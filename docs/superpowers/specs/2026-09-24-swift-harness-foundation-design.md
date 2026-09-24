@@ -161,6 +161,9 @@ name = "GameEngine"
 kind = "engine"                     # feature (default) | engine | render | library
 reason = "60Hz fixed-timestep simulation; per-frame store overhead unjustified"
 
+[clients]                           # vendor SDK modules allowed only inside *Live modules
+vendor_modules = ["DatadogRUM", "FirebaseAnalytics"]
+
 [[modules]]
 name = "HealthCore"
 host_testable = false
@@ -187,6 +190,38 @@ Module kinds:
 | `engine` | Pure `(State, Input) -> State`, seeded RNG dependency, fixed timestep | Real-time loops (>~30Hz), hot pipelines |
 | `render` | SpriteKit / `Canvas` / Metal reading engine state; no rules | Rendering layers |
 | `library` | Plain Swift | Shared utilities |
+| `client` | Interface/Live pair (§6.1.1) | Services: networking, images, analytics, persistence, keychain, auth, flags, push, location |
+
+#### 6.1.1 Client modules (interface / live split)
+
+Every service is **always** two modules, following swift-dependencies' documented
+"Separating interface and implementation" pattern (`LivePreviewTest.md`, 1.17.1):
+
+| Module | Contains | May import | Imported by |
+|---|---|---|---|
+| `FooClient` | `@DependencyClient struct`, domain models, `TestDependencyKey` conformance (unimplemented `testValue`, `previewValue`) | Foundation, Dependencies, other interfaces | anyone |
+| `FooClientLive` | `extension FooClient: DependencyKey { static let liveValue }`, real IO, vendor SDKs | vendor SDKs, URLSession, other **interfaces** | **app target only** (composition root) |
+
+`arch` enforces: no feature/engine/render/library module imports a `*Live` module; no `*Live`
+module imports a feature; `URLSession.shared` and declared vendor SDK modules appear only in `*Live`
+modules. Interfaces must be host-testable; a Live module needing UIKit declares `host_testable = false`.
+
+Reference shapes:
+
+- **Networking** — `HTTPClient` (transport: `URLRequest → (Data, HTTPURLResponse)`) under `APIClient`
+  (typed endpoints). `APIClientLive` depends on the `HTTPClient` *interface*, so decoding, auth
+  refresh, and retry/backoff are T1-tested against a fake transport with `TestClock`. Only
+  `HTTPClientLive` touches URLSession, covered by a thin `URLProtocol`-stub test.
+- **Images** — `ImageClient.load(URL, targetSize) → CGImage` (platform-neutral). Live: in-flight
+  dedup actor, memory + disk cache with an explicit, tested eviction policy, ImageIO downsampling.
+  A thin `RemoteImage` view lives in a shared UI module.
+- **Analytics** — `AnalyticsClient.track(Event)` where `Event` is a typed enum (bounded names, no
+  strings). Reducers emit events; `TestStore` tests assert them via a recording test double. Live
+  fans out to vendor SDKs.
+
+Logging and signposts are **not** clients: `Logger`/`OSSignposter` are called directly (write-only,
+no test-observable output; wrapping hides signposts from Instruments). Live modules own signpost
+intervals around their IO, which sub-project 3's profiler consumes.
 
 **Dogmatic gate, smart judgment.** `swiftgate arch` fails any non-TCA Core not declared in
 `.swiftgate.toml` with a `reason`. The `swift-architecture` skill (and later the review panel)
@@ -236,7 +271,7 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 |---|---|---|---|
 | 1 | Concurrency | Swift 6 mode; `@unchecked Sendable` / `nonisolated(unsafe)` only with justification; structured over unstructured tasks; no `Task.detached` without reason; honor cancellation | lint (escape hatches) |
 | 2 | Architecture | module kinds; TCA conventions (`@Reducer`, `@ObservableState`, `view`/`delegate`/`internal` actions); no logic in views; navigation via state enums + case paths | `arch` + review |
-| 3 | Dependencies | `@DependencyClient` with live/test/preview; test value fails loudly by default; no singletons | lint |
+| 3 | Dependencies & clients | `@DependencyClient` with live/test/preview; test value fails loudly by default; no singletons; every service is a `FooClient`/`FooClientLive` pair; typed analytics events | lint + `arch` |
 | 4 | Errors | typed domain errors; no `try!`/`fatalError` outside true preconditions; `reportIssue` for programmer errors | lint |
 | 5 | Observability | per-module `Logger` (subsystem/category); `OSSignposter` intervals on meaningful operations; no `print`; privacy annotations | lint |
 | 6 | SwiftUI performance | stable identity; no `AnyView`; lazy containers; granular observation | review (+ profiling in sub-project 3) |
@@ -249,7 +284,7 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 
 | Tier | Scope | Runner | Budget | Determinism source |
 |---|---|---|---|---|
-| T0 static | swift-format, SwiftLint (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `arch` (Core ↛ SwiftUI/UIKit, kinds vs config, `@DependencyClient` has `testValue`) | `swiftgate lint`/`arch` | < 5s | no IO |
+| T0 static | swift-format, SwiftLint (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `arch` (Core ↛ SwiftUI/UIKit, kinds vs config, `@DependencyClient` has `testValue`, `*Live` imported only by the app target, URLSession/vendor SDKs only in `*Live`) | `swiftgate lint`/`arch` | < 5s | no IO |
 | T1 host | `TestStore` (exhaustive), dependency clients, engine property + replay tests | `swift test`, affected packages | < 60s | injected deps, `TestClock`/`ImmediateClock`; `withMainSerialExecutor` only in `.serialized` suites |
 | T2 simulator | snapshot tests, view/integration tests | `xcodebuild test`, cloned sim | minutes | pinned device+OS, no network, dep overrides |
 | T3 flow | thin XCUITest smoke of critical flows | `xcodebuild test`, cloned sim | minutes | launch-arg scenario injection |
@@ -303,7 +338,7 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 - `gate/` domain: Swift Testing unit tests over fixtures.
 - Adapters: tests against recorded real tool outputs (xcresult JSON, `swift package describe`, `simctl list -j`).
 - `swiftgate self-test`: fixture repos under `gate/Fixtures/` each seeded with one violation
-  (`Date()` in Core, skipped test, record mode on, UIKit in Core, undeclared non-TCA Core,
+  (`Date()` in Core, skipped test, record mode on, UIKit in Core, undeclared non-TCA Core, feature importing a `*Live` module, `URLSession.shared` outside `*Live`,
   zero tests executed, retry flag) — each must yield `RED`; a clean fixture must yield `GREEN`.
 - Hooks: shim tests feeding recorded hook-input JSON and asserting decisions.
 - End-to-end: a sample app (`examples/SampleApp`, TCA feature + one engine module) bootstrapped and
