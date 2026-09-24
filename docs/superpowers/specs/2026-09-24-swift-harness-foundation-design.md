@@ -4,7 +4,7 @@
 Status: DESIGN — sections 1–4 approved in brainstorm 2026-09-24; spec awaiting user review.
 Next action: user reviews this spec → writing-plans produces the Foundation implementation plan.
 Open items:
-  - Point-Free API verification (research in flight) → fills §6.2 "Verified library baseline".
+  - Point-Free baseline verified 2026-09-24 (§6.2); target TCA 1.26.x, NOT 2.0 beta.
   - Xcode 27 install → capture xcresult golden fixtures, pin `xcode` in the config template (§5.4).
   - Confirm current Claude Code Stop-hook input field for re-entry (`stop_hook_active`) against hook docs (§7).
 Sub-projects after this one: (2) Simulator QA, (3) Agentic profiling, (4) Review/validation loops & workflows.
@@ -196,11 +196,37 @@ adds ceremony only, or store overhead visible in profiling.
 
 ### 6.2 Verified library baseline
 
-Filled from primary sources before `standards.md` is written: current release + Swift 6 status of
-TCA, swift-dependencies, swift-navigation, swift-case-paths, swift-snapshot-testing, swift-clocks,
-swift-custom-dump, swift-concurrency-extras, swift-issue-reporting, swift-sharing; canonical
-feature shape; `@DependencyClient` test/preview semantics; snapshot record-mode API; Swift Testing
-compatibility. No standard may cite an API not verified here.
+Verified 2026-09-24 against GitHub releases, `Package.swift` at each release tag, in-repo DocC, and
+pointfree.co posts. No standard may cite an API not verified here; re-verify on each harness release.
+
+| Library | Pin (from) | Notes |
+|---|---|---|
+| swift-composable-architecture | 1.26.2 | **Target the 1.x shape.** TCA 2.0 (`@Feature`, `Update`) is a subscriber-only beta — do not use. Enable the `ComposableArchitecture2Deprecations` package trait permanently. |
+| swift-dependencies | 1.17.1 | `@DependencyClient` endpoints default to fail-and-report; `static let testValue = Self()` = fully unimplemented. `@DependencyEntry` available. App-launch overrides via `prepareDependencies {}` (sub-project 2 scenario injection). Previews: `#Preview(traits: .dependencies {})`. |
+| swift-navigation | 2.11.2 | |
+| swift-case-paths | 1.10.0 | Prefer `some CasePath` over `AnyCasePath`. |
+| swift-snapshot-testing | 1.19.6 | Record modes `.all/.failed/.missing/.never`; **default `.missing` silently records** — see §7.2 rule 4. Use `record:` param / `withSnapshotTesting` / `.snapshots(record:)` trait; globals `isRecording`/`diffTool` deprecated. Package is Swift 5 language mode. |
+| swift-clocks | 1.1.1 | `TestClock`, `ImmediateClock`, `.test` constructor. |
+| swift-custom-dump | 1.7.3 | `expectNoDifference`; `.customDump` snapshot strategy over soft-deprecated `.dump`. |
+| swift-concurrency-extras | 1.4.1 | `withMainSerialExecutor` sets a process-global hook; docs are XCTest-only. Treat as unsafe under Swift Testing parallelism unless the suite is `.serialized` (inferred, not documented). |
+| swift-issue-reporting | 2.1.1 | Renamed from `xctest-dynamic-overlay`; depend on 2.1+. |
+| swift-sharing | 2.10.1 | |
+| swift-perception | — | Not needed at iOS 18+ (native Observation); no `WithPerceptionTracking`. |
+
+Canonical feature shape (TCA 1.26): `@Reducer struct` + `@ObservableState struct State` + `body`
+with `Reduce`; actions named for what happened (`saveButtonTapped`, `itemsResponse(...)`).
+Navigation: `StackState`/`StackActionOf` + `.forEach`; `@Presents` + `PresentationAction` +
+`.ifLet`; enum destinations scoped via `$store.scope(\.destination, action: \.destination).case`.
+The `view`/`delegate`/`internal` action grouping is a **house convention**, not an upstream API.
+
+Testing: `TestStore` is `@MainActor`; use `@MainActor` Swift Testing suites; construct the store
+inside each test (or `await store.finish()`); exhaustivity via `store.exhaustivity = .on/.off(...)`.
+
+**Banned (lint where feasible):** `ViewStore`, `WithViewStore`, `@BindingState`, `BindingViewState`,
+`TaskResult`, `AnyCasePath`, `Store.withState`, Combine effect operators (`.debounce`, `.throttle`,
+`.animation`, `.transaction`), `Effect.map`/`.concatenate`, `store.publisher`, legacy
+`scope(state:action:)` optional-chained destination form, reentrant `send`, any TCA 2.0 API,
+snapshot `isRecording`/`diffTool` globals.
 
 ### 6.3 `standards.md` sections
 
@@ -224,7 +250,7 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 | Tier | Scope | Runner | Budget | Determinism source |
 |---|---|---|---|---|
 | T0 static | swift-format, SwiftLint (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `arch` (Core ↛ SwiftUI/UIKit, kinds vs config, `@DependencyClient` has `testValue`) | `swiftgate lint`/`arch` | < 5s | no IO |
-| T1 host | `TestStore` (exhaustive), dependency clients, engine property + replay tests | `swift test`, affected packages | < 60s | injected deps, test clocks, serial main executor |
+| T1 host | `TestStore` (exhaustive), dependency clients, engine property + replay tests | `swift test`, affected packages | < 60s | injected deps, `TestClock`/`ImmediateClock`; `withMainSerialExecutor` only in `.serialized` suites |
 | T2 simulator | snapshot tests, view/integration tests | `xcodebuild test`, cloned sim | minutes | pinned device+OS, no network, dep overrides |
 | T3 flow | thin XCUITest smoke of critical flows | `xcodebuild test`, cloned sim | minutes | launch-arg scenario injection |
 
@@ -235,7 +261,10 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
    reverted. `swiftgate prove` reverse-applies the source diff in a scratch worktree and checks.
 3. **Evidence, not exit codes** — verdicts come from the xcresult / test output: >0 tests executed,
    no unaccounted skips. `-retry-tests-on-failure` is banned (hides flakes).
-4. **No implicit snapshot recording** — any record mode in a gate run → `RED`. Re-recording only via
+4. **No implicit snapshot recording** — the library default (`.missing`) silently records new
+   references and passes. `swiftgate` therefore runs every test tier with
+   `SNAPSHOT_TESTING_RECORD=never`, so a missing reference fails; any in-code `record:` other than
+   `.never`/`nil` is a lint `RED`. Re-recording only via
    `swiftgate snapshots record` on the pinned simulator; reference changes appear in the diff.
 5. **Exhaustive `TestStore` by default** — non-exhaustive requires an inline justification.
 6. **Flake stress** — new/changed tests run N=10 times, shuffled, at `ready` tier; any failure → `RED`.
