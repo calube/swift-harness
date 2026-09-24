@@ -219,9 +219,23 @@ Reference shapes:
   strings). Reducers emit events; `TestStore` tests assert them via a recording test double. Live
   fans out to vendor SDKs.
 
-Logging and signposts are **not** clients: `Logger`/`OSSignposter` are called directly (write-only,
-no test-observable output; wrapping hides signposts from Instruments). Live modules own signpost
-intervals around their IO, which sub-project 3's profiler consumes.
+- **Logging** — `LogClient` interface; `LogClientLive` fans out to backends chosen at the composition
+  root: OSLog always (Console/Instruments), plus Datadog Logs and/or Sentry breadcrumbs. Constraints:
+  - *Structured, privacy-classified payloads.* Wrapping `Logger` with a `String` parameter loses
+    OSLog's compile-time privacy redaction and deferred formatting. The interface takes a message plus
+    typed attributes each tagged `.public`/`.private`/`.sensitive`; every backend honors the tag
+    (OSLog maps to privacy annotations; remote backends drop or hash non-public values).
+  - *Cheap when disabled.* Level check before attribute construction (`@autoclosure`); remote
+    fan-out is buffered off the caller's thread.
+  - *Test value is a recording no-op, not unimplemented* — logging is ubiquitous, so an
+    unimplemented default would fail every test. Tests may assert that critical error paths log.
+- **Tracing** — `TracingClient` span API (`withSpan(StaticString, attributes) { ... }`). Live maps
+  each span to an `OSSignposter` interval (names stay `StaticString`, so Instruments sees them —
+  sub-project 3's profiler consumes these) and to Datadog/Sentry spans remotely. Test value records
+  spans. Live modules wrap their IO (requests, decodes, cache hits) in spans.
+
+Direct `Logger`, `OSSignposter`, `print`, and vendor logging SDK calls are banned outside
+`LogClientLive`/`TracingClientLive`.
 
 **Dogmatic gate, smart judgment.** `swiftgate arch` fails any non-TCA Core not declared in
 `.swiftgate.toml` with a `reason`. The `swift-architecture` skill (and later the review panel)
@@ -273,7 +287,7 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 | 2 | Architecture | module kinds; TCA conventions (`@Reducer`, `@ObservableState`, `view`/`delegate`/`internal` actions); no logic in views; navigation via state enums + case paths | `arch` + review |
 | 3 | Dependencies & clients | `@DependencyClient` with live/test/preview; test value fails loudly by default; no singletons; every service is a `FooClient`/`FooClientLive` pair; typed analytics events | lint + `arch` |
 | 4 | Errors | typed domain errors; no `try!`/`fatalError` outside true preconditions; `reportIssue` for programmer errors | lint |
-| 5 | Observability | per-module `Logger` (subsystem/category); `OSSignposter` intervals on meaningful operations; no `print`; privacy annotations | lint |
+| 5 | Observability | log via `LogClient` (structured, privacy-tagged attributes, per-module category); spans via `TracingClient` on meaningful operations; no direct `Logger`/`OSSignposter`/`print`/vendor SDK outside their Live modules | lint + `arch` |
 | 6 | SwiftUI performance | stable identity; no `AnyView`; lazy containers; granular observation | review (+ profiling in sub-project 3) |
 | 7 | Accessibility | identifiers + labels on interactive elements | lint (+ QA in sub-project 2) |
 | 8 | Checker hygiene | every lint/arch rule has a seeded-violation fixture | `self-test` |
