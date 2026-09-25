@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Stamp or upgrade the swift-harness layer in a Swift/iOS app repository with `swiftgate bootstrap` — AGENTS.md router and CLAUDE.md link, .swiftgate.toml inferred from the repo, .swift-format, lefthook git hooks, .gitignore entries, the plan index, and the ~/.local/bin/swiftgate link git hooks call. Shows the diff and asks before writing. Use when the user says "bootstrap", "set up swift-harness", "install the harness in this repo", "upgrade the harness files", "add the git hooks", or when `swiftgate doctor` reports the shim missing or stale, or a repo has no .swiftgate.toml.
+description: This skill should be used to stamp or upgrade the swift-harness layer in a Swift/iOS app repository with `swiftgate bootstrap` (AGENTS.md router, .swiftgate.toml inferred from the repo, format/lint configs, lefthook git hooks, .gitignore entries, the plan index, the ~/.local/bin/swiftgate link). Shows the diff and asks before writing. Use when the user says "bootstrap", "set up swift-harness", "install the harness in this repo", "upgrade the harness files", "add the git hooks", or when `swiftgate doctor` reports the shim missing or stale, or a repo has no .swiftgate.toml.
 ---
 
 # Bootstrap
@@ -15,22 +15,26 @@ tells the binary where the templates are.
 
 1. Run from the root of the Swift project (the directory that will hold `.swiftgate.toml`), usually
    the git toplevel. If the project sits inside a larger repository, run it from the project
-   directory; bootstrap then leaves `lefthook.yml` alone and says how to wire the toplevel one.
+   directory; bootstrap then leaves `lefthook.yml` alone, says how to wire the toplevel one, and
+   does not run `lefthook install`.
 2. Run `"$SG" bootstrap`. The first call after a plugin update builds swiftgate, which can take a
-   few minutes; let it finish in the foreground.
+   few minutes; let it finish in the foreground. Exit status 2 here means BLOCKED before any
+   preview (templates not found, or not run through the plugin shim): report it and stop.
 3. Read the output. It starts with `bootstrap: N to write, …` and then has:
    - a unified diff per file it would create or change,
    - `CLAUDE.md -> AGENTS.md (new symlink)` when the link is missing,
    - `Left alone:` files it will not touch, each with the reason,
    - `Outside the repository:` the registry entry, the `~/.local/bin/swiftgate` link, and
      `lefthook install`,
-   - `Notes:` values it could not infer (`SET-ME` in the config) and missing tools.
+   - `Notes:` config values it could not infer (`SET-ME`), a missing lefthook, no git repository,
+     and home-directory problems it will not fix (an invalid registry, a regular file at
+     `~/.local/bin/swiftgate`).
 4. If it ends with `Nothing to do.`, tell the user the repository is current and stop.
 
 ## 2. Ask
 
 Summarize the preview for the user in a few lines: which files are created or changed, what stays
-alone, and the three home-directory side effects. Don't paste whole created files; `.swift-format`
+alone, and whatever is listed under `Outside the repository:` (zero to three items). Don't paste whole created files; `.swift-format`
 is the toolchain's default configuration and `AGENTS.md` gains a managed block between
 `<!-- swift-harness:begin -->` markers, so the team's own text there is kept.
 
@@ -45,8 +49,10 @@ Never run `--apply` without an explicit **Apply**.
 ## 3. Apply
 
 1. Run `"$SG" bootstrap --apply`. It prints `bootstrap: applied N change(s)` and one line per change.
-2. Exit status 2 means BLOCKED: a template is missing or a write failed. That is the installation or
-   the file system, not the code. Report the message and stop; don't retry with hand-made files.
+2. Exit status 2 means BLOCKED: a template is missing, a write failed, or `lefthook install`
+   failed. Output starting `bootstrap: applied partly, then failed:` lists what was already
+   written. That is the installation or the file system, not the code: report both and stop;
+   don't retry with hand-made files.
 3. Run `"$SG" bootstrap` once more. It must end with `Nothing to do.`; anything else is a bug to
    report, not something to paper over.
 
@@ -56,7 +62,7 @@ Never run `--apply` without an explicit **Apply**.
   each unresolved value in `Notes:`, ask the user with `AskUserQuestion` (batch them into one call),
   then edit `.swiftgate.toml` by hand.
 - **Config advice.** For an existing config, `Left alone: .swiftgate.toml: … consider editing`
-  lists what breaks a run (Xcode pin, uncovered packages, a simulator that isn't installed). Offer
+  lists what breaks a run (Xcode pin, uncovered packages, app_scheme mismatch, a simulator that isn't installed). Offer
   the edit; don't make it silently.
 - **CLAUDE.md is a real file.** Offer to move its content into `AGENTS.md` outside the managed
   block, delete `CLAUDE.md`, and re-run bootstrap so it becomes the link.
@@ -64,8 +70,8 @@ Never run `--apply` without an explicit **Apply**.
   re-run this skill. swiftlint is optional and style-only.
 - **Verify.** Run `"$SG" doctor`. GREEN means the machine matches the config; BLOCKED names what to
   fix in the environment (Xcode pin, simulator runtime, disk, shim).
-- **Module kinds.** `swiftgate arch` fails any non-TCA Core without a `[[modules]]` entry (`arch.undeclared-kind`). If
-  `"$SG" arch` reports that, hand off to `/swift-harness:architecture` to choose kinds.
+- **Module kinds.** Run `"$SG" arch`. It fails any non-TCA Core without a `[[modules]]` entry
+  (`arch.undeclared-kind`); if it reports that, hand off to `/swift-harness:architecture`.
 
 Report in two or three lines: what was written, anything left for the user, and the doctor
 verdict. Committing the stamped files is the user's call.
