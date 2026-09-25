@@ -1,14 +1,14 @@
 # Foundation — implementation plan
 
 <!-- RESUME
-Status: M0 complete 2026-09-24.
+Status: COMPLETE 2026-09-25 — all waves A–I done; 594 tests; live-verified (docs/e2e-report.md).
 Spec: docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md (approved).
-Next action: follow-ups (mutate worker cap + warm scratch, pre-commit warm latency, SessionStart cold-build notice, SampleApp APIClientTests, CheckRun judge test) → T7.5 E2E → T7.6 install+dogfood.
+Next action: none in this plan. Next: real review-workflow run (user opt-in), then sub-project 2 spec.
 Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.
   - T5.0: sample app needs an .xcodeproj — hand-written synchronized-folder pbxproj, fallback = user creates via Xcode template (~2 min).
   - T4.1 / T5.1: confirm `swift test` structured-output flags and `xcresulttool` subcommands on the installed toolchain before coding the parsers.
-Progress: M0–M6 complete; M7 T7.1–T7.4 complete. Last: merge a9ec219 · CanonicalPath d18ccbb · docs 7b00040 (549 tests). Full per-task shas in git log.
+Progress: see git log; final commits e7e3f13 · 11dc71c · b85431d · fb16ce9.
 -->
 
 ## Decisions made while planning

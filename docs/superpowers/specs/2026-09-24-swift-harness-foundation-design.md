@@ -1,13 +1,11 @@
 # swift-harness — Foundation design
 
 <!-- RESUME
-Status: DESIGN — sections 1–4 approved in brainstorm 2026-09-24; spec awaiting user review.
-Next action: user reviews this spec → writing-plans produces the Foundation implementation plan.
-Open items:
-  - Point-Free baseline verified 2026-09-24 (§6.2); target TCA 1.26.x, NOT 2.0 beta.
-  - Xcode pinned to installed 26.2 (build 17C48; sim runtimes iOS 26.2, 26.4). No Xcode 27 (needs macOS upgrade). Moving to 26.6 later = re-capture xcresult fixtures + bump pin.
-  - Confirm current Claude Code Stop-hook input field for re-entry (`stop_hook_active`) against hook docs (§7).
-Sub-projects after this one: (2) Design & plan workflows, (3) Simulator QA, (4) Agentic profiling, (5) Build loop & workflows.
+Status: FOUNDATION BUILT 2026-09-25 (plan docs/superpowers/plans/2026-09-24-foundation-plan.md, all tasks M0–M7 done; 594 tests).
+Verified live in Claude Code via --plugin-dir; end-to-end results in docs/e2e-report.md.
+Refinement after build: review findings carry kind (defect | standards-violation) — docs/decisions/0001.
+Next action: user runs the real `review` workflow once (needs explicit opt-in); then sub-project 2 (design & plan workflows) spec.
+Known gaps: host XCTest skips invisible under --parallel; swift test 6.2 can't shuffle (stress = N processes); App/UITest targets not in the module graph; simulator-tier prove/stress pending; subagent agent_id / Write / SessionStart-resume hook payloads not yet seen live.
 -->
 
 ## 1. Purpose
