@@ -11,6 +11,9 @@ public enum ModuleRole: Sendable, Hashable {
   case clientLive
   /// The composition root (the Xcode app target).
   case app
+  /// Test doubles and fixtures shared by test targets; only tests may depend on it, and it needs
+  /// no tests or coverage of its own.
+  case testSupport
   /// A test target, and the tier its tests run in.
   case tests(Tier)
 }

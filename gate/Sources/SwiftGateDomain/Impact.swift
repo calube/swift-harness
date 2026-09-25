@@ -113,7 +113,7 @@ public enum ImpactAnalysis {
   static func needsTests(_ role: ModuleRole) -> Bool {
     switch role {
     case .core, .client, .clientLive: true
-    case .ui, .app, .tests: false
+    case .ui, .app, .testSupport, .tests: false
     }
   }
 

@@ -30,7 +30,7 @@ enum MutateCheck {
     guard module.isHostTestable else { return false }
     switch module.role {
     case .core, .client, .clientLive: return true
-    case .ui, .app, .tests: return false
+    case .ui, .app, .testSupport, .tests: return false
     }
   }
 

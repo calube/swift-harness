@@ -33,8 +33,8 @@ public struct GraphRule: Sendable {
 /// Spec §6.1.1 client boundaries and the §6.2 toolchain rule, over the module graph.
 public enum ArchitectureRules {
   public static let all: [GraphRule] = [
-    liveDependency, liveDependsOnFeature, vendorDependency, coreMainActorIsolation,
-    configModuleMismatch,
+    liveDependency, liveDependsOnFeature, testSupportDependency, vendorDependency,
+    coreMainActorIsolation, configModuleMismatch,
   ]
 
   public static func evaluate(_ input: ArchitectureInput) throws(ReportContractViolation)
@@ -59,7 +59,7 @@ public enum ArchitectureRules {
   ) { input in
     input.graph.modules.flatMap { module -> [ArchitectureViolation] in
       switch module.role {
-      case .app, .tests: return []
+      case .app, .tests, .testSupport: return []
       case .core, .ui, .client, .clientLive: break
       }
       return module.dependencies
@@ -89,6 +89,28 @@ public enum ArchitectureRules {
           violation(
             at: live, in: input.graph,
             "\(live.name) depends on \(feature); Live modules may depend only on client interfaces")
+        }
+    }
+  }
+
+  /// Test doubles answer whatever a test scripts, so production code that links them can ship a
+  /// fake in place of the real dependency.
+  static let testSupportDependency = GraphRule(
+    id: "arch.test-support-dependency", severity: .major,
+    summary: "a production module depends on a test-support module"
+  ) { input in
+    input.graph.modules.flatMap { module -> [ArchitectureViolation] in
+      switch module.role {
+      case .tests, .testSupport: return []
+      case .core, .ui, .client, .clientLive, .app: break
+      }
+      return module.dependencies
+        .filter { input.graph.module(named: $0)?.role == .testSupport }
+        .map { support in
+          violation(
+            at: module, in: input.graph,
+            "\(module.name) depends on test-support module \(support); only test targets may "
+              + "link test doubles — move what production needs into a production module")
         }
     }
   }

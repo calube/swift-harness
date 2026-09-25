@@ -47,6 +47,20 @@ struct ImpactAnalysisTests {
   }
 
   @Test(
+    "a test-support source change needs no test change of its own — catches test doubles demanding tests for themselves"
+  )
+  func testSupportChangeNeedsNoTests() throws {
+    let testSupport = StaticModuleScopes([
+      .init(
+        scope: ModuleScope(module: "FeedTestSupport", role: .testSupport, kind: .testSupport),
+        directories: ["Packages/Feed/Sources/FeedTestSupport"])
+    ])
+    let result = try Self.evaluate(
+      ["Packages/Feed/Sources/FeedTestSupport/Fake.swift"], scopes: testSupport)
+    #expect(result.findings.isEmpty)
+  }
+
+  @Test(
     "a test change in the module's own test target satisfies it; another module's tests or UI tests do not — catches unrelated test edits masking untested logic"
   )
   func onlyOwnTestTargetCounts() throws {

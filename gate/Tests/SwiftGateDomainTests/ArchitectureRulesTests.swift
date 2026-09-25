@@ -59,6 +59,46 @@ struct ArchitectureRulesTests {
     #expect(result == ["arch.live-dependency Packages/Feed/Package.swift"])
   }
 
+  @Test(
+    "a production module depending on a test-support module is flagged at its manifest — catches test doubles shipping in the app"
+  )
+  func testSupportDependencyFlagged() throws {
+    let config = try Self.config(modules: [
+      ModuleOverride(name: "FeedTestSupport", kind: .testSupport, reason: "shared fakes")
+    ])
+    let result = try Self.findings(
+      [
+        Self.target("FeedClient"),
+        Self.target("FeedTestSupport", deps: ["FeedClient"]),
+        Self.target("FeedCore", deps: ["FeedClient", "FeedTestSupport"]),
+        Self.target("FeedUI", deps: ["FeedCore", "FeedTestSupport"]),
+      ], config: config)
+    #expect(
+      result == [
+        "arch.test-support-dependency Packages/Feed/Package.swift",
+        "arch.test-support-dependency Packages/Feed/Package.swift",
+      ])
+  }
+
+  @Test(
+    "test targets and other test-support modules may depend on a test-support module — catches the guard rail blocking its only legitimate users"
+  )
+  func testSupportDependencyFromTests() throws {
+    let config = try Self.config(modules: [
+      ModuleOverride(name: "FeedTestSupport", kind: .testSupport, reason: "shared fakes"),
+      ModuleOverride(name: "FeedFixtures", kind: .testSupport, reason: "shared fixtures"),
+    ])
+    let result = try Self.findings(
+      [
+        Self.target("FeedClient"),
+        Self.target("FeedCore", deps: ["FeedClient"]),
+        Self.target("FeedTestSupport", deps: ["FeedClient"]),
+        Self.target("FeedFixtures", deps: ["FeedTestSupport"]),
+        Self.target("FeedCoreTests", .test, deps: ["FeedCore", "FeedFixtures", "FeedTestSupport"]),
+      ], config: config)
+    #expect(result == [])
+  }
+
   @Test("a Live module depending on a feature is flagged — catches inverted layering")
   func liveDependsOnFeature() throws {
     let result = try Self.findings([

@@ -179,6 +179,38 @@ struct TOMLConfigDecoderTests {
       ])
   }
 
+  @Test(
+    "kind = \"test-support\" with a reason decodes to the test-support kind — catches test-double modules forced to pose as libraries"
+  )
+  func testSupportKind() throws {
+    let config = try decoder.decode(
+      Self.minimal + """
+        [[modules]]
+        name = "FeedClientTestSupport"
+        kind = "test-support"
+        reason = "fakes shared by feed tests"
+        """)
+    #expect(config.module(named: "FeedClientTestSupport")?.kind == .testSupport)
+  }
+
+  @Test(
+    "kind = \"test-support\" without a reason is an error — catches modules leaving T1 coverage undeclared"
+  )
+  func testSupportKindWithoutReason() {
+    let found = issues(
+      Self.minimal + """
+        [[modules]]
+        name = "FeedClientTestSupport"
+        kind = "test-support"
+        """)
+    #expect(
+      found == [
+        .missingReason(
+          path: "modules[0].reason", module: "FeedClientTestSupport",
+          rule: .nonDefaultKind(.testSupport))
+      ])
+  }
+
   @Test("host_testable = false without reason is an error — catches logic silently moved off T1")
   func notHostTestableWithoutReason() {
     let found = issues(

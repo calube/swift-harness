@@ -54,6 +54,22 @@ struct ModuleGraphTests {
   }
 
   @Test(
+    "a test-support override makes the module test-support whatever its name — catches test doubles classified as client or core"
+  )
+  func testSupportOverride() throws {
+    let config = try SampleGraph.config(modules: [
+      ModuleOverride(name: "APIClient", kind: .testSupport, reason: "shared fakes"),
+      ModuleOverride(name: "GameEngine", kind: .testSupport, reason: "shared fixtures"),
+    ])
+    let graph = try SampleGraph.graph(config: config)
+
+    #expect(graph.module(named: "APIClient")?.role == .testSupport)
+    #expect(graph.module(named: "APIClient")?.kind == .testSupport)
+    #expect(graph.module(named: "GameEngine")?.role == .testSupport)
+    #expect(graph.module(named: "GameEngineTests")?.role == .tests(.t1))
+  }
+
+  @Test(
     "product dependencies resolve to modules in local packages — catches cross-package edges dropped"
   )
   func dependencies() throws {
