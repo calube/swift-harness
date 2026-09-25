@@ -1,19 +1,18 @@
 {
   "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
-  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
   "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
   "cwd": "/REPO",
-  "permission_mode": "default",
+  "prompt_id": "66bc7e65-c545-486b-89ad-72d5648fcbdb",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
   "hook_event_name": "PreToolUse",
   "tool_name": "Bash",
   "tool_input": {
-    "command": "git status --short && swift build",
-    "description": "Show status and build",
-    "timeout": 120000,
-    "run_in_background": false
+    "command": "swiftgate check --tier fast 2>&1 | tail -25",
+    "timeout": 600000,
+    "description": "Run fast gate to watch new test fail"
   },
-  "tool_use_id": "toolu_01ABC123",
-  "effort": {
-    "level": "high"
-  }
+  "tool_use_id": "toolu_01Qia4uEJPromJEdwvtSTt63"
 }

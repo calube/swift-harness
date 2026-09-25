@@ -1,19 +1,19 @@
 {
   "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
-  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
   "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
   "cwd": "/REPO",
-  "permission_mode": "default",
+  "prompt_id": "23e117c8-8bcf-4e32-bd4e-435109b84ad9",
+  "permission_mode": "acceptEdits",
+  "effort": {
+    "level": "medium"
+  },
   "hook_event_name": "PreToolUse",
   "tool_name": "Edit",
   "tool_input": {
     "file_path": "/REPO/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
-    "old_string": "count += 1",
-    "new_string": "count += 2",
+    "old_string": "    public var isLoadingFact: Bool\n\n    public init(count: Int = 0, fact: String? = nil, isLoadingFact: Bool = false) {\n      self.count = count\n      self.fact = fact\n      self.isLoadingFact = isLoadingFact\n    }\n  }\n\n  public enum Action: Equatable {\n    case incrementButtonTapped\n    case decrementButtonTapped\n    case factButtonTapped\n    case factResponse(String)\n    case factFailed\n  }\n\n  @Dependency(\\.apiClient) var apiClient\n  @Dependency(\\.logClient) var log\n\n  public init() {}\n\n  public var body: some ReducerOf<Self> {\n    Reduce { state, action in\n      switch action {\n      case .incrementButtonTapped:\n        state.count += 1\n        state.fact = nil",
+    "new_string": "    public var isLoadingFact: Bool\n    public var lastChanged: Date?\n\n    public init(count: Int = 0, fact: String? = nil, isLoadingFact: Bool = false) {\n      self.count = count\n      self.fact = fact\n      self.isLoadingFact = isLoadingFact\n    }\n  }\n\n  public enum Action: Equatable {\n    case incrementButtonTapped\n    case decrementButtonTapped\n    case factButtonTapped\n    case factResponse(String)\n    case factFailed\n  }\n\n  @Dependency(\\.apiClient) var apiClient\n  @Dependency(\\.logClient) var log\n\n  public init() {}\n\n  public var body: some ReducerOf<Self> {\n    Reduce { state, action in\n      switch action {\n      case .incrementButtonTapped:\n        state.count += 1\n        state.fact = nil\n        state.lastChanged = Date()",
     "replace_all": false
   },
-  "tool_use_id": "toolu_01ABC123",
-  "effort": {
-    "level": "high"
-  }
+  "tool_use_id": "toolu_011S5cp5LWzoxFVwWNyeFsJa"
 }

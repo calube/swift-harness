@@ -176,11 +176,33 @@ Observed behavior the adapter relies on:
 
 ## Hooks
 
-`Hooks/*.json` are Claude Code hook stdin payloads. They are built from the documented schema,
-not captured from a live session (capturing needs a paid nested `claude` run): each carries the
-fields the docs list for its event, with the docs' example values, paths rooted at `/REPO`, and a
-fixed `session_id`. Tests swap `/REPO` for a probe repository. Re-check them against the docs
-whenever Claude Code's hook contract changes.
+`Hooks/*.json` are Claude Code hook stdin payloads. Seven are captured from live headless
+sessions (Claude Code 2.1.282, 2026-09-25) in a bootstrapped SampleApp copy, with the plugin
+loaded by `--plugin-dir` and recording on:
+
+```
+SWIFTGATE_HOOK_RECORD_DIR=<dir> claude -p '<prompt>' --plugin-dir <harness checkout> \
+  --permission-mode acceptEdits --setting-sources project,local \
+  --output-format stream-json --verbose --include-hook-events
+```
+
+`session-start`, `pre-tool-use-bash-xcodebuild` (prompt: run a raw `xcodebuild … test`),
+`pre-tool-use-edit-swift`, `post-tool-use-edit-swift`, `stop`, `stop-reentry` (prompt: add a
+literal `Date()` to CounterCore's reducer and stop without fixing) and `pre-tool-use-bash-allowed`
+(a `swiftgate check` the model ran). Scrubbing: the repository path becomes `/REPO`, the
+transcript directory `/HOME/.claude/projects/-REPO/`, and every `session_id` the fixed
+`8f2c1d7e-…` the tests key on; nothing else changed.
+
+The rest (`pre-tool-use-bash-git-commit`, `pre-tool-use-edit-snapshot`,
+`pre-tool-use-write-*`, `post-tool-use-write-markdown`, `session-start-resume`) are still built
+from the documented schema: no live session produced a Write, a subagent or a resume. Tests swap
+`/REPO` for a probe repository. Re-record whenever Claude Code's hook contract changes.
+
+Live payloads differ from the documented examples only in fields swiftgate does not read:
+SessionStart has no `model` in a headless session; Bash `tool_input` omits `timeout` and
+`run_in_background` unless the model sets them; PostToolUse carries `effort` and a full
+`tool_response` (`originalFile`, `structuredPatch`, `oldString`, `newString`, `replaceAll`,
+`userModified`).
 
 Sources, fetched 2026-09-24 as Markdown (`curl -sL <url>.md`):
 

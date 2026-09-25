@@ -18,7 +18,9 @@ struct HookPayloadTests {
     #expect(bash.cwd == "/REPO")
     #expect(bash.hookEventName == "PreToolUse")
     #expect(bash.toolName == "Bash")
-    #expect(bash.command?.hasPrefix("xcodebuild test") == true)
+    #expect(
+      bash.command
+        == "xcodebuild -scheme SampleApp -destination 'platform=iOS Simulator,name=iPhone 17' test")
     #expect(bash.agentID == nil)
 
     let write = try payload("pre-tool-use-write-ledger-subagent")
