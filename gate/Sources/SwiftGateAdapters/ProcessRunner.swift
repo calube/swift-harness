@@ -10,6 +10,8 @@ public struct ProcessInvocation: Sendable, Equatable {
   /// Applied over the runner's base environment. A `nil` value removes the variable.
   public var environmentOverlay: [String: String?]
   public var workingDirectory: String?
+  /// Bytes the child reads on stdin, then EOF. `nil` connects stdin to `/dev/null`.
+  public var standardInput: Data?
   public var timeout: Duration
   public var maxCapturedBytesPerStream: Int
 
@@ -20,6 +22,7 @@ public struct ProcessInvocation: Sendable, Equatable {
     arguments: [String] = [],
     environmentOverlay: [String: String?] = [:],
     workingDirectory: String? = nil,
+    standardInput: Data? = nil,
     timeout: Duration,
     maxCapturedBytesPerStream: Int = ProcessInvocation.defaultMaxCapturedBytesPerStream
   ) {
@@ -29,6 +32,7 @@ public struct ProcessInvocation: Sendable, Equatable {
     self.arguments = arguments
     self.environmentOverlay = environmentOverlay
     self.workingDirectory = workingDirectory
+    self.standardInput = standardInput
     self.timeout = timeout
     self.maxCapturedBytesPerStream = maxCapturedBytesPerStream
   }

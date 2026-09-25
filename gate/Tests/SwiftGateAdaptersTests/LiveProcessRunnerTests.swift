@@ -19,6 +19,18 @@ struct LiveProcessRunnerTests {
     #expect(!output.status.isSuccess)
   }
 
+  @Test(
+    "standard input reaches the child and ends at EOF — catches batch readers hanging on /dev/null or an open pipe"
+  )
+  func standardInputReachesChild() async throws {
+    let lines = (1...5000).map { "line \($0)" }.joined(separator: "\n") + "\n"
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "/usr/bin/wc", arguments: ["-l"], standardInput: Data(lines.utf8),
+        timeout: .seconds(10)))
+    #expect(output.stdout.text.trimmingCharacters(in: .whitespaces) == "5000\n")
+  }
+
   @Test("arguments are passed verbatim, never shell-interpreted — catches command injection")
   func argumentsAreNotShellInterpreted() async throws {
     let hostile = "$(echo pwned); `id` | cat > x"

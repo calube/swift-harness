@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 /// A real git repository in a temporary directory, isolated from the user's and system git config.
@@ -156,6 +157,33 @@ struct LiveGitTests {
   }
 
   @Test(
+    "staged contents of many files come from one git process — catches a spawn per file blowing the commit-hook latency"
+  )
+  func stagedContentsBatched() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    let paths = (0..<20).map { "Sources/File\($0).swift" }
+    for (index, path) in paths.enumerated() { try repo.write(path, "let v = \(index)\n") }
+    try repo.write("Empty.swift", "")
+    try await repo.git("add", "-A")
+    let recorder = RecordingProcessRunner(base: repo.runner)
+    let adapter = LiveGit(runner: recorder, repositoryRoot: repo.root.path)
+
+    let contents = try await adapter.stagedContents(of: paths + ["Empty.swift"])
+
+    #expect(contents.count == 21)
+    #expect(contents["Sources/File7.swift"] == "let v = 7\n")
+    #expect(contents["Empty.swift"] == "")
+    #expect(recorder.invocations.count == 1)
+    await #expect(throws: GitError.self) {
+      try await adapter.stagedContents(of: ["Sources/File1.swift", "Missing.swift"])
+    }
+    await #expect(throws: GitError.self) {
+      try await adapter.stagedContents(of: ["Line\nBreak.swift"])
+    }
+  }
+
+  @Test(
     "user diff config cannot change parsed output — catches noprefix/color/external breaking parsing"
   )
   func hostileDiffConfig() async throws {
@@ -288,5 +316,20 @@ struct LiveGitAddedSinceTests {
     await #expect(throws: GitError.invalidRef("--output=/tmp/x")) {
       _ = try await repository.adapter.addedLines(since: "--output=/tmp/x")
     }
+  }
+}
+
+/// Delegates to a real runner and records each invocation, for asserting process counts.
+final class RecordingProcessRunner: ProcessRunner {
+  private let base: any ProcessRunner
+  private let recorded = Mutex<[ProcessInvocation]>([])
+
+  init(base: any ProcessRunner) { self.base = base }
+
+  var invocations: [ProcessInvocation] { recorded.withLock { $0 } }
+
+  func run(_ invocation: ProcessInvocation) async throws(ProcessRunnerError) -> ProcessOutput {
+    recorded.withLock { $0.append(invocation) }
+    return try await base.run(invocation)
   }
 }
