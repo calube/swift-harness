@@ -59,6 +59,31 @@ struct HookHarness {
   }
 }
 
+/// A throwaway directory standing in for `git rev-parse --git-common-dir`: every linked worktree
+/// of a repository reports the same one, so two `FakeGit`s pointed at it stand in for two
+/// worktrees sharing plan state.
+struct SharedPlanState {
+  let commonDirectory: URL
+
+  init() {
+    commonDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-common-\(UUID().uuidString)", directoryHint: .isDirectory)
+  }
+
+  func write(index: String) throws {
+    let url = commonDirectory.appending(path: "swift-harness/plans/index.json")
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(index.utf8).write(to: url)
+  }
+
+  func git() -> FakeGit {
+    FakeGit(changed: [], mergeBase: "base", commonDirectory: commonDirectory.path)
+  }
+
+  func remove() { try? FileManager.default.removeItem(at: commonDirectory) }
+}
+
 struct FixedXcode: XcodeSelection {
   let version: String
   func selected() async throws(XcodeSelectionError) -> SelectedXcode {
@@ -132,16 +157,18 @@ struct HookCommandTests {
   }
 
   @Test(
-    "SessionStart injects the module map, an Xcode mismatch and active plan RESUME lines within 1s, describing packages once — catches sessions starting blind or paying describe every time"
+    "SessionStart injects the module map, an Xcode mismatch, the session id and active plan RESUME lines from the shared common-dir index within 1s, describing packages once — catches sessions starting blind or paying describe every time"
   )
   func sessionStart() async throws {
-    var harness = try HookHarness()
+    let shared = SharedPlanState()
+    defer { shared.remove() }
+    try shared.write(
+      index:
+        #"{"plans":[{"slug":"2026-09-24-probe","status":"active","resume":"Next: T2."},{"slug":"old","status":"done"}]}"#
+    )
+    var harness = try HookHarness(git: shared.git())
     defer { harness.repository.remove() }
     harness.xcode = FixedXcode(version: "26.1")
-    try harness.repository.write(
-      ".harness/plans/index.json",
-      #"{"plans":[{"slug":"2026-09-24-probe","status":"active","resume":"Next: T2."},{"slug":"old","status":"done"}]}"#
-    )
 
     let (first, milliseconds) = try await harness.run(.sessionStart, "session-start")
     let (second, _) = try await harness.run(.sessionStart, "session-start-resume")
@@ -151,11 +178,125 @@ struct HookCommandTests {
     let context = try #require(output["additionalContext"])
     #expect(context.contains("XUnitProbe: Probe (core, feature)"))
     #expect(context.contains("Xcode MISMATCH") && context.contains("26.1"))
+    #expect(context.contains("Session id: 8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f"))
     #expect(context.contains("2026-09-24-probe (active): Next: T2."))
     #expect(!context.contains("old (done)"))
     #expect(first.exitCode == 0 && second.stdout == first.stdout)
     #expect(harness.swiftPM.described.count == 1)
     #expect(milliseconds < 1000)
+  }
+
+  @Test(
+    "a linked worktree sees the same active plans as the main checkout, from the shared common dir — catches per-worktree .harness/ leaving task worktrees blind to plan state"
+  )
+  func sessionStartSharedAcrossWorktrees() async throws {
+    let shared = SharedPlanState()
+    defer { shared.remove() }
+    try shared.write(
+      index: #"{"plans":[{"slug":"2026-09-24-probe","status":"active","resume":"Next: T2."}]}"#)
+
+    let mainCheckout = try HookHarness(git: shared.git())
+    defer { mainCheckout.repository.remove() }
+    let linkedWorktree = try HookHarness(git: shared.git())
+    defer { linkedWorktree.repository.remove() }
+    #expect(mainCheckout.root != linkedWorktree.root)
+
+    let (fromMain, _) = try await mainCheckout.run(.sessionStart, "session-start")
+    let (fromWorktree, _) = try await linkedWorktree.run(.sessionStart, "session-start")
+
+    for result in [fromMain, fromWorktree] {
+      let output = try #require(
+        try mainCheckout.json(result)["hookSpecificOutput"] as? [String: String])
+      let context = try #require(output["additionalContext"])
+      #expect(context.contains("2026-09-24-probe (active): Next: T2."))
+    }
+  }
+
+  @Test(
+    "a leftover per-worktree .harness/plans/index.json is ignored in favour of the shared common-dir index — catches a stale local file masking the real plan state"
+  )
+  func sessionStartIgnoresLegacyPerWorktreeIndex() async throws {
+    let shared = SharedPlanState()
+    defer { shared.remove() }
+    try shared.write(
+      index: #"{"plans":[{"slug":"2026-09-24-probe","status":"active","resume":"Next: T2."}]}"#)
+    let harness = try HookHarness(git: shared.git())
+    defer { harness.repository.remove() }
+    try harness.repository.write(
+      ".harness/plans/index.json",
+      #"{"plans":[{"slug":"legacy-local-only","status":"active","resume":"should never surface."}]}"#
+    )
+
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
+    let context = try #require(output["additionalContext"])
+    #expect(context.contains("2026-09-24-probe (active): Next: T2."))
+    #expect(!context.contains("legacy-local-only"))
+  }
+
+  @Test(
+    "SessionStart degrades to no active plans, without failing, when there is no shared plan state to read — catches a hook that blocks the session over an ordinary missing file",
+    arguments: [
+      "no common dir at all" as String,
+      "common dir exists but has no index.json yet" as String,
+    ])
+  func sessionStartDegradesWithoutSharedState(scenario: String) async throws {
+    let commonDirectory = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-common-\(UUID().uuidString)", directoryHint: .isDirectory)
+    if scenario.contains("exists") {
+      try FileManager.default.createDirectory(
+        at: commonDirectory, withIntermediateDirectories: true)
+    }
+    let harness = try HookHarness(
+      git: FakeGit(changed: [], mergeBase: "base", commonDirectory: commonDirectory.path))
+    defer { harness.repository.remove() }
+
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
+    let context = try #require(output["additionalContext"])
+    #expect(context.contains("Active plans: none.") || !context.contains("Active plans"))
+    #expect(!context.contains("is unreadable"))
+    #expect(result.exitCode == 0)
+  }
+
+  @Test(
+    "SessionStart degrades to no active plans, without failing, when it is outside a git repository — catches a git failure blocking the session"
+  )
+  func sessionStartDegradesOutsideGitRepo() async throws {
+    let harness = try HookHarness(
+      git: FakeGit(
+        changed: [], mergeBase: "base",
+        failure: .commandFailed(
+          arguments: ["rev-parse"], status: .exited(128), stderr: "fatal: not a git repository")
+      ))
+    defer { harness.repository.remove() }
+
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
+    let context = try #require(output["additionalContext"])
+    #expect(!context.contains("is unreadable"))
+    #expect(result.exitCode == 0)
+  }
+
+  @Test(
+    "SessionStart surfaces a short note, without failing, when the shared index.json exists but does not decode — catches a corrupt shared file silently hiding every plan"
+  )
+  func sessionStartNotesCorruptSharedIndex() async throws {
+    let shared = SharedPlanState()
+    defer { shared.remove() }
+    try shared.write(index: "not valid json")
+    let harness = try HookHarness(git: shared.git())
+    defer { harness.repository.remove() }
+
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
+    let context = try #require(output["additionalContext"])
+    #expect(context.contains("shared plan index is unreadable"))
+    #expect(result.exitCode == 0)
   }
 
   @Test(

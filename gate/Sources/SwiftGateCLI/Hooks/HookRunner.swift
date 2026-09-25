@@ -91,7 +91,7 @@ enum HookRunner {
     let dependencies = dependencies(root)
     switch event {
     case .sessionStart:
-      return .output(await SessionStartHook.run(root: root, dependencies: dependencies))
+      return .output(await SessionStartHook.run(payload, root: root, dependencies: dependencies))
     case .preToolUse:
       return .output(
         await PreToolUseHook.run(payload, root: root, dependencies: dependencies))

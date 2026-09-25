@@ -8,7 +8,9 @@ import SwiftGateDomain
 enum SessionStartHook {
   static let moduleMapCache = "module-map.json"
 
-  static func run(root: URL, dependencies: HookDependencies) async -> String {
+  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
+    -> String
+  {
     var notes: [String] = []
     var modules: [SessionContext.ModuleEntry] = []
     var xcode: SessionContext.Xcode?
@@ -37,8 +39,8 @@ enum SessionStartHook {
     if let swept = await dependencies.sweep.sweep() { notes.append(swept) }
 
     let inputs = SessionContext.Inputs(
-      projectName: root.lastPathComponent, modules: modules, xcode: xcode,
-      plans: plans(root: root), notes: notes)
+      projectName: root.lastPathComponent, sessionID: payload.sessionID, modules: modules,
+      xcode: xcode, plans: await plans(git: dependencies.git), notes: notes)
     return HookOutput.context(.sessionStart, SessionContext.render(inputs))
   }
 
@@ -49,14 +51,19 @@ enum SessionStartHook {
     }
   }
 
-  static func plans(root: URL) -> SessionContext.Plans {
-    let url = root.appending(path: PlanIndex.path)
-    guard let data = try? Data(contentsOf: url) else { return .none }
-    do {
-      return .active(try PlanIndex.decode(data).active)
-    } catch {
-      return .unreadable("\(error)")
+  /// Reads `index.json` from the git common dir (spec §4, §6.3 row 1), the one location every
+  /// linked worktree of this repository shares — never `root`, which `git worktree add` gives its
+  /// own empty `.harness/`. A missing common dir (outside a git repository, or the query itself
+  /// failing) or a missing file both collapse to "no bytes", which ``SessionContext/resolvePlans``
+  /// renders as no active plans rather than an error.
+  static func plans(git: any Git) async -> SessionContext.Plans {
+    guard let commonDirectory = try? await git.commonDirectory(),
+      let layout = try? PlanStateLayout(commonDirectory: commonDirectory)
+    else {
+      return SessionContext.resolvePlans(indexData: nil)
     }
+    let indexData = try? Data(contentsOf: URL(filePath: layout.indexFile))
+    return SessionContext.resolvePlans(indexData: indexData)
   }
 
   /// `swift package describe` per package costs up to seconds cold, so the map is cached under
