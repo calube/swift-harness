@@ -87,7 +87,38 @@ first, so only the intended rule fires. Output lines count the swiftgate summary
 presentation rule inside a Live client, and it belongs in `CounterCore`. Push GREEN, 2/2 mutants
 killed, the test proven. Bundle: `manifest.json`, `check.json`, `arch.json`, `testlint.json`,
 `comments.json`, `mutate.json`, `diff.patch`; focuses concurrency, architecture, test-quality,
-api-errors. The review workflow itself has not been run on it yet.
+api-errors. The review workflow's run on this bundle is below.
+
+## Review workflow (real run)
+
+The workflow ran through the Workflow tool on that bundle: 6 agents (4 reviewers: concurrency,
+architecture, test-quality, api-errors; 2 verifiers, one each for the two focuses that reported
+findings), 50s wall clock, about 452k subagent tokens. SwiftUI was not applicable. Verdict:
+`refactor-needed`, which is correct for this change.
+
+The architecture and api-errors reviewers each cited D7 on their own at
+`APIClientLive.swift:52` (display truncation inside a Live client). Both verifiers traced the rule
+and the diff and kept the blocker severity.
+
+Caveat: the plugin was not installed in the session that ran it, so the agent types were emulated.
+Each reviewer ran as a general-purpose agent with its `agents/<focus>.md` body prepended to the
+prompt. The plugin's own agent definitions still need a run after install.
+
+Harness bug found: `review-synth` listed the D7 finding twice. It deduped every finding on
+(file, line, category), and the two reviewers named the category differently
+(`logic-in-live-client`, `live-client-logic`). Fixed: standards violations now dedupe on
+(file, line, rule), keeping the most severe copy and recording every reporting focus in
+`review.json`; defects keep the (file, line, category) key. The two real finding files are now the
+regression fixture (`gate/Tests/Fixtures/Review/`). Re-running `review-synth` on the run directory:
+
+```
+review: refactor-needed — 1 findings (1 blocker)
+1. [blocker] architecture,api-errors/logic-in-live-client (D7) Packages/APIClient/Sources/APIClientLive/APIClientLive.swift:52 — Counter-screen display truncation (120 chars + ellipsis) implemented inside APIClientLive
+```
+
+Not reproduced: the gap noted earlier about HTML-escaped `&gt;` in reviewer output. The structured
+workflow output and `review.json` contain no HTML entities. The escaping appeared only in how a
+notification displayed the result.
 
 ## Harness bugs found and fixed
 
