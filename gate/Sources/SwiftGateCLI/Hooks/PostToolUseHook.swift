@@ -1,9 +1,11 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateRules
 
 /// PostToolUse on an edited `*.swift` file (spec §8, < 1s): format it in place, then lint that
-/// one file. Never builds or tests.
+/// one file. Never builds or tests. A `*.md` write instead runs `LocalPathRule` on that one file
+/// (spec §6.2, D25): a fast, pure text scan, not the formatter/lint pass Swift gets.
 enum PostToolUseHook {
   static let editTools: Set<String> = ["Edit", "Write", "MultiEdit"]
 
@@ -11,8 +13,10 @@ enum PostToolUseHook {
     -> String?
   {
     guard let tool = payload.toolName, editTools.contains(tool), let absolute = payload.filePath,
-      absolute.hasSuffix(".swift"), let path = relativePath(absolute, root: root)
+      let path = relativePath(absolute, root: root)
     else { return nil }
+    if path.hasSuffix(".md") { return markdownLocalPaths(path: path, root: root) }
+    guard absolute.hasSuffix(".swift") else { return nil }
     let config = try? StaticCheckInputs.loadConfig(root: root).get()
     let excluded = config?.exclude ?? []
     guard FileManager.default.fileExists(atPath: root.appending(path: path).path),
@@ -43,6 +47,24 @@ enum PostToolUseHook {
     guard !text.isEmpty else { return nil }
     return report.verdict == .red
       ? HookOutput.block(text) : HookOutput.context(.postToolUse, text)
+  }
+
+  /// Reads the file the tool just wrote — PostToolUse fires after the write lands, and the
+  /// payload carries no content, so the file on disk is the only source of truth. `nil` when the
+  /// file can't be read (mid-edit rename, a tool that only touched metadata) or has no findings.
+  private static func markdownLocalPaths(path: String, root: URL) -> String? {
+    guard let text = try? String(contentsOf: root.appending(path: path), encoding: .utf8)
+    else { return nil }
+    let findings = LocalPathRule.scan(text, file: path)
+    guard !findings.isEmpty,
+      let report = try? StaticCheckReport.make(
+        runID: "hook", durationMilliseconds: 0,
+        outcome: .checked(RuleRunResult(findings: findings, allowances: [])))
+    else { return nil }
+    let message =
+      "`swiftgate docs-lint` \(path): \(report.verdict.rawValue)\n" + HookText.findings(report)
+    return report.verdict == .red
+      ? HookOutput.block(message) : HookOutput.context(.postToolUse, message)
   }
 
   /// `nil` for a file outside the project: another project's gate owns it.

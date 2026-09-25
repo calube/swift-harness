@@ -32,13 +32,26 @@ enum CommentsCheck {
     let prefix: String
     let added: [AddedLines]
     let contents: [String: String]
+    let markdownFindings: [Finding]
     do throws(GitError) {
       prefix = try await git.workingDirectoryPrefix()
-      added = try await git.stagedAddedLines().filter {
+      let staged = try await git.stagedAddedLines()
+      added = staged.filter {
         $0.path.hasSuffix(".swift") && $0.path.hasPrefix(prefix)
           && !isExcluded(String($0.path.dropFirst(prefix.count)))
       }
       contents = try await git.stagedContents(of: added.map(\.path))
+      // Hand-edited docs only: the index (never a filesystem walk) is what `git add` populated,
+      // so a gitignored `.build`/`.harness` doc never reaches this scan unless force-added.
+      let markdownPaths = staged.filter {
+        $0.path.hasSuffix(".md") && $0.path.hasPrefix(prefix)
+          && !isExcluded(String($0.path.dropFirst(prefix.count)))
+      }.map(\.path)
+      let markdownContents = try await git.stagedContents(of: markdownPaths)
+      markdownFindings = markdownPaths.sorted().flatMap { path in
+        LocalPathRule.scan(
+          markdownContents[path] ?? "", file: String(path.dropFirst(prefix.count)))
+      }
     } catch {
       return .blocked(reason: "git: \(error)")
     }
@@ -50,8 +63,19 @@ enum CommentsCheck {
       contents[staged.path].map { SourceInput(path: lines.path, text: $0) }
     }
     let context = RuleContext(scopes: scopes.resolver, knownIds: knownIds)
-    return scopes.appendingNotices(
-      to: StaticCheck.evaluate(RuleCatalog.comments, inputs, context: context, restrictTo: local))
+    let outcome = StaticCheck.evaluate(
+      RuleCatalog.comments, inputs, context: context, restrictTo: local)
+    return scopes.appendingNotices(to: Self.appending(markdownFindings, to: outcome))
+  }
+
+  /// No-op when there is nothing to add or the outcome never reached a checked state (`blocked`
+  /// findings already explain themselves).
+  private static func appending(_ findings: [Finding], to outcome: StaticCheckOutcome)
+    -> StaticCheckOutcome
+  {
+    guard case .checked(let result) = outcome, !findings.isEmpty else { return outcome }
+    return .checked(
+      RuleRunResult(findings: result.findings + findings, allowances: result.allowances))
   }
 }
 
