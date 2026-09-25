@@ -1,14 +1,14 @@
 # Foundation — implementation plan
 
 <!-- RESUME
-Status: PLAN WRITTEN 2026-09-24. No code yet.
+Status: M0 complete 2026-09-24.
 Spec: docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md (approved).
-Next action: M0 (T0.1 → T0.2 → T0.3), then Wave B.
+Next action: Wave B (T1.1, T2.1, T5.0, T6.1) — T5.0 waits on TCA×Swift compatibility research.
 Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.
   - T5.0: sample app needs an .xcodeproj — hand-written synchronized-folder pbxproj, fallback = user creates via Xcode template (~2 min).
   - T4.1 / T5.1: confirm `swift test` structured-output flags and `xcresulttool` subcommands on the installed toolchain before coding the parsers.
-Progress: (update per task: id, commit sha)
+Progress: T0.1 25fa917 · T0.2 b997429 · T0.3 (this commit; cached exec 52ms)
 -->
 
 ## Decisions made while planning

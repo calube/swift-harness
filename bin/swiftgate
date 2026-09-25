@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Builds gate/ once per source hash into a user cache, then execs the cached binary.
+# Hooks call this on every tool use, so the cached path must stay well under 100ms.
+set -euo pipefail
+
+resolve() {
+  local path="$1"
+  while [ -L "$path" ]; do
+    local target
+    target="$(readlink "$path")"
+    case "$target" in
+      /*) path="$target" ;;
+      *) path="$(dirname "$path")/$target" ;;
+    esac
+  done
+  printf '%s\n' "$path"
+}
+
+self="$(resolve "${BASH_SOURCE[0]}")"
+root="$(cd "$(dirname "$self")/.." && pwd -P)"
+gate="$root/gate"
+config="${SWIFTGATE_BUILD_CONFIG:-release}"
+cache="${SWIFTGATE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/swift-harness}"
+
+hash="$(
+  cd "$gate"
+  {
+    find Sources -type f -name '*.swift' -print0 | sort -z | xargs -0 shasum
+    shasum Package.swift
+    [ -f Package.resolved ] && shasum Package.resolved
+    echo "$config"
+  } | shasum | cut -c1-16
+)"
+binary="$cache/bin/$hash/swiftgate"
+
+if [ ! -x "$binary" ]; then
+  echo "swift-harness: building swiftgate ($config, $hash)…" >&2
+  scratch="$cache/build/$config"
+  swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" >&2
+  built="$(swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" --show-bin-path)/swiftgate"
+  mkdir -p "$(dirname "$binary")"
+  tmp="$binary.tmp.$$"
+  cp "$built" "$tmp"
+  mv -f "$tmp" "$binary"
+fi
+
+exec "$binary" "$@"
