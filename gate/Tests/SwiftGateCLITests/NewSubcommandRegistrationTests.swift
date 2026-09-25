@@ -33,6 +33,7 @@ struct NewSubcommandRegistrationTests {
     (
       "design-diff", ["design-diff", "docs/designs/old.md", "docs/designs/new.md"], "design-diff"
     ),
+    ("design-diff --chain", ["design-diff", "--chain", "plan.json"], "design-diff"),
     ("design-render", ["design-render", "docs/designs/example.md"], "design-render"),
     ("docs-lint", ["docs-lint"], "docs-lint"),
     ("prose", ["prose", "docs/a.md", "docs/b.md"], "prose"),
@@ -48,10 +49,11 @@ struct NewSubcommandRegistrationTests {
 
   /// Invocations that do real work now. Running them here would act on this checkout's real,
   /// shared plan state under the git common dir, so their behaviour is covered by their own
-  /// suites (`PlanClaimCommandTests`, `IndexSetCommandTests`). Listed by exact invocation name so a
+  /// suites (`PlanClaimCommandTests`, `IndexSetCommandTests`, `DesignDiffCommandTests`). Listed by exact invocation name so a
   /// still-stubbed sibling never drops out of the stub check by sharing a prefix.
   static let implemented: Set<String> = [
-    "plan claim", "plan release", "plan release --force", "index set",
+    "plan claim", "plan release", "plan release --force", "index set", "design-diff",
+    "design-diff --chain",
   ]
 
   @Test(

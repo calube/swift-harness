@@ -1,0 +1,11 @@
+55a2e7dcd1a554fa22b99f3cd57dc43165cd8245 crlf-approved.md
+fe1b6096bdc3a3745f7cbc7dca196f07562ae845 crlf.stripped.md
+ba5e041cf71ccdb7e29871f8bf96d76e74bbe21a fenced-status-edited-approved.md
+bd777fa6f0a86c10ceee5f4f51970286a54a890e fenced-status-edited.stripped.md
+86bdc7641e47f91456710eda4125d2cd8f7bf128 lf-approved.md
+9b2c7d1906747eea3fc268b14cfb80ce114015c4 lf-proposed.md
+72945ae95766ad279c53f464be8bffbe4e66f9d8 lf.stripped.md
+149e57479a836f8dabcc849b68ec692d597037a2 no-trailing-newline-approved.md
+bb2b33874d5f7ae26bd1a0c204077b6e1fea616e no-trailing-newline.stripped.md
+59de93830cdaca2809f22d5580dcad26981cddf1 non-ascii-approved.md
+169ac92d04e074ffbf1c9cddd391bc37531508a0 non-ascii.stripped.md
