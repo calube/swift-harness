@@ -5,7 +5,9 @@ import Testing
 @testable import LogClientLive
 
 struct OSLogRenderingTests {
-  @Test("attributes are split by privacy tag — catches a private or sensitive value leaking into the public log segment")
+  @Test(
+    "attributes are split by privacy tag — catches a private or sensitive value leaking into the public log segment"
+  )
   func partitionsByPrivacy() {
     let segments = OSLogRendering.segments(for: [
       .public("attempt", 3),
@@ -27,7 +29,9 @@ struct OSLogRenderingTests {
     #expect(OSLogRendering.type(for: .fault) == .fault)
   }
 
-  @Test("the minimum level gates lower severities only — catches debug logs shipping in release or errors being dropped")
+  @Test(
+    "the minimum level gates lower severities only — catches debug logs shipping in release or errors being dropped"
+  )
   func minimumLevelGate() {
     let client = LogClient.osLog(subsystem: "test", minimumLevel: .notice)
     #expect(client.isEnabled(.info, "Any") == false)

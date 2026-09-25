@@ -16,7 +16,9 @@ public struct APIClient: Sendable {
 
 extension APIClient: TestDependencyKey {
   public static let testValue = APIClient()
-  public static let previewValue = APIClient(randomFact: { Fact(text: "Cats sleep for around 13 to 14 hours a day.") })
+  public static let previewValue = APIClient(randomFact: {
+    Fact(text: "Cats sleep for around 13 to 14 hours a day.")
+  })
 }
 
 extension DependencyValues {

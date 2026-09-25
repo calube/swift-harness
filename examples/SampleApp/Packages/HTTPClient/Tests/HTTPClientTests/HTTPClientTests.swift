@@ -7,13 +7,17 @@ struct HTTPClientTests {
 
   static func client(status: Int, body: Data = Data()) -> HTTPClient {
     HTTPClient(send: { request in
-      (body, HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+      (
+        body,
+        HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+      )
     })
   }
 
   @Test("2xx responses return the body — catches successful responses being treated as failures")
   func successReturnsBody() async throws {
-    let data = try await Self.client(status: 204, body: Data("ok".utf8)).data(for: URLRequest(url: Self.url))
+    let data = try await Self.client(status: 204, body: Data("ok".utf8)).data(
+      for: URLRequest(url: Self.url))
     #expect(data == Data("ok".utf8))
   }
 

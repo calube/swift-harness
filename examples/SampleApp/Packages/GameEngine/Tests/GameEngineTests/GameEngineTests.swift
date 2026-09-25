@@ -2,7 +2,9 @@ import GameEngine
 import Testing
 
 struct SeededGeneratorTests {
-  @Test("SplitMix64 matches the reference sequence — catches an RNG algorithm change that would invalidate recorded replays")
+  @Test(
+    "SplitMix64 matches the reference sequence — catches an RNG algorithm change that would invalidate recorded replays"
+  )
   func referenceSequence() {
     var generator = SeededGenerator(seed: 0)
     #expect(generator.next() == 0xE220_A839_7B1D_CDAF)
@@ -58,7 +60,9 @@ struct GameEngineRulesTests {
     #expect(GameEngine.step(finished, .humanPlaced(8)) == finished)
   }
 
-  @Test("reset clears the board but keeps the RNG stream — catches reset replaying the same computer moves")
+  @Test(
+    "reset clears the board but keeps the RNG stream — catches reset replaying the same computer moves"
+  )
   func resetKeepsRNG() {
     let played = GameEngine.step(GameState(seed: 1), .humanPlaced(4))
     let reset = GameEngine.step(played, .reset)
@@ -74,7 +78,9 @@ struct GameEngineReplayTests {
     .reset, .humanPlaced(4), .humanPlaced(0), .humanPlaced(8),
   ]
 
-  @Test("seed plus input log replays to an identical final state — catches hidden nondeterminism in the engine")
+  @Test(
+    "seed plus input log replays to an identical final state — catches hidden nondeterminism in the engine"
+  )
   func replayIsDeterministic() {
     let first = GameEngine.replay(seed: 42, inputs: Self.inputs)
     let second = GameEngine.replay(seed: 42, inputs: Self.inputs)

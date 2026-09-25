@@ -8,7 +8,8 @@ struct FactUnavailable: Error {}
 
 @MainActor
 struct CounterFeatureTests {
-  @Test("increment and decrement change the count — catches the buttons updating the wrong direction")
+  @Test(
+    "increment and decrement change the count — catches the buttons updating the wrong direction")
   func incrementDecrement() async {
     let store = TestStore(initialState: CounterFeature.State()) { CounterFeature() }
 
@@ -19,7 +20,9 @@ struct CounterFeatureTests {
 
   @Test("changing the count clears a shown fact — catches a stale fact shown next to a new count")
   func countChangeClearsFact() async {
-    let store = TestStore(initialState: CounterFeature.State(count: 3, fact: "old")) { CounterFeature() }
+    let store = TestStore(initialState: CounterFeature.State(count: 3, fact: "old")) {
+      CounterFeature()
+    }
 
     await store.send(.incrementButtonTapped) {
       $0.count = 4
@@ -42,7 +45,9 @@ struct CounterFeatureTests {
     }
   }
 
-  @Test("a failed fact request stops loading and logs an error — catches a stuck spinner and a silent failure")
+  @Test(
+    "a failed fact request stops loading and logs an error — catches a stuck spinner and a silent failure"
+  )
   func factFailureLogs() async {
     let records = LockIsolated<[LogRecord]>([])
     let store = TestStore(initialState: CounterFeature.State(count: 7)) {

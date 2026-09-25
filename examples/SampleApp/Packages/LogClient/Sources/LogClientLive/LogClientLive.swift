@@ -11,7 +11,8 @@ enum OSLogRendering {
 
   static func segments(for attributes: [LogAttribute]) -> Segments {
     func render(_ privacy: LogPrivacy) -> String {
-      attributes.filter { $0.privacy == privacy }.map { "\($0.key)=\($0.value)" }.joined(separator: " ")
+      attributes.filter { $0.privacy == privacy }.map { "\($0.key)=\($0.value)" }.joined(
+        separator: " ")
     }
     return Segments(
       publicText: render(.public),

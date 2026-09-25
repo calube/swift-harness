@@ -29,7 +29,9 @@ struct LogClientTests {
     var client = LogClient.testValue
     client.emit = { record in records.withValue { $0.append(record) } }
 
-    client.log(.error, "fact request failed", category: "Counter", [.public("attempt", 3), .private("email", "a@b.c")])
+    client.log(
+      .error, "fact request failed", category: "Counter",
+      [.public("attempt", 3), .private("email", "a@b.c")])
 
     #expect(
       records.value == [
@@ -46,7 +48,8 @@ struct LogClientTests {
     )
   }
 
-  @Test("the test value accepts every level — catches an unimplemented logger failing unrelated tests")
+  @Test(
+    "the test value accepts every level — catches an unimplemented logger failing unrelated tests")
   func testValueIsEnabledNoop() {
     #expect(LogClient.testValue.isEnabled(.debug, "Any"))
     LogClient.testValue.log(.fault, "anything", category: "Any")

@@ -43,7 +43,8 @@ public struct LogRecord: Sendable, Equatable {
 
 @DependencyClient
 public struct LogClient: Sendable {
-  public var isEnabled: @Sendable (_ level: LogLevel, _ category: String) -> Bool = { _, _ in false }
+  public var isEnabled: @Sendable (_ level: LogLevel, _ category: String) -> Bool = { _, _ in false
+  }
   public var emit: @Sendable (_ record: LogRecord) -> Void
 }
 
@@ -56,7 +57,8 @@ extension LogClient {
     _ attributes: @autoclosure () -> [LogAttribute] = []
   ) {
     guard isEnabled(level, category) else { return }
-    emit(LogRecord(level: level, category: category, message: "\(message)", attributes: attributes()))
+    emit(
+      LogRecord(level: level, category: category, message: "\(message)", attributes: attributes()))
   }
 }
 

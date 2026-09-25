@@ -8,10 +8,13 @@
 
   @MainActor
   struct CounterViewSnapshotTests {
-    @Test("counter with a loaded fact renders unchanged — catches layout regressions in the counter screen")
+    @Test(
+      "counter with a loaded fact renders unchanged — catches layout regressions in the counter screen"
+    )
     func counterWithFact() {
       let store = Store(
-        initialState: CounterFeature.State(count: 42, fact: "Cats sleep for around 13 to 14 hours a day.")
+        initialState: CounterFeature.State(
+          count: 42, fact: "Cats sleep for around 13 to 14 hours a day.")
       ) {
         CounterFeature()
       }

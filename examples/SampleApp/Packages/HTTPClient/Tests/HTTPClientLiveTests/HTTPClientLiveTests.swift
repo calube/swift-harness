@@ -25,7 +25,9 @@ final class StubURLProtocol: URLProtocol {
 }
 
 struct HTTPClientLiveTests {
-  @Test("the live transport forwards the request and returns the raw response — catches headers or status lost in URLSession bridging")
+  @Test(
+    "the live transport forwards the request and returns the raw response — catches headers or status lost in URLSession bridging"
+  )
   func forwardsRequestAndResponse() async throws {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StubURLProtocol.self]

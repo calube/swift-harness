@@ -43,7 +43,9 @@ extension APIClient {
     Self(randomFact: {
       var request = URLRequest(url: baseURL.appending(path: "fact"))
       request.setValue("application/json", forHTTPHeaderField: "Accept")
-      let data = try await withRetry(retry, clock: clock) { [request] in try await http.data(for: request) }
+      let data = try await withRetry(retry, clock: clock) { [request] in
+        try await http.data(for: request)
+      }
       return Fact(text: try JSONDecoder().decode(CatFactResponse.self, from: data).fact)
     })
   }
@@ -57,7 +59,7 @@ extension APIClient {
     while true {
       do {
         return try await operation()
-      } catch where attempt < policy.maxAttempts && policy.isRetryable(error) {
+      } catch  where attempt < policy.maxAttempts && policy.isRetryable(error) {
         try await clock.sleep(for: policy.delay(beforeRetry: attempt))
         attempt += 1
       }

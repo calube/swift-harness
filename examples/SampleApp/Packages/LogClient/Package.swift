@@ -23,7 +23,9 @@ let package = Package(
     .target(name: "LogClientLive", dependencies: ["LogClient"]),
     .testTarget(
       name: "LogClientTests",
-      dependencies: ["LogClient", .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras")]
+      dependencies: [
+        "LogClient", .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
+      ]
     ),
     .testTarget(name: "LogClientLiveTests", dependencies: ["LogClientLive"]),
   ],
