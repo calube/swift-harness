@@ -10,12 +10,20 @@ public struct ScratchTreeRequest: Sendable, Equatable {
   public var revertTo: String
   public var copiedPaths: [String]
   public var revertedPaths: [String]
+  /// Package directories whose SwiftPM `.build` is cloned from the working tree, so a build in
+  /// the scratch tree starts from the user's resolved and fetched dependencies. Best effort: a
+  /// package with no `.build`, or a clone that fails, builds from scratch.
+  public var seededBuildDirectories: [String]
 
-  public init(revision: String, revertTo: String, copiedPaths: [String], revertedPaths: [String]) {
+  public init(
+    revision: String, revertTo: String, copiedPaths: [String], revertedPaths: [String],
+    seededBuildDirectories: [String] = []
+  ) {
     self.revision = revision
     self.revertTo = revertTo
     self.copiedPaths = copiedPaths
     self.revertedPaths = revertedPaths
+    self.seededBuildDirectories = seededBuildDirectories
   }
 }
 
@@ -118,6 +126,10 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     } catch {
       throw .fileSystem("copying the working tree into \(scratch.path): \(error)")
     }
+    for directory in request.seededBuildDirectories {
+      Self.seedBuild(
+        from: toplevel.appending(path: directory), into: scratch.appending(path: directory))
+    }
     guard !request.revertedPaths.isEmpty else { return }
     let listed = try await git(
       ["ls-tree", "-r", "-z", "--name-only", request.revertTo, "--"] + request.revertedPaths,
@@ -134,6 +146,34 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       }
     } catch {
       throw .fileSystem("removing files added since \(request.revertTo): \(error)")
+    }
+  }
+
+  /// `copyItem` clones on APFS (metadata only, seconds for gigabytes) and copies elsewhere.
+  /// SwiftPM re-plans a moved `.build` for its new paths, which keeps its fetched dependencies
+  /// but not the module cache: that records its absolute path, and a moved one fails every
+  /// build with "PCH was compiled with module cache path …", so it is dropped from the seed.
+  private static func seedBuild(from package: URL, into destinationPackage: URL) {
+    let files = FileManager.default
+    let source = package.appending(path: ".build", directoryHint: .isDirectory)
+    let destination = destinationPackage.appending(path: ".build", directoryHint: .isDirectory)
+    guard files.fileExists(atPath: source.path), !files.fileExists(atPath: destination.path),
+      files.fileExists(atPath: destinationPackage.path)
+    else { return }
+    do {
+      try files.copyItem(at: source, to: destination)
+      for platform in try files.contentsOfDirectory(atPath: destination.path) {
+        let platformURL = destination.appending(path: platform)
+        guard let configurations = try? files.contentsOfDirectory(atPath: platformURL.path)
+        else { continue }
+        for configuration in configurations {
+          let cache = platformURL.appending(path: configuration).appending(path: "ModuleCache")
+          if files.fileExists(atPath: cache.path) { try files.removeItem(at: cache) }
+        }
+      }
+    } catch {
+      // A partial seed could mislead the build; without one it only starts cold.
+      try? files.removeItem(at: destination)
     }
   }
 

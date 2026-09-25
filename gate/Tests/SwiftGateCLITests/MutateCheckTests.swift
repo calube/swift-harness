@@ -37,13 +37,14 @@ struct MutateCheckTests {
     }
 
     func environment(
-      _ added: [AddedLines], toolchain: FakeMutationToolchain, workers: Int = 2
+      _ added: [AddedLines], toolchain: FakeMutationToolchain, workers: Int? = 2,
+      scratch: CopyingScratchWorktrees? = nil
     ) -> MutateCheck.Environment {
       MutateCheck.Environment(
         root: root,
         git: FakeGit(changed: added.map(\.path), mergeBase: "base", addedSince: added),
-        scratch: CopyingScratchWorktrees(seed: root), toolchain: toolchain, workers: workers,
-        timeout: MutantTimeout())
+        scratch: scratch ?? CopyingScratchWorktrees(seed: root), toolchain: toolchain,
+        workers: workers, cores: 18, timeout: MutantTimeout())
     }
   }
 
@@ -96,6 +97,50 @@ struct MutateCheckTests {
     let summary = judgement.findings.first { $0.ruleID == MutationRules.summaryRuleID }
     #expect(summary?.message.contains("3 mutants: 1 killed, 2 survived") == true)
     #expect(summary?.message.contains("2 workers") == true)
+  }
+
+  @Test(
+    "with no --jobs or max_workers the worker count follows the default cap, and each tree is seeded with the mutated packages' builds — catches one cold build per core, or workers never reusing the main build"
+  )
+  func defaultWorkersAndSeeds() async throws {
+    let setup = try Setup()
+    defer { setup.remove() }
+    let toolchain = Self.toolchain(killing: "!(next.outcome == .inProgress)")
+    let scratch = CopyingScratchWorktrees(seed: setup.root)
+    let added = [AddedLines(path: Self.source, ranges: [Self.guardLine...Self.guardLine])]
+
+    let judgement = await MutateCheck.run(
+      setup.environment(added, toolchain: toolchain, workers: nil, scratch: scratch),
+      graph: try Self.graph(), config: try Self.config(), base: "origin/main",
+      context: setup.context)
+
+    let summary = judgement.findings.first { $0.ruleID == MutationRules.summaryRuleID }
+    // 3 mutants on 18 cores: ceil(3 / 2) = 2.
+    #expect(summary?.message.contains("2 workers") == true)
+    #expect(scratch.requests.count == 2)
+    #expect(scratch.requests.allSatisfy { $0.seededBuildDirectories == [Self.package] })
+  }
+
+  @Test(
+    "[mutation] max_workers bounds the workers when --jobs is absent — catches the configured cap ignored"
+  )
+  func configuredWorkers() async throws {
+    let setup = try Setup()
+    defer { setup.remove() }
+    let toolchain = Self.toolchain(killing: "!(next.outcome == .inProgress)")
+    let added = [AddedLines(path: Self.source, ranges: [Self.guardLine...Self.guardLine])]
+    let config = try Config(
+      xcode: "26.2", appScheme: "SampleApp", packages: ["examples/SampleApp/Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+      mutation: MutationConfig(maxMutants: 30, maxWorkers: 1))
+
+    let judgement = await MutateCheck.run(
+      setup.environment(added, toolchain: toolchain, workers: nil), graph: try Self.graph(),
+      config: config, base: "origin/main", context: setup.context)
+
+    let summary = judgement.findings.first { $0.ruleID == MutationRules.summaryRuleID }
+    #expect(summary?.message.contains("1 worker") == true)
+    #expect(summary?.message.contains("2 workers") == false)
   }
 
   @Test(

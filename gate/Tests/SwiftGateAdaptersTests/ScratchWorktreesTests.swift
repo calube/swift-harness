@@ -98,6 +98,35 @@ struct ScratchWorktreesTests {
   }
 
   @Test(
+    "a seeded package's .build is cloned into the tree without its module cache — catches workers building cold, or a seed whose absolute-path module cache fails every build"
+  )
+  func seedsBuildDirectories() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let debug = "app/.build/arm64-apple-macosx/debug"
+    try scratch.repository.write("\(debug)/Lib.build/Lib.swift.o", "object\n")
+    try scratch.repository.write("\(debug)/ModuleCache/ABC/Foundation.pcm", "pcm\n")
+
+    let contents = try await scratch.adapter.withScratchTree(
+      ScratchTreeRequest(
+        revision: "HEAD", revertTo: "HEAD", copiedPaths: [], revertedPaths: [],
+        seededBuildDirectories: ["app", "unbuilt"])
+    ) { root in
+      (
+        read(root, "\(debug)/Lib.build/Lib.swift.o"),
+        FileManager.default.fileExists(atPath: root.appending(path: "\(debug)/ModuleCache").path),
+        FileManager.default.fileExists(atPath: root.appending(path: "unbuilt/.build").path)
+      )
+    }
+
+    #expect(contents.0 == "object\n")
+    #expect(contents.1 == false)
+    #expect(contents.2 == false)
+    // The seed is a copy: the user's own build directory keeps its module cache.
+    #expect(read(scratch.repository.root, "\(debug)/ModuleCache/ABC/Foundation.pcm") == "pcm\n")
+  }
+
+  @Test(
     "an unknown revision fails as a git error and leaves no directory behind — catches a half-made scratch tree left on disk"
   )
   func unknownRevision() async throws {

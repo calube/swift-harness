@@ -228,3 +228,33 @@ extension String {
     range(of: needle).map { utf8.distance(from: utf8.startIndex, to: $0.lowerBound) }
   }
 }
+
+@Suite("mutation workers")
+struct MutationWorkersTests {
+  @Test(
+    "by default workers are min(cores − 1, ceil(mutants / 2), 4) — catches one cold package build per core swamping memory on a many-core laptop"
+  )
+  func defaultCap() {
+    #expect(MutationWorkers.count(configured: nil, cores: 18, mutants: 30) == 4)
+    #expect(MutationWorkers.count(configured: nil, cores: 18, mutants: 5) == 3)
+    #expect(MutationWorkers.count(configured: nil, cores: 3, mutants: 30) == 2)
+    #expect(MutationWorkers.count(configured: nil, cores: 18, mutants: 1) == 1)
+  }
+
+  @Test(
+    "a machine or run too small for the formula still gets one worker — catches a zero-worker run that judges nothing"
+  )
+  func atLeastOne() {
+    #expect(MutationWorkers.count(configured: nil, cores: 1, mutants: 30) == 1)
+    #expect(MutationWorkers.count(configured: nil, cores: 18, mutants: 0) == 1)
+  }
+
+  @Test(
+    "a configured count replaces the formula but never exceeds the mutants to run — catches max_workers ignored, or idle workers each paying a cold build"
+  )
+  func configured() {
+    #expect(MutationWorkers.count(configured: 8, cores: 18, mutants: 30) == 8)
+    #expect(MutationWorkers.count(configured: 8, cores: 18, mutants: 3) == 3)
+    #expect(MutationWorkers.count(configured: 1, cores: 18, mutants: 30) == 1)
+  }
+}

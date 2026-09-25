@@ -54,6 +54,7 @@ public final class CopyingScratchWorktrees: ScratchWorktrees {
   private let seed: URL
   private let failure: ScratchWorktreeError?
   private let made = Mutex<[URL]>([])
+  private let recorded = Mutex<[ScratchTreeRequest]>([])
 
   public init(seed: URL, failure: ScratchWorktreeError? = nil) {
     self.seed = seed
@@ -63,9 +64,13 @@ public final class CopyingScratchWorktrees: ScratchWorktrees {
   /// Every tree handed out, in call order.
   public var trees: [URL] { made.withLock { $0 } }
 
+  /// Every request, in call order.
+  public var requests: [ScratchTreeRequest] { recorded.withLock { $0 } }
+
   public func withScratchTree<T: Sendable>(
     _ request: ScratchTreeRequest, _ body: (URL) async -> T
   ) async throws(ScratchWorktreeError) -> T {
+    recorded.withLock { $0.append(request) }
     if let failure { throw failure }
     let token = UUID().uuidString  // swiftgate:allow det.uuid-init — unique directory
     let name = "swiftgate-fake-scratch-\(token)"

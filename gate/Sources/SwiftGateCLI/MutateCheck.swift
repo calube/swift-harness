@@ -11,7 +11,9 @@ enum MutateCheck {
     let git: any Git
     let scratch: any ScratchWorktrees
     let toolchain: any MutationToolchain
-    let workers: Int
+    /// `--jobs`: overrides `[mutation] max_workers` and the default cap.
+    let workers: Int?
+    var cores = ProcessInfo.processInfo.activeProcessorCount
     let timeout: MutantTimeout
 
     static func live(root: URL, git: any Git, workers: Int? = nil) -> Environment {
@@ -19,7 +21,7 @@ enum MutateCheck {
         root: root, git: git,
         scratch: LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path),
         toolchain: LiveMutationToolchain(runner: LiveProcessRunner()),
-        workers: workers ?? MutationRunner.defaultWorkers, timeout: MutantTimeout())
+        workers: workers, timeout: MutantTimeout())
     }
   }
 
@@ -118,11 +120,15 @@ enum MutateCheck {
     }
     let run = await MutationRunner(
       scratch: environment.scratch, toolchain: environment.toolchain,
-      workers: environment.workers, timeout: environment.timeout
+      workers: MutationWorkers.count(
+        configured: environment.workers ?? config.mutation.maxWorkers, cores: environment.cores,
+        mutants: jobs.count { !$0.selections.isEmpty }), timeout: environment.timeout
     ).run(
       jobs,
       tree: ScratchTreeRequest(
-        revision: "HEAD", revertTo: "HEAD", copiedPaths: changed, revertedPaths: []),
+        revision: "HEAD", revertTo: "HEAD", copiedPaths: changed, revertedPaths: [],
+        seededBuildDirectories: Set(jobs.flatMap { $0.selections.map(\.packagePath) }).sorted()
+          .map { prefix + $0 }),
       projectPrefix: prefix, reportDirectory: context.directory.appending(path: "mutate"))
     return MutationRules.judge(
       MutationRunSummary(

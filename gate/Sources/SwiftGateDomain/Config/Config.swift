@@ -120,6 +120,9 @@ public struct Config: Sendable, Equatable {
       issues.append(
         .outOfRange(path: "mutation.max_mutants", value: "\(mutation.maxMutants)", allowed: ">= 1"))
     }
+    if let workers = mutation.maxWorkers, workers < 1 {
+      issues.append(.outOfRange(path: "mutation.max_workers", value: "\(workers)", allowed: ">= 1"))
+    }
 
     let budgetEntries: [(String, Duration?)] = [
       ("t0", budgets.t0), ("t1", budgets.t1), ("t2", budgets.t2), ("t3", budgets.t3),
@@ -216,9 +219,12 @@ public struct Flow: Sendable, Equatable {
 public struct MutationConfig: Sendable, Equatable {
   /// Mutants beyond this count are sampled.
   public let maxMutants: Int
+  /// Scratch worktrees running mutants at once; `nil` for ``MutationWorkers``' default.
+  public let maxWorkers: Int?
 
-  public init(maxMutants: Int = 30) {
+  public init(maxMutants: Int = 30, maxWorkers: Int? = nil) {
     self.maxMutants = maxMutants
+    self.maxWorkers = maxWorkers
   }
 }
 

@@ -44,7 +44,11 @@ struct MutateCommand: AsyncParsableCommand {
   @Option(help: "Changes are measured from the merge base of HEAD and this ref.")
   var base = "origin/main"
 
-  @Option(help: "Scratch worktrees running mutants at once (default: CPU cores − 1).")
+  @Option(
+    help: """
+      Scratch worktrees running mutants at once (default: [mutation] max_workers, else \
+      min(CPU cores − 1, ceil(mutants / 2), 4)).
+      """)
   var jobs: Int?
 
   @OptionGroup var output: OutputOptions

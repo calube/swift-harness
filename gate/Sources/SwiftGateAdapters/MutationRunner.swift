@@ -166,11 +166,6 @@ public struct MutationRunner: Sendable {
     self.baselineTimeout = baselineTimeout
   }
 
-  /// CPU-bound work: one core is left for the machine.
-  public static var defaultWorkers: Int {
-    max(1, ProcessInfo.processInfo.activeProcessorCount - 1)
-  }
-
   /// - Parameters:
   ///   - tree: what every worker's scratch tree holds (the change, uncommitted work included).
   ///   - projectPrefix: where the project sits inside the tree (`""` at its toplevel); mutant
