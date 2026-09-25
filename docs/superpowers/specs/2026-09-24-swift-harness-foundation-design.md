@@ -32,7 +32,7 @@ ledgers, one shared verdict vocabulary) and none of its backend-specific machine
 | # | Sub-project | Depends on | Delivers |
 |---|---|---|---|
 | 1 | **Foundation** (this spec) | — | plugin skeleton, `swiftgate` core, standards, playbook, hooks, bootstrap, core skills |
-| 2 | Design & plan workflows | 1 | `/swift-harness:design` (frame → cited-evidence research with symbol probes + claim checking → design doc → 3-agent review incl. self-reflect → published as a Claude Artifact for comment/approval) and `/swift-harness:plan` (DAG decomposition with per-task write sets, gates, acceptance tests → wave scheduling → `swiftgate plan-lint` → ledger). Ledger canonical in git (`.harness/ledger.json`), orchestrator-only writes; Artifact is the visual view |
+| 2 | Design & plan workflows | 1 | `/swift-harness:design` (frame → cited-evidence research with symbol probes + claim checking → design doc → 3-agent review incl. self-reflect → published as a Claude Artifact for comment/approval) and `/swift-harness:plan` (per-plan ledger under `.harness/plans/<id>/`; DAG decomposition with per-task write sets, gates, acceptance tests → wave scheduling → `swiftgate plan-lint` → ledger). Ledger canonical in git (`.harness/ledger.json`), orchestrator-only writes; Artifact is the visual view |
 | 3 | Simulator QA | 1 | `swiftgate sim`, launch-arg dependency scenarios, QA skill driving `agent-device`, screenshot + accessibility-tree evidence |
 | 4 | Agentic profiling | 1, 3 | `swiftgate profile` / `leaks`: xctrace + `leaks` summarized to compact JSON; signpost-scoped measurements; XCTMetric baselines |
 | 5 | Build loop & workflows | 1–4 | executes ledger waves across worktrees; review→fix→re-gate loop; full reviewer set; `validate` workflow with sim QA + profile diff |
@@ -79,7 +79,7 @@ Component notes (checked against the Claude Code plugin docs, 2026-09-24):
   workflow. Foundation ships the `review` workflow; `validate` and `milestone` workflows arrive in
   sub-projects 3–5.
 - **Loops are not a component.** Claude Code has no loop component. A loop is a skill or workflow
-  designed to be re-run (e.g. under `/loop`), with its state in `.harness/ledger.md`, not in the
+  designed to be re-run (e.g. under `/loop`), with its state in its plan's `ledger.json` (§4.2), not in the
   conversation.
 - **Resolving `swiftgate`.** Hooks use `${CLAUDE_PLUGIN_ROOT}/bin/swiftgate` explicitly rather than
   depending on the plugin `bin/` being on PATH (the docs don't confirm that). Git hooks run outside
@@ -92,7 +92,16 @@ Component notes (checked against the Claude Code plugin docs, 2026-09-24):
 - `.swiftgate.toml` — project profile (§5.4)
 - `.swiftlint.yml`, `.swift-format`
 - `lefthook.yml` — pre-commit runs `swiftgate comments --staged` (< 1s); pre-push runs `swiftgate check --tier push`
-- `.harness/ledger.md` with RESUME header; `.harness/runs/` (gitignored) for run artifacts
+- `.harness/plans/` — one directory per plan (`<date>-<slug>/`: `design.md`, `ledger.json`,
+  `evidence/`) plus `index.json` listing plans and status; every ledger and the index carry a RESUME
+  summary; orchestrator-only writes (sub-project 2)
+- `.harness/runs/` (gitignored) for run artifacts
+
+Ledgers are per plan, per repo: a project can run several plans at once and the plugin itself holds
+no project state. A user-level registry `~/.swift-harness/projects.json` records bootstrapped repo
+paths only (pointers, not state) so `/swift-harness:status` can list active plans across all Swift
+projects; each repo's `index.json` stays canonical. Task worktrees are named
+`../<repo>-<plan>-<task>` (siblings of the repo).
 
 Bootstrap is idempotent, shows a diff before writing, and upgrades a previously-stamped repo in place.
 
@@ -474,7 +483,7 @@ All hooks are no-ops unless the repo root contains `.swiftgate.toml`.
 
 | Event | Job | Budget |
 |---|---|---|
-| SessionStart | inject compact context (module map + kinds, Xcode pin vs `xcode-select`, ledger RESUME pointer); orphan-clone sweep | < 1s |
+| SessionStart | inject compact context (module map + kinds, Xcode pin vs `xcode-select`, RESUME summaries of active plans from `.harness/plans/index.json`, never whole ledgers); orphan-clone sweep | < 1s |
 | PreToolUse (Bash) | block raw `xcodebuild` (route via `swiftgate`), `simctl erase/delete all`, snapshot record flags, global DerivedData deletion | < 50ms |
 | PreToolUse (Edit/Write) | block hand edits to snapshot references, `Package.resolved`, `.xcresult` | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | format + lint the single file (incl. determinism bans); report violations. Never builds or tests | < 1s |
