@@ -49,7 +49,7 @@ struct CommentsCommandTests {
   }
 
   @Test(
-    "checks only staged Swift files and only their added lines — catches pre-commit blocking on untouched code"
+    "checks only staged Swift files and only their added lines for comment rules — catches pre-commit blocking on untouched code"
   )
   func onlyAddedSwiftLines() async throws {
     let git = FakeGit(staged: [
@@ -64,7 +64,9 @@ struct CommentsCommandTests {
     }
     #expect(result.findings.map(\.ruleID) == ["comments.diff-narration"])
     #expect(result.findings.map(\.line) == [2])
-    #expect(git.contentReads == ["Sources/A.swift"])
+    // README.md is also read now, for the local-path scan; it carries no path, so it adds no
+    // finding here (see MarkdownStagedCommentsTests for the case that does).
+    #expect(git.contentReads == ["Sources/A.swift", "README.md"])
   }
 
   @Test(
