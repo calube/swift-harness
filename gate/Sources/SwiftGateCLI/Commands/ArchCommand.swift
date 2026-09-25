@@ -9,7 +9,7 @@ import SwiftGateRules
 enum ArchCheck {
   /// Every rule `arch` can report, source-level and graph-level.
   static var ruleIDs: [String] {
-    RuleCatalog.arch.map(\.descriptor.id) + ArchitectureRules.all.map(\.id)
+    RuleCatalog.arch.map(\.descriptor.id) + ArchitectureRules.all.map(\.id) + [EngineReplayRule.id]
   }
 
   static func run(root: URL, swiftPM: any SwiftPM) async -> StaticCheckOutcome {
@@ -37,8 +37,10 @@ enum ArchCheck {
     case .failure(let failure): return .blocked(reason: failure.reason)
     }
     do {
-      let graphFindings = try ArchitectureRules.evaluate(
-        ArchitectureInput(graph: graph, config: config, settings: settings))
+      let graphFindings =
+        try ArchitectureRules.evaluate(
+          ArchitectureInput(graph: graph, config: config, settings: settings))
+        + EngineReplayRule.evaluate(graph: graph, sources: inputs.sources)
       return .checked(
         RuleRunResult(
           findings: sourceResult.findings + graphFindings, allowances: sourceResult.allowances))

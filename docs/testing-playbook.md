@@ -4,8 +4,8 @@ How tests are written, placed, and judged in a swift-harness app. It's for anyon
 
 Every rule here names what enforces it:
 
-- A `swiftgate` command and rule id that exists today: `swiftgate lint`, `testlint`, `arch`, `impact`, `coverage`.
-- A command marked **(planned)**: `check`, `test`, `prove`, `stress`, `mutate`, `snapshots record`, `judge`. The rule already applies; until the command lands, the reviewer checks it by hand.
+- A `swiftgate` command and rule id that exists today: `swiftgate lint`, `testlint`, `arch`, `impact`, `coverage`, `check`, `test`, `prove`, `stress`, `reach`, `stats`.
+- A command marked **(planned)**: `mutate`, `snapshots record`, `judge`. The rule already applies; until the command lands, the reviewer checks it by hand.
 - `review`: human or review-agent judgment. No tool can see it.
 
 Waivers use the same-line syntax from [standards.md § Escape hatches](standards.md#escape-hatches): `// swiftgate:allow <rule-id> — <reason>`. A bare allow is itself a gating finding, and every allow is counted in the run report.
@@ -19,7 +19,7 @@ Waivers use the same-line syntax from [standards.md § Escape hatches](standards
 | T2 simulator | Snapshot tests, view and integration tests | `xcodebuild test` on a cloned simulator | minutes | Pinned device and OS, no network, dependency overrides. |
 | T3 flow | A thin XCUITest smoke test per critical flow | `xcodebuild test` on a cloned simulator | minutes | Launch-argument scenario injection. |
 
-`swiftgate check --tier` **(planned)** composes the tiers:
+`swiftgate check --tier` composes the tiers:
 
 | `--tier` | Runs |
 |---|---|
@@ -69,12 +69,12 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P2. A new test fails red before it passes green.**
 - **Do:** write the test first and watch it fail on an **assertion**, not on a compile error or a missing import. Then write the code.
 - **Tell:** a test that passes with the source change reverted.
-- **Enforced by:** `swiftgate prove` **(planned)**: reverse-applies the source diff in a scratch worktree and checks that each new test fails on an assertion · **Source:** incident: none yet.
+- **Enforced by:** `swiftgate prove` (also in `check --tier ready`): runs each new or changed host test on the change, then in a scratch git worktree where production source is restored to the merge base while tests, manifests and resources keep the change. Rules `prove.not-proven` (passes with the source reverted), `prove.compile-only` (only stops compiling), `prove.crashed`, `prove.fails-at-head` (fails on the change itself). Simulator tests aren't proven yet · **Source:** incident: none yet.
 
 **P3. Verdicts come from evidence, not exit codes.**
 - **Do:** trust the gate's reading of the test results: more than 0 tests executed, no unaccounted skips. Never pass `-retry-tests-on-failure`.
 - **Tell:** a green run with 0 tests executed (a filter that matched nothing); a retry flag in a script. A retried pass hides a flake.
-- **Enforced by:** `swiftgate test` / `check` **(planned)** read the xcresult and xUnit output · **Source:** incident: none yet.
+- **Enforced by:** `swiftgate test` / `check` read the xUnit reports (T1) and the xcresult (T2, T3) · **Source:** incident: none yet.
 
 **P4. Snapshots never record during a test run.**
 - **Do:** leave `record:` out, or set it to `.never`. Re-record only through `swiftgate snapshots record` **(planned)** on the pinned simulator from `.swiftgate.toml`, so reference changes show up in the diff.
@@ -89,7 +89,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P6. `TestClock`-driven tests run in a `.serialized` suite, inside `withMainSerialExecutor`.**
 - **Do:** when a test advances a `TestClock` and expects work to have happened in between, put the suite under `@Suite(.serialized, .timeLimit(.minutes(1)))` and wrap the test body in `withMainSerialExecutor { … }`. Keep TestStore tests that don't touch a clock out of those suites so they stay parallel.
 - **Tell:** a test that calls `clock.advance` outside `withMainSerialExecutor`; `withMainSerialExecutor` in a suite without `.serialized`; a suite that passes alone and hangs when the whole package runs.
-- **Enforced by:** review. No mechanical rule yet · **Source:** `withMainSerialExecutor` sets a process-global executor hook, and its docs only cover XCTest. Swift Testing runs tests in parallel by default, so an unserialized suite lets one test swap the hook while another runs. **Incident:** building the sample app, the `APIClientLiveTests` retry tests hung under load until the suite was marked `.serialized` and each test wrapped in `withMainSerialExecutor`. `.timeLimit` turns any future hang into a failure instead of a stuck run.
+- **Enforced by:** `testlint` `test.testclock-serialized` (a Swift Testing test that uses `TestClock` or `withMainSerialExecutor` with no enclosing `@Suite(.serialized …)`; XCTest is exempt because it runs a class's tests one at a time); review for the `withMainSerialExecutor` wrap and `.timeLimit` · **Source:** `withMainSerialExecutor` sets a process-global executor hook, and its docs only cover XCTest. Swift Testing runs tests in parallel by default, so an unserialized suite lets one test swap the hook while another runs. **Incident:** building the sample app, the `APIClientLiveTests` retry tests hung under load until the suite was marked `.serialized` and each test wrapped in `withMainSerialExecutor`. `.timeLimit` turns any future hang into a failure instead of a stuck run.
 
 **P7. No real time or swallowed errors in tests.**
 - **Do:** drive time with `TestClock` or `ImmediateClock`. Let errors propagate (`async throws` tests) or record them with `Issue.record`.
@@ -97,9 +97,9 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 - **Enforced by:** `testlint` `test.sleep`, `test.swallowed-error`; Core code is covered by `lint` `det.*` ([standards.md § 3](standards.md#3-dependencies-and-clients), D1) · **Source:** incident: none yet.
 
 **P8. Stress new and changed tests before ready.**
-- **Do:** expect new or changed tests to run 10 times, in shuffled order, at the `ready` tier. Any failure is RED.
+- **Do:** expect new or changed host tests to run 10 times at the `ready` tier. Any failure is RED. `swift test` on Swift 6.2 has no shuffle or repeat option, so each run is its own `--parallel` process: Swift Testing runs the tests concurrently and XCTest spreads them over worker processes, so their order is not fixed.
 - **Tell:** a test that depends on run order, shared mutable state, or wall time.
-- **Enforced by:** `swiftgate stress --n 10` **(planned)** · **Source:** incident: none yet.
+- **Enforced by:** `swiftgate stress --n 10` (also in `check --tier ready`) rule `stress.failed` · **Source:** incident: none yet.
 
 **P9. A changed Core, Client or Live file comes with a test change in the same module.**
 - **Do:** change `<Module>Tests` in the same commit range, or file an exemption with a reason in `.harness/impact-exemptions.json`:
@@ -113,7 +113,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P10. Every engine module has a replay test.**
 - **Do:** seed plus input log gives an identical final state across runs. Pin the RNG algorithm with a reference-sequence test so a change to it can't silently invalidate recorded replays.
 - **Tell:** an `engine` module in `.swiftgate.toml` with no replay test; two replays that disagree.
-- **Enforced by:** review; T1 presence per module in `check --tier push` **(planned)**; engine code itself is covered by `det.*` and [standards.md § 8](standards.md#8-engine-modules) (G1) · **Source:** incident: none yet.
+- **Enforced by:** `arch` `arch.engine-replay-test`: some test in a target that depends on the engine has "replay" in its function name or display name. That's a naming heuristic, so review still checks the test really replays a seed and input log; engine code itself is covered by `det.*` and [standards.md § 8](standards.md#8-engine-modules) (G1) · **Source:** incident: none yet.
 
 **P11. T3 is a closed list of flows.**
 - **Do:** declare each end-to-end flow as a `[[flows]]` entry with a reason. Name the XCUITest class or method (after `test`) starting with the flow name; matching ignores case and punctuation.
@@ -129,9 +129,9 @@ Raw tier counts are easy to game, so the gate checks where tests live and what t
 | Every XCUITest maps to a `[[flows]]` entry | test and class names vs. config | `testlint` `test.xcuitest-unlisted-flow` |
 | At most `max_flows` flows | config | **(planned)** |
 | A T2 test that renders no view or snapshot and imports only Core/Client modules belongs at T1 | SwiftSyntax import and call scan | `testlint` `test.misplaced-t2` |
-| Every Core, Client and Live module has at least one T1 test | module graph vs. discovered tests | `check --tier push` **(planned)** |
+| Every Core, Client and Live module has at least one T1 test | module graph vs. discovered tests | `swiftgate coverage` / `check --tier push` rule `coverage.no-t1-tests` |
 | At least `diff_coverage_min` of changed Core/Client/Live lines are covered by T1 alone | `swift test --enable-code-coverage` → llvm-cov JSON ∩ diff | `swiftgate coverage` |
-| Tier runtimes stay within budget; p95 trend | run history in `.harness/runs/history.jsonl` | `swiftgate stats` **(planned)** |
+| Tier runtimes stay within budget; p95 trend | run history in `.harness/runs/history.jsonl` | `swiftgate stats` |
 
 Diff coverage from T1 alone is what keeps the pyramid honest: if a line is reachable only from the simulator, its logic is in the wrong module.
 
@@ -156,14 +156,15 @@ SwiftSyntax over test files. Every rule is RED.
 | `test.non-exhaustive-store` | Non-exhaustive `TestStore` without a same-line justification |
 | `test.xcuitest-unlisted-flow` | XCUITest outside `[[flows]]` |
 | `test.misplaced-t2` | T2 test that should be T1 |
+| `test.testclock-serialized` | A Swift Testing test using `TestClock` or `withMainSerialExecutor` outside a `.serialized` suite (P6) |
 
 Run it on a path relative to the repository root, e.g. `swiftgate testlint Packages/CounterFeature/Tests` in an app repository. With no argument it checks everything.
 
 ### 5.2 Behavioral (push and ready)
 
-- **`prove` (planned):** each new test fails on an assertion with the source change reverted (P2).
+- **`prove`:** each new or changed host test fails on an assertion with the source change reverted (P2).
 - **`mutate` (planned):** mutation testing on **changed** Core/Client/Live lines, re-running the affected T1 tests. Operators: negate a conditional, shift a relational boundary (`<` ↔ `<=`), return a default, remove a call, remove an effect or `send`. Any surviving mutant is RED at `ready`, unless the line carries `// swiftgate:equivalent-mutant — <reason>`. Costs about 5–15s per mutant; capped at `[mutation] max_mutants` with sampling beyond; never runs in the Stop hook.
-- **Per-test reach (planned):** each new test runs alone with coverage. Zero production lines covered in the module it targets is RED.
+- **Per-test reach (`swiftgate reach`, and in `check --tier ready`):** each new or changed host test runs alone with coverage. Zero production lines covered in the module it targets (`<Module>` for `<Module>Tests`, otherwise its local production dependencies) is RED `reach.no-production-lines`; failing when run alone is RED `reach.fails-alone`.
 
 ### 5.3 Judgment
 

@@ -1,0 +1,16 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "App"
+packages = ["Packages/*"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[clients]
+vendor_modules = ["DatadogRUM"]
+
+[[modules]]
+name = "PhysicsCore"
+kind = "engine"
+reason = "fixed-timestep integration; a reducer per frame is overhead"

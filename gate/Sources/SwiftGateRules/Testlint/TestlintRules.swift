@@ -7,7 +7,7 @@ public enum TestlintRules {
   public static let all: [any Rule] = [
     NoAssertionRule(), TautologyRule(), ExistenceOnlyRule(), AssertsOwnDoubleRule(),
     SwallowedErrorRule(), SleepRule(), DuplicateTestRule(), UnnamedTestRule(),
-    NonExhaustiveStoreRule(), XCUITestFlowRule(), MisplacedT2Rule(),
+    NonExhaustiveStoreRule(), XCUITestFlowRule(), MisplacedT2Rule(), TestClockSerializedRule(),
   ]
 }
 

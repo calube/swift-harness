@@ -37,6 +37,14 @@ struct TestlintRulesTests {
   }
 
   @Test(
+    "a Swift Testing test on a TestClock or withMainSerialExecutor outside a .serialized suite is RED; nested and extended serialized suites and XCTest pass — catches clock tests that hang under parallel runs"
+  )
+  func testClockSerialized() throws {
+    #expect(try lines("test.testclock-serialized", "bad/Unserialized.swift") == [6, 21, 29])
+    #expect(try lines("test.testclock-serialized", "good/Serialized.swift") == [])
+  }
+
+  @Test(
     "literal, self-comparison and just-constructed assertions are RED — catches assertions that cannot fail"
   )
   func tautology() throws {
