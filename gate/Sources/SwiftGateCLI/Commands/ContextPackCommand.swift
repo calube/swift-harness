@@ -20,8 +20,6 @@ struct ContextPackOptions: ParsableArguments {
   var pin: String?
   @Option(help: "The design's area (research lane).")
   var area: String?
-  @Option(help: "A module named in the frame answers as touched. Repeatable.")
-  var touchedModule: [String] = []
   @Option(help: "The evidence reuse cache's home directory; defaults to $HOME.")
   var cacheHome: String?
 
@@ -73,8 +71,8 @@ struct ContextPackOptions: ParsableArguments {
 
   var gatherInputs: ContextPackGatherInputs {
     ContextPackGatherInputs(
-      key: key, brief: brief, pin: pin, area: area, touchedModule: touchedModule,
-      cacheHome: cacheHome, design: design, docAnchor: docAnchor, template: template,
+      key: key, brief: brief, pin: pin, area: area, cacheHome: cacheHome, design: design,
+      docAnchor: docAnchor, template: template,
       frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, standards: standards,
       playbook: playbook, moduleKind: moduleKind, standardsAnchor: standardsAnchor, claims: claims,
       claimID: claimID, questionSet: questionSet, moduleGraph: moduleGraph,
@@ -90,7 +88,6 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var brief: [String] = []
   var pin: String?
   var area: String?
-  var touchedModule: [String] = []
   var cacheHome: String?
   var design: String?
   var docAnchor: [String] = []
@@ -144,7 +141,9 @@ enum ContextPackRun {
     init(_ message: String) { self.message = message }
   }
 
-  static func run(role roleRaw: String, options: ContextPackGatherInputs, root: URL) -> Outcome {
+  static func run(
+    role roleRaw: String, options: ContextPackGatherInputs, root: URL, swiftPM: any SwiftPM
+  ) async -> Outcome {
     guard let role = ContextPackRole(rawValue: roleRaw) else {
       return .invalid(
         message:
@@ -154,7 +153,7 @@ enum ContextPackRun {
 
     let gathered: Result<Gathered, GatherFailure>
     switch role {
-    case .researchLane: gathered = gatherResearchLane(options, root)
+    case .researchLane: gathered = await gatherResearchLane(options, root, swiftPM)
     case .claimChecker: gathered = gatherClaimChecker(options, root)
     case .drafter: gathered = gatherDrafter(options, root)
     case .evidenceAuditor: gathered = gatherEvidenceAuditor(options, root)
@@ -192,9 +191,9 @@ enum ContextPackRun {
 
   // MARK: - Per-role gathering
 
-  private static func gatherResearchLane(_ o: ContextPackGatherInputs, _ root: URL) -> Result<
-    Gathered, GatherFailure
-  > {
+  private static func gatherResearchLane(
+    _ o: ContextPackGatherInputs, _ root: URL, _ swiftPM: any SwiftPM
+  ) async -> Result<Gathered, GatherFailure> {
     guard let frameAnswersPath = o.frameAnswers else {
       return .failure(GatherFailure("missing required option '--frame-answers <path>'"))
     }
@@ -229,6 +228,12 @@ enum ContextPackRun {
       }
     }
 
+    let touchedModules: [String]
+    switch await resolvedTouchedModules(namedIn: frameAnswers, root: root, swiftPM: swiftPM) {
+    case .failure(let message): return .failure(message)
+    case .success(let names): touchedModules = names
+    }
+
     var notes: [String] = []
     let claimsSource: ContextSource
     switch optionalClaims(o.claims, root: root, notes: &notes) {
@@ -245,9 +250,58 @@ enum ContextPackRun {
           .researchLane(
             ResearchLaneInputs(
               frameAnswers: frameAnswers, area: area, moduleGraph: moduleGraph,
-              touchedModules: o.touchedModule, briefs: briefs, claims: claimsSource,
+              touchedModules: touchedModules, briefs: briefs, claims: claimsSource,
               cacheHits: hits, pin: pin)), notes, nil
         ))
+    }
+  }
+
+  /// The touched modules a research-lane pack slices its module graph to are the SAME
+  /// `touchedModules` `design-scope` already decodes from this exact frame-answers file — never
+  /// a second CLI input naming them independently, which could drift from what the frame answers
+  /// actually say. Validated against the real module graph the same way `design-scope` validates
+  /// them (`DesignScope.deriveFacts`): a name the graph doesn't have is a gathering failure, not
+  /// a pack built against a module that doesn't exist.
+  private static func resolvedTouchedModules(
+    namedIn frameAnswers: ContextSource, root: URL, swiftPM: any SwiftPM
+  ) async -> Result<[String], GatherFailure> {
+    let answers: DesignScopeAnswers
+    do {
+      answers = try DesignScopeInputJSON.decode(Data(frameAnswers.rawText.utf8))
+    } catch {
+      return .failure(
+        GatherFailure("`\(frameAnswers.label)` is not a valid frame-answers file: \(error)"))
+    }
+
+    let config: Config
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(let loaded?): config = loaded
+    case .success(nil):
+      return .failure(
+        GatherFailure("no \(ConfigLoader.fileName): context-pack needs the module graph"))
+    case .failure(let failure):
+      return .failure(GatherFailure(configFailureMessage(failure.outcome)))
+    }
+    let graph: ModuleGraph
+    do {
+      graph = try await ModuleGraphLoader(swiftPM: swiftPM, root: root).load(config: config)
+    } catch {
+      return .failure(GatherFailure("can't load the module graph: \(error)"))
+    }
+
+    do throws(DesignScopeValidationError) {
+      _ = try DesignScope.deriveFacts(answers: answers, graph: graph)
+    } catch {
+      return .failure(GatherFailure("\(error)"))
+    }
+    return .success(answers.touchedModules)
+  }
+
+  private static func configFailureMessage(_ outcome: StaticCheckOutcome) -> String {
+    switch outcome {
+    case .blocked(let reason): reason
+    case .invalid(let reason, _): reason
+    case .checked: "\(ConfigLoader.fileName) could not be loaded"
     }
   }
 
@@ -721,7 +775,7 @@ enum ContextPackRun {
   }
 }
 
-struct ContextPackCommand: ParsableCommand {
+struct ContextPackCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "context-pack",
     abstract:
@@ -743,10 +797,11 @@ struct ContextPackCommand: ParsableCommand {
   @OptionGroup var packOptions: ContextPackOptions
   @OptionGroup var output: OutputOptions
 
-  func run() throws {
+  func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let outcome = ContextPackRun.run(
-      role: packOptions.role, options: packOptions.gatherInputs, root: root)
+    let outcome = await ContextPackRun.run(
+      role: packOptions.role, options: packOptions.gatherInputs, root: root,
+      swiftPM: ScopeResolution.liveSwiftPM(root: root))
     switch outcome {
     case .written(let written):
       Console.write(ContextPackRun.render(written, format: output.format))

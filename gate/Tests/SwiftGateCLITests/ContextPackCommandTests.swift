@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -65,16 +66,59 @@ struct ContextPackCommandTests {
     func packExists(_ relativePath: String) -> Bool {
       FileManager.default.fileExists(atPath: root.appending(path: relativePath).path)
     }
+
+    /// Seeds a `.swiftgate.toml` and one package (`OrderQueueCore` depended on by
+    /// `OrderQueueFeature`) so `context-pack --role research-lane` can validate touched-module
+    /// names against a real module graph, the same way `design-scope` does — through
+    /// `ConfigLoader`/`ModuleGraphLoader` against a scripted `FakeSwiftPM`, never a live
+    /// `swift package describe`.
+    static let modulePackagePath = "Sample"
+
+    @discardableResult
+    func seedModuleGraph() throws -> FakeSwiftPM {
+      let package = root.appending(path: Self.modulePackagePath, directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+      try Data("// swift-tools-version: 6.2\n".utf8).write(
+        to: package.appending(path: "Package.swift"))
+      try write(
+        """
+        schema = 1
+        xcode = "26.2"
+        app_scheme = "Sample"
+        packages = ["\(Self.modulePackagePath)"]
+
+        [simulator]
+        device = "iPhone 17"
+        os = "26.2"
+        """, at: ConfigLoader.fileName)
+      let manifest = PackageManifest(
+        name: "Sample", path: Self.modulePackagePath,
+        targets: [
+          PackageTarget(
+            name: "OrderQueueCore", type: .library,
+            path: "\(Self.modulePackagePath)/Sources/OrderQueueCore"),
+          PackageTarget(
+            name: "OrderQueueFeature", type: .library,
+            path: "\(Self.modulePackagePath)/Sources/OrderQueueFeature",
+            targetDependencies: ["OrderQueueCore"]),
+        ])
+      return FakeSwiftPM(serving: [manifest])
+    }
   }
+
+  /// Unused by every role except research lane; a placeholder so those tests don't have to seed
+  /// a module graph they never read.
+  private static let unusedSwiftPM = FakeSwiftPM(serving: [])
 
   // MARK: - Bad `--role`
 
   @Test("an unknown --role names it and never falls through to a role's builder — exit 2")
-  func unknownRoleIsInvalid() throws {
+  func unknownRoleIsInvalid() async throws {
     let repository = try Repository()
     defer { repository.remove() }
-    let outcome = ContextPackRun.run(
-      role: "not-a-role", options: ContextPackGatherInputs(), root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "not-a-role", options: ContextPackGatherInputs(), root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
     guard case .invalid(let message) = outcome else {
       Issue.record("expected .invalid, got \(outcome)")
       return
@@ -85,14 +129,15 @@ struct ContextPackCommandTests {
   // MARK: - Missing input, never a silent fallback
 
   @Test("an unreadable required input names its path — exit 2, never a silent fallback")
-  func unreadableRequiredInputIsInvalid() throws {
+  func unreadableRequiredInputIsInvalid() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     var options = ContextPackGatherInputs()
     options.design = "docs/does-not-exist.md"
     options.ledger = "ledger.json"
     options.taskID = "whatever"
-    let outcome = ContextPackRun.run(role: "worker", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .invalid(let message) = outcome else {
       Issue.record("expected .invalid, got \(outcome)")
       return
@@ -105,7 +150,7 @@ struct ContextPackCommandTests {
   @Test(
     "a missing standards anchor is a violation naming the anchor and its source — exit 1, never an empty pack"
   )
-  func missingStandardsAnchorIsAViolation() throws {
+  func missingStandardsAnchorIsAViolation() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -118,8 +163,9 @@ struct ContextPackCommandTests {
     options.standards = standardsPath
     options.standardsAnchor = ["not-a-real-anchor"]
 
-    let outcome = ContextPackRun.run(
-      role: "standards-reviewer", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "standards-reviewer", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
     guard case .violation(let message) = outcome else {
       Issue.record("expected .violation, got \(outcome)")
       return
@@ -132,7 +178,7 @@ struct ContextPackCommandTests {
   // MARK: - Optional input absent: noted, never silently dropped
 
   @Test("an absent optional input (claims) is named as a note, and the pack is still written")
-  func absentOptionalInputIsNoted() throws {
+  func absentOptionalInputIsNoted() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -151,7 +197,8 @@ struct ContextPackCommandTests {
     options.ledger = ledgerPath
     options.taskID = task.id
 
-    let outcome = ContextPackRun.run(role: "worker", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -166,7 +213,7 @@ struct ContextPackCommandTests {
   @Test(
     "worker pack for a fixture task holds its covered design sections, cited claims, standards anchor and gate tier"
   )
-  func workerPackHasExpectedSections() throws {
+  func workerPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -207,7 +254,8 @@ struct ContextPackCommandTests {
     options.moduleKind = ["feature"]
     options.standards = standardsPath
 
-    let outcome = ContextPackRun.run(role: "worker", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -244,11 +292,26 @@ struct ContextPackCommandTests {
         pin: pin), status: .supported)
   }
 
+  /// The exact frame-answers JSON `design-scope` already decodes (Wave 8's
+  /// `{schemaVersion, touchedModules, newModules, newDependencies}`); research-lane reuses that
+  /// decoder rather than taking touched-module names as a second, independently-typed CLI input.
+  private static func frameAnswersJSON(touching modules: [String]) -> String {
+    let names = modules.map { "\"\($0)\"" }.joined(separator: ", ")
+    return
+      "{\"schemaVersion\": 1, \"touchedModules\": [\(names)], \"newModules\": [], "
+      + "\"newDependencies\": []}"
+  }
+
+  /// `repository.seedModuleGraph()`'s package has `OrderQueueCore` and `OrderQueueFeature`, so
+  /// `"OrderQueueCore"` is always a valid touched module here; `--module-graph` still names its
+  /// own separate opaque dump (the pack's verbatim text source), same as decomposer's.
   private static func baseResearchLaneOptions(
-    repository: Repository, pin: String, cacheHome: String
-  ) throws -> ContextPackGatherInputs {
+    repository: Repository, pin: String, cacheHome: String,
+    touching modules: [String] = ["OrderQueueCore"]
+  ) throws -> (options: ContextPackGatherInputs, swiftPM: FakeSwiftPM) {
+    let swiftPM = try repository.seedModuleGraph()
     let frameAnswersPath = try repository.write(
-      "Q: which module owns retry?\nA: OrderQueueCore.", at: "frame-answers.md")
+      Self.frameAnswersJSON(touching: modules), at: "frame-answers.json")
     let moduleGraphPath = try repository.write(
       "OrderQueueFeature -> OrderQueueCore\nUnrelatedFeature -> UnrelatedCore",
       at: "module-graph.txt")
@@ -259,11 +322,10 @@ struct ContextPackCommandTests {
     options.frameAnswers = frameAnswersPath
     options.area = "checkout"
     options.moduleGraph = moduleGraphPath
-    options.touchedModule = ["OrderQueueCore"]
     options.brief = [briefPath]
     options.pin = pin
     options.cacheHome = cacheHome
-    return options
+    return (options, swiftPM)
   }
 
   @Test(
@@ -283,25 +345,67 @@ struct ContextPackCommandTests {
     let liveClaim = try ReusableClaim(Self.packageClaim(id: "ev-cache-hit", pin: matchingPin))
     try await store.record(liveClaim, origin: .researchLane)
 
-    var options = try Self.baseResearchLaneOptions(
+    var (options, swiftPM) = try Self.baseResearchLaneOptions(
       repository: repository, pin: matchingPin, cacheHome: cacheHome)
     options.claims = claimsPath
 
-    let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
     }
     #expect(!written.notes.contains { $0.contains("no cache hits") })
     let text = try repository.packText(written.relativePath)
-    #expect(text.contains("which module owns retry"))  // frame answers
+    #expect(text.contains(Self.frameAnswersJSON(touching: ["OrderQueueCore"])))  // frame answers
     #expect(text.contains("checkout"))  // area
     #expect(text.contains("OrderQueueFeature -> OrderQueueCore"))  // touched-module graph slice
-    #expect(!text.contains("UnrelatedFeature -> UnrelatedCore"))
+    #expect(!text.contains("UnrelatedFeature -> UnrelatedCore"))  // an untouched module is excluded
     #expect(text.contains(hit))  // repo same-pin claim
     #expect(!text.contains(miss))
     #expect(text.contains("ev-cache-hit"))  // evidence reuse cache hit
     #expect(text.contains("Investigate retry semantics."))  // lane brief
+  }
+
+  @Test("a touched module the frame answers don't name is not in the module-graph slice")
+  func researchLanePackSlicesExactlyTheNamedTouchedModules() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "swift-composable-architecture@1.26.2", cacheHome: cacheHome,
+      touching: ["OrderQueueCore"])
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("OrderQueueFeature -> OrderQueueCore"))
+    #expect(!text.contains("UnrelatedFeature -> UnrelatedCore"))
+  }
+
+  @Test(
+    "a touched module the frame answers name that isn't in the module graph fails loudly, naming it — exit 2"
+  )
+  func researchLaneUnknownTouchedModuleFailsWithExitTwo() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "swift-composable-architecture@1.26.2", cacheHome: cacheHome,
+      touching: ["Ghost"])
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains("Ghost"))
+    #expect(!repository.packExists(".harness/context-pack/research-lane.md"))
   }
 
   @Test("a tombstoned evidence-cache claim is absent from the research-lane pack")
@@ -324,9 +428,10 @@ struct ContextPackCommandTests {
         status: .supported))
     try await store.record(live, origin: .researchLane)
 
-    let options = try Self.baseResearchLaneOptions(
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
       repository: repository, pin: pin, cacheHome: cacheHome)
-    let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -340,15 +445,16 @@ struct ContextPackCommandTests {
   @Test(
     "an empty evidence reuse cache is a note, not a silently omitted section — the pack is still written"
   )
-  func researchLanePackNotesEmptyReuseCache() throws {
+  func researchLanePackNotesEmptyReuseCache() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let pin = "swift-composable-architecture@1.26.2"
     let cacheHome = try Self.freshCacheHome(repository)
 
-    let options = try Self.baseResearchLaneOptions(
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
       repository: repository, pin: pin, cacheHome: cacheHome)
-    let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -361,7 +467,7 @@ struct ContextPackCommandTests {
   // MARK: - Claim checker: cited ranges only
 
   @Test("claim-checker pack holds only its claims' cited ranges, never the whole cited file")
-  func claimCheckerPackHasExpectedSections() throws {
+  func claimCheckerPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -383,7 +489,8 @@ struct ContextPackCommandTests {
     options.claims = claimsPath
     options.claimID = ["ev-example"]
 
-    let outcome = ContextPackRun.run(role: "claim-checker", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "claim-checker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -400,7 +507,7 @@ struct ContextPackCommandTests {
   @Test(
     "drafter pack holds its template, frame answers, only supported claims, its standards anchors, and notes an absent --probe-verdicts"
   )
-  func drafterPackHasExpectedSections() throws {
+  func drafterPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let templatePath = try repository.write("## Problem\n\n## Requirements\n", at: "template.md")
@@ -420,7 +527,8 @@ struct ContextPackCommandTests {
     options.claims = claimsPath
     options.moduleKind = ["feature"]
 
-    let outcome = ContextPackRun.run(role: "drafter", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "drafter", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -436,7 +544,7 @@ struct ContextPackCommandTests {
   // MARK: - Evidence auditor: only the given doc sections and their cited claims
 
   @Test("evidence-auditor pack holds only its given doc sections and their cited claim excerpts")
-  func evidenceAuditorPackHasExpectedSections() throws {
+  func evidenceAuditorPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -454,8 +562,9 @@ struct ContextPackCommandTests {
     options.claims = claimsPath
     options.claimID = ["ev-tca-effect-run-supports-cancellation"]
 
-    let outcome = ContextPackRun.run(
-      role: "evidence-auditor", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "evidence-auditor", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -471,7 +580,7 @@ struct ContextPackCommandTests {
   @Test(
     "standards-reviewer pack holds Module kinds, Decision and Test plan, and the given standards anchor"
   )
-  func standardsReviewerPackHasExpectedSections() throws {
+  func standardsReviewerPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -484,8 +593,9 @@ struct ContextPackCommandTests {
     options.standards = standardsPath
     options.standardsAnchor = ["feature-kind"]
 
-    let outcome = ContextPackRun.run(
-      role: "standards-reviewer", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "standards-reviewer", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -502,7 +612,7 @@ struct ContextPackCommandTests {
   // MARK: - Challenger: only the given doc sections, plus the question set
 
   @Test("challenger pack holds only its given doc sections, plus the question set")
-  func challengerPackHasExpectedSections() throws {
+  func challengerPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -515,7 +625,8 @@ struct ContextPackCommandTests {
     options.docAnchor = ["options"]
     options.questionSet = questionSetPath
 
-    let outcome = ContextPackRun.run(role: "challenger", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "challenger", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -531,7 +642,7 @@ struct ContextPackCommandTests {
   @Test(
     "decomposer pack holds Requirements, Module kinds and Test plan, plus the module graph and sizing bounds"
   )
-  func decomposerPackHasExpectedSections() throws {
+  func decomposerPackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let designPath = try repository.write(
@@ -546,7 +657,8 @@ struct ContextPackCommandTests {
     options.moduleGraph = moduleGraphPath
     options.taskSizingBounds = boundsPath
 
-    let outcome = ContextPackRun.run(role: "decomposer", options: options, root: repository.root)
+    let outcome = await ContextPackRun.run(
+      role: "decomposer", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
