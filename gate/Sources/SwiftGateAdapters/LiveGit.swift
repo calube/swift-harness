@@ -152,6 +152,34 @@ public struct LiveGit: Git, DiffReading {
     return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  public func commonDirectory() async throws(GitError) -> String {
+    let output = try await run(["rev-parse", "--git-common-dir"])
+      .trimmingCharacters(in: .newlines)
+    guard !output.isEmpty else {
+      throw .unparseableOutput(command: "rev-parse", detail: "empty --git-common-dir")
+    }
+    // A relative answer is relative to the working directory git ran in: this adapter's root.
+    let url =
+      output.hasPrefix("/")
+      ? URL(filePath: output, directoryHint: .isDirectory)
+      : URL(filePath: repositoryRoot, directoryHint: .isDirectory).appending(
+        path: output, directoryHint: .isDirectory)
+    return CanonicalPath.of(url)
+  }
+
+  public func blobContents(_ id: String) async throws(GitError) -> String? {
+    let isHexObjectName =
+      (4...64).contains(id.utf8.count)
+      && id.utf8.allSatisfy {
+        (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0)
+          || (UInt8(ascii: "a")...UInt8(ascii: "f")).contains($0)
+      }
+    guard isHexObjectName else { throw .invalidRef(id) }
+    return try await catFileBatch([id]).first.flatMap { $0 }.map {
+      String(decoding: $0, as: UTF8.self)
+    }
+  }
+
   public func unifiedDiff(since ref: String) async throws(GitError) -> String {
     try Self.validate(ref: ref)
     return try await run([
