@@ -498,3 +498,42 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 
 **Mermaid validation** has fake-runner tests (`TA/MermaidValidationTests.swift`), so the `mmdc`-present path is
 covered on machines without `mmdc`.
+
+## Wave 14
+
+**Markdown writes checked for local paths** (`C/Hooks/PostToolUseHook.swift`, `C/Commands/CommentsCommand.swift`)
+- PostToolUse on a `*.md` Edit/Write/MultiEdit runs `LocalPathRule.scan` on that file (fastest-of-N < 50 ms for
+  1,000 lines). Block text: "`swiftgate docs-lint` <path>: RED\n" + one line per finding, the Swift path's shape.
+  Rule id `docs-lint.local-path` (major); `DocsLintPolicy.productPaths` stay allowed. Non-markdown writes unchanged.
+- `comments --staged` also scans staged `*.md` (git-tracked, hand-edited only); findings merge into its result.
+  No new flag.
+
+**`plan-lint`** (`A/PlanState/PlanStateStore.swift`, `C/Commands/PlanLintCommand.swift`)
+- `swiftgate plan-lint <slug> [--json]` from the repo toplevel. Reads
+  `<git-common-dir>/swift-harness/plans/<slug>/{plan.json,ledger.json}` via `PlanStateStore.locate(slug:git:)`, so
+  every linked worktree sees the same plan. One call to `PlanLintGraph.allFindings`.
+- The design comes from `DesignAtSha.find(designSha:path:git:) -> Found{commit, text}?`: walk
+  `Git.revisions(of:)` newest first, `DesignSha.strippingStatus`, `GitBlobID.of`, stop at the match. Never the
+  working tree, never `Git.blobContents`.
+- Worker packs are the FULL §5.10 pack per task: claims from the working-tree `<slug>.evidence/claims.jsonl`,
+  standards from `docs/standards.md` plus `docs/testing-playbook.md` when present, anchors via
+  `ContextPackModuleKindAnchors` for the kinds of the modules the task touches. An absent claims or standards file
+  is a stderr note; a malformed claims file makes every pack `pack-missing`.
+- Exit 0 clean, 1 gating finding, 2 blocked (missing or malformed `plan.json`/`ledger.json`, nil or unknown
+  `designSha`, no `.swiftgate.toml`, module-graph failure). JSON is the standard `RunReport`; a blocked reason is a
+  `swiftgate.environment` finding.
+
+**Push tier runs evidence check** (`C/Commands/CheckCommand.swift`)
+- `check --tier push` (not `fast`) re-checks every `approved`/`built` design's claims at `HEAD` through
+  `evidence check`'s own code path (`PushDocGates.run`). Rule ids: `evidence-check.stale-claim`,
+  `.status-unknown`, `.blocked` (all major: a design whose evidence can't be checked gates), `.summary` (nit:
+  "N design doc(s) found, M approved or built and checked at HEAD").
+- **Extension point** for the next two `CheckCommand` edits (calibration freshness; docs-lint and prose):
+  `if tier != .fast { parts.findings += try await PushDocGates.run(...) }` in `CheckRun.run`, after the
+  simulator-tiers block. Add sibling steps there. `Dependencies` gained `runner: any ProcessRunner`.
+- One design-doc predicate: `DesignDocument.isDesignDocPath(_ repoRelativePath: String) -> Bool` (a `.md`
+  directly under a path component named `designs`), used by docs-lint, known-id sources and the push tier.
+
+**For `plugin-docs-pass-docs-lint-and-prose`:** `isDesignDocPath` counts `docs/designs/README.md` as a design;
+decide whether router/README files are excluded before docs-lint and prose gate push. This repo's two designs
+predate §5.3 frontmatter (status lives in a RESUME comment), so push sees them as neither approved nor built.
