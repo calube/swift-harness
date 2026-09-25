@@ -168,3 +168,60 @@ then passed. If it recurs, run it through `flake-hunter`.
 invocation name in `NewSubcommandRegistrationTests.implemented`, because running them there would act on this
 checkout's real shared plan state. When the next stub graduates, add its invocation name there and test it in its
 own suite against a temp repo.
+
+## Wave 6
+
+**Markdown reader and CRLF.** `MarkdownDocument` treats `\r\n` like `\n` at the line splitter, so no parsed line
+carries a trailing `\r`. A lone `\r` stays content. The model keeps no raw text or byte ranges: anything that hashes
+or quotes original bytes must read the file itself (as `DesignSha` and the context-pack slicers do).
+
+**Context packs** (`D/Context/ContextPack.swift`, pure, no IO)
+- `ContextPackRole`: closed enum, kebab-case raw values: `research-lane`, `claim-checker`, `drafter`,
+  `evidence-auditor`, `standards-reviewer`, `challenger`, `decomposer`, `worker`.
+- `ContextPack.build(role:inputs:) throws` is the single dispatch: an exhaustive switch over
+  `ContextPackRoleInputs` (one case per role, no `default`). A role that doesn't match its inputs throws
+  `.roleMismatch`. Per-role builders are also public: `researchLanePack`, `claimCheckerPack`, `drafterPack`,
+  `evidenceAuditorPack`, `standardsReviewerPack`, `challengerPack`, `decomposerPack`, `workerPack`.
+- Sources with no domain type yet (template, module graph, challenger question set, sizing bounds) go in as a
+  `ContextSource` (raw text + source label) and are sliced verbatim by anchor.
+- `ContextPack{role, slices, estimatedTokens}`, `ContextPackSlice{sourceLabel, anchor, lines, text}`,
+  `TokenCountEstimate{value}` = UTF-8 bytes / 4. `isOverBudget(tokens:)` answers the budget; `plan-lint` owns the
+  finding.
+- `MarkdownAnchorSlicer.slice(anchor:of:rawText:sourceLabel:)` and
+  `CitationExcerptSlicer.slice(for:rawText:sourceLabel:)` are public for `context-pack-command` and
+  `evidence-check-rules`.
+- `ContextPackError`: `.missingAnchor`, `.duplicateAnchor`, `.unknownCoversID`, `.invalidCitationRange`,
+  `.citationRangeOutOfBounds`, `.citationQuoteNotFound`, `.roleMismatch`. A pack is never silently empty.
+
+**`designSha` and `design-diff`** (`D/Design/DesignDiff.swift`, `C/Commands/DesignDiffCommand.swift`)
+- `DesignSha.of(_:)` = git blob id of the doc with the frontmatter `status:` line removed, computed in-process.
+  Only a top-level `status:` key inside the frontmatter is stripped. An indented one, or one in the body, is
+  content. `DesignSha.strippingStatus(_:)` is public. Fixtures in `FX/DesignSha/` are captured `git hash-object`
+  output.
+- `DesignDiff.compare(old:new:)` → `DesignDiff.Class` (`unchanged`, `clarify`, `amend`) plus
+  `DesignDiff.Trigger` (`requirement-line`, `decision`, `module-kinds`, `test-plan`) and changed ids.
+  `ClarifyChain.verify(approvedSha:links:revisions:)` checks the chain one link at a time. A chain that crosses a
+  file rename fails and says why.
+- `swiftgate design-diff <old> <new> [--json]`: a revision is a path or `<ref>:<path>` (resolved through git, never
+  falling back to the working tree). Exit 0 when classified (read `class`), 2 on status `unknown-ref`,
+  `missing-path`, `unreadable`, `invalid-revision` or `git-failed`.
+- `swiftgate design-diff --chain <plan.json> [--json]`: exit 0 `valid`, 1 `broken`, 2 `no-approval`,
+  `unreadable` or `git-failed`.
+- JSON keys: `command`, `mode`, `status`, `verdict`, `old`, `new`, `class`, `oldSha`, `newSha`, `triggers`,
+  `changedIds`, `plan`, `design`, `approvedSha`, `endSha`,
+  `brokenLink{index, fromSha, toSha, problem, triggers?, changedIds?}`, `message`.
+- `design-diff` is in `NewSubcommandRegistrationTests.implemented`. Its CLI tests are in
+  `TC/DesignDiffCommandTests.swift`.
+
+**Design-lint diagrams and budgets** (`D/Design/DesignLintDiagrams.swift`)
+- `DesignLintDiagrams.check(document:docPath:budgets:) throws(ReportContractViolation) -> [Finding]`.
+- Rule ids, all `major` (spec §5.3: over budget is a violation): `design-lint.architecture-diagram-count`,
+  `design-lint.architecture-diagram-unknown-type`, `design-lint.section-word-budget`,
+  `design-lint.document-word-budget`. Sibling design-lint rules use the `design-lint.` prefix.
+- `DesignLintDiagrams.knownMermaidDiagramTypes` is the closed type set. A blank or `%%` first line is unknown.
+- `DocsBudgets.defaultSectionWords = ["architecture": 80]` is the `sections` default. A repo's
+  `[docs.budgets.sections]` merges over it by key and never drops a default it didn't name. Section budgets
+  apply only to anchors listed in `sections`; everything else is bounded by `budgets.design` (whole doc, summed
+  over subsections). **`docs-lint` budgets inherit the `architecture` default too:** decide deliberately whether
+  it applies outside design docs.
+- Fixtures: `GF/design/diagrams/{missing-diagrams,unknown-type,known-types-with-direction,blank-and-comment-fences}.md`.

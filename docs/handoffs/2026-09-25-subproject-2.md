@@ -1,9 +1,9 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-25): BUILD PAUSED after wave 5 of 28 (user's usage limits). Waves 1–5 merged on LOCAL main, push tier
-GREEN (771 tests). Not pushed to origin: pushing is the user's call.
-Next action: wave 6, in a FRESH orchestrator session. Paste the kickoff prompt from
+State (2026-09-25): BUILDING. Waves 1–6 of 28 merged on LOCAL main, push tier GREEN (863 tests). Not pushed to
+origin: pushing is the user's call.
+Next action: wave 7; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
   docs/handoffs/subproject-2-orchestrator-runbook.md ("Kickoff prompt").
 Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook → the last section of
 docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved;
