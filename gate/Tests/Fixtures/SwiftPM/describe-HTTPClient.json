@@ -1,0 +1,117 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "swift-dependencies",
+      "requirement" : {
+        "exact" : [
+          "1.17.1"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-dependencies"
+    }
+  ],
+  "manifest_display_name" : "HTTPClient",
+  "name" : "HTTPClient",
+  "path" : "/REPO/examples/SampleApp/Packages/HTTPClient",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "HTTPClient",
+      "targets" : [
+        "HTTPClient"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "HTTPClientLive",
+      "targets" : [
+        "HTTPClientLive"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "HTTPClientTests",
+      "module_type" : "SwiftTarget",
+      "name" : "HTTPClientTests",
+      "path" : "Tests/HTTPClientTests",
+      "sources" : [
+        "HTTPClientTests.swift"
+      ],
+      "target_dependencies" : [
+        "HTTPClient"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "HTTPClientLiveTests",
+      "module_type" : "SwiftTarget",
+      "name" : "HTTPClientLiveTests",
+      "path" : "Tests/HTTPClientLiveTests",
+      "sources" : [
+        "HTTPClientLiveTests.swift"
+      ],
+      "target_dependencies" : [
+        "HTTPClientLive"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "HTTPClientLive",
+      "module_type" : "SwiftTarget",
+      "name" : "HTTPClientLive",
+      "path" : "Sources/HTTPClientLive",
+      "product_memberships" : [
+        "HTTPClientLive"
+      ],
+      "sources" : [
+        "HTTPClientLive.swift"
+      ],
+      "target_dependencies" : [
+        "HTTPClient"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "HTTPClient",
+      "module_type" : "SwiftTarget",
+      "name" : "HTTPClient",
+      "path" : "Sources/HTTPClient",
+      "product_dependencies" : [
+        "Dependencies",
+        "DependenciesMacros"
+      ],
+      "product_memberships" : [
+        "HTTPClient",
+        "HTTPClientLive"
+      ],
+      "sources" : [
+        "HTTPClient.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

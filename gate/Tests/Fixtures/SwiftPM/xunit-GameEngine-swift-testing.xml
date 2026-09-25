@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="10" failures="0" skipped="0" time="0.000594042">
+    <testcase classname="GameEngineTests.SeededGeneratorTests" name="referenceSequence()" time="7.3208e-05" />
+    <testcase classname="GameEngineTests.GameEngineReplayTests" name="replayIsDeterministic()" time="0.000266208" />
+    <testcase classname="GameEngineTests.GameEngineReplayTests" name="seedChangesComputerMoves()" time="0.000350625" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="computerAnswersHumanMove()" time="0.000173875" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="resetKeepsRNG()" time="0.00023675" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="noMovesAfterWin()" time="0.000143083" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="outOfRangeIgnored()" time="0.000262167" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="occupiedCellIgnored()" time="0.000288667" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="everyLineWins()" time="0.000276125" />
+    <testcase classname="GameEngineTests.GameEngineRulesTests" name="fullBoardIsDraw()" time="0.000133125" />
+  </testsuite>
+</testsuites>
