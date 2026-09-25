@@ -109,6 +109,13 @@ Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger ca
 - D24 Plugin-owned `prose` skill + `swiftgate prose` linter, written fresh (user's wordsmith lives in a company repo
   with no licence; same precedent as comment-audit). Drafter applies it before design-lint.
 
+- D25 Docs use relative repo paths, never machine paths. `LocalPathRule` runs at write time (PostToolUse on `*.md`,
+  < 1s), at pre-commit (`comments --staged`) and in docs-lint. Evidence `loc` must be repo-relative. Allowlist:
+  the harness's own product paths (`~/.swift-harness/`, `~/.local/bin/swiftgate`).
+- D26 Contributors and consumers are split (ADR 0002): `plugin/` is what ships, via marketplace `source: "./plugin"`;
+  the repo root is contributor space. The shim builds into `${CLAUDE_PLUGIN_DATA}`. `claude plugin validate plugin`
+  joins the ready gate. Lands as a packaging wave before the first real install.
+
 ## Perf/scale notes (to carry into spec)
 
 ~0.6–1M subagent tokens per standard design (estimate from Foundation review: 6 agents ≈ 452k). p99 wall ~10–15 min,
