@@ -5,7 +5,7 @@ Status: DESIGN — sections 1–4 approved in brainstorm 2026-09-24; spec awaiti
 Next action: user reviews this spec → writing-plans produces the Foundation implementation plan.
 Open items:
   - Point-Free baseline verified 2026-09-24 (§6.2); target TCA 1.26.x, NOT 2.0 beta.
-  - Xcode 26.6 install (no Xcode 27: it requires a macOS upgrade) → capture xcresult golden fixtures, pin `xcode` in the config template (§5.4).
+  - Xcode pinned to installed 26.2 (build 17C48; sim runtimes iOS 26.2, 26.4). No Xcode 27 (needs macOS upgrade). Moving to 26.6 later = re-capture xcresult fixtures + bump pin.
   - Confirm current Claude Code Stop-hook input field for re-entry (`stop_hook_active`) against hook docs (§7).
 Sub-projects after this one: (2) Simulator QA, (3) Agentic profiling, (4) Review/validation loops & workflows.
 -->
@@ -48,7 +48,7 @@ ledgers, one shared verdict vocabulary) and none of its backend-specific machine
 | CI | None yet |
 | Architecture default | TCA (~99%); gate is dogmatic, judgment layer recommends exceptions |
 | Host tests | Core packages declare `.macOS` only so `swift test` runs on the Mac |
-| Xcode | Xcode 26.6 (not 27, which needs a macOS upgrade); pinned in config; `DEVELOPER_DIR` selects it per run |
+| Xcode | 26.2 as installed (not 27, which needs a macOS upgrade); pinned in config; `DEVELOPER_DIR` selects it per run |
 
 ## 4. Architecture overview
 
@@ -165,7 +165,7 @@ Tier composition:
 
 ```toml
 schema = 1
-xcode = "26.6"                      # doctor → BLOCKED on mismatch
+xcode = "26.2"                      # doctor → BLOCKED on mismatch
 app_scheme = "App"
 packages = ["Packages/*"]
 
@@ -204,7 +204,7 @@ host_testable = false
 reason = "HealthKit types in public API; tests run on simulator"
 ```
 
-Device/OS values above are placeholders, set from the simulator runtimes installed with Xcode 26.6.
+Device/OS values above are placeholders, set from the installed simulator runtimes (iOS 26.2, 26.4).
 
 ## 6. Standards
 
@@ -522,6 +522,6 @@ Shared by every reviewer and by sub-project 4's panel so findings merge cleanly:
 2. `lint`, `arch`, `impact`, `self-test` fixtures for them.
 3. Hooks (SessionStart, PreToolUse, PostToolUse) on top of 1–2.
 4. T1 runner + evidence rules + Stop hook.
-5. **After Xcode 26.6 install:** `XcresultReader` + golden fixtures, T2/T3 runners, sim clone/lock, `snapshots record`, `prove`, `stress`, `doctor`, `gc`, `stats`.
+5. **Xcode-dependent (unblocked; 26.2 installed):** `XcresultReader` + golden fixtures, T2/T3 runners, sim clone/lock, `snapshots record`, `prove`, `stress`, `doctor`, `gc`, `stats`.
 6. `standards.md` + `testing-playbook.md` (after §6.2 verification).
 7. Skills + `/swift-bootstrap` + templates; sample app end-to-end.
