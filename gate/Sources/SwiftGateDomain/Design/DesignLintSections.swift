@@ -6,11 +6,9 @@ import Foundation
 /// plan item names a tier, Options carries 2–3 entries, and every Module kinds row names a kind
 /// the standards model recognises.
 ///
-/// This file parses nothing itself — every accessor comes from ``DesignDocument`` /
-/// ``MarkdownDocument``. ``requiredSections`` is the one exception: ``DesignDocument`` exposes
-/// each named section as typed *content*, not as an ordered list of section *names*, so the
-/// presence/order check needs its own list of the same anchor literals ``DesignDocument`` already
-/// parses against, ordered to match spec §5.3's table.
+/// This file parses nothing itself — every accessor, including the required section list and
+/// order, comes from ``DesignDocument``: ``DesignDocument/RequiredSection`` is the single source
+/// of truth for spec §5.3's section anchors, shared with the parser's own per-field lookups.
 ///
 /// Ids defined by every *other* design in the repo are an input, not something this pure check
 /// reads off disk: the caller collects `otherDesignIds` (every `req-`/`test-` id parsed from every
@@ -18,23 +16,6 @@ import Foundation
 /// never enters this set or `document.requirements`/`document.testPlan`, so citing another
 /// design's id is never mistaken for redefining it.
 public enum DesignLintSections {
-  /// spec §5.3, in table order.
-  static let requiredSections: [(anchor: String, name: String)] = [
-    ("problem", "Problem"),
-    ("requirements", "Requirements"),
-    ("evidence", "Evidence"),
-    ("options", "Options"),
-    ("decision", "Decision"),
-    ("architecture", "Architecture"),
-    ("module-kinds", "Module kinds"),
-    ("test-plan-by-tier", "Test plan by tier"),
-    ("observability", "Observability"),
-    ("perf--scale", "Perf & scale"),
-    ("risks", "Risks"),
-    ("open-questions", "Open questions"),
-    ("changelog", "Changelog"),
-  ]
-
   private static let minimumOptions = 2
   private static let maximumOptions = 3
   /// spec §5.1: `req-`/`test-` ids are the prefix plus at least this many kebab words.
@@ -62,18 +43,21 @@ public enum DesignLintSections {
     document: DesignDocument, docPath: String
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
-    for (anchor, name) in requiredSections where document.markdown.section(anchor: anchor) == nil {
+    for section in DesignDocument.RequiredSection.allCases
+    where document.markdown.section(anchor: section.anchor) == nil {
       findings.append(
         try Finding(
           ruleID: "design-lint.section-missing", severity: .major, file: docPath, line: nil,
-          message: "\"\(name)\" section is missing (spec §5.3).", failureScenario: nil))
+          message: "\"\(section.name)\" section is missing (spec §5.3).", failureScenario: nil))
     }
 
-    let requiredAnchors = Set(requiredSections.map(\.anchor))
+    let requiredAnchors = Set(DesignDocument.RequiredSection.allCases.map(\.anchor))
     let docOrder = flatten(document.markdown.sections).map(\.anchor)
     let presentAnchors = Set(docOrder)
     let actualOrder = docOrder.filter { requiredAnchors.contains($0) }
-    let expectedOrder = requiredSections.map(\.anchor).filter { presentAnchors.contains($0) }
+    let expectedOrder = DesignDocument.RequiredSection.allCases.map(\.anchor).filter {
+      presentAnchors.contains($0)
+    }
     if actualOrder != expectedOrder {
       findings.append(
         try Finding(
@@ -215,7 +199,8 @@ public enum DesignLintSections {
     document: DesignDocument, docPath: String
   ) throws(ReportContractViolation) -> [Finding] {
     // A missing Options section is already a `section-missing` finding above.
-    guard document.markdown.section(anchor: "options") != nil else { return [] }
+    guard document.markdown.section(anchor: DesignDocument.RequiredSection.options.anchor) != nil
+    else { return [] }
     let count = document.options.count
     guard count < minimumOptions || count > maximumOptions else { return [] }
     return [

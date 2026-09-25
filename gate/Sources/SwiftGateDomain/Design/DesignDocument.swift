@@ -4,6 +4,52 @@ import Foundation
 /// ``MarkdownDocument``. Every accessor here is `nil`/empty when the doc doesn't have that
 /// section — this type never fails to construct; `design-lint` is what enforces shape.
 public struct DesignDocument: Sendable, Equatable {
+  /// spec §5.3's named sections, in table order — the one place both this parser's per-field
+  /// lookups and `design-lint`'s presence/order check get an anchor. Change §5.3's section shape
+  /// here; nowhere else names an anchor literal for it.
+  public enum RequiredSection: CaseIterable, Equatable, Sendable {
+    case problem, requirements, evidence, options, decision, architecture
+    case moduleKinds, testPlanByTier, observability, perfAndScale, risks, openQuestions, changelog
+
+    /// The GitHub-slug anchor `MarkdownDocument` gives this section's heading.
+    public var anchor: String {
+      switch self {
+      case .problem: "problem"
+      case .requirements: "requirements"
+      case .evidence: "evidence"
+      case .options: "options"
+      case .decision: "decision"
+      case .architecture: "architecture"
+      case .moduleKinds: "module-kinds"
+      case .testPlanByTier: "test-plan-by-tier"
+      case .observability: "observability"
+      case .perfAndScale: "perf--scale"
+      case .risks: "risks"
+      case .openQuestions: "open-questions"
+      case .changelog: "changelog"
+      }
+    }
+
+    /// The heading text spec §5.3 names, for finding messages.
+    public var name: String {
+      switch self {
+      case .problem: "Problem"
+      case .requirements: "Requirements"
+      case .evidence: "Evidence"
+      case .options: "Options"
+      case .decision: "Decision"
+      case .architecture: "Architecture"
+      case .moduleKinds: "Module kinds"
+      case .testPlanByTier: "Test plan by tier"
+      case .observability: "Observability"
+      case .perfAndScale: "Perf & scale"
+      case .risks: "Risks"
+      case .openQuestions: "Open questions"
+      case .changelog: "Changelog"
+      }
+    }
+  }
+
   /// Frontmatter `status` (spec §5.4). `unknown` covers a value the doc claims that isn't one of
   /// the four the spec defines, so a malformed frontmatter doesn't silently read as `.proposed`.
   public enum Status: Sendable, Equatable {
@@ -60,30 +106,30 @@ public struct DesignDocument: Sendable, Equatable {
     self.area = markdown.frontmatter["area"]
     self.tier = markdown.frontmatter["tier"]
 
-    self.problem = markdown.section(anchor: "problem")
-    let requirementsSection = markdown.section(anchor: "requirements")
+    self.problem = markdown.section(anchor: RequiredSection.problem.anchor)
+    let requirementsSection = markdown.section(anchor: RequiredSection.requirements.anchor)
     self.requirements = (requirementsSection?.bullets ?? []).compactMap { bullet in
       bullet.id.map { RequirementBullet(id: $0, statement: bullet.remainder) }
     }
 
-    let evidenceSection = markdown.section(anchor: "evidence")
+    let evidenceSection = markdown.section(anchor: RequiredSection.evidence.anchor)
     self.evidence = (evidenceSection?.bullets ?? []).compactMap { bullet in
       bullet.tags.first.map { EvidenceBullet(tag: $0, text: bullet.text) }
     }
 
-    self.options = markdown.section(anchor: "options")?.subsections ?? []
-    self.decision = markdown.section(anchor: "decision")
-    self.architecture = markdown.section(anchor: "architecture")
-    self.moduleKinds = markdown.section(anchor: "module-kinds")?.tables.first
+    self.options = markdown.section(anchor: RequiredSection.options.anchor)?.subsections ?? []
+    self.decision = markdown.section(anchor: RequiredSection.decision.anchor)
+    self.architecture = markdown.section(anchor: RequiredSection.architecture.anchor)
+    self.moduleKinds = markdown.section(anchor: RequiredSection.moduleKinds.anchor)?.tables.first
 
-    let testPlanSection = markdown.section(anchor: "test-plan-by-tier")
+    let testPlanSection = markdown.section(anchor: RequiredSection.testPlanByTier.anchor)
     self.testPlan = (testPlanSection?.bullets ?? []).compactMap(Self.parseTestPlanBullet)
 
-    self.observability = markdown.section(anchor: "observability")
-    self.perfAndScale = markdown.section(anchor: "perf--scale")
-    self.risks = markdown.section(anchor: "risks")
-    self.openQuestions = markdown.section(anchor: "open-questions")
-    self.changelog = markdown.section(anchor: "changelog")
+    self.observability = markdown.section(anchor: RequiredSection.observability.anchor)
+    self.perfAndScale = markdown.section(anchor: RequiredSection.perfAndScale.anchor)
+    self.risks = markdown.section(anchor: RequiredSection.risks.anchor)
+    self.openQuestions = markdown.section(anchor: RequiredSection.openQuestions.anchor)
+    self.changelog = markdown.section(anchor: RequiredSection.changelog.anchor)
   }
 
   private static func parseStatus(_ raw: String?) -> Status? {

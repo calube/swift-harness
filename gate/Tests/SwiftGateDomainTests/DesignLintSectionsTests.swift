@@ -34,6 +34,20 @@ struct DesignLintSectionsTests {
     #expect(findings == [])
   }
 
+  // MARK: - The required order is one shared source of truth
+
+  @Test(
+    "the lint's required section order is exactly DesignDocument's own RequiredSection order — catches the two copies drifting apart"
+  )
+  func requiredOrderMatchesDesignDocumentModel() {
+    let expected = [
+      "problem", "requirements", "evidence", "options", "decision", "architecture",
+      "module-kinds", "test-plan-by-tier", "observability", "perf--scale", "risks",
+      "open-questions", "changelog",
+    ]
+    #expect(DesignDocument.RequiredSection.allCases.map(\.anchor) == expected)
+  }
+
   // MARK: - §5.3 section presence and order
 
   @Test(
