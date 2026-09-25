@@ -3,6 +3,11 @@ import SwiftGateDomain
 public struct RuleRunResult: Sendable, Equatable {
   public let findings: [Finding]
   public let allowances: [Allowance]
+
+  public init(findings: [Finding], allowances: [Allowance]) {
+    self.findings = findings
+    self.allowances = allowances
+  }
 }
 
 /// Runs a set of rules over files: parses each file once, applies scopes, waives findings with

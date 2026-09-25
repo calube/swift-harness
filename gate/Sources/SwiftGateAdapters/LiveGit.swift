@@ -38,6 +38,16 @@ public struct LiveGit: Git {
     return try UnifiedDiff.addedLines(in: diff)
   }
 
+  public func stagedContents(of paths: [String]) async throws(GitError) -> [String: String] {
+    var contents: [String: String] = [:]
+    for path in paths {
+      // `:<path>` names the index entry, root-relative; the leading colon also keeps a path that
+      // starts with `-` from parsing as an option.
+      contents[path] = try await run(["cat-file", "blob", ":\(path)"])
+    }
+    return contents
+  }
+
   public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {
     let root = URL(filePath: repositoryRoot, directoryHint: .isDirectory)
     let existing = paths.filter {

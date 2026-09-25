@@ -1,0 +1,4 @@
+func refresh() {
+  // reload()
+  render()
+}

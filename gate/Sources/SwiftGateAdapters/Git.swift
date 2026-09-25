@@ -11,6 +11,10 @@ public protocol Git: Sendable {
   /// deletions, binary files) are omitted.
   func stagedAddedLines() async throws(GitError) -> [AddedLines]
 
+  /// Each path's content as staged in the index, decoded as UTF-8. Throws if a path is not in the
+  /// index.
+  func stagedContents(of paths: [String]) async throws(GitError) -> [String: String]
+
   /// Git blob hash of each file's current working-tree content. Paths that do not exist are
   /// omitted.
   func contentHashes(of paths: [String]) async throws(GitError) -> [String: String]

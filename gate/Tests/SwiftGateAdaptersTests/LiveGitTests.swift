@@ -130,6 +130,32 @@ struct LiveGitTests {
   }
 
   @Test(
+    "staged contents are the index blob, not the working tree — catches pre-commit checking unstaged edits"
+  )
+  func stagedContents() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("A.swift", "committed\n")
+    try repo.write("Sub/Ü b.swift", "committed\n")
+    _ = try await repo.commitAll("base")
+    try repo.write("A.swift", "staged\n")
+    try repo.write("Sub/Ü b.swift", "staged ü\n")
+    try repo.write("-dash.swift", "staged dash\n")
+    try await repo.git("add", "-A")
+    try repo.write("A.swift", "unstaged\n")
+
+    let contents = try await repo.adapter.stagedContents(
+      of: ["A.swift", "Sub/Ü b.swift", "-dash.swift"])
+    #expect(
+      contents == [
+        "A.swift": "staged\n", "Sub/Ü b.swift": "staged ü\n", "-dash.swift": "staged dash\n",
+      ])
+    await #expect(throws: GitError.self) {
+      try await repo.adapter.stagedContents(of: ["NotStaged.swift"])
+    }
+  }
+
+  @Test(
     "user diff config cannot change parsed output — catches noprefix/color/external breaking parsing"
   )
   func hostileDiffConfig() async throws {
