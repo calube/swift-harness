@@ -76,6 +76,7 @@ struct NewSubcommandRegistrationTests {
     "evidence find", "evidence find --pkg",
     "probe",
     "plan-lint",
+    "design-render",
   ]
 
   @Test(
