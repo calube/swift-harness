@@ -42,8 +42,16 @@ struct NewSubcommandRegistrationTests {
     ("plan-schedule", ["plan-schedule"], "plan-schedule"),
     ("plan-lint", ["plan-lint"], "plan-lint"),
     ("context-pack", ["context-pack", "--role", "worker"], "context-pack"),
-    ("index set", ["index", "set", "example-plan", "active", "resume text"], "set"),
+    ("index set", ["index", "set", "example-plan", "designing", "resume text"], "set"),
     ("calibrate design", ["calibrate", "design"], "design"),
+  ]
+
+  /// Invocations that do real work now. Running them here would act on this checkout's real,
+  /// shared plan state under the git common dir, so their behaviour is covered by their own
+  /// suites (`PlanClaimCommandTests`, `IndexSetCommandTests`). Listed by exact invocation name so a
+  /// still-stubbed sibling never drops out of the stub check by sharing a prefix.
+  static let implemented: Set<String> = [
+    "plan claim", "plan release", "plan release --force", "index set",
   ]
 
   @Test(
@@ -58,11 +66,7 @@ struct NewSubcommandRegistrationTests {
       "\(invocation.name) resolved to \(type(of: parsed).configuration.commandName ?? "<nil>")")
   }
 
-  /// `index set` graduated from a stub to a real command (spec §6.2); running it for real here
-  /// would resolve this checkout's actual git common dir and write into the real, shared
-  /// `swift-harness/plans/index.json` as a test side effect. Its own behavior — including that it
-  /// never exits 0 on a bad input — is covered by `IndexSetCommandTests`.
-  static let stubInvocations = invocations.filter { $0.leafCommandName != "set" }
+  static let stubInvocations = invocations.filter { !implemented.contains($0.name) }
 
   @Test(
     "every stub subcommand exits 2, never 0 — catches a stub passing a gate before it does real work",

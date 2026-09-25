@@ -1,6 +1,7 @@
 import Foundation
 
-/// `.harness/plans/<slug>/plan.json` (spec §5.6): the plan's identity and approval chain. The
+/// `<git common dir>/swift-harness/plans/<slug>/plan.json` (spec §5.6; paths from
+/// ``PlanStateLayout``): the plan's identity and approval chain. The
 /// ledger alongside it (``Ledger``) holds tasks and waves, so a plan can ride out an amendment's
 /// `clarifyChain` without touching task state or the wave schedule.
 public struct PlanFile: Sendable, Equatable, Codable {
@@ -32,18 +33,21 @@ public struct PlanFile: Sendable, Equatable, Codable {
 
   public let schemaVersion: Int
   public let slug: String
+  /// The design doc, relative to the repository root.
   public let design: String
-  public let designSha: String
+  /// `nil` from the claim that seeds the file until the first draft is hashed.
+  public let designSha: String?
   /// `nil` only in the window before the design's first approval: a plan is decomposed from an
   /// approved design (spec §9.1), so every ledger'd plan has one soon after it exists.
   public let approval: Approval?
   public let clarifyChain: [ClarifyChainEntry]
-  public let tier: String
+  /// `nil` when the claim that seeded the file named no tier; `design-scope` sets it later.
+  public let tier: String?
   public let resume: String
 
   public init(
-    schemaVersion: Int, slug: String, design: String, designSha: String, approval: Approval?,
-    clarifyChain: [ClarifyChainEntry], tier: String, resume: String
+    schemaVersion: Int, slug: String, design: String, designSha: String?, approval: Approval?,
+    clarifyChain: [ClarifyChainEntry], tier: String?, resume: String
   ) {
     self.schemaVersion = schemaVersion
     self.slug = slug
@@ -72,5 +76,34 @@ public enum PlanFileJSON {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     return try decoder.decode(PlanFile.self, from: data)
+  }
+}
+
+extension PlanFile {
+  public static let tiers: Set<String> = ["quick", "standard", "deep"]
+
+  /// The `plan.json` a claim writes at frame: it ties the design doc to the plan, which is what
+  /// lets the edit guard allow the holder's writes to it. Nothing is hashed or approved yet.
+  public static func seed(slug: String, design: String, tier: String?) -> PlanFile {
+    PlanFile(
+      schemaVersion: 1, slug: slug, design: design, designSha: nil, approval: nil,
+      clarifyChain: [], tier: tier, resume: "framing")
+  }
+
+  /// A path the edit guard treats as a design doc: repo-relative `…docs/…/designs/<name>.md`,
+  /// with no empty, `.` or `..` component, so it names one file inside the checkout.
+  public static func isValidDesignPath(_ path: String) -> Bool {
+    guard !path.hasPrefix("/"), !path.contains(where: { $0 == "\0" || $0.isNewline }) else {
+      return false
+    }
+    let components = path.split(separator: "/", omittingEmptySubsequences: false).map {
+      $0.lowercased()
+    }
+    guard components.count >= 3,
+      components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
+      let file = components.last, file.hasSuffix(".md"), file != ".md"
+    else { return false }
+    return components[components.count - 2] == "designs"
+      && components.dropLast(2).contains("docs")
   }
 }
