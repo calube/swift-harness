@@ -65,6 +65,38 @@ public enum ArtifactCapability: String, CaseIterable, Sendable, Comparable {
   public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
+/// A pinned third-party script a page loads from an allowed CDN, with the code that starts it.
+/// If the script fails to load, the start code does nothing and the page's fallback stays.
+public enum ArtifactLibrary: String, CaseIterable, Sendable, Comparable {
+  /// Renders every `pre.mermaid` block. `securityLevel: "strict"` keeps diagram labels from
+  /// carrying markup or click handlers, and the escaped source stays visible if loading fails.
+  case mermaid
+
+  public static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
+
+  public var scriptURL: String {
+    switch self {
+    case .mermaid: "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"
+    }
+  }
+
+  var startScript: String {
+    switch self {
+    case .mermaid:
+      """
+      (function () {
+        if (typeof mermaid === "undefined") { return; }
+        var chosen = document.documentElement.getAttribute("data-theme");
+        var dark = chosen === "dark" || (chosen !== "light" && window.matchMedia
+          && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "neutral" });
+        mermaid.run({ querySelector: "pre.mermaid" }).catch(function () {});
+      })();
+      """
+    }
+  }
+}
+
 /// The page frame every `design-render` page shares: title, theme tokens for light and dark,
 /// phone-width layout, the capability declaration, optional JSON page data and one inline script.
 /// The Artifact viewer wraps the file in its own document skeleton, so the shell emits no
@@ -76,17 +108,19 @@ public struct ArtifactPageShell: Sendable, Equatable {
   /// Reaches the page only as JSON inside a `type="application/json"` block, with every `<`
   /// written as `<` so a value can never close the block.
   public let pageData: [String: String]
+  public let libraries: [ArtifactLibrary]
   /// Page code written by this module, never doc content.
   let script: String?
 
   public init(
     title: String, body: HTMLFragment, capabilities: [ArtifactCapability],
-    pageData: [String: String] = [:], script: String? = nil
+    pageData: [String: String] = [:], libraries: [ArtifactLibrary] = [], script: String? = nil
   ) {
     self.title = title
     self.body = body
     self.capabilities = Array(Set(capabilities)).sorted()
     self.pageData = pageData
+    self.libraries = Array(Set(libraries)).sorted()
     self.script = script
   }
 
@@ -108,6 +142,10 @@ public struct ArtifactPageShell: Sendable, Equatable {
       parts.append(
         "<script type=\"application/json\" id=\"page-data\">\(Self.scriptSafeJSON(pageData))</script>"
       )
+    }
+    for library in libraries {
+      parts.append("<script src=\"\(HTMLEscape.escape(library.scriptURL))\"></script>")
+      parts.append("<script>\n\(library.startScript)\n</script>")
     }
     if let script {
       parts.append("<script>\n\(script)\n</script>")

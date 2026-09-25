@@ -135,6 +135,44 @@ struct DesignRenderTests {
     #expect(Self.occurrences(of: "<pre class=\"mermaid\">", in: html) == 2)
   }
 
+  // MARK: - Diagrams
+
+  @Test(
+    "a page with Mermaid fences loads exactly the pinned Mermaid script and starts it strict — catches diagrams shown as raw source"
+  )
+  func mermaidLibraryLoaded() throws {
+    let html = Self.render(try Self.validDoc())
+    let sources = html.components(separatedBy: "<script src=\"").dropFirst().map {
+      String($0.prefix { $0 != "\"" })
+    }
+    #expect(sources == ["https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"])
+    #expect(html.contains("securityLevel: \"strict\""))
+    #expect(html.contains("startOnLoad: false"))
+    #expect(html.contains("mermaid.run({ querySelector: \"pre.mermaid\" })"))
+  }
+
+  @Test("a design with no Mermaid fences loads no library — catches a script fetched for nothing")
+  func noMermaidNoLibrary() throws {
+    let text = try Self.validDoc().replacingOccurrences(of: "```mermaid", with: "```text")
+    let html = Self.render(text)
+    #expect(!html.contains("<script src="))
+    #expect(!html.contains("mermaid.initialize"))
+  }
+
+  @Test(
+    "an injected </script> in a Mermaid fence stays escaped text — catches diagram source breaking out of the page"
+  )
+  func mermaidFenceCannotBreakOut() throws {
+    let clean = Self.render(try Self.validDoc())
+    let text = try Self.validDoc().replacingOccurrences(
+      of: "  B --> C[Checkout API]", with: "  B --> C[</script><script>alert(1)</script>]")
+    let html = Self.render(text)
+    #expect(html.contains("C[&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;]"))
+    #expect(!html.contains("alert(1)</script>"))
+    #expect(
+      Self.occurrences(of: "<script", in: html) == Self.occurrences(of: "<script", in: clean))
+  }
+
   // MARK: - Approval buttons
 
   @Test("both approval buttons carry the doc's designSha — catches approving a different revision")
