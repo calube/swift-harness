@@ -253,3 +253,40 @@ struct LiveGitTests {
     #expect(runner.invocations.isEmpty)
   }
 }
+
+@Suite("LiveGit added lines since a ref")
+struct LiveGitAddedSinceTests {
+  @Test(
+    "lines added since a ref cover committed, unstaged and untracked changes — catches diff coverage blind to work not yet committed"
+  )
+  func addedSince() async throws {
+    let repository = try await TemporaryGitRepository()
+    defer { repository.remove() }
+    try repository.write("Core.swift", "a\nb\nc\n")
+    try repository.write("Gone.swift", "x\n")
+    let base = try await repository.commitAll("base")
+    try repository.write("Core.swift", "a\nB\nc\nd\n")
+    _ = try await repository.commitAll("committed edit")
+    try repository.write("Core.swift", "a\nB\nc\nd\ne\n")
+    try repository.write("New.swift", "1\n2\n")
+    try repository.delete("Gone.swift")
+
+    let added = try await repository.adapter.addedLines(since: base)
+
+    #expect(
+      added == [
+        AddedLines(path: "Core.swift", ranges: [2...2, 4...5]),
+        AddedLines(path: "New.swift", ranges: [1...2]),
+      ])
+  }
+
+  @Test("a ref starting with a dash is rejected — catches a ref parsed as a git option")
+  func rejectsOptionRef() async throws {
+    let repository = try await TemporaryGitRepository()
+    defer { repository.remove() }
+
+    await #expect(throws: GitError.invalidRef("--output=/tmp/x")) {
+      _ = try await repository.adapter.addedLines(since: "--output=/tmp/x")
+    }
+  }
+}

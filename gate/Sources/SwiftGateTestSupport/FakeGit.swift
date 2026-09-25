@@ -20,6 +20,7 @@ public final class FakeGit: Git {
   private let mergeBaseResult: String?
   private let failure: GitError?
   private let prefix: String
+  private let addedSince: [AddedLines]
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
 
@@ -27,11 +28,13 @@ public final class FakeGit: Git {
   ///   - changed: what ``changedFiles(since:)`` returns; defaults to the staged paths.
   ///   - mergeBase: what ``mergeBase(_:_:)`` returns for any pair of refs.
   ///   - prefix: what ``workingDirectoryPrefix()`` returns.
+  ///   - addedSince: what ``addedLines(since:)`` returns for any ref.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
-    prefix: String = "", failure: GitError? = nil
+    prefix: String = "", addedSince: [AddedLines] = [], failure: GitError? = nil
   ) {
     self.prefix = prefix
+    self.addedSince = addedSince
     self.staged = staged
     self.changed = changed
     self.mergeBaseResult = mergeBase
@@ -48,6 +51,12 @@ public final class FakeGit: Git {
     if let failure { throw failure }
     changedSince.withLock { $0.append(ref) }
     return changed ?? staged.keys.sorted()
+  }
+
+  public func addedLines(since ref: String) async throws(GitError) -> [AddedLines] {
+    if let failure { throw failure }
+    changedSince.withLock { $0.append(ref) }
+    return addedSince
   }
 
   public func stagedAddedLines() async throws(GitError) -> [AddedLines] {

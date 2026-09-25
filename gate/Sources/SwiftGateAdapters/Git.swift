@@ -7,6 +7,11 @@ public protocol Git: Sendable {
   /// deletions), plus untracked files that are not ignored. Sorted, unique.
   func changedFiles(since ref: String) async throws(GitError) -> [String]
 
+  /// Lines added between `ref` and the working tree (committed, staged or unstaged), per file,
+  /// with every line of an untracked, non-ignored file counted as added. Files that add no lines
+  /// are omitted. Sorted by path.
+  func addedLines(since ref: String) async throws(GitError) -> [AddedLines]
+
   /// Lines added by the staged change, per file. Files whose staged change adds no lines (pure
   /// deletions, binary files) are omitted.
   func stagedAddedLines() async throws(GitError) -> [AddedLines]

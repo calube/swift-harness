@@ -29,6 +29,30 @@ public struct LiveGit: Git {
     return Array(Set(paths)).sorted()
   }
 
+  public func addedLines(since ref: String) async throws(GitError) -> [AddedLines] {
+    try Self.validate(ref: ref)
+    let diff = try await run([
+      "diff", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv", "--no-relative",
+      "--find-renames", "--diff-filter=ACMR", "--src-prefix=a/", "--dst-prefix=b/", ref, "--",
+    ])
+    var added = try UnifiedDiff.addedLines(in: diff)
+    let untracked = Self.nulSeparated(
+      try await run(["ls-files", "-z", "--full-name", "--others", "--exclude-standard"]))
+    if !untracked.isEmpty {
+      // Untracked paths are toplevel-relative; read them relative to this adapter's root.
+      let prefix = try await workingDirectoryPrefix()
+      let root = URL(filePath: repositoryRoot, directoryHint: .isDirectory)
+      for path in untracked where path.hasPrefix(prefix) {
+        let url = root.appending(path: String(path.dropFirst(prefix.count)))
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
+        let newlines = data.count { $0 == UInt8(ascii: "\n") }
+        let lines = newlines + (data.last == UInt8(ascii: "\n") ? 0 : 1)
+        added.append(AddedLines(path: path, ranges: [1...lines]))
+      }
+    }
+    return added.sorted { $0.path < $1.path }
+  }
+
   public func stagedAddedLines() async throws(GitError) -> [AddedLines] {
     let diff = try await run([
       "diff", "--cached", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv",
