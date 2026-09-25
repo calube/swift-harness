@@ -124,7 +124,7 @@ public struct MarkdownDocument: Sendable, Equatable {
   }
 
   public static func parse(_ text: String) -> MarkdownDocument {
-    var lines = text.components(separatedBy: "\n")
+    var lines = splitLines(text)
     if lines.last == "" { lines.removeLast() }
 
     var bodyStart = 0
@@ -143,6 +143,34 @@ public struct MarkdownDocument: Sendable, Equatable {
     let headings = collectHeadings(in: lines, from: bodyStart)
     let sections = buildSections(lines, headings, headings.indices)
     return MarkdownDocument(frontmatter: frontmatter, sections: sections)
+  }
+
+  // MARK: - Line splitting
+
+  /// Splits on `"\n"` and `"\r\n"` as line terminators, discarding the terminator itself so no
+  /// line content ever carries a trailing `\r`. Every other matcher in this file compares whole
+  /// or prefixed line content (`"---"`, `"#"`, `` "```" ``, table pipes) against `lines`, so fixing
+  /// the split here is enough for every construct — no construct-by-construct patching needed.
+  ///
+  /// Swift's `Character` is an extended grapheme cluster, and Unicode groups an adjacent `\r\n`
+  /// into a *single* `Character` — so a `\r` immediately followed by `\n` never appears as two
+  /// characters to iterate past. That single combined `Character` is what this checks for `"\r\n"`.
+  /// A `\r` that Unicode did *not* fold into a `"\r\n"` cluster (nothing after it, or something
+  /// other than `\n`) surfaces as its own standalone `Character` and falls through to ordinary
+  /// content, so a lone `\r` mid-line is preserved rather than read as a line break.
+  private static func splitLines(_ text: String) -> [String] {
+    var lines: [String] = []
+    var current = ""
+    for character in text {
+      if character == "\n" || character == "\r\n" {
+        lines.append(current)
+        current = ""
+      } else {
+        current.append(character)
+      }
+    }
+    lines.append(current)
+    return lines
   }
 
   // MARK: - Frontmatter
