@@ -51,7 +51,7 @@ struct NewSubcommandRegistrationTests {
     ("plan release", ["plan", "release", "example-plan"], "release"),
     ("plan release --force", ["plan", "release", "example-plan", "--force"], "release"),
     ("plan-schedule", ["plan-schedule", "ledger.json"], "plan-schedule"),
-    ("plan-lint", ["plan-lint"], "plan-lint"),
+    ("plan-lint", ["plan-lint", "example-plan"], "plan-lint"),
     ("context-pack", ["context-pack", "--role", "worker"], "context-pack"),
     ("index set", ["index", "set", "example-plan", "designing", "resume text"], "set"),
     ("calibrate design", ["calibrate", "design"], "design"),
@@ -75,6 +75,7 @@ struct NewSubcommandRegistrationTests {
     "evidence check", "evidence check --at",
     "evidence find", "evidence find --pkg",
     "probe",
+    "plan-lint",
   ]
 
   @Test(
