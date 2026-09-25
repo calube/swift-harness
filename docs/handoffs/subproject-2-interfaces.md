@@ -40,3 +40,34 @@ Only the orchestrator edits this file, appending one section per wave at merge. 
   don't edit `SwiftGate.swift`.
 - `evidence capture` takes its passthrough command with ArgumentParser `.remaining` (`-- <cmd>`).
 - `RepositoryScriptTests` discovers `tests/*_test.mjs` automatically.
+
+## Wave 2
+
+**Config** (`Config.docs`, `Config.plan`)
+- `DocsConfig` (managedFiles, bannedPhrases, anchors, sentenceCeiling, budgets), `BannedPhrase` (phrase, reason),
+  `DocsBudgets` (router, topic, design, agentsMdLines, sections `[String:Int]`).
+- `PlanConfig` (maxParallel, estLinesMin, estLinesMax, maxModulesPerTask, maxTestsPerTask, workerPackTokenBudget).
+- TOML: `[docs]` `managed_files`, `[[docs.banned_phrases]]` `phrase`/`reason`, `anchors`, `sentence_ceiling`;
+  `[docs.budgets]` `router`/`topic`/`design`/`agents_md_lines`/`sections`; `[plan]` `max_parallel`, `est_lines_min`,
+  `est_lines_max`, `max_modules_per_task`, `max_tests_per_task`, `worker_pack_token_budget`.
+- Defaults (estimates, to tune): max_parallel 3, estLines 40–400, 2 modules, 6 tests, pack 15000 tokens;
+  sentence ceiling 40, router 400, topic 800, design 1200 prose words, AGENTS.md 60 lines.
+- The root `.swiftgate.toml` has a live `[docs]` section: managed files `docs/index.md` and `AGENTS.md`, plus banned phrases.
+
+**Plan state** (`SwiftGateDomain/Plan/`)
+- `PlanFile` / `PlanFileJSON`, `Ledger` / `LedgerTask` / `LedgerJSON`, `TaskStatusReport` / `TaskStatusReportJSON`.
+  Each is a single pretty-printed JSON object with sorted keys and ISO-8601 dates (not JSONL). `PlanFile.approval` is optional.
+- `LedgerTask.gate: CheckTier` (Codable in `Plan/CheckTierCodable.swift`). `TaskStatus` is closed: unknown values
+  fail decoding and name the value.
+- `WriteSet.entriesOverlap(_:_:)` / `WriteSet.overlaps(_:_:)`: the disjointness primitive for `plan-lint`.
+- `TaskStatusReport.Report.evidence: [Citation]` reuses the wave-1 `Citation`.
+
+**Markdown and design docs**
+- `MarkdownDocument.parse(_:)` returns frontmatter plus a `sections` tree. `Section` has level, heading, anchor
+  (GitHub slug), bullets, tables, fences, links, `proseWordCount` (excludes tables and fences) and subsections.
+  Look sections up with `section(anchor:)`.
+- `Bullet` (text, `id`, `remainder`, `tags`), `Fence` (language, body, `mermaidDiagramType`), `Table`, `Link` (`isRelative`).
+- `DesignDocument(markdown:)` exposes typed views of every spec §5.3 section. `status` includes `.unknown(String)`
+  on purpose: the parser keeps bad values, and **`design-lint` must report `.unknown` status as a violation**.
+- Test-plan tier parsing splits on the literal `" — tier "`.
+- `gate/Fixtures/design/valid.md` is a full, spec-compliant design doc. Later waves treat it as read-only.
