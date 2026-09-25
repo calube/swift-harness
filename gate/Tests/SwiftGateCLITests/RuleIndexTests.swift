@@ -52,6 +52,8 @@ struct RuleIndexTests {
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
       JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
+      PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,
+      PushDocGates.blockedRuleID, PushDocGates.summaryRuleID,
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,
