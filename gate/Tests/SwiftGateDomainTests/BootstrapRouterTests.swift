@@ -108,13 +108,6 @@ struct BootstrapRouterTests {
   }
 
   @Test(
-    "commit-msg joins pre-commit and pre-push as a hook bootstrap tracks for installation — catches hooksInstalled reporting true before the new hook is wired"
-  )
-  func commitMsgIsATrackedHook() {
-    #expect(BootstrapPlanner.gitHooks == ["pre-commit", "pre-push", "commit-msg"])
-  }
-
-  @Test(
     "the shipped gitignore template drops the repo-level orchestrator-lock entry and adds the harness's newer ephemeral directories, keeping the rest — catches stale or missing ignore entries shipping to real repositories"
   )
   func gitignoreTemplateContent() throws {
@@ -127,12 +120,12 @@ struct BootstrapRouterTests {
   }
 
   @Test(
-    "the shipped lefthook template gains a commit-msg hook that calls the same stable shim as the other hooks — catches a git hook calling a plugin path that breaks between versions"
+    "bootstrap does not wire a commit-msg hook yet, and tracks only the hooks the shipped template installs — catches enforcement landing before `swiftgate comments --commit-msg` exists to run it"
   )
-  func lefthookTemplateGainsCommitMsg() throws {
+  func noCommitMsgHookBeforeItsCommandExists() throws {
+    #expect(BootstrapPlanner.gitHooks == ["pre-commit", "pre-push"])
     let text = try template("templates/lefthook.yml")
-    #expect(text.contains("commit-msg:"))
-    #expect(text.contains(#""$HOME/.local/bin/swiftgate" comments --commit-msg {1}"#))
+    #expect(!text.contains("commit-msg"))
   }
 
   @Test(

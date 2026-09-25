@@ -5,11 +5,6 @@ pre-commit:
     swiftgate-comments:
       run: '"$HOME/.local/bin/swiftgate" comments --staged'
 
-commit-msg:
-  commands:
-    swiftgate-commit-msg:
-      run: '"$HOME/.local/bin/swiftgate" comments --commit-msg {1}'
-
 pre-push:
   commands:
     swiftgate-push:

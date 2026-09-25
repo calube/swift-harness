@@ -205,7 +205,7 @@ public enum BootstrapPlanner {
   }
 
   /// The git hooks `lefthook.yml` defines.
-  public static let gitHooks = ["pre-commit", "pre-push", "commit-msg"]
+  public static let gitHooks = ["pre-commit", "pre-push"]
   public static let blockBegin = "<!-- swift-harness:begin -->"
   public static let blockEnd = "<!-- swift-harness:end -->"
 
