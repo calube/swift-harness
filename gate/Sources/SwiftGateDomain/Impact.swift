@@ -19,10 +19,6 @@ public struct ImpactExemptions: Sendable, Equatable {
 
   public let entries: [Entry]
 
-  init(entries: [Entry]) {
-    self.entries = entries
-  }
-
   private struct File: Decodable {
     struct RawEntry: Decodable {
       let module: String?
