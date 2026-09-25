@@ -30,3 +30,12 @@ func cleanup() throws {
   defer { try? directory.remove() }
   #expect(try directory.isEmpty())
 }
+
+@Test("catch that rethrows keeps the failure — catches a load error lost in translation")
+func translate() throws {
+  do {
+    _ = try Store().load()
+  } catch {
+    throw StoreTestError.load(error)
+  }
+}

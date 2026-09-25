@@ -201,7 +201,8 @@ struct LintRulesTests {
   func syntaxIndexIsShared() {
     let unit = SourceUnit(
       input: SourceInput(path: "A.swift", text: "let a = Date()\n"), scope: nil)
-    #expect(unit.syntaxIndex === unit.syntaxIndex)
+    let first = unit.syntaxIndex
+    #expect(first === unit.syntaxIndex)
     #expect(unit.syntaxIndex.calls.count == 1)
   }
 }

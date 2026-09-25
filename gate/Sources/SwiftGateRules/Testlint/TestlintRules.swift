@@ -374,7 +374,9 @@ struct SwallowedErrorRule: FileRule {
             message: "`try?` in a test discards the error; mark the test `throws` and use `try`"))
       }
       for clause in body.descendants(of: CatchClauseSyntax.self)
-      where AssertionSyntax.assertions(in: clause.body).isEmpty {
+      where AssertionSyntax.assertions(in: clause.body).isEmpty
+        && clause.body.descendants(of: ThrowStmtSyntax.self).isEmpty
+      {
         violations.append(
           unit.violation(
             atStartOf: clause.catchKeyword,
