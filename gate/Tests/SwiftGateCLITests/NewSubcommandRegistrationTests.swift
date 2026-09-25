@@ -56,7 +56,7 @@ struct NewSubcommandRegistrationTests {
   /// sharing a prefix.
   static let implemented: Set<String> = [
     "plan claim", "plan release", "plan release --force", "index set", "design-diff",
-    "design-diff --chain", "design-scope",
+    "design-diff --chain", "design-scope", "evidence capture",
   ]
 
   @Test(
