@@ -3,17 +3,18 @@
 /// fine to its author and breaks for every other reader. Docs cite repo files by relative path
 /// instead.
 ///
-/// `scan` is pure text in, `Finding`s out: it carries no file identity of its own, because the
-/// same detector is meant to run twice — once over an already-written doc (`DocsLintPolicy`, which
-/// knows the doc's path) and once over the text of an edit that hasn't landed yet (a future
-/// write-time hook, which knows the tool call's target path instead). Each caller rebuilds the
-/// `Finding` with the path it actually has; the placeholder `file` this emits is never shown to a
-/// reader.
+/// The spec is silent on whether a path inside a fenced code block or inline code span is exempt.
+/// A path quoted as a "don't do this" example still breaks for every reader who copies it, so this
+/// scanner flags fenced and inline code the same as prose — it never tracks fence state at all.
+///
+/// `scan` is pure text in, `Finding`s out, but takes the target `file` as a label: the same
+/// detector runs twice — once over an already-written doc (`DocsLintPolicy`, which knows the doc's
+/// path) and once over the text of an edit that hasn't landed yet (a future write-time hook, which
+/// knows the tool call's target path instead) — and a caller that forgot to attribute the real path
+/// would silently mislabel every finding it reports, so the label is part of the call, not
+/// something every caller has to remember to rebuild.
 public enum LocalPathRule {
   public static let ruleID = "docs-lint.local-path"
-
-  /// Never surfaced: every caller replaces it with the path it knows before reporting a finding.
-  static let unscopedFile = "(unscoped)"
 
   /// Prefixes that make a token a local, machine-specific path. `~/` is handled separately so it
   /// can be weighed against ``DocsLintPolicy/productPaths``.
@@ -21,25 +22,13 @@ public enum LocalPathRule {
     "$HOME/", "/Users/", "/home/", "/private/tmp/", "/var/folders/",
   ]
 
-  public static func scan(_ text: String) -> [Finding] {
+  public static func scan(_ text: String, file: String) -> [Finding] {
     var findings: [Finding] = []
-    var fenceMarker: String?
     for (index, rawLine) in lines(of: text).enumerated() {
-      let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
-      if let marker = fenceMarker {
-        if trimmed.hasPrefix(marker) { fenceMarker = nil }
-        // A path quoted inside a fenced block — most often an example of what NOT to do — isn't a
-        // live reference a reader will hit, so it never counts.
-        continue
-      }
-      if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
-        fenceMarker = String(trimmed.prefix(3))
-        continue
-      }
       for token in tokens(in: rawLine) where isMachineSpecific(token) {
-        // token and message are never empty, so the report contract cannot reject this.
+        // file, ruleID and message are never empty, so the report contract cannot reject this.
         if let finding = try? Finding(
-          ruleID: ruleID, severity: .major, file: unscopedFile, line: index + 1,
+          ruleID: ruleID, severity: .major, file: file, line: index + 1,
           message:
             "\"\(token)\" is a machine-specific path; use a repository-relative path (or one "
             + "of the harness's own allowlisted product paths).",

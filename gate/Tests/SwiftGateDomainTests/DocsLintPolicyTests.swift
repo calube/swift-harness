@@ -161,6 +161,28 @@ struct DocsLintPolicyTests {
   }
 
   @Test(
+    "a directory merely named like designs (redesigns) is still budgeted — catches a substring match escaping the exclusion"
+  )
+  func directoryNamedLikeDesignsIsStillBudgeted() throws {
+    let hugeProse = Array(repeating: "word", count: 5_000).joined(separator: " ")
+    let config = DocsConfig(budgets: DocsBudgets(router: 10, topic: 10))
+    let findings = try Self.check(
+      [Self.doc("docs/redesigns/x.md", "## Problem\n\n\(hugeProse)")], config: config)
+    #expect(findings.contains { $0.ruleID == "docs-lint.topic-word-budget" })
+  }
+
+  @Test(
+    "an .md file directly under a designs/ directory is excluded, matching plan claim --design's shape"
+  )
+  func fileDirectlyUnderDesignsDirectoryIsExcluded() throws {
+    let hugeProse = Array(repeating: "word", count: 5_000).joined(separator: " ")
+    let config = DocsConfig(budgets: DocsBudgets(router: 10, topic: 10))
+    let findings = try Self.check(
+      [Self.doc("docs/foo/designs/x.md", "## Problem\n\n\(hugeProse)")], config: config)
+    #expect(findings.filter { $0.ruleID.hasSuffix("word-budget") } == [])
+  }
+
+  @Test(
     "docs-lint never applies design-lint's per-section budgets (e.g. Architecture's 80 words) to a non-design doc — a deliberate decision: [docs.budgets.sections] is design-lint's exclusively"
   )
   func sectionBudgetsDoNotApplyOutsideDesignDocs() throws {
@@ -206,7 +228,7 @@ struct DocsLintPolicyTests {
 @Suite("Local path rule")
 struct LocalPathRuleTests {
   static func flagged(_ text: String) -> Bool {
-    LocalPathRule.scan(text).contains { $0.ruleID == LocalPathRule.ruleID }
+    LocalPathRule.scan(text, file: "docs/example.md").contains { $0.ruleID == LocalPathRule.ruleID }
   }
 
   // MARK: - Flagged
@@ -241,12 +263,10 @@ struct LocalPathRuleTests {
     #expect(Self.flagged("set to $HOME/x before running"))
   }
 
-  // MARK: - False positives (never flagged)
-
   @Test(
-    "a path inside a fenced code block, shown as an example of what NOT to do, is not flagged — catches an illustrative anti-pattern being reported as a live violation"
+    "a path inside a fenced code block is flagged like any other prose — the spec is silent on fences, and a path quoted as a \"don't do this\" example still breaks for every reader who copies it"
   )
-  func pathInsideFencedCodeBlockIsNotFlagged() {
+  func pathInsideFencedCodeBlockIsFlagged() {
     let text = """
       Don't hardcode a machine path like this:
 
@@ -256,8 +276,17 @@ struct LocalPathRuleTests {
 
       Use a repository-relative path instead.
       """
-    #expect(!Self.flagged(text))
+    #expect(Self.flagged(text))
   }
+
+  @Test(
+    "a path inside inline code is flagged like any other prose, for the same reason a fenced path is"
+  )
+  func pathInsideInlineCodeIsFlagged() {
+    #expect(Self.flagged("run it against `/Users/me/x` locally"))
+  }
+
+  // MARK: - False positives (never flagged)
 
   @Test("the harness's own ~/.swift-harness/ product path is allowed")
   func swiftHarnessProductPathIsAllowed() {

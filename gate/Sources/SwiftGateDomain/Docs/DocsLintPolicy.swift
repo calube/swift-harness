@@ -18,8 +18,8 @@ public enum DocsLintPolicy {
   ]
 
   /// One file `docs-lint` read off disk: its repository-relative path, raw text (for
-  /// ``LocalPathRule``, which needs fence-aware line scanning no parsed tree keeps) and parsed
-  /// structure (for word counts and anchors).
+  /// ``LocalPathRule`` and the banned-phrase scan, which work over untouched source text, not a
+  /// parsed tree) and parsed structure (for word counts and anchors).
   public struct ScannedDocument: Sendable, Equatable {
     public let path: String
     public let rawText: String
@@ -41,7 +41,7 @@ public enum DocsLintPolicy {
     for document in documents {
       try findings.append(contentsOf: bannedPhraseFindings(document: document, config: config))
       try findings.append(contentsOf: budgetFindings(document: document, config: config))
-      try findings.append(contentsOf: localPathFindings(document: document))
+      findings.append(contentsOf: localPathFindings(document: document))
     }
     return findings
   }
@@ -188,17 +188,8 @@ public enum DocsLintPolicy {
 
   // MARK: - Local paths
 
-  private static func localPathFindings(
-    document: ScannedDocument
-  ) throws(ReportContractViolation) -> [Finding] {
-    var findings: [Finding] = []
-    for match in LocalPathRule.scan(document.rawText) {
-      findings.append(
-        try Finding(
-          ruleID: match.ruleID, severity: match.severity, file: document.path, line: match.line,
-          message: match.message, failureScenario: match.failureScenario))
-    }
-    return findings
+  private static func localPathFindings(document: ScannedDocument) -> [Finding] {
+    LocalPathRule.scan(document.rawText, file: document.path)
   }
 
   // MARK: - Doc classification
@@ -208,8 +199,15 @@ public enum DocsLintPolicy {
     return components.first == "docs" && components.last == "index.md"
   }
 
+  /// The `docs/**/designs/<name>.md` shape `plan claim --design` also matches: an `.md` file whose
+  /// immediate parent directory is literally named `designs`. Matching any path *component* named
+  /// `designs` would also catch `docs/redesigns/x.md` and `notes-designs/x.md`, neither of which is
+  /// a design doc.
   private static func isDesignDoc(_ path: String) -> Bool {
-    path.split(separator: "/").contains("designs")
+    guard path.hasSuffix(".md") else { return false }
+    let components = path.split(separator: "/")
+    guard components.count >= 2 else { return false }
+    return components[components.count - 2] == "designs"
   }
 
   private static func isAgentsFile(_ path: String) -> Bool {
