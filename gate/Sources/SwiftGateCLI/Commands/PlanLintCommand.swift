@@ -12,6 +12,9 @@ enum PlanLintRun {
     /// Why each task's worker pack couldn't be built, keyed by task id. Each one also reaches the
     /// report as the domain's `plan-lint.pack-missing` finding.
     let packFailures: [String: String]
+    /// Inputs a worker pack would carry that don't exist here, so every pack was built without
+    /// them.
+    let notes: [String]
   }
 
   static func run(slug: String, root: URL, git: any Git, swiftPM: any SwiftPM) async -> Result {
@@ -49,7 +52,8 @@ enum PlanLintRun {
     case .success(let loaded?): config = loaded
     case .success(nil):
       return blocked("no \(ConfigLoader.fileName): plan-lint needs the module graph")
-    case .failure(let failure): return Result(outcome: failure.outcome, packFailures: [:])
+    case .failure(let failure):
+      return Result(outcome: failure.outcome, packFailures: [:], notes: [])
     }
     let graph: ModuleGraph
     do {
@@ -58,19 +62,18 @@ enum PlanLintRun {
       return blocked("can't load the module graph: \(error)")
     }
 
+    let sources = WorkerPackSources.gather(designPath: plan.design, root: root)
     var workerPacks: [String: ContextPack] = [:]
     var packFailures: [String: String] = [:]
     for task in ledger.tasks {
-      // The same inputs `context-pack --role worker --design --ledger --task-id` builds from,
-      // with the design read at designSha rather than from the working tree.
-      let inputs = WorkerInputs(
-        task: task, design: design, designSource: designSource,
-        claims: ContextSource(label: "claims.jsonl", rawText: ""), citedClaimIDs: [],
-        standards: ContextSource(label: "standards", rawText: ""), moduleKindAnchors: [])
-      do {
-        workerPacks[task.id] = try ContextPack.build(role: .worker, inputs: .worker(inputs))
-      } catch {
-        packFailures[task.id] = "\(error)"
+      switch sources.inputs(task: task, design: design, designSource: designSource, graph: graph) {
+      case .failure(let reason): packFailures[task.id] = reason.message
+      case .success(let inputs):
+        do {
+          workerPacks[task.id] = try ContextPack.build(role: .worker, inputs: .worker(inputs))
+        } catch {
+          packFailures[task.id] = "\(error)"
+        }
       }
     }
 
@@ -81,14 +84,14 @@ enum PlanLintRun {
         bounds: config.plan)
       return Result(
         outcome: .checked(RuleRunResult(findings: findings, allowances: [])),
-        packFailures: packFailures)
+        packFailures: packFailures, notes: sources.notes)
     } catch {
       return blocked("plan-lint: \(error)")
     }
   }
 
   private static func blocked(_ reason: String) -> Result {
-    Result(outcome: .blocked(reason: reason), packFailures: [:])
+    Result(outcome: .blocked(reason: reason), packFailures: [:], notes: [])
   }
 
   private static func describe(_ error: PlanStateStoreError) -> String {
@@ -98,6 +101,104 @@ enum PlanLintRun {
     case .missing(let path): "`\(path)` doesn't exist"
     case .unreadable(let path, let detail): "can't read `\(path)`: \(detail)"
     case .malformed(let path, let detail): "`\(path)` is malformed: \(detail)"
+    }
+  }
+}
+
+/// What `context-pack --role worker` takes as flags, derived from the repository instead: the
+/// design's `claims.jsonl` (every claim, since the ledger records no per-task citations), the
+/// standards doc plus playbook, and the standards anchors for the kinds of the modules a task
+/// touches (spec §5.10). Claims and standards come from the working tree, as `context-pack` reads
+/// them; only the design is pinned to designSha.
+struct WorkerPackSources: Sendable {
+  static let standardsPath = "docs/standards.md"
+  static let playbookPath = "docs/testing-playbook.md"
+
+  struct Failure: Error, Sendable {
+    let message: String
+  }
+
+  let claims: Swift.Result<(source: ContextSource, ids: [String]), Failure>
+  let standards: Swift.Result<ContextSource?, Failure>
+  let notes: [String]
+
+  static func gather(designPath: String, root: URL) -> WorkerPackSources {
+    var notes: [String] = []
+    let claimsPath = EvidenceLayout(designDocPath: designPath).claimsFile
+    let claims: Swift.Result<(source: ContextSource, ids: [String]), Failure>
+    if !exists(claimsPath, root: root) {
+      notes.append("no `\(claimsPath)`: worker packs carry no claims")
+      claims = .success((ContextSource(label: "claims.jsonl", rawText: ""), []))
+    } else {
+      switch ContextPackFiles.read(label: claimsPath, path: claimsPath, root: root) {
+      case .failure(.unreadable(let path)):
+        claims = .failure(Failure(message: "can't read `\(path)`"))
+      case .success(let source):
+        let decoded = ClaimJSON.decode(Data(source.rawText.utf8))
+        claims =
+          decoded.invalidLines > 0
+          ? .failure(
+            Failure(message: "`\(claimsPath)` has \(decoded.invalidLines) malformed line(s)"))
+          : .success((source, decoded.claims.map(\.id)))
+      }
+    }
+
+    let standards: Swift.Result<ContextSource?, Failure>
+    if !exists(standardsPath, root: root) {
+      notes.append("no `\(standardsPath)`: worker packs carry no standards anchors")
+      standards = .success(nil)
+    } else {
+      standards = readStandards(root: root)
+    }
+    return WorkerPackSources(claims: claims, standards: standards, notes: notes)
+  }
+
+  func inputs(
+    task: LedgerTask, design: DesignDocument, designSource: ContextSource, graph: ModuleGraph
+  ) -> Swift.Result<WorkerInputs, Failure> {
+    let claimsSource: ContextSource
+    let claimIDs: [String]
+    switch claims {
+    case .failure(let failure): return .failure(failure)
+    case .success(let value): (claimsSource, claimIDs) = value
+    }
+    let standardsSource: ContextSource?
+    switch standards {
+    case .failure(let failure): return .failure(failure)
+    case .success(let value): standardsSource = value
+    }
+    let touched = PlanLintGraph.modulesTouched(writeSet: task.writeSet, graph: graph)
+    let kinds = graph.modules.filter { touched.contains($0.name) }.sorted { $0.name < $1.name }
+      .map(\.kind)
+    return .success(
+      WorkerInputs(
+        task: task, design: design, designSource: designSource, claims: claimsSource,
+        citedClaimIDs: claimIDs,
+        standards: standardsSource ?? ContextSource(label: "standards", rawText: ""),
+        moduleKindAnchors: standardsSource == nil
+          ? [] : ContextPackModuleKindAnchors.anchors(for: kinds)))
+  }
+
+  private static func exists(_ path: String, root: URL) -> Bool {
+    FileManager.default.fileExists(atPath: ContextPackFiles.resolve(path, root: root).path)
+  }
+
+  /// The standards doc with the playbook appended when there is one, labelled as `context-pack`
+  /// labels `--standards` plus `--playbook`.
+  private static func readStandards(root: URL) -> Swift.Result<ContextSource?, Failure> {
+    let standards: ContextSource
+    switch ContextPackFiles.read(label: standardsPath, path: standardsPath, root: root) {
+    case .failure(.unreadable(let path)): return .failure(Failure(message: "can't read `\(path)`"))
+    case .success(let source): standards = source
+    }
+    guard exists(playbookPath, root: root) else { return .success(standards) }
+    switch ContextPackFiles.read(label: playbookPath, path: playbookPath, root: root) {
+    case .failure(.unreadable(let path)): return .failure(Failure(message: "can't read `\(path)`"))
+    case .success(let playbook):
+      return .success(
+        ContextSource(
+          label: "\(standardsPath) + \(playbookPath)",
+          rawText: standards.rawText + "\n" + playbook.rawText))
     }
   }
 }
@@ -124,6 +225,9 @@ struct PlanLintCommand: AsyncParsableCommand {
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
     try await StaticCheckRun.execute(root: root, format: output.format) {
       let result = await PlanLintRun.run(slug: slug, root: root, git: git, swiftPM: swiftPM)
+      for note in result.notes {
+        FileHandle.standardError.write(Data("swiftgate plan-lint: \(note)\n".utf8))
+      }
       for (task, reason) in result.packFailures.sorted(by: { $0.key < $1.key }) {
         FileHandle.standardError.write(
           Data("swiftgate plan-lint: worker pack for `\(task)` not built: \(reason)\n".utf8))

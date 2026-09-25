@@ -97,14 +97,15 @@ private struct PlanLintRepo {
 
   /// Commits the approved design (status `proposed`), then a commit that only flips its status to
   /// `approved`, so the approved revision always sits behind a later commit.
-  init() async throws {
+  init(workerPackTokenBudget: Int? = nil) async throws {
     root = FileManager.default.temporaryDirectory
       .appending(path: "swiftgate-plan-lint-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     try await run("init", "-q", "-b", "main")
     try await run("config", "commit.gpgsign", "false")
-    try write(ConfigLoader.fileName, Self.config)
+    let budget = workerPackTokenBudget.map { "\n[plan]\nworker_pack_token_budget = \($0)\n" }
+    try write(ConfigLoader.fileName, Self.config + (budget ?? ""))
     try write("\(Self.packagePath)/Package.swift", "// swift-tools-version: 6.2\n")
     try write(Self.design, Self.approvedText)
     try await commit("approved draft")
@@ -153,6 +154,17 @@ private struct PlanLintRepo {
       clarifyChain: [], tier: "standard", resume: "planned")
     try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+  }
+
+  /// Claims and standards for the worker pack, each padded to about `bytes` long.
+  func writeClaimsAndStandards(bytes: Int) throws {
+    let padding = String(repeating: "queued orders replay in submit order; ", count: bytes / 38)
+    try write(
+      EvidenceLayout(designDocPath: Self.design).claimsFile,
+      #"{"citation":{"kind":"file","loc":"Sample/Sources/Core/Queue.swift:L1-L1","quote":"q"},"#
+        + #""id":"ev-queue-order","lane":"codebase","status":"supported","text":"\#(padding)"}"#
+        + "\n")
+    try write("docs/standards.md", "# Standards\n\n## 2. Architecture\n\n\(padding)\n")
   }
 
   func lint(from directory: URL? = nil) async throws -> (report: RunReport, run: PlanLintRun.Result)
@@ -331,5 +343,43 @@ struct PlanLintCommandTests {
     #expect(main.report.findings.contains { $0.ruleID == PlanLintGraph.wavesMismatchRuleID })
     #expect(fromLinked.report.findings == main.report.findings)
     #expect(fromLinked.report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "claims and module-kind standards in a worker pack trip pack-over-budget — catches a pack sized without its claims and standards"
+  )
+  func fullWorkerPackIsBudgeted() async throws {
+    let repo = try await PlanLintRepo(workerPackTokenBudget: 400)
+    defer { repo.remove() }
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText), ledger: PlanLintRepo.ledger())
+    let overBudget = PlanLintCoverage.packOverBudgetRuleID
+
+    let bare = try await repo.lint()
+    #expect(!bare.report.findings.contains { $0.ruleID == overBudget })
+    #expect(bare.run.notes.contains { $0.contains("claims.jsonl") })
+    #expect(bare.run.notes.contains { $0.contains("docs/standards.md") })
+
+    try repo.writeClaimsAndStandards(bytes: 900)
+    let full = try await repo.lint()
+    #expect(full.report.findings.contains { $0.ruleID == overBudget && $0.file == "queue-core" })
+    #expect(full.run.notes.isEmpty)
+    #expect(full.report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a malformed claims file fails every worker pack as pack-missing — catches bad claims dropped into a thinner pack"
+  )
+  func malformedClaimsFailPacks() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText), ledger: PlanLintRepo.ledger())
+    try repo.write(EvidenceLayout(designDocPath: PlanLintRepo.design).claimsFile, "{not json\n")
+
+    let (report, run) = try await repo.lint()
+    #expect(report.findings.contains { $0.ruleID == PlanLintGraph.packMissingRuleID })
+    #expect(run.packFailures["queue-core"]?.contains("claims.jsonl") == true)
+    #expect(report.verdict.exitCode == 1)
   }
 }
