@@ -5,7 +5,7 @@ Status: IN PROGRESS — waves 1–4 merged 2026-09-25 (push tier GREEN). Pre-wav
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
 Next action: wave 5 — commit-message-id-check, index-set-under-file-lock, plan-claim-and-release-commands.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
-Interfaces note: docs/handoffs/subproject-2-interfaces.md.
+Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
