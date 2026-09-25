@@ -199,3 +199,20 @@ Contract points the hooks rely on:
   shape. With `args` set, the hook runs in exec form: `command` and each `args` element have
   `${CLAUDE_PLUGIN_ROOT}` substituted and no shell is involved. `timeout` is in seconds
   (default 600 for command hooks).
+
+## Bootstrap
+
+Xcode 26.2 (17C48), run from `examples/SampleApp`:
+
+| File | Capture |
+|---|---|
+| `Bootstrap/xcodebuild-list-project.json` | `xcrun xcodebuild -list -json -project SampleApp.xcodeproj` (verbatim stdout, exit 0) |
+| `Bootstrap/xcodebuild-list-missing.{stdout,stderr,status}` | `xcrun xcodebuild -list -json -project Missing.xcodeproj`; the result-bundle path under the user temp directory is replaced with `/TMP/` |
+
+Observed behavior the adapter relies on:
+
+- A project listing is `{"project": {"name", "schemes", "targets", "configurations"}}`. Package
+  products of local packages appear as schemes beside the app's, so the app scheme is the one named
+  after the project, or else the only scheme that is also a target.
+- Listing resolves the project's packages first (16s cold on the sample app).
+- A missing project exits 66 with the error on stderr.

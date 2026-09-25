@@ -1,0 +1,5 @@
+# swift-harness
+**/.harness/runs/
+**/.harness/hook-state/
+**/.harness/derived-data/
+.harness/orchestrator.lock
