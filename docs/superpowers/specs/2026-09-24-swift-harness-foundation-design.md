@@ -70,7 +70,7 @@ templates/                # files /swift-bootstrap stamps into an app repo
 - `AGENTS.md` (router to the harness docs; `CLAUDE.md` symlinks to it)
 - `.swiftgate.toml` — project profile (§5.4)
 - `.swiftlint.yml`, `.swift-format`
-- `lefthook.yml` — pre-push runs `swiftgate check --tier push`
+- `lefthook.yml` — pre-commit runs `swiftgate comments --staged` (< 1s); pre-push runs `swiftgate check --tier push`
 - `.harness/ledger.md` with RESUME header; `.harness/runs/` (gitignored) for run artifacts
 
 Bootstrap is idempotent, shows a diff before writing, and upgrades a previously-stamped repo in place.
@@ -100,6 +100,7 @@ No check logic lives anywhere else. A hook or skill that re-implements a check i
 swiftgate check  --tier fast|push|ready     # orchestrator; composes the commands below
 swiftgate lint | arch | impact | testlint   # T0 pieces (testlint = useless-test static checks)
 swiftgate coverage                          # diff coverage of Core/Client/Live from T1 alone
+swiftgate comments --staged                 # mechanical comment-discipline checks (pre-commit)
 swiftgate mutate                            # mutation testing on changed lines (ready tier)
 swiftgate test   --tier t1|t2|t3 [--affected-since <ref>]
 swiftgate prove                             # red/green proof in a scratch worktree
@@ -407,6 +408,24 @@ contract is *typed questions → calibrated probabilities*, not free-form rubric
 **Escape hatch.** `// swiftgate:allow <rule> — <reason>`; counted in the report; a bare allow
 without a reason is itself `RED`.
 
+### 7.5 Comment discipline
+
+Rule: if deleting a comment loses nothing a reader can't recover from the code, delete it. Keep
+non-obvious *why*, footgun warnings, suppression justifications, and contract docs (`///`) on
+public/shared API. No diff/history narration in source.
+
+- **Mechanical — `swiftgate comments --staged`** (git pre-commit, every commit, < 1s, blocks):
+  commented-out code (fragment parses as Swift), diff narration ("changed from", "previously",
+  "now uses", "fixed bug where"), line-number references, `TODO`/`FIXME` without an issue link,
+  `swiftlint:disable` without an inline reason, local paths / private codenames, `///` that restates
+  the symbol name on trivial private declarations. Scoped to comments in staged hunks only.
+- **Judgment — `/swift-comment-audit` + judge questions** (Claude-authored commits only, via the
+  PreToolUse `git commit` hook; advisory, cached by content hash): Boolean "does this comment convey
+  information not recoverable from the code?"; Choice keep / trim / delete. Proposes edits for Claude
+  to apply; never blocks, never runs on human commits.
+- Self-test fixtures for each mechanical rule, plus labeled keep/delete examples in the judge
+  calibration set.
+
 ## 8. Hooks
 
 All hooks are no-ops unless the repo root contains `.swiftgate.toml`.
@@ -417,6 +436,7 @@ All hooks are no-ops unless the repo root contains `.swiftgate.toml`.
 | PreToolUse (Bash) | block raw `xcodebuild` (route via `swiftgate`), `simctl erase/delete all`, snapshot record flags, global DerivedData deletion | < 50ms |
 | PreToolUse (Edit/Write) | block hand edits to snapshot references, `Package.resolved`, `.xcresult` | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | format + lint the single file (incl. determinism bans); report violations. Never builds or tests | < 1s |
+| PreToolUse (Bash `git commit`) | Claude-authored commits only: run judge comment questions on staged comments; propose trims (advisory, cached) | ≤ 20s |
 | Stop | run `check --tier fast`; **block** if `RED` | ≤ 90s |
 
 Stop-hook safeguards: skip when no `.swift`/`Package.swift` content changed since the last `GREEN`
@@ -430,6 +450,7 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `/swift-bootstrap` | stamp or upgrade the per-app layer; idempotent; diff before write |
 | `swift-architecture` | judgment layer: design a feature/module, recommend kind via fit signals, scaffold Core/UI package pair |
 | `swift-tdd` | test-first with `TestStore` and engine replay/property patterns; regression litmus |
+| `/swift-comment-audit` | judgment pass over a diff's comments: keep / trim / delete with proposed edits; Swift-specific, written fresh for this harness |
 | `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
 
 ## 10. Testing the harness itself
