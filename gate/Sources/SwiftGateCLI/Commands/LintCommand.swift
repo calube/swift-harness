@@ -12,6 +12,10 @@ enum LintCheck {
     case .failed(let outcome): return outcome
     case .loaded(let loaded): inputs = loaded
     }
+    return evaluate(inputs)
+  }
+
+  static func evaluate(_ inputs: StaticCheckInputs.Loaded) -> StaticCheckOutcome {
     let context = RuleContext(
       scopes: inputs.scopes.resolver, vendorModules: inputs.config?.clients.vendorModules ?? [])
     return inputs.scopes.appendingNotices(

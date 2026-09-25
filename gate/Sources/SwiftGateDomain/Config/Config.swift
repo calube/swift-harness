@@ -1,5 +1,5 @@
 /// A repository's `.swiftgate.toml`, validated. Every instance satisfies the cross-field rules in
-/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:)``;
+/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:exclude:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
 public struct Config: Sendable, Equatable {
   /// Where the config lives, relative to the repository root.
@@ -22,6 +22,9 @@ public struct Config: Sendable, Equatable {
   /// Only modules that deviate from the defaults (`feature`, host-testable) need entries.
   public let modules: [ModuleOverride]
   public let judge: JudgeConfig
+  /// Repository-relative directories that whole-repository checks skip, such as fixtures that
+  /// violate the rules on purpose.
+  public let exclude: [String]
 
   public init(
     xcode: String,
@@ -34,12 +37,13 @@ public struct Config: Sendable, Equatable {
     budgets: Budgets = Budgets(),
     clients: ClientsConfig = ClientsConfig(),
     modules: [ModuleOverride] = [],
-    judge: JudgeConfig = .disabled
+    judge: JudgeConfig = .disabled,
+    exclude: [String] = []
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge)
+      modules: modules, judge: judge, exclude: exclude)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     self.xcode = xcode
     self.appScheme = appScheme
@@ -52,6 +56,7 @@ public struct Config: Sendable, Equatable {
     self.clients = clients
     self.modules = modules
     self.judge = judge
+    self.exclude = exclude
   }
 
   public func module(named name: String) -> ModuleOverride? {
@@ -69,7 +74,7 @@ public struct Config: Sendable, Equatable {
   static func invariantIssues(
     xcode: String, appScheme: String, packages: [String], simulator: SimulatorConfig,
     pyramid: PyramidConfig, flows: [Flow], mutation: MutationConfig, budgets: Budgets,
-    clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig
+    clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, exclude: [String]
   ) -> [ConfigIssue] {
     var issues: [ConfigIssue] = []
     func requireText(_ value: String, _ path: String) {
@@ -157,6 +162,14 @@ public struct Config: Sendable, Equatable {
       if thresholds.advisory > thresholds.block {
         issues.append(
           .judgeThresholdsInverted(advisory: thresholds.advisory, block: thresholds.block))
+      }
+    }
+    for (index, path) in exclude.enumerated() {
+      let components = path.split(separator: "/")
+      if path.isBlank || path.hasPrefix("/") || components.contains("..") {
+        issues.append(
+          .outOfRange(
+            path: "exclude[\(index)]", value: path, allowed: "a repository-relative directory"))
       }
     }
     return issues

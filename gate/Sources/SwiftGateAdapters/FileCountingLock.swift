@@ -93,7 +93,8 @@ public struct FileCountingLock: CountingLock {
       if Task.isCancelled { throw .cancelled }
       if clock.now >= deadline { throw .timedOut(waited: timeout, capacity: capacity) }
       do {
-        try await Task.sleep(for: min(pollInterval, deadline - clock.now))
+        let wait = min(pollInterval, deadline - clock.now)
+        try await Task.sleep(for: wait)  // swiftgate:allow det.task-sleep — other processes hold it
       } catch {
         throw .cancelled
       }

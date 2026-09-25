@@ -1,0 +1,31 @@
+# The harness gates itself. `gate` is a SwiftPM tool package, not an app: its modules are
+# libraries, and its fixtures and the example app are gated by their own configs.
+schema = 1
+xcode = "26.2"
+app_scheme = "swiftgate"
+packages = ["gate"]
+exclude = ["gate/Fixtures", "examples"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[[modules]]
+name = "SwiftGateDomain"
+kind = "library"
+reason = "pure gate domain model; no reducers"
+
+[[modules]]
+name = "SwiftGateRules"
+kind = "library"
+reason = "SwiftSyntax rule engine; no reducers"
+
+[[modules]]
+name = "SwiftGateAdapters"
+kind = "library"
+reason = "process, git and file-system adapters behind protocols; no reducers"
+
+[[modules]]
+name = "SwiftGateTestSupport"
+kind = "library"
+reason = "test doubles shared by the gate's own tests"

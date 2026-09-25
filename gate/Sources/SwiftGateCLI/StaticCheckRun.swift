@@ -26,7 +26,7 @@ enum StaticCheckRun {
       // History is diagnostics; failing to write it must not flip a verdict about the code.
       FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
     }
-    print(try ReportRenderer.render(report, format: format))
+    Console.write(try ReportRenderer.render(report, format: format))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
   }

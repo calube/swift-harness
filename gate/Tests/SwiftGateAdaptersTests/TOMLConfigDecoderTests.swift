@@ -291,4 +291,22 @@ struct TOMLConfigDecoderTests {
       Self.minimal.replacingOccurrences(of: "\"26.2\"\napp", with: "2026-01-01\napp"))
     #expect(found == [.wrongType(path: "xcode", expected: "string", found: "local date")])
   }
+
+  @Test(
+    "exclude lists repository-relative directories kept out of whole-repository checks — catches fixtures of deliberate violations gating the repository"
+  )
+  func exclude() throws {
+    let config = try decoder.decode(
+      #"exclude = ["gate/Fixtures", "examples"]"# + "\n" + Self.minimal)
+    #expect(config.exclude == ["gate/Fixtures", "examples"])
+    #expect(try decoder.decode(Self.minimal).exclude == [])
+  }
+
+  @Test(
+    "an absolute or escaping exclude path is rejected — catches an exclude that silently matches nothing or everything"
+  )
+  func excludeMustBeRelative() {
+    let found = issues(#"exclude = ["/abs", "../up", " "]"# + "\n" + Self.minimal)
+    #expect(found.map(\.path) == ["exclude[0]", "exclude[1]", "exclude[2]"])
+  }
 }

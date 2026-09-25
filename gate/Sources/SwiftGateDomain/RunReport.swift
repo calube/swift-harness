@@ -15,10 +15,16 @@ public struct TestCounts: Sendable, Equatable {
 
   public var executed: Int { passed + failed }
 
+  public static let zero = TestCounts(validPassed: 0, failed: 0, skipped: 0)
+
   public init(passed: Int, failed: Int, skipped: Int) throws(ReportContractViolation) {
     try requireNonNegative(passed, field: "passed")
     try requireNonNegative(failed, field: "failed")
     try requireNonNegative(skipped, field: "skipped")
+    self.init(validPassed: passed, failed: failed, skipped: skipped)
+  }
+
+  private init(validPassed passed: Int, failed: Int, skipped: Int) {
     self.passed = passed
     self.failed = failed
     self.skipped = skipped

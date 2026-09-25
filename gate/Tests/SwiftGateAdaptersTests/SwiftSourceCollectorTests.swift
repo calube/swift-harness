@@ -64,4 +64,21 @@ struct SwiftSourceCollectorTests {
       try collector.collect(paths: ["../x"])
     }
   }
+
+  @Test(
+    "excluded directories are skipped when walking — catches deliberate-violation fixtures linted as product code"
+  )
+  func excludedDirectories() throws {
+    let root = try makeTree([
+      "gate/Sources/A.swift": "a", "gate/Fixtures/rules/bad/B.swift": "b",
+      "gate/FixturesExtra/C.swift": "c",
+    ])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let collector = SwiftSourceCollector(root: root, excluding: ["gate/Fixtures"])
+
+    #expect(
+      try collector.collect(paths: ["."]).map(\.path) == [
+        "gate/FixturesExtra/C.swift", "gate/Sources/A.swift",
+      ])
+  }
 }

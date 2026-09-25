@@ -314,13 +314,3 @@ private struct Judgement {
     if let finding { findings.append(finding) }
   }
 }
-
-extension TestCounts {
-  static let zero: TestCounts = {
-    // Zero is non-negative, so the contract cannot reject it.
-    guard let zero = try? TestCounts(passed: 0, failed: 0, skipped: 0) else {
-      preconditionFailure("TestCounts rejects zero")
-    }
-    return zero
-  }()
-}

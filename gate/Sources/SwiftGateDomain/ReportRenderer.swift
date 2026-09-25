@@ -81,7 +81,7 @@ public enum ReportRenderer {
   }
 
   /// Locale-independent so output is byte-stable across machines.
-  static func duration(_ milliseconds: Int) -> String {
+  public static func duration(_ milliseconds: Int) -> String {
     guard milliseconds >= 1000 else { return "\(milliseconds)ms" }
     return "\(milliseconds / 1000).\(milliseconds % 1000 / 100)s"
   }

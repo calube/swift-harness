@@ -15,7 +15,7 @@ public enum ConfigSchema {
       in: root, at: "",
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
-        "budgets", "clients", "modules", "judge",
+        "budgets", "clients", "modules", "judge", "exclude",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -26,6 +26,7 @@ public enum ConfigSchema {
     let xcode = reader.string(root, "xcode", at: "", required: true) ?? ""
     let appScheme = reader.string(root, "app_scheme", at: "", required: true) ?? ""
     let packages = reader.stringArray(root, "packages", at: "", required: true) ?? []
+    let exclude = reader.stringArray(root, "exclude", at: "") ?? []
 
     let simulator = readSimulator(&reader, root)
     let pyramid = readPyramid(&reader, root)
@@ -47,7 +48,7 @@ public enum ConfigSchema {
     let invariantIssues = Config.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge
+      modules: modules, judge: judge, exclude: exclude
     ).filter { !restatesReadIssue($0) }
     let issues = reader.issues + invariantIssues
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
@@ -55,7 +56,7 @@ public enum ConfigSchema {
     return try Config(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge)
+      modules: modules, judge: judge, exclude: exclude)
   }
 
   private static func readSimulator(_ reader: inout Reader, _ root: [String: ConfigValue])

@@ -18,6 +18,12 @@ enum ArchCheck {
     case .failed(let outcome): return outcome
     case .loaded(let loaded): inputs = loaded
     }
+    return await evaluate(inputs, swiftPM: swiftPM)
+  }
+
+  static func evaluate(_ inputs: StaticCheckInputs.Loaded, swiftPM: any SwiftPM) async
+    -> StaticCheckOutcome
+  {
     let sourceOutcome = StaticCheck.evaluate(
       RuleCatalog.arch, inputs.sources, context: RuleContext(scopes: inputs.scopes.resolver))
     guard case .checked(let sourceResult) = sourceOutcome else { return sourceOutcome }

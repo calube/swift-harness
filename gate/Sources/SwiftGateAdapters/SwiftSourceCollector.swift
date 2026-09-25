@@ -19,9 +19,14 @@ public enum SourceCollectionError: Error, Sendable, Equatable {
 /// Reads `.swift` files named by command-line paths (files or directories) under a root.
 public struct SwiftSourceCollector: Sendable {
   public let root: URL
+  /// Repository-relative directories never walked into.
+  public let excluded: Set<String>
 
-  public init(root: URL) {
+  public init(root: URL, excluding excluded: [String] = []) {
     self.root = root.standardizedFileURL.resolvingSymlinksInPath()
+    self.excluded = Set(
+      excluded.map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 }
+        .map { $0.hasPrefix("./") ? String($0.dropFirst(2)) : $0 })
   }
 
   /// Build output and tool state, never sources under review.
@@ -73,7 +78,12 @@ public struct SwiftSourceCollector: Sendable {
     for case let url as URL in enumerator {
       let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
       if isDirectory {
-        if Self.skippedDirectories.contains(url.lastPathComponent) { enumerator.skipDescendants() }
+        if Self.skippedDirectories.contains(url.lastPathComponent)
+          || relativePath(of: url.standardizedFileURL.resolvingSymlinksInPath())
+            .map(excluded.contains) == true
+        {
+          enumerator.skipDescendants()
+        }
         continue
       }
       if url.pathExtension == "swift",
