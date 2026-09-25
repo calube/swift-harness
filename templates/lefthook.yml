@@ -9,3 +9,8 @@ pre-push:
   commands:
     swiftgate-push:
       run: '"$HOME/.local/bin/swiftgate" check --tier push'
+
+commit-msg:
+  commands:
+    swiftgate-commit-msg:
+      run: '"$HOME/.local/bin/swiftgate" comments --commit-msg {1}'

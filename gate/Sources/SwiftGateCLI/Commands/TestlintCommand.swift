@@ -6,9 +6,13 @@ import SwiftGateRules
 
 /// Static useless-test detection over test files (spec §7.4) plus T3 flow placement.
 enum TestlintCheck {
-  static func run(root: URL, paths: [String], swiftPM: any SwiftPM) async -> StaticCheckOutcome {
+  /// - Parameter git: when non-nil, staged and test-name findings are checked against the known-id
+  ///   feed too (spec §5.1); omitted by call sites that don't need it (existing tests).
+  static func run(root: URL, paths: [String], swiftPM: any SwiftPM, git: (any Git)? = nil) async
+    -> StaticCheckOutcome
+  {
     let inputs: StaticCheckInputs.Loaded
-    switch await StaticCheckInputs.load(root: root, paths: paths, swiftPM: swiftPM) {
+    switch await StaticCheckInputs.load(root: root, paths: paths, swiftPM: swiftPM, git: git) {
     case .failed(let outcome): return outcome
     case .loaded(let loaded): inputs = loaded
     }
@@ -17,9 +21,11 @@ enum TestlintCheck {
 
   static func evaluate(_ inputs: StaticCheckInputs.Loaded) -> StaticCheckOutcome {
     let context = RuleContext(
-      scopes: inputs.scopes.resolver, flows: inputs.config.map { $0.flows.map(\.name) })
-    return inputs.scopes.appendingNotices(
+      scopes: inputs.scopes.resolver, flows: inputs.config.map { $0.flows.map(\.name) },
+      knownIds: inputs.knownIds)
+    let outcome = inputs.scopes.appendingNotices(
       to: StaticCheck.evaluate(RuleCatalog.testlint, inputs.sources, context: context))
+    return KnownIdSourceFindings.appending(inputs.unreadableIdSources, to: outcome)
   }
 }
 
@@ -35,9 +41,10 @@ struct TestlintCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     try await StaticCheckRun.execute(root: root, format: output.format) {
       await TestlintCheck.run(
-        root: root, paths: paths, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+        root: root, paths: paths, swiftPM: ScopeResolution.liveSwiftPM(root: root), git: git)
     }
   }
 }
