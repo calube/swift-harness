@@ -19,10 +19,10 @@ public struct PlanSummary: Sendable, Equatable {
   }
 }
 
-/// `.harness/plans/index.json`: `{"plans": [{"slug", "status", "resume"}, …]}`. Other keys are
-/// ignored, so a plan's full ledger never reaches session context through the index.
+/// The shared `index.json` under the git common dir (spec §4, §5.8):
+/// `{"plans": [{"slug", "status", "resume"}, …]}`. Other keys are ignored, so a plan's full
+/// ledger never reaches session context through the index.
 public struct PlanIndex: Sendable, Equatable {
-  public static let path = ".harness/plans/index.json"
   public static let finishedStatuses: Set<String> = [
     "done", "complete", "completed", "abandoned", "archived", "cancelled",
   ]
@@ -41,8 +41,19 @@ public struct PlanIndex: Sendable, Equatable {
       plans: wire.plans.map { PlanSummary(slug: $0.slug, status: $0.status, resume: $0.resume) })
   }
 
-  private struct Wire: Decodable {
-    struct Plan: Decodable {
+  /// One pretty-printed, key-sorted object, so two encodes of the same value produce identical
+  /// bytes (`swiftgate index set` writes this under a file lock; the file is reviewable as a diff).
+  public func encode() throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    var data = try encoder.encode(
+      Wire(plans: plans.map { Wire.Plan(slug: $0.slug, status: $0.status, resume: $0.resume) }))
+    data.append(UInt8(ascii: "\n"))
+    return data
+  }
+
+  private struct Wire: Codable {
+    struct Plan: Codable {
       let slug: String
       let status: String
       let resume: String?
@@ -57,6 +68,10 @@ public struct PlanIndex: Sendable, Equatable {
 public enum SessionContext {
   public static let maxCharacters = 9_000
   static let maxResumeCharacters = 600
+  /// Sub-budget for the rendered plan list (spec §6.3 row 7, §10): well under
+  /// ``maxCharacters``, so a large ``index.json`` truncates with an explicit overflow count
+  /// instead of the overall clip silently swallowing the tail of the plan list mid-line.
+  static let maxPlanListCharacters = 4_000
 
   public struct ModuleEntry: Sendable, Equatable {
     public let package: String
@@ -85,6 +100,10 @@ public enum SessionContext {
 
   public struct Inputs: Sendable, Equatable {
     public let projectName: String
+    /// The Claude Code session id (spec §6.3 row 1): a skill reads it back out of this context
+    /// to pass `--session` to `swiftgate plan claim`/`plan release`, since skills can't read hook
+    /// payloads directly. Empty when the caller has none to report (never rendered).
+    public let sessionID: String
     public let modules: [ModuleEntry]
     /// `nil` when there is no valid config to read the pin from.
     public let xcode: Xcode?
@@ -93,13 +112,28 @@ public enum SessionContext {
     public let notes: [String]
 
     public init(
-      projectName: String, modules: [ModuleEntry], xcode: Xcode?, plans: Plans, notes: [String]
+      projectName: String, sessionID: String = "", modules: [ModuleEntry], xcode: Xcode?,
+      plans: Plans, notes: [String]
     ) {
       self.projectName = projectName
+      self.sessionID = sessionID
       self.modules = modules
       self.xcode = xcode
       self.plans = plans
       self.notes = notes
+    }
+  }
+
+  /// Classifies the shared `index.json` (spec §6.3 rows 1 and 7): no bytes at all — no common
+  /// dir, no file yet, or being outside a git repository — degrades silently to ``Plans/none``,
+  /// since that is the ordinary "no plan started" state. Bytes that fail to decode are the one
+  /// case worth a note: a file exists but this build can't trust it.
+  public static func resolvePlans(indexData: Data?) -> Plans {
+    guard let indexData else { return .none }
+    do {
+      return .active(try PlanIndex.decode(indexData).active)
+    } catch {
+      return .unreadable("\(error)")
     }
   }
 
@@ -111,6 +145,11 @@ public enum SessionContext {
         + "DerivedData deletion and hand edits to snapshots, Package.resolved or .xcresult are "
         + "denied."
     ]
+    if !inputs.sessionID.isEmpty {
+      lines.append(
+        "Session id: \(inputs.sessionID) (pass as `--session` to `swiftgate plan claim`/`plan "
+          + "release`).")
+    }
     if !inputs.modules.isEmpty {
       lines.append("Modules by package (role, kind):")
       let packages = Dictionary(grouping: inputs.modules, by: \.package)
@@ -141,16 +180,28 @@ public enum SessionContext {
       lines.append("Active plans: none.")
     case .active(let plans):
       lines.append("Active plans (RESUME summaries; ledgers are orchestrator-only):")
+      var shownCharacters = 0
+      var shown = 0
       for plan in plans {
         let resume =
           plan.resume.map {
             clip(
               $0.split(whereSeparator: \.isNewline).joined(separator: " "), to: maxResumeCharacters)
           } ?? "no RESUME summary"
-        lines.append("- \(plan.slug) (\(plan.status)): \(resume)")
+        let line = "- \(plan.slug) (\(plan.status)): \(resume)"
+        if shown > 0, shownCharacters + line.count > maxPlanListCharacters { break }
+        lines.append(line)
+        shownCharacters += line.count
+        shown += 1
+      }
+      let omitted = plans.count - shown
+      if omitted > 0 {
+        lines.append(
+          "…and \(omitted) more active plan\(omitted == 1 ? "" : "s") not shown (over the "
+            + "context budget).")
       }
     case .unreadable(let reason):
-      lines.append("Plans: \(PlanIndex.path) is unreadable: \(reason)")
+      lines.append("Plans: the shared plan index is unreadable: \(reason)")
     }
     lines += inputs.notes
     return clip(lines.joined(separator: "\n"), to: maxCharacters)
