@@ -628,6 +628,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `comments.restates-code`, `comments.long-block`, `comments.test-body`, `comments.trivial-private-doc`, `comments.ai-prose` | K1 |
 | `comments.commented-out-code`, `comments.diff-narration`, `comments.line-reference`, `comments.todo-without-link`, `comments.private-reference` | K2 |
 | `comments.unjustified-suppression` | [Escape hatches](#escape-hatches), C2, E2 |
+| `comments.leaked-id` | [design plan workflows §5.1](designs/2026-09-25-design-plan-workflows-design.md#51-id-policy) (id policy) |
 | `test.unnamed` | playbook P1 |
 | `test.no-assertion`, `test.tautology`, `test.existence-only`, `test.asserts-own-double`, `test.duplicate` | playbook §5.1 |
 | `test.non-exhaustive-store` | playbook P5 |
@@ -635,6 +636,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `test.sleep`, `test.swallowed-error` | playbook P7, D1 |
 | `test.misplaced-t2` | playbook §4 |
 | `test.xcuitest-unlisted-flow` | playbook P11 |
+| `test.leaked-id` | [design plan workflows §5.1](designs/2026-09-25-design-plan-workflows-design.md#51-id-policy) (id policy) |
 
 ### Test evidence (`test`, `check`)
 

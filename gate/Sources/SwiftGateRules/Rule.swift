@@ -67,15 +67,20 @@ public struct RuleContext: Sendable {
   public let privateCodenames: [String]
   /// Vendor SDK module names that may be imported only inside `*Live` modules.
   public let vendorModules: Set<String>
+  /// Ledger task, claim and doc ids (``KnownIds``) that must not leak into a comment or test name
+  /// (spec §5.1). Distinct from `privateCodenames`: this set is derived from the plan/evidence
+  /// state, not hand-configured.
+  public let knownIds: Set<String>
 
   public init(
     scopes: any ModuleScopeResolving, flows: [String]? = nil, privateCodenames: [String] = [],
-    vendorModules: [String] = []
+    vendorModules: [String] = [], knownIds: Set<String> = []
   ) {
     self.scopes = scopes
     self.flows = flows
     self.privateCodenames = privateCodenames
     self.vendorModules = Set(vendorModules)
+    self.knownIds = knownIds
   }
 }
 

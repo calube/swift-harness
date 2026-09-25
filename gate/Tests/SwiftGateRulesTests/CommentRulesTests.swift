@@ -134,7 +134,7 @@ struct CommentRulesTests {
       blocking == [
         "comments.commented-out-code", "comments.diff-narration", "comments.line-reference",
         "comments.todo-without-link", "comments.private-reference",
-        "comments.unjustified-suppression",
+        "comments.unjustified-suppression", "comments.leaked-id",
       ])
   }
 }
