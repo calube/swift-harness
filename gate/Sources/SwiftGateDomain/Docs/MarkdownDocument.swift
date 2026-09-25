@@ -129,15 +129,13 @@ public struct MarkdownDocument: Sendable, Equatable {
 
     var bodyStart = 0
     var frontmatter: [String: String] = [:]
-    if lines.first == "---" {
-      var index = 1
-      while index < lines.count, lines[index] != "---" {
-        if let field = parseFrontmatterLine(lines[index]) {
+    if let end = frontmatterEnd(lines) {
+      for line in lines[1..<end] {
+        if let field = parseFrontmatterLine(line) {
           frontmatter[field.key] = field.value
         }
-        index += 1
       }
-      bodyStart = index < lines.count ? index + 1 : index
+      bodyStart = end < lines.count ? end + 1 : end
     }
 
     let headings = collectHeadings(in: lines, from: bodyStart)
@@ -174,6 +172,15 @@ public struct MarkdownDocument: Sendable, Equatable {
   }
 
   // MARK: - Frontmatter
+
+  /// Index of the closing `---`, or `lines.count` when it is never closed; `nil` without
+  /// frontmatter.
+  private static func frontmatterEnd(_ lines: [String]) -> Int? {
+    guard lines.first == "---" else { return nil }
+    var index = 1
+    while index < lines.count, lines[index] != "---" { index += 1 }
+    return index
+  }
 
   private static func parseFrontmatterLine(_ line: String) -> (key: String, value: String)? {
     guard let colon = line.firstIndex(of: ":") else { return nil }
@@ -281,6 +288,187 @@ public struct MarkdownDocument: Sendable, Equatable {
   }
 }
 
+// MARK: - Running prose
+
+extension MarkdownDocument {
+  /// One line of running prose, for sentence-level checks. `number` is the 1-based line in the
+  /// original file. `text` has its heading, list or blockquote marker removed; inline code spans
+  /// and bare URLs are replaced by ``maskedSpan``; link targets and HTML comments are removed.
+  /// `startsBlock` is true for a heading, a list item, and the first line after a blank or skipped
+  /// line, so a sentence never runs from one block into the next.
+  public struct ProseLine: Sendable, Equatable {
+    public let number: Int
+    public let text: String
+    public let startsBlock: Bool
+
+    public init(number: Int, text: String, startsBlock: Bool) {
+      self.number = number
+      self.text = text
+      self.startsBlock = startsBlock
+    }
+  }
+
+  /// Stands in for masked code or a URL: it still counts as one word, but it has no letters for
+  /// a word rule to match.
+  public static let maskedSpan: Character = "\u{FFFC}"
+
+  /// Every prose line, skipping frontmatter, fenced code (Mermaid included), tables, HTML comments
+  /// and thematic breaks with the same fence and table detection ``parse(_:)`` uses.
+  public static func proseLines(_ text: String) -> [ProseLine] {
+    var lines = splitLines(text)
+    if lines.last == "" { lines.removeLast() }
+    var index = 0
+    if let end = frontmatterEnd(lines) { index = end + 1 }
+
+    var result: [ProseLine] = []
+    var fenceMarker: String?
+    var inComment = false
+    var startsBlock = true
+    while index < lines.count {
+      let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+      if let marker = fenceMarker {
+        if trimmed.hasPrefix(marker) { fenceMarker = nil }
+        index += 1
+        continue
+      }
+      if !inComment, trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+        fenceMarker = String(trimmed.prefix(3))
+        startsBlock = true
+        index += 1
+        continue
+      }
+      if !inComment, SectionContent.isTableRow(trimmed), index + 1 < lines.count,
+        SectionContent.isTableSeparator(lines[index + 1].trimmingCharacters(in: .whitespaces))
+      {
+        index += 2
+        while index < lines.count,
+          SectionContent.isTableRow(lines[index].trimmingCharacters(in: .whitespaces))
+        {
+          index += 1
+        }
+        startsBlock = true
+        continue
+      }
+
+      let masked = maskInline(lines[index], inComment: &inComment)
+      let content = stripBlockMarker(masked)
+      if content.text.isEmpty {
+        startsBlock = true
+      } else {
+        result.append(
+          ProseLine(
+            number: index + 1, text: content.text,
+            startsBlock: startsBlock || content.startsBlock))
+        startsBlock = content.isHeading
+      }
+      index += 1
+    }
+    return result
+  }
+
+  private static func stripBlockMarker(_ line: String) -> (
+    text: String, startsBlock: Bool, isHeading: Bool
+  ) {
+    if let heading = headingComponents(of: line) { return (heading.text, true, true) }
+    var text = line.trimmingCharacters(in: .whitespaces)
+    if text.count >= 3, text.allSatisfy({ $0 == "-" || $0 == "*" || $0 == "_" }) {
+      return ("", true, false)
+    }
+    while text.hasPrefix(">") {
+      text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+    }
+    for bullet in ["- ", "* ", "+ "] where text.hasPrefix(bullet) {
+      return (String(text.dropFirst(2)).trimmingCharacters(in: .whitespaces), true, false)
+    }
+    if text == "-" || text == "*" || text == "+" { return ("", true, false) }
+    let digits = text.prefix(while: \.isNumber)
+    if !digits.isEmpty {
+      let rest = text.dropFirst(digits.count)
+      if rest.hasPrefix(". ") || rest.hasPrefix(") ") {
+        return (String(rest.dropFirst(2)).trimmingCharacters(in: .whitespaces), true, false)
+      }
+    }
+    return (text, false, false)
+  }
+
+  /// Masks inline code and bare URLs and drops link targets and HTML comments, carrying an open
+  /// comment across lines through `inComment`.
+  private static func maskInline(_ line: String, inComment: inout Bool) -> String {
+    let characters = Array(line)
+    var output = ""
+    var index = 0
+    func starts(with prefix: String, at position: Int) -> Bool {
+      let needle = Array(prefix)
+      guard position + needle.count <= characters.count else { return false }
+      return Array(characters[position..<position + needle.count]) == needle
+    }
+    while index < characters.count {
+      if inComment {
+        if starts(with: "-->", at: index) {
+          inComment = false
+          output.append(" ")
+          index += 3
+        } else {
+          index += 1
+        }
+        continue
+      }
+      let character = characters[index]
+      if starts(with: "<!--", at: index) {
+        inComment = true
+        index += 4
+        continue
+      }
+      if character == "`" {
+        let run = characters[index...].prefix(while: { $0 == "`" }).count
+        if let close = closingBacktickRun(characters, from: index + run, length: run) {
+          output.append(maskedSpan)
+          index = close + run
+        } else {
+          output.append(contentsOf: String(repeating: "`", count: run))
+          index += run
+        }
+        continue
+      }
+      if character == "]", index + 1 < characters.count, characters[index + 1] == "(",
+        let close = characters[(index + 1)...].firstIndex(of: ")")
+      {
+        output.append("]")
+        index = close + 1
+        continue
+      }
+      if starts(with: "http://", at: index) || starts(with: "https://", at: index) {
+        output.append(maskedSpan)
+        while index < characters.count, !characters[index].isWhitespace,
+          characters[index] != ">", characters[index] != ")"
+        {
+          index += 1
+        }
+        continue
+      }
+      output.append(character)
+      index += 1
+    }
+    return output.trimmingCharacters(in: .whitespaces)
+  }
+
+  private static func closingBacktickRun(_ characters: [Character], from start: Int, length: Int)
+    -> Int?
+  {
+    var index = start
+    while index < characters.count {
+      guard characters[index] == "`" else {
+        index += 1
+        continue
+      }
+      let run = characters[index...].prefix(while: { $0 == "`" }).count
+      if run == length { return index }
+      index += run
+    }
+    return nil
+  }
+}
+
 /// Parses one section's body lines into bullets, tables, fences, links and a prose word count, in
 /// a single pass so fence/table detection and prose counting agree on which lines are which.
 private enum SectionContent {
@@ -371,11 +559,11 @@ private enum SectionContent {
     text.split(whereSeparator: \.isWhitespace).count
   }
 
-  private static func isTableRow(_ line: String) -> Bool {
+  fileprivate static func isTableRow(_ line: String) -> Bool {
     line.contains("|")
   }
 
-  private static func isTableSeparator(_ line: String) -> Bool {
+  fileprivate static func isTableSeparator(_ line: String) -> Bool {
     let cells = tableCells(line)
     guard !cells.isEmpty else { return false }
     return cells.allSatisfy { cell in

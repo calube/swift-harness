@@ -58,6 +58,7 @@ struct NewSubcommandRegistrationTests {
     "plan claim", "plan release", "plan release --force", "index set", "design-diff",
     "design-diff --chain", "design-scope", "evidence capture",
     "plan-schedule",
+    "prose",
   ]
 
   @Test(
