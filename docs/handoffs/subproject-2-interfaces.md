@@ -71,3 +71,9 @@ Only the orchestrator edits this file, appending one section per wave at merge. 
   on purpose: the parser keeps bad values, and **`design-lint` must report `.unknown` status as a violation**.
 - Test-plan tier parsing splits on the literal `" — tier "`.
 - `gate/Fixtures/design/valid.md` is a full, spec-compliant design doc. Later waves treat it as read-only.
+
+## Wave 3 (in progress)
+
+- **`designSha` isn't retrievable.** It hashes content that git never stores. Find a revision by walking
+  `git log --follow -- <doc>` and hashing each revision with its status line stripped (`hash-object --stdin`, never `-w`).
+  `Git.blobContents` only finds blobs that are actually stored, so don't use it to look up a `designSha` (spec §5.4).

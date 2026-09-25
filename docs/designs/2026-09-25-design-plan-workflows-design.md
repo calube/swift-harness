@@ -270,6 +270,12 @@ tier: standard
 `designSha` is the git blob id of the doc with the `status:` line removed, so status transitions
 and the PR merge strategy don't change it. `design-diff` computes it.
 
+`designSha` is an identity, not a storage key: the stripped content is never written to git, so no
+command looks a revision up by it. To get the revision a `designSha` names, walk the design file's
+committed history (`git log --follow -- <doc>`), strip each revision's `status:` line, and hash it
+(`git hash-object --stdin`, never `-w`, because loose objects get pruned). `plan-lint` hashes the current doc and
+compares. `design-diff` rebuilds a clarify chain by walking history this way.
+
 ### 5.5 Amendment record
 
 One JSON object per line in `amendments.jsonl` (committed):
