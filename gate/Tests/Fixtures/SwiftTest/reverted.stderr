@@ -1,0 +1,18 @@
+Building for debugging...
+[0/8] /REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/XUnitProbePackageTests.derived/runner.swift
+[1/8] Write sources
+[5/8] Write swift-version--58304C5D6DBC2206.txt
+[7/10] Compiling Probe Probe.swift
+[8/10] Emitting module Probe
+[9/17] Emitting module EmptyTests
+[10/17] Compiling EmptyTests Empty.swift
+[11/17] Compiling ProbeTests CrashTests.swift
+[12/17] Compiling ProbeTests FailTests.swift
+[13/17] Emitting module ProbeTests
+[14/17] Compiling ProbeTests SkipTests.swift
+[15/17] Compiling ProbeTests PassTests.swift
+[16/19] Compiling XUnitProbePackageTests runner.swift
+[17/19] Emitting module XUnitProbePackageTests
+[17/19] Write Objects.LinkFileList
+[18/19] Linking XUnitProbePackageTests
+Build complete! (7.46s)

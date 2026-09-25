@@ -1,0 +1,59 @@
+Building for debugging...
+[0/8] /REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/XUnitProbePackageTests.derived/runner.swift
+[1/8] Write sources
+[5/8] Write swift-version--58304C5D6DBC2206.txt
+[7/10] Emitting module Probe
+[8/10] Compiling Probe Probe.swift
+[9/17] Compiling EmptyTests Empty.swift
+[10/17] Emitting module EmptyTests
+[11/17] Compiling ProbeTests PassTests.swift
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/PassTests.swift:7:20: error: cannot find 'double' in scope
+ 5 | final class PassXCTests: XCTestCase {
+ 6 |   func testDoubles() {
+ 7 |     XCTAssertEqual(double(2), 4)
+   |                    `- error: cannot find 'double' in scope
+ 8 |   }
+ 9 | }
+
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/PassTests.swift:13:13: error: cannot find 'double' in scope
+11 | @Suite struct PassSwiftTests {
+12 |   @Test func doubles() {
+13 |     #expect(double(3) == 6)
+   |             `- error: cannot find 'double' in scope
+14 |   }
+15 | }
+[12/17] Compiling ProbeTests SkipTests.swift
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/SkipTests.swift:17:13: error: cannot find 'double' in scope
+15 | @Suite struct SkipSwiftTests {
+16 |   @Test(.disabled("flaky on CI")) func disabledWithReason() {
+17 |     #expect(double(1) == 2)
+   |             `- error: cannot find 'double' in scope
+18 |   }
+19 | 
+
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/SkipTests.swift:21:13: error: cannot find 'double' in scope
+19 | 
+20 |   @Test(.disabled()) func disabledWithoutReason() {
+21 |     #expect(double(1) == 2)
+   |             `- error: cannot find 'double' in scope
+22 |   }
+23 | }
+[13/17] Emitting module ProbeTests
+[14/17] Compiling ProbeTests CrashTests.swift
+[15/17] Compiling ProbeTests FailTests.swift
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/FailTests.swift:7:20: error: cannot find 'double' in scope
+ 5 | final class FailXCTests: XCTestCase {
+ 6 |   func testDoublesWrong() {
+ 7 |     XCTAssertEqual(double(2), 5, "double(2) should be 5")
+   |                    `- error: cannot find 'double' in scope
+ 8 |   }
+ 9 | }
+
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/FailTests.swift:13:13: error: cannot find 'double' in scope
+11 | @Suite struct FailSwiftTests {
+12 |   @Test func doublesWrong() {
+13 |     #expect(double(3) == 7)
+   |             `- error: cannot find 'double' in scope
+14 |   }
+15 | }
+error: fatalError

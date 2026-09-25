@@ -90,6 +90,29 @@ struct CheckCommandTests {
   }
 
   @Test(
+    "ready runs prove, stress and reach on the host tests instead of listing them as not run — catches ready claiming proofs it never ran"
+  )
+  func readyRunsChangedTestChecks() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    let swiftPM = try ProbeRepository.swiftPM(replaying: "pass")
+    let git = FakeGit(changed: [], mergeBase: "base")
+    let scratch = FakeScratchWorktrees(root: repository.root)
+
+    let parts = try await CheckRun.run(
+      root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
+      tier: .ready, base: "origin/main", context: repository.context(),
+      changedTests: ChangedTestChecks.Environment(
+        root: repository.root, git: git, swiftPM: swiftPM, scratch: scratch,
+        scratchSwiftPM: { _ in swiftPM }))
+
+    let notes = parts.findings.filter { $0.ruleID == ChangedTestChecks.summaryRuleID }
+    #expect(notes.map(\.message).map { $0.prefix(6) } == ["reach:", "stress", "prove:"])
+    let notRun = parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }.map(\.message)
+    #expect(!notRun.contains { $0.hasPrefix("prove") || $0.hasPrefix("stress") })
+  }
+
+  @Test(
     "without a config T0 still runs and T1 is reported not run — catches check failing repositories that have not bootstrapped"
   )
   func noConfig() async throws {

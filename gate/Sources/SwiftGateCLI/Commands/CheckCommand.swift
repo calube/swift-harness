@@ -11,7 +11,8 @@ enum CheckRun {
 
   static func run(
     root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
-    tier: CheckTier, base: String, context: GateRun.Context
+    tier: CheckTier, base: String, context: GateRun.Context,
+    changedTests: ChangedTestChecks.Environment? = nil
   ) async throws -> GateRunParts {
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
@@ -40,8 +41,16 @@ enum CheckRun {
       let t1 = try await runT1(
         root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
         graph: graph, changed: changed, context: context)
-      parts.tiers.append(t1.tier)
+      var t1Tier = t1.tier
       parts.findings += t1.findings
+      if tier == .ready {
+        let changed = await ChangedTestChecks.ready(
+          changedTests ?? .live(root: root, git: git, swiftPM: swiftPM), graph: graph, base: base,
+          context: context)
+        t1Tier = try t1Tier.merging(changed.verdict)
+        parts.findings += changed.findings
+      }
+      parts.tiers.append(t1Tier)
     } else {
       parts.findings.append(
         try note("T1 not run: \(ConfigLoader.fileName) is needed to find the packages to test"))

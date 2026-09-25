@@ -22,7 +22,7 @@ struct CheckTierTests {
     #expect(CheckTier.push.pendingSteps.map(\.name) == ["T2"])
     #expect(
       CheckTier.ready.pendingSteps.map(\.name) == [
-        "T2", "T3", "stress", "prove", "reach", "mutate",
+        "T2", "T3", "simulator prove and stress", "mutate",
       ])
   }
 }

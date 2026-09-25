@@ -45,11 +45,14 @@ file is one where `swift test` wrote none.
 | Scenario | Filter | What it shows |
 |---|---|---|
 | `pass` (with `--enable-code-coverage`) | `ProbeTests\.Pass` | one passing XCTest and one Swift Testing case; `pass-codecov.json` is the llvm-cov export from `--show-codecov-path` |
+| `zero-codecov.json` only (with `--enable-code-coverage`) | `^EmptyTests\.` | the llvm-cov export of a run that executes no test: `Probe.swift` instrumented, nothing covered |
 | `fail` | `ProbeTests\.Fail` | an `XCTAssertEqual` and an `#expect` failure |
 | `skip` | `ProbeTests\.Skip` | `XCTSkip` with and without a message; `.disabled` with and without a reason |
 | `crash` | `ProbeTests\.Crash` | an index-out-of-range trap in each framework |
 | `zero` | `^EmptyTests\.` | a target with no tests |
 | `build-error` | `ProbeTests\.Pass` | a copy of the package (no build output) with a type error in `Probe.swift` |
+| `reverted` | `ProbeTests\.Pass` | a copy with `double` computing `value * 3`: the passing tests fail on their assertions, as `prove` expects with a source change reverted |
+| `compile-only` | `ProbeTests\.Pass` | a copy without the public `double` the tests call: no report, compile errors located in the test files |
 | `stale-module-cache` | `ProbeTests\.Pass` | a copy including `.build/`, so the module cache path is stale (recorded as `/MOVED/XUnitProbe`) |
 
 Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
