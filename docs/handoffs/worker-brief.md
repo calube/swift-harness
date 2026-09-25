@@ -82,7 +82,8 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
 - A green run with zero tests is not green. Confirm the test count your change should have moved.
 - A cloned `gate/.build` keeps a `ModuleCache` with headers that point at the old path. If the build fails
   on stale module paths, delete `ModuleCache` directories with `/usr/bin/find`, not a shell alias.
-- `rm` is aliased to `rm -i` in this shell and hangs waiting for input. Delete with `/bin/rm -f`.
+- `rm` and `cp` are aliased to `rm -i` / `cp -i` in this shell and hang waiting for input. Use `/bin/rm -f`
+  and `/bin/cp -f`.
 - Tests that run a real command resolve this checkout's git common dir, which is shared with every sibling
   worktree. Run commands that write plan state only against a temp repo.
 

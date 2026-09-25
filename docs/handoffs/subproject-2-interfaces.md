@@ -474,3 +474,27 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 - Rule ids: `plan-lint.dag-cycle`, `.missing-dependency`, `.waves-mismatch`, `.write-set-overlap`,
   `.pack-missing`, `.pack-unknown-task` (major); `.hot-file` (a path in ≥ 3 tasks), `.single-dependent-chain`
   (minor). Plus the Wave 10 coverage and sizing ids.
+
+## Wave 13
+
+**`probe`** (`A/Probe/ProbeBuilder.swift`, `C/Commands/ProbeCommand.swift`, `GF/probe/`)
+- `swiftgate probe --design <doc> --package <dir> --target <name> [--sdk <v>] [--cache-home <dir>] [--json]`.
+  Inputs are `<slug>.evidence/probes/<ev-id>.snippet.swift`; snippet ids must match `ev-[a-z0-9-]+`.
+- One scratch package per worktree under `.harness/probe/`, pinned to the target's `Package.resolved`, depending
+  only on products the target already uses. Local path packages are left out with a note (codebase code is cited
+  by file, never probed). Never `swift-issue-reporting`; no MainActor default isolation.
+- iOS targets build with `xcodebuild -skipMacroValidation` for `iphonesimulator` and a per-worktree
+  `-derivedDataPath` under `.harness/probe/`; host-only packages use `swift build`. Build only: no test, no boot.
+- Writes `probes/Probe_<id>.swift` (wrapper) and `probes/Probe_<id>.verdict.json` via `ProbeVerdictRecord.encode`.
+- Exit 0 all pass, 1 any fail, 2 blocked (bad design path, no snippets, an unpinned dependency, an unattributed
+  error, or a failed build with no diagnostics).
+- JSON: `{command, verdict, design, platform, sdk, built, probes: [{claimId, verdict, cached, wrapper,
+  verdictFile, diagnostics}], notes, message}`.
+- Cache: `EvidenceCacheStore` bucket `sdk/<platform><ver>.jsonl`, origin `probe`. The key covers the snippet's
+  sha256, deployment targets, products and traits, every `Package.resolved` pin, and the SDK. A hit runs no build.
+- A recorded real iOS run against `examples/SampleApp` (TCA 1.26.2, iphonesimulator 26.2) lives in
+  `FX/Probe/ios-sampleapp.{stdout,status}`: `@Reducer` snippet passes; `Effect.teleport` fails with
+  "type 'Effect<Int>' has no member 'teleport'". The capture command is in `FX/README.md`.
+
+**Mermaid validation** has fake-runner tests (`TA/MermaidValidationTests.swift`), so the `mmdc`-present path is
+covered on machines without `mmdc`.
