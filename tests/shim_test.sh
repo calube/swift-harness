@@ -5,7 +5,12 @@ set -euo pipefail
 
 repo_src="$(cd "$(dirname "$0")/.." && pwd -P)"
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# $work is a fresh, unique mktemp directory, so anything matched by its path below can only ever
+# be this run's own processes — never a process outside this test.
+trap '
+  pkill -f "$work" >/dev/null 2>&1 || true
+  rm -rf "$work"
+' EXIT
 
 mkdir -p "$work/repo"
 cp -R "$repo_src/bin" "$work/repo/"
@@ -30,12 +35,32 @@ wait_for_background_build() {
   return 1
 }
 
+# Kills this run's background build (and every child it spawned) so a killed sample never leaves
+# a build running, or contending for CPU, into the next sample. `--package-path` and every source
+# file the build touches sit under $work/repo/gate, so this pattern reaches the swift build
+# driver and its compiler children without reaching anything outside this test.
+kill_background_build() {
+  local pattern="$work/repo/gate"
+  local waited
+  for signal in "" "-9"; do
+    pkill $signal -f "$pattern" >/dev/null 2>&1 || true
+    for waited in $(seq 1 25); do
+      pgrep -f "$pattern" >/dev/null 2>&1 || return 0
+      sleep 0.2
+    done
+  done
+  return 1
+}
+
 # A hook on a cold cache must answer at once and build in the background. Each sample resets
 # $SWIFTGATE_CACHE_DIR to empty so every repeat measures the same cold state, not the warm path
-# after sample 1 — but a cold sample also pays for a real background debug build before the next
-# reset can start clean, so this uses fewer, coarser samples than the other budgets (seconds of
-# real work per sample, not milliseconds).
+# after sample 1. Letting every cold sample's real background build run to completion would pay
+# for 3 debug builds instead of 1 — tripling this test's own contribution to machine load, the
+# very thing the other budgets in this file are being made robust to — so samples before the last
+# kill their build once measured, instead of waiting for it. If a build can't be killed cleanly,
+# this falls back to a single cold sample rather than leave an orphaned build behind.
 cold_samples=()
+cold_note=""
 for i in 1 2 3; do
   rm -rf "$SWIFTGATE_CACHE_DIR"
   hook_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
@@ -58,11 +83,22 @@ assert "warming up" in context and "not enforced" in context, context
   other_out="$(cd "$work/elsewhere" && echo '{}' | "$shim" hook session-start)" ||
     fail "cold session-start outside a project exited non-zero on sample $i"
   [ -z "$other_out" ] || fail "cold session-start outside a project said '$other_out' on sample $i"
-  wait_for_background_build || fail "background build $i did not finish"
+
+  if [ "$i" -lt 3 ]; then
+    if kill_background_build; then
+      continue
+    fi
+    cold_note=" (sample $i's background build could not be killed cleanly, so this fell back to 1 cold sample)"
+    break
+  fi
 done
+# Whichever sample was last — the real one on a clean run, or the one that could not be killed on
+# a fallback — its build is still running (or just finished) and must be let finish, since every
+# check below expects a populated cache.
+wait_for_background_build || fail "background build did not finish"
 hook_ms="$(printf '%s\n' "${cold_samples[@]}" | sort -n | head -1)"
 [ "$hook_ms" -lt 2000 ] ||
-  fail "cold hooks took ${cold_samples[*]}ms, fastest ${hook_ms}ms, budget 2000ms"
+  fail "cold hooks took ${cold_samples[*]}ms, fastest ${hook_ms}ms, budget 2000ms${cold_note}"
 
 out1="$("$shim" --version 2>"$work/err1")"
 [ "$out1" = "0.1.0" ] || fail "first run printed '$out1': $(cat "$SWIFTGATE_CACHE_DIR"/build-*.log)"
@@ -91,4 +127,9 @@ echo "// changed" >> "$work/repo/gate/Sources/SwiftGateDomain/SwiftGateDomain.sw
 "$shim" --version >/dev/null 2>"$work/err4"
 grep -q "building swiftgate" "$work/err4" || fail "source change did not trigger rebuild"
 
-echo "shim_test: PASS (cached run samples: ${samples[*]}ms, fastest ${elapsed}ms)"
+# Every background build this test started was either killed and reaped, or let finish — none
+# should still be running.
+stray="$(pgrep -fl "$work" 2>/dev/null || true)"
+[ -z "$stray" ] || fail "stray process(es) still running under \$work: $stray"
+
+echo "shim_test: PASS (cold samples: ${cold_samples[*]}ms, fastest ${hook_ms}ms${cold_note}; cached run samples: ${samples[*]}ms, fastest ${elapsed}ms)"
