@@ -391,9 +391,11 @@ contract is *typed questions → calibrated probabilities*, not free-form rubric
 
 - Inputs: test source, covered diff, versioned question set. Output: per-test findings in the
   stable JSON schema (question, answer, probability, one-line rationale where the backend gives one).
-- Backends: Claude via structured output first; a Jev adapter (TypeSafe AI classification model —
-  typed choice/score/yes-no answers with calibrated probabilities, Python SDK `langchain-typesafe`)
-  later. Transport for Jev (REST vs. Python helper) to be verified when that adapter is built.
+- Backends: Claude via structured output first; a Jev adapter later. Jev is TypeSafe AI's decision
+  model: Choice / Score / Boolean questions over text or JSON state, answered as probability
+  distributions, no prose. It is served through Vercel AI Gateway's native HTTP API (also the AI SDK
+  evaluation API and TypeSafe's Python SDK `langchain-typesafe`), so the Swift adapter calls it over
+  HTTP directly. Pricing, rate limits, and request schema to be verified when the adapter is built.
 - Policy is thresholds, not opinions: p ≥ `block_threshold` may block at `ready`; between the two
   thresholds is advisory; below is ignored. The judge alone never produces `RED` below `ready`.
 - Cache by hash(test, diff, question-set version, backend, model) → stable re-runs, zero cost on hit.
