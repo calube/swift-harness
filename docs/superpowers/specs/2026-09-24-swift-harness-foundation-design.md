@@ -4,7 +4,7 @@
 Status: FOUNDATION BUILT 2026-09-25 (plan docs/superpowers/plans/2026-09-24-foundation-plan.md, all tasks M0–M7 done; 594 tests).
 Verified live in Claude Code via --plugin-dir; end-to-end results in docs/e2e-report.md.
 Refinement after build: review findings carry kind (defect | standards-violation) — docs/decisions/0001.
-Next action: user runs the real `review` workflow once (needs explicit opt-in); then sub-project 2 (design & plan workflows) spec.
+Next action: sub-project 2 (design & plan workflows) spec. Review workflow ran for real 2026-09-25 (refactor-needed, correct; dedupe fixed 87aae53).
 Known gaps: host XCTest skips invisible under --parallel; swift test 6.2 can't shuffle (stress = N processes); App/UITest targets not in the module graph; simulator-tier prove/stress pending; subagent agent_id / Write / SessionStart-resume hook payloads not yet seen live.
 -->
 
