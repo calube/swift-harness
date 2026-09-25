@@ -1,46 +1,15 @@
 import Foundation
 
-/// A `LedgerTask.status` value (spec §5.7). `pending`/`inProgress`/`done`/`needsReplan` are the
-/// states this sub-project defines; `.other` preserves whatever a later sub-project adds so an
-/// older `swiftgate` build round-trips a ledger without dropping a status it doesn't know yet.
-/// `done` tasks are immutable — enforcing that is the writer's job, not this type's.
-public enum TaskStatus: Sendable, Equatable {
+/// A `LedgerTask.status` value (spec §5.7): the closed set of states this sub-project defines.
+/// `ledger.json` is written by the trusted orchestrator, not a worker, but the set is still closed
+/// deliberately — a status this build doesn't know is a schema change that should fail loudly, not
+/// a value to carry through unexamined. `done` tasks are immutable — enforcing that is the
+/// writer's job, not this type's.
+public enum TaskStatus: String, Sendable, Equatable, Codable, CaseIterable {
   case pending
-  case inProgress
+  case inProgress = "in-progress"
   case done
-  case needsReplan
-  case other(String)
-
-  public var rawValue: String {
-    switch self {
-    case .pending: return "pending"
-    case .inProgress: return "in-progress"
-    case .done: return "done"
-    case .needsReplan: return "needs-replan"
-    case .other(let value): return value
-    }
-  }
-
-  public init(rawValue: String) {
-    switch rawValue {
-    case "pending": self = .pending
-    case "in-progress": self = .inProgress
-    case "done": self = .done
-    case "needs-replan": self = .needsReplan
-    default: self = .other(rawValue)
-    }
-  }
-}
-
-extension TaskStatus: Codable {
-  public init(from decoder: Decoder) throws {
-    self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
-  }
-
-  public func encode(to encoder: Encoder) throws {
-    var container = encoder.singleValueContainer()
-    try container.encode(rawValue)
-  }
+  case needsReplan = "needs-replan"
 }
 
 /// One `ledger.json` task entry (spec §5.7).
@@ -49,10 +18,7 @@ public struct LedgerTask: Sendable, Equatable, Codable {
   public let deps: [String]
   /// Exact paths or `/`-terminated prefixes (``WriteSet``).
   public let writeSet: [String]
-  /// A `CheckTier` raw value (`fast`/`push`/`ready`). Kept as the wire string rather than
-  /// `CheckTier` itself so this model doesn't add a retroactive `Codable` conformance to a type
-  /// declared in a file other tasks still edit; `plan-lint` parses and compares it.
-  public let gate: String
+  public let gate: CheckTier
   public let tests: [String]
   public let covers: [String]
   public let estLines: Int
@@ -60,7 +26,7 @@ public struct LedgerTask: Sendable, Equatable, Codable {
   public let worktree: String
 
   public init(
-    id: String, deps: [String], writeSet: [String], gate: String, tests: [String],
+    id: String, deps: [String], writeSet: [String], gate: CheckTier, tests: [String],
     covers: [String], estLines: Int, status: TaskStatus, worktree: String
   ) {
     self.id = id

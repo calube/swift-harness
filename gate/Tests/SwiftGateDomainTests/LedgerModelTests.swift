@@ -26,7 +26,7 @@ struct LedgerModelTests {
       "Packages/OrderQueue/Sources/OrderQueueCore/",
       "Packages/OrderQueue/Tests/OrderQueueCoreTests/",
     ],
-    gate: "push",
+    gate: .push,
     tests: ["test-queued-orders-replay-in-submit-order"],
     covers: [
       "req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order",
@@ -63,24 +63,35 @@ struct LedgerModelTests {
   }
 
   @Test(
-    "a status sub-project 5 has not invented yet round-trips unchanged — catches later build states dropped"
+    "an unrecognized task status is rejected, naming the value — catches an unknown build state passed through unexamined"
   )
-  func unknownStatusPreserved() throws {
-    let task = Self.sampleTask
-    let withUnknownStatus = LedgerTask(
-      id: task.id, deps: task.deps, writeSet: task.writeSet, gate: task.gate, tests: task.tests,
-      covers: task.covers, estLines: task.estLines, status: TaskStatus(rawValue: "escalated"),
-      worktree: task.worktree)
-    let ledger = Ledger(
-      schemaVersion: 1, resume: "…", maxParallel: 3, tasks: [withUnknownStatus],
-      waves: [[task.id]])
+  func unknownStatusRejected() throws {
+    for invalid in ["finished", "done "] {
+      let json = Data("\"\(invalid)\"".utf8)
+      let error = #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(TaskStatus.self, from: json)
+      }
+      #expect(error != nil)
+      #expect(String(describing: error).contains(invalid))
+    }
+  }
 
-    let data = try LedgerJSON.encode(ledger)
-    let decoded = try LedgerJSON.decode(data)
+  @Test(
+    "an unrecognized gate tier fails to decode, naming the field — catches an invalid tier silently accepted"
+  )
+  func unknownGateTierRejected() throws {
+    let validJSON = String(decoding: try LedgerJSON.encode(Self.sampleLedger), as: UTF8.self)
+    #expect(validJSON.contains("\"push\""))
+    let corrupted = Data(
+      validJSON.replacingOccurrences(of: "\"push\"", with: "\"unknown-tier\"").utf8)
 
-    #expect(decoded.tasks[0].status == TaskStatus(rawValue: "escalated"))
-    #expect(decoded.tasks[0].status.rawValue == "escalated")
-    #expect(String(decoding: data, as: UTF8.self).contains("\"escalated\""))
+    let error = #expect(throws: DecodingError.self) {
+      try LedgerJSON.decode(corrupted)
+    }
+    #expect(error != nil)
+    let description = String(describing: error)
+    #expect(description.contains("gate"))
+    #expect(description.contains("unknown-tier"))
   }
 
   @Test(
