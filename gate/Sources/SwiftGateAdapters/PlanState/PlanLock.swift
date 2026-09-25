@@ -69,7 +69,13 @@ public struct PlanLock: Sendable {
     guard code == EEXIST else {
       throw .io("linking \(plan.orchestratorLock): \(String(cString: strerror(code)))")
     }
-    let holder = try holder() ?? ""
+    // The name exists yet reads as absent: released since the link failed, or a dangling symlink
+    // that release and force-release, finding no holder, would never remove.
+    guard let holder = try holder() else {
+      throw .io(
+        "\(plan.orchestratorLock) exists but has no readable holder; retry the claim, or remove it if it isn't a lock file"
+      )
+    }
     return holder == session ? .alreadyHeld : .heldByOther(holder: holder)
   }
 
