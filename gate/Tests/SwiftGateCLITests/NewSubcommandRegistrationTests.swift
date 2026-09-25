@@ -59,6 +59,7 @@ struct NewSubcommandRegistrationTests {
     "design-diff --chain", "design-scope", "evidence capture",
     "plan-schedule",
     "prose",
+    "docs-lint",
   ]
 
   @Test(
