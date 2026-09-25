@@ -1,0 +1,9 @@
+{
+  "directory": "Tests/CartSimulatorTests",
+  "modules": [
+    { "name": "CartCore", "role": "core", "directories": ["Packages/Cart/Sources/CartCore"] },
+    { "name": "APIClient", "role": "client", "kind": "client", "directories": ["Packages/API/Sources/APIClient"] },
+    { "name": "CartUI", "role": "ui", "directories": ["Packages/Cart/Sources/CartUI"] },
+    { "name": "CartSimulatorTests", "role": "t2", "directories": ["Tests/CartSimulatorTests"] }
+  ]
+}

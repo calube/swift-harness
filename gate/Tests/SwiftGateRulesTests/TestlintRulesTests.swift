@@ -1,0 +1,146 @@
+import Foundation
+import SwiftGateDomain
+import SwiftGateRules
+import Testing
+
+/// Exact-line checks for each testlint rule over its fixtures, under the fixture's manifest
+/// context.
+@Suite("Testlint rules")
+struct TestlintRulesTests {
+  private func lines(_ ruleID: String, _ fixture: String, flows: [String]?? = nil) throws -> [Int] {
+    let rule = try #require(RuleCatalog.testlint.first { $0.descriptor.id == ruleID })
+    let directory = RuleFixtureTests.fixturesRoot.appending(path: ruleID)
+    let manifestFile = directory.appending(path: "fixture.json")
+    var manifest = RuleFixtureManifest()
+    if FileManager.default.fileExists(atPath: manifestFile.path) {
+      manifest = try JSONDecoder().decode(
+        RuleFixtureManifest.self, from: Data(contentsOf: manifestFile))
+    }
+    let base = try manifest.context()
+    let context =
+      flows.map { RuleContext(scopes: base.scopes, flows: $0) } ?? base
+    let file = directory.appending(path: fixture)
+    let input = SourceInput(
+      path: manifest.path(forFileNamed: file.lastPathComponent),
+      text: try String(contentsOf: file, encoding: .utf8))
+    let result = try RuleEngine(rules: [rule]).run([input], context: context)
+    return result.findings.filter { $0.ruleID == ruleID }.compactMap(\.line)
+  }
+
+  @Test(
+    "tests with no assertion are RED at their declaration; every recognised assertion form counts — catches tests that cannot fail"
+  )
+  func noAssertion() throws {
+    #expect(try lines("test.no-assertion", "bad/SwiftTesting.swift") == [5])
+    #expect(try lines("test.no-assertion", "bad/XCTest.swift") == [5])
+    #expect(try lines("test.no-assertion", "good/Assertions.swift") == [])
+  }
+
+  @Test(
+    "literal, self-comparison and just-constructed assertions are RED — catches assertions that cannot fail"
+  )
+  func tautology() throws {
+    #expect(try lines("test.tautology", "bad/Tautologies.swift") == [6, 12, 18, 23, 24])
+    #expect(try lines("test.tautology", "good/RealChecks.swift") == [])
+  }
+
+  @Test("a test whose only assertions are nil checks is RED — catches existence-only tests")
+  func existenceOnly() throws {
+    #expect(try lines("test.existence-only", "bad/NotNil.swift") == [5, 11, 16])
+    #expect(try lines("test.existence-only", "good/Behavior.swift") == [])
+  }
+
+  @Test("asserting a value configured on the test's own double is RED — catches tests of the mock")
+  func assertsOwnDouble() throws {
+    #expect(try lines("test.asserts-own-double", "bad/Doubles.swift") == [7, 13])
+    #expect(try lines("test.asserts-own-double", "good/DoubleDrivesSUT.swift") == [])
+  }
+
+  @Test("try? and catch without an issue in a test body are RED — catches swallowed failures")
+  func swallowedError() throws {
+    #expect(try lines("test.swallowed-error", "bad/Swallowed.swift") == [5, 13, 22])
+    #expect(try lines("test.swallowed-error", "good/Recorded.swift") == [])
+  }
+
+  @Test("Task.sleep, usleep and Thread.sleep in tests are RED — catches timing-dependent flakes")
+  func sleep() throws {
+    #expect(try lines("test.sleep", "bad/Sleeps.swift") == [6, 12, 13])
+    #expect(try lines("test.sleep", "good/TestClock.swift") == [])
+  }
+
+  @Test(
+    "bodies equal after dropping trivia are duplicates, reported on the later copy — catches copy-pasted tests"
+  )
+  func duplicate() throws {
+    #expect(try lines("test.duplicate", "bad/Duplicates.swift") == [10])
+    #expect(try lines("test.duplicate", "good/Distinct.swift") == [])
+  }
+
+  @Test("duplicates are found across files — catches a copy in a sibling file")
+  func duplicateAcrossFiles() throws {
+    let body = "import Testing\n@Test(\"n — c\")\nfunc a() {\n  #expect(f() == 1)\n}\n"
+    let result = try RuleEngine(rules: RuleCatalog.testlint).run(
+      [SourceInput(path: "T/B.swift", text: body), SourceInput(path: "T/A.swift", text: body)],
+      context: RuleContext(scopes: StaticModuleScopes()))
+    let duplicates = result.findings.filter { $0.ruleID == "test.duplicate" }
+    #expect(duplicates.map(\.file) == ["T/B.swift"])
+    #expect(duplicates.first?.message.contains("T/A.swift:3") == true)
+  }
+
+  @Test("@Test without a display name is RED — catches tests whose name carries no regression")
+  func unnamed() throws {
+    #expect(try lines("test.unnamed", "bad/Unnamed.swift") == [3, 7, 11])
+    #expect(try lines("test.unnamed", "good/Named.swift") == [])
+  }
+
+  @Test(
+    "non-exhaustive TestStore without a same-line reason is RED — catches silently skipped state assertions"
+  )
+  func nonExhaustiveStore() throws {
+    #expect(try lines("test.non-exhaustive-store", "bad/Off.swift") == [8, 10, 11])
+    #expect(try lines("test.non-exhaustive-store", "good/Justified.swift") == [])
+  }
+
+  @Test(
+    "XCUITests must map to a declared flow; with no config the rule is inert — catches T3 growing past the closed list"
+  )
+  func xcuitestFlows() throws {
+    #expect(try lines("test.xcuitest-unlisted-flow", "bad/Unlisted.swift") == [4])
+    #expect(try lines("test.xcuitest-unlisted-flow", "good/Listed.swift") == [])
+    #expect(try lines("test.xcuitest-unlisted-flow", "bad/Unlisted.swift", flows: .some(nil)) == [])
+  }
+
+  @Test(
+    "a T2 test rendering nothing and importing only Core/Client is RED — catches host logic on the simulator"
+  )
+  func misplacedT2() throws {
+    #expect(try lines("test.misplaced-t2", "bad/HostLogic.swift") == [1])
+    #expect(try lines("test.misplaced-t2", "good/Snapshot.swift") == [])
+    #expect(try lines("test.misplaced-t2", "good/UIModuleImport.swift") == [])
+  }
+
+  @Test(
+    "the same host-logic test in a T1 target is fine — catches the rule firing without tier data")
+  func misplacedT2NeedsTier() throws {
+    let text = "@testable import CartCore\nimport Testing\n"
+    let scopes = StaticModuleScopes([
+      .init(scope: ModuleScope(module: "CartCore", role: .core), directories: ["Sources/CartCore"]),
+      .init(
+        scope: ModuleScope(module: "CartCoreTests", role: .tests(.t1)),
+        directories: ["Tests/CartCoreTests"]),
+    ])
+    let result = try RuleEngine(rules: RuleCatalog.testlint).run(
+      [SourceInput(path: "Tests/CartCoreTests/A.swift", text: text)],
+      context: RuleContext(scopes: scopes))
+    #expect(!result.findings.contains { $0.ruleID == "test.misplaced-t2" })
+  }
+
+  @Test("testlint ignores non-test files — catches production helpers linted as tests")
+  func nonTestFilesIgnored() throws {
+    let text = "func testSomething() { try? run(); Thread.sleep(forTimeInterval: 1) }\n"
+    let result = try RuleEngine(rules: RuleCatalog.testlint).run(
+      [SourceInput(path: "Sources/AppCore/Helpers.swift", text: text)],
+      context: RuleContext(scopes: PathConventionModuleScopes()))
+    #expect(result.findings.isEmpty)
+  }
+}

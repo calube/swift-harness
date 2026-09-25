@@ -3,5 +3,8 @@ public enum RuleCatalog {
   /// `swiftgate comments --staged`.
   public static let comments: [any Rule] = CommentRules.all
 
-  public static var all: [any Rule] { comments }
+  /// `swiftgate testlint`.
+  public static let testlint: [any Rule] = TestlintRules.all
+
+  public static var all: [any Rule] { comments + testlint }
 }
