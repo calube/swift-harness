@@ -228,16 +228,8 @@ public enum ReviewSynthesis {
         break
       }
       for finding in review.findings {
-        guard finding.hasFailureScenario else {
-          dropped.append(.init(focus: focus, finding: finding, reason: .noFailureScenario))
-          continue
-        }
-        guard finding.effectiveKind == .defect || finding.citesRule else {
-          dropped.append(.init(focus: focus, finding: finding, reason: .noRuleCitation))
-          continue
-        }
-        guard finding.verified == true else {
-          dropped.append(.init(focus: focus, finding: finding, reason: .unverified))
+        if let reason = dropReason(finding) {
+          dropped.append(.init(focus: focus, finding: finding, reason: reason))
           continue
         }
         let key = DedupeKey(finding)
@@ -260,6 +252,15 @@ public enum ReviewSynthesis {
       findings: findings,
       dropped: dropped.sorted { order($0.finding) < order($1.finding) },
       notReviewed: notReviewed, notApplicable: notApplicable)
+  }
+
+  /// The verify step's drop rule, shared by code and design review so the two can't drift.
+  /// Location plays no part: it is `file:line` for code and a section anchor for a design.
+  static func dropReason(_ finding: ReviewFinding) -> ReviewReport.Dropped.Reason? {
+    guard finding.hasFailureScenario else { return .noFailureScenario }
+    guard finding.effectiveKind == .defect || finding.citesRule else { return .noRuleCitation }
+    guard finding.verified == true else { return .unverified }
+    return nil
   }
 
   static func verdict(findings: [ReviewReport.Merged], anyUnreviewed: Bool) -> ReviewVerdict {

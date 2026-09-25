@@ -297,6 +297,44 @@ enum ReviewSynthRun {
   }
 }
 
+/// `review-synth --design`: the design review verdict (design spec §8.2) over per-reviewer files,
+/// through the same input-failure path and exit contract as `review-synth`.
+enum DesignReviewSynthRun {
+  static let reportFile = "design-review.json"
+
+  static func run(design: URL, tier: DesignTier, files: [URL], runDirectory: URL) throws
+    -> DesignReviewReport
+  {
+    let text: String
+    do {
+      text = try String(contentsOf: design, encoding: .utf8)
+    } catch {
+      throw ReviewSynthRun.InputFailure(file: design.path, detail: "\(error)")
+    }
+    var inputs: [DesignReview] = []
+    for file in files {
+      do {
+        inputs.append(try DesignReviewJSON.decode(Data(contentsOf: file)))
+      } catch {
+        throw ReviewSynthRun.InputFailure(file: file.path, detail: "\(error)")
+      }
+    }
+    let report: DesignReviewReport
+    do {
+      report = try DesignReviewSynthesis.synthesize(
+        inputs, tier: tier, document: MarkdownDocument.parse(text))
+    } catch {
+      throw ReviewSynthRun.InputFailure(file: "(inputs)", detail: "\(error)")
+    }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+    try encoder.encode(report).write(
+      to: runDirectory.appending(path: reportFile), options: .atomic)
+    return report
+  }
+}
+
 struct ReviewSynthCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "review-synth",
@@ -305,7 +343,12 @@ struct ReviewSynthCommand: ParsableCommand {
     discussion:
       "Each input is one focus's verified findings (schemaVersion 1). A focus with no input "
       + "counts as NOT REVIEWED. Writes review.json into --run-directory and prints the verdict "
-      + "and the top 10 findings. Exit 0 whatever the verdict; 2 when an input breaks the contract."
+      + "and the top 10 findings. Exit 0 whatever the verdict; 2 when an input breaks the contract.\n\n"
+      + "With --design <doc> --tier <quick|standard|deep>, each input is one design reviewer's "
+      + "findings (schemaVersion 1, located by section anchor) and the verdict is ready / revise / "
+      + "rethink plus the reviewers to re-run, written to design-review.json. A required reviewer "
+      + "with no input counts as NOT REVIEWED. Exit 0 whatever the verdict; 2 on a contract "
+      + "violation (unknown reviewer, duplicate reviewer, anchor absent from the doc, bad tier)."
   )
 
   @Option(help: "The review run directory (.harness/runs/<id>); review.json is written there.")
@@ -314,10 +357,27 @@ struct ReviewSynthCommand: ParsableCommand {
   @Flag(help: "Print review.json instead of the summary.")
   var json = false
 
-  @Argument(help: "Per-focus findings files.")
-  var findings: [String]
+  @Option(help: "Synthesize a design review of this design doc instead of a code review.")
+  var design: String?
+
+  @Option(help: "The design's depth tier (quick, standard, deep); required with --design.")
+  var tier: String?
+
+  @Argument(help: "Per-focus findings files (per-reviewer files with --design).")
+  var findings: [String] = []
+
+  func validate() throws {
+    // Only a design review may have no inputs: quick tier runs no reviewers.
+    if design == nil, tier == nil, findings.isEmpty {
+      throw ValidationError("Missing expected argument '<findings> ...'")
+    }
+  }
 
   func run() throws {
+    if design != nil || tier != nil {
+      try runDesign()
+      return
+    }
     let directory = URL(filePath: runDirectory, directoryHint: .isDirectory)
     let report: ReviewReport
     do {
@@ -334,5 +394,36 @@ struct ReviewSynthCommand: ParsableCommand {
     } else {
       Console.write(ReviewSummary.render(report, reportPath: path))
     }
+  }
+
+  private func runDesign() throws {
+    guard let design else { try fail("--tier needs --design <doc>") }
+    guard let tier else { try fail("--design needs --tier <quick|standard|deep>") }
+    guard let designTier = DesignTier(rawValue: tier) else {
+      try fail(
+        "unknown tier '\(tier)'; expected one of "
+          + DesignTier.allCases.map(\.rawValue).joined(separator: ", "))
+    }
+    let directory = URL(filePath: runDirectory, directoryHint: .isDirectory)
+    let report: DesignReviewReport
+    do {
+      report = try DesignReviewSynthRun.run(
+        design: URL(filePath: design), tier: designTier, files: findings.map { URL(filePath: $0) },
+        runDirectory: directory)
+    } catch let failure as ReviewSynthRun.InputFailure {
+      try fail("\(failure)")
+    }
+    let path = directory.appending(path: DesignReviewSynthRun.reportFile).path
+    if json {
+      Console.write(
+        String(decoding: try Data(contentsOf: URL(filePath: path)), as: UTF8.self))
+    } else {
+      Console.write(DesignReviewSummary.render(report, reportPath: path))
+    }
+  }
+
+  private func fail(_ message: String) throws -> Never {
+    FileHandle.standardError.write(Data("swiftgate review-synth: \(message)\n".utf8))
+    throw ExitCode(Verdict.blocked.exitCode)
   }
 }
