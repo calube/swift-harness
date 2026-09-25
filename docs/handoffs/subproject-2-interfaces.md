@@ -272,3 +272,52 @@ supports the bullet, and otherwise use `[UNVERIFIED]` with a restatement in Risk
   = the first 3, deep = all 4. `quick` is `ready` when no file is given, or every given file is `reviewed` with
   no kept blocker or major.
 - `ReviewSynthesis.dropReason(_:)` is the ONE verify-step drop rule for both code and design review. Don't copy it.
+
+## Wave 8
+
+**Plan lock hardening.** A dangling-symlink `orchestrator.lock` used to read as "held by an empty session" that
+neither `release` nor `--force` would clear, so the plan could never be claimed again. `claim` now fails with an
+io error naming the path. The lock's error paths (read-only dir, `EEXIST` from a concurrent claimer, a staging
+file left by a crash, `ENOTSUP`/`ENOSPC` on a real FAT volume) are tested. The volume tests attach a 1 MB image
+with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiutil` is absent.
+
+**`design-scope`** (`D/Design/DesignScope.swift`, `C/Commands/DesignScopeCommand.swift`)
+- `swiftgate design-scope --frame-answers <path> [--json]`. Input:
+  `{schemaVersion: 1, touchedModules: [String], newModules: [{name, kind}], newDependencies: [String]}`.
+  `kind` is a `ModuleKind` raw value. Frame answers NAME modules. They never count them.
+- The CLI loads the module graph with `ConfigLoader` + `ModuleGraphLoader`, the same loaders `arch` uses, and
+  derives `{addsDependency, addsModuleKind, modulesAdded, modulesTouched}` in pure domain code.
+- Exit 0 whenever a tier is recommended. Exit 2, with no report, on: a missing flag, an unreadable file,
+  malformed JSON, a bad `schemaVersion`, an unknown kind, a touched module not in the graph, a "new" module
+  that already exists, or duplicate names. A default tier is never assumed.
+- Constants, not config: `DesignScope.modulesAddedDeepThreshold = 2`, `.modulesTouchedDeepThreshold = 4`.
+  A new dependency or a new module kind is never `quick`, which is proven over every input combination.
+- Output: `DesignScopeReport{command, tier: DesignTier, reasons: [{code: DesignScopeReason, message}], input,
+  message}`. `input` echoes both the answers and the derived counts.
+
+**Docs-lint policy and budgets** (`D/Docs/DocsLintPolicy.swift`, `D/Docs/LocalPathRule.swift`)
+- `DocsLintPolicy.check(documents: [DocsLintPolicy.ScannedDocument], config: DocsConfig)` sweeps the whole corpus.
+  `ScannedDocument{path, rawText, markdown}`.
+- Rule ids, all `major`: `docs-lint.managed-file-missing`, `.managed-file-unlisted` (router `docs/**/index.md`
+  files and `AGENTS.md` absent from `managed_files`), `.anchor-vacuous`, `.banned-phrase`,
+  `.agents-md-line-budget`, `.router-word-budget`, `.topic-word-budget`, `.local-path`.
+- Section budgets (`[docs.budgets.sections]`, e.g. `architecture = 80`) belong to design-lint only. A design doc,
+  meaning a `.md` directly under a path component named `designs`, is exempt from docs-lint's whole-file budgets
+  because design-lint governs it.
+- `LocalPathRule.scan(_ text: String, file: String) -> [Finding]` is pure. It flags `~/…`, `$HOME/…`, `/Users/`,
+  `/home/`, `/private/tmp`, `/var/folders`, INCLUDING inside fenced and inline code (the spec is silent, and a
+  copied example still breaks for its reader). URLs and system paths like `/usr/bin/find` pass.
+- `DocsLintPolicy.productPaths = ["~/.swift-harness/", "~/.local/bin/swiftgate", "~/.cache/swift-harness/"]`.
+  This is a constant with no config key.
+
+**Docs-lint references and links** (`D/Docs/DocsLintReferences.swift`)
+- `DocsLintReferences.check(...)` takes `DocsLintReferences.DocFile{path, text}` (the docs corpus), `claims:
+  [Claim]` and `repoPaths: Set<String>` (every tracked file, from `git ls-files`). No IO.
+- Rule ids, all `major`: `docs-lint.dangling-id`, `.bare-adr-reference`, `.requirement-uncited` (cited nowhere
+  outside its defining design), `.broken-relative-link`, `.unreachable-doc` (a walk from
+  `DocsLintReferences.routerRoot = "docs/index.md"` that handles cycles).
+- Every relative link resolves against `repoPaths`. A file link must be in the set. A directory link must be a
+  real directory prefix (`../gate/Sour` fails). `#anchor` is stripped and not verified. A leading `/` means
+  repo-root-absolute. Climbing above the root is flagged. External schemes and links inside code are ignored.
+- **`docs-lint-command` must unify the two corpus types** (`ScannedDocument` and `DocFile`) into one, built once
+  from the filesystem. Don't keep two readers of the same files.

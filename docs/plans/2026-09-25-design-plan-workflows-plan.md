@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: BUILDING — waves 1–7 merged on local main (2026-09-25), push tier GREEN (936 tests). Main NOT pushed to origin (user decision pending); backups at origin backup/subproject-2-wave-<N>.
+Status: PAUSED after wave 8 (2026-09-25, user request) — waves 1–8 merged and pushed to origin/main, push tier GREEN (1051 tests). Backups at origin backup/subproject-2-wave-<N>. Resuming on a new machine: the runbook's "New machine" section first.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 8 — design-scope-tier-recommendation, docs-lint-policy-and-budgets, docs-lint-references-and-links. Follow the runbook's wave loop.
+Next action: wave 9 — evidence-capture-command, evidence-check-rules, evidence-reuse-cache-store, in a fresh orchestrator session (runbook "Kickoff prompt"). Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
@@ -273,7 +273,7 @@ flowchart LR
 ### `docs-lint-policy-and-budgets`
 - Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 220
 - Writes: `D/Docs/DocsLintPolicy.swift`, `D/Docs/LocalPathRule.swift`, `TD/DocsLintPolicyTests.swift`
-- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`; no config key). Docs reference repo files by relative path. The detector is a pure `LocalPathRule.scan(_ text:) -> [Finding]` so the write-time hook reuses it.
+- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`, `~/.cache/swift-harness/` (the shim's binary cache); no config key). Docs reference repo files by relative path. The detector is a pure `LocalPathRule.scan(_ text:) -> [Finding]` so the write-time hook reuses it.
 - Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged · `~/Developer/x` and `/Users/me/x` flagged, `~/.swift-harness/` allowed — catches machine-specific paths that break for every other reader.
 
 ### `docs-lint-references-and-links`
