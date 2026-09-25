@@ -8,11 +8,15 @@ let package = Package(
     .executable(name: "swiftgate", targets: ["SwiftGateCLI"])
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
+    .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
+    .package(url: "https://github.com/mattt/swift-toml", from: "2.0.0"),
   ],
   targets: [
     .target(name: "SwiftGateDomain"),
-    .target(name: "SwiftGateAdapters", dependencies: ["SwiftGateDomain"]),
+    .target(
+      name: "SwiftGateAdapters",
+      dependencies: ["SwiftGateDomain", .product(name: "TOML", package: "swift-toml")]
+    ),
     .executableTarget(
       name: "SwiftGateCLI",
       dependencies: [
