@@ -358,6 +358,11 @@ Plan identity and approval chain (the ledger holds tasks and waves):
 Shape unchanged from Foundation: `{"plans": [{"slug", "status", "resume"}]}`. Location moves to the
 git common dir (§4). Written only through `swiftgate index set` (§6.2).
 
+`status` is a closed set, `PlanStatus`: `designing` → `in-review` → `approved` → `planned` → `building` →
+`done`, plus `abandoned` and `superseded` from any state. `index set` rejects any other value with exit 2.
+SessionStart lists a plan as active unless its status is `done`, `abandoned` or `superseded`. Readers
+tolerate an unknown value in an old index and show it as active, so a bad entry stays visible.
+
 ### 5.9 Worker reports: `design-conflict` and `needs-replan`
 
 Workers cannot edit design, evidence or amendments (§6.3). A worker that finds the design wrong
