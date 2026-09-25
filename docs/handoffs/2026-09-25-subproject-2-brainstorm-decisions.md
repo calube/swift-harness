@@ -1,7 +1,7 @@
 # Sub-project 2 brainstorm — locked decisions (input to the spec)
 
 <!-- RESUME
-State (2026-09-25): brainstorm in progress. Locked D1–D20 below (D11 amended by D19). Brainstorm COMPLETE. Next: write spec to
+State (2026-09-25): brainstorm in progress. Locked D1–D24 below (D11 amended by D19). Brainstorm COMPLETE. Next: write spec to
 docs/designs/2026-09-25-design-plan-workflows-design.md, self-review, user review, writing-plans.
 Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger canonical in git") — superseded by D11/D12.
 -->
@@ -99,6 +99,15 @@ Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger ca
   real plugin install; standard /design → /plan on a real SampleApp feature; a second run naming a nonexistent API
   must end refuted/UNVERIFIED, never in Decision. Metrics: refute + UNVERIFIED rate per lane, probe fail rate, cache
   hit rate, cost/wall per phase, **escape rate** (supported claims later disproved by amendment).
+
+- D21 Artifacts are visual-first: `design-render` builds views (diagrams, comparison tables, evidence badges, DAG,
+  wave timeline, coverage matrix), prose only where a diagram can't carry it.
+- D22 Repo design docs use Mermaid: template Architecture section needs ≥2 mermaid blocks; Mermaid is the single
+  source for repo + Artifact; syntax validation only when `mmdc` is installed.
+- D23 Concise docs by prose word budgets (`[docs.budgets]`, whole design ~1,200 words default); enforced by
+  design-lint and docs-lint.
+- D24 Plugin-owned `prose` skill + `swiftgate prose` linter, written fresh (user's wordsmith lives in a company repo
+  with no licence; same precedent as comment-audit). Drafter applies it before design-lint.
 
 ## Perf/scale notes (to carry into spec)
 

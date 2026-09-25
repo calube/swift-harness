@@ -56,6 +56,10 @@ Every locked decision and where this spec carries it. Doubles as the self-review
 | D18 | Id policy | §5.1 |
 | D19 | Shared state in the git common dir; Foundation edits | §4, §6.3 |
 | D20 | Proving the harness catches lies | §12, §13 |
+| D21 | Artifacts are visual-first views, not transcribed text | §6.2 (`design-render`) |
+| D22 | Repo design docs carry Mermaid diagrams | §5.3, §6.2 |
+| D23 | Conciseness by prose word budgets | §5.3, §6.2 |
+| D24 | Plugin-owned `prose` skill + `swiftgate prose`, written fresh | §6.2, §7.3 |
 
 ## 3. Architecture
 
@@ -222,6 +226,7 @@ File `docs/<area>/designs/<slug>.md`. Sections, in order:
 | Evidence | bullets | each tagged `[ev-…]` or `[UNVERIFIED]` |
 | Options | 2–3 options, each with trade-offs | count 2–3 |
 | Decision | bullets | each tagged; cited claims must be `supported` |
+| Architecture | Mermaid diagrams: module graph (`flowchart`) and data flow (`sequenceDiagram` or `flowchart`), ≤ 80 prose words | ≥ 2 fenced `mermaid` blocks of a known diagram type |
 | Module kinds | table: module → kind → reason | kinds from the standards model |
 | Test plan by tier | bullets `test-…: behaviour — tier T1/T2/T3` | ids D18 form; tier present |
 | Observability | prose + bullets | present |
@@ -231,6 +236,15 @@ File `docs/<area>/designs/<slug>.md`. Sections, in order:
 | Changelog | dated entries from clarify and amend (§8.4) | append-only |
 
 Prose sections are not sentence-linted. Tags are the only mechanical link from sentence to evidence.
+
+**Diagrams over prose.** Options may carry a diagram each. Mermaid is the single diagram source for
+both surfaces: GitHub renders it in the repo, and `design-render` renders the same blocks in the
+Artifact. `design-lint` checks block presence and diagram type. Full syntax validation runs only when
+`mmdc` is on PATH; otherwise it is skipped with a note, never `BLOCKED`.
+
+**Word budgets.** Each section has a prose budget in `.swiftgate.toml [docs.budgets]`. Tables,
+diagrams and code don't count. Default whole-design budget ~1,200 prose words (an estimate, tuned
+from real designs). Over budget is a `design-lint` violation.
 
 ### 5.4 Status frontmatter and `designSha`
 
@@ -387,6 +401,7 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
 | `design-diff <old> <new>` | two doc revisions | `amend` or `clarify`, changed ids, `designSha` | pure domain |
 | `design-render <doc>` | doc, claims | Artifact HTML | pure domain |
 | `docs-lint` | `docs/`, optional `[docs]` config | violations | pure domain + FS adapter |
+| `prose <files>` | markdown files, `[docs]` config | mechanical plain-English violations | pure domain |
 | `plan-schedule` | ledger tasks, `[plan] max_parallel` | waves | pure domain |
 | `plan-lint` | `plan.json`, `ledger.json`, design at `designSha` | errors + warnings | pure domain + Git adapter |
 | `context-pack --role <r>` | role inputs (§5.10) | pack file + token count | pure domain + FS adapter |
@@ -407,6 +422,15 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
   module kind or a dependency.
 - **`design-lint`** — §5.3 rules. Cited ids must be `supported`; `[UNVERIFIED]` must also appear in
   Risks or Open questions.
+- **`design-render`** — builds a visual view, not a transcription (D21). Design page: phase flow and
+  module graph from the doc's Mermaid blocks, options as a comparison table, evidence as status
+  badges (supported / `UNVERIFIED` / refuted) that expand to the cited quote, requirements rendered
+  by title. Ledger page: task DAG, wave timeline, requirement × task coverage matrix, predicted
+  overhead share. Prose appears only where a diagram can't carry it: problem, risks, open questions.
+- **`prose`** — mechanical plain-English checks over designs, ADRs and docs: adverbs, em-dashes,
+  number words where numerals fit, passive voice, filler and business-jargon lists, sentence-length
+  ceiling. Rule set written fresh for the harness. Runs inside `design-lint` and at pre-push over
+  changed docs.
 - **`design-diff`** — changes touching a `req-…` line, Decision, Module kinds or Test plan →
   `amend`; anything else → `clarify`. Also verifies a clarify chain link by link.
 - **`docs-lint`** — generic families:
@@ -419,6 +443,8 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
   | Non-vacuity | an anchor or rule that matches nothing fails |
   | Banned phrases | each entry carries the reason that killed it |
   | Repo-specific anchors | optional, from `.swiftgate.toml [docs]` |
+
+  | Budgets | per-file prose budgets: `AGENTS.md` ≤ 60 lines, routers and topic files per `[docs.budgets]` |
 
   Ships with a seeded self-test, one violation per family.
 - **`plan-schedule`** — Kahn topological layers; within a layer, greedy split so overlapping write
@@ -472,6 +498,7 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
 | drafter | `opus` | Agent-tool subagent |
 | reviewers, pre-mortem | `opus` | workflow agents |
 | decomposer | `opus` | Agent-tool subagent, one `SendMessage` fix round |
+| prose pass | same agent as the drafter | the drafter applies `skills/prose` before `design-lint`; `swiftgate prose` is the gate |
 
 Native model names only. The plugin never names relay or proxy agent types.
 
@@ -621,7 +648,9 @@ Three layers.
    | `design-lint` | untagged Decision bullet, citation to a refuted claim, `[UNVERIFIED]` missing from Risks |
    | `plan-lint` | uncovered requirement, cycle, overlapping wave, hand-edited waves, oversize task, over-budget pack |
    | `design-diff` | requirement-line edit posing as clarify |
-   | `docs-lint` | dangling id, bare ADR number, unreachable doc, vacuous anchor |
+   | `docs-lint` | dangling id, bare ADR number, unreachable doc, vacuous anchor, over-budget file |
+   | `design-lint` (D22–D23) | Architecture without Mermaid, unknown diagram type, section over word budget |
+   | `prose` | adverb, em-dash, number word, jargon phrase |
    | `comments` / `testlint` | id leak, codename leak |
 
 2. **Agent calibration (`calibrate design`)** — seeds labelled by construction:
@@ -660,6 +689,8 @@ amendment).
 | Artifact `comments` and `db` capabilities | claude.ai dependency; approval flow breaks if unavailable |
 | No machine-wide agent cap | 10× breaks on memory first (§11) |
 | Estimates | token and wall figures in §11 unmeasured until the §13 run |
+| Mermaid syntax | validated only when `mmdc` is installed; otherwise a broken diagram surfaces at render time |
+| `prose` skill | written fresh, not copied from any existing style guide, so the harness has no external IP dependency |
 | Clarify chain trust | approval survives clarify edits only because `design-diff` re-verifies every link |
 
 ## 15. Foundation spec corrections
