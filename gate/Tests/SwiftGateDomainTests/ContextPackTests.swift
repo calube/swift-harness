@@ -23,6 +23,9 @@ struct ContextPackTests {
   }
 
   private static let designLabel = "docs/checkout/designs/offline-order-queue.md"
+  private var designSource: ContextSource {
+    ContextSource(label: Self.designLabel, rawText: designRawText)
+  }
 
   private static let sampleTask = LedgerTask(
     id: "offline-queue-core-reducer",
@@ -41,6 +44,19 @@ struct ContextPackTests {
     worktree: "../myapp-2026-09-25-offline-order-queue-offline-queue-core-reducer"
   )
 
+  private static let standardsRawText = """
+    ## core
+
+    Core modules import no UI framework and touch no live IO directly.
+
+    ## feature
+
+    Feature modules own one screen's reducer and view.
+    """
+  private static let standardsLabel = "docs/standards.md"
+  private static let standardsSource = ContextSource(
+    label: standardsLabel, rawText: standardsRawText)
+
   private static func claimLine(
     id: String, lane: String = "packages", text: String = "some claim text",
     kind: Citation.Kind = .file, loc: String, pin: String?, quote: String? = nil,
@@ -51,6 +67,19 @@ struct ContextPackTests {
       citation: Citation(kind: kind, loc: loc, pin: pin, quote: quote), status: status)
     let data = try JSONEncoder().encode(claim)
     return String(decoding: data, as: UTF8.self)
+  }
+
+  /// Builds a minimal worker pack's inputs for a given task, with a stubbed standards/claims
+  /// corpus so tests that don't care about those two rows don't have to restate them.
+  private func workerInputs(
+    task: LedgerTask, citedClaimIDs: [String] = [], claimsRawText: String = "",
+    moduleKindAnchors: [String] = ["core"]
+  ) -> WorkerInputs {
+    WorkerInputs(
+      task: task, design: design, designSource: designSource,
+      claims: ContextSource(label: "claims.jsonl", rawText: claimsRawText),
+      citedClaimIDs: citedClaimIDs, standards: Self.standardsSource,
+      moduleKindAnchors: moduleKindAnchors)
   }
 
   // MARK: - Verbatim property, all 8 roles, real fixtures
@@ -77,18 +106,6 @@ struct ContextPackTests {
   @Test(
     "every pack line is a verbatim substring of its source, for all 8 roles — catches summarising")
   func verbatimAcrossAllRoles() throws {
-    let standardsRawText = """
-      ## core
-
-      Core modules import no UI framework and touch no live IO directly.
-
-      ## feature
-
-      Feature modules own one screen's reducer and view.
-      """
-    let standards = MarkdownDocument.parse(standardsRawText)
-    let standardsLabel = "docs/standards.md"
-
     let claimsRawLine = try Self.claimLine(
       id: "ev-tca-effect-run-supports-cancellation",
       loc:
@@ -106,10 +123,13 @@ struct ContextPackTests {
       }
       """
     let citationLabel = ".build/checkouts/swift-composable-architecture/…/Cancellation.swift"
+    let claimToJudge = ClaimToJudge(
+      claimRawLine: claimsRawLine, claimsSourceLabel: "claims.jsonl",
+      citationSourceLabel: citationLabel, citationRawText: citationRawText)
 
     var sources: [String: String] = [
       Self.designLabel: designRawText,
-      standardsLabel: standardsRawText,
+      Self.standardsLabel: Self.standardsRawText,
       "claims.jsonl": claimsRawLine,
       citationLabel: citationRawText,
     ]
@@ -119,142 +139,94 @@ struct ContextPackTests {
       return source
     }
 
-    // research lane
-    let researchPack = ContextPack.researchLanePack(
-      briefs: [
-        track(
-          ContextSource(
-            label: "frame answers", rawText: "Q: which module owns retry?\nA: OrderQueueCore.")),
-        track(ContextSource(label: "area", rawText: "checkout")),
-      ],
-      claimsJSONLLines: [claimsRawLine], claimsSourceLabel: "claims.jsonl",
-      pin: "swift-composable-architecture@1.26.2")
+    let frameAnswers = track(
+      ContextSource(
+        label: "frame answers", rawText: "Q: which module owns retry?\nA: OrderQueueCore."))
 
-    // claim checker
-    let claimCheckerPack = try ContextPack.claimCheckerPack(entries: [
-      ClaimToJudge(
-        claimRawLine: claimsRawLine, claimsSourceLabel: "claims.jsonl",
-        citationSourceLabel: citationLabel, citationRawText: citationRawText)
-    ])
-
-    // worker
-    let workerPack = try ContextPack.workerPack(
-      task: Self.sampleTask, design: design, designRawText: designRawText,
-      designSourceLabel: Self.designLabel)
-    // The ledger-entry slice's source is the encoded task itself — there's no separate file to
-    // compare it against, so register it under its own label the same way every other source is.
-    for slice in workerPack.slices where slice.anchor == nil {
+    // Built separately (not inline via `.build`) so its self-describing ledger-entry slice can be
+    // registered as its own source below, the same way every other source is.
+    let workerPack = try ContextPack.build(
+      role: .worker,
+      inputs: .worker(
+        workerInputs(
+          task: Self.sampleTask, citedClaimIDs: ["ev-tca-effect-run-supports-cancellation"],
+          claimsRawText: claimsRawLine, moduleKindAnchors: ["core"])))
+    for slice in workerPack.slices where slice.anchor == nil && slice.sourceLabel != "claims.jsonl"
+    {
       sources[slice.sourceLabel] = slice.text
     }
 
-    // drafter: template + frame answers + supported claims + probe verdicts + standards anchors
-    let drafterPack = ContextPack(
-      role: .drafter,
-      slices: [
-        ContextPackSlice(
-          track(ContextSource(label: "template", rawText: "## Problem\n\n## Requirements\n"))),
-        ContextPackSlice(
-          track(
-            ContextSource(
-              label: "frame answers", rawText: "Q: which module owns retry?\nA: OrderQueueCore."))),
-        ContextPackSlice(sourceLabel: "claims.jsonl", anchor: nil, lines: [claimsRawLine]),
-        ContextPackSlice(
-          track(ContextSource(label: "probe verdicts", rawText: "Probe_ev_tca_effect_run: pass"))),
-        try MarkdownAnchorSlicer.slice(
-          anchor: "core", of: standards, rawText: standardsRawText, sourceLabel: standardsLabel),
-      ])
-
-    // evidence auditor: the doc + every cited claim with its citation excerpt
-    let evidenceAuditorPack = try ContextPack(
-      role: .evidenceAuditor,
-      slices: [
-        MarkdownAnchorSlicer.slice(
-          anchor: "evidence", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        MarkdownAnchorSlicer.slice(
-          anchor: "decision", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        ContextPackSlice(sourceLabel: "claims.jsonl", anchor: nil, lines: [claimsRawLine]),
-        CitationExcerptSlicer.slice(
-          for: Claim(
-            id: "x", lane: "x", text: "x",
-            citation: Citation(
-              kind: .file,
-              loc:
-                ".build/checkouts/swift-composable-architecture/Sources/ComposableArchitecture/Effects/Cancellation.swift:L4-L4",
-              pin: "x",
-              quote:
-                "public func cancellable<ID: Hashable & Sendable>(id: ID, cancelInFlight: Bool = false) -> Self"
-            ), status: .supported
-          ).citation, rawText: citationRawText, sourceLabel: citationLabel),
-      ])
-
-    // standards reviewer: Module kinds, Decision, Test plan sections; standards anchors
-    let standardsReviewerPack = try ContextPack(
-      role: .standardsReviewer,
-      slices: [
-        MarkdownAnchorSlicer.slice(
-          anchor: "module-kinds", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        MarkdownAnchorSlicer.slice(
-          anchor: "decision", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        MarkdownAnchorSlicer.slice(
-          anchor: "test-plan-by-tier", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        MarkdownAnchorSlicer.slice(
-          anchor: "feature", of: standards, rawText: standardsRawText, sourceLabel: standardsLabel),
-      ])
-
-    // challenger: the doc + challenger question set
-    let challengerPack = ContextPack(
-      role: .challenger,
-      slices: [
-        try MarkdownAnchorSlicer.slice(
-          anchor: "options", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        ContextPackSlice(
-          track(
-            ContextSource(
-              label: "challenger question set",
-              rawText: "Does the decision follow from the evidence?\nWhat would falsify it?"))),
-      ])
-
-    // decomposer: Requirements, Module kinds, Test plan sections + module graph + D16 bounds
-    let decomposerPack = ContextPack(
-      role: .decomposer,
-      slices: [
-        try MarkdownAnchorSlicer.slice(
-          anchor: "requirements", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        try MarkdownAnchorSlicer.slice(
-          anchor: "module-kinds", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        try MarkdownAnchorSlicer.slice(
-          anchor: "test-plan-by-tier", of: design.markdown, rawText: designRawText,
-          sourceLabel: Self.designLabel),
-        ContextPackSlice(
-          track(
-            ContextSource(label: "module graph", rawText: "OrderQueueFeature -> OrderQueueCore"))),
-      ])
-
-    let packs: [ContextPack] = [
-      researchPack, claimCheckerPack, drafterPack, evidenceAuditorPack, standardsReviewerPack,
-      challengerPack, decomposerPack, workerPack,
+    let packs: [ContextPack] = try [
+      .build(
+        role: .researchLane,
+        inputs: .researchLane(
+          ResearchLaneInputs(
+            briefs: [frameAnswers, track(ContextSource(label: "area", rawText: "checkout"))],
+            claims: ContextSource(label: "claims.jsonl", rawText: claimsRawLine),
+            pin: "swift-composable-architecture@1.26.2"))),
+      .build(
+        role: .claimChecker,
+        inputs: .claimChecker(ClaimCheckerInputs(entries: [claimToJudge]))),
+      .build(
+        role: .drafter,
+        inputs: .drafter(
+          DrafterInputs(
+            template: track(
+              ContextSource(label: "template", rawText: "## Problem\n\n## Requirements\n")),
+            frameAnswers: frameAnswers,
+            claims: ContextSource(label: "claims.jsonl", rawText: claimsRawLine),
+            probeVerdicts: track(
+              ContextSource(label: "probe verdicts", rawText: "Probe_ev_tca_effect_run: pass")),
+            standards: Self.standardsSource, moduleKindAnchors: ["core"]))),
+      .build(
+        role: .evidenceAuditor,
+        inputs: .evidenceAuditor(
+          EvidenceAuditorInputs(
+            design: designSource, docAnchors: ["evidence", "decision"],
+            citedClaims: [claimToJudge]))),
+      .build(
+        role: .standardsReviewer,
+        inputs: .standardsReviewer(
+          StandardsReviewerInputs(
+            design: designSource, standardsAndPlaybook: Self.standardsSource,
+            standardsAnchors: ["feature"]))),
+      .build(
+        role: .challenger,
+        inputs: .challenger(
+          ChallengerInputs(
+            design: designSource, docAnchors: ["options"],
+            questionSet: track(
+              ContextSource(
+                label: "challenger question set",
+                rawText: "Does the decision follow from the evidence?\nWhat would falsify it?"))))
+      ),
+      .build(
+        role: .decomposer,
+        inputs: .decomposer(
+          DecomposerInputs(
+            design: designSource,
+            moduleGraph: track(
+              ContextSource(label: "module graph", rawText: "OrderQueueFeature -> OrderQueueCore")
+            ),
+            taskSizingBounds: track(
+              ContextSource(
+                label: "task-sizing bounds", rawText: "estLines 40-400; max 2 modules per task"))
+          ))),
+      workerPack,
     ]
+
     #expect(Set(packs.map(\.role)) == Set(ContextPackRole.allCases))
     for pack in packs {
       assertVerbatim(pack, sources: sources)
     }
   }
 
-  // MARK: - Worker: only sections covering `covers`
+  // MARK: - Worker: spec §5.10 contents
 
-  @Test("worker pack holds only sections covering its `covers` ids")
+  @Test("worker pack holds only design sections covering its `covers` ids")
   func workerPackHoldsOnlyCoveredSections() throws {
     let pack = try ContextPack.workerPack(
-      task: Self.sampleTask, design: design, designRawText: designRawText,
-      designSourceLabel: Self.designLabel)
+      workerInputs(task: Self.sampleTask, moduleKindAnchors: []))
 
     let anchors = Set(pack.slices.compactMap(\.anchor))
     #expect(anchors == ["requirements", "test-plan-by-tier"])
@@ -262,6 +234,29 @@ struct ContextPackTests {
     // "Client-side queue" only appears in the Decision section, which this task doesn't cover.
     #expect(
       !pack.slices.contains { $0.lines.contains(where: { $0.contains("Client-side queue") }) })
+  }
+
+  @Test("a worker pack carries its cited claims, its standards anchors, and its gate tier")
+  func workerPackCarriesCitedClaimsStandardsAndGateTier() throws {
+    let hit = try Self.claimLine(id: "ev-cited", loc: "Sources/Hit.swift:L1-L1", pin: "p")
+    let miss = try Self.claimLine(id: "ev-not-cited", loc: "Sources/Miss.swift:L1-L1", pin: "p")
+
+    let pack = try ContextPack.workerPack(
+      workerInputs(
+        task: Self.sampleTask, citedClaimIDs: ["ev-cited"], claimsRawText: "\(hit)\n\(miss)",
+        moduleKindAnchors: ["core", "feature"]))
+
+    let claimsSlice = try #require(pack.slices.first { $0.sourceLabel == "claims.jsonl" })
+    #expect(claimsSlice.lines == [hit])
+    #expect(!claimsSlice.lines.contains(miss))
+
+    let standardsAnchors = pack.slices.filter { $0.sourceLabel == Self.standardsLabel }
+      .compactMap(\.anchor)
+    #expect(Set(standardsAnchors) == ["core", "feature"])
+
+    let ledgerEntry = try #require(
+      pack.slices.first { $0.sourceLabel.hasPrefix("ledger task entry") })
+    #expect(ledgerEntry.lines.contains { $0.contains("\"gate\" : \"push\"") })
   }
 
   @Test("an unknown `covers` id fails loudly instead of producing a silently incomplete pack")
@@ -272,9 +267,7 @@ struct ContextPackTests {
       worktree: Self.sampleTask.worktree)
 
     #expect(throws: ContextPackError.unknownCoversID("req-does-not-exist-anywhere")) {
-      try ContextPack.workerPack(
-        task: task, design: design, designRawText: designRawText,
-        designSourceLabel: Self.designLabel)
+      try ContextPack.workerPack(workerInputs(task: task))
     }
   }
 
@@ -288,25 +281,31 @@ struct ContextPackTests {
       ],
       estLines: 10, status: .pending, worktree: Self.sampleTask.worktree)
 
-    let pack = try ContextPack.workerPack(
-      task: task, design: design, designRawText: designRawText,
-      designSourceLabel: Self.designLabel)
+    let pack = try ContextPack.workerPack(workerInputs(task: task))
 
     #expect(pack.slices.filter { $0.anchor == "requirements" }.count == 1)
   }
 
-  @Test("an empty `covers` list is not an error — the pack just has no design sections")
+  @Test("an empty `covers` list is not an error — the pack just has no covering design sections")
   func emptyCoversIsNotAnError() throws {
     let task = LedgerTask(
       id: Self.sampleTask.id, deps: [], writeSet: Self.sampleTask.writeSet, gate: .push,
       tests: [], covers: [], estLines: 10, status: .pending, worktree: Self.sampleTask.worktree)
 
-    let pack = try ContextPack.workerPack(
-      task: task, design: design, designRawText: designRawText,
-      designSourceLabel: Self.designLabel)
+    let pack = try ContextPack.workerPack(workerInputs(task: task, moduleKindAnchors: []))
 
     #expect(pack.slices.count == 1)  // the ledger task entry only
     #expect(pack.slices[0].anchor == nil)
+  }
+
+  @Test("an unknown module-kind anchor for a worker fails loudly")
+  func workerUnknownModuleKindAnchorFailsLoudly() throws {
+    #expect(
+      throws: ContextPackError.missingAnchor(anchor: "not-a-real-kind", source: Self.standardsLabel)
+    ) {
+      try ContextPack.workerPack(
+        workerInputs(task: Self.sampleTask, moduleKindAnchors: ["not-a-real-kind"]))
+    }
   }
 
   // MARK: - Anchor selection: missing / duplicate
@@ -356,11 +355,12 @@ struct ContextPackTests {
     let claimRawLine = try Self.claimLine(
       id: "ev-example", loc: "Sources/Example.swift:L3-L5", pin: "abc123")
 
-    let pack = try ContextPack.claimCheckerPack(entries: [
-      ClaimToJudge(
-        claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-        citationSourceLabel: "Sources/Example.swift", citationRawText: citationRawText)
-    ])
+    let pack = try ContextPack.claimCheckerPack(
+      ClaimCheckerInputs(entries: [
+        ClaimToJudge(
+          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+          citationSourceLabel: "Sources/Example.swift", citationRawText: citationRawText)
+      ]))
 
     let citationSlice = try #require(
       pack.slices.first { $0.sourceLabel == "Sources/Example.swift" })
@@ -383,11 +383,12 @@ struct ContextPackTests {
       id: "ev-url-session-singleton", kind: .snapshot, loc: "snapshots/urlsession.txt",
       pin: "iOS 18", quote: "URLSession.shared is a singleton")
 
-    let pack = try ContextPack.claimCheckerPack(entries: [
-      ClaimToJudge(
-        claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-        citationSourceLabel: "snapshots/urlsession.txt", citationRawText: snapshotRawText)
-    ])
+    let pack = try ContextPack.claimCheckerPack(
+      ClaimCheckerInputs(entries: [
+        ClaimToJudge(
+          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+          citationSourceLabel: "snapshots/urlsession.txt", citationRawText: snapshotRawText)
+      ]))
 
     let excerpt = try #require(pack.slices.first { $0.sourceLabel == "snapshots/urlsession.txt" })
     #expect(
@@ -401,11 +402,12 @@ struct ContextPackTests {
     let citationRawText = "one\ntwo\nthree\n"
     let claimRawLine = try Self.claimLine(id: "ev-single", loc: "Sources/X.swift:L2", pin: "p")
 
-    let pack = try ContextPack.claimCheckerPack(entries: [
-      ClaimToJudge(
-        claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-        citationSourceLabel: "Sources/X.swift", citationRawText: citationRawText)
-    ])
+    let pack = try ContextPack.claimCheckerPack(
+      ClaimCheckerInputs(entries: [
+        ClaimToJudge(
+          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+          citationSourceLabel: "Sources/X.swift", citationRawText: citationRawText)
+      ]))
 
     let excerpt = try #require(pack.slices.first { $0.sourceLabel == "Sources/X.swift" })
     #expect(excerpt.lines == ["two"])
@@ -421,11 +423,12 @@ struct ContextPackTests {
       throws: ContextPackError.citationRangeOutOfBounds(
         "Sources/X.swift:L10-L12", source: "Sources/X.swift")
     ) {
-      try ContextPack.claimCheckerPack(entries: [
-        ClaimToJudge(
-          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-          citationSourceLabel: "Sources/X.swift", citationRawText: citationRawText)
-      ])
+      try ContextPack.claimCheckerPack(
+        ClaimCheckerInputs(entries: [
+          ClaimToJudge(
+            claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+            citationSourceLabel: "Sources/X.swift", citationRawText: citationRawText)
+        ]))
     }
   }
 
@@ -435,11 +438,12 @@ struct ContextPackTests {
       id: "ev-bare", kind: .snapshot, loc: "snapshots/bare.txt", pin: "p", quote: nil)
 
     #expect(throws: ContextPackError.invalidCitationRange("snapshots/bare.txt")) {
-      try ContextPack.claimCheckerPack(entries: [
-        ClaimToJudge(
-          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-          citationSourceLabel: "snapshots/bare.txt", citationRawText: "irrelevant content")
-      ])
+      try ContextPack.claimCheckerPack(
+        ClaimCheckerInputs(entries: [
+          ClaimToJudge(
+            claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+            citationSourceLabel: "snapshots/bare.txt", citationRawText: "irrelevant content")
+        ]))
     }
   }
 
@@ -453,11 +457,12 @@ struct ContextPackTests {
       throws: ContextPackError.citationQuoteNotFound(
         "this text is not in the source", source: "snapshots/miss.txt")
     ) {
-      try ContextPack.claimCheckerPack(entries: [
-        ClaimToJudge(
-          claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
-          citationSourceLabel: "snapshots/miss.txt", citationRawText: "nothing matches here")
-      ])
+      try ContextPack.claimCheckerPack(
+        ClaimCheckerInputs(entries: [
+          ClaimToJudge(
+            claimRawLine: claimRawLine, claimsSourceLabel: "claims.jsonl",
+            citationSourceLabel: "snapshots/miss.txt", citationRawText: "nothing matches here")
+        ]))
     }
   }
 
@@ -466,11 +471,12 @@ struct ContextPackTests {
     let torn = "{\"id\": \"ev-tor"  // truncated mid-write, as a crash could leave it
 
     #expect(throws: ContextPackError.invalidCitationRange(torn)) {
-      try ContextPack.claimCheckerPack(entries: [
-        ClaimToJudge(
-          claimRawLine: torn, claimsSourceLabel: "claims.jsonl",
-          citationSourceLabel: "Sources/X.swift", citationRawText: "irrelevant")
-      ])
+      try ContextPack.claimCheckerPack(
+        ClaimCheckerInputs(entries: [
+          ClaimToJudge(
+            claimRawLine: torn, claimsSourceLabel: "claims.jsonl",
+            citationSourceLabel: "Sources/X.swift", citationRawText: "irrelevant")
+        ]))
     }
   }
 
@@ -485,8 +491,10 @@ struct ContextPackTests {
       id: "ev-miss", loc: "Sources/Miss.swift:L1-L1", pin: "some-other-package@2.0.0")
 
     let pack = ContextPack.researchLanePack(
-      briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
-      claimsJSONLLines: [hit, miss], claimsSourceLabel: "claims.jsonl", pin: matchingPin)
+      ResearchLaneInputs(
+        briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
+        claims: ContextSource(label: "claims.jsonl", rawText: "\(hit)\n\(miss)"), pin: matchingPin)
+    )
 
     let claimsSlice = try #require(pack.slices.first { $0.sourceLabel == "claims.jsonl" })
     #expect(claimsSlice.lines == [hit])
@@ -496,19 +504,244 @@ struct ContextPackTests {
   @Test("no cache hits for the pin means no claims slice, not an empty one")
   func researchPackOmitsClaimsSliceWhenNoHits() {
     let pack = ContextPack.researchLanePack(
-      briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
-      claimsJSONLLines: [], claimsSourceLabel: "claims.jsonl", pin: "whatever@1.0.0")
+      ResearchLaneInputs(
+        briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
+        claims: ContextSource(label: "claims.jsonl", rawText: ""), pin: "whatever@1.0.0"))
 
     #expect(!pack.slices.contains { $0.sourceLabel == "claims.jsonl" })
+  }
+
+  // MARK: - Drafter: only `supported` claims
+
+  @Test("a drafter pack's claims slice holds only `supported` claims")
+  func drafterPackHoldsOnlySupportedClaims() throws {
+    let supported = try Self.claimLine(
+      id: "ev-supported", loc: "Sources/A.swift:L1-L1", pin: "p", status: .supported)
+    let notYetChecked = try Self.claimLine(
+      id: "ev-new", loc: "Sources/B.swift:L1-L1", pin: "p", status: .new)
+
+    let pack = try ContextPack.drafterPack(
+      DrafterInputs(
+        template: ContextSource(label: "template", rawText: "## Problem\n"),
+        frameAnswers: ContextSource(label: "frame answers", rawText: "Q/A"),
+        claims: ContextSource(
+          label: "claims.jsonl", rawText: "\(supported)\n\(notYetChecked)"),
+        probeVerdicts: ContextSource(label: "probe verdicts", rawText: "pass"),
+        standards: Self.standardsSource, moduleKindAnchors: ["core"]))
+
+    let claimsSlice = try #require(pack.slices.first { $0.sourceLabel == "claims.jsonl" })
+    #expect(claimsSlice.lines == [supported])
+    #expect(!claimsSlice.lines.contains(notYetChecked))
+  }
+
+  @Test("an unknown module-kind anchor for a drafter fails loudly")
+  func drafterUnknownModuleKindAnchorFailsLoudly() {
+    #expect(
+      throws: ContextPackError.missingAnchor(anchor: "not-a-real-kind", source: Self.standardsLabel)
+    ) {
+      try ContextPack.drafterPack(
+        DrafterInputs(
+          template: ContextSource(label: "template", rawText: "## Problem\n"),
+          frameAnswers: ContextSource(label: "frame answers", rawText: "Q/A"),
+          claims: ContextSource(label: "claims.jsonl", rawText: ""),
+          probeVerdicts: ContextSource(label: "probe verdicts", rawText: "pass"),
+          standards: Self.standardsSource, moduleKindAnchors: ["not-a-real-kind"]))
+    }
+  }
+
+  // MARK: - Evidence auditor: only its named sections
+
+  @Test("an evidence-auditor pack holds only the given design sections and their cited claims")
+  func evidenceAuditorPackHoldsOnlyGivenSections() throws {
+    let pack = try ContextPack.evidenceAuditorPack(
+      EvidenceAuditorInputs(
+        design: designSource, docAnchors: ["evidence", "decision"], citedClaims: []))
+
+    let anchors = Set(pack.slices.compactMap(\.anchor))
+    #expect(anchors == ["evidence", "decision"])
+    #expect(!anchors.contains("problem"))
+    #expect(
+      !pack.slices.contains {
+        $0.lines.contains(where: { $0.contains("Guests on flaky Wi-Fi") })
+      })
+  }
+
+  @Test("a missing doc anchor for an evidence auditor fails loudly")
+  func evidenceAuditorMissingAnchorFailsLoudly() {
+    #expect(
+      throws: ContextPackError.missingAnchor(anchor: "not-a-real-section", source: Self.designLabel)
+    ) {
+      try ContextPack.evidenceAuditorPack(
+        EvidenceAuditorInputs(
+          design: designSource, docAnchors: ["not-a-real-section"], citedClaims: []))
+    }
+  }
+
+  // MARK: - Standards reviewer: Module kinds, Decision, Test plan — not Problem
+
+  @Test("a standards-reviewer pack holds Module kinds, Decision and Test plan, and not Problem")
+  func standardsReviewerPackHoldsOnlyItsSections() throws {
+    let pack = try ContextPack.standardsReviewerPack(
+      StandardsReviewerInputs(
+        design: designSource, standardsAndPlaybook: Self.standardsSource,
+        standardsAnchors: ["feature"]))
+
+    let designAnchors = Set(
+      pack.slices.filter { $0.sourceLabel == Self.designLabel }.compactMap(\.anchor))
+    #expect(designAnchors == ["module-kinds", "decision", "test-plan-by-tier"])
+    #expect(!designAnchors.contains("problem"))
+    #expect(
+      !pack.slices.contains {
+        $0.lines.contains(where: { $0.contains("Guests on flaky Wi-Fi") })
+      })
+
+    let standardsAnchors = Set(
+      pack.slices.filter { $0.sourceLabel == Self.standardsLabel }.compactMap(\.anchor))
+    #expect(standardsAnchors == ["feature"])
+  }
+
+  @Test("an unknown standards anchor for a standards reviewer fails loudly")
+  func standardsReviewerUnknownAnchorFailsLoudly() {
+    #expect(
+      throws: ContextPackError.missingAnchor(anchor: "not-a-real-kind", source: Self.standardsLabel)
+    ) {
+      try ContextPack.standardsReviewerPack(
+        StandardsReviewerInputs(
+          design: designSource, standardsAndPlaybook: Self.standardsSource,
+          standardsAnchors: ["not-a-real-kind"]))
+    }
+  }
+
+  // MARK: - Challenger: only the given doc sections, plus the question set
+
+  @Test("a challenger pack holds only the given doc sections, not the whole document")
+  func challengerPackHoldsOnlyGivenSections() throws {
+    let pack = try ContextPack.challengerPack(
+      ChallengerInputs(
+        design: designSource, docAnchors: ["options"],
+        questionSet: ContextSource(label: "challenger question set", rawText: "What breaks it?"))
+    )
+
+    let anchors = Set(pack.slices.compactMap(\.anchor))
+    #expect(anchors == ["options"])
+    #expect(
+      !pack.slices.contains {
+        $0.lines.contains(where: { $0.contains("Guests on flaky Wi-Fi") })
+      })
+    #expect(pack.slices.contains { $0.sourceLabel == "challenger question set" })
+  }
+
+  @Test("a missing doc anchor for a challenger fails loudly")
+  func challengerMissingAnchorFailsLoudly() {
+    #expect(
+      throws: ContextPackError.missingAnchor(anchor: "not-a-real-section", source: Self.designLabel)
+    ) {
+      try ContextPack.challengerPack(
+        ChallengerInputs(
+          design: designSource, docAnchors: ["not-a-real-section"],
+          questionSet: ContextSource(label: "challenger question set", rawText: "What breaks it?"))
+      )
+    }
+  }
+
+  // MARK: - Decomposer: Requirements, Module kinds, Test plan — not Decision
+
+  @Test(
+    "a decomposer pack holds Requirements, Module kinds and Test plan, plus the module graph and bounds"
+  )
+  func decomposerPackHoldsOnlyItsSections() throws {
+    let pack = try ContextPack.decomposerPack(
+      DecomposerInputs(
+        design: designSource,
+        moduleGraph: ContextSource(
+          label: "module graph", rawText: "OrderQueueFeature -> OrderQueueCore"),
+        taskSizingBounds: ContextSource(label: "task-sizing bounds", rawText: "estLines 40-400"))
+    )
+
+    let designAnchors = Set(
+      pack.slices.filter { $0.sourceLabel == Self.designLabel }.compactMap(\.anchor))
+    #expect(designAnchors == ["requirements", "module-kinds", "test-plan-by-tier"])
+    #expect(!designAnchors.contains("decision"))
+    #expect(pack.slices.contains { $0.sourceLabel == "module graph" })
+    #expect(pack.slices.contains { $0.sourceLabel == "task-sizing bounds" })
+  }
+
+  // The design fixture always has Requirements, Module kinds and Test plan sections, so a
+  // decomposer's design-side anchors can't go missing from real input — its failure surface is
+  // its two flat `ContextSource` inputs instead, already proven correct by the pass-through
+  // `ContextPackSlice(_:)` initializer and the verbatim test above.
+
+  // MARK: - Dispatch: `ContextPack.build(role:inputs:)`
+
+  @Test("build dispatches every role to its own builder — catches a role silently falling through")
+  func buildDispatchesEveryRole() throws {
+    for role in ContextPackRole.allCases {
+      let inputs: ContextPackRoleInputs
+      switch role {
+      case .researchLane:
+        inputs = .researchLane(
+          ResearchLaneInputs(
+            briefs: [], claims: ContextSource(label: "claims.jsonl", rawText: ""), pin: "p"))
+      case .claimChecker:
+        inputs = .claimChecker(ClaimCheckerInputs(entries: []))
+      case .drafter:
+        inputs = .drafter(
+          DrafterInputs(
+            template: ContextSource(label: "template", rawText: ""),
+            frameAnswers: ContextSource(label: "frame answers", rawText: ""),
+            claims: ContextSource(label: "claims.jsonl", rawText: ""),
+            probeVerdicts: ContextSource(label: "probe verdicts", rawText: ""),
+            standards: Self.standardsSource, moduleKindAnchors: []))
+      case .evidenceAuditor:
+        inputs = .evidenceAuditor(
+          EvidenceAuditorInputs(design: designSource, docAnchors: [], citedClaims: []))
+      case .standardsReviewer:
+        inputs = .standardsReviewer(
+          StandardsReviewerInputs(
+            design: designSource, standardsAndPlaybook: Self.standardsSource,
+            standardsAnchors: []))
+      case .challenger:
+        inputs = .challenger(
+          ChallengerInputs(
+            design: designSource, docAnchors: [],
+            questionSet: ContextSource(label: "challenger question set", rawText: "")))
+      case .decomposer:
+        inputs = .decomposer(
+          DecomposerInputs(
+            design: designSource,
+            moduleGraph: ContextSource(label: "module graph", rawText: ""),
+            taskSizingBounds: ContextSource(label: "task-sizing bounds", rawText: "")))
+      case .worker:
+        inputs = .worker(workerInputs(task: Self.sampleTask, moduleKindAnchors: []))
+      }
+
+      let pack = try ContextPack.build(role: role, inputs: inputs)
+      #expect(pack.role == role)
+    }
+  }
+
+  @Test("build fails loudly when `role` doesn't match the inputs it was given")
+  func buildRoleMismatchFailsLoudly() {
+    let inputs = ContextPackRoleInputs.drafter(
+      DrafterInputs(
+        template: ContextSource(label: "template", rawText: ""),
+        frameAnswers: ContextSource(label: "frame answers", rawText: ""),
+        claims: ContextSource(label: "claims.jsonl", rawText: ""),
+        probeVerdicts: ContextSource(label: "probe verdicts", rawText: ""),
+        standards: Self.standardsSource, moduleKindAnchors: []))
+
+    #expect(
+      throws: ContextPackError.roleMismatch(expected: .worker, actual: .drafter)
+    ) {
+      try ContextPack.build(role: .worker, inputs: inputs)
+    }
   }
 
   // MARK: - Budget
 
   @Test("an over-budget worker pack is flagged; a small one is not")
   func overBudgetWorkerPackFlagged() throws {
-    let pack = try ContextPack.workerPack(
-      task: Self.sampleTask, design: design, designRawText: designRawText,
-      designSourceLabel: Self.designLabel)
+    let pack = try ContextPack.workerPack(workerInputs(task: Self.sampleTask))
 
     #expect(pack.isOverBudget(tokens: 5))
     #expect(!pack.isOverBudget(tokens: 1_000_000))
