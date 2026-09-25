@@ -74,6 +74,20 @@ private struct TemporaryRepo {
     try LedgerJSON.encode(ledger).write(to: URL(filePath: planPaths.ledgerFile))
   }
 
+  /// Writes bytes that exist but don't decode as a ledger, the way a crash mid-write or a hand
+  /// edit would leave one. Returns the ledger file's path so a test can assert a finding names it.
+  @discardableResult
+  func writeCorruptLedger(plan: String = "demo") async throws -> String {
+    let common = try await git.commonDirectory()
+    let layout = try PlanStateLayout(commonDirectory: common)
+    let planPaths = try layout.plan(plan)
+    try FileManager.default.createDirectory(
+      at: URL(filePath: planPaths.directory, directoryHint: .isDirectory),
+      withIntermediateDirectories: true)
+    try Data("{ not valid json".utf8).write(to: URL(filePath: planPaths.ledgerFile))
+    return planPaths.ledgerFile
+  }
+
   func writeMessage(_ text: String, name: String = "COMMIT_EDITMSG") throws -> String {
     let url = root.appending(path: name)
     try Data(text.utf8).write(to: url)
@@ -237,5 +251,37 @@ struct CommitMessageIdCheckTests {
         executable: binaryPath, arguments: ["comments", "--commit-msg", leaking],
         workingDirectory: repo.root.path, timeout: .seconds(60)))
     #expect(leakingOutput.status == .exited(1))
+  }
+
+  @Test(
+    "a corrupt ledger is a non-gating finding naming the file, not a silent narrowing of the known-id feed — catches a broken ledger switching the id-leak check off with no signal"
+  )
+  func corruptLedgerIsANonGatingFinding() async throws {
+    let repo = try await TemporaryRepo()
+    defer { repo.remove() }
+    let ledgerPath = try await repo.writeCorruptLedger()
+    let path = try repo.writeMessage("Add caching for guest checkout responses\n")
+
+    let outcome = await CommitMessageCheck.run(path: path, root: repo.root, git: repo.git)
+    let report = try StaticCheckReport.make(runID: "r1", durationMilliseconds: 1, outcome: outcome)
+    #expect(report.verdict == .green, "a corrupt id source must never gate the commit")
+    #expect(
+      report.findings.contains {
+        $0.ruleID == KnownIdSourceFindings.ruleID && $0.file == ledgerPath
+      })
+  }
+
+  @Test(
+    "no plans at all is not a finding — catches a fresh repository with no ledger yet reported as broken"
+  )
+  func noCommonDirPlansIsNotAFinding() async throws {
+    let repo = try await TemporaryRepo()
+    defer { repo.remove() }
+    let path = try repo.writeMessage("Add caching for guest checkout responses\n")
+
+    let outcome = await CommitMessageCheck.run(path: path, root: repo.root, git: repo.git)
+    let report = try StaticCheckReport.make(runID: "r1", durationMilliseconds: 1, outcome: outcome)
+    #expect(report.verdict == .green)
+    #expect(!report.findings.contains { $0.ruleID == KnownIdSourceFindings.ruleID })
   }
 }

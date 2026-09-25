@@ -51,7 +51,7 @@ struct RuleIndexTests {
       FormatCheck.parseRuleID, RuleEngine.allowMissingReasonRuleID, BudgetCheck.ruleID,
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
-      JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID,
+      JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,

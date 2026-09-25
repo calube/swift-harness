@@ -18,8 +18,9 @@ enum CommentsCheck {
     case .resolved(let scopes):
       let collector = SwiftSourceCollector(root: root, excluding: config?.exclude ?? [])
       let knownIds = await KnownIdSources.load(root: root, git: git)
-      return await run(
-        git: git, scopes: scopes, isExcluded: collector.isExcluded, knownIds: knownIds)
+      let outcome = await run(
+        git: git, scopes: scopes, isExcluded: collector.isExcluded, knownIds: knownIds.ids)
+      return KnownIdSourceFindings.appending(knownIds.unreadable, to: outcome)
     }
   }
 
@@ -73,14 +74,15 @@ enum CommitMessageCheck {
     }
     let knownIds = await KnownIdSources.load(root: root, git: git)
     do throws(ReportContractViolation) {
-      let findings = try IdLeakScan.matches(in: text, knownIds: knownIds).map {
+      let findings = try IdLeakScan.matches(in: text, knownIds: knownIds.ids).map {
         match throws(ReportContractViolation) in
         try Finding(
           ruleID: "comments.leaked-id", severity: .major, file: path,
           line: lineNumber(of: match.range.lowerBound, in: text), message: match.message,
           failureScenario: nil)
       }
-      return .checked(RuleRunResult(findings: findings, allowances: []))
+      let outcome = StaticCheckOutcome.checked(RuleRunResult(findings: findings, allowances: []))
+      return KnownIdSourceFindings.appending(knownIds.unreadable, to: outcome)
     } catch {
       return .blocked(reason: "rule engine: \(error)")
     }

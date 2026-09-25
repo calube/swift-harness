@@ -23,8 +23,9 @@ enum TestlintCheck {
     let context = RuleContext(
       scopes: inputs.scopes.resolver, flows: inputs.config.map { $0.flows.map(\.name) },
       knownIds: inputs.knownIds)
-    return inputs.scopes.appendingNotices(
+    let outcome = inputs.scopes.appendingNotices(
       to: StaticCheck.evaluate(RuleCatalog.testlint, inputs.sources, context: context))
+    return KnownIdSourceFindings.appending(inputs.unreadableIdSources, to: outcome)
   }
 }
 
