@@ -1,65 +1,135 @@
 import Foundation
 
-/// The module-graph facts a design's frame answers carry about its shape (spec §8.1). The design
-/// skill's frame step compares the modules it plans to touch against the current ``ModuleGraph``
-/// and answers these questions; `design-scope` itself loads no graph and reads no files, so a
-/// repository's actual module layout never has to be reachable from this pure decision.
-public struct DesignScopeInput: Sendable, Equatable, Encodable {
-  /// The design pulls in a dependency (an external product, or a local package) the graph does
-  /// not already carry.
-  public let addsDependency: Bool
-  /// The design introduces a ``ModuleKind`` no existing module in the graph has.
-  public let addsModuleKind: Bool
-  /// Brand-new modules the design creates.
-  public let modulesAdded: Int
-  /// Modules the design creates or edits. Every added module is touched, so this can never be
-  /// smaller than `modulesAdded`.
-  public let modulesTouched: Int
+/// A module the design creates, named in a frame answer. `kind` is a ``ModuleKind`` raw value, so
+/// an unrecognised kind fails to decode instead of silently becoming some default.
+///
+/// `ModuleKind` (declared in `Config.swift`, a different task's file) isn't `Codable`, so this
+/// type codes `kind` through its raw value itself rather than adding that conformance to a
+/// shared config type from here.
+public struct DesignScopeNewModule: Sendable, Equatable, Codable {
+  public let name: String
+  public let kind: ModuleKind
 
-  /// Not `Decodable`: the only supported way to build one from JSON is
-  /// ``DesignScopeInputJSON/decode(_:)``, which enforces `schemaVersion` before it reaches here.
-  /// A bare `Decodable` conformance would let a malformed frame-answers file skip that check and
-  /// still produce a tier.
-  public init(
-    addsDependency: Bool, addsModuleKind: Bool, modulesAdded: Int, modulesTouched: Int
-  ) throws(ReportContractViolation) {
-    try requireNonNegative(modulesAdded, field: "modulesAdded")
-    try requireNonNegative(modulesTouched, field: "modulesTouched")
-    guard modulesTouched >= modulesAdded else {
-      throw .outOfRange(field: "modulesTouched", value: modulesTouched)
+  public init(name: String, kind: ModuleKind) {
+    self.name = name
+    self.kind = kind
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case name, kind
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    name = try container.decode(String.self, forKey: .name)
+    let rawKind = try container.decode(String.self, forKey: .kind)
+    guard let kind = ModuleKind(rawValue: rawKind) else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .kind, in: container,
+        debugDescription:
+          "'\(rawKind)' is not a known module kind (\(ModuleKind.allCases.map(\.rawValue)))")
     }
-    self.addsDependency = addsDependency
-    self.addsModuleKind = addsModuleKind
-    self.modulesAdded = modulesAdded
-    self.modulesTouched = modulesTouched
+    self.kind = kind
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(name, forKey: .name)
+    try container.encode(kind.rawValue, forKey: .kind)
+  }
+}
+
+/// What a design's frame answers name about its shape (spec §8.1): which existing modules it
+/// touches, which modules it creates, and which dependencies it adds. Frame answers name things;
+/// they never count them — `design-scope` derives the counts itself, against the real module
+/// graph, so a miscount by whatever wrote this file can't understate the tier.
+///
+/// Not `Decodable`: the only supported way to build one from JSON is
+/// ``DesignScopeInputJSON/decode(_:)``, which enforces `schemaVersion` before it reaches here.
+public struct DesignScopeAnswers: Sendable, Equatable, Encodable {
+  public let touchedModules: [String]
+  public let newModules: [DesignScopeNewModule]
+  public let newDependencies: [String]
+
+  public init(
+    touchedModules: [String], newModules: [DesignScopeNewModule], newDependencies: [String]
+  ) {
+    self.touchedModules = touchedModules
+    self.newModules = newModules
+    self.newDependencies = newDependencies
   }
 }
 
 /// The frame-answers file `design-scope --frame-answers <path>` reads (its only supported input
-/// shape; see ``DesignScopeInput``).
+/// shape; see ``DesignScopeAnswers``).
 public enum DesignScopeInputJSON {
   public static let schemaVersion = 1
 
   private struct Envelope: Decodable {
     let schemaVersion: Int
-    let addsDependency: Bool
-    let addsModuleKind: Bool
-    let modulesAdded: Int
-    let modulesTouched: Int
+    let touchedModules: [String]
+    let newModules: [DesignScopeNewModule]
+    let newDependencies: [String]
   }
 
-  /// Throws `DecodingError` on malformed JSON or a missing/mistyped key, and
-  /// ``ReportContractViolation`` on an unsupported `schemaVersion` or an invalid value
-  /// (negative count, or `modulesTouched` under `modulesAdded`). Never returns a tier for
-  /// invalid input — the caller decides what "malformed" means for its exit code.
-  public static func decode(_ data: Data) throws -> DesignScopeInput {
+  /// Throws `DecodingError` on malformed JSON, a missing/mistyped key, or an unrecognised
+  /// `ModuleKind`, and ``ReportContractViolation`` on an unsupported `schemaVersion`. Never
+  /// returns a tier for invalid input — the caller decides what "malformed" means for its exit
+  /// code.
+  public static func decode(_ data: Data) throws -> DesignScopeAnswers {
     let envelope = try JSONDecoder().decode(Envelope.self, from: data)
     guard envelope.schemaVersion == schemaVersion else {
       throw ReportContractViolation.unsupportedSchemaVersion(envelope.schemaVersion)
     }
-    return try DesignScopeInput(
-      addsDependency: envelope.addsDependency, addsModuleKind: envelope.addsModuleKind,
-      modulesAdded: envelope.modulesAdded, modulesTouched: envelope.modulesTouched)
+    return DesignScopeAnswers(
+      touchedModules: envelope.touchedModules, newModules: envelope.newModules,
+      newDependencies: envelope.newDependencies)
+  }
+}
+
+/// Why a set of frame answers can't be checked against the module graph. Each case names the
+/// offending module so the message is actionable without a second lookup.
+public enum DesignScopeValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+  /// `touchedModules` names a module the graph doesn't have.
+  case touchedModuleNotInGraph(String)
+  /// `newModules` names a module the graph already has — it isn't new.
+  case newModuleAlreadyExists(String)
+  /// The same name appears more than once across `touchedModules` and `newModules` (checked in
+  /// that order): a module can't be both untouched-and-new and separately touched, or named twice
+  /// in the same list.
+  case duplicateName(String)
+
+  public var description: String {
+    switch self {
+    case .touchedModuleNotInGraph(let name):
+      "touched module `\(name)` is not in the module graph"
+    case .newModuleAlreadyExists(let name):
+      "new module `\(name)` already exists in the module graph"
+    case .duplicateName(let name):
+      "`\(name)` is named more than once across touchedModules and newModules"
+    }
+  }
+}
+
+/// The module-graph facts `design-scope` recommends a tier from (spec §8.1 Decisions), derived
+/// from ``DesignScopeAnswers`` against the real ``ModuleGraph`` by
+/// ``DesignScope/deriveFacts(answers:graph:)``.
+public struct DesignScopeGraphFacts: Sendable, Equatable, Codable {
+  /// `newDependencies` isn't empty.
+  public let addsDependency: Bool
+  /// Some new module's kind is absent from every module already in the graph.
+  public let addsModuleKind: Bool
+  /// `newModules.count`.
+  public let modulesAdded: Int
+  /// The distinct union of `touchedModules` and `newModules`' names — every added module is
+  /// touched, so this is never smaller than `modulesAdded`.
+  public let modulesTouched: Int
+
+  public init(addsDependency: Bool, addsModuleKind: Bool, modulesAdded: Int, modulesTouched: Int) {
+    self.addsDependency = addsDependency
+    self.addsModuleKind = addsModuleKind
+    self.modulesAdded = modulesAdded
+    self.modulesTouched = modulesTouched
   }
 }
 
@@ -105,35 +175,66 @@ public struct DesignScopeRecommendation: Sendable, Equatable, Codable {
   }
 }
 
-/// Recommends a design's depth tier from its frame answers (spec §8.1). The deep thresholds are
-/// fixed constants, not `[docs]`/`[plan]` config (Decisions table: moving them to config is the
-/// named reversal, not the default), so softening them takes a code change and a gate re-run
-/// rather than a `.swiftgate.toml` edit.
+/// Recommends a design's depth tier from its frame answers and the real module graph (spec
+/// §8.1). The deep thresholds are fixed constants, not `[docs]`/`[plan]` config (Decisions table:
+/// moving them to config is the named reversal, not the default), so softening them takes a code
+/// change and a gate re-run rather than a `.swiftgate.toml` edit.
 public enum DesignScope {
   /// Two or more brand-new modules recommend deep on their own.
   public static let modulesAddedDeepThreshold = 2
   /// Four or more touched modules recommend deep on their own.
   public static let modulesTouchedDeepThreshold = 4
 
+  /// Turns frame answers into graph facts, checked against `graph`. Deterministic: duplicate
+  /// names are checked first (`touchedModules` then `newModules`, first offender reported), then
+  /// every touched module must already be in the graph, then no new module may already be in the
+  /// graph.
+  public static func deriveFacts(
+    answers: DesignScopeAnswers, graph: ModuleGraph
+  ) throws(DesignScopeValidationError) -> DesignScopeGraphFacts {
+    var seen = Set<String>()
+    for name in answers.touchedModules {
+      guard seen.insert(name).inserted else { throw .duplicateName(name) }
+    }
+    for module in answers.newModules {
+      guard seen.insert(module.name).inserted else { throw .duplicateName(module.name) }
+    }
+    for name in answers.touchedModules {
+      guard graph.module(named: name) != nil else { throw .touchedModuleNotInGraph(name) }
+    }
+    for module in answers.newModules {
+      guard graph.module(named: module.name) == nil else {
+        throw .newModuleAlreadyExists(module.name)
+      }
+    }
+
+    let existingKinds = Set(graph.modules.map(\.kind))
+    let addsModuleKind = answers.newModules.contains { !existingKinds.contains($0.kind) }
+    let touchedAndNew = Set(answers.touchedModules).union(answers.newModules.map(\.name))
+    return DesignScopeGraphFacts(
+      addsDependency: !answers.newDependencies.isEmpty, addsModuleKind: addsModuleKind,
+      modulesAdded: answers.newModules.count, modulesTouched: touchedAndNew.count)
+  }
+
   /// Quick is never offered once the design adds a dependency or a module kind — checked here by
   /// construction: the only path that returns `.quick` requires both to be `false`. Deep is
   /// checked first, so the dependency-and-module-kind case (which meets both the quick-exclusion
   /// and a deep trigger) resolves to deep, never standard.
-  public static func recommend(_ input: DesignScopeInput) -> DesignScopeRecommendation {
+  public static func recommend(_ facts: DesignScopeGraphFacts) -> DesignScopeRecommendation {
     var deepReasons: [DesignScopeReason] = []
-    if input.addsDependency, input.addsModuleKind {
+    if facts.addsDependency, facts.addsModuleKind {
       deepReasons.append(.newDependencyAndModuleKind)
     }
-    if input.modulesAdded >= modulesAddedDeepThreshold { deepReasons.append(.modulesAdded) }
-    if input.modulesTouched >= modulesTouchedDeepThreshold { deepReasons.append(.modulesTouched) }
+    if facts.modulesAdded >= modulesAddedDeepThreshold { deepReasons.append(.modulesAdded) }
+    if facts.modulesTouched >= modulesTouchedDeepThreshold { deepReasons.append(.modulesTouched) }
     if !deepReasons.isEmpty {
       return DesignScopeRecommendation(tier: .deep, reasons: deepReasons)
     }
 
-    guard !input.addsDependency, !input.addsModuleKind else {
+    guard !facts.addsDependency, !facts.addsModuleKind else {
       var reasons: [DesignScopeReason] = []
-      if input.addsDependency { reasons.append(.newDependency) }
-      if input.addsModuleKind { reasons.append(.newModuleKind) }
+      if facts.addsDependency { reasons.append(.newDependency) }
+      if facts.addsModuleKind { reasons.append(.newModuleKind) }
       return DesignScopeRecommendation(tier: .standard, reasons: reasons)
     }
     return DesignScopeRecommendation(tier: .quick, reasons: [.noNewDependencyOrModuleKind])
