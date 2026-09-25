@@ -31,6 +31,37 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
 8. **Dependencies:** only those in the plan's Decisions table unless unavoidable (report it).
 9. **Scope:** only your tasks. If blocked, stop and report — do not improvise large redesigns.
 
+## Cost discipline
+- **Report once.** Your final message is the report. Don't send progress updates or re-report state that hasn't
+  changed; each extra message costs the orchestrator a full context re-read.
+- **Wait on the real artifact.** Poll the file, git ref or test result itself, in the foreground, never
+  another watcher's output. If you wait on several things, finish when all are done, not once per item.
+- **No fan-out of your own.** Don't spawn subagents unless your prompt asks for them. If the task looks
+  under-scoped, say so in DEVIATIONS instead of expanding it.
+- **Stop at diminishing returns.** Once further polishing would only fix nits, stop and list them in your report.
+
+## Worktree safety
+- You are your worktree's only committer. When you start, and again before your first commit, run
+  `git log --oneline -3` and `git status`: commits or changes you didn't make mean another agent is here.
+  Stop and report it; don't commit over it.
+- Never run a git write outside your worktree (checkout, stash, branch switch, reset included).
+
+## Never
+- Merge, push to `main`, force-push, open or change a PR, request a reviewer, or message a human.
+- Undo state a human set (a PR marked ready, auto-merge armed, a branch they moved). Leave it and report it.
+
+## Verification traps in this repo
+- `xcodebuild` needs `-skipMacroValidation`; go through `swiftgate`, never raw `xcodebuild`.
+- `swift test` on Swift 6.2 can't shuffle or repeat. To test order independence or concurrency, loop and
+  permute inside the test.
+- Host XCTest skips don't show up under `--parallel`. Gate toolchain-dependent tests with Swift Testing
+  `.enabled(if:)` and a reason.
+- A green run with zero tests is not green. Confirm the test count your change should have moved.
+- A cloned `gate/.build` keeps a `ModuleCache` with headers that point at the old path. If the build fails
+  on stale module paths, delete `ModuleCache` directories with `/usr/bin/find`, not a shell alias.
+- Tests that run a real command resolve this checkout's git common dir, which is shared with every sibling
+  worktree. Run commands that write plan state only against a temp repo.
+
 ## Report (your final message, ≤ 200 words, exactly this shape)
 ```
 TASKS: <id> <commit sha> <one line> (per task)

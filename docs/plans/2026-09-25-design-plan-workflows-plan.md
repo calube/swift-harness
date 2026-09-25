@@ -414,7 +414,7 @@ flowchart LR
 ### `design-research-lane-agents`
 - Deps: context-pack-command, evidence-find-command, probe-builds-scratch-package · Gate: fast · estLines: 280
 - Writes: `agents/design-lane-codebase.md`, `agents/design-lane-apple-docs.md`, `agents/design-lane-packages.md`, `agents/design-lane-prior-decisions.md`, `tests/design_agents_test.mjs`
-- Does: §7.1 lanes, `sonnet`, read-only. A lane returns `{lane, claims: [§5.2 records, status new], probes: [{claimId, swift}], needsDecision: [§3.4 {question, options[2–4], recommendation, evidence[]}]}`, with a probe snippet for every API relied on. Cite `.build/checkouts` at pins; Apple snapshots back semantics only. The test checks every `agents/design-*.md`: native model name, read-only tools unless declared, no relay or proxy agent types.
+- Does: prompts carry the read-only agent rules (no subagents of your own, stop at diminishing returns, never contact a human, return once; see the worker brief's cost discipline); §7.1 lanes, `sonnet`, read-only. A lane returns `{lane, claims: [§5.2 records, status new], probes: [{claimId, swift}], needsDecision: [§3.4 {question, options[2–4], recommendation, evidence[]}]}`, with a probe snippet for every API relied on. Cite `.build/checkouts` at pins; Apple snapshots back semantics only. The test checks every `agents/design-*.md`: native model name, read-only tools unless declared, no relay or proxy agent types.
 - Tests: `design_agents_test.mjs` green · a file naming a relay type fails it — catches D2 drift · `plugin-dev:plugin-validator` passes.
 
 ### `design-research-workflow`
@@ -438,7 +438,7 @@ flowchart LR
 ### `design-review-agents`
 - Deps: design-research-lane-agents, design-review-verdict · Gate: fast · estLines: 300
 - Writes: `agents/design-evidence-auditor.md`, `agents/design-standards-conformance.md`, `agents/design-challenger.md`, `agents/design-pre-mortem.md`
-- Does: §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger's question set is written fresh in `agents/design-challenger.md`: 5–7 questions, including "is this the best end-to-end design, not merely a complete one" and "biggest blind spot"; don't copy any existing self-reflect text.
+- Does: prompts carry the read-only agent rules (no subagents of your own, stop at diminishing returns, never contact a human, return once; see the worker brief's cost discipline); §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger's question set is written fresh in `agents/design-challenger.md`: 5–7 questions, including "is this the best end-to-end design, not merely a complete one" and "biggest blind spot"; don't copy any existing self-reflect text.
 - Tests: `design_agents_test.mjs` green · `plugin-validator` passes. Behaviour is calibrated by `calibration-seeds-labelled-by-construction`.
 
 ### `design-single-step-agents`
@@ -625,6 +625,10 @@ except the install check, which must go through the marketplace.
 | §15 Foundation corrections | bootstrap-stamps-docs-router, plugin-docs-pass-docs-lint-and-prose |
 
 ## Not in this plan
+
+- **Consumer worker rules** (cost discipline, worktree safety, the never-list, per-repo verification traps) shipped in
+  `plugin/docs/` for workers the build loop dispatches in app repos. That's sub-project 5; the contributor version is
+  `docs/handoffs/worker-brief.md`.
 
 | Item | Why |
 |---|---|
