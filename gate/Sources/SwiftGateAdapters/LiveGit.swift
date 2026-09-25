@@ -114,6 +114,16 @@ public struct LiveGit: Git {
     try await run(["rev-parse", "--show-prefix"]).trimmingCharacters(in: .newlines)
   }
 
+  public func revision(_ ref: String) async throws(GitError) -> String? {
+    try Self.validate(ref: ref)
+    let arguments = ["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"]
+    let output = try await execute(arguments)
+    // `--quiet` makes an unresolvable name exit 1 with no diagnostics.
+    if output.status == .exited(1), output.stderr.bytes.isEmpty { return nil }
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
   public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {
     try Self.validate(ref: first)
     try Self.validate(ref: second)

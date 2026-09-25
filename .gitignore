@@ -2,5 +2,7 @@
 .swiftpm/
 *.xcresult
 **/.harness/runs/
+**/.harness/hook-state/
+**/.harness/orchestrator.lock
 DerivedData/
 .DS_Store

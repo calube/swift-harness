@@ -16,9 +16,24 @@ shim="$work/repo/bin/swiftgate"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+# A hook on a cold cache must answer at once and build in the background.
+hook_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+hook_out="$(echo '{}' | "$shim" hook stop)" || fail "cold hook exited non-zero"
+start_out="$(echo '{}' | "$shim" hook session-start)" || fail "cold session-start exited non-zero"
+hook_end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+hook_ms=$(perl -e "printf '%d', ($hook_end - $hook_start) * 1000")
+[ -z "$hook_out" ] || fail "cold stop hook printed '$hook_out'"
+case "$start_out" in *"building in the background"*) ;; *) fail "cold session-start said '$start_out'" ;; esac
+[ "$hook_ms" -lt 2000 ] || fail "cold hooks took ${hook_ms}ms"
+for _ in $(seq 1 600); do
+  ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1 || break
+  sleep 1
+done
+ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1 && fail "background build did not finish"
+
 out1="$("$shim" --version 2>"$work/err1")"
-[ "$out1" = "0.1.0" ] || fail "first run printed '$out1'"
-grep -q "building swiftgate" "$work/err1" || fail "first run did not build"
+[ "$out1" = "0.1.0" ] || fail "first run printed '$out1': $(cat "$SWIFTGATE_CACHE_DIR"/build-*.log)"
+[ ! -s "$work/err1" ] || fail "the background build did not populate the cache: $(cat "$work/err1")"
 
 start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
 out2="$("$shim" --version 2>"$work/err2")"

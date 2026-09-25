@@ -1,0 +1,8 @@
+{
+  "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
+  "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
+  "cwd": "/REPO",
+  "hook_event_name": "SessionStart",
+  "source": "startup",
+  "model": "claude-opus-5-5"
+}

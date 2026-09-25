@@ -1,0 +1,19 @@
+{
+  "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
+  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
+  "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
+  "cwd": "/REPO",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/REPO/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+    "old_string": "count += 1",
+    "new_string": "count += 2",
+    "replace_all": false
+  },
+  "tool_use_id": "toolu_01ABC123",
+  "effort": {
+    "level": "high"
+  }
+}

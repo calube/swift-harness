@@ -90,3 +90,42 @@ Observed behavior the adapter relies on:
   reported with its absolute path and no `[Rule]`.
 - Exit status is 1 when any diagnostic is printed under `--strict`, else 0. A path that does not
   exist is silently skipped with status 0, so the gate passes only existing files.
+
+## Hooks
+
+`Hooks/*.json` are Claude Code hook stdin payloads. They are built from the documented schema,
+not captured from a live session (capturing needs a paid nested `claude` run): each carries the
+fields the docs list for its event, with the docs' example values, paths rooted at `/REPO`, and a
+fixed `session_id`. Tests swap `/REPO` for a probe repository. Re-check them against the docs
+whenever Claude Code's hook contract changes.
+
+Sources, fetched 2026-09-24 as Markdown (`curl -sL <url>.md`):
+
+- Hooks reference, https://code.claude.com/docs/en/hooks — common input fields; SessionStart,
+  PreToolUse (Bash/Edit/Write `tool_input`), PostToolUse and Stop inputs; JSON output and decision
+  control; exit-code semantics; timeouts.
+- Plugins reference, https://code.claude.com/docs/en/plugins-reference, and plugin components,
+  https://code.claude.com/docs/en/plugins/components — `hooks/hooks.json` format and
+  `${CLAUDE_PLUGIN_ROOT}`.
+
+Contract points the hooks rely on:
+
+- Every payload has `session_id`, `transcript_path`, `cwd`, `hook_event_name`; tool events add
+  `tool_name`, `tool_input`, `tool_use_id`. File-tool `tool_input.file_path` is always absolute.
+- Inside a subagent every event also carries `agent_id` (and `agent_type`); the main thread never
+  does. That is how a worker is told apart from the orchestrator.
+- Stop carries `stop_hook_active`: `true` when Claude is continuing because a Stop hook blocked.
+  Claude Code ends the turn itself after 8 consecutive blocks; swiftgate releases after 3.
+- A hook decides by exiting 0 with JSON on stdout. PreToolUse denies with
+  `hookSpecificOutput.permissionDecision: "deny"` plus `permissionDecisionReason` (shown to
+  Claude). PostToolUse and Stop use top-level `decision: "block"` with `reason`.
+  `hookSpecificOutput.additionalContext` adds context (SessionStart, PreToolUse, PostToolUse);
+  `systemMessage` shows the user a message without continuing the turn.
+- Exit 2 also blocks, with stderr as the reason; any other non-zero exit is a non-blocking error,
+  so swiftgate uses exit 1 only for a malformed payload. A hook that times out renders no
+  decision, and on PreToolUse the call proceeds.
+- `additionalContext`, `systemMessage` and plain stdout are capped at 10,000 characters.
+- Plugin hooks live in `hooks/hooks.json` under a top-level `hooks` key, in the `settings.json`
+  shape. With `args` set, the hook runs in exec form: `command` and each `args` element have
+  `${CLAUDE_PLUGIN_ROOT}` substituted and no shell is involved. `timeout` is in seconds
+  (default 600 for command hooks).

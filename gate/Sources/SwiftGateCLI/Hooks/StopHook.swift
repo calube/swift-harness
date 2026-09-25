@@ -1,0 +1,109 @@
+import CryptoKit
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+
+/// Stop (spec §8, ≤ 90s): `check --tier fast`, blocking a RED result under ``StopGate``'s policy.
+enum StopHook {
+  static let command = "hook stop"
+
+  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
+    -> HookResult
+  {
+    let store = HookStateStore(worktreeRoot: root)
+    let state = store.stopState(session: payload.sessionID)
+    let fingerprint = await ContentFingerprint.compute(git: dependencies.git)
+    let reentry = payload.stopHookActive
+
+    let outcome: StopGate.Outcome
+    switch StopGate.plan(
+      fingerprint: fingerprint, lastGreen: store.lastGreen(), state: state, reentry: reentry)
+    {
+    case .skip:
+      return .silent
+    case .reuseRed(let summary):
+      outcome = StopGate.decide(
+        verdict: .red, summary: summary, fingerprint: fingerprint, state: state, reentry: reentry)
+    case .run:
+      let (verdict, summary) = await fastTier(root: root, dependencies: dependencies)
+      outcome = StopGate.decide(
+        verdict: verdict, summary: summary, fingerprint: fingerprint, state: state,
+        reentry: reentry)
+    }
+
+    var warnings: [String] = []
+    do throws(HookStateError) {
+      try store.saveStopState(outcome.state, session: payload.sessionID)
+      if let green = outcome.lastGreen { try store.saveLastGreen(green) }
+    } catch {
+      // Lost state costs a re-run or a strike count restart, never a wrong verdict.
+      warnings.append("swiftgate: could not save hook state: \(error)")
+    }
+    let stderr = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
+
+    switch outcome.decision {
+    case .allow: return HookResult(stdout: nil, stderr: stderr, exitCode: 0)
+    case .block(let reason):
+      return HookResult(stdout: HookOutput.block(reason), stderr: stderr, exitCode: 0)
+    case .release(let message), .warn(let message):
+      return HookResult(stdout: HookOutput.systemMessage(message), stderr: stderr, exitCode: 0)
+    }
+  }
+
+  /// The same run `swiftgate check --tier fast` performs, recorded in the run history under this
+  /// hook's name so `stats` shows its latency against the stop-hook budget.
+  static func fastTier(root: URL, dependencies: HookDependencies) async -> (Verdict, String) {
+    let clock = ContinuousClock()
+    let start = clock.now
+    let startedAt = Date()
+    let runID = RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
+    let runs = RunStore(worktreeRoot: root)
+    let directory =
+      (try? runs.runDirectory(for: runID))
+      ?? FileManager.default.temporaryDirectory.appending(
+        path: "swiftgate-\(runID)", directoryHint: .isDirectory)
+    do {
+      let parts = try await CheckRun.run(
+        root: root, swiftPM: dependencies.swiftPM, git: dependencies.git,
+        formatter: dependencies.formatter, tier: .fast, base: "origin/main",
+        context: GateRun.Context(runID: runID, directory: directory))
+      let report = try RunReport(
+        runID: runID, durationMilliseconds: GateRun.milliseconds(clock.now - start),
+        tiers: parts.tiers, findings: parts.findings, allowances: parts.allowances)
+      try? runs.record(report, finishedAt: Date(), command: command)
+      return (report.verdict, ReportRenderer.human(report))
+    } catch {
+      return (.blocked, "swiftgate check --tier fast could not run: \(error)")
+    }
+  }
+}
+
+/// Identifies the Swift-relevant content of a worktree: HEAD plus the current bytes of every
+/// changed Swift source, manifest, lockfile and gate config. Equal fingerprints mean the fast tier
+/// would judge the same content.
+enum ContentFingerprint {
+  static func isRelevant(_ path: String) -> Bool {
+    let name = path.split(separator: "/").last.map(String.init) ?? path
+    return path.hasSuffix(".swift") || name == "Package.resolved" || name == ConfigLoader.fileName
+  }
+
+  /// `nil` when git cannot say (no repository, no commit yet): the check then always runs.
+  static func compute(git: any Git) async -> String? {
+    do throws(GitError) {
+      guard let head = try await git.revision("HEAD") else { return nil }
+      let prefix = try await git.workingDirectoryPrefix()
+      let changed = try await git.changedFiles(since: "HEAD")
+        .filter { $0.hasPrefix(prefix) && isRelevant($0) }
+        .map { String($0.dropFirst(prefix.count)) }
+      let hashes = try await git.contentHashes(of: changed)
+      var hasher = SHA256()
+      hasher.update(data: Data("\(head)\n\(prefix)\n".utf8))
+      for path in changed.sorted() {
+        hasher.update(data: Data("\(path)\0\(hashes[path] ?? "deleted")\n".utf8))
+      }
+      return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    } catch {
+      return nil
+    }
+  }
+}
