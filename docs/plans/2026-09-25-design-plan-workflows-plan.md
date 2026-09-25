@@ -33,7 +33,8 @@ Progress: git log. Update this header at every wave merge.
 
 - **Worktrees.** Per task, the orchestrator runs `git worktree add ../swift-harness-<task-id> -b <task-id>` from
   main after the previous wave merged, clones main's `gate/.build` in (`cp -cR`), then deletes the clone's
-  `ModuleCache` directories (their headers point at the old path and fail the build). One committer per worktree. Workers commit locally and don't push.
+  `ModuleCache` directories with `/usr/bin/find … -name ModuleCache -prune -exec rm -rf {} +` (their headers point at
+  the old path and fail the build; a shell wrapper that rewrites `find` may drop `-exec`, so call the system binary). One committer per worktree. Workers commit locally and don't push.
 - **Workers** get [`worker-brief.md`](../handoffs/worker-brief.md), this plan's Decisions and "How to work"
   sections, their task section, and the interfaces note. Reports: ≤ 200 words, in the brief's shape.
 - **Interfaces note** `docs/handoffs/subproject-2-interfaces.md`: the orchestrator appends each wave's "notes
