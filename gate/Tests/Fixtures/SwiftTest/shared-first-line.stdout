@@ -1,0 +1,16 @@
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite SharedFirstLineTests started.
+◇ Test secondMismatch() started.
+◇ Test firstMismatch() started.
+✘ Test secondMismatch() recorded an issue at SharedFirstLineTests.swift:10:17: Issue recorded
+↳ State does not match.
+    count: expected 3, actual 4
+✘ Test firstMismatch() recorded an issue at SharedFirstLineTests.swift:6:17: Issue recorded
+↳ State does not match.
+    count: expected 1, actual 2
+✘ Test secondMismatch() failed after 0.001 seconds with 1 issue.
+✘ Test firstMismatch() failed after 0.001 seconds with 1 issue.
+✘ Suite SharedFirstLineTests failed after 0.001 seconds with 2 issues.
+✘ Test run with 2 tests in 1 suite failed after 0.001 seconds with 2 issues.

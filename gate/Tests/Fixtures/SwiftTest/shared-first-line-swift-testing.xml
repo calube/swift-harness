@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="2" failures="2" skipped="0" time="0.000361125">
+    <testcase classname="ProbeTests.SharedFirstLineTests" name="secondMismatch()" time="0.000132458" >
+      <failure message="Issue recorded (error): State does not match.&#10;  count: expected 3, actual 4" />
+    </testcase>
+    <testcase classname="ProbeTests.SharedFirstLineTests" name="firstMismatch()" time="0.000137166" >
+      <failure message="Issue recorded (error): State does not match.&#10;  count: expected 1, actual 2" />
+    </testcase>
+  </testsuite>
+</testsuites>

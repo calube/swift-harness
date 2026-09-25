@@ -214,10 +214,16 @@ private struct Judgement {
     for suffix in [" (error)", " (warning)"] where message.hasSuffix(suffix) {
       message.removeLast(suffix.count)
     }
+    // Console first lines repeat across tests (`Issue recorded`), so the whole issue decides
+    // first; the first line alone is the fallback.
+    let whole = Self.comparable(reportMessage)
     guard
       let issue = log.swiftTestingIssues.first(where: {
-        !$0.message.isEmpty && message.hasPrefix($0.message)
+        !$0.detail.isEmpty && Self.comparable("\($0.message) (error): \($0.detail)") == whole
       })
+        ?? log.swiftTestingIssues.first(where: {
+          !$0.message.isEmpty && message.hasPrefix($0.message)
+        })
     else { return (targetPath(testCase.targetName), nil, message) }
     let candidates = evidence.testSourceFiles.filter {
       $0 == issue.file || $0.hasSuffix("/" + issue.file)
@@ -226,6 +232,12 @@ private struct Judgement {
       return (targetPath(testCase.targetName), nil, "\(issue.file):\(issue.line): \(message)")
     }
     return (file, issue.line, message)
+  }
+
+  /// The report and the console indent continuation lines differently.
+  private static func comparable(_ message: String) -> String {
+    String(
+      message.replacingOccurrences(of: " (warning)", with: " (error)").filter { !$0.isWhitespace })
   }
 
   private mutating func requireExecutedTests() {

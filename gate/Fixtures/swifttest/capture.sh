@@ -37,6 +37,7 @@ sed -e "s#$root#/REPO#g" "$(cd "$probe" && swift test --show-codecov-path)" >"$o
 capture fail "$probe" "$probe_path" 'ProbeTests\.Fail'
 capture skip "$probe" "$probe_path" 'ProbeTests\.Skip'
 capture crash "$probe" "$probe_path" 'ProbeTests\.Crash'
+capture shared-first-line "$probe" "$probe_path" 'ProbeTests\.SharedFirstLine'
 capture zero "$probe" "$probe_path" '^EmptyTests\.'
 
 # A compile error in the code under test: copy without build output, break one line.

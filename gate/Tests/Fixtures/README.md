@@ -48,6 +48,7 @@ file is one where `swift test` wrote none.
 | `zero-codecov.json` only (with `--enable-code-coverage`) | `^EmptyTests\.` | the llvm-cov export of a run that executes no test: `Probe.swift` instrumented, nothing covered |
 | `fail` | `ProbeTests\.Fail` | an `XCTAssertEqual` and an `#expect` failure |
 | `skip` | `ProbeTests\.Skip` | `XCTSkip` with and without a message; `.disabled` with and without a reason |
+| `shared-first-line` | `ProbeTests\.SharedFirstLine` | two `Issue.record` failures whose console lines both read `Issue recorded`; only the `↳` continuation lines (and the report message) tell them apart |
 | `crash` | `ProbeTests\.Crash` | an index-out-of-range trap in each framework |
 | `zero` | `^EmptyTests\.` | a target with no tests |
 | `build-error` | `ProbeTests\.Pass` | a copy of the package (no build output) with a type error in `Probe.swift` |

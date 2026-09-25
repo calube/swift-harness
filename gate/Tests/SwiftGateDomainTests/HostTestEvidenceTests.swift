@@ -10,7 +10,7 @@ struct HostTestEvidenceTests {
     name: "ProbeTests", path: "\(package)/Tests/ProbeTests")
   private static let emptyTests = TestTargetReference(
     name: "EmptyTests", path: "\(package)/Tests/EmptyTests")
-  private static let sources = ["Crash", "Fail", "Pass", "Skip"].map {
+  private static let sources = ["Crash", "Fail", "Pass", "SharedFirstLine", "Skip"].map {
     "\(package)/Tests/ProbeTests/\($0)Tests.swift"
   }
 
@@ -65,6 +65,20 @@ struct HostTestEvidenceTests {
     #expect(outcome.findings[0].message.contains("FailXCTests.testDoublesWrong"))
     #expect(outcome.findings[1].message.contains("Expectation failed: (double(3) → 6) == 7"))
     #expect(outcome.findings[1].message.contains("FailSwiftTests.doublesWrong()"))
+  }
+
+  @Test(
+    "failures whose console issues share a first line are each located at their own line — catches every TCA state-diff failure pointing at the first failing test's line"
+  )
+  func sharedFirstLine() throws {
+    let outcome = HostTestEvidenceRules.evaluate(try evidence("shared-first-line"))
+
+    let file = "\(Self.package)/Tests/ProbeTests/SharedFirstLineTests.swift"
+    let located = outcome.findings.map { finding -> String in
+      let test = finding.message.contains("firstMismatch()") ? "first" : "second"
+      return "\(test) \(finding.file):\(finding.line ?? 0)"
+    }
+    #expect(located.sorted() == ["first \(file):6", "second \(file):10"])
   }
 
   @Test(

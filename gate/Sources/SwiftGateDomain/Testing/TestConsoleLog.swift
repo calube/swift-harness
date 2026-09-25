@@ -7,6 +7,9 @@ public struct TestConsoleLog: Sendable, Equatable {
     public let file: String
     public let line: Int
     public let message: String
+    /// A Swift Testing issue's `↳` and indented continuation lines, which carry what a first line
+    /// such as `Issue recorded` leaves out.
+    public internal(set) var detail = ""
   }
 
   /// `<file>:<line>: error: -[<Target>.<Class> <method>] : <message>`, keyed by
@@ -28,9 +31,17 @@ public struct TestConsoleLog: Sendable, Equatable {
   public init(stdout: String, stderr: String) {
     var currentXCTest: String?
     var started: [String] = []
+    var continuedIssue: Int?
     for rawLine in (stdout + "\n" + stderr).split(separator: "\n", omittingEmptySubsequences: true)
     {
       let line = String(rawLine)
+      if let index = continuedIssue, line.hasPrefix("↳ ") || line.hasPrefix(" ") {
+        let text = line.hasPrefix("↳ ") ? String(line.dropFirst(2)) : line
+        let detail = swiftTestingIssues[index].detail
+        swiftTestingIssues[index].detail = detail.isEmpty ? text : detail + "\n" + text
+        continue
+      }
+      continuedIssue = nil
       if let test = Self.between(line, "Test Case '-[", "]' started.") {
         currentXCTest = Self.xctestKey(test)
       } else if line.hasPrefix("Test Case '-[") {
@@ -39,6 +50,7 @@ public struct TestConsoleLog: Sendable, Equatable {
         xctestFailures[failure.key, default: []].append(failure.location)
       } else if let issue = Self.swiftTestingIssue(line) {
         swiftTestingIssues.append(issue)
+        continuedIssue = swiftTestingIssues.count - 1
       } else if line.hasPrefix("◇ Test "), line.hasSuffix(" started.") {
         started.append(String(line.dropFirst("◇ Test ".count).dropLast(" started.".count)))
       } else if line.hasPrefix("✔ Test ") || line.hasPrefix("✘ Test ") || line.hasPrefix("➜ Test ")
