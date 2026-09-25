@@ -46,6 +46,10 @@ struct NewSubcommandRegistrationTests {
     ("calibrate design", ["calibrate", "design"], "design"),
   ]
 
+  /// Commands that do real work now: running them here would act on this repository's own
+  /// plan state. `PlanClaimCommandTests` covers their exit codes.
+  static let implemented: Set<String> = ["plan"]
+
   @Test(
     "every §6.1 command parses its documented arguments and resolves to the right leaf command — catches a skill calling an unregistered command",
     arguments: invocations)
@@ -60,7 +64,7 @@ struct NewSubcommandRegistrationTests {
 
   @Test(
     "every stub subcommand exits 2, never 0 — catches a stub passing a gate before it does real work",
-    arguments: invocations)
+    arguments: invocations.filter { !implemented.contains($0.arguments.first ?? "") })
   func stubsExitBlocked(
     _ invocation: (name: String, arguments: [String], leafCommandName: String)
   ) async throws {
