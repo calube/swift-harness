@@ -28,9 +28,8 @@ fresh laptop:
 
 1. Clone, then check `main` matches `origin/main`. `backup/subproject-2-wave-<N>` branches on `origin` hold each
    wave's merged state.
-2. Match the toolchain the waves ran on: Swift 6.2.3 (Xcode 26.2), node 24, `lefthook` on `PATH`, plus stock
-   `rsync`, `python3` and `perl`. Without `lefthook` the push tier is red: its install test skips, and
-   `t1.skip-without-reason` gates on the skip. A different Swift minor version can change the toolchain facts in the plan's "How to work this plan"
+2. Match the toolchain the waves ran on: Swift 6.2.3 (Xcode 26.2), node 24, `lefthook` on `PATH` (its install test
+   skips without it), plus stock `rsync`, `python3` and `perl`. A different Swift minor version can change the toolchain facts in the plan's "How to work this plan"
    section. Re-check them before wave 1 on that machine, and record any change here.
 3. Build once so worktrees have a `.build` to clone: `swift build --package-path gate`, then
    `bin/swiftgate check --tier push`. The first build compiles SwiftSyntax and takes minutes. The shim's own
