@@ -142,6 +142,7 @@ struct ContextPackTests {
     let frameAnswers = track(
       ContextSource(
         label: "frame answers", rawText: "Q: which module owns retry?\nA: OrderQueueCore."))
+    sources["area"] = "checkout"
 
     // Built separately (not inline via `.build`) so its self-describing ledger-entry slice can be
     // registered as its own source below, the same way every other source is.
@@ -161,9 +162,10 @@ struct ContextPackTests {
         role: .researchLane,
         inputs: .researchLane(
           ResearchLaneInputs(
-            briefs: [frameAnswers, track(ContextSource(label: "area", rawText: "checkout"))],
-            claims: ContextSource(label: "claims.jsonl", rawText: claimsRawLine),
-            pin: "swift-composable-architecture@1.26.2"))),
+            frameAnswers: frameAnswers, area: "checkout",
+            moduleGraph: ContextSource(label: "module graph", rawText: ""), touchedModules: [],
+            briefs: [], claims: ContextSource(label: "claims.jsonl", rawText: claimsRawLine),
+            cacheHits: [], pin: "swift-composable-architecture@1.26.2"))),
       .build(
         role: .claimChecker,
         inputs: .claimChecker(ClaimCheckerInputs(entries: [claimToJudge]))),
@@ -480,9 +482,64 @@ struct ContextPackTests {
     }
   }
 
-  // MARK: - Research lane: same-pin cache hits
+  // MARK: - Research lane
 
-  @Test("research pack includes same-pin cache hits and excludes other pins")
+  /// Minimal, non-cache-hit inputs shared by the tests below, so each one only restates what it
+  /// actually varies.
+  private func researchLaneInputs(
+    moduleGraph: ContextSource = ContextSource(label: "module graph", rawText: ""),
+    touchedModules: [String] = [],
+    claims: ContextSource = ContextSource(
+      label: "claims.jsonl", rawText: ""), cacheHits: [CachedClaim] = [],
+    pin: String = "whatever@1.0.0"
+  ) -> ResearchLaneInputs {
+    ResearchLaneInputs(
+      frameAnswers: ContextSource(label: "frame answers", rawText: "Q: …\nA: …"), area: "checkout",
+      moduleGraph: moduleGraph, touchedModules: touchedModules,
+      briefs: [ContextSource(label: "lane brief", rawText: "Investigate retry semantics.")],
+      claims: claims, cacheHits: cacheHits, pin: pin)
+  }
+
+  private static func cachedClaim(id: String, loc: String, pin: String) throws -> CachedClaim {
+    let claim = Claim(
+      id: id, lane: "packages", text: "some claim text",
+      citation: Citation(kind: .file, loc: loc, pin: pin), status: .supported)
+    return CachedClaim(claim: try ReusableClaim(claim), origin: .researchLane, reuseCount: 0)
+  }
+
+  @Test("research pack always carries frame answers, area and the lane brief")
+  func researchPackCarriesFrameAnswersAreaAndBrief() {
+    let pack = ContextPack.researchLanePack(researchLaneInputs())
+
+    #expect(pack.slices.contains { $0.sourceLabel == "frame answers" })
+    let areaSlice = pack.slices.first { $0.sourceLabel == "area" }
+    #expect(areaSlice?.lines == ["checkout"])
+    #expect(pack.slices.contains { $0.sourceLabel == "lane brief" })
+  }
+
+  @Test("the module-graph slice keeps only lines naming a touched module")
+  func researchPackSlicesModuleGraphToTouchedModules() throws {
+    let moduleGraph = ContextSource(
+      label: "module graph",
+      rawText: "OrderQueueFeature -> OrderQueueCore\nUnrelatedFeature -> UnrelatedCore")
+
+    let pack = ContextPack.researchLanePack(
+      researchLaneInputs(moduleGraph: moduleGraph, touchedModules: ["OrderQueueCore"]))
+
+    let graphSlice = try #require(pack.slices.first { $0.sourceLabel == "module graph" })
+    #expect(graphSlice.lines == ["OrderQueueFeature -> OrderQueueCore"])
+  }
+
+  @Test("no touched modules means no module-graph slice, not an empty one")
+  func researchPackOmitsModuleGraphSliceWhenNoTouchedModules() {
+    let pack = ContextPack.researchLanePack(
+      researchLaneInputs(
+        moduleGraph: ContextSource(label: "module graph", rawText: "A -> B"), touchedModules: []))
+
+    #expect(!pack.slices.contains { $0.sourceLabel == "module graph" })
+  }
+
+  @Test("research pack includes the repo's same-pin claims and excludes other pins")
   func researchPackIncludesSamePinCacheHits() throws {
     let matchingPin = "swift-composable-architecture@1.26.2"
     let hit = try Self.claimLine(
@@ -491,24 +548,44 @@ struct ContextPackTests {
       id: "ev-miss", loc: "Sources/Miss.swift:L1-L1", pin: "some-other-package@2.0.0")
 
     let pack = ContextPack.researchLanePack(
-      ResearchLaneInputs(
-        briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
-        claims: ContextSource(label: "claims.jsonl", rawText: "\(hit)\n\(miss)"), pin: matchingPin)
-    )
+      researchLaneInputs(
+        claims: ContextSource(label: "claims.jsonl", rawText: "\(hit)\n\(miss)"), pin: matchingPin))
 
     let claimsSlice = try #require(pack.slices.first { $0.sourceLabel == "claims.jsonl" })
     #expect(claimsSlice.lines == [hit])
     #expect(!claimsSlice.lines.contains(miss))
   }
 
-  @Test("no cache hits for the pin means no claims slice, not an empty one")
+  @Test("no repo claims for the pin means no repo-claims slice, not an empty one")
   func researchPackOmitsClaimsSliceWhenNoHits() {
     let pack = ContextPack.researchLanePack(
-      ResearchLaneInputs(
-        briefs: [ContextSource(label: "frame answers", rawText: "Q: …\nA: …")],
-        claims: ContextSource(label: "claims.jsonl", rawText: ""), pin: "whatever@1.0.0"))
+      researchLaneInputs(claims: ContextSource(label: "claims.jsonl", rawText: "")))
 
     #expect(!pack.slices.contains { $0.sourceLabel == "claims.jsonl" })
+  }
+
+  @Test("research pack renders the evidence reuse cache's live claims as their own slice")
+  func researchPackIncludesReuseCacheHits() throws {
+    let pin = "swift-composable-architecture@1.26.2"
+    let cached = try Self.cachedClaim(
+      id: "ev-cached", loc: ".build/checkouts/swift-composable-architecture/Sources/X.swift:L1-L1",
+      pin: pin)
+
+    let pack = ContextPack.researchLanePack(researchLaneInputs(cacheHits: [cached], pin: pin))
+
+    let cacheSlice = try #require(
+      pack.slices.first { $0.sourceLabel == "evidence cache: \(pin)" })
+    #expect(cacheSlice.lines.count == 1)
+    #expect(cacheSlice.lines[0].contains("ev-cached"))
+    let decoded = try JSONDecoder().decode(Claim.self, from: Data(cacheSlice.lines[0].utf8))
+    #expect(decoded == cached.claim.claim)
+  }
+
+  @Test("no evidence reuse cache hits means no cache slice, not an empty one")
+  func researchPackOmitsReuseCacheSliceWhenEmpty() {
+    let pack = ContextPack.researchLanePack(researchLaneInputs(cacheHits: []))
+
+    #expect(!pack.slices.contains { $0.sourceLabel.hasPrefix("evidence cache:") })
   }
 
   // MARK: - Drafter: only `supported` claims
@@ -681,7 +758,10 @@ struct ContextPackTests {
       case .researchLane:
         inputs = .researchLane(
           ResearchLaneInputs(
-            briefs: [], claims: ContextSource(label: "claims.jsonl", rawText: ""), pin: "p"))
+            frameAnswers: ContextSource(label: "frame answers", rawText: ""), area: "",
+            moduleGraph: ContextSource(label: "module graph", rawText: ""), touchedModules: [],
+            briefs: [], claims: ContextSource(label: "claims.jsonl", rawText: ""), cacheHits: [],
+            pin: "p"))
       case .claimChecker:
         inputs = .claimChecker(ClaimCheckerInputs(entries: []))
       case .drafter:

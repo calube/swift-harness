@@ -1,4 +1,5 @@
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 import Testing
 
@@ -226,10 +227,49 @@ struct ContextPackCommandTests {
     #expect(!text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
   }
 
-  // MARK: - Research lane: same-pin cache hits, plus its briefs
+  // MARK: - Research lane: all 5 spec §5.10 parts, plus the evidence reuse cache
 
-  @Test("research-lane pack holds its briefs and only same-pin claim cache hits")
-  func researchLanePackHasExpectedSections() throws {
+  /// A `--cache-home` unique to the calling test, so cache reads/writes never touch a real
+  /// `$HOME` (worker-brief pitfall 7) and tests never see each other's cache files.
+  private static func freshCacheHome(_ repository: Repository) throws -> String {
+    try repository.write("", at: "cache-home/.keep")
+    return repository.root.appending(path: "cache-home").path
+  }
+
+  private static func packageClaim(id: String, pin: String) -> Claim {
+    Claim(
+      id: id, lane: "packages", text: "some claim text",
+      citation: Citation(
+        kind: .file, loc: ".build/checkouts/swift-composable-architecture/Sources/X.swift:L1-L1",
+        pin: pin), status: .supported)
+  }
+
+  private static func baseResearchLaneOptions(
+    repository: Repository, pin: String, cacheHome: String
+  ) throws -> ContextPackGatherInputs {
+    let frameAnswersPath = try repository.write(
+      "Q: which module owns retry?\nA: OrderQueueCore.", at: "frame-answers.md")
+    let moduleGraphPath = try repository.write(
+      "OrderQueueFeature -> OrderQueueCore\nUnrelatedFeature -> UnrelatedCore",
+      at: "module-graph.txt")
+    let briefPath = try repository.write(
+      "Investigate retry semantics.", at: "lane-brief.md")
+
+    var options = ContextPackGatherInputs()
+    options.frameAnswers = frameAnswersPath
+    options.area = "checkout"
+    options.moduleGraph = moduleGraphPath
+    options.touchedModule = ["OrderQueueCore"]
+    options.brief = [briefPath]
+    options.pin = pin
+    options.cacheHome = cacheHome
+    return options
+  }
+
+  @Test(
+    "research-lane pack holds all 5 spec parts: frame answers, area, the touched-module graph slice, repo and reuse-cache claim hits, and the lane brief"
+  )
+  func researchLanePackHasExpectedSections() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let matchingPin = "swift-composable-architecture@1.26.2"
@@ -237,12 +277,14 @@ struct ContextPackCommandTests {
     let miss = try Self.claimLine(
       id: "ev-miss", loc: "Sources/Miss.swift:L1-L1", pin: "some-other-package@2.0.0")
     let claimsPath = try repository.write("\(hit)\n\(miss)\n", at: "claims.jsonl")
-    let briefPath = try repository.write(
-      "Q: which module owns retry?\nA: OrderQueueCore.", at: "frame-answers.md")
 
-    var options = ContextPackGatherInputs()
-    options.brief = [briefPath]
-    options.pin = matchingPin
+    let cacheHome = try Self.freshCacheHome(repository)
+    let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
+    let liveClaim = try ReusableClaim(Self.packageClaim(id: "ev-cache-hit", pin: matchingPin))
+    try await store.record(liveClaim, origin: .researchLane)
+
+    var options = try Self.baseResearchLaneOptions(
+      repository: repository, pin: matchingPin, cacheHome: cacheHome)
     options.claims = claimsPath
 
     let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
@@ -250,10 +292,70 @@ struct ContextPackCommandTests {
       Issue.record("expected .written, got \(outcome)")
       return
     }
+    #expect(!written.notes.contains { $0.contains("no cache hits") })
     let text = try repository.packText(written.relativePath)
-    #expect(text.contains("which module owns retry"))
-    #expect(text.contains(hit))
+    #expect(text.contains("which module owns retry"))  // frame answers
+    #expect(text.contains("checkout"))  // area
+    #expect(text.contains("OrderQueueFeature -> OrderQueueCore"))  // touched-module graph slice
+    #expect(!text.contains("UnrelatedFeature -> UnrelatedCore"))
+    #expect(text.contains(hit))  // repo same-pin claim
     #expect(!text.contains(miss))
+    #expect(text.contains("ev-cache-hit"))  // evidence reuse cache hit
+    #expect(text.contains("Investigate retry semantics."))  // lane brief
+  }
+
+  @Test("a tombstoned evidence-cache claim is absent from the research-lane pack")
+  func researchLanePackExcludesTombstonedCacheClaims() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let pin = "swift-composable-architecture@1.26.2"
+    let cacheHome = try Self.freshCacheHome(repository)
+    let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
+
+    let tombstoned = try ReusableClaim(Self.packageClaim(id: "ev-refuted", pin: pin))
+    try await store.record(tombstoned, origin: .researchLane)
+    try await store.tombstone(tombstoned, reason: .refuted)
+    let live = try ReusableClaim(
+      Claim(
+        id: "ev-still-live", lane: "packages", text: "a different claim",
+        citation: Citation(
+          kind: .file,
+          loc: ".build/checkouts/swift-composable-architecture/Sources/Y.swift:L1-L1", pin: pin),
+        status: .supported))
+    try await store.record(live, origin: .researchLane)
+
+    let options = try Self.baseResearchLaneOptions(
+      repository: repository, pin: pin, cacheHome: cacheHome)
+    let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(!written.notes.contains { $0.contains("no cache hits") })
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ev-still-live"))
+    #expect(!text.contains("ev-refuted"))
+  }
+
+  @Test(
+    "an empty evidence reuse cache is a note, not a silently omitted section — the pack is still written"
+  )
+  func researchLanePackNotesEmptyReuseCache() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let pin = "swift-composable-architecture@1.26.2"
+    let cacheHome = try Self.freshCacheHome(repository)
+
+    let options = try Self.baseResearchLaneOptions(
+      repository: repository, pin: pin, cacheHome: cacheHome)
+    let outcome = ContextPackRun.run(role: "research-lane", options: options, root: repository.root)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(written.notes.contains { $0.contains("no cache hits for \(pin)") })
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("no cache hits for \(pin)"))
   }
 
   // MARK: - Claim checker: cited ranges only

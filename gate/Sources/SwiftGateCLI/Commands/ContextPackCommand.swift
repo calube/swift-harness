@@ -14,10 +14,16 @@ struct ContextPackOptions: ParsableArguments {
   var key: String?
 
   // Research lane
-  @Option(help: "A labelled input text (frame answers, area, a lane brief, …). Repeatable.")
+  @Option(help: "A lane brief text. Repeatable.")
   var brief: [String] = []
   @Option(help: "The package/SDK pin a research lane's claim cache hits must match.")
   var pin: String?
+  @Option(help: "The design's area (research lane).")
+  var area: String?
+  @Option(help: "A module named in the frame answers as touched. Repeatable.")
+  var touchedModule: [String] = []
+  @Option(help: "The evidence reuse cache's home directory; defaults to $HOME.")
+  var cacheHome: String?
 
   // Design-anchored roles (evidence auditor, standards reviewer, challenger, decomposer, worker)
   @Option(help: "Path to the design doc.")
@@ -67,7 +73,8 @@ struct ContextPackOptions: ParsableArguments {
 
   var gatherInputs: ContextPackGatherInputs {
     ContextPackGatherInputs(
-      key: key, brief: brief, pin: pin, design: design, docAnchor: docAnchor, template: template,
+      key: key, brief: brief, pin: pin, area: area, touchedModule: touchedModule,
+      cacheHome: cacheHome, design: design, docAnchor: docAnchor, template: template,
       frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, standards: standards,
       playbook: playbook, moduleKind: moduleKind, standardsAnchor: standardsAnchor, claims: claims,
       claimID: claimID, questionSet: questionSet, moduleGraph: moduleGraph,
@@ -82,6 +89,9 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var key: String?
   var brief: [String] = []
   var pin: String?
+  var area: String?
+  var touchedModule: [String] = []
+  var cacheHome: String?
   var design: String?
   var docAnchor: [String] = []
   var template: String?
@@ -185,8 +195,31 @@ enum ContextPackRun {
   private static func gatherResearchLane(_ o: ContextPackGatherInputs, _ root: URL) -> Result<
     Gathered, GatherFailure
   > {
+    guard let frameAnswersPath = o.frameAnswers else {
+      return .failure(GatherFailure("missing required option '--frame-answers <path>'"))
+    }
+    guard let area = o.area else {
+      return .failure(GatherFailure("missing required option '--area <string>'"))
+    }
+    guard let moduleGraphPath = o.moduleGraph else {
+      return .failure(GatherFailure("missing required option '--module-graph <path>'"))
+    }
     guard !o.brief.isEmpty else {
       return .failure(GatherFailure("missing required option '--brief <path>' (at least one)"))
+    }
+    guard let pin = o.pin else {
+      return .failure(GatherFailure("missing required option '--pin <string>'"))
+    }
+
+    let frameAnswers: ContextSource
+    switch ContextPackFiles.read(label: frameAnswersPath, path: frameAnswersPath, root: root) {
+    case .success(let s): frameAnswers = s
+    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+    }
+    let moduleGraph: ContextSource
+    switch ContextPackFiles.read(label: moduleGraphPath, path: moduleGraphPath, root: root) {
+    case .success(let s): moduleGraph = s
+    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
     }
     var briefs: [ContextSource] = []
     for path in o.brief {
@@ -195,21 +228,50 @@ enum ContextPackRun {
       case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
       }
     }
-    guard let pin = o.pin else {
-      return .failure(GatherFailure("missing required option '--pin <string>'"))
-    }
 
     var notes: [String] = []
+    let claimsSource: ContextSource
     switch optionalClaims(o.claims, root: root, notes: &notes) {
     case .failure(let message): return .failure(message)
-    case .success(let claimsSource):
+    case .success(let s): claimsSource = s
+    }
+
+    switch cacheHits(for: pin, options: o) {
+    case .failure(let message): return .failure(message)
+    case .success(let (hits, cacheNotes)):
+      notes.append(contentsOf: cacheNotes)
       return .success(
         (
-          .researchLane(ResearchLaneInputs(briefs: briefs, claims: claimsSource, pin: pin)), notes,
-          nil
-        )
-      )
+          .researchLane(
+            ResearchLaneInputs(
+              frameAnswers: frameAnswers, area: area, moduleGraph: moduleGraph,
+              touchedModules: o.touchedModule, briefs: briefs, claims: claimsSource,
+              cacheHits: hits, pin: pin)), notes, nil
+        ))
     }
+  }
+
+  /// Reads live (non-tombstoned) claims for `pin` from the user-level evidence reuse cache
+  /// (`--cache-home`, defaulting to `$HOME`; tests always pass an explicit temp `--cache-home` so
+  /// they never touch the real one). A corrupt cache line is named as a note, never dropped
+  /// silently; an empty cache is named as a note too, never a silently thinner pack.
+  private static func cacheHits(for pin: String, options o: ContextPackGatherInputs) -> Result<
+    (hits: [CachedClaim], notes: [String]), GatherFailure
+  > {
+    guard let cacheHome = o.cacheHome ?? ProcessInfo.processInfo.environment["HOME"] else {
+      return .failure(
+        GatherFailure("missing required option '--cache-home <path>' ($HOME is not set)"))
+    }
+    let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
+    let contents: EvidenceCacheContents
+    do {
+      contents = try store.contents(of: .package(pin: pin))
+    } catch {
+      return .failure(GatherFailure("can't read the evidence cache for `\(pin)`: \(error)"))
+    }
+    var notes = contents.findings.map { "evidence cache: \($0.message)" }
+    if contents.claims.isEmpty { notes.append("no cache hits for \(pin)") }
+    return .success((hits: contents.claims, notes: notes))
   }
 
   private static func gatherClaimChecker(_ o: ContextPackGatherInputs, _ root: URL) -> Result<
