@@ -8,7 +8,7 @@ Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.
   - T5.0: sample app needs an .xcodeproj — hand-written synchronized-folder pbxproj, fallback = user creates via Xcode template (~2 min).
   - T4.1 / T5.1: confirm `swift test` structured-output flags and `xcresulttool` subcommands on the installed toolchain before coding the parsers.
-Progress: T0.1 25fa917 · T0.2 b997429 · T0.3 051fb2e · T1.1 8d6bd2e · T2.1 ca422d9
+Progress: T0.1 25fa917 · T0.2 b997429 · T0.3 051fb2e · T1.1 8d6bd2e · T2.1 ca422d9 · T6.1 fd66788 · T1.2 7e6af37 · T1.5 580b4c0 · T2.2 836f96a · T2.4 f93be8b
 -->
 
 ## Decisions made while planning
