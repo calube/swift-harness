@@ -495,6 +495,7 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
 - Does: ADR 0002 layout. The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}` keyed by source hash
   (the per-version cache dir is not reused across updates); a contributor checkout still builds in place.
   Root `AGENTS.md` stays contributor-facing; nothing under `plugin/` is contributor-only except `gate/Tests`.
+  Also deletes the dead worktree-relative `.harness/plans` guard rule and its tests (plan state lives in the common dir).
 - Tests: `claude plugin validate plugin` passes with no warnings — catches a root CLAUDE.md shipping to
   consumers · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
   reuses it on a second run · every repo path in docs, skills and agents resolves after the move (link check) ·
