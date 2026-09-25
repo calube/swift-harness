@@ -14,9 +14,41 @@ struct EvidenceCaptureReport: Sendable, Equatable, Encodable {
   let argv: [String]
   let capturePath: String?
   let citation: Citation?
-  let exitedWith: Int32?
-  let signaledWith: Int32?
+  /// The captured command's real process status, or `nil` when no capture ran (a blocked
+  /// report). `ExitStatus` isn't itself `Codable`, so this is encoded explicitly as a single-key
+  /// object naming which case it is: `{"exited": <code>}` or `{"signaled": <signal>}` — never a
+  /// 0 standing in for "not known".
+  let status: ExitStatus?
   let message: String
+
+  private enum CodingKeys: String, CodingKey {
+    case command, verdict, design, argv, capturePath, citation, status, message
+  }
+
+  private enum StatusCodingKeys: String, CodingKey {
+    case exited, signaled
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(command, forKey: .command)
+    try container.encode(verdict, forKey: .verdict)
+    try container.encode(design, forKey: .design)
+    try container.encode(argv, forKey: .argv)
+    try container.encodeIfPresent(capturePath, forKey: .capturePath)
+    try container.encodeIfPresent(citation, forKey: .citation)
+    if let status {
+      var statusContainer = container.nestedContainer(
+        keyedBy: StatusCodingKeys.self, forKey: .status)
+      switch status {
+      case .exited(let code): try statusContainer.encode(code, forKey: .exited)
+      case .signaled(let signal): try statusContainer.encode(signal, forKey: .signaled)
+      }
+    } else {
+      try container.encodeNil(forKey: .status)
+    }
+    try container.encode(message, forKey: .message)
+  }
 }
 
 enum EvidenceCaptureRun {
@@ -44,12 +76,12 @@ enum EvidenceCaptureRun {
     case .failure(let failure):
       return blocked(design: design, argv: argv, describe(failure))
     case .success(let result):
-      let status = result.signaledWith.map { "signal \($0)" } ?? "exit \(result.exitedWith ?? 0)"
       return EvidenceCaptureReport(
         verdict: .green, design: design, argv: argv, capturePath: result.capturePath,
-        citation: result.citation, exitedWith: result.exitedWith,
-        signaledWith: result.signaledWith,
-        message: "captured `\(argv.joined(separator: " "))` (\(status)) at \(result.capturePath)")
+        citation: result.citation, status: result.status,
+        message:
+          "captured `\(argv.joined(separator: " "))` (\(describe(result.status))) at "
+          + result.capturePath)
     }
   }
 
@@ -81,12 +113,19 @@ enum EvidenceCaptureRun {
     }
   }
 
+  private static func describe(_ status: ExitStatus) -> String {
+    switch status {
+    case .exited(let code): "exit \(code)"
+    case .signaled(let signal): "signal \(signal)"
+    }
+  }
+
   private static func blocked(design: String, argv: [String], _ message: String)
     -> EvidenceCaptureReport
   {
     EvidenceCaptureReport(
-      verdict: .blocked, design: design, argv: argv, capturePath: nil, citation: nil,
-      exitedWith: nil, signaledWith: nil, message: message)
+      verdict: .blocked, design: design, argv: argv, capturePath: nil, citation: nil, status: nil,
+      message: message)
   }
 }
 

@@ -59,16 +59,44 @@ struct EvidenceCaptureCommandTests {
 
       // The capture itself succeeds even though the captured command failed.
       #expect(report.verdict == .green)
-      let exitCode = try #require(report.exitedWith)
-      #expect(exitCode != 0)
-      #expect(report.signaledWith == nil)
+      let status = try #require(report.status)
+      guard case .exited(let code) = status else {
+        Issue.record("expected the process to exit, not be signaled: \(status)")
+        return
+      }
+      #expect(code != 0)
 
       let capturePath = try #require(report.capturePath)
       let onDisk = try Data(contentsOf: root.appending(path: capturePath))
       let text = String(decoding: onDisk, as: UTF8.self)
-      #expect(text.contains("exit: exited \(exitCode)"))
+      #expect(text.contains("exit: exited \(code)"))
       // stderr is non-empty: ls names the missing path.
       #expect(text.contains(missing))
+    }
+  }
+
+  @Test(
+    "a signaled command's status is stored as .signaled, never collapsed to an exit-code placeholder — catches a signal status coerced to 0"
+  )
+  func signaledCommandStoresSignalStatus() async throws {
+    try await Self.withTempRoot { root in
+      // The child sends itself SIGTERM, so it terminates by signal without depending on our own
+      // timeout/kill machinery.
+      let report = await EvidenceCaptureRun.capture(
+        design: Self.design, argv: ["/bin/sh", "-c", "kill -TERM $$"], workingDirectory: root,
+        runner: LiveProcessRunner())
+
+      #expect(report.verdict == .green)
+      let status = try #require(report.status)
+      guard case .signaled(let signal) = status else {
+        Issue.record("expected the process to be signaled, not exit: \(status)")
+        return
+      }
+      #expect(signal == 15)  // SIGTERM
+
+      let capturePath = try #require(report.capturePath)
+      let onDisk = try Data(contentsOf: root.appending(path: capturePath))
+      #expect(String(decoding: onDisk, as: UTF8.self).contains("exit: signaled \(signal)"))
     }
   }
 
@@ -105,6 +133,7 @@ struct EvidenceCaptureCommandTests {
       #expect(report.verdict == .blocked)
       #expect(report.citation == nil)
       #expect(report.capturePath == nil)
+      #expect(report.status == nil)
       #expect(report.message.contains("failed to launch"))
     }
   }
@@ -126,7 +155,33 @@ struct EvidenceCaptureCommandTests {
       #expect(report.verdict == .blocked)
       #expect(report.citation == nil)
       #expect(report.capturePath == nil)
+      #expect(report.status == nil)
       #expect(!report.message.isEmpty)
+    }
+  }
+
+  @Test(
+    "the JSON report's status is a single-key object naming the real case, and null when no capture ran — catches status collapsed to an exit-code field"
+  )
+  func jsonStatusShape() async throws {
+    try await Self.withTempRoot { root in
+      let green = await EvidenceCaptureRun.capture(
+        design: Self.design, argv: ["/bin/echo", "hi"], workingDirectory: root,
+        runner: LiveProcessRunner())
+      let greenJSON = try #require(
+        try JSONSerialization.jsonObject(
+          with: Data(EvidenceCaptureRun.render(green, format: .json).utf8))
+          as? [String: Any])
+      let status = try #require(greenJSON["status"] as? [String: Any])
+      #expect(status["exited"] as? Int == 0)
+      #expect(status["signaled"] == nil)
+
+      let blocked = await EvidenceCaptureRun.capture(
+        design: "not-a-design-path", argv: [], workingDirectory: root, runner: LiveProcessRunner())
+      let blockedJSON = try #require(
+        try JSONSerialization.jsonObject(
+          with: Data(EvidenceCaptureRun.render(blocked, format: .json).utf8)) as? [String: Any])
+      #expect(blockedJSON["status"] is NSNull)
     }
   }
 }

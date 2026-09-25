@@ -12,8 +12,9 @@ public enum EvidenceCapture {
     public let citation: Citation
     /// Repo-relative path to the stored capture file (`<layout.capturesDirectory>/<sha256>.txt`).
     public let capturePath: String
-    public let exitedWith: Int32?
-    public let signaledWith: Int32?
+    /// The captured command's real process status: `.exited(code)` or `.signaled(signal)`. A
+    /// capture always has one once it succeeds, so it's never a placeholder value.
+    public let status: ExitStatus
     public let stdout: String
     public let stderr: String
   }
@@ -62,16 +63,10 @@ public enum EvidenceCapture {
 
     let loc = repoRelativeCapturesDirectory + "/" + fileName
     let citation = Citation(kind: .capture, loc: loc, pin: "sha256:\(hash)")
-    var exitedWith: Int32?
-    var signaledWith: Int32?
-    switch output.status {
-    case .exited(let code): exitedWith = code
-    case .signaled(let signal): signaledWith = signal
-    }
     return .success(
       Outcome(
-        citation: citation, capturePath: loc, exitedWith: exitedWith, signaledWith: signaledWith,
-        stdout: stdout, stderr: stderr))
+        citation: citation, capturePath: loc, status: output.status, stdout: stdout,
+        stderr: stderr))
   }
 
   /// A deterministic, human-readable rendering of one run. Hashed verbatim, so the same argv,
