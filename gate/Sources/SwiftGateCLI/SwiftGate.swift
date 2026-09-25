@@ -14,7 +14,7 @@ struct SwiftGate: AsyncParsableCommand {
       CommentsCommand.self, TestlintCommand.self, LintCommand.self, ImpactCommand.self,
       ArchCommand.self, SelfTestCommand.self, TestCommand.self, CoverageCommand.self,
       CheckCommand.self, StatsCommand.self, HookCommand.self, ProveCommand.self,
-      StressCommand.self, ReachCommand.self,
+      StressCommand.self, ReachCommand.self, MutateCommand.self,
     ]
   )
 }

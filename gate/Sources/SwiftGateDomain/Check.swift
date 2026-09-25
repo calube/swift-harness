@@ -34,7 +34,6 @@ public enum CheckTier: String, Sendable, CaseIterable {
         PendingStep(
           name: "simulator prove and stress",
           requires: "prove and stress of T2/T3 tests (host tests are proven, stressed and reached)"),
-        PendingStep(name: "mutate", requires: "swiftgate mutate"),
       ]
     }
   }

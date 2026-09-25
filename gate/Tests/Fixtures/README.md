@@ -77,6 +77,18 @@ Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
 - Toggling `--enable-code-coverage` rebuilds the package (about 20s for the SampleApp's TCA
   package), so every T1 run enables it.
 
+## Mutation (`mutate`)
+
+`LiveMutationToolchainTests` replays the `SwiftTest` captures above: `swift test --skip-build`
+writes the same two xUnit reports as a building `swift test`, and `build-error` stands in for a
+rejected `swift build --build-tests` (only its `error:` lines are read).
+
+`gate/Fixtures/mutate` is not captured output but the real package `MutateSelfTests` runs:
+`Scorer` at its base commit, `change/Score.swift` (the change under test, nine mutants) and two
+suites for it. `weak/` leaves boundary mutants alive, so `mutate` is RED; `strong/` pins every
+boundary and return value, so all nine are killed and it is GREEN. The test builds and runs them
+for real in scratch worktrees (about 8s each).
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's

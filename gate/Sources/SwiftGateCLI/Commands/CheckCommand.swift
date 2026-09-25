@@ -12,7 +12,8 @@ enum CheckRun {
   static func run(
     root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
     tier: CheckTier, base: String, context: GateRun.Context,
-    changedTests: ChangedTestChecks.Environment? = nil
+    changedTests: ChangedTestChecks.Environment? = nil,
+    mutation: MutateCheck.Environment? = nil
   ) async throws -> GateRunParts {
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
@@ -49,6 +50,13 @@ enum CheckRun {
           context: context)
         t1Tier = try t1Tier.merging(changed.verdict)
         parts.findings += changed.findings
+        let mutated = try await mutate(after: t1Tier) {
+          await MutateCheck.run(
+            mutation ?? .live(root: root, git: git), graph: graph, config: config, base: base,
+            context: context)
+        }
+        t1Tier = mutated.tier
+        parts.findings += mutated.findings
       }
       parts.tiers.append(t1Tier)
     } else {
@@ -63,6 +71,16 @@ enum CheckRun {
       parts.findings += try BudgetCheck.findings(tiers: parts.tiers, budgets: config.budgets)
     }
     return parts
+  }
+
+  /// Runs `mutate` unless T1 is already RED: every mutant's unmutated baseline would fail, so
+  /// the scratch builds would be spent proving nothing.
+  static func mutate(
+    after t1: TierResult, _ run: () async -> ChangedTestJudgement
+  ) async throws -> (tier: TierResult, findings: [Finding]) {
+    guard t1.verdict != .red else { return (t1, [try note("mutate not run: T1 is RED")]) }
+    let judgement = await run()
+    return (try t1.merging(judgement.verdict), judgement.findings)
   }
 
   private struct T0Result {

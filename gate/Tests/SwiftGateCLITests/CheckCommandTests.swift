@@ -84,9 +84,12 @@ struct CheckCommandTests {
       .ready, in: repository, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
       git: FakeGit(changed: [], mergeBase: "base"))
 
+    let pending = CheckTier.ready.pendingSteps.map { "\($0.name) not run" }
     #expect(
-      parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }.count
-        == CheckTier.ready.pendingSteps.count)
+      parts.findings.filter { finding in
+        finding.ruleID == CheckRun.notRunRuleID
+          && pending.contains { finding.message.hasPrefix($0) }
+      }.count == pending.count)
   }
 
   @Test(
