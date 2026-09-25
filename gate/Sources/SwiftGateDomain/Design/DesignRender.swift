@@ -78,13 +78,8 @@ public enum DesignRender {
     body.append(context.bulletSection("Open questions", section: document.openQuestions))
     body.append(approvalBar(designSha: designSha))
 
-    let fenceSections = [document.architecture] + document.options.map { Optional($0) }
-    let hasDiagrams = fenceSections.contains { section in
-      section?.fences.contains { $0.language == "mermaid" } ?? false
-    }
     return ArtifactPageShell(
-      title: title, body: .joined(body), capabilities: capabilities,
-      libraries: hasDiagrams ? [.mermaid] : [], script: approvalScript)
+      title: title, body: .joined(body), capabilities: capabilities, script: approvalScript)
   }
 
   // MARK: - Claims
