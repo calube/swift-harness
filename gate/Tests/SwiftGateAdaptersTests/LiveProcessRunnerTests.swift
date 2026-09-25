@@ -84,6 +84,22 @@ struct LiveProcessRunnerTests {
     #expect(lines.contains("KEEP=1"))
   }
 
+  @Test(
+    "the SDK variables Apple's git shim exports into git hooks never reach a child — catches the pre-push gate rebuilding every package against the CommandLineTools SDK"
+  )
+  func gitShimSDKVariablesDropped() async throws {
+    let runner = LiveProcessRunner(baseEnvironment: [
+      "PATH": "/usr/bin:/bin", "SDKROOT": "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+      "CPATH": "/usr/local/include", "LIBRARY_PATH": "/usr/local/lib", "KEEP": "1",
+    ])
+    let output = try await runner.run(
+      ProcessInvocation(executable: "/usr/bin/env", timeout: .seconds(10)))
+    let names = Set(
+      output.stdout.text.split(separator: "\n").map { String($0.prefix { $0 != "=" }) })
+    #expect(names.isDisjoint(with: ["SDKROOT", "CPATH", "LIBRARY_PATH"]))
+    #expect(names.contains("KEEP"))
+  }
+
   @Test("working directory is applied — catches tools running against the wrong package")
   func workingDirectory() async throws {
     let output = try await runner.run(

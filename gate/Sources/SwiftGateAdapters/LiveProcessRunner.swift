@@ -12,8 +12,14 @@ public struct LiveProcessRunner: ProcessRunner {
   private let terminationGracePeriod: Duration
   private let postExitDrainLimit: Duration
 
+  /// `/usr/bin/git` is an `xcrun` shim that exports these into every git hook. Inherited by
+  /// `swift`/`xcodebuild`, `SDKROOT` points builds at the CommandLineTools SDK instead of the
+  /// pinned Xcode's, and the changed build settings rebuild every package from scratch.
+  static let droppedVariables: Set<String> = ["SDKROOT", "CPATH", "LIBRARY_PATH"]
+
   /// - Parameters:
-  ///   - baseEnvironment: the environment every invocation's overlay is applied to.
+  ///   - baseEnvironment: the environment every invocation's overlay is applied to, minus
+  ///     ``droppedVariables``.
   ///   - terminationGracePeriod: time between SIGTERM and SIGKILL to the process group.
   ///   - postExitDrainLimit: how long to keep reading after the child exits, in case a surviving
   ///     descendant still holds the pipes open.
@@ -22,7 +28,7 @@ public struct LiveProcessRunner: ProcessRunner {
     terminationGracePeriod: Duration = .seconds(2),
     postExitDrainLimit: Duration = .seconds(2)
   ) {
-    self.baseEnvironment = baseEnvironment
+    self.baseEnvironment = baseEnvironment.filter { !Self.droppedVariables.contains($0.key) }
     self.terminationGracePeriod = terminationGracePeriod
     self.postExitDrainLimit = postExitDrainLimit
   }
