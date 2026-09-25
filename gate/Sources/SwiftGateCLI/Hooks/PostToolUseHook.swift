@@ -47,8 +47,8 @@ enum PostToolUseHook {
 
   /// `nil` for a file outside the project: another project's gate owns it.
   static func relativePath(_ absolute: String, root: URL) -> String? {
-    let file = URL(filePath: absolute).standardizedFileURL.resolvingSymlinksInPath().path
-    let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+    let file = CanonicalPath.of(URL(filePath: absolute))
+    let base = CanonicalPath.of(root)
     let prefix = base.hasSuffix("/") ? base : base + "/"
     guard file.hasPrefix(prefix) else { return nil }
     return String(file.dropFirst(prefix.count))

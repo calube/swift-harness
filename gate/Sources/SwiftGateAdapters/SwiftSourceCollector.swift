@@ -23,7 +23,7 @@ public struct SwiftSourceCollector: Sendable {
   public let excluded: Set<String>
 
   public init(root: URL, excluding excluded: [String] = []) {
-    self.root = root.standardizedFileURL.resolvingSymlinksInPath()
+    self.root = CanonicalPath.url(root)
     self.excluded = Set(
       excluded.map { $0.hasSuffix("/") ? String($0.dropLast()) : $0 }
         .map { $0.hasPrefix("./") ? String($0.dropFirst(2)) : $0 })
@@ -51,10 +51,8 @@ public struct SwiftSourceCollector: Sendable {
   public func collect(paths: [String]) throws(SourceCollectionError) -> [CollectedSource] {
     var relativePaths = Set<String>()
     for argument in paths {
-      let url =
-        (argument.hasPrefix("/")
-        ? URL(filePath: argument) : root.appending(path: argument)).standardizedFileURL
-        .resolvingSymlinksInPath()
+      let url = CanonicalPath.url(
+        argument.hasPrefix("/") ? URL(filePath: argument) : root.appending(path: argument))
       guard let relative = relativePath(of: url) else { throw .outsideRoot(argument) }
       var isDirectory: ObjCBool = false
       guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
@@ -95,7 +93,7 @@ public struct SwiftSourceCollector: Sendable {
       let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
       if isDirectory {
         if Self.skippedDirectories.contains(url.lastPathComponent)
-          || relativePath(of: url.standardizedFileURL.resolvingSymlinksInPath())
+          || relativePath(of: CanonicalPath.url(url))
             .map(excluded.contains) == true
         {
           enumerator.skipDescendants()
@@ -103,7 +101,7 @@ public struct SwiftSourceCollector: Sendable {
         continue
       }
       if url.pathExtension == "swift",
-        let relative = relativePath(of: url.standardizedFileURL.resolvingSymlinksInPath())
+        let relative = relativePath(of: CanonicalPath.url(url))
       {
         found.append(relative)
       }

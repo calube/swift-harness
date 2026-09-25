@@ -38,9 +38,8 @@ public protocol ScratchWorktrees: Sendable {
 /// toplevel, `.<repo>-swiftgate-prove-<pid>-<token>`, so a tree whose process died (a killed run
 /// skips its cleanup) is recognisable and swept by the next run.
 ///
-/// Not the system temporary directory: it sits under `/private/var`, which Foundation's symlink
-/// resolution reports without `/private` while SwiftPM and the compiler report it with, so paths
-/// from a scratch tree there would not match the gate's.
+/// Beside the repository rather than in the system temporary directory so a scratch build shares
+/// the repository's volume and its orphans are found by name next to it.
 public struct LiveScratchWorktrees: ScratchWorktrees {
   static let nameMarker = "-swiftgate-prove-"
 

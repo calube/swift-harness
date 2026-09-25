@@ -50,7 +50,7 @@ public struct HostTestRunner: Sendable {
   /// - Parameter root: the worktree root the package paths are relative to.
   public init(swiftPM: any SwiftPM, root: URL, maxConcurrentPackages: Int = 2) {
     self.swiftPM = swiftPM
-    self.root = root.standardizedFileURL.resolvingSymlinksInPath()
+    self.root = CanonicalPath.url(root)
     self.maxConcurrentPackages = max(1, maxConcurrentPackages)
   }
 

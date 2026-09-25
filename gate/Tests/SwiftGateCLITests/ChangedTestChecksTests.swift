@@ -50,10 +50,12 @@ struct ChangedTestChecksTests {
       try ModuleGraph(packages: [try ProbeRepository.manifest()])
     }
 
-    /// A recorded llvm-cov export rewritten to this repository's root; returns its path.
+    /// A recorded llvm-cov export rewritten to this repository's root as llvm-cov spells it;
+    /// returns its path.
     func coverage(_ fixture: String) throws -> String {
       let export = try Fixture.text("SwiftTest/\(fixture)").replacingOccurrences(
-        of: "\(Fixture.repositoryRoot)/gate/Fixtures/swifttest", with: repository.root.path)
+        of: "\(Fixture.repositoryRoot)/gate/Fixtures/swifttest",
+        with: CanonicalPath.of(repository.root))
       try repository.write(".coverage/\(fixture)", export)
       return repository.root.appending(path: ".coverage/\(fixture)").path
     }

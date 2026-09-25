@@ -297,14 +297,3 @@ struct MaintenanceCommandTests {
     #expect(summary.errors.count == 1)
   }
 }
-
-@Suite("repository root")
-struct RepositoryRootTests {
-  @Test(
-    "a root under /tmp resolves to /private/tmp as swift package describe reports it — catches every graph load BLOCKED for repositories under /tmp or /var"
-  )
-  func canonicalRoot() {
-    #expect(ScopeResolution.describeRoot(URL(filePath: "/tmp")) == "/private/tmp")
-    #expect(ScopeResolution.describeRoot(URL(filePath: "/no/such/dir")) == "/no/such/dir")
-  }
-}

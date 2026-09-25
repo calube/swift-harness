@@ -33,7 +33,7 @@ enum CoverageCheck {
   static func judge(
     graph: ModuleGraph, config: Config, added: [AddedLines], exports: [Data], root: URL
   ) throws(ReportContractViolation) -> Judgement {
-    let rootPath = root.standardizedFileURL.resolvingSymlinksInPath().path
+    let rootPath = CanonicalPath.of(root)
     var coverage = LineCoverage(files: [:])
     var unreadable: [String] = []
     for export in exports {

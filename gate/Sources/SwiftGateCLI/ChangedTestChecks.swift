@@ -275,7 +275,7 @@ enum ChangedTestChecks {
       guard !selection.packages.isEmpty else {
         return .note("reach: no new or changed host tests since \(base)")
       }
-      let rootPath = environment.root.standardizedFileURL.resolvingSymlinksInPath().path
+      let rootPath = CanonicalPath.of(environment.root)
       var judgement = ChangedTestJudgement.empty
       var index = 0
       for package in selection.packages {

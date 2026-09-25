@@ -10,21 +10,24 @@ import Testing
 struct CoverageCommandTests {
   private static let probeSource = "XUnitProbe/Sources/Probe/Probe.swift"
 
-  /// The recorded export, with its capture-time root rewritten to this repository's root.
-  private func export(in repository: ProbeRepository) throws -> String {
+  /// The recorded export, with its capture-time root rewritten to `root` (by default this
+  /// repository's root as llvm-cov spells it).
+  private func export(in repository: ProbeRepository, root: String? = nil) throws -> String {
     let text = try Fixture.text("SwiftTest/pass-codecov.json")
       .replacingOccurrences(
-        of: "\(Fixture.repositoryRoot)/gate/Fixtures/swifttest", with: repository.root.path)
+        of: "\(Fixture.repositoryRoot)/gate/Fixtures/swifttest",
+        with: root ?? CanonicalPath.of(repository.root))
     let url = repository.root.appending(path: "codecov.json")
     try Data(text.utf8).write(to: url)
     return url.path
   }
 
-  private func run(_ added: [ClosedRange<Int>], in repository: ProbeRepository) async throws
-    -> (GateRunParts, FakeSwiftPM)
-  {
+  private func run(
+    _ added: [ClosedRange<Int>], in repository: ProbeRepository, exportRoot: String? = nil
+  ) async throws -> (GateRunParts, FakeSwiftPM) {
     let swiftPM = try ProbeRepository.swiftPM(
-      replaying: "pass", coveragePaths: ["XUnitProbe": try export(in: repository)])
+      replaying: "pass",
+      coveragePaths: ["XUnitProbe": try export(in: repository, root: exportRoot)])
     let git = FakeGit(
       mergeBase: "base",
       addedSince: [AddedLines(path: Self.probeSource, ranges: added)])
@@ -68,6 +71,24 @@ struct CoverageCommandTests {
     #expect(!coverageFindings.contains { $0.severity.failsGate })
     let summary = try #require(parts.findings.first { $0.ruleID == CoverageCheck.summaryRuleID })
     #expect(summary.message.contains("3 of 3"))
+  }
+
+  @Test(
+    "a repository in the temporary directory is matched although llvm-cov spells it /private/var/folders — catches every changed line reported uncovered for repositories under /var or /tmp"
+  )
+  func privateVarRoot() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    // Foundation spells the temporary directory /var/folders/…; the compiler, llvm-cov and
+    // swift package describe spell the same directory /private/var/folders/….
+    #expect(repository.root.path.hasPrefix("/var/folders/"))
+
+    let (parts, _) = try await run(
+      [1...3], in: repository, exportRoot: "/private" + repository.root.path)
+
+    let summary = try #require(parts.findings.first { $0.ruleID == CoverageCheck.summaryRuleID })
+    #expect(summary.message.contains("3 of 3"))
+    #expect(!parts.findings.contains { $0.ruleID == DiffCoverage.uncoveredRuleID })
   }
 
   @Test("a missing merge base is BLOCKED — catches coverage measured against no diff")

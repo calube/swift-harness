@@ -286,7 +286,7 @@ struct SelfTestCommand: AsyncParsableCommand {
       throw ValidationError(
         "pass --harness-root, or run through bin/swiftgate, which sets \(Self.harnessRootVariable)")
     }
-    let root = URL(filePath: path, directoryHint: .isDirectory).resolvingSymlinksInPath()
+    let root = CanonicalPath.url(URL(filePath: path, directoryHint: .isDirectory))
     if judge {
       let live = judgeBackend.flatMap {
         JudgeFactory.make(

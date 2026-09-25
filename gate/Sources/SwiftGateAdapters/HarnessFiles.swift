@@ -82,16 +82,13 @@ public enum HarnessFiles {
           path: linkPath, target: linkPath, expected: expectedShim(harnessRoot) ?? "a symlink")
         : .missing(path: linkPath)
     }
-    let target = URL(
-      filePath: destination, relativeTo: URL(filePath: linkPath).deletingLastPathComponent()
-    )
-    .standardizedFileURL.resolvingSymlinksInPath().path
+    let target = CanonicalPath.of(
+      URL(filePath: destination, relativeTo: URL(filePath: linkPath).deletingLastPathComponent()))
     guard manager.fileExists(atPath: target) else {
       return .dangling(path: linkPath, target: destination)
     }
     guard let expected = expectedShim(harnessRoot) else { return .unverified }
-    let resolvedExpected = URL(filePath: expected).standardizedFileURL.resolvingSymlinksInPath()
-      .path
+    let resolvedExpected = CanonicalPath.of(URL(filePath: expected))
     return target == resolvedExpected
       ? .current : .elsewhere(path: linkPath, target: target, expected: resolvedExpected)
   }
