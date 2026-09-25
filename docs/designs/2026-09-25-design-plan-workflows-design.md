@@ -60,6 +60,8 @@ Every locked decision and where this spec carries it. Doubles as the self-review
 | D22 | Repo design docs carry Mermaid diagrams | §5.3, §6.2 |
 | D23 | Conciseness by prose word budgets | §5.3, §6.2 |
 | D24 | Plugin-owned `prose` skill + `swiftgate prose`, written fresh | §6.2, §7.3 |
+| D25 | Relative paths only | §6.2 (`docs-lint` local-paths family), write-time hook |
+| D26 | Contributor/consumer split + steering | [ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md) |
 
 ## 3. Architecture
 
@@ -137,7 +139,7 @@ they need a user call (for example, a probe refutes the only viable option).
 | Class | Location | Contents | Why here |
 |---|---|---|---|
 | Committed (durable) | `docs/<area>/designs/<slug>.md` | design doc | reviewed and approved artifact; outlives the plan |
-| Committed | `docs/<area>/designs/<slug>.evidence/` | `claims.jsonl`, `amendments.jsonl`, `snapshots/`, `captures/`, `probes/` | citations must travel with the doc |
+| Committed | `docs/<area>/designs/<slug>.evidence/` | `claims.jsonl`, `amendments.jsonl`, `answers.jsonl`, `review-log.jsonl`, `snapshots/`, `captures/`, `probes/` | citations must travel with the doc |
 | Committed | `docs/<area>/adrs/NNNN-<title>.md` | ADR for the decision (standard and deep tiers) | design history is load-bearing |
 | Committed | `docs/<area>/index.md` row; `docs/index.md` row | router entries | reachability (`docs-lint`) |
 | Shared, uncommitted | `$(git rev-parse --git-common-dir)/swift-harness/plans/index.json` | plan index | one view for every worktree |
@@ -209,7 +211,10 @@ One JSON object per line in `claims.jsonl` (all examples in §5 are illustrative
 | `snapshot` | stored doc snapshot under `snapshots/` | SDK version | snapshot contains the quote |
 | `capture` | stored command output under `captures/` | content hash | hash matches the stored output |
 | `probe` | probe file under `probes/` | resolved pins + SDK | probe verdict from `swiftgate probe` |
-| `answer` | user answer record (run id + question) | — | answer exists in the run's decision record |
+| `answer` | `answers.jsonl#<runId>/<n>` (`<n>` = 1-based ordinal within the run) | — | that record exists in `answers.jsonl` |
+
+User answers live in `<slug>.evidence/answers.jsonl`, one `{runId, question, options, answer, at}` per line,
+written by the design skill.
 
 Rules:
 
@@ -427,7 +432,9 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
   `enum Probe_<id>` (id sanitised to a Swift identifier); built once with `xcodebuild` for the iOS
   simulator with `-skipMacroValidation`, or `swift build` for host-only packages; DerivedData
   reused; per-probe verdict from diagnostics attributed to that probe's file. A fabricated API or
-  a wrong signature fails.
+  a wrong signature fails. Files, under `<slug>.evidence/probes/`: input `<ev-id>.snippet.swift`
+  (written by the skill); output the generated `Probe_<id>.swift` and `Probe_<id>.verdict.json` =
+  `{claimId, verdict: pass|fail, diagnostics[], pins, sdk}`, which `evidence check` reads.
 - **`design-scope`** — recommends quick / standard / deep; never offers quick when the design adds a
   module kind or a dependency.
 - **`design-lint`** — §5.3 rules. Cited ids must be `supported`; `[UNVERIFIED]` must also appear in
@@ -495,7 +502,7 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
 
 | | |
 |---|---|
-| Agents | 3, `opus`: **evidence auditor** (Decision and Perf bullets follow from cited claims), **standards conformance** (module kinds, layering, test plan tiers against standards and playbook), **challenger** (`agents/design-challenger.md`, a plugin-owned port of the self-reflect questions: is this the best end-to-end design, not merely a complete one). Deep tier adds a pre-mortem agent |
+| Agents | 3, `opus`: **evidence auditor** (Decision and Perf bullets follow from cited claims), **standards conformance** (module kinds, layering, test plan tiers against standards and playbook), **challenger** (`agents/design-challenger.md`, 5–7 questions written fresh, including: is this the best end-to-end design, not merely a complete one; what is the biggest blind spot). Deep tier adds a pre-mortem agent |
 | Input | per-reviewer context pack |
 | Output | findings in the Foundation §9.1 contract; location = design section anchor, not `file:line` |
 | Failure | a reviewer that dies is `NOT REVIEWED`; the design cannot be `ready` |
@@ -543,8 +550,9 @@ Deep tier allows 2 revise rounds.
 
 1. `design-render` produces the page; the skill publishes it as an Artifact with the `comments` and
    `db` capabilities.
-2. Approve / Request-changes buttons write `{decision, designSha, at}` to the page `db`; the skill
-   reads it with `ArtifactData`.
+2. Approve / Request-changes buttons write `{decision: approve|request-changes, at}` to the page `db`
+   (collection `approval`, doc id = `designSha`); the skill reads it with `ArtifactData`. Without
+   `db` (§14), approval goes through `AskUserQuestion`, recorded as an `answer` claim bound to the `designSha`.
 3. **Approve** → status `approved`, merge the `design/<slug>` PR, record approval in `plan.json`
    when `/plan` runs.
 4. **`/swift-harness:design --revise`** → pull comments with `ArtifactComments`. Questions get
@@ -595,7 +603,7 @@ remaining errors halt and ask. Worktrees are named in the ledger and created by 
 | Check | Severity |
 |---|---|
 | DAG acyclic; every dep exists | error |
-| `gate` ≥ tier of the task's `tests` | error |
+| `gate` ≥ tier of the task's `tests` (T1 → `fast`, T2 → `push`, T3 → `ready`, the Foundation tier composition) | error |
 | write sets disjoint within each wave | error |
 | `waves` equal recomputed `plan-schedule` output | error |
 | every `req-…` and `test-…` in the design at `designSha` covered (read from the design, not a ledger copy) | error |
@@ -673,7 +681,8 @@ Three layers.
    | standards conformance | UIKit in a Core module |
    | challenger / auditor | option resting on a probe-refuted API |
 
-   Precision comes from the user's Request-changes decisions and dismissed-findings log.
+   Precision comes from the user's Request-changes decisions and the dismissed-findings log
+   `<slug>.evidence/review-log.jsonl` (`{findingId, reviewer, disposition: accepted|dismissed, reason}`).
 
 3. **End-to-end** — see §13.
 

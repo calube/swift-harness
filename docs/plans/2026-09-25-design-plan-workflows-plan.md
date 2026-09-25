@@ -3,10 +3,10 @@
 <!-- RESUME
 Status: IN PROGRESS — waves 1–4 merged 2026-09-25 (push tier GREEN). Pre-wave fix: test-support module kind.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 5 — commit-message-id-check, index-set-under-file-lock, plan-claim-and-release-commands.
+Next action: wave 5 — commit-message-id-check, index-set-under-file-lock, plan-claim-and-release-commands (`--design` seeding fix in flight; section updated).
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
-Open items: Artifact `db` call shape (design-render-design-page pre-step); live `agent_id` payload (plugin-installs-for-real).
+Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
 
@@ -16,7 +16,7 @@ Progress: git log. Update this header at every wave merge.
 |---|---|---|
 | No edits to `gate/Package.swift` or `hooks/hooks.json`. Markdown is read by a line-oriented reader in `SwiftGateDomain`; no new dependency. | Every §5.3 construct is line-level (headings, bullets, fences, tables, frontmatter). The PreToolUse matcher already covers `Edit\|Write\|MultiEdit\|NotebookEdit`. | Add `swift-markdown` behind `MarkdownDocument` |
 | Milestones run in the requested order. Inside a milestone, waves follow `plan-schedule`'s rules: Kahn layers, id tie-break, disjoint write sets, width 3. | User's build order; laptop memory pressure | Drop the barriers and recompute |
-| The per-plan lock is explicit: `swiftgate plan claim <slug> --session <id>` creates the plan dir under the git common dir and writes `orchestrator.lock` = session id; `plan release <slug>` removes it. The design skill claims at frame. The guard only checks the lock and never writes. | §6.3 names the lock but no writer. A guard that writes state as a side effect can't be reasoned about. | Guard claims on first main-session write |
+| The per-plan lock is explicit: `swiftgate plan claim <plan> --session <id> --design <doc>` creates the plan dir under the git common dir, seeds `plan.json` for a new plan, and writes `orchestrator.lock` = session id; `plan release <plan>` removes it. The design skill claims at frame. The guard only checks the lock and never writes. | §6.3 names the lock but no writer. A guard that writes state as a side effect can't be reasoned about. | Guard claims on first main-session write |
 | A held lock counts as live until it's released. Taking over an abandoned lock is explicit: `plan release <slug> --force`, run by the user. | Hook payloads carry no process id, so liveness can't be probed | Heartbeat from the session's hooks with a TTL |
 | The session id reaches the skill through SessionStart context, and the skill passes it to `plan claim`. | Skills can't read hook payloads | An env var, if Claude Code exposes one |
 | The design review verdict is a gate rule, `review-synth --design`, not workflow JS. | §3.3: every deterministic check lives in `swiftgate` | Move the rule into `design-review.js` |
@@ -24,7 +24,7 @@ Progress: git log. Update this header at every wave merge.
 | Context-pack token count = UTF-8 bytes / 4, labelled an estimate. | No offline tokenizer | Swap the estimator |
 | `design-scope` recommends deep when a change adds a dependency and a module kind, adds ≥ 2 modules, or touches ≥ 4 modules. | §8.1 defines only quick's rule | Move thresholds to config |
 | `design-render` refuses a doc that fails `design-lint`. | An unlinted design must never reach approval | Render with a warning banner |
-| Every task's gate is green at merge, and the plugin's push tier is green after every wave. New enforcement lands in the same task as its first passing input. So calibration freshness is wired into push by `calibration-seeds-labelled-by-construction`, not before. | A known-red window hides real regressions for weeks of waves | — |
+| Every task's gate is green at merge, and the plugin's push tier is green after every wave. New enforcement lands in the same task as its first passing input. So calibration freshness is wired into push by `calibration-seeds-labelled-by-construction`, and `docs-lint` + `prose` by `plugin-docs-pass-docs-lint-and-prose` (which first makes this repo's docs pass), not before. | A known-red window hides real regressions for weeks of waves | — |
 | The calibration pass record is committed: `gate/Fixtures/calibrate-design/last-pass.json`. | `.harness/` is per worktree and gitignored, so every task worktree would have to recalibrate | Move it under `.harness/` |
 | `evidence capture` and `probe` take `--design <doc>` to locate `<slug>.evidence/`. | §6.1 signatures name no target | Infer from the `design/<slug>` branch |
 | `RepositoryScriptTests` runs every `tests/*_test.mjs`. | Otherwise each workflow task edits that file | — |
@@ -55,6 +55,7 @@ Progress: git log. Update this header at every wave merge.
   `gate/Sources/SwiftGateAdapters/`, `C/` = `gate/Sources/SwiftGateCLI/`, `S/` =
   `gate/Sources/SwiftGateTestSupport/`, `TD/` `TR/` `TA/` `TC/` = `gate/Tests/SwiftGate{Domain,Rules,Adapters,CLI}Tests/`,
   `FX/` = `gate/Tests/Fixtures/` (captured tool output only), `GF/` = `gate/Fixtures/` (hand-authored fixtures).
+  From wave 24 on, all of these sit under `plugin/`, the shim is `plugin/bin/swiftgate`, and worktree seeding clones `plugin/gate/.build`.
 
 ### Merge points (hot files)
 
@@ -65,7 +66,12 @@ Progress: git log. Update this header at every wave merge.
 | `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml` | `config-docs-and-plan-sections` |
 | other `templates/*`, `.gitignore` | `bootstrap-stamps-docs-router`; `templates/lefthook.yml` + `gitHooks` again in `commit-message-id-check` (4 waves later) |
 | `A/Git.swift`, `A/LiveGit.swift`, `S/FakeGit.swift` | `plan-state-paths-in-git-common-dir` |
-| `C/Commands/CheckCommand.swift` | `push-tier-runs-doc-gates`, then `calibration-seeds-labelled-by-construction` (8 waves apart) |
+| `C/Commands/CheckCommand.swift` | `push-tier-runs-doc-gates`, then `calibration-seeds-labelled-by-construction`, then `plugin-docs-pass-docs-lint-and-prose` (waves 14, 22, 23) |
+| `D/Plan/PlanFile.swift` | `ledger-and-plan-model`, then `plan-claim-and-release-commands` |
+| `D/Evidence/EvidenceLayout.swift` | `claim-and-amendment-records`, then `evidence-check-rules` (`answersFile`) |
+| `C/Commands/CommentsCommand.swift` | `commit-message-id-check`, then `markdown-writes-checked-for-local-paths` (waves 5, 14) |
+| `AGENTS.md`, `docs/index.md`, `README.md` | `plugin-docs-pass-docs-lint-and-prose`, `consumer-plugin-in-plugin-dir`, `contributor-agents-md-for-harness-developers` (waves 23, 24, 25; README not in 25) |
+| `docs/handoffs/worker-brief.md` | `consumer-plugin-in-plugin-dir`, then `contributor-agents-md-for-harness-developers` (waves 24, 25) |
 | `C/Commands/SelfTestCommand.swift` | `self-test-runs-evidence-and-design-seeds` |
 | `FX/README.md` | `probe-diagnostic-verdicts`, `design-diff-and-design-sha`, `probe-builds-scratch-package` (3 waves) |
 | `C/Commands/DesignRenderCommand.swift`, `skills/design/SKILL.md`, `docs/hooks.md`, `docs/e2e-report.md` | sequential owners, one per wave (see tasks) |
@@ -100,7 +106,7 @@ flowchart LR
     w20 --> w21["21: design-skill-review-publish-amend"]
   end
   subgraph sd["Seeds"]
-    w22["22: calibration-seeds-labelled-by-construction<br/>plugin-docs-pass-docs-lint-and-prose<br/>self-test-runs-evidence-and-design-seeds"] --> w23["23: self-test-runs-plan-docs-prose-id-seeds"]
+    w22["22: calibration-seeds-labelled-by-construction<br/>self-test-runs-evidence-and-design-seeds"] --> w23["23: plugin-docs-pass-docs-lint-and-prose<br/>self-test-runs-plan-docs-prose-id-seeds"]
   end
   subgraph pkg["Packaging and steering"]
     w24["24: consumer-plugin-in-plugin-dir"] --> w25["25: consumer-steering-channels<br/>contributor-agents-md-for-harness-developers"]
@@ -120,10 +126,10 @@ flowchart LR
 | Waves | Milestone | Tasks | Why split this way |
 |---|---|---|---|
 | 1–5 | Foundation changes and formats | 14 | layer 0 (8 tasks) → 3 waves; guard, ids, session start; then index, plan claim, commit-msg |
-| 6–14 | Mechanical gates | 25 | 15 rule/domain tasks → 5 waves; 7 commands → 3 (probe alone: sole cold build); 2 integrators |
+| 6–14 | Mechanical gates | 25 | 15 rule/domain tasks → waves 6–10; 5 commands + `plan-lint-graph-and-waves` → 11–12; probe alone in 13 (sole cold build); 3 integrators (hook, `plan-lint` command, push wiring) in 14 |
 | 15–16 | Render and metrics | 3 | ledger page shares the render command file |
 | 17–21 | Agent layer | 10 | agents test first; skills after the agents and gates they call |
-| 22–23 | Seeds | 4 | the id and plan seeds reuse the seed runner |
+| 22–23 | Seeds | 4 | the id and plan seeds reuse the seed runner; the docs pass shares `CheckCommand.swift` with the calibration seeds, so it follows them |
 | 24 | Packaging | 1 | moves every path; must follow all code waves and precede the real install (ADR 0002) |
 | 25 | Steering | 2 | contributor and consumer channels differ (ADR 0002, Steering); both need the moved layout |
 | 26–28 | Acceptance | 3 | all write `docs/e2e-report.md` |
@@ -215,9 +221,9 @@ flowchart LR
 
 ### `plan-claim-and-release-commands`
 - Deps: plan-state-paths-in-git-common-dir, edit-guard-covers-design-and-plan-state, cli-subcommand-stubs · Gate: push · estLines: 200
-- Writes: `A/PlanState/PlanLock.swift`, `C/Commands/PlanClaimCommand.swift`, `C/Commands/PlanReleaseCommand.swift`, `TC/PlanClaimCommandTests.swift`
-- Does: §6.3 per-plan lock, explicitly. `plan claim <slug> --session <id>` creates `…/swift-harness/plans/<slug>/` and writes `orchestrator.lock` with an exclusive create; refuses if another session holds it. `plan release <slug> --session <id>` removes it for the holder only; `--force` is the user's takeover.
-- Tests: claim on an unheld plan succeeds and writes the session id · claim on a plan held by another session is refused, lock unchanged — catches two orchestrators on one ledger · release by a non-holder is refused · the PreToolUse hook blocks a main-session ledger write when no lock exists — catches writes before a claim · re-claim by the holder is a no-op.
+- Writes: `A/PlanState/PlanLock.swift`, `C/Commands/PlanClaimCommand.swift`, `C/Commands/PlanReleaseCommand.swift`, `D/Plan/PlanFile.swift` (`designSha` optional), `TC/PlanClaimCommandTests.swift`, `TC/NewSubcommandRegistrationTests.swift`
+- Does: §6.3 per-plan lock, explicitly. `plan claim <plan> --session <id> --design <repo-relative docs/**/designs/*.md> [--tier …]` creates `…/swift-harness/plans/<plan>/`, writes `orchestrator.lock` with an exclusive create, and, when the plan is new, seeds `plan.json` (`design` set, `designSha` nil) atomically. `--design` is required for a new plan. Refuses if another session holds the lock. `PlanFile.designSha` stays nil until the first draft; `plan-lint` exits 2 (BLOCKED) on a nil `designSha`. `plan release <plan> --session <id>` removes the lock for the holder only; `--force` is the user's takeover. `design-skill-frame-to-draft` calls `plan claim … --design …` at frame.
+- Tests: claim on an unheld plan succeeds and writes the session id · claim on a plan held by another session is refused, lock unchanged — catches two orchestrators on one ledger · new plan without `--design` → exit 2, nothing written · design-doc write allowed right after claim — catches a claimed plan that owns no design · release by a non-holder is refused · the PreToolUse hook blocks a main-session ledger write when no lock exists — catches writes before a claim · re-claim by the holder is a no-op.
 
 ## Mechanical gates
 
@@ -254,8 +260,9 @@ flowchart LR
 ### `design-review-verdict`
 - Deps: markdown-and-design-doc-model · Gate: push · estLines: 200
 - Writes: `D/Review/DesignReviewVerdict.swift`, `C/Commands/ReviewCommands.swift`, `TD/DesignReviewVerdictTests.swift`
-- Does: §8.2 as `review-synth --design <doc>`: Foundation §9.1 findings located by section anchor → `ready` · `revise` · `rethink`, plus the reviewers to re-run.
-- Tests: `NOT REVIEWED` or `NOT RESEARCHED` is never `ready` — catches a dead agent passing · blocker on Decision → `rethink` · major elsewhere → `revise` naming only that reviewer · anchor absent from the doc → contract violation.
+- Inputs: Foundation design §9.1 ([`2026-09-24-swift-harness-foundation-design.md`](../designs/2026-09-24-swift-harness-foundation-design.md)).
+- Does: §8.2 as `review-synth --design <doc> --tier <quick|standard|deep>`. Reuses the Foundation `FocusReview` finding shape, located by `location.anchor` (design section anchor) instead of `file:line`. `--tier` sets the required reviewer set: quick = none, standard = the 3 reviewers, deep = 3 + pre-mortem. A missing required reviewer is `NOT REVIEWED` and the verdict can't be `ready`. Output `ready` · `revise` · `rethink`, plus the reviewers to re-run. Exits 0 on any verdict, as `review-synth` does; exit 2 on a contract violation.
+- Tests: `NOT REVIEWED` or `NOT RESEARCHED` is never `ready` — catches a dead agent passing · deep without the pre-mortem → `NOT REVIEWED`, not `ready` — catches a skipped reviewer · blocker on Decision → `rethink` · major elsewhere → `revise` naming only that reviewer · anchor absent from the doc → contract violation.
 
 ### `design-scope-tier-recommendation`
 - Deps: cli-subcommand-stubs · Gate: push · estLines: 170
@@ -283,9 +290,9 @@ flowchart LR
 
 ### `evidence-check-rules`
 - Deps: claim-and-amendment-records, probe-diagnostic-verdicts · Gate: push · estLines: 280
-- Writes: `D/Evidence/EvidenceCheck.swift`, `TD/EvidenceCheckTests.swift`
-- Does: D3 per-kind rules (§5.2 table); citation `loc` must be repo-relative (`.build/checkouts/…` included), never absolute or home-relative; `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`).
-- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` without a decision record → fail · absolute or `~/` `loc` → fail — catches evidence that only resolves on one machine.
+- Writes: `D/Evidence/EvidenceCheck.swift`, `D/Evidence/EvidenceLayout.swift` (`answersFile`), `TD/EvidenceCheckTests.swift`
+- Does: D3 per-kind rules (§5.2 table); citation `loc` must be repo-relative (`.build/checkouts/…` included), never absolute or home-relative; `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`). Answers live in `<slug>.evidence/answers.jsonl`, one `{runId, question, options, answer, at}` per line; `EvidenceLayout.answersFile` names it. An `answer` claim's `loc` = `answers.jsonl#<runId>/<n>` (`<n>` = 1-based ordinal of that run's answers); it passes only when that record exists. Probe claims take the verdict from `probes/Probe_<id>.verdict.json` (contract in `probe-builds-scratch-package`).
+- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` `loc` with no matching `answers.jsonl` record → fail — catches an invented user decision · absolute or `~/` `loc` → fail — catches evidence that only resolves on one machine.
 
 ### `evidence-reuse-cache-store`
 - Deps: claim-and-amendment-records · Gate: push · estLines: 260
@@ -296,8 +303,8 @@ flowchart LR
 ### `plan-lint-coverage-and-sizing`
 - Deps: ledger-and-plan-model, markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 240
 - Writes: `D/Plan/PlanLintCoverage.swift`, `TD/PlanLintCoverageTests.swift`
-- Does: §9.2 coverage against the design text passed in; §9.3 bounds; pack sizes as input.
-- Tests: design requirement in no `covers` → error — catches a dropped requirement · estLines 401 → error, 39 → warning · 3 modules → error; interface + live pair allowed · 7 tests → error · over-budget pack → error.
+- Does: §9.2 coverage against the design text passed in; §9.2 test-tier → minimum gate as a pure mapping (T1 → `fast`, T2 → `push`, T3 → `ready`, the Foundation tier composition), which `plan-lint-graph-and-waves` applies; §9.3 bounds; pack sizes as input.
+- Tests: design requirement in no `covers` → error — catches a dropped requirement · mapping T1/T2/T3 → fast/push/ready — catches a gate weaker than its tests · estLines 401 → error, 39 → warning · 3 modules → error; interface + live pair allowed · 7 tests → error · over-budget pack → error.
 
 ### `plan-schedule-waves`
 - Deps: ledger-and-plan-model, cli-subcommand-stubs, config-docs-and-plan-sections · Gate: push · estLines: 220
@@ -309,7 +316,7 @@ flowchart LR
 - Deps: markdown-and-design-doc-model, config-docs-and-plan-sections, cli-subcommand-stubs · Gate: push · estLines: 320
 - Writes: `D/Prose/ProseRules.swift`, `C/Commands/ProseCommand.swift`, `TD/ProseRulesTests.swift`
 - Does: D24 rules written fresh from §6.2's list; skips code, tables, diagrams, frontmatter. Don't open any existing style-guide or wordsmith skill (§14).
-- Tests: adverb · em-dash · number word where a numeral fits · jargon phrase · sentence over the ceiling · code fences and tables ignored — catches false positives on code.
+- Tests: adverb · em-dash · number word where a numeral fits · passive voice · filler · jargon phrase · sentence over the ceiling · code fences and tables ignored — catches false positives on code.
 
 ### `context-pack-command`
 - Deps: context-pack-slicing, evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push · estLines: 200
@@ -332,8 +339,8 @@ flowchart LR
 ### `evidence-check-command`
 - Deps: evidence-check-rules, cli-subcommand-stubs · Gate: push · estLines: 220
 - Writes: `A/Evidence/EvidenceFiles.swift`, `C/Commands/EvidenceCheckCommand.swift`, `TC/EvidenceCheckCommandTests.swift`
-- Does: reads claims, `Package.resolved`, cited files (tree or `--at` via `Git.contents`), snapshots, captures, probe verdicts; exit 1 on fail or `stale`.
-- Tests: temp repo: deleting a cited line → `stale` at `--at HEAD` — catches drift · relocation reports the new `loc` · missing `claims.jsonl` → exit 2.
+- Does: reads claims, `Package.resolved`, cited files (tree or `--at` via `Git.contents`), snapshots, captures, `answers.jsonl`, and probe verdict files `probes/Probe_<id>.verdict.json` = `{claimId, verdict: pass|fail, diagnostics[], pins, sdk}`; exit 1 on fail or `stale`. `--json` prints one `{id, status, loc?}` per claim (`loc` only when relocated); the design skill rewrites `claims.jsonl` from it.
+- Tests: temp repo: deleting a cited line → `stale` at `--at HEAD` — catches drift · relocation reports the new `loc` · probe claim against fixture verdict files: `fail` verdict → claim fails, verdict with other pins or SDK → `stale` — catches a probe result reused across versions · `--json` shape per claim · missing `claims.jsonl` → exit 2.
 
 ### `evidence-find-command`
 - Deps: evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push · estLines: 150
@@ -342,16 +349,16 @@ flowchart LR
 - Tests: repo and cache hits carry origin · `--pkg` excludes other versions — catches cross-version reuse · tombstoned claims hidden.
 
 ### `plan-lint-graph-and-waves`
-- Deps: plan-schedule-waves · Gate: push · estLines: 200
+- Deps: plan-schedule-waves, plan-lint-coverage-and-sizing · Gate: push · estLines: 200
 - Writes: `D/Plan/PlanLintGraph.swift`, `TD/PlanLintGraphTests.swift`
-- Does: §9.2 DAG, gate ≥ test tier, wave disjointness, waves = schedule, hot-file warning.
+- Does: §9.2 DAG, gate ≥ test tier (the coverage task's mapping), wave disjointness, waves = schedule, hot-file warning.
 - Tests: cycle → error · hand-edited waves → error — catches ledger tampering · overlap inside a wave → error · `fast` gate on a T2 test → error · path in 3 tasks → warning.
 
 ### `probe-builds-scratch-package`
 - Deps: probe-diagnostic-verdicts, evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push + one recorded iOS-simulator probe run · estLines: 320
 - Writes: `A/Probe/ProbeBuilder.swift`, `C/Commands/ProbeCommand.swift`, `TA/ProbeBuilderTests.swift`, `TC/ProbeCommandTests.swift`, `FX/README.md`, `GF/probe/` (new)
-- Does: §6.2. One scratch package per worktree at `.harness/probe/`, pinned to the target's `Package.resolved`, depending only on products the target already uses. iOS: `xcodebuild` through `ProcessRunner` with `-skipMacroValidation` and the worktree's `-derivedDataPath`; host-only packages: `swift build`. Never a direct `swift-issue-reporting` dependency; no MainActor default isolation; build only (no `swift test`, no simulator boot). Verdicts cached per SDK; written to `<slug>.evidence/probes/`.
-- Tests: host fixture: real API passes, fabricated API and wrong signature fail — catches a hallucinated API reaching Decision · xcodebuild argv has `-skipMacroValidation` and per-worktree DerivedData · same pins and SDK hit the cache with no build · scratch manifest never lists `swift-issue-reporting`.
+- Does: §6.2. One scratch package per worktree at `.harness/probe/`, pinned to the target's `Package.resolved`, depending only on products the target already uses. iOS: `xcodebuild` through `ProcessRunner` with `-skipMacroValidation` and the worktree's `-derivedDataPath`; host-only packages: `swift build`. Never a direct `swift-issue-reporting` dependency; no MainActor default isolation; build only (no `swift test`, no simulator boot). Verdicts cached per SDK. File contract, all under `<slug>.evidence/probes/`: input `<ev-id>.snippet.swift`, written by the skill; output the generated wrapper `Probe_<id>.swift` (name from `ProbeIdentifier.fileName(forClaimID:)`) plus `Probe_<id>.verdict.json` = `{claimId, verdict: pass|fail, diagnostics[], pins, sdk}`.
+- Tests: host fixture: real API passes, fabricated API and wrong signature fail — catches a hallucinated API reaching Decision · each `.snippet.swift` yields its wrapper and a verdict file in the contract's shape — catches `evidence check` reading a format probe never writes · xcodebuild argv has `-skipMacroValidation` and per-worktree DerivedData · same pins and SDK hit the cache with no build · scratch manifest never lists `swift-issue-reporting`.
 - Alone in its wave: the only cold build, which eases memory pressure.
 
 ### `markdown-writes-checked-for-local-paths`
@@ -365,30 +372,30 @@ flowchart LR
   1,000-line doc checks in < 50ms · a staged doc with `/Users/…` fails pre-commit.
 
 ### `plan-lint-command`
-- Deps: plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, context-pack-command, plan-state-paths-in-git-common-dir · Gate: push · estLines: 220
+- Deps: plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, context-pack-command, plan-state-paths-in-git-common-dir, design-diff-and-design-sha · Gate: push · estLines: 220
 - Writes: `A/PlanState/PlanStateStore.swift`, `C/Commands/PlanLintCommand.swift`, `TC/PlanLintCommandTests.swift`
-- Does: reads shared `plan.json` and `ledger.json`, the design at `designSha` via `Git.blobContents`, the module graph, worker pack sizes.
-- Tests: requirement added to the working-tree design after approval doesn't change the result — catches linting the wrong revision · hand-edited waves exit 1 · clean plan exits 0 · unknown `designSha` → exit 2.
+- Does: reads shared `plan.json` and `ledger.json`, the module graph, worker pack sizes, and the design at `designSha`. Never `Git.blobContents` (a `designSha` is never stored, spec §5.4): walk `Git.revisions(of:)` newest first, read each with `Git.contents(of:at:)`, strip `status:` as `design-diff` does, hash with `GitBlobID.of`, stop at the match. Nil `designSha` (claimed, not yet drafted) → exit 2 BLOCKED.
+- Tests: requirement added to the working-tree design after approval doesn't change the result — catches linting the wrong revision · approved revision found behind a later status-only commit · hand-edited waves exit 1 · clean plan exits 0 · unknown or nil `designSha` → exit 2.
 
 ### `push-tier-runs-doc-gates`
-- Deps: prose-rules-and-command, docs-lint-command, evidence-check-command · Gate: push · estLines: 240
+- Deps: evidence-check-command · Gate: push · estLines: 160
 - Writes: `C/Commands/CheckCommand.swift`, `TC/PushTierDocGatesTests.swift`
-- Does: the one `CheckCommand` edit. Push adds `prose` on changed docs, `docs-lint`, and `evidence check --at HEAD` over `approved`/`built` designs. Calibration freshness is not wired here (Decisions).
-- Tests: stale claim in an approved design → red · same in a `proposed` design → unchecked · dangling doc id → red — catches docs drifting past push · fast tier runs none of these.
+- Does: first `CheckCommand` edit. Push adds `evidence check --at HEAD` over `approved`/`built` designs. `docs-lint` and `prose` are wired by `plugin-docs-pass-docs-lint-and-prose`, calibration freshness by `calibration-seeds-labelled-by-construction` (Decisions: enforcement lands with its first passing input).
+- Tests: stale claim in an approved design → red · same in a `proposed` design → unchecked · no designs in the repo → green, nothing run · fast tier doesn't run it.
 
 ## Render and metrics
 
 ### `design-render-design-page`
 - Deps: design-lint-command, design-diff-and-design-sha, evidence-check-command · Gate: push · estLines: 380
 - Writes: `D/Design/DesignRender.swift`, `D/Design/ArtifactPageShell.swift`, `C/Commands/DesignRenderCommand.swift`, `TD/DesignRenderTests.swift`
-- Does: D21 design page: Mermaid rendered, options as a comparison table, evidence badges that expand to the quote, requirements by title, prose only for problem, risks, open questions. Approve / Request changes write `{decision, designSha, at}` to page `db`. Pre-step: load the `artifact-design` and `artifact-capabilities` skills; record the `db` call shape and page contract in the interfaces note before coding.
+- Does: D21 design page: Mermaid rendered, options as a comparison table, evidence badges that expand to the quote, requirements by title, prose only for problem, risks, open questions. Approve / Request changes write to page `db`: collection `approval`, doc id = `designSha`, `{decision: approve|request-changes, at}`. Pre-step: load the `artifact-design` and `artifact-capabilities` skills and verify the `db` call shape before coding; report it under "notes for next waves" (the orchestrator records it; workers never edit the interfaces note).
 - Tests: each claim status gets its badge · titles shown; ids only in `data-` attributes — catches ids as reader words · quotes HTML-escaped — catches script injection · buttons carry the doc's `designSha` · lint-failing doc → exit 1, no HTML.
 
 ### `stats-design-and-plan-metrics`
 - Deps: claim-and-amendment-records, ledger-and-plan-model · Gate: push · estLines: 280
 - Writes: `D/Design/DesignMetrics.swift`, `C/Commands/StatsCommand.swift`, `TD/DesignMetricsTests.swift`
-- Does: §10/§12 metrics from claims, amendments, ledger and `.harness/runs/design-<id>/phases.jsonl` (format defined here; the design skill writes it).
-- Tests: escape rate counts a `supported` claim later amended — catches over-trust going unmeasured · refute and `[UNVERIFIED]` rate per lane · tokens, cost, wall per agent and phase · estimate error only when `actualLines` exists · reviewer precision from Request-changes and dismissals.
+- Does: §10/§12 metrics from claims, amendments, `review-log.jsonl`, ledger, probe verdicts, the evidence cache and `.harness/runs/design-<id>/phases.jsonl` (format defined here; the design skill writes it). Adds probe fail rate and cache hit rate.
+- Tests: escape rate counts a `supported` claim later amended — catches over-trust going unmeasured · refute and `[UNVERIFIED]` rate per lane · tokens, cost, wall per agent and phase · estimate error only when `actualLines` exists · reviewer precision from Request-changes and dismissals · probe fail rate and cache hit rate per run.
 
 ### `design-render-ledger-page`
 - Deps: design-render-design-page, plan-schedule-waves · Gate: push · estLines: 240
@@ -407,14 +414,14 @@ flowchart LR
 ### `design-research-lane-agents`
 - Deps: context-pack-command, evidence-find-command, probe-builds-scratch-package · Gate: fast · estLines: 280
 - Writes: `agents/design-lane-codebase.md`, `agents/design-lane-apple-docs.md`, `agents/design-lane-packages.md`, `agents/design-lane-prior-decisions.md`, `tests/design_agents_test.mjs`
-- Does: §7.1 lanes, `sonnet`, read-only. Emit `new` claims, probe snippets for every API relied on, and `needsDecision` asks. Cite `.build/checkouts` at pins; Apple snapshots back semantics only. The test checks every `agents/design-*.md`: native model name, read-only tools unless declared, no relay or proxy agent types.
+- Does: §7.1 lanes, `sonnet`, read-only. A lane returns `{lane, claims: [§5.2 records, status new], probes: [{claimId, swift}], needsDecision: [§3.4 {question, options[2–4], recommendation, evidence[]}]}`, with a probe snippet for every API relied on. Cite `.build/checkouts` at pins; Apple snapshots back semantics only. The test checks every `agents/design-*.md`: native model name, read-only tools unless declared, no relay or proxy agent types.
 - Tests: `design_agents_test.mjs` green · a file naming a relay type fails it — catches D2 drift · `plugin-dev:plugin-validator` passes.
 
 ### `design-research-workflow`
 - Deps: context-pack-command, evidence-find-command, probe-builds-scratch-package · Gate: fast · estLines: 300
 - Writes: `workflows/design-research.js`, `tests/design_research_workflow_test.mjs`
-- Does: §7.1, §3.4: ≤ 4 lanes, ≤ 3 in flight, each given its pack path; dead or malformed lane → `NOT RESEARCHED`; early return with `needsDecision[]` once the fan-out settles; `resumeFromRunId` replays the unchanged prefix. No filesystem or network. Pre-step: load the `workflow-authoring` skill.
-- Tests (stubbed agents, as `review_workflow_test.mjs`): never > 3 in flight · dead lane → `NOT RESEARCHED`, siblings kept · malformed return → `NOT RESEARCHED` · 2 asking lanes → one early return with both asks.
+- Does: §7.1, §3.4. Args `{tier, mode: "research"|"reresearch", claimIds?, lanes: [{name, packPath}], answers: [{question, answer}]}`; returns the lane results in the `design-research-lane-agents` shape. ≤ 4 lanes, ≤ 3 in flight. An answer is injected only into the prompt of the lane that asked it (matched by question text against that lane's `needsDecision`), so the other lanes replay from cache. `mode: "reresearch"` with `claimIds` is the single-claim re-research lane (§8.5); dead or malformed lane → `NOT RESEARCHED`; early return with `needsDecision[]` once the fan-out settles; `resumeFromRunId` replays the unchanged prefix. No filesystem or network. Pre-step: load the `workflow-authoring` skill.
+- Tests (stubbed agents, as `review_workflow_test.mjs`): never > 3 in flight · dead lane → `NOT RESEARCHED`, siblings kept · malformed return → `NOT RESEARCHED` · 2 asking lanes → one early return with both asks · resume with one answer changes only the asking lane's prompt — catches every lane re-running · `reresearch` runs one lane over the named claim ids.
 
 ### `design-review-workflow`
 - Deps: design-review-verdict, context-pack-command · Gate: fast · estLines: 260
@@ -431,7 +438,7 @@ flowchart LR
 ### `design-review-agents`
 - Deps: design-research-lane-agents, design-review-verdict · Gate: fast · estLines: 300
 - Writes: `agents/design-evidence-auditor.md`, `agents/design-standards-conformance.md`, `agents/design-challenger.md`, `agents/design-pre-mortem.md`
-- Does: §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger is written fresh: it carries the intent of the self-reflect questions (best end-to-end design, not merely complete) without copying their text.
+- Does: §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger's question set is written fresh in `agents/design-challenger.md`: 5–7 questions, including "is this the best end-to-end design, not merely a complete one" and "biggest blind spot"; don't copy any existing self-reflect text.
 - Tests: `design_agents_test.mjs` green · `plugin-validator` passes. Behaviour is calibrated by `calibration-seeds-labelled-by-construction`.
 
 ### `design-single-step-agents`
@@ -443,7 +450,7 @@ flowchart LR
 ### `design-skill-frame-to-draft`
 - Deps: design-research-workflow, design-single-step-agents, prose-skill-written-fresh, design-scope-tier-recommendation, design-lint-command, docs-lint-command, evidence-check-command, evidence-capture-command, plan-claim-and-release-commands · Gate: fast · estLines: 350
 - Writes: `skills/design/SKILL.md`, `skills/design/references/frame-research-verify.md`, `tests/skill_commands_test.mjs`
-- Does: §3.1 frame → draft. `plan claim` at frame. `AskUserQuestion` only, recommended option first; answers become `answer` claims. `design-scope`; research with halt/ask/resume (≤ 4 asks per prompt); `evidence check`, `probe`, claim checker; drafter via the Agent tool; `design-lint` + `docs-lint`; `phases.jsonl`. Quick tier: one lane + drafter, no ADR, no review. Agents return content; the skill writes every file.
+- Does: §3.1 frame → draft. At frame, `plan claim <plan> --session <id> --design <doc>`. `AskUserQuestion` only, recommended option first; each answer is appended to `<slug>.evidence/answers.jsonl` as `{runId, question, options, answer, at}` and becomes an `answer` claim with `loc` = `answers.jsonl#<runId>/<n>`. `design-scope`; research with halt/ask/resume (≤ 4 asks per prompt; workflow args as `design-research-workflow`); writes each lane probe to `probes/<ev-id>.snippet.swift`; `evidence check`, `probe`, claim checker, then rewrites `claims.jsonl` from `evidence check --json` (`{id, status, loc?}` per claim) plus the checker verdicts; drafter via the Agent tool; `design-lint` + `docs-lint`; `phases.jsonl`. Quick tier: one lane + drafter, no ADR, no review. Agents return content; the skill writes every file.
 - Tests: `skill_commands_test.mjs` runs `bin/swiftgate <cmd> --help` for every command and flag any skill names — catches instructions drifting from the CLI · `swiftgate prose` clean · `skill-reviewer` passes.
 
 ### `plan-skill`
@@ -455,7 +462,7 @@ flowchart LR
 ### `design-skill-review-publish-amend`
 - Deps: design-skill-frame-to-draft, design-review-workflow, design-review-agents, design-render-design-page, design-diff-and-design-sha · Gate: fast · estLines: 330
 - Writes: `skills/design/SKILL.md`, `skills/design/references/review-publish-amend.md`
-- Does: review → `review-synth --design` → one revise round (2 at deep). Publish: `design/<slug>` branch, status `proposed`, `design-render`, Artifact with `comments` and `db`, approval read with `ArtifactData`, status `approved`, merge. `--revise` via `ArtifactComments`. `--amend` and clarify via `design-diff`, amendment records, 2-agent delta review, `needs-replan`. A `stale` claim spawns a one-claim lane. Area router rows; ADRs at standard and deep.
+- Does: review → `review-synth --design --tier <tier>` → one revise round (2 at deep). Each finding's disposition is appended to `<slug>.evidence/review-log.jsonl` as `{findingId, reviewer, disposition: accepted|dismissed, reason}` (`stats` reads the dismissals). Publish: `design/<slug>` branch, status `proposed`, `design-render`, Artifact with `comments` and `db`, approval read with `ArtifactData` (collection `approval`, doc id = `designSha`), status `approved`, merge. When `db` is unavailable (§14), approval goes through `AskUserQuestion` and is recorded as an `answer` claim bound to the `designSha`. `--supersede <old-slug>` sets the old design's status to `superseded-by: <slug>` in the same PR (§5.4). `--revise` via `ArtifactComments`. `--amend` and clarify via `design-diff`, amendment records, 2-agent delta review, `needs-replan`. A `stale` claim spawns a one-claim lane. Area router rows; ADRs at standard and deep.
 - Tests: `skill_commands_test.mjs` green · `prose` clean · `skill-reviewer` passes.
 
 ## Seeds
@@ -467,10 +474,10 @@ flowchart LR
 - Tests: `swiftgate calibrate design` passes · changed design prompt without a new pass → push red — catches uncalibrated prompts shipping · no `agents/design-*.md` → check skipped · push green on the committed record.
 
 ### `plugin-docs-pass-docs-lint-and-prose`
-- Deps: design-skill-review-publish-amend, plan-skill · Gate: push · estLines: 200
-- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`
-- Does: the repo's docs pass `docs-lint` and `prose`; AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Explicit exception to the brief's README rule.
-- Tests: `swiftgate docs-lint` exit 0 on this repo · `check --tier push` green.
+- Deps: design-skill-review-publish-amend, plan-skill, push-tier-runs-doc-gates, docs-lint-command, prose-rules-and-command, calibration-seeds-labelled-by-construction · Gate: push · estLines: 280
+- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`, `C/Commands/CheckCommand.swift`, `TC/PushTierDocsLintProseTests.swift`
+- Does: first makes the repo's docs pass `docs-lint` and `prose`: AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Then, in the same task, wires push to run `docs-lint` and `prose` on changed docs. Explicit exception to the brief's README rule. Wave 23: shares `CheckCommand.swift` with the calibration seeds.
+- Tests: `swiftgate docs-lint` exit 0 on this repo · dangling doc id → push red — catches docs drifting past push · prose violation in a changed doc → push red; in an unchanged doc → not run · fast tier runs neither · `check --tier push` green.
 
 ### `self-test-runs-evidence-and-design-seeds`
 - Deps: every command task in "Mechanical gates" · Gate: push · estLines: 320
@@ -487,22 +494,29 @@ flowchart LR
 
 ## Packaging and steering
 
-Not code slices; the §13 checks are the tests. Record evidence (commands, verdicts, tokens, wall time) in `docs/e2e-report.md`.
+Moves the plugin into `plugin/` and splits contributor from consumer steering (ADR 0002).
 
 ### `consumer-plugin-in-plugin-dir`
 - Deps: all code and seed waves · Gate: ready · estLines: 180 (logic; the rest is `git mv`, justified exception to the 400 cap)
+- Inputs: read [ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md) first.
 - Writes: `plugin/**` (moved from `.claude-plugin/`, `skills/`, `agents/`, `hooks/`, `workflows/`, `templates/`,
   `bin/`, `gate/`, `docs/standards.md`, `docs/testing-playbook.md`, `docs/hooks.md`), `.claude-plugin/marketplace.json`
-  (root, `source: "./plugin"`), `bin/swiftgate` shim, `AGENTS.md`, `docs/index.md`, `README.md`, `.swiftgate.toml`
-- Does: ADR 0002 layout. The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}` keyed by source hash
+  (root, `source: "./plugin"`), root `bin/swiftgate` (deleted), `AGENTS.md`, `docs/index.md`, `README.md`, `.swiftgate.toml`,
+  agent and workflow paths in `tests/*.mjs`, `tests/shim_test.sh`, `plugin/gate/Tests/SwiftGateAdaptersTests/RepositoryScriptTests.swift`
+  (repo-root and `tests/` paths), the calibration-freshness path globs (→ `plugin/agents/design-*.md`, `plugin/workflows/design-*.js`),
+  `docs/handoffs/worker-brief.md` (self-gate `cd gate` → `cd plugin/gate`)
+- Does: ADR 0002 layout. The root `bin/swiftgate` is removed: one shim, `plugin/bin/swiftgate`, and bootstrap
+  repoints `~/.local/bin/swiftgate` to it. The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}` keyed by source hash
   (the per-version cache dir is not reused across updates); a contributor checkout still builds in place.
+  The ready tier runs `claude plugin validate plugin` when `claude` is on PATH, else skips with a note (never BLOCKED).
   Root `AGENTS.md` stays contributor-facing; nothing under `plugin/` is contributor-only except `gate/Tests`.
   Also deletes the dead worktree-relative `.harness/plans` guard rule and its tests (plan state lives in the common dir).
   Moves the review verdict contract consumers read at runtime into `plugin/docs/review-contract.md` and repoints
   `workflows/review.js`, `skills/review/SKILL.md` and `agents/*.md` at it (ADR 0002, Steering).
 - Tests: `claude plugin validate plugin` passes with no warnings — catches a root CLAUDE.md shipping to
-  consumers · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
-  reuses it on a second run · `/swift-harness:review` loads its contract from inside `plugin/` — catches a consumer
+  consumers · ready tier without `claude` on PATH → note, not BLOCKED · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
+  reuses it on a second run · bootstrap repoints an existing `~/.local/bin/swiftgate` at `plugin/bin/swiftgate` · calibration freshness finds
+  `plugin/agents/design-*.md` after the move — catches a freshness check that silently hashes nothing · `shim_test.sh` and every `tests/*_test.mjs` green from the new paths · `/swift-harness:review` loads its contract from inside `plugin/` — catches a consumer
   runtime read of a contributor doc · every repo path in docs, skills and agents resolves after the move (link check) ·
   push and ready tiers green from the new layout.
 
@@ -521,33 +535,48 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
 - Writes: `plugin/templates/AGENTS.md`, `plugin/gate/Sources/SwiftGateDomain/Hooks/SessionContext.swift`,
   `plugin/gate/Sources/SwiftGateCLI/Hooks/SessionStartHook.swift`, `plugin/gate/Tests/SwiftGateCLITests/ConsumerSteeringTests.swift`,
   `plugin/docs/index.md`
+- Inputs: read [ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md) (Steering) first.
+- Pre-step: verify that `CLAUDE_PLUGIN_ROOT` is set in hook processes (log it from a SessionStart run of the
+  installed plugin). If it isn't, the shim exports `SWIFT_HARNESS_PLUGIN_ROOT` (add `plugin/bin/swiftgate` to the
+  write set) and SessionStart reads that. Report the result under "notes for next waves".
 - Does: SessionStart injects the resolved absolute path of the plugin's reference docs (`${CLAUDE_PLUGIN_ROOT}/docs`)
   alongside the session id and active plans, so consumer agents can open `standards.md` without a committed path.
   The stamped `AGENTS.md` refers to "the plugin reference docs (path in your session context)". Adds a consumer
-  router `plugin/docs/index.md`. Adds a test that no file under `plugin/` mentions `docs/designs`, `docs/adrs`,
-  `docs/plans` or `docs/handoffs`.
+  router `plugin/docs/index.md`. Adds a test that scans only `plugin/{skills,agents,workflows,templates,docs,hooks}`
+  and flags relative links and `${CLAUDE_PLUGIN_ROOT}` paths that resolve into this repo's contributor docs
+  (`docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs` at the repo root). Bare strings aren't flagged:
+  consumer repos legitimately have `docs/designs`.
 - Tests: SessionStart output names an existing `standards.md` path — catches consumer agents unable to find the rules
-  · a plugin file citing `docs/adrs/…` fails — catches consumer runtime depending on contributor docs · the stamped
-  `AGENTS.md` contains no absolute path.
+  · a plugin skill linking `../../docs/adrs/…` fails — catches consumer runtime depending on contributor docs · a
+  skill naming the consumer's own `docs/designs/` passes — catches over-matching · the stamped `AGENTS.md` contains
+  no absolute path.
 
 ## Acceptance
 
+Not code slices; the §13 checks are the tests. Record evidence (commands, verdicts, tokens, wall time) in `docs/e2e-report.md`.
+All three are attended: orchestrator plus user. The user answers the frame questions, clicks Approve, and approves merge and push.
+Every step that needs no user input runs headless: `claude -p --plugin-dir plugin "<prompt>" --output-format json` from `examples/SampleApp`,
+except the install check, which must go through the marketplace.
+
 ### `plugin-installs-for-real`
+- Attended: orchestrator plus user.
 - Deps: contributor-agents-md-for-harness-developers, consumer-steering-channels · Gate: ready · estLines: 80
 - Writes: `docs/e2e-report.md`, `.claude-plugin/marketplace.json` (only if install needs a fix)
-- Does: install through the marketplace, not `--plugin-dir`. In a SampleApp session, run one design agent type by its plugin name; capture a live PreToolUse payload with `agent_id` (§14).
+- Does: install through the marketplace, not `--plugin-dir`. In a SampleApp session, run one design agent type by its plugin name; capture a live PreToolUse payload with `agent_id` (§14). Headless where possible: `claude -p` in the installed session to spawn the agent type and attempt the guarded writes.
 - Tests: plugin agent types run · subagent write to a ledger, design doc and claim file denied · two worktrees read the same `index.json` and ledger.
 
 ### `nonexistent-api-run-refutes-claim`
+- Attended: orchestrator plus user.
 - Deps: plugin-installs-for-real · Gate: ready · estLines: 80
 - Writes: `docs/e2e-report.md`
-- Does: a design request naming a fabricated API; the design branch is never merged.
-- Tests: the claim ends `refuted` or `[UNVERIFIED]` and never appears in Decision (§13).
+- Does: the worker picks an API and first proves it absent: grep `.build/checkouts/swift-composable-architecture` at the pinned TCA version (`Package.resolved`) and record the empty result in the report. Then run a design request that relies on it (`claude -p --plugin-dir plugin` up to the frame questions; the user answers). The design branch is never merged.
+- Tests: the claim ends `refuted` or `[UNVERIFIED]` and never appears in Decision (§13) · the absence grep is recorded before the run — catches a "fabricated" API that exists.
 
 ### `sampleapp-standard-design-to-plan`
+- Attended: orchestrator plus user.
 - Deps: plugin-installs-for-real · Gate: ready · estLines: 150
 - Writes: `docs/e2e-report.md`, `examples/SampleApp/docs/` (through the design PR)
-- Does: standard `/swift-harness:design` → `/swift-harness:plan` on a real SampleApp feature (candidate: `CounterFeature` history that survives relaunch; confirmed at frame). The user clicks Approve and approves the merge.
+- Does: standard `/swift-harness:design` → `/swift-harness:plan` on a real SampleApp feature (candidate: `CounterFeature` history that survives relaunch; confirmed at frame). The user answers the frame questions, clicks Approve, and approves the merge and push. `/swift-harness:plan` runs headless (`claude -p --plugin-dir plugin`) once approval is recorded.
 - Tests: design approved through the Artifact, PR merged, ledger passes `plan-lint` · `swiftgate self-test` and `calibrate design` pass · §11 estimates compared with measured tokens and wall time.
 
 ---
@@ -564,11 +593,11 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
 | D6 reviewers, contract, verdicts, revise round (§7.2, §8.2) | design-review-verdict, design-review-workflow, design-review-agents, design-skill-review-publish-amend |
 | D7 Artifact approval, `--revise` (§8.3) | design-render-design-page, design-skill-review-publish-amend |
 | D8 drift, `--amend`, `design-diff`, `needs-replan` (§5.5, §5.9, §8.4) | claim-and-amendment-records, ledger-and-plan-model, design-diff-and-design-sha, design-skill-review-publish-amend |
-| D9 staleness (§8.5) | evidence-check-rules, push-tier-runs-doc-gates, plan-skill, design-skill-review-publish-amend |
+| D9 staleness (§8.5) | evidence-check-rules, push-tier-runs-doc-gates, design-research-workflow, plan-skill, design-skill-review-publish-amend |
 | D10 reuse cache (§8.6) | evidence-reuse-cache-store, evidence-find-command, probe-builds-scratch-package |
 | D11 durable vs ephemeral, no plan branch (§4) | plan-state-paths-in-git-common-dir, bootstrap-stamps-docs-router, index-set-under-file-lock, design-skill-review-publish-amend |
 | D12 doc shape and layout (§4, §5.3) | bootstrap-stamps-docs-router, markdown-and-design-doc-model, design-lint-sections-and-ids, design-skill-review-publish-amend |
-| D13 `docs-lint`, status frontmatter (§5.4) | docs-lint-references-and-links, docs-lint-policy-and-budgets, docs-lint-command, design-diff-and-design-sha, design-skill-review-publish-amend |
+| D13 `docs-lint`, status frontmatter (§5.4) | docs-lint-references-and-links, docs-lint-policy-and-budgets, docs-lint-command, design-diff-and-design-sha, design-skill-review-publish-amend, plugin-docs-pass-docs-lint-and-prose |
 | D14 tiers, `design-scope` (§8.1) | design-scope-tier-recommendation, design-skill-frame-to-draft |
 | D15 ledger, `plan-schedule`, `plan-lint`, decomposer (§5.7, §9) | ledger-and-plan-model, plan-schedule-waves, plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, plan-lint-command, design-single-step-agents, plan-skill |
 | D16 sizing (§9.3) | config-docs-and-plan-sections, plan-lint-coverage-and-sizing |
@@ -579,8 +608,8 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
 | D21 visual-first Artifacts | design-render-design-page, design-render-ledger-page |
 | D22 Mermaid in design docs | markdown-and-design-doc-model, design-lint-diagrams-and-budgets, design-render-design-page |
 | D23 word budgets | config-docs-and-plan-sections, design-lint-diagrams-and-budgets, docs-lint-policy-and-budgets |
-| D24 `prose` skill + `swiftgate prose` | prose-rules-and-command, prose-skill-written-fresh, design-lint-command, push-tier-runs-doc-gates |
-| D25 relative paths only (spec §6.2 docs-lint) | docs-lint-policy-and-budgets, markdown-writes-checked-for-local-paths, evidence-check-rules |
+| D24 `prose` skill + `swiftgate prose` | prose-rules-and-command, prose-skill-written-fresh, design-lint-command, plugin-docs-pass-docs-lint-and-prose |
+| D25 relative paths only (spec §6.2 docs-lint, write-time hook) | docs-lint-policy-and-budgets, markdown-writes-checked-for-local-paths, evidence-check-rules |
 | D26 contributor/consumer split + steering (ADR 0002) | consumer-plugin-in-plugin-dir, contributor-agents-md-for-harness-developers, consumer-steering-channels, plugin-installs-for-real |
 | §6.3 common-dir resolution | plan-state-paths-in-git-common-dir, session-start-reads-shared-plan-index, edit-guard-covers-design-and-plan-state |
 | §6.3 absolute-path matching · guard scope | edit-guard-covers-design-and-plan-state |

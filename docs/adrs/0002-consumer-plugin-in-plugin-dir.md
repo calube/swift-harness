@@ -45,6 +45,8 @@ flowchart LR
 - `plugin/` is a hand-maintained source directory, not generated output, so nothing can drift from source.
 - The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}`, keyed by source hash. That directory persists
   across plugin updates; the per-version cache dir does not.
+- There is one shim, `plugin/bin/swiftgate`. The root `bin/swiftgate` is removed, and bootstrap repoints
+  `~/.local/bin/swiftgate` to the plugin shim.
 - The consumer's agent guide is `plugin/templates/AGENTS.md`, which bootstrap stamps into each app repo.
   The root `AGENTS.md` is for contributors only.
 
@@ -65,8 +67,9 @@ Rules that keep the channels apart:
 - Nothing under `plugin/` references contributor docs (`docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs`)
   or any path above `plugin/`. A contract that consumers need at runtime, such as the review verdict contract
   from ADR 0001 (review severity for standards violations), gets a consumer copy in `plugin/docs/`.
-- Consumer docs never name the plugin's install path. SessionStart computes it each session, so nothing
-  machine-specific is committed.
+- Consumer docs never name the plugin's install path. SessionStart computes it each session from
+  `CLAUDE_PLUGIN_ROOT` (or `SWIFT_HARNESS_PLUGIN_ROOT`, exported by the shim, if hooks don't receive it),
+  so nothing machine-specific is committed.
 - The contributor `AGENTS.md` doesn't restate app rules. It points to `plugin/docs/standards.md`, which
   contributors need only when they change a rule or `examples/`.
 
@@ -76,7 +79,8 @@ Rules that keep the channels apart:
   `gate/Tests`. A prebuilt binary release can remove both later, without changing this layout.
 - Every source path moves once. The move runs after all code waves of the design-and-plan build, so no
   in-flight task collides with it.
-- `claude plugin validate plugin` becomes part of the ready gate for the plugin repo.
+- `claude plugin validate plugin` becomes part of the ready gate for the plugin repo. It runs when `claude`
+  is on PATH and is skipped with a note otherwise; it never makes the gate BLOCKED.
 
 ## Alternatives rejected
 

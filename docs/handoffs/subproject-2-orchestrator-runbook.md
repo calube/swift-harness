@@ -132,3 +132,7 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   `flake-hunter`.
 - The review workflow reads a contributor ADR at runtime until the packaging wave moves the contract into
   `plugin/docs/` (ADR 0002, steering).
+- From the packaging wave on, the root `bin/swiftgate` is gone. Run `plugin/bin/swiftgate`, and seed worktrees by
+  cloning `plugin/gate/.build` instead of `gate/.build`.
+- The acceptance waves are attended. The user answers the frame questions, clicks Approve, and approves the merge
+  and push, so schedule them when the user is present.
