@@ -10,6 +10,6 @@ struct SwiftGate: AsyncParsableCommand {
     commandName: "swiftgate",
     abstract: "The single gate for swift-harness: lint, architecture, tests, and evidence.",
     version: SwiftGateVersion.current,
-    subcommands: [CommentsCommand.self, TestlintCommand.self]
+    subcommands: [CommentsCommand.self, TestlintCommand.self, LintCommand.self]
   )
 }

@@ -8,25 +8,16 @@ import SwiftGateRules
 enum TestlintCheck {
   static func run(root: URL, paths: [String]) -> StaticCheckOutcome {
     let config: Config?
-    do throws(ConfigLoadError) {
-      config = try ConfigLoader().load(repositoryRoot: root)
-    } catch {
-      switch error.verdict {
-      case .red: return .invalid(reason: error.description)
-      case .blocked, .green: return .blocked(reason: error.description)
-      }
-    }
-    let sources: [CollectedSource]
-    do throws(SourceCollectionError) {
-      sources = try SwiftSourceCollector(root: root).collect(paths: paths.isEmpty ? ["."] : paths)
-    } catch {
-      return .blocked(reason: "sources: \(error)")
+    let sources: [SourceInput]
+    switch StaticCheckInputs.load(root: root, paths: paths) {
+    case .loaded(let loadedConfig, let loadedSources):
+      (config, sources) = (loadedConfig, loadedSources)
+    case .failed(let outcome): return outcome
     }
     let context = RuleContext(
       scopes: PathConventionModuleScopes(), flows: config.map { $0.flows.map(\.name) })
     return StaticCheck.evaluate(
-      RuleCatalog.testlint, sources.map { SourceInput(path: $0.path, text: $0.text) },
-      context: context)
+      RuleCatalog.testlint, sources, context: context)
   }
 }
 

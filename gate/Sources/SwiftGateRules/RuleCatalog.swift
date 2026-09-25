@@ -6,5 +6,9 @@ public enum RuleCatalog {
   /// `swiftgate testlint`.
   public static let testlint: [any Rule] = TestlintRules.all
 
-  public static var all: [any Rule] { comments + testlint }
+  /// `swiftgate lint`.
+  public static let lint: [any Rule] =
+    DeterminismRules.all + BoundaryRules.all + SafetyRules.all + TCARules.all
+
+  public static var all: [any Rule] { comments + testlint + lint }
 }

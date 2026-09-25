@@ -381,7 +381,7 @@ extension ItemsClient: TestDependencyKey {
 **E2. No `try!`, `as!` or `fatalError` outside true preconditions.**
 - **Do:** propagate or handle the error. A crash is acceptable only for a programmer-error invariant that a test proves, and then it carries a same-line reason.
 - **Tell:** `try!` or `as!` with no same-line `swiftgate:allow`; `fatalError` on a path that input data can reach.
-- **Enforced by:** `safety.try-bang`, `safety.as-bang`; `fatalError` by review · **Source:** [Error handling](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/errorhandling/). Incident: none yet.
+- **Enforced by:** `safety.try-bang`, `safety.as-bang`, `safety.fatal-error` (also `preconditionFailure`; test files exempt) · **Source:** [Error handling](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/errorhandling/). Incident: none yet.
 
 **E3. `reportIssue` for programmer errors.**
 - **Do:** when code reaches a state that means a bug (not bad input), call `reportIssue("…")` from `IssueReporting`. It fails the running test and logs at runtime without crashing users.
@@ -604,7 +604,7 @@ if items.isEmpty { return }
 | `det.date-init`, `det.uuid-init`, `det.task-sleep`, `det.async-after`, `det.random` | D1, G1 |
 | `client.urlsession-shared`, `client.vendor-module` | D3, D5, O3 |
 | `obs.direct-logger`, `obs.direct-signposter`, `obs.print` | O3 |
-| `safety.try-bang`, `safety.as-bang` | E2 |
+| `safety.try-bang`, `safety.as-bang`, `safety.fatal-error` | E2 |
 | `safety.unchecked-sendable`, `safety.nonisolated-unsafe`, `safety.preconcurrency` | C2 |
 | `tca.banned-api` | A6 |
 | `snap.record-mode` | testing playbook |

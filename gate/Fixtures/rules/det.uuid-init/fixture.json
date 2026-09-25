@@ -1,0 +1,28 @@
+{
+  "directory": "Packages/Feed/Sources/FeedCore",
+  "modules": [
+    {
+      "name": "FeedCore",
+      "role": "core",
+      "directories": [
+        "Packages/Feed/Sources/FeedCore"
+      ]
+    },
+    {
+      "name": "FeedClient",
+      "role": "client",
+      "kind": "client",
+      "directories": [
+        "Packages/FeedClient/Sources/FeedClient"
+      ]
+    },
+    {
+      "name": "FeedClientLive",
+      "role": "clientLive",
+      "kind": "client",
+      "directories": [
+        "Packages/FeedClient/Sources/FeedClientLive"
+      ]
+    }
+  ]
+}

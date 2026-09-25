@@ -1,6 +1,7 @@
 import SwiftGateDomain
 import SwiftParser
 import SwiftSyntax
+import Synchronization
 
 /// A file to check: repository-relative path plus its text (working tree or staged blob).
 public struct SourceInput: Sendable, Equatable {
@@ -24,6 +25,7 @@ public final class SourceUnit: Sendable {
   /// Top-level `import` module names, in source order.
   public let imports: [String]
   private let converter: SourceLocationConverter
+  private let syntaxIndexCache = Mutex<SyntaxIndex?>(nil)
 
   public init(input: SourceInput, scope: ModuleScope?) {
     path = input.path
@@ -34,6 +36,16 @@ public final class SourceUnit: Sendable {
     allowDirectives = comments.compactMap(AllowDirective.init(comment:))
     imports = tree.statements.compactMap {
       $0.item.as(ImportDeclSyntax.self)?.path.first?.name.text
+    }
+  }
+
+  /// The nodes lint rules match on, collected in one walk the first time any rule asks.
+  public var syntaxIndex: SyntaxIndex {
+    syntaxIndexCache.withLock { cached in
+      if let cached { return cached }
+      let index = SyntaxIndex(tree)
+      cached = index
+      return index
     }
   }
 

@@ -65,13 +65,17 @@ public struct RuleContext: Sendable {
   public let flows: [String]?
   /// Private codenames that must not appear in shared comments.
   public let privateCodenames: [String]
+  /// Vendor SDK module names that may be imported only inside `*Live` modules.
+  public let vendorModules: Set<String>
 
   public init(
-    scopes: any ModuleScopeResolving, flows: [String]? = nil, privateCodenames: [String] = []
+    scopes: any ModuleScopeResolving, flows: [String]? = nil, privateCodenames: [String] = [],
+    vendorModules: [String] = []
   ) {
     self.scopes = scopes
     self.flows = flows
     self.privateCodenames = privateCodenames
+    self.vendorModules = Set(vendorModules)
   }
 }
 

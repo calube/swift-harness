@@ -2,7 +2,7 @@ import SwiftGateDomain
 
 /// Optional `fixture.json` in a rule's fixture directory (`Fixtures/rules/<rule-id>/`): the
 /// injected context the rule's `bad/` and `good/` files are checked under. Without it, files are
-/// checked with no module scopes, no flows and no codenames.
+/// checked with no module scopes, flows, codenames or vendor modules.
 public struct RuleFixtureManifest: Decodable, Sendable, Equatable {
   public struct Module: Decodable, Sendable, Equatable {
     public let name: String
@@ -18,15 +18,17 @@ public struct RuleFixtureManifest: Decodable, Sendable, Equatable {
   public let modules: [Module]?
   public let flows: [String]?
   public let privateCodenames: [String]?
+  public let vendorModules: [String]?
 
   public init(
     directory: String? = nil, modules: [Module]? = nil, flows: [String]? = nil,
-    privateCodenames: [String]? = nil
+    privateCodenames: [String]? = nil, vendorModules: [String]? = nil
   ) {
     self.directory = directory
     self.modules = modules
     self.flows = flows
     self.privateCodenames = privateCodenames
+    self.vendorModules = vendorModules
   }
 
   public static let defaultDirectory = "Fixture"
@@ -52,7 +54,8 @@ public struct RuleFixtureManifest: Decodable, Sendable, Equatable {
           directories: module.directories))
     }
     return RuleContext(
-      scopes: StaticModuleScopes(entries), flows: flows, privateCodenames: privateCodenames ?? [])
+      scopes: StaticModuleScopes(entries), flows: flows, privateCodenames: privateCodenames ?? [],
+      vendorModules: vendorModules ?? [])
   }
 
   static func role(named name: String) -> ModuleRole? {
