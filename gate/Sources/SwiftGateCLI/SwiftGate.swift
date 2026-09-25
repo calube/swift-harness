@@ -12,6 +12,7 @@ struct SwiftGate: AsyncParsableCommand {
     version: SwiftGateVersion.current,
     subcommands: [
       CommentsCommand.self, TestlintCommand.self, LintCommand.self, ImpactCommand.self,
+      ArchCommand.self,
     ]
   )
 }

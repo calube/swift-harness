@@ -5,6 +5,9 @@ import SwiftGateDomain
 public protocol SwiftPM: Sendable {
   func describe(packageDirectory: String) async throws(SwiftPMError) -> PackageManifest
 
+  /// Build settings `describe` omits, from `swift package dump-package`.
+  func settings(packageDirectory: String) async throws(SwiftPMError) -> PackageSettings
+
   /// Runs `swift test`. A nonzero exit (failing tests, build errors) is a normal result: judging it
   /// from the xUnit reports is the evidence layer's job.
   func test(_ request: SwiftTestRequest) async throws(SwiftPMError) -> SwiftTestRun
@@ -86,6 +89,17 @@ public struct LiveSwiftPM: SwiftPM {
       return try PackageManifest(describeJSON: output.stdout.bytes, repositoryRoot: repositoryRoot)
     } catch {
       throw .unparseableOutput(command: "package describe", detail: "\(error)")
+    }
+  }
+
+  public func settings(packageDirectory: String) async throws(SwiftPMError) -> PackageSettings {
+    let arguments = ["package", "dump-package"]
+    let output = try await run(arguments, in: packageDirectory, timeout: queryTimeout)
+    try Self.requireSuccess(arguments, output)
+    do {
+      return try PackageSettings(dumpPackageJSON: output.stdout.bytes)
+    } catch {
+      throw .unparseableOutput(command: "package dump-package", detail: "\(error)")
     }
   }
 

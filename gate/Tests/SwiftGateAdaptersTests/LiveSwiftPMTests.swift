@@ -31,6 +31,21 @@ struct LiveSwiftPMTests {
   }
 
   @Test(
+    "settings runs dump-package in the package directory — catches isolation read from the wrong package"
+  )
+  func settings() async throws {
+    let json = try Fixture.text("SwiftPM/dump-package-main-actor-core.json")
+    let runner = FakeProcessRunner { _ in ProcessOutput(status: .exited(0), stdout: json) }
+
+    let settings = try await adapter(runner).settings(packageDirectory: gameEngine)
+
+    #expect(settings.defaultIsolation["FeedCore"] == "MainActor")
+    let invocation = try #require(runner.invocations.first)
+    #expect(invocation.arguments == ["package", "dump-package"])
+    #expect(invocation.workingDirectory == "\(root)/\(gameEngine)")
+  }
+
+  @Test(
     "describe failure is blocked with swift's stderr — catches a missing package passing as empty")
   func describeFailure() async throws {
     let stderr = try Fixture.text("SwiftPM/describe-no-package.stderr.txt")

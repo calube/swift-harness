@@ -2,6 +2,9 @@
 /// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
 public struct Config: Sendable, Equatable {
+  /// Where the config lives, relative to the repository root.
+  public static let fileName = ".swiftgate.toml"
+
   /// The only `schema` value this build understands.
   public static let supportedSchema = 1
 

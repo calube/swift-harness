@@ -139,6 +139,11 @@ public struct ModuleGraph: ModuleScopeResolving {
       .max { $0.path.count < $1.path.count }
   }
 
+  /// The package that defines `module`; `nil` for app modules.
+  public func package(of module: Module) -> PackageManifest? {
+    module.packageName.flatMap { name in packages.first { $0.name == name } }
+  }
+
   /// Direct in-graph dependencies, sorted.
   public func dependencies(of name: String) -> [String] {
     modulesByName[name]?.dependencies ?? []

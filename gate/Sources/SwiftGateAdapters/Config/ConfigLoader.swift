@@ -3,7 +3,7 @@ import SwiftGateDomain
 
 /// Reads `.swiftgate.toml` from a repository root.
 public struct ConfigLoader: Sendable {
-  public static let fileName = ".swiftgate.toml"
+  public static let fileName = Config.fileName
 
   private let decoder: any ConfigDecoding
 
