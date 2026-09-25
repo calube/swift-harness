@@ -1,0 +1,58 @@
+Building for debugging...
+[0/2] Write sources
+[1/2] Write swift-version--58304C5D6DBC2206.txt
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+[3/8] Emitting module ProbeScratch
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
+[4/8] Compiling ProbeScratch Probe_ev_wrong_signature.swift
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
+
+/SCRATCH/Sources/ProbeScratch/Probe_ev_wrong_signature.swift:3:21: error: cannot convert value of type 'Int' to expected argument type 'String'
+1 | enum Probe_ev_wrong_signature {
+2 |   static func run() -> Bool {
+3 |     "abc".hasPrefix(5)
+  |                     `- error: cannot convert value of type 'Int' to expected argument type 'String'
+4 |   }
+5 | }
+[5/8] Compiling ProbeScratch Probe_ev_fabricated_symbol.swift
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
+
+/SCRATCH/Sources/ProbeScratch/Probe_ev_fabricated_symbol.swift:3:5: error: cannot find 'fabricatedAPIThatDoesNotExist' in scope
+1 | enum Probe_ev_fabricated_symbol {
+2 |   static func run() -> Int {
+3 |     fabricatedAPIThatDoesNotExist()
+  |     `- error: cannot find 'fabricatedAPIThatDoesNotExist' in scope
+4 |   }
+5 | }
+[6/8] Compiling ProbeScratch Probe_ev_warns_but_compiles.swift
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
+
+/SCRATCH/Sources/ProbeScratch/Probe_ev_warns_but_compiles.swift:3:9: warning: initialization of immutable value 'unused' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+1 | enum Probe_ev_warns_but_compiles {
+2 |   static func run() -> Int {
+3 |     let unused = 42
+  |         `- warning: initialization of immutable value 'unused' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+4 |     return 1
+5 |   }
+[7/8] Compiling ProbeScratch Probe_ev_good_effect_cancel.swift
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
+[8/8] Compiling ProbeScratch Extra.swift
+/SCRATCH/Sources/ProbeScratch/Extra.swift:1:28: error: expected initial value after '='
+1 | let extraSyntaxError: Int =
+  |                            `- error: expected initial value after '='
+2 | 
