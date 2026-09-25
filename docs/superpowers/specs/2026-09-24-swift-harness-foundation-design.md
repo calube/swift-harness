@@ -379,6 +379,29 @@ asserting only values the test configured on its own double; `try?` or empty `ca
 sub-project 4) for what tools can't see: vacuous or restated regression names,
 implementation-detail coupling, over-mocking, wrong abstraction level.
 
+**Judge seam (`swiftgate judge`).** The judgment layer is an adapter behind a `Judge` protocol whose
+contract is *typed questions → calibrated probabilities*, not free-form rubric text:
+
+| Question | Type |
+|---|---|
+| Would this test fail if the behavior it names were broken? | binary → p |
+| Which tier does this test belong in (T1/T2/T3)? | choice → p per option |
+| How specific is the regression name (vague/partial/specific)? | score → level + p |
+| Does it assert implementation details rather than behavior? | binary → p |
+
+- Inputs: test source, covered diff, versioned question set. Output: per-test findings in the
+  stable JSON schema (question, answer, probability, one-line rationale where the backend gives one).
+- Backends: Claude via structured output first; a Jev adapter (TypeSafe AI classification model —
+  typed choice/score/yes-no answers with calibrated probabilities, Python SDK `langchain-typesafe`)
+  later. Transport for Jev (REST vs. Python helper) to be verified when that adapter is built.
+- Policy is thresholds, not opinions: p ≥ `block_threshold` may block at `ready`; between the two
+  thresholds is advisory; below is ignored. The judge alone never produces `RED` below `ready`.
+- Cache by hash(test, diff, question-set version, backend, model) → stable re-runs, zero cost on hit.
+  Only new/changed tests are judged.
+- Calibration: `gate/Fixtures/judge/` holds labeled useless/good tests; `swiftgate self-test --judge`
+  reports precision/recall per question and fails if a question-set or backend change regresses them.
+- Remote backends are opt-in per repo (`[judge] backend = "..."`) because test source leaves the machine.
+
 **Escape hatch.** `// swiftgate:allow <rule> — <reason>`; counted in the report; a bare allow
 without a reason is itself `RED`.
 
