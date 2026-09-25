@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
@@ -88,7 +89,7 @@ private struct EvidenceRepo {
     try write("Package.resolved", try Fixture.data("Doctor/Package.resolved-CounterFeature.json"))
   }
 
-  func check(at ref: String? = nil, sdk: String? = nil, design: String? = Self.design) async
+  func check(at ref: String? = nil, sdk: String? = nil, design: String = Self.design) async
     -> EvidenceCheckRun.Outcome
   {
     await EvidenceCheckRun.run(
@@ -354,7 +355,7 @@ struct EvidenceCheckCommandTests {
   }
 
   @Test(
-    "a ref naming no commit, a missing --design or a non-design path exits 2 — catches every claim reported stale against nothing"
+    "a ref naming no commit, a design with no evidence or a non-design path exits 2 — catches every claim reported stale against nothing"
   )
   func unusableInputsExit2() async throws {
     let repo = try await EvidenceRepo()
@@ -364,7 +365,21 @@ struct EvidenceCheckCommandTests {
     try await repo.commitAll("add queue")
 
     #expect(EvidenceCheckRun.exitCode(await repo.check(at: "no-such-branch")) == 2)
-    #expect(EvidenceCheckRun.exitCode(await repo.check(design: nil)) == 2)
+    #expect(
+      EvidenceCheckRun.exitCode(await repo.check(design: "docs/ordering/designs/absent.md")) == 2)
     #expect(EvidenceCheckRun.exitCode(await repo.check(design: "notes/queue.md")) == 2)
+  }
+
+  @Test(
+    "evidence check without --design is a usage error naming the flag — catches a check that runs with no design to read"
+  )
+  func designIsRequiredAtParse() async throws {
+    do {
+      _ = try await SwiftGate.asyncParseAsRoot(["evidence", "check", "--at", "HEAD"])
+      Issue.record("evidence check without --design parsed instead of failing")
+    } catch {
+      #expect(!(error is ExitCode), "parse failure should not be a bare ExitCode")
+      #expect(SwiftGate.message(for: error).contains("--design"), "\(error)")
+    }
   }
 }

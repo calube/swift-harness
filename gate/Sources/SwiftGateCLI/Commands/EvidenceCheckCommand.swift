@@ -14,7 +14,7 @@ struct EvidenceCheckLine: Sendable, Equatable, Encodable {
 /// Loads the design's claims and their sources, then hands every rule to ``EvidenceCheck``.
 enum EvidenceCheckRun {
   struct Options: Sendable, Equatable {
-    var design: String?
+    var design: String
     var at: String?
     /// Repo-relative; read from the ref under `--at`.
     var packageResolved: String
@@ -29,9 +29,7 @@ enum EvidenceCheckRun {
   }
 
   static func run(options: Options, root: URL, runner: any ProcessRunner) async -> Outcome {
-    guard let design = options.design else {
-      return .blocked("--design <doc> is required: it locates <slug>.evidence/claims.jsonl")
-    }
+    let design = options.design
     guard PlanFile.isValidDesignPath(design) else {
       return .blocked(
         "--design `\(design)` must be a repo-relative docs/**/designs/<name>.md path")
@@ -140,7 +138,7 @@ struct EvidenceCheckCommand: AsyncParsableCommand {
       + "failing or stale claim, 2 unreadable or malformed input.")
 
   @Option(help: "The design doc whose <slug>.evidence/claims.jsonl is checked.")
-  var design: String?
+  var design: String
 
   @Option(help: "Check evidence as of this ref instead of the working tree.")
   var at: String?
