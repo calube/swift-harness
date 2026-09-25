@@ -128,3 +128,43 @@ then passed. If it recurs, run it through `flake-hunter`.
   capped at 4,000 characters with an `…and N more` line.
 - `SessionContext.resolvePlans(indexData:)`. Use `PlanIndex.encode()` for index writes: pretty-printed, sorted keys, trailing newline.
   It never fails a session.
+
+## Wave 5
+
+**`plan claim` / `plan release`** (the only writers of `orchestrator.lock`)
+- `swiftgate plan claim <plan> --session <id> [--design docs/**/designs/<name>.md] [--tier quick|standard|deep] [--json]`.
+  Exit 0 when claimed or already held, 1 when held by another session (the message names the holder), 2 when blocked.
+  A new plan requires `--design`.
+- The claim writes the lock by exclusive create (`mkstemp` + `link(2)`). The lock is exactly `<session-id>\n`.
+  A new plan also gets a seed `plan.json` (`design` set, `designSha` and `tier` optional/nil), written with
+  `link(2)` so it never overwrites an existing one.
+- `swiftgate plan release <plan> --session <id> [--force] [--json]`. Exit 0 when released or not claimed, 1 when the
+  caller isn't the holder, 2 when blocked. `--force` needs no `--session` and reports whose lock it overrode.
+- JSON keys: `command`, `plan`, `status` (`claimed`, `already-held`, `held-by-other`, `released`, `not-claimed`,
+  `force-released`, `blocked`), `verdict`, `holder?`, `lockFile?`, `message`.
+- `plan-lint` exits 2 while `designSha` is nil.
+
+**`index set`**
+- `swiftgate index set <slug> <status> <resume>`. `status` must be a `PlanStatus`: `designing`, `in-review`,
+  `approved`, `planned`, `building`, `done`, `abandoned`, `superseded` (spec §5.8). Anything else exits 2 and lists
+  the allowed values.
+- `PlanStatus.isFinished` covers `done`, `abandoned` and `superseded`. SessionStart shows every other status,
+  including an unknown legacy one, as active.
+- `PlanIndexStore(path:lock:timeout:).update { }` does a locked read-modify-write. The lock is `index.lock` next to
+  `index.json`. Writes are atomic (temp file + rename). Malformed JSON throws and never writes.
+  `PlanIndex.settingStatus(slug:status:resume:)` upserts one entry.
+
+**`comments --commit-msg`**
+- `swiftgate comments --commit-msg <file>`: exit 0 when clean, 1 on a leaked id, 2 outside a repo or on an
+  unreadable file. It can't be combined with `--staged` (enforced in `validate()`), so keep that when editing
+  `CommentsCommand.swift`.
+- Bootstrap now stamps the `commit-msg` lefthook stanza, and `gitHooks` includes `commit-msg`.
+- `KnownIdSources.load(root:git:)` returns the ids plus the sources it couldn't read. Each unreadable source is a
+  non-gating `comments.id-source-unreadable` finding.
+- `StaticCheckInputs.load` and `TestlintCheck.run` take an optional `git:` so they can check known ids.
+  `IdLeakScan` is public.
+
+**Test hygiene:** commands that do real work (`plan claim`, `plan release`, `index set`) are listed by exact
+invocation name in `NewSubcommandRegistrationTests.implemented`, because running them there would act on this
+checkout's real shared plan state. When the next stub graduates, add its invocation name there and test it in its
+own suite against a temp repo.

@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–4 merged 2026-09-25 (push tier GREEN). Pre-wave fix: test-support module kind.
+Status: PAUSED after wave 5 (2026-09-25) — waves 1–5 merged on local main, push tier GREEN (771 tests). Main NOT pushed to origin (user decision pending). Handoff audit applied (f5f556d).
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 5 — commit-message-id-check, index-set-under-file-lock, plan-claim-and-release-commands (`--design` seeding fix in flight; section updated).
+Next action: wave 6 — context-pack-slicing, design-diff-and-design-sha, design-lint-diagrams-and-budgets. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).

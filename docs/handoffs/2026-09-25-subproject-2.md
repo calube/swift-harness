@@ -1,12 +1,13 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-25): brainstorm COMPLETE (D1–D24). Spec written and pushed:
-  docs/designs/2026-09-25-design-plan-workflows-design.md — approved. Plan written:
-  docs/plans/2026-09-25-design-plan-workflows-plan.md (NOT STARTED).
-Next action: build it wave by wave with workers, starting at the plan's wave 1.
-Read first: this file → spec RESUME header → spec §2 decision map. Decision log:
-  docs/handoffs/2026-09-25-subproject-2-brainstorm-decisions.md. Grep the spec for sections; don't read it whole.
+State (2026-09-25): BUILD PAUSED after wave 5 of 28 (user's usage limits). Waves 1–5 merged on LOCAL main, push tier
+GREEN (771 tests). Not pushed to origin: pushing is the user's call.
+Next action: wave 6. Drive it with docs/handoffs/subproject-2-orchestrator-runbook.md.
+Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook → the last section of
+docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved;
+grep it by §.
+Needs the user: waves 26–28 (acceptance) are attended runs.
 -->
 
 ## 1. Where things are
