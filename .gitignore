@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+*.xcresult
+.harness/runs/
+DerivedData/
+.DS_Store
