@@ -213,6 +213,9 @@ One JSON object per line in `claims.jsonl` (all examples in §5 are illustrative
 | `probe` | probe file under `probes/` | resolved pins + SDK | probe verdict from `swiftgate probe` |
 | `answer` | `answers.jsonl#<runId>/<n>` (`<n>` = 1-based ordinal within the run) | — | that record exists in `answers.jsonl` |
 
+A `file` loc is repo-relative; every other kind's `loc` is relative to `<slug>.evidence/`, so citations travel
+with the doc. A `capture` pin is `sha256:<lowercase hex>`.
+
 User answers live in `<slug>.evidence/answers.jsonl`, one `{runId, question, options, answer, at}` per line,
 written by the design skill.
 

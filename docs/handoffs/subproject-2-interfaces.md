@@ -321,3 +321,49 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
   repo-root-absolute. Climbing above the root is flagged. External schemes and links inside code are ignored.
 - **`docs-lint-command` must unify the two corpus types** (`ScannedDocument` and `DocFile`) into one, built once
   from the filesystem. Don't keep two readers of the same files.
+
+## Wave 9
+
+**Citation contract for evidence kinds.** `snapshot`, `capture`, `probe` and `answer` locs are relative to
+`<slug>.evidence/`, so citations travel with the doc: `snapshots/<name>`, `captures/<sha256hex>.txt`,
+`probes/Probe_<id>.swift`, `answers.jsonl#<runId>/<n>`. A `file` loc is repo-relative (`<path>:L<a>[-L<b>]`,
+`.build/checkouts/…` allowed); absolute, `~/`, `$HOME` and above-root locs fail. A capture's `pin` is exactly
+`sha256:` + 64 lowercase hex. The one sha256 hex helper is `CaptureDigest.sha256Hex(_: Data)` in
+`D/Evidence/EvidenceCheck.swift`; don't add another.
+
+**`evidence capture`** (`A/Evidence/EvidenceCapture.swift`, `C/Commands/EvidenceCaptureCommand.swift`)
+- `swiftgate evidence capture --design <doc> -- <cmd…>`. argv goes straight to the executable, never a shell.
+- Stores `captures/<sha256(content)>.txt`, plain text:
+  `"$ argv\nexit: exited N|signaled N\n\n--- stdout ---\n…\n\n--- stderr ---\n…\n"`.
+- `EvidenceCapture.run(argv:evidenceRoot:repoRelativeCapturesDirectory:workingDirectory:runner:timeout:)
+  -> Result<Outcome, Failure>`. `Outcome{citation, capturePath, status, stdout, stderr}`; `status` is the
+  process-status enum. JSON: `"status": {"exited": N}` / `{"signaled": N}`, `null` on the blocked path.
+- Exit 0 whenever the capture itself succeeds, whatever the captured command's exit. Exit 2 for a bad
+  `--design`, empty command, launch failure or write failure.
+- `NewSubcommandRegistrationTests.implemented` lists every subcommand whose stub is replaced; each command task
+  adds its own entry there.
+
+**Evidence check rules** (`D/Evidence/EvidenceCheck.swift`), pure, no IO
+- `EvidenceCheck.check(_: [Claim], sources: some EvidenceSources, mode: .workingTree | .atRef)
+  -> [EvidenceCheckResult]`. `EvidenceSources`: `repoFile(path) -> String?`,
+  `evidenceFile(pathUnderEvidenceRoot) -> Data?`, `packageResolved: Data?`, `sdkVersion: String?`.
+  `InMemoryEvidenceSources` implements it. `evidence-check-command` supplies the real one.
+- Outcome: `.passed`, `.relocated(loc:)`, `.failed(EvidenceCheckFailure)`, `.stale(EvidenceStaleReason)`; plus
+  `claimStatus: Claim.Status?` (nil only for a probe with no usable verdict) and `isFailing`.
+- `ProbeVerdictRecord{claimId, verdict: pass|fail, diagnostics[{file,line,column,level,message}],
+  pins{identity: version}, sdk}` at `ProbeVerdictRecord.path(forClaimID:)`, written with `.encode`.
+  `probe-builds-scratch-package` must write this type.
+- `AnswerRecord` lines live at `EvidenceLayout.answersFile`; one bad line fails the whole file. An answer
+  claim's quote, if present, must appear in the recorded question.
+
+**Evidence reuse cache** (`D/Evidence/EvidenceCache.swift`, `A/Evidence/EvidenceCacheStore.swift`)
+- Only `ReusableClaim(_ claim) throws(EvidenceCacheRefusal)` admits a claim; codebase claims are refused.
+  Enums: `ReusableClaimKind`, `EvidenceCacheOrigin` (`research-lane`, `claim-checker`, `probe`),
+  `EvidenceCacheTombstoneReason`, `EvidenceCacheVerdict`.
+- Files under `<home>/.swift-harness/evidence-cache/`: `<pkg>@<ver>.jsonl`, `sdk/<pin>.jsonl`,
+  `verdicts.jsonl`; lock `evidence-cache.lock` (`FileCountingLock`, one slot). Pins must be one file component.
+- Lines: `{"type": "claim"|"verdict"|"reuse"|"tombstone", claim?, origin?, verdict?, reason?, textHash,
+  quoteHash?}`; hashes are sha256 hex.
+- `EvidenceCacheStore(home:lock:timeout:)`: `record`, `recordVerdict`, `markReused`, `markVerdictReused`,
+  `tombstone`, `contents(of: EvidenceCacheBucket) -> EvidenceCacheContents{claims, verdicts, tombstones,
+  findings}`. A corrupt line is a minor `evidence-cache.corrupt-line` finding naming the file, never dropped.

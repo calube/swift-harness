@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: PAUSED after wave 8 (2026-09-25, user request) — waves 1–8 merged and pushed to origin/main, push tier GREEN (1051 tests). Backups at origin backup/subproject-2-wave-<N>. Resuming on a new machine: the runbook's "New machine" section first.
+Status: IN PROGRESS — waves 1–9 merged on local main (1–8 also on origin/main), push tier GREEN (1114 tests). Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 9 — evidence-capture-command, evidence-check-rules, evidence-reuse-cache-store, in a fresh orchestrator session (runbook "Kickoff prompt"). Follow the runbook's wave loop.
+Next action: wave 10 — plan-lint-coverage-and-sizing, plan-schedule-waves, prose-rules-and-command. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
