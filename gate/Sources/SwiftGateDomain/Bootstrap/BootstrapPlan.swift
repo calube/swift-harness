@@ -20,10 +20,12 @@ public struct HarnessTemplates: Sendable, Equatable {
   public let lefthook: String
   /// `.gitignore` lines; comments and blank lines are kept only when the file is created.
   public let gitignore: String
+  /// `docs/index.md`: the docs router, seeded once and then owned by whatever adds rows to it.
+  public let docsIndex: String
 
   public init(
     agents: String, config: String, swiftFormat: String, swiftLint: String, lefthook: String,
-    gitignore: String
+    gitignore: String, docsIndex: String
   ) {
     self.agents = agents
     self.config = config
@@ -31,6 +33,7 @@ public struct HarnessTemplates: Sendable, Equatable {
     self.swiftLint = swiftLint
     self.lefthook = lefthook
     self.gitignore = gitignore
+    self.docsIndex = docsIndex
   }
 }
 
@@ -194,10 +197,10 @@ public enum BootstrapPlanner {
     public static let swiftLint = ".swiftlint.yml"
     public static let lefthook = "lefthook.yml"
     public static let gitignore = ".gitignore"
-    public static let planIndex = PlanIndex.path
+    public static let docsIndex = "docs/index.md"
 
     public static let all = [
-      agents, claude, config, swiftFormat, swiftLint, lefthook, gitignore, planIndex,
+      agents, claude, config, swiftFormat, swiftLint, lefthook, gitignore, docsIndex,
     ]
   }
 
@@ -205,7 +208,6 @@ public enum BootstrapPlanner {
   public static let gitHooks = ["pre-commit", "pre-push"]
   public static let blockBegin = "<!-- swift-harness:begin -->"
   public static let blockEnd = "<!-- swift-harness:end -->"
-  public static let emptyPlanIndex = "{\n  \"plans\" : []\n}\n"
 
   public static func plan(_ inputs: BootstrapInputs) -> BootstrapPlan {
     func existing(_ path: String) -> ExistingEntry { inputs.existing[path] ?? .absent }
@@ -242,7 +244,7 @@ public enum BootstrapPlanner {
       Stamp(
         path: Paths.gitignore,
         change: gitignore(existing(Paths.gitignore), template: inputs.templates.gitignore)))
-    stamps.append(planIndex(existing(Paths.planIndex)))
+    stamps.append(docsIndex(existing(Paths.docsIndex), template: inputs.templates.docsIndex))
 
     var home: [HomeAction] = []
     var notes = inputs.inferred.unresolved.map { "inferred config: \($0)" }
@@ -390,11 +392,12 @@ public enum BootstrapPlanner {
     }
   }
 
-  static func planIndex(_ entry: ExistingEntry) -> Stamp {
+  /// Seeds the docs router once; after that it belongs to whatever adds a row to it (the design
+  /// and plan skills), never to bootstrap.
+  static func docsIndex(_ entry: ExistingEntry, template: String) -> Stamp {
     switch entry {
-    case .absent: Stamp(path: Paths.planIndex, change: .create(emptyPlanIndex))
-    // The index belongs to the plan orchestrator once it exists.
-    case .file, .symlink, .other: Stamp(path: Paths.planIndex, change: .unchanged)
+    case .absent: Stamp(path: Paths.docsIndex, change: .create(template))
+    case .file, .symlink, .other: Stamp(path: Paths.docsIndex, change: .unchanged)
     }
   }
 }

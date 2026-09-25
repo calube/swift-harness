@@ -107,6 +107,7 @@ public enum BootstrapFiles {
     public static let swiftLint = "templates/swiftlint.yml"
     public static let lefthook = "templates/lefthook.yml"
     public static let gitignore = "templates/gitignore"
+    public static let docsIndex = "templates/docs-index.md"
   }
 
   /// Directories never searched for packages: build output, dependency checkouts, bundles.
@@ -126,7 +127,8 @@ public enum BootstrapFiles {
       agents: try read(TemplateNames.agents), config: try read(TemplateNames.config),
       swiftFormat: try read(TemplateNames.swiftFormat),
       swiftLint: try read(TemplateNames.swiftLint),
-      lefthook: try read(TemplateNames.lefthook), gitignore: try read(TemplateNames.gitignore))
+      lefthook: try read(TemplateNames.lefthook), gitignore: try read(TemplateNames.gitignore),
+      docsIndex: try read(TemplateNames.docsIndex))
   }
 
   public static func entry(root: URL, path: String) -> ExistingEntry {

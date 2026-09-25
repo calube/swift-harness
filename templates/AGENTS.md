@@ -22,6 +22,9 @@ code. Pass `--json` for the versioned report; full logs land in `.harness/runs/<
   Rule ids such as `det.date-init` or `A2` point into it.
 - `docs/testing-playbook.md` — tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
 
+**This repository's own docs.** [`docs/index.md`](docs/index.md) routes every doc this repository
+has — designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.
+
 **Skills.** `/swift-harness:architecture` (design a module, pick its kind),
 `/swift-harness:tdd` (test-first), `/swift-harness:test-gate` (pre-ready sequence),
 `/swift-harness:validate` (evidence for a PR), `/swift-harness:comment-audit`,
@@ -31,8 +34,8 @@ code. Pass `--json` for the versioned report; full logs land in `.harness/runs/<
 
 - Never run `xcodebuild` directly, erase simulators, or pass snapshot record flags: go through
   `swiftgate` (`swiftgate test --tier t2|t3`, `swiftgate snapshots record`).
-- Never hand-edit snapshot references, `Package.resolved`, `.xcresult` bundles, or
-  `.harness/plans/`.
+- Never hand-edit snapshot references, `Package.resolved`, `.xcresult` bundles, or plan/ledger
+  state.
 - Waive a rule only on the offending line: `// swiftgate:allow <rule-id> — <reason>`. A bare allow
   is itself RED.
 - Project settings live in `.swiftgate.toml`; this block is managed by `swiftgate bootstrap`, so
