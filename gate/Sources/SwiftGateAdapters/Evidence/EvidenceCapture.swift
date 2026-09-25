@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import SwiftGateDomain
 
@@ -51,7 +50,7 @@ public enum EvidenceCapture {
     let stdout = output.stdout.text
     let stderr = output.stderr.text
     let bytes = serialize(argv: argv, status: output.status, stdout: stdout, stderr: stderr)
-    let hash = hex(bytes)
+    let hash = CaptureDigest.sha256Hex(bytes)
     let fileName = "\(hash).txt"
 
     do {
@@ -101,9 +100,5 @@ public enum EvidenceCapture {
       "`\(executable)` timed out after \(after)"
     case .cancelled(let executable): "`\(executable)` was cancelled"
     }
-  }
-
-  private static func hex(_ data: Data) -> String {
-    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
   }
 }

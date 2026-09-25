@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Which step of the design pipeline wrote a cache entry (spec §8.6: "entries carry `origin`").
@@ -64,7 +63,7 @@ public struct EvidenceFingerprint: Sendable, Hashable, Codable {
   }
 
   static func digest(_ string: String) -> String {
-    SHA256.hash(data: Data(string.utf8)).map { String(format: "%02x", $0) }.joined()
+    CaptureDigest.sha256Hex(Data(string.utf8))
   }
 }
 
