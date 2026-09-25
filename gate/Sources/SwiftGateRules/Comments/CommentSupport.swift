@@ -72,9 +72,19 @@ enum SwiftCodeHeuristic {
     !tree.descendants(of: FunctionCallExprSyntax.self).isEmpty
       || !tree.descendants(of: ClosureExprSyntax.self).isEmpty
       || !tree.descendants(of: AssignmentExprSyntax.self).isEmpty
+      || tree.descendants(of: BinaryOperatorExprSyntax.self).contains {
+        isCompoundAssignment($0.operator.text)
+      }
       || !tree.descendants(of: TryExprSyntax.self).isEmpty
       || !tree.descendants(of: AwaitExprSyntax.self).isEmpty
       || !tree.descendants(of: IfExprSyntax.self).isEmpty
       || !tree.descendants(of: SwitchExprSyntax.self).isEmpty
+  }
+
+  /// Unfolded, `count += 1` is a sequence with a `+=` operator rather than an assignment node.
+  /// Comparisons (`<=`, `>=`, `==`, `!=`, `===`, `!==`) also end in `=`, and are prose-safe.
+  private static func isCompoundAssignment(_ symbol: String) -> Bool {
+    symbol.count >= 2 && symbol.hasSuffix("=")
+      && !["<=", ">=", "==", "!=", "===", "!=="].contains(symbol)
   }
 }

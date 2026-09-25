@@ -28,6 +28,7 @@ struct CommentRulesTests {
     #expect(try lines("comments.commented-out-code", "bad/SingleCall.swift") == [2])
     #expect(try lines("comments.commented-out-code", "bad/MixedBlock.swift") == [3])
     #expect(try lines("comments.commented-out-code", "bad/BlockComment.swift") == [1])
+    #expect(try lines("comments.commented-out-code", "bad/CompoundAssignment.swift") == [2])
     #expect(try lines("comments.commented-out-code", "good/ProseWithKeywords.swift") == [])
   }
 

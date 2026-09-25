@@ -18,3 +18,4 @@ func documented() {}
 let example = "// print(value)"
 // https://example.com/docs/caching
 // Note: the invariant is count > 0
+// Keep retries <= 3 and attempts >= 1; count != 0 after a tap.
