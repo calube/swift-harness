@@ -21,7 +21,12 @@ let package = Package(
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),
+    .target(name: "SwiftGateTestSupport", dependencies: ["SwiftGateDomain", "SwiftGateAdapters"]),
     .testTarget(name: "SwiftGateDomainTests", dependencies: ["SwiftGateDomain"]),
+    .testTarget(
+      name: "SwiftGateAdaptersTests",
+      dependencies: ["SwiftGateDomain", "SwiftGateAdapters", "SwiftGateTestSupport"]
+    ),
     .testTarget(name: "SwiftGateCLITests", dependencies: ["SwiftGateCLI"]),
   ],
   swiftLanguageModes: [.v6]
