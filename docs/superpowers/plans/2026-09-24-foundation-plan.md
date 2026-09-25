@@ -3,7 +3,7 @@
 <!-- RESUME
 Status: M0 complete 2026-09-24.
 Spec: docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md (approved).
-Next action: Wave B (T1.1, T2.1, T5.0, T6.1) — T5.0 waits on TCA×Swift compatibility research.
+Next action: Wave B (T1.1, T2.1, T5.0, T6.1). TCA×Swift compatibility resolved (spec §6.2 toolchain notes).
 Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.
   - T5.0: sample app needs an .xcodeproj — hand-written synchronized-folder pbxproj, fallback = user creates via Xcode template (~2 min).
@@ -180,7 +180,9 @@ Tests: every rule red on `bad`, green on `good`; string literals/comments contai
 ### T5.0 `examples/SampleApp`
 - Thin app target + `Packages/`: `CounterFeature` (Core TCA + UI), `GameEngine` (engine kind),
   `APIClient`/`APIClientLive`, `HTTPClient`/`HTTPClientLive`, `LogClient`/`LogClientLive`.
-  Point-Free deps at spec §6.2 pins.
+  Point-Free deps at spec §6.2 pins; no direct `swift-issue-reporting` dependency on Swift 6.2;
+  Core packages without MainActor default isolation (TCA #3768). Reference graph that resolves and builds
+  on 26.2 was proven in a scratch package during research — reuse its pins.
 - App project: hand-written synchronized-folder `.xcodeproj`; fallback: user creates it from the Xcode
   template and the task continues from there.
 - Verify: builds for the iOS 26.2 simulator; `swift test` green on every Core package.
@@ -194,11 +196,12 @@ Tests: every rule red on `bad`, green on `good`; string literals/comments contai
 
 ### T5.3 `test --tier t2|t3`
 - `xcodebuild test` via ProcessRunner with per-worktree `-derivedDataPath`, cloned destination,
-  `SNAPSHOT_TESTING_RECORD=never`, retry flags refused; T3 flows mapped to `[[flows]]`.
+  `SNAPSHOT_TESTING_RECORD=never`, `-skipMacroValidation`, retry flags refused; T3 flows mapped to `[[flows]]`.
 
 ### T5.4 `snapshots record`, `doctor`, `gc`
 - `record` only on the pinned device/OS; `doctor` checks Xcode pin, runtimes, disk, symlink,
-  SwiftLint presence (warn); `gc` prunes DerivedData + runs by age.
+  SwiftLint presence (warn), direct `swift-issue-reporting` dep on toolchain < 6.4 (red),
+  MainActor default isolation on a Core target (red), recorded Xcode-upgrade hazards (warn); `gc` prunes DerivedData + runs by age.
 
 ### T5.5 `prove`, `stress`, per-test reach
 - `prove`: scratch worktree, reverse-apply source diff, new tests must fail on assertion.

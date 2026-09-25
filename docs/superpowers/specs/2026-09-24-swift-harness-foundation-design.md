@@ -302,9 +302,16 @@ pointfree.co posts. No standard may cite an API not verified here; re-verify on 
 | swift-clocks | 1.1.1 | `TestClock`, `ImmediateClock`, `.test` constructor. |
 | swift-custom-dump | 1.7.3 | `expectNoDifference`; `.customDump` snapshot strategy over soft-deprecated `.dump`. |
 | swift-concurrency-extras | 1.4.1 | `withMainSerialExecutor` sets a process-global hook; docs are XCTest-only. Treat as unsafe under Swift Testing parallelism unless the suite is `.serialized` (inferred, not documented). |
-| swift-issue-reporting | 2.1.1 | Renamed from `xctest-dynamic-overlay`; depend on 2.1+. |
+| swift-issue-reporting | — (see toolchain notes) | **Do not declare directly on Swift 6.2.** Point-Free packages' 6.x fallback manifests depend on `xctest-dynamic-overlay` 1.13+, which provides the `IssueReporting` module; adding `swift-issue-reporting` 2.x fails with a conflicting-target error. The 2.x split applies from Swift 6.4 (Xcode 27). |
 | swift-sharing | 2.10.1 | |
 | swift-perception | — | Not needed at iOS 18+ (native Observation); no `WithPerceptionTracking`. |
+
+**Toolchain compatibility (verified 2026-09-24 by resolving and building the pinned graph on Xcode 26.2 / Swift 6.2.3):**
+
+- TCA 1.26.2 on Swift 6.2 selects its `Package@swift-6.1.swift` manifest; Swift ≥ 6.1 is required since TCA 1.24. swift-syntax range `509..<605` (602.x in the same graph builds).
+- `xcodebuild` must pass `-skipMacroValidation` headlessly or macro targets fail with "Macro … must be enabled"; `swiftgate` passes it for T2/T3 (dependencies are pinned, so the trust decision is made at pin time).
+- Open issue pointfreeco/swift-composable-architecture#3768: `@Reducer` enums break under `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor`. Rule: Core packages don't use MainActor default isolation.
+- Upgrade hazards recorded for `doctor`: Xcode 26.4 (Swift 6.3) needs TCA ≥ 1.24 and swift-sharing ≥ 2.8.0, and rejects writable key paths to `@Shared` state (#3899/#3900); Xcode 27 (Swift 6.4) needs TCA ≥ 1.26.
 
 Canonical feature shape (TCA 1.26): `@Reducer struct` + `@ObservableState struct State` + `body`
 with `Reduce`; actions named for what happened (`saveButtonTapped`, `itemsResponse(...)`).
