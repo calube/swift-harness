@@ -7,7 +7,7 @@ public enum CommentRules {
   public static let all: [any Rule] = [
     CommentedOutCodeRule(), DiffNarrationRule(), LineReferenceRule(), TodoWithoutLinkRule(),
     PrivateReferenceRule(), UnjustifiedSuppressionRule(), LongBlockRule(), RestatesCodeRule(),
-    TestBodyCommentRule(), TrivialPrivateDocRule(), AIProseRule(),
+    TestBodyCommentRule(), TrivialPrivateDocRule(), AIProseRule(), LeakedIdRule(),
   ]
 }
 
@@ -151,7 +151,7 @@ struct PrivateReferenceRule: CommentPatternRule {
     }
     for codename in context.privateCodenames where !codename.isEmpty {
       for match in comment.text.ranges(of: codename)
-      where isWholeWord(match, in: comment.text) {
+      where IdLeakScan.isWholeWordMatch(match, in: comment.text) {
         result.append(
           (
             comment.line(atTextOffset: match.lowerBound),
@@ -160,14 +160,6 @@ struct PrivateReferenceRule: CommentPatternRule {
       }
     }
     return result
-  }
-
-  private func isWholeWord(_ range: Range<String.Index>, in text: String) -> Bool {
-    let before =
-      range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
-    let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
-    return !(before?.isLetter ?? false) && !(before?.isNumber ?? false)
-      && !(after?.isLetter ?? false) && !(after?.isNumber ?? false)
   }
 }
 
@@ -476,5 +468,88 @@ struct AIProseRule: CommentPatternRule {
     var lines = Set(patterns.flatMap(comment.matchLines))
     if comment.text.count(where: { $0 == "—" }) >= 2 { lines.insert(comment.startLine) }
     return lines.sorted().map { ($0, "AI-prose tell; say the fact plainly or delete it") }
+  }
+}
+
+struct LeakedIdRule: CommentPatternRule {
+  let descriptor = RuleDescriptor(
+    id: "comments.leaked-id", severity: .major,
+    summary: "a ledger/claim/doc id, or a plan-codename shape, leaked into a comment")
+
+  func matches(in comment: SourceComment, context: RuleContext) -> [(line: Int, message: String)] {
+    IdLeakScan.matches(in: comment.text, knownIds: context.knownIds).map {
+      (comment.line(atTextOffset: $0.range.lowerBound), $0.message)
+    }
+  }
+}
+
+// MARK: - Known-id and codename leaks (spec §5.1)
+
+/// Detects spec §5.1's two banned shapes wherever free text can carry them, so `comments` and
+/// `testlint` read a leak the same way: an exact known id (ledger task, claim or doc id — the
+/// caller supplies the set ``KnownIds`` builds) and a codename-shaped token (`Phase N`/`Stage
+/// N`/`Wave N`, or the bare task-id shape `[A-Z]{1,3}\d{1,2}[a-z]?`). Both checks require a
+/// whole-word match, so an id or codename embedded inside a longer identifier is left alone.
+enum IdLeakScan {
+  static func matches(in text: String, knownIds: Set<String>) -> [(
+    range: Range<String.Index>, message: String
+  )] {
+    var found: [(range: Range<String.Index>, message: String)] = []
+    for id in knownIds.sorted() where !id.isEmpty {
+      for range in text.ranges(of: id) where isWholeWordMatch(range, in: text) {
+        found.append(
+          (
+            range,
+            "known id \"\(id)\" leaked outside the ledger/evidence it belongs to; ids are local "
+              + "and never appear in committed code"
+          ))
+      }
+    }
+    // Local, not static: a stored `static let [Regex<Substring>]` fails the Swift 6
+    // concurrency-safety check (`Regex` isn't provably `Sendable` to the compiler), the same
+    // reason every other pattern-matching rule in this file builds its regex list per call.
+    let codenamePatterns: [Regex<Substring>] = [
+      // `Phase N` / `Stage N` / `Wave N` (spec §5.1), hyphen- or space-separated, with an
+      // optional letter suffix (`Stage-0a`). Case-sensitive on purpose: lowercase "phase" reads
+      // as an adjective ("phase-locked loop"), not a plan codename.
+      /\b(?:Phase|Stage|Wave)[ -]\d+[a-z]?\b/,
+      // The bare task-id shape (spec §5.1): 2-3 uppercase letters, 1-2 digits, optional lowercase
+      // letter (`SH1`, `KO01`, `PR2a`). A single leading letter is deliberately excluded — this
+      // harness's own tests prove that shape collides with ordinary abbreviations (test tiers
+      // `T0`-`T3`, a `-R1` revision suffix, a standards code like `D7`), so it would flag its own
+      // corpus. Bounded at 3 letters and 2 digits so the match never starts inside a longer
+      // all-caps acronym (`HTTP2` has 4 leading letters) or spans a 3-digit version number
+      // (`H264`) — in both cases the excess character breaks the closing `\b`, so no match is
+      // found there at all.
+      /\b[A-Z]{2,3}\d{1,2}[a-z]?\b/,
+    ]
+    for pattern in codenamePatterns {
+      for match in text.matches(of: pattern)
+      where !technicalTokenExceptions.contains(text[match.range].uppercased()) {
+        found.append(
+          (
+            match.range,
+            "\"\(text[match.range])\" looks like a plan codename; describe the work instead of "
+              + "naming a phase, wave or task id"
+          ))
+      }
+    }
+    return found.sorted { $0.range.lowerBound < $1.range.lowerBound }
+  }
+
+  /// Established technical vocabulary that still fits the bare task-id shape verbatim — a
+  /// hash/encoding name (`UTF8`, `SHA1`, `MD5`) or a CPU shorthand (`ARM64`) — so needs an
+  /// explicit exception; shrinking the shape further to exclude them would also exclude real
+  /// codenames of the same length (`SH1`, `KO01`).
+  private static let technicalTokenExceptions: Set<String> = [
+    "UTF8", "SHA1", "MD5", "ARM64",
+  ]
+
+  static func isWholeWordMatch(_ range: Range<String.Index>, in text: String) -> Bool {
+    let before =
+      range.lowerBound == text.startIndex ? nil : text[text.index(before: range.lowerBound)]
+    let after = range.upperBound == text.endIndex ? nil : text[range.upperBound]
+    return !(before?.isLetter ?? false) && !(before?.isNumber ?? false)
+      && !(after?.isLetter ?? false) && !(after?.isNumber ?? false)
   }
 }

@@ -8,6 +8,7 @@ public enum TestlintRules {
     NoAssertionRule(), TautologyRule(), ExistenceOnlyRule(), AssertsOwnDoubleRule(),
     SwallowedErrorRule(), SleepRule(), DuplicateTestRule(), UnnamedTestRule(),
     NonExhaustiveStoreRule(), XCUITestFlowRule(), MisplacedT2Rule(), TestClockSerializedRule(),
+    LeakedTestNameIdRule(),
   ]
 }
 
@@ -582,5 +583,48 @@ struct MisplacedT2Rule: FileRule {
           "simulator (T2) test renders no view or snapshot and imports only Core/Client modules; "
           + "move it to the module's T1 host tests")
     ]
+  }
+}
+
+/// D18 (spec §5.1) for test names: a ledger/claim/doc id, or a plan-codename shape, must not leak
+/// into a `@Test` display name or an XCTest method name. Shares its matching with `comments`
+/// (``IdLeakScan``) so a leak reads the same whether it lands in a comment or a test name.
+struct LeakedTestNameIdRule: FileRule {
+  let descriptor = RuleDescriptor(
+    id: "test.leaked-id", severity: redSeverity,
+    summary: "a ledger/claim/doc id, or a plan-codename shape, leaked into a test name")
+  let scope = RuleScope.testFiles
+
+  func check(_ unit: SourceUnit, context: RuleContext) -> [RuleViolation] {
+    TestFile(unit).tests.flatMap { test -> [RuleViolation] in
+      var violations = IdLeakScan.matches(in: test.name, knownIds: context.knownIds).map {
+        unit.violation(
+          atStartOf: test.decl, message: "test name \($0.message) (\"\(test.name)\")")
+      }
+      guard let attribute = test.testAttribute, let literal = Self.displayNameLiteral(attribute)
+      else { return violations }
+      let displayName = Self.literalText(literal)
+      violations += IdLeakScan.matches(in: displayName, knownIds: context.knownIds).map {
+        unit.violation(atStartOf: literal, message: "test name \($0.message)")
+      }
+      return violations
+    }
+  }
+
+  /// The `@Test("<display name>", ...)` string literal, mirroring how `UnnamedTestRule` finds it.
+  private static func displayNameLiteral(_ attribute: AttributeSyntax) -> StringLiteralExprSyntax? {
+    guard case .argumentList(let arguments) = attribute.arguments, let first = arguments.first,
+      first.label == nil
+    else { return nil }
+    return first.expression.as(StringLiteralExprSyntax.self)
+  }
+
+  /// Concatenates plain segments; an interpolated segment contributes nothing; display names are
+  /// static literals, so this loses no id an author could actually write.
+  private static func literalText(_ literal: StringLiteralExprSyntax) -> String {
+    literal.segments.compactMap {
+      if case .stringSegment(let piece) = $0 { return piece.content.text }
+      return nil
+    }.joined()
   }
 }
