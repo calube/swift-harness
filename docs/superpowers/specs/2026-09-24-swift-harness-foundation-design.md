@@ -414,15 +414,36 @@ Rule: if deleting a comment loses nothing a reader can't recover from the code, 
 non-obvious *why*, footgun warnings, suppression justifications, and contract docs (`///`) on
 public/shared API. No diff/history narration in source.
 
-- **Mechanical — `swiftgate comments --staged`** (git pre-commit, every commit, < 1s, blocks):
-  commented-out code (fragment parses as Swift), diff narration ("changed from", "previously",
-  "now uses", "fixed bug where"), line-number references, `TODO`/`FIXME` without an issue link,
-  `swiftlint:disable` without an inline reason, local paths / private codenames, `///` that restates
-  the symbol name on trivial private declarations. Scoped to comments in staged hunks only.
+- **Mechanical — `swiftgate comments --staged`** (git pre-commit, every commit, < 1s; comments on
+  added lines only). High-precision rules **block**:
+  - commented-out code (the fragment parses as Swift)
+  - diff narration ("previously", "now uses", "switched from", "this PR", "fixed bug where")
+  - line-number references
+  - `TODO`/`FIXME` without an issue link
+  - local paths and private codenames
+  - an unjustified suppression: `swiftlint:disable*`, `swiftformat:disable`, `periphery:ignore`,
+    `try!`, `as!`, `@unchecked Sendable`, `nonisolated(unsafe)` and `@preconcurrency` each need a
+    same-line reason
+
+  Heuristic rules **warn** (fed to the judgment pass, never block):
+  - blocks over 3 lines
+  - a comment directly above an `if`/`guard`/`return`/`catch` that restates it
+  - comments inside test bodies (arrange/act/assert labels; the `@Test` name should carry the meaning)
+  - `///` on trivial private declarations
+  - AI-prose tells (em-dash clusters, "it's worth noting", "importantly", "not X, it's Y")
+
+  Always kept: `// MARK:`, `#warning`, `@available(..., message:)`, justified suppressions, and `///`
+  contracts on `public`/`package` API.
 - **Judgment — `/swift-comment-audit` + judge questions** (Claude-authored commits only, via the
-  PreToolUse `git commit` hook; advisory, cached by content hash): Boolean "does this comment convey
-  information not recoverable from the code?"; Choice keep / trim / delete. Proposes edits for Claude
-  to apply; never blocks, never runs on human commits.
+  PreToolUse `git commit` hook; advisory, cached by content hash). Runs in an isolated subagent that
+  doesn't see the author's reasoning.
+  - **Test 1:** would the reader lose a fact the code can't give back? No means CUT.
+  - **Test 2:** is a KEEP the right size? If not, TRIM: delete it and rewrite the surviving fact fresh.
+  - **Evidence per verdict:** precedent (how often the same construct appears uncommented), owner
+    (the fact already lives in a type/doc), ward (a plausible edit that compiles and passes tests but
+    is wrong, which the comment prevents), and test (could a test replace the comment? If yes, write
+    the test and CUT).
+  - Proposes edits for Claude to apply. It never blocks and never runs on human commits.
 - Self-test fixtures for each mechanical rule, plus labeled keep/delete examples in the judge
   calibration set.
 
