@@ -113,3 +113,15 @@ Observed behavior the evidence rules rely on:
   XCTest crashes name only the crashing symbol.
 - A build error's `sourceURL` is `file://<abs path>#…&StartingLineNumber=<0-based>&…`.
 - An unresolved destination records a device whose `deviceId` is empty.
+
+## Simctl
+
+`Simctl/<call>.{stdout,stderr,status}` are captured by `gate/Fixtures/simctl/capture.sh` (run from
+the repository root): each file is one real `xcrun simctl` call against a throwaway clone of the
+pinned simulator (`clone`, `list-devices` while the clone exists, `bootstatus -b`, `launch` of
+`com.apple.Preferences`, `install` of a missing app, `shutdown`, `delete`), plus `clone` and `delete`
+of an all-zero UDID. The scratch path is replaced with `/SCRATCH`.
+
+- `simctl clone` prints only the new UDID; `launch` prints `<bundle id>: <pid>`.
+- An unknown device exits 148 with `Invalid device: <udid>`.
+- `bootstatus -b` boots the device and exits once it has finished booting.
