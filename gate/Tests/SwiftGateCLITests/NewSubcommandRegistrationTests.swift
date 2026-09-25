@@ -62,6 +62,7 @@ struct NewSubcommandRegistrationTests {
     "context-pack",
     "design-lint",
     "docs-lint",
+    "evidence check", "evidence check --at",
   ]
 
   @Test(
