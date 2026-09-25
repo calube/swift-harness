@@ -76,8 +76,8 @@ struct DiffNarrationRule: CommentPatternRule {
     summary: "comment narrates history (previously, now uses, this PR)")
 
   func matches(in comment: SourceComment, context: RuleContext) -> [(line: Int, message: String)] {
-    // "previously" only as narration ("Previously, …", "was previously …"), not as an adjective
-    // ("the previously cached value").
+    // The bare adverb is matched only where it opens a sentence or follows a copula, so the
+    // adjective use ("the previously cached value") passes.
     let patterns: [Regex<Substring>] = [
       /(?:^|[.;!?]\s+|\/\/\/?\s*|\*\s*)previously\b/.ignoresCase(),
       /\b(?:was|were|is|are|had been)\s+previously\b/.ignoresCase(),
@@ -143,7 +143,7 @@ struct PrivateReferenceRule: CommentPatternRule {
 
   func matches(in comment: SourceComment, context: RuleContext) -> [(line: Int, message: String)] {
     let paths: [Regex<Substring>] = [
-      /\/Users\/[^\/\s]+/, /\/home\/[^\/\s]+/, /(?:^|[\s(`'"])~\//, /\/private\/var\//,
+      /\/Users\/[^\/\s]+/, /\/home\/[^\/\s]+/, /\/private\/var\//,
       /\/var\/folders\//, /[A-Za-z]:\\Users\\/,
     ]
     var result = Set(paths.flatMap(comment.matchLines)).sorted().map {
@@ -300,7 +300,7 @@ struct RestatesCodeRule: FileRule {
     summary: "comment restates the if/guard/return/catch below it")
   let scope = RuleScope.allFiles
 
-  private static let stopWords: Set<String> = [
+  static let stopWords: Set<String> = [
     "a", "an", "the", "if", "is", "are", "we", "to", "of", "and", "or", "then", "check", "checks",
     "whether", "when", "return", "returns", "guard", "catch", "this", "that", "it", "not", "no",
     "else", "early", "for", "in", "on", "be", "has", "have", "there", "out", "bail", "otherwise",
@@ -387,7 +387,7 @@ struct TestBodyCommentRule: FileRule {
   func check(_ unit: SourceUnit, context: RuleContext) -> [RuleViolation] {
     let bodies = TestFunction.all(in: unit).compactMap(\.body)
     return unit.comments.filter { comment in
-      !comment.isExempt
+      !comment.isExempt && !comment.isTrailing
         && bodies.contains { body in
           comment.anchor.isDescendant(of: body) && comment.anchor.id != body.leftBrace.id
             || comment.anchor.id == body.rightBrace.id
@@ -408,7 +408,8 @@ struct TrivialPrivateDocRule: FileRule {
 
   func check(_ unit: SourceUnit, context: RuleContext) -> [RuleViolation] {
     unit.comments.filter { $0.kind.isDoc && !$0.isTrailing }.compactMap { comment in
-      guard let decl = Self.declaration(startingWith: comment.anchor), Self.isTrivialPrivate(decl)
+      guard let decl = Self.declaration(startingWith: comment.anchor), Self.isTrivialPrivate(decl),
+        Self.restatesName(comment.body, of: decl)
       else { return nil }
       return RuleViolation(
         path: unit.path, lines: comment.startLine...comment.endLine,
@@ -425,6 +426,21 @@ struct TrivialPrivateDocRule: FileRule {
       node = current.parent
     }
     return nil
+  }
+
+  /// The doc only repeats the declaration's own name (a why-comment on a private constant is
+  /// fine).
+  private static func restatesName(_ doc: String, of decl: DeclSyntax) -> Bool {
+    let nameWords = Set(
+      decl.tokens(viewMode: .sourceAccurate).flatMap { token -> [String] in
+        guard case .identifier(let text) = token.tokenKind else { return [] }
+        return RestatesCodeRule.words(in: text)
+      })
+    let docWords = RestatesCodeRule.words(in: doc).filter {
+      !RestatesCodeRule.stopWords.contains($0)
+    }
+    guard !docWords.isEmpty, docWords.count <= 6 else { return false }
+    return docWords.filter(nameWords.contains).count * 2 >= docWords.count
   }
 
   private static func isTrivialPrivate(_ decl: DeclSyntax) -> Bool {

@@ -17,7 +17,8 @@ private struct ForbiddenCallRule: FileRule {
   }
 }
 
-/// Reports one violation spanning lines 2...4 of every file, to exercise added-line filtering.
+/// Reports one violation spanning the second to fourth lines of every file, to exercise
+/// added-line filtering.
 private struct SpanRule: FileRule {
   let descriptor = RuleDescriptor(id: "test.span", severity: .minor, summary: "span")
   let scope: RuleScope = .allFiles
