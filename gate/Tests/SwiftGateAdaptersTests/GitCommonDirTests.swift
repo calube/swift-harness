@@ -165,4 +165,85 @@ struct GitCommonDirTests {
     await #expect(throws: GitError.invalidRef("x")) { _ = try await failing.commonDirectory() }
     await #expect(throws: GitError.invalidRef("x")) { _ = try await failing.blobContents("abcd") }
   }
+
+  @Test(
+    "a file's revisions follow its rename, newest first — catches a design pin lost when the doc moves"
+  )
+  func revisionsFollowRenames() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("old.md", "one\n")
+    let first = try await repo.commitAll("one")
+    try repo.write("old.md", "two\n")
+    let second = try await repo.commitAll("two")
+    try await repo.git("mv", "old.md", "new.md")
+    let renamed = try await repo.commitAll("rename")
+    try repo.write("unrelated.md", "x\n")
+    _ = try await repo.commitAll("unrelated")
+    try repo.write("new.md", "three\n")
+    let third = try await repo.commitAll("three")
+
+    #expect(try await repo.adapter.revisions(of: "new.md") == [third, renamed, second, first])
+    let pinned = try await repo.adapter.contents(of: ["old.md"], at: second)
+    #expect(
+      GitBlobID.of(try #require(pinned["old.md"]))
+        == (try await repo.git("rev-parse", "\(second):old.md")))
+  }
+
+  @Test("an untracked or unknown path has no revisions — catches a missing file read as an error")
+  func revisionsOfUntrackedPath() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("A.swift", "a\n")
+    _ = try await repo.commitAll("base")
+    try repo.write("untracked.md", "u\n")
+
+    #expect(try await repo.adapter.revisions(of: "untracked.md") == [])
+    #expect(try await repo.adapter.revisions(of: "no/such/file.md") == [])
+  }
+
+  @Test(
+    "revisions outside a git repository are a BLOCKED error — catches no history read as no pin")
+  func revisionsOutsideRepository() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-nogit-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let git = LiveGit(
+      runner: LiveProcessRunner(
+        baseEnvironment: TemporaryGitRepository.environment.merging(
+          ["GIT_CEILING_DIRECTORIES": directory.deletingLastPathComponent().path]) { $1 }),
+      repositoryRoot: directory.path)
+
+    await #expect {
+      _ = try await git.revisions(of: "design.md")
+    } throws: { error in
+      guard let error = error as? GitError, case .commandFailed = error else { return false }
+      return error.verdict == .blocked
+    }
+  }
+
+  @Test(
+    "empty or NUL paths are rejected before git runs — catches a log of the whole repository",
+    arguments: ["", "a\0b"])
+  func revisionsRejectBadPath(path: String) async {
+    let runner = FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(status: .exited(0))
+    }
+    let git = LiveGit(runner: runner, repositoryRoot: "/repo")
+    await #expect(throws: GitError.invalidPath(path)) {
+      _ = try await git.revisions(of: path)
+    }
+    #expect(runner.invocations.isEmpty)
+  }
+
+  @Test("the fake answers the history it was given — catches command tests seeing no revisions")
+  func fakeRevisions() async throws {
+    let git = FakeGit(history: ["docs/d.md": ["c2", "c1"]])
+    #expect(try await git.revisions(of: "docs/d.md") == ["c2", "c1"])
+    #expect(try await git.revisions(of: "other.md") == [])
+    await #expect(throws: GitError.invalidRef("x")) {
+      _ = try await FakeGit(failure: .invalidRef("x")).revisions(of: "docs/d.md")
+    }
+  }
 }

@@ -49,6 +49,11 @@ public protocol Git: Sendable {
   /// object (or an abbreviated `id` is ambiguous). An `id` naming a non-blob object throws. `id` must be a hex object name (4–64 characters); anything else throws
   /// ``GitError/invalidRef(_:)`` so refs and `<ref>:<path>` forms can't stand in for a pinned blob.
   func blobContents(_ id: String) async throws(GitError) -> String?
+
+  /// Commits that touched the toplevel-relative `path`, newest first, following renames. A path
+  /// with no history (untracked or unknown) has none. Empty or NUL-bearing paths throw
+  /// ``GitError/invalidPath(_:)``.
+  func revisions(of path: String) async throws(GitError) -> [String]
 }
 
 /// Every case means git could not answer, which is never evidence about the code: `blocked`.
@@ -57,6 +62,8 @@ public enum GitError: Error, Sendable, Equatable {
   case commandFailed(arguments: [String], status: ExitStatus, stderr: String)
   /// Refs beginning with `-` would be parsed by git as options.
   case invalidRef(String)
+  /// Empty or NUL-bearing paths can't name one file.
+  case invalidPath(String)
   case unparseableOutput(command: String, detail: String)
 
   public var verdict: Verdict { .blocked }

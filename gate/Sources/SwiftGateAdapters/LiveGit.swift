@@ -180,6 +180,29 @@ public struct LiveGit: Git, DiffReading {
     }
   }
 
+  public func revisions(of path: String) async throws(GitError) -> [String] {
+    if path.isEmpty || path.contains("\0") { throw .invalidPath(path) }
+    // `top` keeps the path toplevel-relative from a nested root; `literal` stops glob expansion.
+    // `log.showSignature` would print signature text between the ids.
+    let output = try await run([
+      "-c", "log.showSignature=false", "log", "--follow", "--format=%H", "--",
+      ":(top,literal)\(path)",
+    ])
+    let ids = output.split(separator: "\n").map(String.init)
+    if let bad = ids.first(where: { !Self.isObjectID($0) }) {
+      throw .unparseableOutput(command: "log", detail: "not a commit id: \(bad)")
+    }
+    return ids
+  }
+
+  private static func isObjectID(_ text: String) -> Bool {
+    (text.utf8.count == 40 || text.utf8.count == 64)
+      && text.utf8.allSatisfy {
+        (UInt8(ascii: "0")...UInt8(ascii: "9")).contains($0)
+          || (UInt8(ascii: "a")...UInt8(ascii: "f")).contains($0)
+      }
+  }
+
   public func unifiedDiff(since ref: String) async throws(GitError) -> String {
     try Self.validate(ref: ref)
     return try await run([
