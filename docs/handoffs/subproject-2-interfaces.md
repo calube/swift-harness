@@ -72,8 +72,27 @@ Only the orchestrator edits this file, appending one section per wave at merge. 
 - Test-plan tier parsing splits on the literal `" — tier "`.
 - `gate/Fixtures/design/valid.md` is a full, spec-compliant design doc. Later waves treat it as read-only.
 
-## Wave 3 (in progress)
+## Wave 3
 
 - **`designSha` isn't retrievable.** It hashes content that git never stores. Find a revision by walking
   `git log --follow -- <doc>` and hashing each revision with its status line stripped (`hash-object --stdin`, never `-w`).
   `Git.blobContents` only finds blobs that are actually stored, so don't use it to look up a `designSha` (spec §5.4).
+
+**Shared plan state**
+- `Git.commonDirectory()` returns an absolute, realpath-canonical path. Empty or no repository → BLOCKED.
+- `Git.revisions(of:)` lists commit ids newest first and follows renames. It throws `GitError.invalidPath` on an empty or NUL path.
+  `Git.blobContents(_:)` only finds stored blobs.
+- `PlanStateLayout(commonDirectory:)` exposes `.root` (`<common>/swift-harness/plans`) and `.indexFile`.
+  `.plan(name)` gives `{directory, planFile, ledgerFile, orchestratorLock}` and rejects `/`, `.`, `..`, NUL, newline and empty names.
+- `FakeGit(commonDirectory:, blobs:, history:)`. Its existing `revisions:` parameter is for `revision(_:)`.
+- `GitBlobID.of(_:)` computes git's blob id (SHA-1 of `blob <bytes>\0content`) in process.
+
+**Probes**
+- `ProbeIdentifier.enumName(forClaimID:)` / `fileName(forClaimID:)` → `Probe_<id with - as _>` and `Probe_<…>.swift`.
+  The probe builder MUST name files this way.
+- `CompilerDiagnostics.parse(_:)` reads only the primary `path:line:col: error|warning:` lines.
+  `ProbeAttribution.attribute(_:probes:)` matches by file basename. An error it can't attribute forces at least BLOCKED.
+- Fixtures are `gate/Tests/Fixtures/Probe/{good,mixed,unattributed}`; the capture recipe is in `gate/Tests/Fixtures/README.md`.
+
+**Known suspect flake:** the Foundation shim test ("swiftgate shim caches and rebuilds") failed once on a cold rebuild,
+then passed. If it recurs, run it through `flake-hunter`.

@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–2 merged 2026-09-25 (push tier GREEN). Pre-wave fix: test-support module kind.
+Status: IN PROGRESS — waves 1–3 merged 2026-09-25 (push tier GREEN). Pre-wave fix: test-support module kind.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 3 — plan-state-paths-in-git-common-dir, probe-diagnostic-verdicts.
+Next action: wave 4 — edit-guard-covers-design-and-plan-state, known-id-leak-rules, session-start-reads-shared-plan-index.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); live `agent_id` payload (plugin-installs-for-real).
