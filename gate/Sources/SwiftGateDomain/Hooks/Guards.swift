@@ -203,3 +203,175 @@ public enum OrchestratorMarker {
     return lockContents.trimmingCharacters(in: .whitespacesAndNewlines) == sessionID
   }
 }
+
+/// Edit/Write guard over shared plan state and committed design artifacts (spec §4, §6.3). Only the
+/// orchestrating main session writes them; workers report instead (spec §5.9).
+///
+/// Paths are classified after the caller has resolved them to absolute, symlink-free form, and
+/// component names compare case-insensitively: the default APFS volume is case-insensitive, and a
+/// component that does not exist yet keeps whatever case the caller spelled it in.
+public enum PlanStateGuard {
+  public enum Target: Sendable, Equatable {
+    /// A plan's claim. Only `swiftgate plan claim|release` write it, never a tool edit.
+    case orchestratorLock
+    /// Under a plans root but naming no valid plan; nobody may write it.
+    case malformedPlanPath
+    /// Any file inside one plan's directory: writable by that plan's lock holder.
+    case planFile(PlanStateLayout.Plan)
+    /// `index.json` or any other file directly under a plans root: writable by any lock holder.
+    case sharedPlanFile(PlanStateLayout)
+    /// `docs/**/designs/*.md`, or anything under its `<doc>.evidence/` directory: writable only
+    /// by the holder of the plan whose `plan.json` names `document`.
+    case designArtifact(document: String)
+  }
+
+  /// One plan under the repository's common dir, as the caller read it.
+  public struct PlanRecord: Sendable, Equatable {
+    public enum Design: Sendable, Equatable {
+      /// `plan.json`'s `design`, resolved to the same canonical form as the written path.
+      case named(String)
+      /// `plan.json` is missing or doesn't decode; the plan owns no design.
+      case unreadable
+    }
+
+    public let name: String
+    /// The lock's contents, `nil` when the plan is unclaimed.
+    public let lock: String?
+    public let design: Design
+
+    public init(name: String, lock: String?, design: Design) {
+      self.name = name
+      self.lock = lock
+      self.design = design
+    }
+  }
+
+  /// Which locks decide a write to a plan-state target; the caller reads them, this type never
+  /// does. A design artifact is decided by ``PlanRecord``s instead.
+  public enum LockScope: Sendable, Equatable {
+    case none
+    case plan(PlanStateLayout.Plan)
+    case everyPlan(PlanStateLayout)
+  }
+
+  /// `path` must be absolute with symlinks and `..` already resolved.
+  public static func target(ofResolvedPath path: String) -> Target? {
+    let components = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+    let lowered = components.map { $0.lowercased() }
+    if let target = planStateTarget(components, lowered) { return target }
+    if let document = designDocument(components, lowered) {
+      return .designArtifact(document: document)
+    }
+    return nil
+  }
+
+  public static func lockScope(of target: Target) -> LockScope {
+    switch target {
+    case .orchestratorLock, .malformedPlanPath, .designArtifact: .none
+    case .planFile(let plan): .plan(plan)
+    case .sharedPlanFile(let layout): .everyPlan(layout)
+    }
+  }
+
+  /// `locks` holds the contents of each lock file in ``lockScope(of:)`` that exists; `plans`
+  /// describes every plan for a ``Target/designArtifact(document:)``.
+  public static func evaluate(
+    _ target: Target, locks: [String], plans: [PlanRecord] = [], environmentValue: String?,
+    sessionID: String, agentID: String?
+  ) -> GuardViolation? {
+    switch target {
+    case .orchestratorLock:
+      return violation(
+        "orchestrator.lock is a plan's claim. Only `swiftgate plan claim <plan> --session <id>` "
+          + "and `swiftgate plan release` write it; a hand edit would forge or steal the claim.")
+    case .malformedPlanPath:
+      return violation("this path names no valid plan under the shared plan state.")
+    case .designArtifact(let document):
+      let override = OrchestratorMarker.isOrchestrator(
+        environmentValue: environmentValue, lockContents: nil, sessionID: sessionID,
+        agentID: agentID)
+      if override { return nil }
+      if agentID != nil { return violation(workerReason("design docs and their `.evidence/`")) }
+      let owners = plans.filter { $0.design == .named(document) }
+      if owners.contains(where: { holds($0.lock, sessionID: sessionID, agentID: agentID) }) {
+        return nil
+      }
+      if let owner = owners.first {
+        return violation(
+          "\(document) belongs to plan `\(owner.name)`, whose lock this session doesn't hold. "
+            + "Only that plan's orchestrating session edits its design and `.evidence/`.")
+      }
+      let held = plans.filter { holds($0.lock, sessionID: sessionID, agentID: agentID) }
+      if held.contains(where: { $0.design == .unreadable }) {
+        return violation(
+          "the plan.json of a plan this session holds is missing or unreadable, so it can't "
+            + "own \(document). Fix plan.json before editing the design.")
+      }
+      return violation(
+        "no plan's plan.json names \(document) as its design. Claim the plan first: "
+          + "`swiftgate plan claim <slug> --session <id>`, with a plan.json whose `design` is "
+          + "this doc. SWIFT_HARNESS_ORCHESTRATOR=1 overrides.")
+    case .planFile, .sharedPlanFile:
+      let allowed =
+        OrchestratorMarker.isOrchestrator(
+          environmentValue: environmentValue, lockContents: nil, sessionID: sessionID,
+          agentID: agentID)
+        || locks.contains { holds($0, sessionID: sessionID, agentID: agentID) }
+      guard !allowed else { return nil }
+      return violation(
+        workerReason(
+          "plan state (`plan.json`, `ledger.json`, `index.json` in the git common dir)"))
+    }
+  }
+
+  private static func holds(_ lock: String?, sessionID: String, agentID: String?) -> Bool {
+    OrchestratorMarker.isOrchestrator(
+      environmentValue: nil, lockContents: lock, sessionID: sessionID, agentID: agentID)
+  }
+
+  private static func workerReason(_ what: String) -> String {
+    what + " is written only by the main session holding the owning plan's lock. A worker "
+      + "reports `design-conflict` or `needs-replan` instead. A main session claims a plan with "
+      + "`swiftgate plan claim <slug> --session <id>`; SWIFT_HARNESS_ORCHESTRATOR=1 overrides. "
+      + "A subagent never qualifies."
+  }
+
+  private static func violation(_ reason: String) -> GuardViolation {
+    GuardViolation(ruleID: EditGuard.planStateRuleID, reason: reason)
+  }
+
+  /// The outermost `swift-harness/plans` pair decides, so a look-alike root nested inside a plan
+  /// directory can't redirect the check to a lock the writer planted.
+  private static func planStateTarget(_ components: [String], _ lowered: [String]) -> Target? {
+    guard
+      let index = lowered.indices.dropLast().first(where: {
+        lowered[$0] == "swift-harness" && lowered[$0 + 1] == "plans"
+      })
+    else { return nil }
+    let inside = components[(index + 2)...]
+    guard !inside.isEmpty else { return nil }
+    if inside.last?.lowercased() == "orchestrator.lock" { return .orchestratorLock }
+    let common = "/" + components[..<index].joined(separator: "/")
+    guard let layout = try? PlanStateLayout(commonDirectory: common) else {
+      return .malformedPlanPath
+    }
+    guard inside.count >= 2 else { return .sharedPlanFile(layout) }
+    guard let plan = try? layout.plan(inside[inside.startIndex]) else {
+      return .malformedPlanPath
+    }
+    return .planFile(plan)
+  }
+
+  /// The design doc a path belongs to: itself, or `<dir>/<doc>.md` for anything under
+  /// `<dir>/<doc>.evidence/`. The outermost evidence directory decides.
+  private static func designDocument(_ components: [String], _ lowered: [String]) -> String? {
+    if let index = lowered.indices.dropLast().first(where: { lowered[$0].hasSuffix(".evidence") }) {
+      let stem = components[index].dropLast(".evidence".count)
+      return "/" + (components[..<index] + [stem + ".md"]).joined(separator: "/")
+    }
+    guard lowered.count >= 3, let file = lowered.last, file.hasSuffix(".md"),
+      lowered[lowered.count - 2] == "designs", lowered.dropLast(2).contains("docs")
+    else { return nil }
+    return "/" + components.joined(separator: "/")
+  }
+}
