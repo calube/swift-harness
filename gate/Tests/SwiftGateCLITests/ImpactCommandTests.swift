@@ -1,0 +1,84 @@
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+import SwiftGateTestSupport
+import Testing
+
+@testable import SwiftGateCLI
+
+@Suite("swiftgate impact")
+struct ImpactCommandTests {
+  private func makeRepository(_ files: [String: String] = [:]) throws -> URL {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-impact-\(UUID().uuidString)", directoryHint: .isDirectory)
+      .resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    for (path, content) in files {
+      let url = root.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(content.utf8).write(to: url)
+    }
+    return root
+  }
+
+  private static let changed = [
+    "Packages/Feed/Sources/FeedCore/Reducer.swift",
+    "Packages/Cart/Sources/CartCore/Cart.swift",
+  ]
+
+  @Test(
+    "diffs against the merge base with --base and waives filed exemptions, counting them — catches impact judged against the wrong base or exemptions ignored"
+  )
+  func diffsFromMergeBase() async throws {
+    let root = try makeRepository([
+      ImpactExemptions.fileName: """
+      {"schema": 1, "exemptions": [{"module": "CartCore", "reason": "rename only"}]}
+      """
+    ])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let git = FakeGit(changed: Self.changed, mergeBase: "abc123")
+    let outcome = await ImpactCheck.run(root: root, git: git, base: "origin/main")
+    #expect(git.changedSinceRefs == ["abc123"])
+    let report = try StaticCheckReport.make(runID: "r", durationMilliseconds: 1, outcome: outcome)
+    #expect(report.findings.map(\.file) == ["Packages/Feed/Sources/FeedCore/Reducer.swift"])
+    #expect(report.verdict == .red)
+    #expect(report.allowances == [try AllowanceCount(ruleID: ImpactAnalysis.ruleID, count: 1)])
+  }
+
+  @Test(
+    "an invalid exemptions file is RED; git failure or no common history is BLOCKED — catches impact passing when it could not judge"
+  )
+  func setupFailures() async throws {
+    let root = try makeRepository([
+      ImpactExemptions.fileName: #"{"schema": 1, "exemptions": [{"module": "CartCore"}]}"#
+    ])
+    defer { try? FileManager.default.removeItem(at: root) }
+    let invalid = try StaticCheckReport.make(
+      runID: "r", durationMilliseconds: 1,
+      outcome: await ImpactCheck.run(
+        root: root, git: FakeGit(changed: Self.changed, mergeBase: "abc"), base: "origin/main"))
+    #expect(invalid.verdict == .red)
+    #expect(invalid.findings.first?.file == ImpactExemptions.fileName)
+
+    let empty = try makeRepository()
+    defer { try? FileManager.default.removeItem(at: empty) }
+    for git in [
+      FakeGit(changed: Self.changed, mergeBase: nil), FakeGit(failure: .invalidRef("-x")),
+    ] {
+      let report = try StaticCheckReport.make(
+        runID: "r", durationMilliseconds: 1,
+        outcome: await ImpactCheck.run(root: empty, git: git, base: "origin/main"))
+      #expect(report.verdict == .blocked)
+    }
+  }
+
+  @Test("--base defaults to origin/main — catches impact silently diffing against nothing")
+  func parsesBase() throws {
+    let command = try #require(try SwiftGate.parseAsRoot(["impact"]) as? ImpactCommand)
+    #expect(command.base == "origin/main")
+    let custom = try #require(
+      try SwiftGate.parseAsRoot(["impact", "--base", "main", "--json"]) as? ImpactCommand)
+    #expect(custom.base == "main")
+  }
+}

@@ -8,8 +8,9 @@ enum StaticCheckOutcome: Sendable, Equatable {
   case checked(RuleRunResult)
   /// The environment prevented the check (git, file system). Never evidence about the code.
   case blocked(reason: String)
-  /// The repository's own inputs are wrong (an invalid `.swiftgate.toml`): a code change.
-  case invalid(reason: String)
+  /// The repository's own inputs are wrong (an invalid `.swiftgate.toml` or exemptions file): a
+  /// code change. `file` is the input at fault.
+  case invalid(reason: String, file: String = ConfigLoader.fileName)
 }
 
 enum StaticCheck {
@@ -54,10 +55,10 @@ enum StaticCheckReport {
           failureScenario: nil)
       ]
       verdict = .blocked
-    case .invalid(let reason):
+    case .invalid(let reason, let file):
       findings = [
         try Finding(
-          ruleID: configRuleID, severity: .major, file: ConfigLoader.fileName, line: nil,
+          ruleID: configRuleID, severity: .major, file: file, line: nil,
           message: reason, failureScenario: nil)
       ]
       verdict = .red

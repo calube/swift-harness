@@ -16,20 +16,35 @@ public final class FakeGit: Git {
   }
 
   private let staged: [String: StagedFile]
+  private let changed: [String]?
+  private let mergeBaseResult: String?
   private let failure: GitError?
   private let reads = Mutex<[String]>([])
+  private let changedSince = Mutex<[String]>([])
 
-  public init(staged: [String: StagedFile] = [:], failure: GitError? = nil) {
+  /// - Parameters:
+  ///   - changed: what ``changedFiles(since:)`` returns; defaults to the staged paths.
+  ///   - mergeBase: what ``mergeBase(_:_:)`` returns for any pair of refs.
+  public init(
+    staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
+    failure: GitError? = nil
+  ) {
     self.staged = staged
+    self.changed = changed
+    self.mergeBaseResult = mergeBase
     self.failure = failure
   }
+
+  /// Refs passed to ``changedFiles(since:)``, in call order.
+  public var changedSinceRefs: [String] { changedSince.withLock { $0 } }
 
   /// Paths passed to ``stagedContents(of:)``, in call order.
   public var contentReads: [String] { reads.withLock { $0 } }
 
   public func changedFiles(since ref: String) async throws(GitError) -> [String] {
     if let failure { throw failure }
-    return staged.keys.sorted()
+    changedSince.withLock { $0.append(ref) }
+    return changed ?? staged.keys.sorted()
   }
 
   public func stagedAddedLines() async throws(GitError) -> [AddedLines] {
@@ -61,6 +76,6 @@ public final class FakeGit: Git {
 
   public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {
     if let failure { throw failure }
-    return nil
+    return mergeBaseResult
   }
 }

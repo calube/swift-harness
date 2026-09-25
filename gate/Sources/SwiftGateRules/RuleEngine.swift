@@ -83,7 +83,7 @@ public struct RuleEngine: Sendable {
     }
 
     findings.sort { ($0.file, $0.line ?? 0, $0.ruleID) < ($1.file, $1.line ?? 0, $1.ruleID) }
-    allowances.sort { ($0.path, $0.line, $0.ruleID) < ($1.path, $1.line, $1.ruleID) }
+    allowances.sort { ($0.path, $0.line ?? 0, $0.ruleID) < ($1.path, $1.line ?? 0, $1.ruleID) }
     return RuleRunResult(findings: findings, allowances: allowances)
   }
 }

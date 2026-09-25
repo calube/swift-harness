@@ -46,10 +46,11 @@ public struct AllowDirective: Sendable, Equatable {
 public struct Allowance: Sendable, Equatable {
   public let ruleID: String
   public let path: String
-  public let line: Int
+  /// `nil` for waivers of file-level findings (a filed exemption rather than an inline allow).
+  public let line: Int?
   public let reason: String
 
-  public init(ruleID: String, path: String, line: Int, reason: String) {
+  public init(ruleID: String, path: String, line: Int?, reason: String) {
     self.ruleID = ruleID
     self.path = path
     self.line = line
