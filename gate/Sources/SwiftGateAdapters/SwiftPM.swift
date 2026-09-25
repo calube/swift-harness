@@ -66,41 +66,62 @@ public struct LiveSwiftPM: SwiftPM {
   private let executable: String
   private let queryTimeout: Duration
   private let testTimeout: Duration
+  private let manifestCache: ManifestAnswerCache?
 
   /// - Parameters:
   ///   - repositoryRoot: absolute path of the worktree's top-level directory.
   ///   - queryTimeout: for `describe` and `--show-codecov-path`, which may resolve dependencies.
+  ///   - manifestCache: where `describe` and `dump-package` answers are kept between processes;
+  ///     `nil` to ask `swift` every time.
   public init(
     runner: any ProcessRunner, repositoryRoot: String, executable: String = "swift",
-    queryTimeout: Duration = .seconds(300), testTimeout: Duration = .seconds(900)
+    queryTimeout: Duration = .seconds(300), testTimeout: Duration = .seconds(900),
+    manifestCache: URL? = nil
   ) {
     self.runner = runner
     self.repositoryRoot = repositoryRoot
     self.executable = executable
     self.queryTimeout = queryTimeout
     self.testTimeout = testTimeout
+    self.manifestCache = manifestCache.map {
+      ManifestAnswerCache(directory: $0, repositoryRoot: repositoryRoot)
+    }
   }
 
   public func describe(packageDirectory: String) async throws(SwiftPMError) -> PackageManifest {
-    let arguments = ["package", "describe", "--type", "json"]
-    let output = try await run(arguments, in: packageDirectory, timeout: queryTimeout)
-    try Self.requireSuccess(arguments, output)
+    let output = try await manifestAnswer(
+      ["package", "describe", "--type", "json"], packageDirectory: packageDirectory)
     do {
-      return try PackageManifest(describeJSON: output.stdout.bytes, repositoryRoot: repositoryRoot)
+      return try PackageManifest(describeJSON: output, repositoryRoot: repositoryRoot)
     } catch {
       throw .unparseableOutput(command: "package describe", detail: "\(error)")
     }
   }
 
   public func settings(packageDirectory: String) async throws(SwiftPMError) -> PackageSettings {
-    let arguments = ["package", "dump-package"]
-    let output = try await run(arguments, in: packageDirectory, timeout: queryTimeout)
-    try Self.requireSuccess(arguments, output)
+    let output = try await manifestAnswer(
+      ["package", "dump-package"], packageDirectory: packageDirectory)
     do {
-      return try PackageSettings(dumpPackageJSON: output.stdout.bytes)
+      return try PackageSettings(dumpPackageJSON: output)
     } catch {
       throw .unparseableOutput(command: "package dump-package", detail: "\(error)")
     }
+  }
+
+  /// Only successful answers are kept, so a transient failure is retried next time.
+  private func manifestAnswer(_ arguments: [String], packageDirectory: String)
+    async throws(SwiftPMError) -> Data
+  {
+    let command = arguments.joined(separator: " ")
+    if let cached = manifestCache?.answer(command, packageDirectory: packageDirectory) {
+      return cached
+    }
+    let output = try await run(arguments, in: packageDirectory, timeout: queryTimeout)
+    try Self.requireSuccess(arguments, output)
+    if !output.stdout.truncated {
+      manifestCache?.store(output.stdout.bytes, command, packageDirectory: packageDirectory)
+    }
+    return output.stdout.bytes
   }
 
   public func test(_ request: SwiftTestRequest) async throws(SwiftPMError) -> SwiftTestRun {

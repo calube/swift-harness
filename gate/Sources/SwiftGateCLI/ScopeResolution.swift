@@ -58,9 +58,14 @@ enum ScopeResolution {
     }
   }
 
+  /// Where manifest answers are cached, relative to the project root.
+  static let manifestCacheDirectory = ".harness/cache/manifests"
+
   /// The live SwiftPM for a repository root, with the root spelled the way `describe` reports
-  /// paths.
+  /// paths, and manifest answers cached under the project.
   static func liveSwiftPM(root: URL) -> any SwiftPM {
-    LiveSwiftPM(runner: LiveProcessRunner(), repositoryRoot: CanonicalPath.of(root))
+    LiveSwiftPM(
+      runner: LiveProcessRunner(), repositoryRoot: CanonicalPath.of(root),
+      manifestCache: root.appending(path: manifestCacheDirectory, directoryHint: .isDirectory))
   }
 }

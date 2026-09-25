@@ -4,3 +4,4 @@
 **/.harness/derived-data/
 .harness/orchestrator.lock
 **/.harness/judge-cache/
+**/.harness/cache/
