@@ -3,12 +3,12 @@
 <!-- RESUME
 Status: M0 complete 2026-09-24.
 Spec: docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md (approved).
-Next action: Wave B (T1.1, T2.1, T5.0, T6.1). TCA×Swift compatibility resolved (spec §6.2 toolchain notes).
+Next action: Wave E/F — T4.1 → T4.3 → T4.2 → T4.4 (main lane); T6.2 playbook (docs lane).
 Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.
   - T5.0: sample app needs an .xcodeproj — hand-written synchronized-folder pbxproj, fallback = user creates via Xcode template (~2 min).
   - T4.1 / T5.1: confirm `swift test` structured-output flags and `xcresulttool` subcommands on the installed toolchain before coding the parsers.
-Progress: T0.1 25fa917 · T0.2 b997429 · T0.3 051fb2e · T1.1 8d6bd2e · T2.1 ca422d9 · T6.1 fd66788 · T1.2 7e6af37 · T1.5 580b4c0 · T2.2 836f96a · T2.4 f93be8b
+Progress: T0.1 25fa917 · T0.2 b997429 · T0.3 051fb2e · T1.1 8d6bd2e · T2.1 ca422d9 · T6.1 fd66788 · T1.2 7e6af37 · T1.5 580b4c0 · T2.2 836f96a · T2.4 f93be8b · T5.0 5ff680b · T2.3 e90c670 · T1.3 0a0ce4d · T1.4 84d6ae6 · T3.4 3445c72 · T3.3 06f0387 · T3.1 b77ba59 · T3.5 1878df8 · merge 5b39067 · T3.2 2bd9cbd · T3.6 59a74bb (216 tests)
 -->
 
 ## Decisions made while planning
