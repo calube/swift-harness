@@ -87,6 +87,17 @@ struct DocsLintPolicyTests {
     #expect(finding.message.contains("vague business jargon"))
   }
 
+  @Test("a banned phrase finding names the line it appears on")
+  func bannedPhraseFindingNamesItsLine() throws {
+    let config = DocsConfig(
+      bannedPhrases: [BannedPhrase(phrase: "leverage", reason: "vague business jargon")])
+    let findings = try Self.check(
+      [Self.doc("docs/topic.md", "first line\nwe should leverage the client.\nthird line")],
+      config: config)
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.banned-phrase" })
+    #expect(finding.line == 2)
+  }
+
   @Test(
     "a banned phrase config entry without a reason is rejected at config-parse time, not waved through as a silent pass — the same enforcement DocsPlanConfigTests.bannedPhraseWithoutReasonRejected exercises through TOML"
   )

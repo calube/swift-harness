@@ -20,6 +20,10 @@ public enum DocsLintPolicy {
   /// One file `docs-lint` read off disk: its repository-relative path, raw text (for
   /// ``LocalPathRule`` and the banned-phrase scan, which work over untouched source text, not a
   /// parsed tree) and parsed structure (for word counts and anchors).
+  ///
+  /// This is the one corpus type `docs-lint` reads the whole docs tree into: ``DocsLintReferences``
+  /// reads the same type rather than defining its own, and `docs-lint-command`'s `DocsTreeReader`
+  /// adapter is the one place that builds it from the filesystem.
   public struct ScannedDocument: Sendable, Equatable {
     public let path: String
     public let rawText: String
@@ -117,13 +121,23 @@ public enum DocsLintPolicy {
     document: ScannedDocument, config: DocsConfig
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
-    for banned in config.bannedPhrases where document.rawText.contains(banned.phrase) {
+    for banned in config.bannedPhrases {
+      guard let line = firstLine(containing: banned.phrase, in: document.rawText) else { continue }
       findings.append(
         try Finding(
-          ruleID: "docs-lint.banned-phrase", severity: .major, file: document.path, line: nil,
+          ruleID: "docs-lint.banned-phrase", severity: .major, file: document.path, line: line,
           message: "\"\(banned.phrase)\" is banned: \(banned.reason)", failureScenario: nil))
     }
     return findings
+  }
+
+  /// 1-based line of the phrase's first occurrence; `nil` when it appears nowhere (including a
+  /// phrase that only exists by spanning a line break, which this rule doesn't chase).
+  private static func firstLine(containing phrase: String, in text: String) -> Int? {
+    var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    if lines.last == "" { lines.removeLast() }
+    for (index, line) in lines.enumerated() where line.contains(phrase) { return index + 1 }
+    return nil
   }
 
   // MARK: - Budgets

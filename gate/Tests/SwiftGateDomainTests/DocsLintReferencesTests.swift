@@ -5,7 +5,7 @@ import Testing
 @Suite("Docs lint — reference integrity, relative links, router reachability")
 struct DocsLintReferencesTests {
   static func file(_ path: String, _ text: String) -> DocsLintReferences.DocFile {
-    DocsLintReferences.DocFile(path: path, text: text)
+    DocsLintReferences.DocFile(path: path, rawText: text, markdown: .parse(text))
   }
 
   /// `repoPaths` defaults to exactly the given files' own paths — every fixture doc counts as a
@@ -412,5 +412,81 @@ struct DocsLintReferencesTests {
     let unreachable = Set(
       findings.filter { $0.ruleID == "docs-lint.unreachable-doc" }.map { $0.file })
     #expect(unreachable == ["docs/orphan-a.md", "docs/orphan-b.md"])
+  }
+
+  // MARK: - Findings name a real line
+
+  @Test("a dangling id finding names the line it's first mentioned on")
+  func danglingIDFindingNamesItsLine() throws {
+    let doc = Self.file(
+      "docs/designs/x.md",
+      """
+      ## Evidence
+
+      - Evidence: something is true [ev-nothing-backs-this]
+      """)
+    let findings = try Self.check([doc], claims: [])
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.dangling-id" })
+    #expect(finding.line == 3)
+  }
+
+  @Test("a bare ADR mention finding names the line it appears on")
+  func bareADRMentionFindingNamesItsLine() throws {
+    let doc = Self.file(
+      "docs/index.md",
+      """
+      ## Status
+
+      See ADR 0004 for the reasoning.
+      """)
+    let findings = try Self.check([doc])
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.bare-adr-reference" })
+    #expect(finding.line == 3)
+  }
+
+  @Test("a requirement-uncited finding names the line where the requirement is defined")
+  func requirementUncitedFindingNamesItsLine() throws {
+    let design = Self.file(
+      "docs/designs/a.md",
+      """
+      ## Requirements
+
+      - req-only-mentioned-here: the thing must happen.
+      """)
+    let findings = try Self.check([design])
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.requirement-uncited" })
+    #expect(finding.line == 3)
+  }
+
+  @Test("a broken relative link finding names the line the link appears on")
+  func brokenRelativeLinkFindingNamesItsLine() throws {
+    let doc = Self.file(
+      "docs/index.md",
+      """
+      Intro line.
+
+      See [missing](designs/does-not-exist.md).
+      """)
+    let findings = try Self.check([doc])
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.broken-relative-link" })
+    #expect(finding.line == 3)
+  }
+
+  @Test(
+    "a broken relative link after a fenced code block still names the right line — catches the scan dropping fenced lines instead of blanking them"
+  )
+  func brokenRelativeLinkAfterAFenceNamesTheRightLine() throws {
+    let doc = Self.file(
+      "docs/index.md",
+      """
+      ```swift
+      let x = 1
+      ```
+
+      See [missing](designs/does-not-exist.md).
+      """)
+    let findings = try Self.check([doc])
+    let finding = try #require(findings.first { $0.ruleID == "docs-lint.broken-relative-link" })
+    #expect(finding.line == 5)
   }
 }
