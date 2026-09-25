@@ -1,4 +1,5 @@
 import Foundation
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateDomain
@@ -166,6 +167,61 @@ struct ReviewSynthesisTests {
       Self.inputs(
         Self.reviewed(
           .concurrency, [Self.finding(.major), Self.finding(.major, category: "cancellation")])))
+    #expect(report.findings.count == 2)
+  }
+
+  @Test(
+    "one rule violation reported by two focuses under different category names merges into one — catches a D7 blocker listed twice"
+  )
+  func standardsViolationDedupesByRule() throws {
+    let apiErrors = try FocusReviewJSON.decode(Fixture.data("Review/d7-api-errors.json"))
+    let architecture = try FocusReviewJSON.decode(Fixture.data("Review/d7-architecture.json"))
+    #expect(apiErrors.findings.first?.category != architecture.findings.first?.category)
+
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs([.apiErrors: apiErrors, .architecture: architecture]))
+
+    #expect(report.findings.count == 1)
+    #expect(report.findings.first?.finding.rule == "D7")
+    #expect(report.findings.first?.focuses == [.architecture, .apiErrors])
+    #expect(report.verdict == .refactorNeeded)
+  }
+
+  @Test(
+    "a merged rule violation keeps the most severe copy — catches a downgrade when focuses disagree"
+  )
+  func standardsViolationDedupeKeepsMostSevere() throws {
+    let minor = Self.finding(
+      .minor, category: "live-client-logic", file: "Sources/FactClientLive/Live.swift",
+      kind: .standardsViolation, rule: "D7")
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(
+        Self.reviewed(.apiErrors, [minor])
+          .merging(Self.reviewed(.architecture, [Self.violation(.blocker)])) { $1 }))
+    #expect(report.findings.count == 1)
+    #expect(report.findings.first?.finding.severity == .blocker)
+  }
+
+  @Test(
+    "different rules on one line stay separate — catches two violations collapsed into one"
+  )
+  func differentRulesNotDeduped() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(
+        Self.reviewed(
+          .architecture,
+          [Self.violation(.major, rule: "D7"), Self.violation(.major, rule: "D3")])))
+    #expect(report.findings.count == 2)
+  }
+
+  @Test(
+    "a defect and a rule violation with the same category stay separate — catches a verified defect absorbed into a standards finding"
+  )
+  func defectAndViolationNotMerged() throws {
+    let defect = Self.finding(
+      .major, category: "logic-in-live-client", file: "Sources/FactClientLive/Live.swift")
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.architecture, [defect, Self.violation(.major)])))
     #expect(report.findings.count == 2)
   }
 

@@ -40,8 +40,8 @@ public struct ReviewFinding: Sendable, Equatable, Codable {
   }
 
   public let severity: Severity
-  /// Short kebab-case defect class (`data-race`, `layering`); with `file` and `line` it is the
-  /// dedupe key, so reviewers of different focuses reporting one defect merge.
+  /// Short kebab-case defect class (`data-race`, `layering`). For a defect, with `file` and
+  /// `line` it is the dedupe key; a standards violation dedupes on `rule` instead.
   public let category: String
   public let file: String
   public let line: Int?
@@ -161,7 +161,7 @@ public enum FocusReviewJSON {
 public struct ReviewReport: Sendable, Equatable, Codable {
   public struct Merged: Sendable, Equatable, Codable {
     public let finding: ReviewFinding
-    /// Every focus that reported this defect, in focus order.
+    /// Every focus that reported this finding, in focus order.
     public let focuses: [ReviewFocus]
   }
 
@@ -273,15 +273,29 @@ public enum ReviewSynthesis {
     return anyUnreviewed ? .fixThenMerge : .merge
   }
 
+  /// Defects merge on (file, line, category). Standards violations merge on (file, line, rule):
+  /// category is free text each reviewer invents, so two focuses citing one rule at one line
+  /// name it differently, while the rule id is shared vocabulary.
   private struct DedupeKey: Hashable {
+    enum Identity: Hashable {
+      case defect(category: String)
+      case violation(rule: String)
+    }
+
     let file: String
     let line: Int?
-    let category: String
+    let identity: Identity
 
     init(_ finding: ReviewFinding) {
       file = finding.file
       line = finding.line
-      category = finding.category.lowercased()
+      switch finding.effectiveKind {
+      case .defect:
+        identity = .defect(category: finding.category.lowercased())
+      case .standardsViolation:
+        let rule = (finding.rule ?? "").trimmingCharacters(in: .whitespaces).uppercased()
+        identity = .violation(rule: rule)
+      }
     }
   }
 

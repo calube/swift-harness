@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "focus": "api-errors",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "standards-violation",
+      "rule": "D7",
+      "category": "live-client-logic",
+      "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+      "line": 52,
+      "title": "Display truncation rule added to the Live client leaves the Fact contract hidden from every non-Live implementation",
+      "fix": "Keep `APIClient.live` returning the decoded fact unchanged. Put the truncation (`maxFactLength` and the ellipsis rule) in the counter feature's Core, as a reducer or state helper or a small pure function in a library module. Cover it with a host/`TestStore` test there, and move the new `factLengthLimit` test from `APIClientLiveTests` to that module.",
+      "severity": "blocker",
+      "failure_scenario": "The `randomFact` contract now quietly means 'at most 120 characters, ellipsised'. That holds only for `APIClient.live`. `previewValue` returns a fixed short fact and `testValue = APIClient()` is unimplemented, so every TestStore override of `randomFact` returns whatever the test supplies, untruncated. A counter-feature test that feeds a 200-character fact passes while the screen overflows. The rule also reaches every other caller of `apiClient.randomFact`, which gets text cut for one screen with nothing in the type or interface saying so. When product changes the limit, someone has to edit `APIClientLive`, and no feature test runs that code.",
+      "evidence": "APIClientLive.swift:37-38 (added) `/// The counter screen shows a fact on at most three lines.` / `static let maxFactLength = 120`; APIClientLive.swift:51-53 (added) `let text = try JSONDecoder().decode(CatFactResponse.self, from: data).fact` / `guard text.count > maxFactLength else { return Fact(text: text) }` / `return Fact(text: String(text.prefix(maxFactLength - 1)) + \"…\")`. APIClient.swift:18-21 `testValue = APIClient()` and `previewValue` returns `Fact(text: \"Cats sleep for around 13 to 14 hours a day.\")`. This matches the D7 Tell: 'a *Live endpoint that changes the domain value after decoding: `.prefix(n)`, ... a length or count check, ... a computed display string; a product rule change that means editing a Live module'.",
+      "verified": true,
+      "verification_note": "Found D7 in standards.md (line ~299). Its Do says Live modules only send, decode and map, and that truncation and display formatting belong in Core or library modules. Its Tell names `.prefix(n)`, length/count checks, computed display strings, and product-rule changes that mean editing a Live module. Checked diff.patch: lines 37-38 and 51-53 of APIClientLive.swift are added by this diff and match the quoted evidence exactly. A length check plus `.prefix(119) + \"…\"` runs after decoding, and a comment ties it to a counter-screen display rule. Checked APIClient.swift: testValue is unimplemented and previewValue returns a fixed short fact, so the rule exists only in Live, which is the risk D7's Source names. Found no exception: the repo .swiftgate.toml lists only GameEngine (engine) and a counter flow, APIClient has no module entry, and the file has no swiftgate:allow. ADR 0001 says a verified violation of a rule's Do is at least major, and its own example treats a seeded D7 smell of this shape as a blocker, so I kept the severity at blocker."
+    }
+  ]
+}

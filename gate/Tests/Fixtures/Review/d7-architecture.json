@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "focus": "architecture",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "standards-violation",
+      "rule": "D7",
+      "category": "logic-in-live-client",
+      "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+      "line": 52,
+      "title": "Counter-screen display truncation (120 chars + ellipsis) implemented inside APIClientLive",
+      "fix": "This is structural. Revert APIClientLive.randomFact to decoding and mapping only (`return Fact(text: decoded.fact)`), and delete maxFactLength from the Live module. Move the limit and the ellipsis formatting into CounterCore. For example, in CounterFeature's `.factResponse` case or a computed display property on State, set `state.fact` to the truncated text, or move it into a small library helper that CounterCore calls. Move the 121/120-character boundary test into CounterFeatureTests as a TestStore test that stubs apiClient.randomFact with a long fact.",
+      "severity": "blocker",
+      "failure_scenario": "The 120-character, three-line limit is a counter-screen layout rule, but it runs only in APIClient.live. CounterFeature's TestStore tests, the snapshot tests and previews all swap in test or preview values, so none of them ever runs the truncation. When the counter layout changes (bigger font, four lines, another screen that wants the full fact), someone has to edit the networking module, and no feature test catches it. Every other caller of randomFact also gets a truncated domain Fact with no way to reach the full text.",
+      "evidence": "APIClientLive.swift:37-38 (added in diff) `/// The counter screen shows a fact on at most three lines.` / `static let maxFactLength = 120`; APIClientLive.swift:51-53 `let text = try JSONDecoder().decode(CatFactResponse.self, from: data).fact` / `guard text.count > maxFactLength else { return Fact(text: text) }` / `return Fact(text: String(text.prefix(maxFactLength - 1)) + \"…\")`. D7 (standards.md): Tell lists `.prefix(n)`, a length or count check, a computed display string, and a product rule change that means editing a Live module; Do puts truncating and formatting for display in a Core feature or library module. Only test is APIClientLiveTests/factLengthLimit using a ScriptedTransport double.",
+      "verified": true,
+      "verification_note": "Found D7 at standards.md:299-302 (Do/Tell/Enforced by; no stated exception). Confirmed the diff adds maxFactLength and the count check + prefix + ellipsis after decoding in APIClientLive.randomFact (file lines 37-38, 51-53), matching three separate Tell items; the doc comment itself ties the rule to the counter screen's layout. Checked for exceptions: no `swiftgate:allow` in Packages/APIClient, and .swiftgate.toml has no module entry for APIClient/APIClientLive (only GameEngine). The new test factLengthLimit drives the rule through ScriptedTransport, which is the transport double D7 says these rules shouldn't need. Severity blocker kept: ADR 0001 lines 51-52 say an architecture violation whose fix moves logic across a module boundary is a blocker, and this fix does that."
+    }
+  ]
+}

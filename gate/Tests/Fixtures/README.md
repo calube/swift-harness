@@ -271,3 +271,13 @@ Observed behavior the adapter relies on:
   exits 1.
 - `--restricted` ignores user, project and local settings (so plugin hooks don't run inside the
   judge) and `--tools ""` removes every built-in tool.
+
+## Review
+
+| File | Capture |
+|---|---|
+| `Review/d7-api-errors.json`, `Review/d7-architecture.json` | Verbatim copies of `review-findings/api-errors.json` and `review-findings/architecture.json` from a real run of `workflows/review.js` on the SampleApp "Review input" change (see `docs/e2e-report.md`). Neither file contains a machine path, so nothing was scrubbed. |
+
+Observed behavior synthesis relies on: two reviewers citing the same rule at the same line invent
+different `category` strings (`live-client-logic`, `logic-in-live-client`), so standards
+violations dedupe on `rule`, not `category`.
