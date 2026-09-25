@@ -439,3 +439,38 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 - Exit 0 clean, 1 any finding, 2 unreadable docs or git failure. Minor, non-gating: `docs-lint.no-docs-section`,
   `docs-lint.no-docs-directory`.
 - Not wired into any tier or hook yet.
+
+## Wave 12
+
+**`evidence check`** (`A/Evidence/EvidenceFiles.swift`, `C/Commands/EvidenceCheckCommand.swift`)
+- `swiftgate evidence check --design <doc> [--at <ref>] [--package-resolved <path>] [--sdk <v>] [--json]`.
+  `--design` is required. Without `--sdk`, runs `xcrun --sdk iphonesimulator --show-sdk-version`, only when a probe
+  or snapshot claim exists. The adapter implements `EvidenceSources`; every rule stays in `EvidenceCheck`.
+- Under `--at`: cited repo files and `Package.resolved` come from the ref via `Git.contents`. `.build/` files
+  (untracked) and `<slug>.evidence/` files (fresh probes count before commit) come from the working tree.
+- Exit 0 all pass, 1 any fail or stale (a probe with no verdict file fails `probeVerdictMissing`), 2 bad design
+  path, bad ref, missing `claims.jsonl`, or a malformed claims line (named `file:line`). A package claim with no
+  `Package.resolved` fails `packageResolvedMissing`.
+- `--json`: an array of `{"id", "status"}` plus `"loc"` only when relocated; a probe with no verdict keeps its
+  recorded status. Blocked: `{"message", "verdict": "BLOCKED"}`. The design skill rewrites `claims.jsonl` from it.
+
+**`evidence find`** (`D/Evidence/EvidenceQuery.swift`, `C/Commands/EvidenceFindCommand.swift`)
+- `swiftgate evidence find <query> [--pkg <name>@<ver>] [--cache-home <dir>] [--json]`.
+- `EvidenceQuery.matches(_: Claim)`: case-insensitive substring over `claim.text` or `citation.quote`. `--pkg`
+  splits on the first `@` and compares identity and version exactly, never a prefix; no `@<ver>` → exit 2.
+- `EvidenceFindHit{id, text, status, origin: EvidenceHitOrigin(.repo | .cache(EvidenceCacheOrigin)),
+  reuseCount: Int?, pin: String?, source: String}`. Cache hits use the text hash as id; `reuseCount` is nil only
+  for repo hits. Sorted by `(source, id)`.
+- JSON: `{command, verdict, query, pkg, hits: [{id, text, status, origin, reuseCount, pin, source}], notes,
+  message}`; `origin` is `"repo"` or the cache origin's raw value. Exit 0 always ("no matches for …" when
+  empty); 2 only for a malformed `--pkg` or an unresolvable `--cache-home`. Corrupt input is a note.
+
+**Plan-lint graph and waves** (`D/Plan/PlanLintGraph.swift`), pure
+- One entry point for every plan-lint family: `PlanLintGraph.allFindings(design: DesignDocument, designPath:
+  String, ledger: Ledger, ledgerPath: String, graph: ModuleGraph, workerPacks: [String: ContextPack], bounds:
+  PlanConfig) throws(ReportContractViolation) -> [Finding]`. `plan-lint-command` supplies the design at
+  `designSha`, the decoded ledger, the loaded `ModuleGraph`, a built worker `ContextPack` for EVERY task, and
+  `PlanConfig`.
+- Rule ids: `plan-lint.dag-cycle`, `.missing-dependency`, `.waves-mismatch`, `.write-set-overlap`,
+  `.pack-missing`, `.pack-unknown-task` (major); `.hot-file` (a path in ≥ 3 tasks), `.single-dependent-chain`
+  (minor). Plus the Wave 10 coverage and sizing ids.
