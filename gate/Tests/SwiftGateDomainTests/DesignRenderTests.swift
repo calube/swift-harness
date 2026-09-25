@@ -135,6 +135,33 @@ struct DesignRenderTests {
     #expect(Self.occurrences(of: "<pre class=\"mermaid\">", in: html) == 2)
   }
 
+  // MARK: - Diagrams
+
+  @Test(
+    "Mermaid fences become pre.mermaid blocks and no mermaid script is loaded, because the Artifact viewer renders them natively — catches a library re-added against the page contract"
+  )
+  func mermaidRenderedNatively() throws {
+    let html = Self.render(try Self.validDoc())
+    #expect(Self.occurrences(of: "<pre class=\"mermaid\">", in: html) == 2)
+    let sources = html.components(separatedBy: "<script src=").dropFirst()
+    #expect(!sources.contains { $0.prefix { $0 != ">" }.lowercased().contains("mermaid") })
+    #expect(!html.contains("mermaid.initialize"))
+  }
+
+  @Test(
+    "an injected </script> in a Mermaid fence stays escaped text — catches diagram source breaking out of the page"
+  )
+  func mermaidFenceCannotBreakOut() throws {
+    let clean = Self.render(try Self.validDoc())
+    let text = try Self.validDoc().replacingOccurrences(
+      of: "  B --> C[Checkout API]", with: "  B --> C[</script><script>alert(1)</script>]")
+    let html = Self.render(text)
+    #expect(html.contains("C[&lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;]"))
+    #expect(!html.contains("alert(1)</script>"))
+    #expect(
+      Self.occurrences(of: "<script", in: html) == Self.occurrences(of: "<script", in: clean))
+  }
+
   // MARK: - Approval buttons
 
   @Test("both approval buttons carry the doc's designSha — catches approving a different revision")
