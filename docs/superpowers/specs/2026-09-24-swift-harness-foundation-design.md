@@ -493,7 +493,7 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `swift-tdd` | test-first with `TestStore` and engine replay/property patterns; regression litmus |
 | `/swift-comment-audit` | judgment pass over a diff's comments: keep / trim / delete with proposed edits; Swift-specific, written fresh for this harness |
 | `/swift-validate` (thin) | `check --tier ready` → evidence summary in `.harness/runs/<id>/` + PR-body-ready block. Sub-project 2 adds sim QA of changed flows; sub-project 3 adds before/after profile diff and leak check |
-| `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design — seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 4 adds SwiftUI perf, observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
+| `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design, SwiftUI best practices (when UI is touched) — via the `review` workflow (§9.2), seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 4 adds observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
 | `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
 
 ### 9.1 Review verdict contract
@@ -504,6 +504,28 @@ Shared by every reviewer and by sub-project 4's panel so findings merge cleanly:
   (concrete input/state → wrong outcome), `evidence` (tool output, test, or code citation), `fix`.
 - Verdicts (literal strings, machine-matched): `merge` · `fix-then-merge` · `refactor-needed`.
 - A finding without a concrete failure scenario is dropped at the verify step.
+
+### 9.2 `review` workflow
+
+1. **Gather** (deterministic, no agents): `swiftgate check --tier push --json` + `arch`/`testlint`/
+   `comments`/`mutate` outputs + diff → `.harness/runs/<id>/review-input/`. **Gate `RED` → stop**;
+   reviewing code that fails its own gate wastes tokens.
+2. **Review** (parallel): concurrency/Sendable · architecture & TCA fit · test quality/slop ·
+   API & error design · **SwiftUI best practices** (only when the diff touches a module importing
+   SwiftUI: view identity, state ownership, observation granularity, `@Bindable`/binding misuse,
+   lazy containers, environment/preference misuse, previews with dependency traits). Each returns
+   verdict-contract findings.
+3. **Verify** (pipelined, one verifier per reviewer, starts as each reviewer finishes): receives
+   findings + code, not the reviewer's reasoning; reproduces each failure scenario; drops findings
+   without a concrete one.
+4. **Synthesize** (deterministic code): dedupe by `file:line` + category; verdict by rule — verified
+   architecture blocker → `refactor-needed`; any other blocker or major → `fix-then-merge`; else
+   `merge`. Full report → `.harness/runs/<id>/review.json`; caller receives verdict + top 10 findings.
+
+Scale and failure: 8–10 agents, all top tier (judgment work); wall time ≈ slowest reviewer+verifier
+pair. Diffs over ~1,500 changed lines split by module and ask before exceeding the agent budget.
+A reviewer that dies is reported `NOT REVIEWED`; the verdict cannot be `merge` with any focus
+unreviewed. The review→fix→re-gate loop is not here; it calls this workflow once per round.
 
 ## 10. Testing the harness itself
 
