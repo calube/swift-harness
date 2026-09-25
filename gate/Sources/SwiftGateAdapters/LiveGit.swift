@@ -2,7 +2,7 @@ import Foundation
 import SwiftGateDomain
 
 /// ``Git`` over the `git` CLI via a ``ProcessRunner``.
-public struct LiveGit: Git {
+public struct LiveGit: Git, DiffReading {
   private let runner: any ProcessRunner
   private let repositoryRoot: String
   private let executable: String
@@ -133,6 +133,14 @@ public struct LiveGit: Git {
     if output.status == .exited(1), output.stderr.bytes.isEmpty { return nil }
     guard output.status.isSuccess else { throw Self.failure(arguments, output) }
     return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func unifiedDiff(since ref: String) async throws(GitError) -> String {
+    try Self.validate(ref: ref)
+    return try await run([
+      "diff", "--unified=3", "--no-color", "--no-ext-diff", "--no-textconv", "--relative",
+      "--find-renames", "--src-prefix=a/", "--dst-prefix=b/", ref, "--", ".",
+    ])
   }
 
   /// Keeps each argv well under `ARG_MAX` for large change sets.

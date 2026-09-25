@@ -333,3 +333,27 @@ final class RecordingProcessRunner: ProcessRunner {
     return try await base.run(invocation)
   }
 }
+
+@Suite("LiveGit unified diff")
+struct LiveGitUnifiedDiffTests {
+  @Test(
+    "the review diff covers working-tree edits since the ref, relative to the project — catches reviewers reading a stale or repo-wide diff"
+  )
+  func unifiedDiff() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("app/Sources/Core/A.swift", "let a = 1\n")
+    try repo.write("other/B.swift", "let b = 1\n")
+    let base = try await repo.commitAll("base")
+    try repo.write("app/Sources/Core/A.swift", "let a = 2\n")
+    try repo.write("other/B.swift", "let b = 2\n")
+
+    let project = LiveGit(
+      runner: repo.runner, repositoryRoot: repo.root.appending(path: "app").path)
+    let diff = try await project.unifiedDiff(since: base)
+
+    #expect(diff.contains("+++ b/Sources/Core/A.swift"))
+    #expect(diff.contains("-let a = 1\n+let a = 2"))
+    #expect(!diff.contains("B.swift"))
+  }
+}
