@@ -1,0 +1,2 @@
+# CRLF and missing-newline fixtures are hashed byte for byte.
+* -text

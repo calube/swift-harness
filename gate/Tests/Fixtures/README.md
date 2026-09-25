@@ -362,3 +362,28 @@ Observed behavior the domain relies on:
   (`unattributed.stdout` shows `Extra.swift`'s error five times) — attribution must not assume one
   diagnostic per file, and a probe's own single real error must not be mistaken for several.
 - A warning never fails its build (`good.status` is `0`); only `error:` lines do.
+
+## DesignSha
+
+git 2.50.1 (Apple Git-155). `DesignSha/*.md` are the inputs, not tool output: each
+`<variant>-approved.md` is a design doc, and `<variant>.stripped.md` is the same doc with its
+frontmatter `status:` line removed by hand, so the expected sha never comes from the code under
+test. `lf-proposed.md` differs from `lf-approved.md` only in its status value. Variants: `lf`,
+`crlf` (every line ends `\r\n`), `no-trailing-newline`, `non-ascii` (Latin accents, CJK, an emoji),
+and `fenced-status-edited`, whose body has a `status:` line inside a fenced block that must stay
+hashed. `DesignSha/.gitattributes` sets `-text` so checkout never rewrites the line endings.
+
+`DesignSha/hashes.txt` is the captured output, `<sha> <file>` per line, from a real temp repo:
+
+```sh
+cd gate/Tests/Fixtures/DesignSha
+T=$(mktemp -d) && cp .gitattributes *.md "$T"/ && cd "$T"
+git init -q -b main && git add -A && git -c commit.gpgsign=false commit -qm fixtures
+for f in *.md; do
+  h=$(git hash-object --no-filters "$f")
+  [ "$h" = "$(git rev-parse "HEAD:$f")" ] || echo "MISMATCH $f"   # stored blob == raw bytes
+  printf '%s %s\n' "$h" "$f"
+done > hashes.txt
+```
+
+Copy `hashes.txt` back. The loop printed no `MISMATCH`: every committed blob equals the raw bytes.
