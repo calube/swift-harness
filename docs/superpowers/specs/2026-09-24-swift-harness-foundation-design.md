@@ -98,7 +98,9 @@ No check logic lives anywhere else. A hook or skill that re-implements a check i
 
 ```
 swiftgate check  --tier fast|push|ready     # orchestrator; composes the commands below
-swiftgate lint | arch | impact              # T0 pieces
+swiftgate lint | arch | impact | testlint   # T0 pieces (testlint = useless-test static checks)
+swiftgate coverage                          # diff coverage of Core/Client/Live from T1 alone
+swiftgate mutate                            # mutation testing on changed lines (ready tier)
 swiftgate test   --tier t1|t2|t3 [--affected-since <ref>]
 swiftgate prove                             # red/green proof in a scratch worktree
 swiftgate stress --n 10                     # new/changed tests, shuffled order
@@ -115,8 +117,8 @@ Tier composition:
 | `--tier` | Runs |
 |---|---|
 | `fast` | T0 + T1 on affected packages |
-| `push` | T0 + T1 (all Core) + T2 + impact |
-| `ready` | push + T3 + `stress` on new/changed tests |
+| `push` | T0 + T1 (all Core) + T2 + impact + `coverage` + per-module T1 presence |
+| `ready` | push + T3 + `stress` + `prove` + per-test reach + `mutate` on new/changed code |
 
 ### 5.2 Internal layering
 
@@ -150,6 +152,17 @@ packages = ["Packages/*"]
 device = "iPhone 17"                # pinned for snapshot determinism
 os = "27.0"
 max_concurrent = 2
+
+[pyramid]
+diff_coverage_min = 0.90            # changed Core/Client/Live lines covered by T1 alone
+max_flows = 10                      # T3 cap
+
+[[flows]]                           # the closed list of T3 flows
+name = "checkout"
+reason = "revenue-critical; crosses 3 features"
+
+[mutation]
+max_mutants = 30                    # sampled beyond this
 
 [budgets]                           # seconds; stats flags breaches
 t0 = 5
@@ -322,6 +335,53 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 8. **Engine determinism** — every `engine` module has a replay test: seed + input log → identical
    final state across runs.
 
+### 7.3 Pyramid enforcement
+
+Raw tier counts are gameable, so the gate enforces **placement** and **reach**:
+
+| Rule | Detection | Tier |
+|---|---|---|
+| T3 is a closed list: every XCUITest maps to a `[[flows]]` entry; ≤ `max_flows` | test tags/names vs config | T0 |
+| A T2 test that renders no view/snapshot and imports only Core/Client modules is misplaced → move to T1 | SwiftSyntax import + usage scan | T0 |
+| Every Core, Client, and Live module has ≥1 T1 test | module graph vs discovered tests | push |
+| ≥ `diff_coverage_min` of changed Core/Client/Live lines covered by T1 alone | `swift test --enable-code-coverage` → llvm-cov JSON ∩ diff | push |
+| Tier runtime budgets, p95 trend | run history | always |
+
+Diff coverage from T1 alone enforces the pyramid indirectly: logic reachable only by simulator
+tests is in the wrong module.
+
+### 7.4 Useless-test detection (anti-slop)
+
+Three layers, cheapest first; each check lives at the lowest tier where it is reliable.
+
+**Static — `swiftgate testlint` (T0, SwiftSyntax over test files).** `RED` on:
+no real assertion (`#expect`/`#require`/`XCTAssert*`/`store.send|receive` state assertions/
+`assertSnapshot`/`expectNoDifference`); tautologies (`#expect(true)`, `x == x`, asserting a value the
+test just constructed); existence-only (`!= nil`/`XCTAssertNotNil(sut)` as the sole assertion);
+asserting only values the test configured on its own double; `try?` or empty `catch` without
+`Issue.record` in a test body; `Task.sleep`/`usleep` in tests; duplicate tests (normalized-AST hash);
+`@Test` without a display name; unjustified non-exhaustive `TestStore`.
+
+**Behavioral (push/ready).**
+- `prove` — new test fails on an assertion with the source change reverted (§7.2 rule 2).
+- `mutate` — mutation testing on **changed** Core/Client/Live lines, re-running affected T1 tests.
+  Operators: negate conditional, relational boundary (`<`↔`<=`), return default, remove call,
+  remove effect/`send`. **Any surviving mutant → `RED` at `ready`**, unless annotated
+  `// swiftgate:equivalent-mutant — <reason>`. Cost ≈ 5–15s per mutant (incremental build + affected
+  T1); capped at `max_mutants` with sampling beyond; CPU-bound parallelism; never in the Stop hook.
+  Implemented in-house on SwiftSyntax: Muter (muter-mutation-testing/muter) was evaluated — repo
+  active but last release 2023, Swift 6 support unverified, and it lacks diff scoping and
+  TCA-aware operators. Keep it as a reference implementation only.
+- Per-test reach — each new test run alone with coverage; zero production lines covered in the
+  module it targets → `RED`.
+
+**Judgment (LLM).** A test-slop rubric in `swift-test-gate` (and a review-panel member in
+sub-project 4) for what tools can't see: vacuous or restated regression names,
+implementation-detail coupling, over-mocking, wrong abstraction level.
+
+**Escape hatch.** `// swiftgate:allow <rule> — <reason>`; counted in the report; a bare allow
+without a reason is itself `RED`.
+
 ## 8. Hooks
 
 All hooks are no-ops unless the repo root contains `.swiftgate.toml`.
@@ -345,7 +405,7 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `/swift-bootstrap` | stamp or upgrade the per-app layer; idempotent; diff before write |
 | `swift-architecture` | judgment layer: design a feature/module, recommend kind via fit signals, scaffold Core/UI package pair |
 | `swift-tdd` | test-first with `TestStore` and engine replay/property patterns; regression litmus |
-| `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → impact → judgment checklist → `prove` → `stress` → `check --tier ready` |
+| `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
 
 ## 10. Testing the harness itself
 
@@ -353,7 +413,7 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 - Adapters: tests against recorded real tool outputs (xcresult JSON, `swift package describe`, `simctl list -j`).
 - `swiftgate self-test`: fixture repos under `gate/Fixtures/` each seeded with one violation
   (`Date()` in Core, skipped test, record mode on, UIKit in Core, undeclared non-TCA Core, feature importing a `*Live` module, `URLSession.shared` outside `*Live`,
-  zero tests executed, retry flag) — each must yield `RED`; a clean fixture must yield `GREEN`.
+  zero tests executed, retry flag, assertion-free test, tautological test, `try?` in test, unnamed `@Test`, bare `swiftgate:allow`, XCUITest outside `[[flows]]`, surviving mutant) — each must yield `RED`; a clean fixture must yield `GREEN`.
 - Hooks: shim tests feeding recorded hook-input JSON and asserting decisions.
 - End-to-end: a sample app (`examples/SampleApp`, TCA feature + one engine module) bootstrapped and
   gated at every tier.
