@@ -16,6 +16,19 @@ resolve() {
   printf '%s\n' "$path"
 }
 
+# Mirrors the gate's project lookup: the nearest .swiftgate.toml at or above the directory,
+# stopping at a git root. The hook's working directory stands in for the payload's cwd, which the
+# shell cannot read without a JSON parser.
+in_project() {
+  local dir="$1"
+  while :; do
+    [ -f "$dir/.swiftgate.toml" ] && return 0
+    [ -e "$dir/.git" ] && return 1
+    [ "$dir" = "/" ] && return 1
+    dir="$(dirname "$dir")"
+  done
+}
+
 self="$(resolve "${BASH_SOURCE[0]}")"
 root="$(cd "$(dirname "$self")/.." && pwd -P)"
 gate="$root/gate"
@@ -63,8 +76,14 @@ if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
     ) </dev/null >/dev/null 2>&1 &
   fi
   rm -f "${pending:-}"
-  if [ "${2:-}" = "session-start" ]; then
-    echo "swift-harness: swiftgate is building in the background (log: $cache/build-$hash.log); its hooks are inactive until the build finishes."
+  if [ "${2:-}" = "session-start" ] && in_project "$PWD"; then
+    # SessionStart context is the only channel that tells the model the gates are off for now.
+    context="swiftgate enforcement is warming up: swiftgate is being built in the background \
+(log: $cache/build-$hash.log). Until it finishes, the swiftgate hooks are not enforced: no \
+format or lint after edits, no command guards, no Stop-hook check, no module map. Run \
+\`swiftgate check\` yourself before claiming work is done; it builds swiftgate first if needed."
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
+      "$(printf '%s' "$context" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   fi
   exit 0
 fi

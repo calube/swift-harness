@@ -16,15 +16,31 @@ shim="$work/repo/bin/swiftgate"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+# Claude Code runs hooks in the session's project directory.
+mkdir -p "$work/project/.git" "$work/elsewhere/.git"
+touch "$work/project/.swiftgate.toml"
+
 # A hook on a cold cache must answer at once and build in the background.
 hook_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
-hook_out="$(echo '{}' | "$shim" hook stop)" || fail "cold hook exited non-zero"
-start_out="$(echo '{}' | "$shim" hook session-start)" || fail "cold session-start exited non-zero"
+hook_out="$(cd "$work/project" && echo '{}' | "$shim" hook stop)" || fail "cold hook exited non-zero"
+start_out="$(cd "$work/project" && echo '{}' | "$shim" hook session-start)" ||
+  fail "cold session-start exited non-zero"
 hook_end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
 hook_ms=$(perl -e "printf '%d', ($hook_end - $hook_start) * 1000")
 [ -z "$hook_out" ] || fail "cold stop hook printed '$hook_out'"
-case "$start_out" in *"building in the background"*) ;; *) fail "cold session-start said '$start_out'" ;; esac
+# The model must learn from session context that the gates are not enforcing yet.
+printf '%s' "$start_out" | python3 -c '
+import json, sys
+output = json.load(sys.stdin)["hookSpecificOutput"]
+assert output["hookEventName"] == "SessionStart", output
+context = output["additionalContext"]
+assert "warming up" in context and "not enforced" in context, context
+' || fail "cold session-start did not inject warm-up context: '$start_out'"
 [ "$hook_ms" -lt 2000 ] || fail "cold hooks took ${hook_ms}ms"
+# Outside a swiftgate project every hook stays silent, cold or not.
+other_out="$(cd "$work/elsewhere" && echo '{}' | "$shim" hook session-start)" ||
+  fail "cold session-start outside a project exited non-zero"
+[ -z "$other_out" ] || fail "cold session-start outside a project said '$other_out'"
 for _ in $(seq 1 600); do
   ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1 || break
   sleep 1
