@@ -8,7 +8,8 @@ the procedure the orchestrator actually used for waves 1–5. Workers never read
 
 Start a NEW Claude Code session in the repo root, then paste:
 
-> You are the orchestrator for sub-project 2 of swift-harness. Read, in order and nothing else up front:
+> You are the orchestrator for sub-project 2 of swift-harness. On a machine that has never run a wave, do the
+> runbook's "New machine" steps first. Read, in order and nothing else up front:
 > `docs/handoffs/2026-09-25-subproject-2.md` (RESUME header only), the plan's RESUME header
 > (`docs/plans/2026-09-25-design-plan-workflows-plan.md`), this runbook
 > (`docs/handoffs/subproject-2-orchestrator-runbook.md`) in full, and the LAST wave section of
@@ -18,6 +19,25 @@ Start a NEW Claude Code session in the repo root, then paste:
 > checkpoint. Merges stay on local `main`. After each wave, refresh the backup with
 > `git push origin main:refs/heads/backup/subproject-2-wave-<N>`. Only push `origin/main` if I say so. Stop
 > and ask me before the acceptance waves (26–28), which need me present.
+
+## New machine
+
+All build state lives in this repo: the plan and its RESUME header, this runbook, the worker brief, the
+interfaces note and the handoff. Nothing lives in Claude memory, and there's no plan state under `.git`. On a
+fresh laptop:
+
+1. Clone, then check `main` matches `origin/main`. `backup/subproject-2-wave-<N>` branches on `origin` hold each
+   wave's merged state.
+2. Match the toolchain the waves ran on: Swift 6.2.3 (Xcode 26.2), node 24, plus stock `rsync`, `python3` and
+   `perl`. A different Swift minor version can change the toolchain facts in the plan's "How to work this plan"
+   section. Re-check them before wave 1 on that machine, and record any change here.
+3. Build once so worktrees have a `.build` to clone: `swift build --package-path gate`, then
+   `bin/swiftgate check --tier push`. The first build compiles SwiftSyntax and takes minutes. The shim's own
+   cache, `~/.cache/swift-harness`, fills itself.
+4. Claude Code only needs the built-in `general-purpose` agent, the `sonnet` and `opus` models, and
+   `SendMessage` for fix rounds. The build uses no user-level plugin or skill.
+5. The sibling e2e repo `../swift-harness-e2e` isn't kept. The acceptance waves recreate it as
+   `docs/e2e-report.md` describes.
 
 ## Resume from cold
 

@@ -21,7 +21,7 @@ Needs the user: waves 26–28 (acceptance) are attended runs.
 | Standards / playbook / ADRs | [`standards.md`](../standards.md) · [`testing-playbook.md`](../testing-playbook.md) · [`adrs/`](../adrs/README.md) |
 | End-to-end evidence | [`e2e-report.md`](../e2e-report.md) |
 | Worker brief | [`worker-brief.md`](worker-brief.md): reuse it for sub-project 2 workers |
-| Throwaway e2e repo | sibling checkout `../swift-harness-e2e` (`source env.sh` first). Safe to delete |
+| Throwaway e2e repo | not kept between sessions; the acceptance waves recreate `../swift-harness-e2e` as [`e2e-report.md`](../e2e-report.md) describes |
 
 The plugin is **not installed**. It was tested with `claude -p --plugin-dir`.
 
