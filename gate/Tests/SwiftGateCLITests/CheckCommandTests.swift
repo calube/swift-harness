@@ -9,11 +9,12 @@ import Testing
 @Suite("swiftgate check")
 struct CheckCommandTests {
   private func check(
-    _ tier: CheckTier, in repository: ProbeRepository, swiftPM: FakeSwiftPM, git: FakeGit
+    _ tier: CheckTier, in repository: ProbeRepository, swiftPM: FakeSwiftPM, git: FakeGit,
+    formatter: FakeSwiftFormatter = FakeSwiftFormatter()
   ) async throws -> (parts: GateRunParts, report: RunReport) {
     let parts = try await CheckRun.run(
-      root: repository.root, swiftPM: swiftPM, git: git, tier: tier, base: "origin/main",
-      context: repository.context())
+      root: repository.root, swiftPM: swiftPM, git: git, formatter: formatter, tier: tier,
+      base: "origin/main", context: repository.context())
     let report = try RunReport(
       runID: "r", durationMilliseconds: 1, tiers: parts.tiers, findings: parts.findings,
       allowances: parts.allowances)
@@ -102,6 +103,56 @@ struct CheckCommandTests {
     #expect(parts.tiers.map(\.tier) == [.t0])
     #expect(report.verdict == .green)
     #expect(parts.findings.contains { $0.ruleID == CheckRun.notRunRuleID })
+  }
+
+  @Test(
+    "T0 format-lints only the changed Swift files still on disk and fails on a violation — catches unformatted code passing check"
+  )
+  func formatLintsChangedFiles() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    try repository.write("XUnitProbe/Sources/Probe/Probe.swift", "public let probe = 1\n")
+    try repository.write("XUnitProbe/Sources/Probe/Clean.swift", "public let clean = 1\n")
+    try repository.write("XUnitProbe/.build/Generated.swift", "let generated = 1\n")
+    let changed = [
+      "XUnitProbe/Sources/Probe/Probe.swift", "XUnitProbe/Sources/Probe/Clean.swift",
+      "XUnitProbe/.build/Generated.swift", "Deleted.swift", "docs/guide.md",
+    ]
+    let formatter = FakeSwiftFormatter(violations: [
+      FormatViolation(
+        path: "XUnitProbe/Sources/Probe/Probe.swift", line: 3, column: 1, rule: "Indentation",
+        message: "unindent by 2 spaces")
+    ])
+
+    let (parts, report) = try await check(
+      .fast, in: repository, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
+      git: FakeGit(changed: changed, mergeBase: "base"), formatter: formatter)
+
+    #expect(
+      formatter.lintedPaths
+        == [["XUnitProbe/Sources/Probe/Clean.swift", "XUnitProbe/Sources/Probe/Probe.swift"]])
+    let finding = try #require(parts.findings.first { $0.ruleID == "format.Indentation" })
+    #expect(finding.file == "XUnitProbe/Sources/Probe/Probe.swift" && finding.line == 3)
+    #expect(finding.severity.failsGate)
+    #expect(parts.tiers.first { $0.tier == .t0 }?.verdict == .red)
+    #expect(report.verdict == .red)
+  }
+
+  @Test(
+    "a formatter that cannot run blocks T0 instead of passing or failing it — catches a missing toolchain read as clean"
+  )
+  func formatUnavailable() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    try repository.write("Scripts/Tool.swift", "let tool = 1\n")
+
+    let (parts, _) = try await check(
+      .fast, in: repository, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
+      git: FakeGit(changed: ["Scripts/Tool.swift"], mergeBase: "base"),
+      formatter: FakeSwiftFormatter(
+        failure: .process(.launchFailed(executable: "swift", reason: "not found"))))
+
+    #expect(parts.tiers.first { $0.tier == .t0 }?.verdict == .blocked)
   }
 
   @Test(

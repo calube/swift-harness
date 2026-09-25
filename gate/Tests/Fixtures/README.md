@@ -73,3 +73,20 @@ Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
   or cache failures print `<unknown>:0: error: …` instead.
 - Toggling `--enable-code-coverage` rebuilds the package (about 20s for the SampleApp's TCA
   package), so every T1 run enables it.
+
+## SwiftFormat
+
+Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's
+own gate) are the inputs.
+
+| File | Capture |
+|---|---|
+| `SwiftFormat/lint-strict.stderr`, `SwiftFormat/lint-strict.status` | `(cd gate/Fixtures/format && swift format lint --strict Formatted.swift Unformatted.swift Broken.swift) 2>&1 >/dev/null \| sed "s#$ROOT#/REPO#g"`; the status file holds the exit status |
+
+Observed behavior the adapter relies on:
+
+- Diagnostics go to stderr as `<path>:<line>:<column>: error: [<Rule>] <message>` (`warning:`
+  without `--strict`), with the path as given on the command line. A file that does not parse is
+  reported with its absolute path and no `[Rule]`.
+- Exit status is 1 when any diagnostic is printed under `--strict`, else 0. A path that does not
+  exist is silently skipped with status 0, so the gate passes only existing files.

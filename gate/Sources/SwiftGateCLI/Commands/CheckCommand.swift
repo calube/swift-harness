@@ -10,8 +10,8 @@ enum CheckRun {
   static let notRunRuleID = "swiftgate.not-run"
 
   static func run(
-    root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, base: String,
-    context: GateRun.Context
+    root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
+    tier: CheckTier, base: String, context: GateRun.Context
   ) async throws -> GateRunParts {
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
@@ -27,18 +27,19 @@ enum CheckRun {
     case .resolved(let resolved): scopes = resolved
     }
 
+    let changed = await changedSinceMergeBase(git: git, base: base)
     // T0 finishes in well under a second, so it runs before T1 rather than beside it: the arch
     // check's `dump-package` would otherwise wait on the package lock T1's build holds.
     let t0 = try await runT0(
-      root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
-      scopes: scopes)
+      root: root, swiftPM: swiftPM, git: git, formatter: formatter, tier: tier, base: base,
+      config: config, scopes: scopes, changed: changed)
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
     if let config, let graph = scopes.graph {
       let t1 = try await runT1(
         root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
-        graph: graph, context: context)
+        graph: graph, changed: changed, context: context)
       parts.tiers.append(t1.tier)
       parts.findings += t1.findings
     } else {
@@ -62,8 +63,9 @@ enum CheckRun {
   }
 
   private static func runT0(
-    root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, base: String,
-    config: Config?, scopes: ResolvedScopes
+    root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
+    tier: CheckTier, base: String, config: Config?, scopes: ResolvedScopes,
+    changed: Result<[String], BlockedReason>
   ) async throws -> T0Result {
     let (outcomes, milliseconds) = await GateRun.timed { () async -> [StaticCheckOutcome] in
       let inputs: StaticCheckInputs.Loaded
@@ -75,6 +77,8 @@ enum CheckRun {
         scopes.appendingNotices(to: .checked(RuleRunResult(findings: [], allowances: []))),
         LintCheck.evaluate(inputs), TestlintCheck.evaluate(inputs),
         await ArchCheck.evaluate(inputs, swiftPM: swiftPM),
+        await FormatCheck.run(
+          changed: changed, root: root, excluded: config?.exclude ?? [], formatter: formatter),
       ]
       if tier.runsImpact {
         outcomes.append(
@@ -87,13 +91,14 @@ enum CheckRun {
 
   private static func runT1(
     root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, base: String,
-    config: Config, graph: ModuleGraph, context: GateRun.Context
+    config: Config, graph: ModuleGraph, changed: Result<[String], BlockedReason>,
+    context: GateRun.Context
   ) async throws -> HostTestCheck.Result {
     let plan: TierPlan
     if tier.runsAllT1 {
       plan = TierPlan(allOf: graph, tier: .t1)
     } else {
-      switch await changedSinceMergeBase(git: git, base: base) {
+      switch changed {
       case .failure(let reason): return try blockedT1(reason.text)
       case .success(let changed): plan = TierPlan(changedPaths: changed, graph: graph, tier: .t1)
       }
@@ -207,7 +212,9 @@ struct CheckCommand: AsyncParsableCommand {
       root: root, format: output.format, command: "check \(tier.rawValue)"
     ) { context in
       try await CheckRun.run(
-        root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, context: context)
+        root: root, swiftPM: swiftPM, git: git,
+        formatter: LiveSwiftFormatter(runner: LiveProcessRunner(), repositoryRoot: root.path),
+        tier: tier, base: base, context: context)
     }
   }
 }

@@ -32,6 +32,22 @@ public struct SwiftSourceCollector: Sendable {
   /// Build output and tool state, never sources under review.
   private static let skippedDirectories: Set<String> = ["DerivedData"]
 
+  /// Whether a repository-relative file lies where a directory walk would never look: under an
+  /// excluded directory, build output, or a hidden directory.
+  public func isExcluded(_ relativePath: String) -> Bool {
+    let components = relativePath.split(separator: "/").dropLast()
+    var prefix = ""
+    for component in components {
+      prefix = prefix.isEmpty ? String(component) : "\(prefix)/\(component)"
+      if component.hasPrefix(".") || Self.skippedDirectories.contains(String(component))
+        || excluded.contains(prefix)
+      {
+        return true
+      }
+    }
+    return false
+  }
+
   public func collect(paths: [String]) throws(SourceCollectionError) -> [CollectedSource] {
     var relativePaths = Set<String>()
     for argument in paths {
