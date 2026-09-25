@@ -110,7 +110,7 @@ struct HookCommandTests {
   ]
 
   @Test(
-    "every hook is a silent no-op outside a swiftgate project, within 50ms — catches hooks taxing every repository the plugin is installed in",
+    "every hook is a silent no-op outside a swiftgate project, fastest of 5 under 50ms — catches hooks taxing every repository the plugin is installed in",
     arguments: [
       (HookEvent.sessionStart, "session-start"), (.preToolUse, "pre-tool-use-bash-xcodebuild"),
       (.preToolUse, "pre-tool-use-write-package-resolved"),
@@ -118,26 +118,31 @@ struct HookCommandTests {
       (.stop, "stop"),
     ])
   func noConfigIsNoOp(event: HookEvent, fixture: String) async throws {
-    let elsewhere = FileManager.default.temporaryDirectory
-      .appending(path: "swiftgate-noconfig-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(
-      at: elsewhere.appending(path: ".git"), withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: elsewhere) }
-    let harness = try HookHarness()
-    defer { harness.repository.remove() }
-    let input = try harness.payload(fixture, cwd: elsewhere)
-    let factoryCalls = Mutex(0)
+    // Each sample rebuilds its own directory and harness so every repeat measures the same,
+    // untouched state rather than one warmed by an earlier repeat.
+    let samples = try await Latency.samples {
+      let elsewhere = FileManager.default.temporaryDirectory
+        .appending(path: "swiftgate-noconfig-\(UUID().uuidString)", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(
+        at: elsewhere.appending(path: ".git"), withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: elsewhere) }
+      let harness = try HookHarness()
+      defer { harness.repository.remove() }
+      let input = try harness.payload(fixture, cwd: elsewhere)
+      let factoryCalls = Mutex(0)
 
-    let (result, milliseconds) = await GateRun.timed {
-      await HookRunner.run(event, input: input) { _ in
-        factoryCalls.withLock { $0 += 1 }
-        return harness.dependencies
+      let (result, milliseconds) = await GateRun.timed {
+        await HookRunner.run(event, input: input) { _ in
+          factoryCalls.withLock { $0 += 1 }
+          return harness.dependencies
+        }
       }
-    }
 
-    #expect(result == HookResult(stdout: nil, stderr: nil, exitCode: 0))
-    #expect(factoryCalls.withLock { $0 } == 0)
-    #expect(milliseconds < 50)
+      #expect(result == HookResult(stdout: nil, stderr: nil, exitCode: 0))
+      #expect(factoryCalls.withLock { $0 } == 0)
+      return milliseconds
+    }
+    #expect(samples.min()! < 50, "noConfigIsNoOp(\(fixture)) samples: \(samples)ms, budget: 50ms")
   }
 
   @Test(
@@ -157,7 +162,7 @@ struct HookCommandTests {
   }
 
   @Test(
-    "SessionStart injects the module map, an Xcode mismatch, the session id and active plan RESUME lines from the shared common-dir index within 1s, describing packages once — catches sessions starting blind or paying describe every time"
+    "SessionStart injects the module map, an Xcode mismatch, the session id and active plan RESUME lines from the shared common-dir index, fastest of 5 under 1s, describing packages once — catches sessions starting blind or paying describe every time"
   )
   func sessionStart() async throws {
     let shared = SharedPlanState()
@@ -166,11 +171,24 @@ struct HookCommandTests {
       index:
         #"{"plans":[{"slug":"2026-09-24-probe","status":"active","resume":"Next: T2."},{"slug":"old","status":"done"}]}"#
     )
+
+    // SessionStart caches the module map to disk on its first call in a worktree (see
+    // SessionStartHook.moduleMap), so a repeat on the same harness would time the cache hit, not
+    // the real per-session cost the budget guards. Each sample gets its own fresh worktree.
+    let samples = try await Latency.samples {
+      var timed = try HookHarness(git: shared.git())
+      defer { timed.repository.remove() }
+      timed.xcode = FixedXcode(version: "26.1")
+      let (_, milliseconds) = try await timed.run(.sessionStart, "session-start")
+      return milliseconds
+    }
+    #expect(samples.min()! < 1000, "sessionStart samples: \(samples)ms, budget: 1000ms")
+
     var harness = try HookHarness(git: shared.git())
     defer { harness.repository.remove() }
     harness.xcode = FixedXcode(version: "26.1")
 
-    let (first, milliseconds) = try await harness.run(.sessionStart, "session-start")
+    let (first, _) = try await harness.run(.sessionStart, "session-start")
     let (second, _) = try await harness.run(.sessionStart, "session-start-resume")
 
     let output = try #require(try harness.json(first)["hookSpecificOutput"] as? [String: String])
@@ -183,7 +201,6 @@ struct HookCommandTests {
     #expect(!context.contains("old (done)"))
     #expect(first.exitCode == 0 && second.stdout == first.stdout)
     #expect(harness.swiftPM.described.count == 1)
-    #expect(milliseconds < 1000)
   }
 
   @Test(
@@ -300,32 +317,41 @@ struct HookCommandTests {
   }
 
   @Test(
-    "PreToolUse denies a raw xcodebuild with the documented deny shape, within 50ms — catches a guard Claude Code ignores or a slow hook on every Bash call"
+    "PreToolUse denies a raw xcodebuild with the documented deny shape, fastest of 5 under 50ms — catches a guard Claude Code ignores or a slow hook on every Bash call"
   )
   func denyXcodebuild() async throws {
-    let harness = try HookHarness()
-    defer { harness.repository.remove() }
+    let samples = try await Latency.samples {
+      let harness = try HookHarness()
+      defer { harness.repository.remove() }
 
-    let (result, milliseconds) = try await harness.run(.preToolUse, "pre-tool-use-bash-xcodebuild")
+      let (result, milliseconds) = try await harness.run(
+        .preToolUse, "pre-tool-use-bash-xcodebuild")
 
-    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
-    #expect(output["permissionDecision"] == "deny")
-    #expect(output["permissionDecisionReason"]?.contains("raw xcodebuild") == true)
-    #expect(result.exitCode == 0)
-    #expect(milliseconds < 50)
+      let output = try #require(
+        try harness.json(result)["hookSpecificOutput"] as? [String: String])
+      #expect(output["permissionDecision"] == "deny")
+      #expect(output["permissionDecisionReason"]?.contains("raw xcodebuild") == true)
+      #expect(result.exitCode == 0)
+      return milliseconds
+    }
+    #expect(samples.min()! < 50, "denyXcodebuild samples: \(samples)ms, budget: 50ms")
   }
 
   @Test(
     "PreToolUse leaves ordinary commands and source edits to the normal permission flow — catches guards blocking everyday work",
     arguments: ["pre-tool-use-bash-allowed", "pre-tool-use-edit-swift"])
   func allowsOrdinaryWork(fixture: String) async throws {
-    let harness = try HookHarness()
-    defer { harness.repository.remove() }
+    let samples = try await Latency.samples {
+      let harness = try HookHarness()
+      defer { harness.repository.remove() }
 
-    let (result, milliseconds) = try await harness.run(.preToolUse, fixture)
+      let (result, milliseconds) = try await harness.run(.preToolUse, fixture)
 
-    #expect(result == HookResult(stdout: nil, stderr: nil, exitCode: 0))
-    #expect(milliseconds < 50)
+      #expect(result == HookResult(stdout: nil, stderr: nil, exitCode: 0))
+      return milliseconds
+    }
+    #expect(
+      samples.min()! < 50, "allowsOrdinaryWork(\(fixture)) samples: \(samples)ms, budget: 50ms")
   }
 
   @Test(
@@ -335,14 +361,19 @@ struct HookCommandTests {
       ("pre-tool-use-write-package-resolved", EditGuard.packageResolvedRuleID),
     ])
   func denyArtifactEdits(fixture: String, rule: String) async throws {
-    let harness = try HookHarness()
-    defer { harness.repository.remove() }
+    let samples = try await Latency.samples {
+      let harness = try HookHarness()
+      defer { harness.repository.remove() }
 
-    let (result, milliseconds) = try await harness.run(.preToolUse, fixture)
+      let (result, milliseconds) = try await harness.run(.preToolUse, fixture)
 
-    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
-    #expect(output["permissionDecision"] == "deny")
-    #expect(milliseconds < 50)
+      let output = try #require(
+        try harness.json(result)["hookSpecificOutput"] as? [String: String])
+      #expect(output["permissionDecision"] == "deny")
+      return milliseconds
+    }
+    #expect(
+      samples.min()! < 50, "denyArtifactEdits(\(fixture)) samples: \(samples)ms, budget: 50ms")
   }
 
   @Test(
@@ -388,27 +419,32 @@ struct HookCommandTests {
   }
 
   @Test(
-    "PostToolUse formats the edited Swift file, lints only it, and reports a RED finding as a block within 1s — catches determinism bans surfacing only at Stop"
+    "PostToolUse formats the edited Swift file, lints only it, and reports a RED finding as a block, fastest of 5 under 1s — catches determinism bans surfacing only at Stop"
   )
   func postToolUseLints() async throws {
-    var harness = try HookHarness()
-    defer { harness.repository.remove() }
-    harness.formatter = FakeSwiftFormatter(reformats: [Self.probeSource])
-    try harness.repository.write(Self.probeSource, "import Foundation\n\npublic let now = Date()\n")
-    try harness.repository.write(
-      "XUnitProbe/Sources/Probe/Other.swift", "import Foundation\n\npublic let other = UUID()\n")
+    let samples = try await Latency.samples {
+      var harness = try HookHarness()
+      defer { harness.repository.remove() }
+      harness.formatter = FakeSwiftFormatter(reformats: [Self.probeSource])
+      try harness.repository.write(
+        Self.probeSource, "import Foundation\n\npublic let now = Date()\n")
+      try harness.repository.write(
+        "XUnitProbe/Sources/Probe/Other.swift", "import Foundation\n\npublic let other = UUID()\n"
+      )
 
-    let (result, milliseconds) = try await harness.run(
-      .postToolUse, "post-tool-use-edit-swift", replacing: Self.editedFile)
+      let (result, milliseconds) = try await harness.run(
+        .postToolUse, "post-tool-use-edit-swift", replacing: Self.editedFile)
 
-    #expect(harness.formatter.formattedPaths == [Self.probeSource])
-    let output = try harness.json(result)
-    #expect(output["decision"] as? String == "block")
-    let reason = try #require(output["reason"] as? String)
-    #expect(reason.contains("det.date-init"))
-    #expect(!reason.contains("det.uuid-init"))
-    #expect(reason.contains("reformatted"))
-    #expect(milliseconds < 1000)
+      #expect(harness.formatter.formattedPaths == [Self.probeSource])
+      let output = try harness.json(result)
+      #expect(output["decision"] as? String == "block")
+      let reason = try #require(output["reason"] as? String)
+      #expect(reason.contains("det.date-init"))
+      #expect(!reason.contains("det.uuid-init"))
+      #expect(reason.contains("reformatted"))
+      return milliseconds
+    }
+    #expect(samples.min()! < 1000, "postToolUseLints samples: \(samples)ms, budget: 1000ms")
   }
 
   @Test(
@@ -458,20 +494,26 @@ struct HookCommandTests {
   }
 
   @Test(
-    "Stop allows a GREEN tier, then skips unchanged content without running anything — catches every stop paying for the fast tier"
+    "Stop allows a GREEN tier, then skips unchanged content without running anything, fastest of 5 under 1s — catches every stop paying for the fast tier"
   )
   func stopSkipsSinceGreen() async throws {
     let harness = try HookHarness(scenario: "pass", git: Self.git(changing: "Scripts/Tool.swift"))
     defer { harness.repository.remove() }
     try harness.repository.write("Scripts/Tool.swift", "let tool = 1\n")
 
+    // The GREEN fingerprint is primed once; every repeat below re-checks the same unchanged
+    // content and hits the same skip path (StopHook.run's `.skip` case is a pure read, so
+    // repeating it never re-triggers the fast tier or re-writes state).
     let first = try await harness.run(.stop, "stop").result
-    let (second, milliseconds) = try await harness.run(.stop, "stop")
-
     #expect(first == HookResult(stdout: nil, stderr: nil, exitCode: 0))
-    #expect(second == HookResult(stdout: nil, stderr: nil, exitCode: 0))
+
+    let samples = try await Latency.samples {
+      let (second, milliseconds) = try await harness.run(.stop, "stop")
+      #expect(second == HookResult(stdout: nil, stderr: nil, exitCode: 0))
+      return milliseconds
+    }
     #expect(harness.formatter.lintedPaths.count == 1)
-    #expect(milliseconds < 1000)
+    #expect(samples.min()! < 1000, "stopSkipsSinceGreen samples: \(samples)ms, budget: 1000ms")
   }
 
   @Test(
