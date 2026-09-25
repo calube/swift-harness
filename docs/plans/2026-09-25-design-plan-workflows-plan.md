@@ -87,7 +87,7 @@ flowchart LR
     w10 --> w11["11: context-pack-command<br/>design-lint-command<br/>docs-lint-command"]
     w11 --> w12["12: evidence-check-command<br/>evidence-find-command<br/>plan-lint-graph-and-waves"]
     w12 --> w13["13: probe-builds-scratch-package"]
-    w13 --> w14["14: plan-lint-command<br/>push-tier-runs-doc-gates"]
+    w13 --> w14["14: markdown-writes-checked-for-local-paths<br/>plan-lint-command<br/>push-tier-runs-doc-gates"]
   end
   subgraph rnd["Render and metrics"]
     w15["15: design-render-design-page<br/>stats-design-and-plan-metrics"] --> w16["16: design-render-ledger-page"]
@@ -101,25 +101,30 @@ flowchart LR
   subgraph sd["Seeds"]
     w22["22: calibration-seeds-labelled-by-construction<br/>plugin-docs-pass-docs-lint-and-prose<br/>self-test-runs-evidence-and-design-seeds"] --> w23["23: self-test-runs-plan-docs-prose-id-seeds"]
   end
+  subgraph pkg["Packaging"]
+    w24["24: consumer-plugin-in-plugin-dir"]
+  end
   subgraph acc["Acceptance"]
-    w24["24: plugin-installs-for-real"] --> w25["25: nonexistent-api-run-refutes-claim"]
-    w25 --> w26["26: sampleapp-standard-design-to-plan"]
+    w25["25: plugin-installs-for-real"] --> w26["26: nonexistent-api-run-refutes-claim"]
+    w26 --> w27["27: sampleapp-standard-design-to-plan"]
   end
   w5 --> w6
   w14 --> w15
   w16 --> w17
   w21 --> w22
   w23 --> w24
+  w24 --> w25
 ```
 
 | Waves | Milestone | Tasks | Why split this way |
 |---|---|---|---|
 | 1–5 | Foundation changes and formats | 14 | layer 0 (8 tasks) → 3 waves; guard, ids, session start; then index, plan claim, commit-msg |
-| 6–14 | Mechanical gates | 24 | 15 rule/domain tasks → 5 waves; 7 commands → 3 (probe alone: sole cold build); 2 integrators |
+| 6–14 | Mechanical gates | 25 | 15 rule/domain tasks → 5 waves; 7 commands → 3 (probe alone: sole cold build); 2 integrators |
 | 15–16 | Render and metrics | 3 | ledger page shares the render command file |
 | 17–21 | Agent layer | 10 | agents test first; skills after the agents and gates they call |
 | 22–23 | Seeds | 4 | the id and plan seeds reuse the seed runner |
-| 24–26 | Acceptance | 3 | all write `docs/e2e-report.md` |
+| 24 | Packaging | 1 | moves every path; must follow all code waves and precede the real install (ADR 0002) |
+| 25–27 | Acceptance | 3 | all write `docs/e2e-report.md` |
 
 ---
 
@@ -258,8 +263,8 @@ flowchart LR
 
 ### `docs-lint-policy-and-budgets`
 - Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 220
-- Writes: `D/Docs/DocsLintPolicy.swift`, `TD/DocsLintPolicyTests.swift`
-- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`; no config key). Docs reference repo files by relative path.
+- Writes: `D/Docs/DocsLintPolicy.swift`, `D/Docs/LocalPathRule.swift`, `TD/DocsLintPolicyTests.swift`
+- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`; no config key). Docs reference repo files by relative path. The detector is a pure `LocalPathRule.scan(_ text:) -> [Finding]` so the write-time hook reuses it.
 - Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged · `~/Developer/x` and `/Users/me/x` flagged, `~/.swift-harness/` allowed — catches machine-specific paths that break for every other reader.
 
 ### `docs-lint-references-and-links`
@@ -277,8 +282,8 @@ flowchart LR
 ### `evidence-check-rules`
 - Deps: claim-and-amendment-records, probe-diagnostic-verdicts · Gate: push · estLines: 280
 - Writes: `D/Evidence/EvidenceCheck.swift`, `TD/EvidenceCheckTests.swift`
-- Does: D3 per-kind rules (§5.2 table); `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`).
-- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` without a decision record → fail.
+- Does: D3 per-kind rules (§5.2 table); citation `loc` must be repo-relative (`.build/checkouts/…` included), never absolute or home-relative; `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`).
+- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` without a decision record → fail · absolute or `~/` `loc` → fail — catches evidence that only resolves on one machine.
 
 ### `evidence-reuse-cache-store`
 - Deps: claim-and-amendment-records · Gate: push · estLines: 260
@@ -346,6 +351,16 @@ flowchart LR
 - Does: §6.2. One scratch package per worktree at `.harness/probe/`, pinned to the target's `Package.resolved`, depending only on products the target already uses. iOS: `xcodebuild` through `ProcessRunner` with `-skipMacroValidation` and the worktree's `-derivedDataPath`; host-only packages: `swift build`. Never a direct `swift-issue-reporting` dependency; no MainActor default isolation; build only (no `swift test`, no simulator boot). Verdicts cached per SDK; written to `<slug>.evidence/probes/`.
 - Tests: host fixture: real API passes, fabricated API and wrong signature fail — catches a hallucinated API reaching Decision · xcodebuild argv has `-skipMacroValidation` and per-worktree DerivedData · same pins and SDK hit the cache with no build · scratch manifest never lists `swift-issue-reporting`.
 - Alone in its wave: the only cold build, which eases memory pressure.
+
+### `markdown-writes-checked-for-local-paths`
+- Deps: docs-lint-policy-and-budgets, commit-message-id-check · Gate: push · estLines: 160
+- Writes: `C/Hooks/PostToolUseHook.swift`, `C/Commands/CommentsCommand.swift`, `TC/MarkdownLocalPathHookTests.swift`
+- Does: the fast gate for docs that skills write into consumer repos. PostToolUse on a `*.md` write runs
+  `LocalPathRule` on that one file (same < 1s budget as the Swift path) and reports each violation with its
+  line; `comments --staged` also scans staged `*.md` files so pre-commit catches hand edits.
+- Tests: writing `docs/x.md` containing a home-directory path reports it with its line — catches a skill
+  leaking the author's machine · `~/.swift-harness/` passes · non-markdown writes are unaffected · a
+  1,000-line doc checks in < 50ms · a staged doc with `/Users/…` fails pre-commit.
 
 ### `plan-lint-command`
 - Deps: plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, context-pack-command, plan-state-paths-in-git-common-dir · Gate: push · estLines: 220
@@ -472,8 +487,21 @@ flowchart LR
 
 Not code slices; the §13 checks are the tests. Record evidence (commands, verdicts, tokens, wall time) in `docs/e2e-report.md`.
 
+### `consumer-plugin-in-plugin-dir`
+- Deps: all code and seed waves · Gate: ready · estLines: 180 (logic; the rest is `git mv`, justified exception to the 400 cap)
+- Writes: `plugin/**` (moved from `.claude-plugin/`, `skills/`, `agents/`, `hooks/`, `workflows/`, `templates/`,
+  `bin/`, `gate/`, `docs/standards.md`, `docs/testing-playbook.md`, `docs/hooks.md`), `.claude-plugin/marketplace.json`
+  (root, `source: "./plugin"`), `bin/swiftgate` shim, `AGENTS.md`, `docs/index.md`, `README.md`, `.swiftgate.toml`
+- Does: ADR 0002 layout. The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}` keyed by source hash
+  (the per-version cache dir is not reused across updates); a contributor checkout still builds in place.
+  Root `AGENTS.md` stays contributor-facing; nothing under `plugin/` is contributor-only except `gate/Tests`.
+- Tests: `claude plugin validate plugin` passes with no warnings — catches a root CLAUDE.md shipping to
+  consumers · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
+  reuses it on a second run · every repo path in docs, skills and agents resolves after the move (link check) ·
+  push and ready tiers green from the new layout.
+
 ### `plugin-installs-for-real`
-- Deps: all earlier waves · Gate: ready · estLines: 80
+- Deps: consumer-plugin-in-plugin-dir · Gate: ready · estLines: 80
 - Writes: `docs/e2e-report.md`, `.claude-plugin/marketplace.json` (only if install needs a fix)
 - Does: install through the marketplace, not `--plugin-dir`. In a SampleApp session, run one design agent type by its plugin name; capture a live PreToolUse payload with `agent_id` (§14).
 - Tests: plugin agent types run · subagent write to a ledger, design doc and claim file denied · two worktrees read the same `index.json` and ledger.
