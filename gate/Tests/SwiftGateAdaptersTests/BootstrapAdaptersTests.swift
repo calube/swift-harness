@@ -134,7 +134,9 @@ struct BootstrapAdaptersTests {
   @Test(
     "lefthook install with the shipped template installs both hooks the planner checks for — catches bootstrap reinstalling hooks forever or never",
     .enabled(
-      if: HarnessFiles.isOnPath("lefthook", path: ProcessInfo.processInfo.environment["PATH"] ?? "")
+      if: HarnessFiles.isOnPath(
+        "lefthook", path: ProcessInfo.processInfo.environment["PATH"] ?? ""),
+      "needs lefthook on PATH"
     )
   )
   func lefthookInstall() async throws {
