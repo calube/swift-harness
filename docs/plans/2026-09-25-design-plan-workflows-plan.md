@@ -1,11 +1,11 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: NOT STARTED (plan written 2026-09-25).
+Status: IN PROGRESS — wave 1 merged 2026-09-25 (push tier GREEN, 631 tests). Pre-wave fix: test-support module kind.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 1 — bootstrap-stamps-docs-router, claim-and-amendment-records, cli-subcommand-stubs.
+Next action: wave 2 — config-docs-and-plan-sections, ledger-and-plan-model, markdown-and-design-doc-model.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
-Interfaces note: docs/handoffs/subproject-2-interfaces.md (the orchestrator creates it at the first merge).
+Interfaces note: docs/handoffs/subproject-2-interfaces.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
@@ -32,7 +32,8 @@ Progress: git log. Update this header at every wave merge.
 ## How to work this plan
 
 - **Worktrees.** Per task, the orchestrator runs `git worktree add ../swift-harness-<task-id> -b <task-id>` from
-  main after the previous wave merged. One committer per worktree. Workers commit locally and don't push.
+  main after the previous wave merged, clones main's `gate/.build` in (`cp -cR`), then deletes the clone's
+  `ModuleCache` directories (their headers point at the old path and fail the build). One committer per worktree. Workers commit locally and don't push.
 - **Workers** get [`worker-brief.md`](../handoffs/worker-brief.md), this plan's Decisions and "How to work"
   sections, their task section, and the interfaces note. Reports: ≤ 200 words, in the brief's shape.
 - **Interfaces note** `docs/handoffs/subproject-2-interfaces.md`: the orchestrator appends each wave's "notes
