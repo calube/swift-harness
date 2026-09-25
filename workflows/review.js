@@ -38,7 +38,7 @@ if (typeof ARGS.pluginRoot !== 'string' || !ARGS.pluginRoot.startsWith('/')) {
 const pluginRoot = ARGS.pluginRoot.replace(/\/+$/, '')
 const STANDARDS = `${pluginRoot}/docs/standards.md`
 const PLAYBOOK = `${pluginRoot}/docs/testing-playbook.md`
-const CONTRACT = `${pluginRoot}/docs/decisions/0001-review-severity-for-standards-violations.md`
+const CONTRACT = `${pluginRoot}/docs/adrs/0001-review-severity-for-standards-violations.md`
 const DOCS =
   `Standards: ${STANDARDS}. Testing playbook: ${PLAYBOOK}. ` +
   `Review contract for finding kinds and severity: ${CONTRACT}.`

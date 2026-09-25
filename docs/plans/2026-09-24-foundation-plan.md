@@ -2,7 +2,7 @@
 
 <!-- RESUME
 Status: COMPLETE 2026-09-25 — all waves A–I done; 594 tests; live-verified (docs/e2e-report.md).
-Spec: docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md (approved).
+Spec: docs/designs/2026-09-24-swift-harness-foundation-design.md (approved).
 Next action: none in this plan. Next: real review-workflow run (user opt-in), then sub-project 2 spec.
 Open items:
   - T4.4: confirm current Claude Code hook input schema (Stop re-entry field, subagent identity) before coding.

@@ -51,7 +51,7 @@ read-only. Don't edit files, build, or run tests.
 
 ## Output: the review contract
 
-The contract is spec §9.1 as refined by `docs/decisions/0001-review-severity-for-standards-violations.md`
+The contract is spec §9.1 as refined by `docs/adrs/0001-review-severity-for-standards-violations.md`
 in the plugin. Return findings only; the workflow enforces the JSON shape. Each finding has:
 
 - `kind`: how the finding is verified.

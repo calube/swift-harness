@@ -58,7 +58,7 @@ for each focus in `focuses`, launch `swift-harness:<focus>` (all in one message)
 returns findings, launch `swift-harness:verifier` with only those findings, the bundle path and the
 absolute docs paths, never the reviewer's reasoning. Give every prompt the absolute paths
 `${CLAUDE_PLUGIN_ROOT}/docs/standards.md`, `${CLAUDE_PLUGIN_ROOT}/docs/testing-playbook.md` and
-`${CLAUDE_PLUGIN_ROOT}/docs/decisions/0001-review-severity-for-standards-violations.md`. Build the
+`${CLAUDE_PLUGIN_ROOT}/docs/adrs/0001-review-severity-for-standards-violations.md`. Build the
 per-focus objects exactly as `reconcile()` in `workflows/review.js` does: keep the reviewer's
 `kind`, `rule`, category and location; keep the verifier's `verification_note`; accept a lower
 severity for a `standards-violation` only when the verifier gave a `downgrade_reason`; unverified

@@ -4,8 +4,9 @@ A Claude Code plugin that holds SwiftUI iOS work to a consistent bar: codified s
 playbook, `swiftgate` (the single gate tool every hook, skill, and git hook calls), and review and
 validation workflows.
 
-- Design: `docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md`
-- Plan: `docs/superpowers/plans/2026-09-24-foundation-plan.md`
+- Docs: start at [`docs/index.md`](docs/index.md)
+- Design: `docs/designs/2026-09-24-swift-harness-foundation-design.md`
+- Plan: `docs/plans/2026-09-24-foundation-plan.md`
 
 ## Install
 

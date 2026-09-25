@@ -3,7 +3,7 @@
 <!-- RESUME
 State (2026-09-25): Foundation (sub-project 1) is BUILT, live-verified and pushed to main: 598 tests, gate GREEN.
 Next action: brainstorm and spec sub-project 2 (design and plan workflows). Start with the brainstorming skill. Write the spec to
-  docs/superpowers/specs/<date>-design-plan-workflows-design.md, then write a plan, then build it wave by wave with workers.
+  docs/designs/<date>-design-plan-workflows-design.md, then write a plan, then build it wave by wave with workers.
 Read first: this file → Foundation spec RESUME header → spec §2 row 2 and §4.2 (plans layout).
 Do NOT re-read the whole Foundation spec or plan; grep for the sections you need.
 -->
@@ -13,10 +13,10 @@ Do NOT re-read the whole Foundation spec or plan; grep for the sections you need
 | What | Where |
 |---|---|
 | Repo | `~/Developer/swift-harness` on private GitHub `calube/swift-harness`, branch `main` |
-| Foundation spec | `docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md` (RESUME header at the top) |
-| Foundation plan | `docs/superpowers/plans/2026-09-24-foundation-plan.md` (complete) |
+| Foundation spec | `docs/designs/2026-09-24-swift-harness-foundation-design.md` (RESUME header at the top) |
+| Foundation plan | `docs/plans/2026-09-24-foundation-plan.md` (complete) |
 | Standards / playbook | `docs/standards.md` (rule anchors C/A/D/E/O/U/X/G/K/H), `docs/testing-playbook.md` (P1–P11) |
-| Decisions | `docs/decisions/0001-review-severity-for-standards-violations.md` |
+| Decisions | `docs/adrs/0001-review-severity-for-standards-violations.md` |
 | End-to-end evidence | `docs/e2e-report.md`: tier timings, seeded violations, live-session hooks, the real review-workflow run |
 | Worker brief | `docs/handoffs/worker-brief.md`: the brief every build worker got. Reuse it for sub-project 2 |
 | Throwaway e2e repo | `~/Developer/swift-harness-e2e` (`source env.sh` first). Safe to delete |

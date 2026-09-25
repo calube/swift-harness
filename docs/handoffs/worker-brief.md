@@ -4,9 +4,9 @@ You are a worker implementing tasks from the swift-harness Foundation plan. An o
 owns the plan and merges your work. Your task IDs and worktree are given in your prompt.
 
 ## Sources of truth (read only what you need)
-- Plan: `docs/superpowers/plans/2026-09-24-foundation-plan.md` — read the "Decisions", "How to work
+- Plan: `docs/plans/2026-09-24-foundation-plan.md` — read the "Decisions", "How to work
   this plan" sections and YOUR task sections only (grep for `### T<id>`).
-- Spec: `docs/superpowers/specs/2026-09-24-swift-harness-foundation-design.md` — grep for the
+- Spec: `docs/designs/2026-09-24-swift-harness-foundation-design.md` — grep for the
   sections your task cites (e.g. `§5.4`, `### 7.4`). Do not read the whole spec unless needed.
 
 ## Rules

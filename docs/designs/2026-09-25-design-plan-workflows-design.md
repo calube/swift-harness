@@ -2,7 +2,7 @@
 
 <!-- RESUME
 Status: SPEC WRITTEN 2026-09-25, awaiting user review. Source of truth for every decision: docs/handoffs/2026-09-25-subproject-2-brainstorm-decisions.md (D1–D20; D19 amends D11).
-Next action: user review → writing-plans (plan to docs/superpowers/plans/).
+Next action: user review → writing-plans (plan to docs/plans/).
 Read first: this header → §2 (decision map) → the section you need. Grep; don't read the whole file.
 Corrects Foundation spec §2 row 2 and §4.2 (plan-state location, "ledger canonical in git") — see §15.
 Open: agent_id not yet seen live in hook payloads; Artifact runtime capabilities (comments, db) are a claude.ai dependency.
@@ -128,9 +128,9 @@ they need a user call (for example, a probe refutes the only viable option).
 
 | Class | Location | Contents | Why here |
 |---|---|---|---|
-| Committed (durable) | `docs/<area>/design/<slug>.md` | design doc | reviewed and approved artifact; outlives the plan |
-| Committed | `docs/<area>/design/<slug>.evidence/` | `claims.jsonl`, `amendments.jsonl`, `snapshots/`, `captures/`, `probes/` | citations must travel with the doc |
-| Committed | `docs/<area>/decisions/NNNN-<title>.md` | ADR for the decision (standard and deep tiers) | design history is load-bearing |
+| Committed (durable) | `docs/<area>/designs/<slug>.md` | design doc | reviewed and approved artifact; outlives the plan |
+| Committed | `docs/<area>/designs/<slug>.evidence/` | `claims.jsonl`, `amendments.jsonl`, `snapshots/`, `captures/`, `probes/` | citations must travel with the doc |
+| Committed | `docs/<area>/adrs/NNNN-<title>.md` | ADR for the decision (standard and deep tiers) | design history is load-bearing |
 | Committed | `docs/<area>/index.md` row; `docs/index.md` row | router entries | reachability (`docs-lint`) |
 | Shared, uncommitted | `$(git rev-parse --git-common-dir)/swift-harness/plans/index.json` | plan index | one view for every worktree |
 | Shared, uncommitted | `…/swift-harness/plans/<date>-<slug>/plan.json`, `ledger.json`, `orchestrator.lock` | plan metadata, tasks and waves, per-plan orchestrator lock | same |
@@ -151,7 +151,7 @@ Rules:
 - `swiftgate gc` never touches `…/swift-harness/plans/`.
 - Doc layout follows the subsystem layout: a router per area ("If you're → Read" table plus a
   30-second summary of invariants), one file per topic, an `AGENTS.md` entry pointer with a
-  `CLAUDE.md` symlink, `decisions/` for ADRs. Quick tier is the single-doc exception: one design
+  `CLAUDE.md` symlink, `adrs/` for ADRs. Quick tier is the single-doc exception: one design
   doc plus its evidence, no ADR (§8.1).
 
 ## 5. Formats
@@ -213,7 +213,7 @@ Rules:
 
 ### 5.3 Design doc template
 
-File `docs/<area>/design/<slug>.md`. Sections, in order:
+File `docs/<area>/designs/<slug>.md`. Sections, in order:
 
 | Section | Form | `design-lint` rule |
 |---|---|---|
@@ -266,7 +266,7 @@ One JSON object per line in `amendments.jsonl` (committed):
   "changedIds": ["req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order"],
   "newClaims": ["ev-urlsession-background-task-limit-per-session"],
   "trigger": "design-conflict from task offline-queue-core-reducer",
-  "review": {"verdict": "ready", "reviewers": ["evidence-auditor", "challenger"]},
+  "review": {"verdict": "ready", "reviewers": ["evidence-auditor", "standards-conformance"]},
   "approval": {"decision": "approve", "designSha": "9b0e…", "at": "2026-10-02T15:00:00Z"}
 }
 ```
@@ -282,7 +282,7 @@ Plan identity and approval chain (the ledger holds tasks and waves):
 {
   "schemaVersion": 1,
   "slug": "2026-09-25-offline-order-queue",
-  "design": "docs/ordering/design/offline-order-queue.md",
+  "design": "docs/ordering/designs/offline-order-queue.md",
   "designSha": "3f1c…",
   "approval": {"decision": "approve", "designSha": "3f1c…", "at": "2026-09-25T18:00:00Z"},
   "clarifyChain": [{"fromSha": "3f1c…", "toSha": "7a2d…", "at": "…"}],
@@ -516,7 +516,7 @@ Deep tier allows 2 revise rounds.
 
 | Class | Triggered by (`design-diff`) | Process | Approval |
 |---|---|---|---|
-| `amend` | change to a `req-…` line, Decision, Module kinds or Test plan | amendment record; evidence + probes for new claims; 2-agent delta review (evidence auditor + challenger on the changed sections) | re-approval; new `designSha` |
+| `amend` | change to a `req-…` line, Decision, Module kinds or Test plan | amendment record; evidence + probes for new claims; 2-agent delta review (evidence auditor + standards conformance on the changed sections) | re-approval; new `designSha` |
 | `clarify` | anything else | auto-apply; Changelog entry; clarify record | stays valid through a re-verifiable clarify chain |
 
 After an amend, only tasks whose `covers` intersect the changed ids pause as `needs-replan`.
@@ -667,5 +667,6 @@ amendment).
 | Foundation section | Was | Now |
 |---|---|---|
 | §2 row 2 | ledger at `.harness/ledger.json`, "ledger canonical in git"; per-plan ledger under `.harness/plans/<id>/` | plan state (`index.json`, `plan.json`, `ledger.json`, lock) in `$(git rev-parse --git-common-dir)/swift-harness/plans/`, never committed; design doc, ADR and evidence committed under `docs/<area>/`; escalation fallback verified as halt/ask/resume |
-| §4.2 | `.harness/plans/` stamped in the repo with `design.md` and `evidence/` per plan | bootstrap no longer stamps `.harness/plans/`; design and evidence live in `docs/<area>/design/`; bootstrap stamps `docs/index.md` and the `AGENTS.md` pointer |
+| §4.2 | `.harness/plans/` stamped in the repo with `design.md` and `evidence/` per plan | bootstrap no longer stamps `.harness/plans/`; design and evidence live in `docs/<area>/designs/`; bootstrap stamps `docs/index.md` and the `AGENTS.md` pointer |
 | §4.2, §8 | `.harness/orchestrator.lock` (repo-level) | per-plan lock in the common dir |
+| (repo docs) | plugin repo docs previously lived under a `superpowers` tree (`specs`, `plans`) and a separate `decisions` folder | the plugin repo's own docs moved to `docs/designs`, `docs/adrs`, `docs/plans` with a `docs/index.md` router |

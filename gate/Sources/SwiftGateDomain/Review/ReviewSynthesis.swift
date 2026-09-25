@@ -30,7 +30,7 @@ public enum ReviewVerdict: String, Sendable, Codable {
 }
 
 /// One verifier-checked finding in the shared review contract (spec §9.1, refined by
-/// `docs/decisions/0001-review-severity-for-standards-violations.md`).
+/// `docs/adrs/0001-review-severity-for-standards-violations.md`).
 public struct ReviewFinding: Sendable, Equatable, Codable {
   /// How the finding was verified. A defect is verified by reproducing its failure scenario; a
   /// standards violation by its cited rule, the quoted code, and why the rule applies.

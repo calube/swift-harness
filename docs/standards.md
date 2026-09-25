@@ -106,7 +106,7 @@ Every module keeps three invariants: logic lives in a platform-neutral, host-tes
 **A2. Core imports no UI framework.**
 - **Do:** Core modules import Foundation, TCA, Dependencies and other Cores/interfaces only.
 - **Tell:** `import SwiftUI` or `import UIKit` in a Core module; a Core test that needs a simulator.
-- **Enforced by:** arch · **Source:** [harness design §6.1](superpowers/specs/2026-09-24-swift-harness-foundation-design.md) (host-testable Core). Incident: none yet.
+- **Enforced by:** arch · **Source:** [harness design §6.1](designs/2026-09-24-swift-harness-foundation-design.md) (host-testable Core). Incident: none yet.
 
 **A3. Canonical TCA 1.26 feature shape.**
 - **Do:** `@Reducer struct` + `@ObservableState struct State` + `body` built from `Reduce`. Name actions for what happened (`saveButtonTapped`, `itemsResponse`), not what to do. Group actions as `view` / `delegate` / internal cases; this grouping is a house convention, not a TCA API.
@@ -294,7 +294,7 @@ struct ItemsFeatureTests {
 **D6. Analytics events are typed.**
 - **Do:** `AnalyticsClient.track(Event)` where `Event` is an enum with bounded names and payloads. Reducers emit events; `TestStore` tests assert them through a recording double.
 - **Tell:** `track("screen_view", ["id": ...])` with a string name or an unbounded payload.
-- **Enforced by:** review · **Source:** [harness design §6.1.1](superpowers/specs/2026-09-24-swift-harness-foundation-design.md) (analytics reference shape). Incident: none yet.
+- **Enforced by:** review · **Source:** [harness design §6.1.1](designs/2026-09-24-swift-harness-foundation-design.md) (analytics reference shape). Incident: none yet.
 
 **D7. Live clients perform IO and map to domain models; nothing else.**
 - **Do:** a `*Live` module sends the request, decodes the response, and maps it (and its errors, per E1) to the interface's domain models. Business rules and transformations (filtering, truncating, sorting, thresholds, defaults, fallbacks, formatting for display) live in a Core feature or a library module, where host tests cover them without a transport double.
@@ -576,12 +576,12 @@ next.spawn(at: .random(in: next.spawnRange))
 **K1. Delete comments that the code already says.**
 - **Do:** keep a comment only when deleting it loses a fact a reader can't get back from the code: a non-obvious *why*, a footgun warning, a suppression justification, or a `///` contract on `public` / `package` API. Always kept: `// MARK:`, `#warning`, `@available(..., message:)`.
 - **Tell:** a comment above an `if` / `guard` / `return` / `catch` that restates it; blocks over 3 lines; arrange/act/assert labels inside tests (the `@Test` name carries the meaning); `///` on a trivial private declaration; AI-prose tells ("it's worth noting", "importantly").
-- **Enforced by:** `swiftgate comments --staged` warns (never blocks); a judgment pass reviews Claude-authored commits · **Source:** [harness design §7.5](superpowers/specs/2026-09-24-swift-harness-foundation-design.md). Incident: none yet.
+- **Enforced by:** `swiftgate comments --staged` warns (never blocks); a judgment pass reviews Claude-authored commits · **Source:** [harness design §7.5](designs/2026-09-24-swift-harness-foundation-design.md). Incident: none yet.
 
 **K2. No history, no dead code, no private context.**
 - **Do:** history goes in commit messages. Link a `TODO`/`FIXME` to an issue. Use repo-relative references only.
 - **Tell:** commented-out code; "previously", "now uses", "switched from", "this PR", "fixed bug where"; line-number references; `TODO` with no issue link; local machine paths or private codenames.
-- **Enforced by:** `swiftgate comments --staged`, blocking, on added lines at every commit · **Source:** [harness design §7.5](superpowers/specs/2026-09-24-swift-harness-foundation-design.md). Incident: none yet.
+- **Enforced by:** `swiftgate comments --staged`, blocking, on added lines at every commit · **Source:** [harness design §7.5](designs/2026-09-24-swift-harness-foundation-design.md). Incident: none yet.
 
 ```swift
 // Good: a fact the code can't give back.

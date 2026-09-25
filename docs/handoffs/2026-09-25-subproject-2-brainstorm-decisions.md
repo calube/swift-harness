@@ -2,7 +2,7 @@
 
 <!-- RESUME
 State (2026-09-25): brainstorm in progress. Locked D1–D20 below (D11 amended by D19). Brainstorm COMPLETE. Next: write spec to
-docs/superpowers/specs/2026-09-25-design-plan-workflows-design.md, self-review, user review, writing-plans.
+docs/designs/2026-09-25-design-plan-workflows-design.md, self-review, user review, writing-plans.
 Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger canonical in git") — superseded by D11/D12.
 -->
 
@@ -54,6 +54,7 @@ Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger ca
 - D12 Design shape: `docs/<area>/design/<slug>.md` (template-linted, `<slug>-R*` / `<slug>-TP*` ids) + `decisions/NNNN-*.md`
   ADR + area router row; evidence alongside. Adopts the Owner subsystem doc layout (router "If you're → Read",
   per-topic files, AGENTS.md entry pointer + CLAUDE.md symlink, decisions/). Quick tier = single-doc exception.
+  Note (2026-09-25): D12's paths are now `designs/` and `adrs/`, matching the plugin repo's own layout.
 - D13 `swiftgate docs-lint` now, generic families: reference integrity (ids, ADR links, register rows cited), relative
   links, router reachability / managed files, non-vacuity, banned phrases with reasons; repo-specific anchors optional
   config. Seeded self-test. Design status frontmatter proposed → approved → built → superseded-by.
