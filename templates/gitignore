@@ -2,7 +2,9 @@
 **/.harness/runs/
 **/.harness/hook-state/
 **/.harness/derived-data/
-.harness/orchestrator.lock
 **/.harness/judge-cache/
 **/.harness/cache/
+**/.harness/probe/
+**/.harness/context-pack/
+**/.harness/task-status.json
 .build/

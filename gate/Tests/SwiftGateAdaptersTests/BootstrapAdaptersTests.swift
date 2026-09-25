@@ -103,6 +103,18 @@ struct BootstrapAdaptersTests {
   }
 
   @Test(
+    "the docs router template loads from templates/docs-index.md, not a stale or misspelled path — catches TemplateNames.docsIndex drifting from the shipped file"
+  )
+  func docsIndexTemplateLoads() throws {
+    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.checkoutRoot)
+    let onDisk = try String(
+      contentsOf: Fixture.checkoutRoot.appending(path: "templates/docs-index.md"),
+      encoding: .utf8)
+    #expect(templates.docsIndex == onDisk)
+    #expect(!templates.docsIndex.isEmpty)
+  }
+
+  @Test(
     "git state tells a toplevel, a nested project and a non-repository apart — catches lefthook installed from a subdirectory or outside git"
   )
   func gitState() async throws {

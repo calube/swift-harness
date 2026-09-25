@@ -118,7 +118,8 @@ struct ConfigInferenceTests {
 struct BootstrapPlanTests {
   static let templates = HarnessTemplates(
     agents: "# Router\n", config: "xcode = {{XCODE}}\n", swiftFormat: "{}\n", swiftLint: "rules\n",
-    lefthook: "pre-commit:\n", gitignore: "# swift-harness\n**/.harness/runs/\n.harness/x.lock\n")
+    lefthook: "pre-commit:\n", gitignore: "# swift-harness\n**/.harness/runs/\n.harness/x.lock\n",
+    docsIndex: "# Docs index\n")
 
   static let inferred = ConfigInference.infer(
     RepositorySurvey(
@@ -186,7 +187,7 @@ struct BootstrapPlanTests {
     #expect(plan.writes.map(\.path) == BootstrapPlanner.Paths.all)
     #expect(change(plan, "CLAUDE.md") == .link(destination: "AGENTS.md"))
     #expect(change(plan, ".swiftgate.toml") == .create("xcode = \"26.2\"\n"))
-    #expect(change(plan, ".harness/plans/index.json") == .create(BootstrapPlanner.emptyPlanIndex))
+    #expect(change(plan, "docs/index.md") == .create(Self.templates.docsIndex))
     #expect(plan.home.count == 3)
     #expect(plan.home.contains(.installGitHooks))
   }
@@ -256,12 +257,12 @@ struct BootstrapPlanTests {
   }
 
   @Test(
-    "a CLAUDE.md that is a real file, an existing plan index, and a missing swiftlint are all left alone — catches bootstrap destroying user content or orchestrator state"
+    "a CLAUDE.md that is a real file, an existing docs router, and a missing swiftlint are all left alone — catches bootstrap destroying user content or a router that has grown"
   )
   func leftAlone() {
     let plan = BootstrapPlanner.plan(
       Self.inputs(existing: [
-        "CLAUDE.md": .file("mine\n"), ".harness/plans/index.json": .file("{\"plans\":[{}]}"),
+        "CLAUDE.md": .file("mine\n"), "docs/index.md": .file("# Docs index\ncustom rows\n"),
       ]))
     guard case .untouched = change(plan, "CLAUDE.md"),
       case .untouched = change(plan, ".swiftlint.yml")
@@ -269,7 +270,7 @@ struct BootstrapPlanTests {
       Issue.record("expected CLAUDE.md and .swiftlint.yml to be left alone")
       return
     }
-    #expect(change(plan, ".harness/plans/index.json") == .unchanged)
+    #expect(change(plan, "docs/index.md") == .unchanged)
     #expect(plan.render().contains("Left alone:\n  CLAUDE.md: exists and is not a symlink"))
   }
 
