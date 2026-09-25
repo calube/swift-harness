@@ -388,3 +388,61 @@ struct HookCommandTests {
     #expect(throws: (any Error).self) { try SwiftGate.parseAsRoot(["hook", "session-end"]) }
   }
 }
+
+@Suite("swiftgate hook recording")
+struct HookRecordingTests {
+  let scratch = FileManager.default.temporaryDirectory
+    .appending(path: "swiftgate-hookrec-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+  @Test(
+    "SWIFTGATE_HOOK_RECORD_DIR captures each invocation's payload and outcome — catches live sessions leaving no evidence of what Claude Code sent"
+  )
+  func records() async throws {
+    let harness = try HookHarness()
+    defer {
+      harness.repository.remove()
+      try? FileManager.default.removeItem(at: scratch)
+    }
+    let input = try harness.payload("pre-tool-use-bash-xcodebuild")
+    let environment = [HookRecorder.environmentKey: scratch.path]
+
+    let result = await HookCommand.execute(
+      .preToolUse, input: input, environment: environment
+    ) { _ in harness.dependencies }
+
+    let names = try FileManager.default.contentsOfDirectory(atPath: scratch.path).sorted()
+    #expect(names.count == 2)
+    let payload = try #require(names.first { !$0.hasSuffix(".outcome.json") })
+    #expect(try Data(contentsOf: scratch.appending(path: payload)) == input)
+    let outcomeName = try #require(names.first { $0.hasSuffix(".outcome.json") })
+    let outcome = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: scratch.appending(path: outcomeName)))
+        as? [String: Any])
+    #expect(outcome["stdout"] as? String == result.stdout)
+    #expect(try #require(result.stdout).contains("\"deny\""))
+  }
+
+  @Test(
+    "a recording failure never changes the hook's decision — catches the diagnostic switch disabling the gate it observes"
+  )
+  func failureIsHarmless() async throws {
+    let harness = try HookHarness()
+    defer {
+      harness.repository.remove()
+      try? FileManager.default.removeItem(at: scratch)
+    }
+    try Data().write(to: scratch)
+    let input = try harness.payload("pre-tool-use-bash-xcodebuild")
+
+    let plain = await HookCommand.execute(.preToolUse, input: input, environment: [:]) { _ in
+      harness.dependencies
+    }
+    let recorded = await HookCommand.execute(
+      .preToolUse, input: input, environment: [HookRecorder.environmentKey: scratch.path]
+    ) { _ in harness.dependencies }
+
+    #expect(recorded.stdout == plain.stdout)
+    #expect(recorded.exitCode == plain.exitCode)
+    #expect(recorded.stderr?.contains(HookRecorder.environmentKey) == true)
+  }
+}

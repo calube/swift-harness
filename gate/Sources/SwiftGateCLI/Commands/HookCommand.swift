@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 
 extension HookEvent: ExpressibleByArgument {}
@@ -16,7 +17,7 @@ struct HookCommand: AsyncParsableCommand {
   func run() async throws {
     let input = FileHandle.standardInput.readDataToEndOfFile()
     let environment = ProcessInfo.processInfo.environment
-    let result = await HookRunner.run(event, input: input) { root in
+    let result = await Self.execute(event, input: input, environment: environment) { root in
       HookDependencies.live(root: root, environment: environment)
     }
     if let stdout = result.stdout { Console.write(stdout) }
@@ -24,5 +25,39 @@ struct HookCommand: AsyncParsableCommand {
       FileHandle.standardError.write(Data((stderr + "\n").utf8))
     }
     if result.exitCode != 0 { throw ExitCode(result.exitCode) }
+  }
+
+  static func execute(
+    _ event: HookEvent, input: Data, environment: [String: String],
+    dependencies: (URL) -> HookDependencies
+  ) async -> HookResult {
+    guard let recorder = HookRecorder.configured(environment) else {
+      return await HookRunner.run(event, input: input, dependencies: dependencies)
+    }
+    var warnings: [String] = []
+    let recording: HookRecorder.Recording?
+    do {
+      recording = try recorder.recordPayload(event, input: input, at: Date())
+    } catch {
+      recording = nil
+      warnings.append("\(HookRecorder.environmentKey): payload not recorded: \(error)")
+    }
+    var (result, milliseconds) = await GateRun.timed {
+      await HookRunner.run(event, input: input, dependencies: dependencies)
+    }
+    if let recording {
+      do {
+        try recorder.recordOutcome(
+          recording, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr,
+          milliseconds: milliseconds)
+      } catch {
+        warnings.append("\(HookRecorder.environmentKey): outcome not recorded: \(error)")
+      }
+    }
+    // Stderr on exit 0 only reaches the debug log, so a broken recorder cannot sway a decision.
+    if !warnings.isEmpty {
+      result.stderr = ([result.stderr].compactMap { $0 } + warnings).joined(separator: "\n")
+    }
+    return result
   }
 }
