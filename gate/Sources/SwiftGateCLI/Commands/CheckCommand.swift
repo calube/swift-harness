@@ -290,7 +290,8 @@ enum PushDocGates {
   static func run(root: URL, runner: any ProcessRunner) async throws(ReportContractViolation)
     -> [Finding]
   {
-    let designs = RepositoryFiles.list(root: root, under: "docs", where: isDesignDoc)
+    let designs = RepositoryFiles.list(
+      root: root, under: "docs", where: DesignDocument.isDesignDocPath)
     var findings: [Finding] = []
     var checked = 0
     for design in designs {
@@ -298,7 +299,7 @@ enum PushDocGates {
       else {
         findings.append(
           try Finding(
-            ruleID: blockedRuleID, severity: .minor, file: design, line: nil,
+            ruleID: blockedRuleID, severity: .major, file: design, line: nil,
             message: "could not be read; its evidence was not checked at HEAD.",
             failureScenario: nil))
         continue
@@ -342,7 +343,7 @@ enum PushDocGates {
     case .blocked(let message):
       return [
         try Finding(
-          ruleID: blockedRuleID, severity: .minor, file: design, line: nil,
+          ruleID: blockedRuleID, severity: .major, file: design, line: nil,
           message: "evidence check could not run at HEAD: \(message)", failureScenario: nil)
       ]
     case .checked(_, let results):
@@ -365,17 +366,6 @@ enum PushDocGates {
     case .failed(let failure): return "\(failure)"
     case .stale(let reason): return "\(reason)"
     }
-  }
-
-  /// The `docs/**/designs/<name>.md` shape: an `.md` file whose immediate parent directory is
-  /// literally named `designs`. The same predicate `design-lint`'s and `docs-lint`'s own doc
-  /// discovery use (`DocsLintPolicy.isDesignDoc`, `KnownIdSources.isDesignDoc`); duplicated here
-  /// rather than exposed across modules because none of those is public.
-  private static func isDesignDoc(_ path: String) -> Bool {
-    guard path.hasSuffix(".md") else { return false }
-    let components = path.split(separator: "/")
-    guard components.count >= 2 else { return false }
-    return components[components.count - 2] == "designs"
   }
 }
 

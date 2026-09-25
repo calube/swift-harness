@@ -164,6 +164,22 @@ struct PushTierDocGatesTests {
   }
 
   @Test(
+    "an approved design with no claims.jsonl at all fails, never passes with a quiet note — catches evidence check unable to run read as nothing to check"
+  )
+  func missingClaimsFileInApprovedDesignFails() async throws {
+    let repo = try await DocGatesRepo()
+    defer { repo.remove() }
+    try repo.writeDesign(status: "approved")
+    try await repo.commitAll("add queue")
+
+    let findings = try await PushDocGates.run(root: repo.root, runner: repo.runner)
+
+    let blocked = try #require(findings.first { $0.ruleID == PushDocGates.blockedRuleID })
+    #expect(blocked.severity == .major)
+    #expect(blocked.severity.failsGate)
+  }
+
+  @Test(
     "the same stale claim in a proposed design is never checked — catches every design gated regardless of lifecycle status"
   )
   func proposedDesignNotChecked() async throws {
