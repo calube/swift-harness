@@ -61,7 +61,7 @@ Progress: git log. Update this header at every wave merge.
 | `gate/Package.swift`, `hooks/hooks.json` | nobody |
 | `C/SwiftGate.swift`, `TA/RepositoryScriptTests.swift` | `cli-subcommand-stubs` (each stub file then has one owner) |
 | `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml` | `config-docs-and-plan-sections` |
-| other `templates/*`, `.gitignore` | `bootstrap-stamps-docs-router` |
+| other `templates/*`, `.gitignore` | `bootstrap-stamps-docs-router`; `templates/lefthook.yml` + `gitHooks` again in `commit-message-id-check` (4 waves later) |
 | `A/Git.swift`, `A/LiveGit.swift`, `S/FakeGit.swift` | `plan-state-paths-in-git-common-dir` |
 | `C/Commands/CheckCommand.swift` | `push-tier-runs-doc-gates`, then `calibration-seeds-labelled-by-construction` (8 waves apart) |
 | `C/Commands/SelfTestCommand.swift` | `self-test-runs-evidence-and-design-seeds` |
@@ -195,9 +195,9 @@ flowchart LR
 
 ### `commit-message-id-check`
 - Deps: known-id-leak-rules, plan-state-paths-in-git-common-dir, ledger-and-plan-model · Gate: push · estLines: 220
-- Writes: `A/KnownIdSources.swift`, `C/Commands/CommentsCommand.swift`, `C/Commands/TestlintCommand.swift`, `C/StaticCheckInputs.swift`, `TC/CommitMessageIdCheckTests.swift`
-- Does: gathers ids from every common-dir ledger, `docs/**/*.evidence/claims.jsonl` and docs; feeds both commands; adds `comments --commit-msg <file>`.
-- Tests: message naming a ledger task id exits 1 — catches ids in history · clean message exits 0 · ids read from a linked worktree's shared ledger · outside a git repo → exit 2, not pass.
+- Writes: `A/KnownIdSources.swift`, `C/Commands/CommentsCommand.swift`, `C/Commands/TestlintCommand.swift`, `C/StaticCheckInputs.swift`, `TC/CommitMessageIdCheckTests.swift`, `templates/lefthook.yml`, `D/Bootstrap/BootstrapPlan.swift` (`gitHooks`), `TD/BootstrapPlanTests.swift`
+- Does: gathers ids from every common-dir ledger, `docs/**/*.evidence/claims.jsonl` and docs; feeds both commands; adds `comments --commit-msg <file>`; stamps the `commit-msg` lefthook stanza and adds it to `gitHooks` (enforcement lands with its first passing input).
+- Tests: message naming a ledger task id exits 1 — catches ids in history · bootstrap stamps a `commit-msg` hook whose command exits 0 on a clean message · clean message exits 0 · ids read from a linked worktree's shared ledger · outside a git repo → exit 2, not pass.
 
 ### `index-set-under-file-lock`
 - Deps: session-start-reads-shared-plan-index, cli-subcommand-stubs · Gate: push · estLines: 180
