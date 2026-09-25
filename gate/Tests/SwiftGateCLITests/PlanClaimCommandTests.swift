@@ -12,6 +12,7 @@ private struct LockScenario {
   static let plan = "2026-09-25-search"
   static let alice = "5e0c7a1b-2d3f-4a6b-8c9d-0e1f2a3b4c5d"
   static let bob = "9a8b7c6d-5e4f-4a3b-2c1d-0e9f8a7b6c5d"
+  static let design = "docs/search/designs/search.md"
 
   let shared = SharedPlanState()
   var git: FakeGit { shared.git() }
@@ -27,8 +28,17 @@ private struct LockScenario {
     FileManager.default.contents(atPath: try lockFile).map { String(decoding: $0, as: UTF8.self) }
   }
 
-  func claim(_ session: String?, plan: String = Self.plan) async -> PlanLockReport {
-    await PlanLockRun.claim(slug: plan, session: session, git: git)
+  func claim(
+    _ session: String?, plan: String = Self.plan, design: String? = Self.design,
+    tier: String? = nil
+  ) async -> PlanLockReport {
+    await PlanLockRun.claim(slug: plan, session: session, design: design, tier: tier, git: git)
+  }
+
+  func planFile() throws -> PlanFile? {
+    let path = try PlanStateLayout(commonDirectory: shared.commonDirectory.path).plan(Self.plan)
+      .planFile
+    return try FileManager.default.contents(atPath: path).map { try PlanFileJSON.decode($0) }
   }
 
   func release(_ session: String?, force: Bool = false) async -> PlanLockReport {
@@ -58,6 +68,7 @@ struct PlanClaimCommandTests {
     #expect(
       scenario.planStateFiles() == [
         "plans", "plans/\(LockScenario.plan)", "plans/\(LockScenario.plan)/orchestrator.lock",
+        "plans/\(LockScenario.plan)/plan.json",
       ])
   }
 
@@ -222,5 +233,87 @@ struct PlanClaimCommandTests {
       slug: PlanStateScenario.planA, session: PlanStateScenario.session, force: false, git: git)
     #expect(release.status == .released)
     #expect(try await scenario.decision(ledger) == "deny")
+  }
+
+  @Test(
+    "a claim with --design lets the claiming session write that design doc and denies every other session — catches every design-doc write being denied at frame"
+  )
+  func claimWithDesignOpensTheDesignDoc() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    let design = "docs/frame/designs/frame.md"
+    let document = scenario.root.path + "/" + design
+    let git = scenario.harness.git
+    #expect(try await scenario.decision(document) == "deny")
+
+    let other = await PlanLockRun.claim(
+      slug: "2026-09-26-frame-other", session: LockScenario.bob, design: design, tier: nil, git: git
+    )
+    #expect(other.status == .claimed)
+    #expect(try await scenario.decision(document) == "deny", "another session's plan names it")
+
+    _ = await PlanLockRun.release(
+      slug: "2026-09-26-frame-other", session: LockScenario.bob, force: false, git: git)
+    let claim = await PlanLockRun.claim(
+      slug: "2026-09-26-frame", session: PlanStateScenario.session, design: design,
+      tier: "standard", git: git)
+    #expect(claim.status == .claimed)
+    #expect(try await scenario.decision(document) == nil)
+  }
+
+  @Test(
+    "the seed plan.json names the design, has no sha yet and survives a re-claim naming another design — catches a re-claim clobbering the plan"
+  )
+  func seedPlanFile() async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+
+    #expect(await scenario.claim(LockScenario.alice, tier: "deep").status == .claimed)
+    let seed = try #require(try scenario.planFile())
+    #expect(seed.slug == LockScenario.plan)
+    #expect(seed.design == LockScenario.design)
+    #expect(seed.designSha == nil)
+    #expect(seed.approval == nil)
+    #expect(seed.tier == "deep")
+    #expect(try PlanFileJSON.decode(try PlanFileJSON.encode(seed)) == seed)
+
+    let again = await scenario.claim(LockScenario.alice, design: "docs/other/designs/other.md")
+    #expect(again.status == .alreadyHeld)
+    #expect(try scenario.planFile() == seed)
+  }
+
+  @Test(
+    "a new plan claimed without --design exits 2 and writes nothing; an existing plan needs none — catches a plan the guard can never tie to a doc"
+  )
+  func newPlanNeedsDesign() async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+
+    let report = await scenario.claim(LockScenario.alice, design: nil)
+    #expect(report.verdict == .blocked)
+    #expect(report.message.contains("--design"))
+    #expect(scenario.planStateFiles().isEmpty)
+
+    _ = await scenario.claim(LockScenario.alice)
+    _ = await scenario.release(LockScenario.alice)
+    #expect(await scenario.claim(LockScenario.bob, design: nil).status == .claimed)
+  }
+
+  @Test(
+    "a --design outside a docs designs directory, absolute, climbing or not markdown, or an unknown --tier, exits 2 and writes nothing — catches a plan naming a doc the guard doesn't cover",
+    arguments: [
+      ("/abs/docs/designs/a.md", nil as String?), ("docs/designs/../a.md", nil),
+      ("docs/x/../designs/a.md", nil), ("docs/designs/a.txt", nil), ("docs/a.md", nil),
+      ("designs/a.md", nil), ("docs/designs/", nil), ("", nil), ("docs//designs/a.md", nil),
+      ("./docs/designs/a.md", nil), (LockScenario.design, "huge"),
+    ])
+  func badDesignBlocked(design: String, tier: String?) async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+
+    let report = await scenario.claim(LockScenario.alice, design: design, tier: tier)
+
+    #expect(report.verdict == .blocked)
+    #expect(scenario.planStateFiles().isEmpty)
   }
 }

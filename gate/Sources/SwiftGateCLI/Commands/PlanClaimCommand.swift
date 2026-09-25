@@ -26,30 +26,59 @@ struct PlanLockReport: Sendable, Equatable, Encodable {
 }
 
 enum PlanLockRun {
-  static func claim(slug: String, session: String?, git: any Git) async -> PlanLockReport {
+  static func claim(
+    slug: String, session: String?, design: String? = nil, tier: String? = nil, git: any Git
+  ) async -> PlanLockReport {
     let command = "plan claim"
+    if let design, !PlanFile.isValidDesignPath(design) {
+      return blocked(
+        command, slug,
+        "--design `\(design)` must be a repo-relative docs/**/designs/<name>.md path without `..`")
+    }
+    if let tier, !PlanFile.tiers.contains(tier) {
+      return blocked(command, slug, "--tier `\(tier)` must be quick, standard or deep")
+    }
     let lock: PlanLock
     switch await locate(slug, session: session, requireSession: true, git: git) {
     case .failure(let message): return blocked(command, slug, message)
     case .success(let located): lock = located
     }
+    if design == nil, !lock.hasPlanFile {
+      return blocked(
+        command, slug,
+        "`\(slug)` is a new plan: --design is required, so the edit guard can tie the design doc "
+          + "to it")
+    }
     let file = lock.plan.orchestratorLock
+    let outcome: PlanLock.ClaimOutcome
     do {
-      switch try lock.claim(session: session ?? "") {
-      case .claimed:
-        return report(command, slug, .claimed, .green, nil, file, "claimed plan `\(slug)`")
-      case .alreadyHeld:
-        return report(
-          command, slug, .alreadyHeld, .green, nil, file,
-          "plan `\(slug)` is already held by this session")
-      case .heldByOther(let holder):
-        return report(
-          command, slug, .heldByOther, .red, holder, file,
-          "plan `\(slug)` is held by session \(holder); it stays live until that session runs "
-            + "`swiftgate plan release`, or the user runs `swiftgate plan release \(slug) --force`")
-      }
+      outcome = try lock.claim(session: session ?? "")
     } catch {
       return blocked(command, slug, describe(error))
+    }
+    switch outcome {
+    case .heldByOther(let holder):
+      return report(
+        command, slug, .heldByOther, .red, holder, file,
+        "plan `\(slug)` is held by session \(holder); it stays live until that session runs "
+          + "`swiftgate plan release`, or the user runs `swiftgate plan release \(slug) --force`")
+    case .claimed, .alreadyHeld:
+      var seeded = ""
+      if let design, !lock.hasPlanFile {
+        do {
+          let data = try PlanFileJSON.encode(PlanFile.seed(slug: slug, design: design, tier: tier))
+          if try lock.seedPlanFile(data) { seeded = "; seeded plan.json for \(design)" }
+        } catch let error as PlanLockError {
+          return blocked(command, slug, "claimed, but seeding plan.json failed: \(describe(error))")
+        } catch {
+          return blocked(command, slug, "claimed, but encoding plan.json failed: \(error)")
+        }
+      }
+      return outcome == .claimed
+        ? report(command, slug, .claimed, .green, nil, file, "claimed plan `\(slug)`" + seeded)
+        : report(
+          command, slug, .alreadyHeld, .green, nil, file,
+          "plan `\(slug)` is already held by this session" + seeded)
     }
   }
 
@@ -179,12 +208,22 @@ struct PlanClaimCommand: AsyncParsableCommand {
   @Option(help: "The session id to record as the lock holder (from the SessionStart context).")
   var session: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "The design doc, repo-relative under a docs/**/designs/ directory. Required to claim a "
+        + "new plan: it seeds plan.json, which is how the edit guard ties the doc to this plan."))
+  var design: String?
+
+  @Option(help: "The design's tier, recorded in a seeded plan.json: quick, standard or deep.")
+  var tier: String?
+
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let report = await PlanLockRun.claim(slug: slug, session: session, git: git)
+    let report = await PlanLockRun.claim(
+      slug: slug, session: session, design: design, tier: tier, git: git)
     Console.write(PlanLockRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

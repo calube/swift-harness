@@ -62,7 +62,7 @@ public struct PlanLock: Sendable {
     } catch {
       throw .io("creating \(plan.directory): \(error.localizedDescription)")
     }
-    let staging = try stage(Self.fileContents(session: session))
+    let staging = try stage(Data(Self.fileContents(session: session).utf8))
     defer { unlink(staging) }
     if link(staging, plan.orchestratorLock) == 0 { return .claimed }
     let code = errno
@@ -90,10 +90,25 @@ public struct PlanLock: Sendable {
     return .overrode(holder: holder)
   }
 
+  public var hasPlanFile: Bool { FileManager.default.fileExists(atPath: plan.planFile) }
+
+  /// Publishes `plan.json` whole, and never over an existing one: `false` when one was already
+  /// there. Only the lock holder calls this.
+  public func seedPlanFile(_ contents: Data) throws(PlanLockError) -> Bool {
+    let staging = try stage(contents)
+    defer { unlink(staging) }
+    if link(staging, plan.planFile) == 0 { return true }
+    let code = errno
+    guard code == EEXIST else {
+      throw .io("linking \(plan.planFile): \(String(cString: strerror(code)))")
+    }
+    return false
+  }
+
   /// A uniquely named private file in the plan directory holding `contents`; `mkstemp` picks the
   /// name so racing claimers never share one.
-  private func stage(_ contents: String) throws(PlanLockError) -> String {
-    var template = Array((plan.directory + "/.orchestrator.lock.XXXXXX").utf8CString)
+  private func stage(_ contents: Data) throws(PlanLockError) -> String {
+    var template = Array((plan.directory + "/.staging.XXXXXX").utf8CString)
     let descriptor = template.withUnsafeMutableBufferPointer { buffer in
       buffer.baseAddress.map { mkstemp($0) } ?? -1
     }
@@ -103,7 +118,7 @@ public struct PlanLock: Sendable {
     let path = String(decoding: template.dropLast().map { UInt8(bitPattern: $0) }, as: UTF8.self)
     let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
     do {
-      try handle.write(contentsOf: Data(contents.utf8))
+      try handle.write(contentsOf: contents)
       try handle.close()
     } catch {
       unlink(path)

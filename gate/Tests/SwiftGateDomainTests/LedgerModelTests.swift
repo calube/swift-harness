@@ -53,6 +53,23 @@ struct LedgerModelTests {
     #expect(firstPass == secondPass)
   }
 
+  @Test(
+    "a plan.json seeded at frame, before any sha or tier is known, omits them and round-trips byte-stable — catches a sentinel sha passing for a real one"
+  )
+  func seedPlanRoundTrip() throws {
+    let seed = PlanFile(
+      schemaVersion: 1, slug: "2026-09-25-offline-order-queue",
+      design: "docs/ordering/designs/offline-order-queue.md", designSha: nil, approval: nil,
+      clarifyChain: [], tier: nil, resume: "framing")
+    let firstPass = try PlanFileJSON.encode(seed)
+    let text = String(decoding: firstPass, as: UTF8.self)
+    #expect(!text.contains("designSha"))
+    #expect(!text.contains("tier"))
+    let decoded = try PlanFileJSON.decode(firstPass)
+    #expect(decoded == seed)
+    #expect(try PlanFileJSON.encode(decoded) == firstPass)
+  }
+
   @Test("ledger.json round-trips byte-stable — catches schema drift")
   func ledgerJSONRoundTrip() throws {
     let firstPass = try LedgerJSON.encode(Self.sampleLedger)
