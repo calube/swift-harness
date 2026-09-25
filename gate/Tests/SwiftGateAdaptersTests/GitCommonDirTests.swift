@@ -85,6 +85,22 @@ struct GitCommonDirTests {
   }
 
   @Test(
+    "an empty common-dir answer is a BLOCKED error — catches plan state rooted at the adapter's root itself"
+  )
+  func emptyOutput() async {
+    let runner = FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(status: .exited(0), stdout: "\n")
+    }
+    let git = LiveGit(runner: runner, repositoryRoot: "/repo")
+    await #expect {
+      _ = try await git.commonDirectory()
+    } throws: { error in
+      guard let error = error as? GitError, case .unparseableOutput = error else { return false }
+      return error.verdict == .blocked
+    }
+  }
+
+  @Test(
     "outside a git repository the common dir is a BLOCKED error — catches plan state silently rooted nowhere"
   )
   func outsideRepository() async throws {
