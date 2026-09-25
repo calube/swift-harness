@@ -24,6 +24,27 @@ struct DesignLintDiagramsTests {
       document: document, docPath: "docs/example/designs/x.md", budgets: budgets)
   }
 
+  /// An Architecture section with two known-type diagrams (so only the word-budget rule can fire)
+  /// and exactly `words` prose words after them.
+  static func architectureSection(words: Int) -> String {
+    let prose = Array(repeating: "word", count: words).joined(separator: " ")
+    return """
+      ## Architecture
+
+      ```mermaid
+      flowchart TD
+        A --> B
+      ```
+
+      ```mermaid
+      sequenceDiagram
+        A->>B: submit
+      ```
+
+      \(prose)
+      """
+  }
+
   static func loadValidDesign() throws -> DesignDocument {
     let text = try String(
       contentsOf: fixturesRoot.deletingLastPathComponent().appending(path: "valid.md"),
@@ -185,6 +206,8 @@ struct DesignLintDiagramsTests {
     #expect(finding.message.contains("Problem"))
     #expect(finding.message.contains("5"))
     #expect(finding.message.contains("3"))
+    #expect(finding.severity == .major)
+    #expect(finding.severity.failsGate)
   }
 
   @Test(
@@ -214,6 +237,55 @@ struct DesignLintDiagramsTests {
     #expect(findings.filter { $0.ruleID == "design-lint.section-word-budget" } == [])
   }
 
+  // MARK: - Architecture's default 80-word budget (spec §5.3's own table entry)
+
+  @Test(
+    "Architecture over its default 80-word budget is flagged, major and gate-failing, with no config — catches the spec's own limit going unenforced by default"
+  )
+  func architectureOver80WordsIsFlaggedByDefault() throws {
+    let findings = try Self.check(
+      Self.parse(Self.architectureSection(words: 81)), budgets: DocsBudgets())
+    let finding = try #require(findings.first { $0.ruleID == "design-lint.section-word-budget" })
+    #expect(finding.message.contains("Architecture"))
+    #expect(finding.message.contains("81"))
+    #expect(finding.message.contains("80"))
+    #expect(finding.severity == .major)
+    #expect(finding.severity.failsGate)
+  }
+
+  @Test(
+    "Architecture at exactly its default 80-word budget is not flagged — catches an off-by-one on the spec's own limit"
+  )
+  func architectureAt80WordsIsNotFlaggedByDefault() throws {
+    let findings = try Self.check(
+      Self.parse(Self.architectureSection(words: 80)), budgets: DocsBudgets())
+    #expect(findings.filter { $0.ruleID == "design-lint.section-word-budget" } == [])
+  }
+
+  @Test(
+    "a configured architecture budget overrides the default — catches an override being ignored")
+  func architectureBudgetOverrideLiftsTheDefaultLimit() throws {
+    let budgets = DocsBudgets(sections: ["architecture": 120])
+    let findings = try Self.check(
+      Self.parse(Self.architectureSection(words: 81)), budgets: budgets)
+    #expect(findings.filter { $0.ruleID == "design-lint.section-word-budget" } == [])
+  }
+
+  @Test(
+    "an unrelated section key in config keeps the Architecture default — catches one section's override erasing every other section's default"
+  )
+  func unrelatedSectionKeyKeepsArchitectureDefault() throws {
+    // Simulates what ConfigSchema.readDocsBudgets merges: a repo-configured section (here
+    // "risks") adds to, rather than replaces, DocsBudgets.defaultSectionWords.
+    let budgets = DocsBudgets(
+      sections: DocsBudgets.defaultSectionWords.merging(["risks": 50]) { _, configured in
+        configured
+      })
+    let findings = try Self.check(
+      Self.parse(Self.architectureSection(words: 81)), budgets: budgets)
+    #expect(findings.contains { $0.ruleID == "design-lint.section-word-budget" })
+  }
+
   @Test(
     "the whole document over its word budget is flagged, naming the total and the limit — catches a design that only trips per-section checks"
   )
@@ -232,6 +304,8 @@ struct DesignLintDiagramsTests {
     let finding = try #require(findings.first { $0.ruleID == "design-lint.document-word-budget" })
     #expect(finding.message.contains("6"))
     #expect(finding.message.contains("5"))
+    #expect(finding.severity == .major)
+    #expect(finding.severity.failsGate)
   }
 
   @Test(

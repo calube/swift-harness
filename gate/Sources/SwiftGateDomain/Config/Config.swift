@@ -428,6 +428,12 @@ public struct DocsBudgets: Sendable, Equatable {
   public static let defaultTopicWords = 800
   public static let defaultDesignWords = 1_200
   public static let defaultAgentsMdLines = 60
+  /// Default per-section overrides, keyed by the design doc's GitHub-style anchor slug
+  /// (`MarkdownDocument.Section.anchor`). Architecture's 80-word cap is spec §5.3's own table entry,
+  /// not a tunable estimate like the others here — but it still lives in config, never in the lint,
+  /// so `[docs.budgets.sections]` can raise or lower it per repo. A user's `sections` table merges
+  /// over this default; it doesn't replace it (`ConfigSchema.readDocsBudgets`).
+  public static let defaultSectionWords: [String: Int] = ["architecture": 80]
 
   /// Budget for `docs/index.md` and area routers.
   public let router: Int
@@ -436,7 +442,8 @@ public struct DocsBudgets: Sendable, Equatable {
   /// Whole-design-doc default; an estimate, tuned from real designs (spec §5.3).
   public let design: Int
   public let agentsMdLines: Int
-  /// Per design-section-anchor word budget. A section absent here falls back to `design`.
+  /// Per design-section-anchor word budget. A section absent here is bounded only by the
+  /// whole-document `design` budget, not individually.
   public let sections: [String: Int]
 
   public init(
@@ -444,7 +451,7 @@ public struct DocsBudgets: Sendable, Equatable {
     topic: Int = Self.defaultTopicWords,
     design: Int = Self.defaultDesignWords,
     agentsMdLines: Int = Self.defaultAgentsMdLines,
-    sections: [String: Int] = [:]
+    sections: [String: Int] = Self.defaultSectionWords
   ) {
     self.router = router
     self.topic = topic

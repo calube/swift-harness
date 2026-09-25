@@ -84,7 +84,45 @@ struct DocsPlanConfigTests {
     #expect(config.docs.budgets.topic == 900)
     #expect(config.docs.budgets.design == 1_300)
     #expect(config.docs.budgets.agentsMdLines == 70)
-    #expect(config.docs.budgets.sections == ["Problem": 150, "Risks": 100])
+    #expect(
+      config.docs.budgets.sections == ["architecture": 80, "Problem": 150, "Risks": 100])
+  }
+
+  @Test(
+    "an unconfigured [docs.budgets.sections] keeps Architecture's default 80-word budget — catches the spec's own limit going unenforced when a repo sets no override"
+  )
+  func architectureDefaultSurvivesWhenSectionsUnconfigured() throws {
+    let root = minimalRoot(merging: ["docs": .table(["budgets": .table([:])])])
+    let config = try ConfigSchema.config(from: root)
+    #expect(config.docs.budgets.sections == ["architecture": 80])
+  }
+
+  @Test(
+    "an unrelated [docs.budgets.sections] key merges over, not replaces, Architecture's default — catches one section's override erasing every other section's default"
+  )
+  func unrelatedSectionKeyMergesOverArchitectureDefault() throws {
+    let root = minimalRoot(
+      merging: [
+        "docs": .table([
+          "budgets": .table(["sections": .table(["risks": .integer(50)])])
+        ])
+      ])
+    let config = try ConfigSchema.config(from: root)
+    #expect(config.docs.budgets.sections == ["architecture": 80, "risks": 50])
+  }
+
+  @Test(
+    "a configured [docs.budgets.sections.architecture] overrides, rather than adds to, the default"
+  )
+  func configuredArchitectureBudgetOverridesDefault() throws {
+    let root = minimalRoot(
+      merging: [
+        "docs": .table([
+          "budgets": .table(["sections": .table(["architecture": .integer(120)])])
+        ])
+      ])
+    let config = try ConfigSchema.config(from: root)
+    #expect(config.docs.budgets.sections == ["architecture": 120])
   }
 
   @Test(

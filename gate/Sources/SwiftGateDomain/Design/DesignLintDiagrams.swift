@@ -78,7 +78,7 @@ public enum DesignLintDiagrams {
       }
       findings.append(
         try Finding(
-          ruleID: "design-lint.section-word-budget", severity: .minor, file: docPath, line: nil,
+          ruleID: "design-lint.section-word-budget", severity: .major, file: docPath, line: nil,
           message:
             "\"\(section.heading)\" is \(section.proseWordCount) prose words, "
             + "over its \(limit)-word budget.",
@@ -94,7 +94,7 @@ public enum DesignLintDiagrams {
     guard total > budgets.design else { return [] }
     return [
       try Finding(
-        ruleID: "design-lint.document-word-budget", severity: .minor, file: docPath, line: nil,
+        ruleID: "design-lint.document-word-budget", severity: .major, file: docPath, line: nil,
         message: "the design doc is \(total) prose words, over its \(budgets.design)-word budget.",
         failureScenario: nil)
     ]

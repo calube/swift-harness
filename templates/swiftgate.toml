@@ -38,6 +38,10 @@ os = {{OS}}
 # [docs.budgets]
 # router = 400
 # topic = 800
+# [docs.budgets.sections]
+# architecture defaults to 80 words (spec §5.3); an entry here overrides it and merges over,
+# rather than replacing, the other section defaults.
+# architecture = 120
 
 # Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
 # [plan]
