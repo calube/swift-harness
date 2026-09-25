@@ -342,7 +342,7 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 
 | Tier | Scope | Runner | Budget | Determinism source |
 |---|---|---|---|---|
-| T0 static | swift-format, SwiftLint (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `arch` (Core ↛ SwiftUI/UIKit, kinds vs config, `@DependencyClient` has `testValue`, `*Live` imported only by the app target, URLSession/vendor SDKs only in `*Live`) | `swiftgate lint`/`arch` | < 5s | no IO |
+| T0 static | `swift format`, `swiftgate lint` on SwiftSyntax (SwiftLint optional, style only — plan D1) (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `arch` (Core ↛ SwiftUI/UIKit, kinds vs config, `@DependencyClient` has `testValue`, `*Live` imported only by the app target, URLSession/vendor SDKs only in `*Live`) | `swiftgate lint`/`arch` | < 5s | no IO |
 | T1 host | `TestStore` (exhaustive), dependency clients, engine property + replay tests | `swift test`, affected packages | < 60s | injected deps, `TestClock`/`ImmediateClock`; `withMainSerialExecutor` only in `.serialized` suites |
 | T2 simulator | snapshot tests, view/integration tests | `xcodebuild test`, cloned sim | minutes | pinned device+OS, no network, dep overrides |
 | T3 flow | thin XCUITest smoke of critical flows | `xcodebuild test`, cloned sim | minutes | launch-arg scenario injection |
