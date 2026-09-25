@@ -30,9 +30,9 @@ struct SessionContextTests {
   func plans() throws {
     let index = """
       {"plans": [
-        {"slug": "2026-09-24-feed", "status": "active", "resume": "Next: T3 wire the feed client.", "ledger": {"huge": true}},
+        {"slug": "2026-09-24-feed", "status": "building", "resume": "Next: T3 wire the feed client.", "ledger": {"huge": true}},
         {"slug": "2026-09-01-old", "status": "done", "resume": "finished"},
-        {"slug": "2026-09-20-long", "status": "blocked", "resume": "\(String(repeating: "x", count: 5000))"}
+        {"slug": "2026-09-20-long", "status": "in-review", "resume": "\(String(repeating: "x", count: 5000))"}
       ]}
       """
     let summaries = try PlanIndex.decode(Data(index.utf8)).active
@@ -42,7 +42,7 @@ struct SessionContextTests {
       SessionContext.Inputs(
         projectName: "SampleApp", modules: [], xcode: .unknown(pinned: "26.2", reason: "x"),
         plans: .active(summaries), notes: []))
-    #expect(text.contains("2026-09-24-feed (active): Next: T3 wire the feed client."))
+    #expect(text.contains("2026-09-24-feed (building): Next: T3 wire the feed client."))
     #expect(!text.contains("2026-09-01-old"))
     #expect(!text.contains("huge"))
     #expect(text.count < SessionContext.maxCharacters)

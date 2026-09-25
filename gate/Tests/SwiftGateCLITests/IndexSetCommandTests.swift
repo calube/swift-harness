@@ -104,7 +104,7 @@ struct IndexSetCommandTests {
           group.addTask {
             let slug = "slug-\(iteration)-\(index)"
             let outcome = await IndexSetRun.run(
-              slug: slug, status: "pending", resume: "resume-\(index)", git: git,
+              slug: slug, status: "building", resume: "resume-\(index)", git: git,
               store: fastStore)
             if case .failure(let error) = outcome {
               Issue.record("iteration \(iteration) slug \(slug) failed: \(error)")
@@ -138,7 +138,7 @@ struct IndexSetCommandTests {
       for index in 0..<writers {
         group.addTask {
           let outcome = await IndexSetRun.run(
-            slug: "writer-\(index)", status: "pending", resume: "r", git: git, store: fastStore)
+            slug: "writer-\(index)", status: "building", resume: "r", git: git, store: fastStore)
           if case .failure(let error) = outcome {
             Issue.record("writer \(index) failed: \(error)")
           }
@@ -176,7 +176,7 @@ struct IndexSetCommandTests {
     try malformed.write(to: URL(filePath: layout.indexFile))
     let git = FakeGit(commonDirectory: directory.path)
 
-    let outcome = await IndexSetRun.run(slug: "s", status: "pending", resume: "r", git: git)
+    let outcome = await IndexSetRun.run(slug: "s", status: "building", resume: "r", git: git)
     guard case .failure(let error) = outcome else {
       Issue.record("expected a failure, got \(outcome)")
       return
@@ -188,6 +188,44 @@ struct IndexSetCommandTests {
   }
 
   @Test(
+    "an unrecognised status is rejected before any git or filesystem work, exit 2, naming the allowed values — catches a skill-written typo left permanently \"active\"",
+    arguments: ["Done", "finished"])
+  func rejectsUnknownStatus(_ bad: String) async throws {
+    let git = FakeGit(failure: .invalidRef("must not be reached"))
+
+    let outcome = await IndexSetRun.run(slug: "s", status: bad, resume: "r", git: git)
+
+    guard case .failure(let error) = outcome else {
+      Issue.record("expected a failure, got \(outcome)")
+      return
+    }
+    #expect(error == .invalidStatus(bad))
+    #expect(error.verdict.exitCode == 2)
+    let message = IndexSetReport.renderError(error, format: .human)
+    for status in PlanStatus.allCases {
+      #expect(message.contains(status.rawValue), "message missing '\(status.rawValue)': \(message)")
+    }
+  }
+
+  @Test(
+    "each of the 8 plan statuses round-trips through `index set` unchanged",
+    arguments: PlanStatus.allCases)
+  func eachStatusRoundTrips(_ status: PlanStatus) async throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let git = FakeGit(commonDirectory: directory.path)
+
+    let outcome = await IndexSetRun.run(
+      slug: "s", status: status.rawValue, resume: "r", git: git)
+
+    guard case .success(let index) = outcome else {
+      Issue.record("expected success for \(status.rawValue), got \(outcome)")
+      return
+    }
+    #expect(index.plans.first?.status == status.rawValue)
+  }
+
+  @Test(
     "the main checkout and a linked worktree write into the same index.json — catches per-worktree plan state"
   )
   func linkedWorktreeWritesTheSharedIndex() async throws {
@@ -195,13 +233,13 @@ struct IndexSetCommandTests {
     defer { pair.remove() }
 
     let first = await IndexSetRun.run(
-      slug: "main-plan", status: "in-progress", resume: "from main", git: pair.mainGit)
+      slug: "main-plan", status: "building", resume: "from main", git: pair.mainGit)
     guard case .success = first else {
       Issue.record("expected success from the main checkout, got \(first)")
       return
     }
     let second = await IndexSetRun.run(
-      slug: "linked-plan", status: "pending", resume: "from linked worktree", git: pair.linkedGit)
+      slug: "linked-plan", status: "planned", resume: "from linked worktree", git: pair.linkedGit)
     guard case .success(let index) = second else {
       Issue.record("expected success from the linked worktree, got \(second)")
       return
@@ -221,7 +259,7 @@ struct IndexSetCommandTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let git = FakeGit(commonDirectory: directory.path)
 
-    _ = await IndexSetRun.run(slug: "a", status: "pending", resume: "first", git: git)
+    _ = await IndexSetRun.run(slug: "a", status: "planned", resume: "first", git: git)
     let outcome = await IndexSetRun.run(slug: "a", status: "done", resume: "second", git: git)
 
     guard case .success(let index) = outcome else {
@@ -247,7 +285,7 @@ struct IndexSetCommandTests {
     try FileManager.default.createDirectory(
       at: URL(filePath: layout.root), withIntermediateDirectories: true)
     let indexURL = URL(filePath: layout.indexFile)
-    let contents = try PlanIndex(plans: [PlanSummary(slug: "s", status: "pending", resume: nil)])
+    let contents = try PlanIndex(plans: [PlanSummary(slug: "s", status: "building", resume: nil)])
       .encode()
     try contents.write(to: indexURL)
     let old = Date(timeIntervalSinceNow: -3600 * 24 * 365)

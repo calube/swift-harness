@@ -68,6 +68,28 @@ struct SharedPlanIndexContextTests {
   }
 
   @Test(
+    "superseded and abandoned plans drop out of the active list — catches the closed PlanStatus set failing to retire terminal plans"
+  )
+  func supersededAndAbandonedAreNotActive() {
+    let index = PlanIndex(plans: [
+      PlanSummary(slug: "still-going", status: "building", resume: nil),
+      PlanSummary(slug: "replaced", status: "superseded", resume: nil),
+      PlanSummary(slug: "dropped", status: "abandoned", resume: nil),
+    ])
+    #expect(index.active.map(\.slug) == ["still-going"])
+  }
+
+  @Test(
+    "a legacy status outside the closed PlanStatus set stays listed as active — catches a bad or pre-migration entry silently disappearing instead of staying visible"
+  )
+  func legacyStatusStaysActive() {
+    let index = PlanIndex(plans: [
+      PlanSummary(slug: "old-entry", status: "complete", resume: nil)
+    ])
+    #expect(index.active.map(\.slug) == ["old-entry"])
+  }
+
+  @Test(
     "the session id appears in the injected context so a skill can pass it to `plan claim` — catches skills unable to identify their own session"
   )
   func rendersSessionID() {

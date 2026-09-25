@@ -23,16 +23,15 @@ public struct PlanSummary: Sendable, Equatable {
 /// `{"plans": [{"slug", "status", "resume"}, …]}`. Other keys are ignored, so a plan's full
 /// ledger never reaches session context through the index.
 public struct PlanIndex: Sendable, Equatable {
-  public static let finishedStatuses: Set<String> = [
-    "done", "complete", "completed", "abandoned", "archived", "cancelled",
-  ]
-
   public let plans: [PlanSummary]
 
   public init(plans: [PlanSummary]) { self.plans = plans }
 
+  /// A status outside the closed ``PlanStatus`` set (unknown, or a legacy value from before it
+  /// existed) is never treated as finished: a bad entry stays visible instead of silently
+  /// disappearing from the active list (spec §5.8).
   public var active: [PlanSummary] {
-    plans.filter { !Self.finishedStatuses.contains($0.status.lowercased()) }
+    plans.filter { !(PlanStatus(rawValue: $0.status)?.isFinished ?? false) }
   }
 
   public static func decode(_ data: Data) throws -> PlanIndex {
