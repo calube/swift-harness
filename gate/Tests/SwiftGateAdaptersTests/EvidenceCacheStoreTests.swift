@@ -259,8 +259,7 @@ struct EvidenceCacheStoreTests {
     let writers = 8
     let runner = LiveProcessRunner()
 
-    let outputs = await withTaskGroup(of: (Int, Result<ProcessOutput, ProcessRunnerError>).self) {
-      group in
+    let outputs = await withTaskGroup(of: (Int, ProcessOutput?).self) { group in
       for writer in 0..<writers {
         group.addTask {
           let invocation = ProcessInvocation(
@@ -276,24 +275,20 @@ struct EvidenceCacheStoreTests {
             ],
             timeout: .seconds(300))
           do throws(ProcessRunnerError) {
-            return (writer, .success(try await runner.run(invocation)))
+            return (writer, try await runner.run(invocation))
           } catch {
-            return (writer, .failure(error))
+            Issue.record(error, "writer \(writer) didn't run")
+            return (writer, nil)
           }
         }
       }
       return await group.reduce(into: [:]) { $0[$1.0] = $1.1 }
     }
 
-    for (writer, outcome) in outputs.sorted(by: { $0.key < $1.key }) {
-      switch outcome {
-      case .success(let output):
-        #expect(
-          output.status.isSuccess,
-          "writer \(writer) exited \(output.status): \(output.stdout.text) \(output.stderr.text)")
-      case .failure(let error):
-        Issue.record("writer \(writer) didn't run: \(error)")
-      }
+    for (writer, output) in outputs.sorted(by: { $0.key < $1.key }) {
+      #expect(
+        output.status.isSuccess,
+        "writer \(writer) exited \(output.status): \(output.stdout.text) \(output.stderr.text)")
     }
     try Self.expectEveryWriterLanded(
       home: home, writers: writers, perWriter: SelfRelaunch.claimsPerWriter)
@@ -389,6 +384,34 @@ struct EvidenceCacheStoreTests {
     let after = try store.contents(of: good.bucket)
     #expect(after.claims.map(\.claim) == [good, next])
     #expect(after.findings.map(\.line) == [2, 3])
+  }
+
+  @Test(
+    "a quoteless verdict, a pin that is a path, and a second tombstone write nothing — catches cache files named or keyed by bad input"
+  )
+  func refusedWritesLeaveCacheUntouched() async throws {
+    let home = try ScratchHome()
+    defer { home.remove() }
+    let store = home.store()
+    let probe = try ReusableClaim(
+      Claim(
+        id: "ev-navigation-stack-path-init-exists", lane: "apple-docs", text: "t",
+        citation: Citation(kind: .probe, loc: "probes/Probe_x.swift", pin: "iphoneos26.0"),
+        status: .supported))
+    await #expect(throws: EvidenceCacheStoreError.missingQuote(claimID: probe.claim.id)) {
+      try await store.recordVerdict(.supported, for: probe, origin: .probe)
+    }
+    #expect(throws: EvidenceCacheStoreError.invalidBucket(.invalidPin("../escape@1"))) {
+      try store.contents(of: .package(pin: "../escape@1"))
+    }
+    #expect(FileSystemConditions.contents(of: home.url.path).isEmpty)
+
+    try await store.record(probe, origin: .probe)
+    try await store.tombstone(probe, reason: .amended)
+    let before = try Data(contentsOf: URL(filePath: try store.layout.file(probe.bucket)))
+    try await store.tombstone(probe, reason: .refuted)
+    #expect(try Data(contentsOf: URL(filePath: try store.layout.file(probe.bucket))) == before)
+    #expect(try store.contents(of: probe.bucket).tombstones[probe.fingerprint] == .amended)
   }
 
   private static func expectEveryWriterLanded(home: ScratchHome, writers: Int, perWriter: Int)
