@@ -31,6 +31,13 @@ let package = Package(
       ]
     ),
     .testTarget(
+      name: "APIClientTests",
+      dependencies: [
+        "APIClient",
+        .product(name: "Dependencies", package: "swift-dependencies"),
+      ]
+    ),
+    .testTarget(
       name: "APIClientLiveTests",
       dependencies: [
         "APIClientLive",
