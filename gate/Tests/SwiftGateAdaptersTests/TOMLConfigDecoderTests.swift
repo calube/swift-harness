@@ -357,4 +357,57 @@ struct TOMLConfigDecoderTests {
     let found = issues(#"exclude = ["/abs", "../up", " "]"# + "\n" + Self.minimal)
     #expect(found.map(\.path) == ["exclude[0]", "exclude[1]", "exclude[2]"])
   }
+
+  @Test(
+    "plan bounds out of range are errors — catches a zero wave width or inverted size bounds reaching the scheduler"
+  )
+  func planBoundsRange() {
+    let found = issues(
+      Self.minimal + """
+        [plan]
+        max_parallel = 0
+        est_lines_min = 50
+        est_lines_max = 40
+        max_modules_per_task = 0
+        max_tests_per_task = 0
+        worker_pack_token_budget = 0
+        """)
+    #expect(
+      found == [
+        .outOfRange(path: "plan.max_parallel", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "plan.est_lines_max", value: "40", allowed: ">= plan.est_lines_min"),
+        .outOfRange(path: "plan.max_modules_per_task", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "plan.max_tests_per_task", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "plan.worker_pack_token_budget", value: "0", allowed: ">= 1"),
+      ])
+  }
+
+  @Test(
+    "docs budgets and sentence ceiling below one are errors — catches a budget that would fail every doc or none"
+  )
+  func docsBudgetsRange() {
+    let found = issues(
+      Self.minimal + """
+        [docs]
+        sentence_ceiling = 0
+
+        [docs.budgets]
+        router = 0
+        topic = 0
+        design = 0
+        agents_md_lines = 0
+
+        [docs.budgets.sections]
+        decision = 0
+        """)
+    #expect(
+      found == [
+        .outOfRange(path: "docs.sentence_ceiling", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "docs.budgets.router", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "docs.budgets.topic", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "docs.budgets.design", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "docs.budgets.agents_md_lines", value: "0", allowed: ">= 1"),
+        .outOfRange(path: "docs.budgets.sections.decision", value: "0", allowed: ">= 1"),
+      ])
+  }
 }

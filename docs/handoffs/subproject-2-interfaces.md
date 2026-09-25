@@ -96,3 +96,35 @@ Only the orchestrator edits this file, appending one section per wave at merge. 
 
 **Known suspect flake:** the Foundation shim test ("swiftgate shim caches and rebuilds") failed once on a cold rebuild,
 then passed. If it recurs, run it through `flake-hunter`.
+
+## Wave 4
+
+**Edit guard** (`PlanStateGuard`, rule `guard.plan-state`)
+- It protects everything under `<common>/swift-harness/plans/`, plus `docs/**/designs/*.md` and `*.evidence/**`. Nobody may
+  edit `orchestrator.lock`. Any payload `agent_id` means deny.
+- Write access:
+  - `index.json`: any session whose id is in some plan's `orchestrator.lock`.
+  - A design doc or its evidence: only the holder of the plan whose `plan.json` field `design` names that doc.
+    Paths are resolved against the **writing session's own worktree**.
+  - `SWIFT_HARNESS_ORCHESTRATOR=1` overrides. A git failure fails closed. The guard never writes.
+- **Design skill constraint:** author the design doc in the session's own checkout, on its `design/<slug>` branch.
+  Never write into a sibling worktree's copy.
+- In this repo, editing `docs/designs/` from a plugin-loaded session needs a claim or the override.
+- The dead worktree-relative `.harness/plans` rule is still present. The packaging task deletes it.
+
+**Id-leak rules** (`comments.leaked-id`, `test.leaked-id`)
+- `IdLeakScan.matches(in:knownIds:)` flags:
+  - exact known ids
+  - `Phase|Stage|Wave` + number
+  - bare `[A-Z]{2,3}\d{1,2}[a-z]?`
+
+  It needs 2 or more capitals because `T0`–`T3` tiers and standards codes like `D7` are legitimate. `UTF8`, `SHA1`,
+  `MD5` and `ARM64` are denylisted.
+- `KnownIds.build(ledgerTaskIds:claimIds:docIds:)` → pass the result to `RuleContext(knownIds:)`.
+
+**SessionStart**
+- It injects `Session id: <id> (pass as `--session` to `swiftgate plan claim`/`plan release`).`, once, only when the id is non-empty.
+- Then `Active plans (RESUME summaries; ledgers are orchestrator-only):` followed by `- <slug> (<status>): <resume>`,
+  capped at 4,000 characters with an `…and N more` line.
+- `SessionContext.resolvePlans(indexData:)`. Use `PlanIndex.encode()` for index writes: pretty-printed, sorted keys, trailing newline.
+  It never fails a session.
