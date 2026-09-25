@@ -48,6 +48,28 @@ flowchart LR
 - The consumer's agent guide is `plugin/templates/AGENTS.md`, which bootstrap stamps into each app repo.
   The root `AGENTS.md` is for contributors only.
 
+## Steering: contributors and consumers get different channels
+
+The two audiences need different guidance, not just different files.
+
+| | Contributors (build the harness) | Consumers (use the harness in an app) |
+|---|---|---|
+| Entry point | root `AGENTS.md` (+ `CLAUDE.md` symlink) | the block bootstrap stamps into the app's `AGENTS.md` (`plugin/templates/AGENTS.md`) |
+| Standing context | `docs/index.md` router, worker brief, orchestrator runbook | SessionStart `additionalContext`: session id, active plans, the resolved path to the plugin's reference docs |
+| Task steering | the implementation plan, the interfaces note | skills (`SKILL.md`), agent prompts, hook feedback messages |
+| Reference docs | `docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs` | `plugin/docs/`: standards, testing playbook, hooks, review contract |
+| What it teaches | gate layering (domain / adapters / CLI), fixtures captured from real tools, every rule ships a fixture and a rule-index row, worktrees and one committer, the plan and wave process | app rules: module kinds, determinism, clients, testing tiers, how to read verdicts |
+
+Rules that keep the channels apart:
+
+- Nothing under `plugin/` references contributor docs (`docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs`)
+  or any path above `plugin/`. A contract that consumers need at runtime, such as the review verdict contract
+  from ADR 0001 (review severity for standards violations), gets a consumer copy in `plugin/docs/`.
+- Consumer docs never name the plugin's install path. SessionStart computes it each session, so nothing
+  machine-specific is committed.
+- The contributor `AGENTS.md` doesn't restate app rules. It points to `plugin/docs/standards.md`, which
+  contributors need only when they change a rule or `examples/`.
+
 ## Consequences
 
 - Consumers compile SwiftSyntax on the first run of each version, which takes minutes, and they receive

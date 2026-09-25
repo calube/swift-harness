@@ -102,19 +102,19 @@ flowchart LR
   subgraph sd["Seeds"]
     w22["22: calibration-seeds-labelled-by-construction<br/>plugin-docs-pass-docs-lint-and-prose<br/>self-test-runs-evidence-and-design-seeds"] --> w23["23: self-test-runs-plan-docs-prose-id-seeds"]
   end
-  subgraph pkg["Packaging"]
-    w24["24: consumer-plugin-in-plugin-dir"]
+  subgraph pkg["Packaging and steering"]
+    w24["24: consumer-plugin-in-plugin-dir"] --> w25["25: consumer-steering-channels<br/>contributor-agents-md-for-harness-developers"]
   end
   subgraph acc["Acceptance"]
-    w25["25: plugin-installs-for-real"] --> w26["26: nonexistent-api-run-refutes-claim"]
-    w26 --> w27["27: sampleapp-standard-design-to-plan"]
+    w26["26: plugin-installs-for-real"] --> w27["27: nonexistent-api-run-refutes-claim"]
+    w27 --> w28["28: sampleapp-standard-design-to-plan"]
   end
   w5 --> w6
   w14 --> w15
   w16 --> w17
   w21 --> w22
   w23 --> w24
-  w24 --> w25
+  w25 --> w26
 ```
 
 | Waves | Milestone | Tasks | Why split this way |
@@ -125,7 +125,8 @@ flowchart LR
 | 17–21 | Agent layer | 10 | agents test first; skills after the agents and gates they call |
 | 22–23 | Seeds | 4 | the id and plan seeds reuse the seed runner |
 | 24 | Packaging | 1 | moves every path; must follow all code waves and precede the real install (ADR 0002) |
-| 25–27 | Acceptance | 3 | all write `docs/e2e-report.md` |
+| 25 | Steering | 2 | contributor and consumer channels differ (ADR 0002, Steering); both need the moved layout |
+| 26–28 | Acceptance | 3 | all write `docs/e2e-report.md` |
 
 ---
 
@@ -484,7 +485,7 @@ flowchart LR
 - Tests: `swiftgate self-test` green with every new seed red as labelled.
 - Sizing exception: fixtures only.
 
-## Acceptance
+## Packaging and steering
 
 Not code slices; the §13 checks are the tests. Record evidence (commands, verdicts, tokens, wall time) in `docs/e2e-report.md`.
 
@@ -497,13 +498,42 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
   (the per-version cache dir is not reused across updates); a contributor checkout still builds in place.
   Root `AGENTS.md` stays contributor-facing; nothing under `plugin/` is contributor-only except `gate/Tests`.
   Also deletes the dead worktree-relative `.harness/plans` guard rule and its tests (plan state lives in the common dir).
+  Moves the review verdict contract consumers read at runtime into `plugin/docs/review-contract.md` and repoints
+  `workflows/review.js`, `skills/review/SKILL.md` and `agents/*.md` at it (ADR 0002, Steering).
 - Tests: `claude plugin validate plugin` passes with no warnings — catches a root CLAUDE.md shipping to
   consumers · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
-  reuses it on a second run · every repo path in docs, skills and agents resolves after the move (link check) ·
+  reuses it on a second run · `/swift-harness:review` loads its contract from inside `plugin/` — catches a consumer
+  runtime read of a contributor doc · every repo path in docs, skills and agents resolves after the move (link check) ·
   push and ready tiers green from the new layout.
 
+### `contributor-agents-md-for-harness-developers`
+- Deps: consumer-plugin-in-plugin-dir · Gate: push · estLines: 120
+- Writes: `AGENTS.md`, `docs/index.md`, `docs/handoffs/worker-brief.md`
+- Does: rewrites the root `AGENTS.md` for people building the harness (ADR 0002, Steering): gate layering
+  (domain pure, adapters behind protocols, thin CLI), fixtures captured from real tools with the command recorded,
+  every new rule ships a fixture and a rule-index row, one committer per worktree, the plan and wave process, where
+  the runbook and interfaces note live. App rules become one pointer to `plugin/docs/standards.md`. ≤ 60 lines.
+- Tests: `docs-lint` passes on the new file (budget, links, local paths) · the file names no app-only rule —
+  catches consumer rules steering contributors · every path it names exists.
+
+### `consumer-steering-channels`
+- Deps: consumer-plugin-in-plugin-dir · Gate: push · estLines: 220
+- Writes: `plugin/templates/AGENTS.md`, `plugin/gate/Sources/SwiftGateDomain/Hooks/SessionContext.swift`,
+  `plugin/gate/Sources/SwiftGateCLI/Hooks/SessionStartHook.swift`, `plugin/gate/Tests/SwiftGateCLITests/ConsumerSteeringTests.swift`,
+  `plugin/docs/index.md`
+- Does: SessionStart injects the resolved absolute path of the plugin's reference docs (`${CLAUDE_PLUGIN_ROOT}/docs`)
+  alongside the session id and active plans, so consumer agents can open `standards.md` without a committed path.
+  The stamped `AGENTS.md` refers to "the plugin reference docs (path in your session context)". Adds a consumer
+  router `plugin/docs/index.md`. Adds a test that no file under `plugin/` mentions `docs/designs`, `docs/adrs`,
+  `docs/plans` or `docs/handoffs`.
+- Tests: SessionStart output names an existing `standards.md` path — catches consumer agents unable to find the rules
+  · a plugin file citing `docs/adrs/…` fails — catches consumer runtime depending on contributor docs · the stamped
+  `AGENTS.md` contains no absolute path.
+
+## Acceptance
+
 ### `plugin-installs-for-real`
-- Deps: consumer-plugin-in-plugin-dir · Gate: ready · estLines: 80
+- Deps: contributor-agents-md-for-harness-developers, consumer-steering-channels · Gate: ready · estLines: 80
 - Writes: `docs/e2e-report.md`, `.claude-plugin/marketplace.json` (only if install needs a fix)
 - Does: install through the marketplace, not `--plugin-dir`. In a SampleApp session, run one design agent type by its plugin name; capture a live PreToolUse payload with `agent_id` (§14).
 - Tests: plugin agent types run · subagent write to a ledger, design doc and claim file denied · two worktrees read the same `index.json` and ledger.
@@ -550,6 +580,8 @@ Not code slices; the §13 checks are the tests. Record evidence (commands, verdi
 | D22 Mermaid in design docs | markdown-and-design-doc-model, design-lint-diagrams-and-budgets, design-render-design-page |
 | D23 word budgets | config-docs-and-plan-sections, design-lint-diagrams-and-budgets, docs-lint-policy-and-budgets |
 | D24 `prose` skill + `swiftgate prose` | prose-rules-and-command, prose-skill-written-fresh, design-lint-command, push-tier-runs-doc-gates |
+| D25 relative paths only (spec §6.2 docs-lint) | docs-lint-policy-and-budgets, markdown-writes-checked-for-local-paths, evidence-check-rules |
+| D26 contributor/consumer split + steering (ADR 0002) | consumer-plugin-in-plugin-dir, contributor-agents-md-for-harness-developers, consumer-steering-channels, plugin-installs-for-real |
 | §6.3 common-dir resolution | plan-state-paths-in-git-common-dir, session-start-reads-shared-plan-index, edit-guard-covers-design-and-plan-state |
 | §6.3 absolute-path matching · guard scope | edit-guard-covers-design-and-plan-state |
 | §6.3 per-plan orchestrator lock | plan-claim-and-release-commands, edit-guard-covers-design-and-plan-state, design-skill-frame-to-draft |
