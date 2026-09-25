@@ -1,0 +1,41 @@
+{
+  "built" : true,
+  "command" : "probe",
+  "design" : "docs/designs/probe-sampleapp.md",
+  "message" : "2 probe(s), 1 failed, 0 from the cache (iphonesimulator 26.2)",
+  "notes" : [
+    "left out `APIClient` from local package `apiclient`: codebase code is cited by file, not probed",
+    "left out `LogClient` from local package `logclient`: codebase code is cited by file, not probed"
+  ],
+  "platform" : "iphonesimulator",
+  "probes" : [
+    {
+      "cached" : false,
+      "claimId" : "ev-tca-effect-teleport-exists",
+      "diagnostics" : [
+        {
+          "column" : 6,
+          "file" : "probes/Probe_ev_tca_effect_teleport_exists.swift",
+          "level" : "error",
+          "line" : 5,
+          "message" : "type 'Effect<Int>' has no member 'teleport'"
+        }
+      ],
+      "verdict" : "fail",
+      "verdictFile" : "probes/Probe_ev_tca_effect_teleport_exists.verdict.json",
+      "wrapper" : "probes/Probe_ev_tca_effect_teleport_exists.swift"
+    },
+    {
+      "cached" : false,
+      "claimId" : "ev-tca-reducer-macro-builds",
+      "diagnostics" : [
+
+      ],
+      "verdict" : "pass",
+      "verdictFile" : "probes/Probe_ev_tca_reducer_macro_builds.verdict.json",
+      "wrapper" : "probes/Probe_ev_tca_reducer_macro_builds.swift"
+    }
+  ],
+  "sdk" : "26.2",
+  "verdict" : "RED"
+}
