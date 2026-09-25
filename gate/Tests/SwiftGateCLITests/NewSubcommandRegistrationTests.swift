@@ -61,6 +61,7 @@ struct NewSubcommandRegistrationTests {
     "prose",
     "context-pack",
     "design-lint",
+    "docs-lint",
   ]
 
   @Test(

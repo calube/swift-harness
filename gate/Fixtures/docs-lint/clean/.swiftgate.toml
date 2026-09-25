@@ -1,0 +1,11 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "Sample"
+packages = ["Sample"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[docs]
+managed_files = ["docs/index.md"]

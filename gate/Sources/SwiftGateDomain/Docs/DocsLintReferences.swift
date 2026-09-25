@@ -30,18 +30,10 @@ import Foundation
 /// trust that list — a link or `req-`/`test-`/`ev-`/`ADR` mention inside a fence or inline code
 /// must never be treated as a real reference.
 public enum DocsLintReferences {
-  /// One file in the docs corpus: `path` is repo-relative (posix separators, no leading `/` or
-  /// `./`, matching every other rule's `docPath`), `text` is the file's raw content. Building this
-  /// list — reading `docs/` and root `AGENTS.md` — is `docs-lint-command`'s adapter job.
-  public struct DocFile: Sendable, Equatable {
-    public let path: String
-    public let text: String
-
-    public init(path: String, text: String) {
-      self.path = path
-      self.text = text
-    }
-  }
+  /// The docs corpus: ``DocsLintPolicy/ScannedDocument`` (`path`, `rawText`, `markdown`) — the one
+  /// corpus type `docs-lint` reads the whole docs tree into, built once by `docs-lint-command`'s
+  /// `DocsTreeReader` adapter and shared with ``DocsLintPolicy``.
+  public typealias DocFile = DocsLintPolicy.ScannedDocument
 
   /// spec §6.2: "every doc reachable from `docs/index.md`".
   public static let routerRoot = "docs/index.md"
@@ -85,7 +77,8 @@ public enum DocsLintReferences {
         guard dangling else { continue }
         findings.append(
           try Finding(
-            ruleID: "docs-lint.dangling-id", severity: .major, file: scan.path, line: nil,
+            ruleID: "docs-lint.dangling-id", severity: .major, file: scan.path,
+            line: scan.firstMentionLine[id],
             message:
               "\"\(id)\" has no matching definition or claim (spec §6.2 reference integrity).",
             failureScenario: nil))
@@ -103,14 +96,14 @@ public enum DocsLintReferences {
     let adrMention = #/ADR\s+\d{4}\b/#
     var findings: [Finding] = []
     for scan in scans {
-      for (line, lineLinks) in zip(scan.scanLines, scan.linksPerLine) {
+      for (index, (line, lineLinks)) in zip(scan.scanLines, scan.linksPerLine).enumerated() {
         for match in line.matches(of: adrMention) {
           let isLinked = lineLinks.contains { $0.textRange.overlaps(match.range) }
           guard !isLinked else { continue }
           findings.append(
             try Finding(
               ruleID: "docs-lint.bare-adr-reference", severity: .major, file: scan.path,
-              line: nil,
+              line: index + 1,
               message:
                 "\"\(line[match.range])\" references an ADR by number without linking to it "
                 + "(spec §6.2 reference integrity).",
@@ -139,7 +132,7 @@ public enum DocsLintReferences {
         findings.append(
           try Finding(
             ruleID: "docs-lint.requirement-uncited", severity: .major, file: scan.path,
-            line: nil,
+            line: scan.definedIDLine[id],
             message:
               "\"\(id)\" is defined here but never cited outside its defining doc "
               + "(spec §6.2 reference integrity).",
@@ -163,7 +156,7 @@ public enum DocsLintReferences {
         findings.append(
           try Finding(
             ruleID: "docs-lint.broken-relative-link", severity: .major, file: occurrence.from,
-            line: nil,
+            line: occurrence.line,
             message:
               "link \"\(occurrence.destination)\" climbs above the repo root; a relative link "
               + "never resolves outside the repo (spec §6.2 relative links).",
@@ -172,7 +165,7 @@ public enum DocsLintReferences {
         findings.append(
           try Finding(
             ruleID: "docs-lint.broken-relative-link", severity: .major, file: occurrence.from,
-            line: nil,
+            line: occurrence.line,
             message:
               "link \"\(occurrence.destination)\" resolves to \"\(resolved)\", which isn't a "
               + "tracked file or directory (spec §6.2 relative links).",
@@ -241,6 +234,7 @@ public enum DocsLintReferences {
     let from: String
     let destination: String
     let resolution: LinkResolution
+    let line: Int
   }
 
   private static func resolvedLinks(scans: [DocScan], repoPaths: Set<String>) -> [LinkOccurrence] {
@@ -251,7 +245,9 @@ public enum DocsLintReferences {
           let classified = classify(
             resolve(from: scan.path, destination: link.destination), repoPaths: repoPaths)
           occurrences.append(
-            LinkOccurrence(from: scan.path, destination: link.destination, resolution: classified)
+            LinkOccurrence(
+              from: scan.path, destination: link.destination, resolution: classified,
+              line: link.line)
           )
         }
       }
@@ -343,11 +339,13 @@ public enum DocsLintReferences {
 
   /// One link `[text](destination)` found on a single scan line, with `textRange` (the bracketed
   /// text's range within that same line) kept so the bare-ADR check can test whether a mention
-  /// falls inside a link's visible text.
+  /// falls inside a link's visible text, and `line` (1-based, in the original file) for the
+  /// relative-link findings.
   private struct LineLink {
     let text: String
     let textRange: Range<String.Index>
     let destination: String
+    let line: Int
   }
 
   /// A file's fence- and inline-code-stripped scan surface, computed once and shared by every
@@ -358,6 +356,8 @@ public enum DocsLintReferences {
     /// Non-fenced lines with inline-code spans blanked to spaces (length-preserving, so
     /// `String.Index` positions found in a masked line stay valid for that same line). A link or
     /// id/ADR mention living only inside a fence or inline code never reaches any family.
+    /// Fenced lines are blanked, not dropped, so index `i` always names line `i + 1` of the real
+    /// file — every family that reports a line number depends on that alignment.
     let scanLines: [String]
     let linksPerLine: [[LineLink]]
     /// Every `req-`/`test-` id this file defines via a `- <id>: ` bullet.
@@ -365,32 +365,47 @@ public enum DocsLintReferences {
     /// Every `req-`/`test-`/`ev-`-shaped token mentioned anywhere in this file (definitions
     /// included).
     let mentionedIDs: Set<String>
+    /// 1-based line of each mentioned id's first occurrence.
+    let firstMentionLine: [String: Int]
+    /// 1-based line of each defined id's `- <id>: ` bullet.
+    let definedIDLine: [String: Int]
 
     init(file: DocFile) {
       self.path = file.path
-      let lines = DocScan.nonFencedLines(file.text).map(DocScan.maskInlineCode)
+      let lines = DocScan.nonFencedLines(file.rawText).map(DocScan.maskInlineCode)
       self.scanLines = lines
-      self.linksPerLine = lines.map(DocScan.links(in:))
+      self.linksPerLine = lines.enumerated().map { index, line in
+        DocScan.links(in: line, line: index + 1)
+      }
 
       let definitionPattern = #/^-\s+(?<id>(?:req|test)-[a-z0-9]+(?:-[a-z0-9]+)*):\s/#
       let mentionPattern = #/\b(?:req|test|ev)-[a-z0-9]+(?:-[a-z0-9]+)*\b/#
       var defined: Set<String> = []
       var mentioned: Set<String> = []
-      for line in lines {
+      var firstMention: [String: Int] = [:]
+      var definedLine: [String: Int] = [:]
+      for (index, line) in lines.enumerated() {
         if let match = try? definitionPattern.firstMatch(in: line) {
-          defined.insert(String(match.id))
+          let id = String(match.id)
+          defined.insert(id)
+          if definedLine[id] == nil { definedLine[id] = index + 1 }
         }
         for match in line.matches(of: mentionPattern) {
-          mentioned.insert(String(line[match.range]))
+          let id = String(line[match.range])
+          mentioned.insert(id)
+          if firstMention[id] == nil { firstMention[id] = index + 1 }
         }
       }
       self.definedIDs = defined
       self.mentionedIDs = mentioned
+      self.firstMentionLine = firstMention
+      self.definedIDLine = definedLine
     }
 
-    /// Drops fenced code blocks (opening/closing fence lines and everything between) entirely —
-    /// mirrors ``MarkdownDocument``'s own fence-marker tracking, kept standalone here since a
-    /// fence never has to survive past this scan.
+    /// Blanks fenced code blocks (opening/closing fence lines and everything between) to empty
+    /// strings — mirrors ``MarkdownDocument``'s own fence-marker tracking, kept standalone here
+    /// since a fence never has to survive past this scan. Blanking rather than dropping keeps
+    /// every later index aligned with the real file's line numbers.
     private static func nonFencedLines(_ text: String) -> [String] {
       var result: [String] = []
       var fenceMarker: String?
@@ -400,10 +415,12 @@ public enum DocsLintReferences {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         if let marker = fenceMarker {
           if trimmed.hasPrefix(marker) { fenceMarker = nil }
+          result.append("")
           continue
         }
         if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
           fenceMarker = String(trimmed.prefix(3))
+          result.append("")
           continue
         }
         result.append(line)
@@ -430,7 +447,7 @@ public enum DocsLintReferences {
       return result
     }
 
-    private static func links(in line: String) -> [LineLink] {
+    private static func links(in line: String, line lineNumber: Int) -> [LineLink] {
       var results: [LineLink] = []
       var searchStart = line.startIndex
       while let open = line[searchStart...].firstIndex(of: "["),
@@ -446,7 +463,9 @@ public enum DocsLintReferences {
         let textRange = line.index(after: open)..<closeText
         let destination = String(line[line.index(after: afterText)..<closeDest])
         results.append(
-          LineLink(text: String(line[textRange]), textRange: textRange, destination: destination))
+          LineLink(
+            text: String(line[textRange]), textRange: textRange, destination: destination,
+            line: lineNumber))
         searchStart = line.index(after: closeDest)
       }
       return results

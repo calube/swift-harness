@@ -1,0 +1,19 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "Sample"
+packages = ["Sample"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[docs]
+managed_files = ["docs/index.md", "AGENTS.md"]
+anchors = ["nonexistent-anchor"]
+
+[[docs.banned_phrases]]
+phrase = "leverage"
+reason = "vague business jargon"
+
+[docs.budgets]
+agents_md_lines = 3
