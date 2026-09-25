@@ -472,7 +472,18 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `swift-architecture` | judgment layer: design a feature/module, recommend kind via fit signals, scaffold Core/UI package pair |
 | `swift-tdd` | test-first with `TestStore` and engine replay/property patterns; regression litmus |
 | `/swift-comment-audit` | judgment pass over a diff's comments: keep / trim / delete with proposed edits; Swift-specific, written fresh for this harness |
+| `/swift-validate` (thin) | `check --tier ready` → evidence summary in `.harness/runs/<id>/` + PR-body-ready block. Sub-project 2 adds sim QA of changed flows; sub-project 3 adds before/after profile diff and leak check |
+| `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design — seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 4 adds SwiftUI perf, observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
 | `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
+
+### 9.1 Review verdict contract
+
+Shared by every reviewer and by sub-project 4's panel so findings merge cleanly:
+
+- Finding fields: `severity` (blocker / major / minor / nit), `file:line`, `failure_scenario`
+  (concrete input/state → wrong outcome), `evidence` (tool output, test, or code citation), `fix`.
+- Verdicts (literal strings, machine-matched): `merge` · `fix-then-merge` · `refactor-needed`.
+- A finding without a concrete failure scenario is dropped at the verify step.
 
 ## 10. Testing the harness itself
 
