@@ -1,0 +1,89 @@
+import Foundation
+
+/// Real filesystem states for error-path tests: a scratch directory, permission changes that are
+/// always undone, and a small FAT volume (no hard links, a fixed size that can be filled).
+enum FileSystemConditions {
+  /// `chmod` denies nothing to root, so a permission test run as root would pass vacuously.
+  static let permissionsDeny = geteuid() != 0
+
+  static let hasDiskImages = FileManager.default.isExecutableFile(atPath: "/usr/bin/hdiutil")
+
+  static func scratchDirectory(_ label: String) throws -> URL {
+    let url = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-\(label)-\(UUID().uuidString)", directoryHint: .isDirectory)
+      .resolvingSymlinksInPath()
+    try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    return url
+  }
+
+  /// Every file and directory under `root`, relative to it, sorted.
+  static func contents(of root: String) -> [String] {
+    (FileManager.default.subpaths(atPath: root) ?? []).sorted()
+  }
+
+  static func setMode(_ mode: mode_t, _ path: String) throws {
+    guard chmod(path, mode) == 0 else {
+      throw ConditionError(
+        "chmod \(String(mode, radix: 8)) \(path): \(String(cString: strerror(errno)))")
+    }
+  }
+}
+
+struct ConditionError: Error, CustomStringConvertible {
+  let description: String
+  init(_ description: String) { self.description = description }
+}
+
+/// A 1 MB MS-DOS (FAT) disk image attached at a private mount point. FAT has no hard links, so
+/// `link(2)` fails there with `ENOTSUP`, and its fixed size lets a test fill it to `ENOSPC`.
+struct FATVolume {
+  let image: URL
+  let mountPoint: URL
+
+  init() throws {
+    let base = try FileSystemConditions.scratchDirectory("fat")
+    image = base.appending(path: "volume.dmg")
+    mountPoint = base.appending(path: "mnt", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
+    try Self.hdiutil(
+      "create", "-quiet", "-size", "1m", "-fs", "MS-DOS", "-volname", "SGTEST", "-layout", "NONE",
+      "-o", image.path)
+    try Self.hdiutil("attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path)
+  }
+
+  func detach() {
+    try? Self.hdiutil("detach", "-quiet", "-force", mountPoint.path)
+    try? FileManager.default.removeItem(at: image.deletingLastPathComponent())
+  }
+
+  /// Grows a filler file to the largest size the volume accepts. FAT has no sparse files, so every
+  /// cluster is then allocated. Growing by `ftruncate` rather than writing matters: a write that
+  /// doesn't fit fails whole, and `statvfs` overstates what FAT can still allocate.
+  func fill() throws {
+    let path = mountPoint.appending(path: "filler").path
+    let descriptor = open(path, O_WRONLY | O_CREAT, 0o644)
+    guard descriptor >= 0 else { throw ConditionError("creating \(path)") }
+    defer { close(descriptor) }
+    var fits: off_t = 0
+    var tooBig: off_t = 4 * 1024 * 1024
+    while tooBig - fits > 1 {
+      let size = (fits + tooBig) / 2
+      if ftruncate(descriptor, size) == 0 { fits = size } else { tooBig = size }
+    }
+    guard ftruncate(descriptor, fits) == 0 else { throw ConditionError("sizing \(path)") }
+  }
+
+  private static func hdiutil(_ arguments: String...) throws {
+    let process = Process()
+    process.executableURL = URL(filePath: "/usr/bin/hdiutil")
+    process.arguments = arguments
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    try process.run()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+      throw ConditionError(
+        "hdiutil \(arguments.joined(separator: " ")) exited \(process.terminationStatus)")
+    }
+  }
+}
