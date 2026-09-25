@@ -454,6 +454,7 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
   | Banned phrases | each entry carries the reason that killed it |
   | Repo-specific anchors | optional, from `.swiftgate.toml [docs]` |
 
+  | Local paths | no machine-specific paths (home dirs, `/Users/`, temp dirs); repo files by relative path; product paths allowlisted in `[docs] allowed_paths` |
   | Budgets | per-file prose budgets: `AGENTS.md` ≤ 60 lines, routers and topic files per `[docs.budgets]` |
 
   Ships with a seeded self-test, one violation per family.

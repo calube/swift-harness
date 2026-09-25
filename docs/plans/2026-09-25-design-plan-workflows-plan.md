@@ -259,8 +259,8 @@ flowchart LR
 ### `docs-lint-policy-and-budgets`
 - Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 220
 - Writes: `D/Docs/DocsLintPolicy.swift`, `TD/DocsLintPolicyTests.swift`
-- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets.
-- Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged.
+- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist of product paths `~/.swift-harness/`, `~/.local/bin/swiftgate` in `[docs] allowed_paths`). Docs reference repo files by relative path.
+- Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged · `~/Developer/x` and `/Users/me/x` flagged, `~/.swift-harness/` allowed — catches machine-specific paths that break for every other reader.
 
 ### `docs-lint-references-and-links`
 - Deps: markdown-and-design-doc-model · Gate: push · estLines: 240
