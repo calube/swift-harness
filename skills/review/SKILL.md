@@ -5,9 +5,10 @@ description: This skill should be used to run the swift-harness multi-agent code
 
 # Review
 
-Invoking this skill is the user's opt-in to run the review workflow (8–10 agents, top-tier model,
-wall time about the slowest reviewer plus its verifier). Gather and synthesis are deterministic
-`swiftgate` commands; only review and verification use agents.
+Invoking this skill is the user's opt-in to run the review workflow: one reviewer per focus (4, or
+5 when the diff touches SwiftUI) plus one verifier for each reviewer that reports findings, so 4 to
+10 top-tier agents. Wall time is about the slowest reviewer plus its verifier. Gather and synthesis
+are deterministic `swiftgate` commands; only review and verification use agents.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Pass `--base <ref>` when the branch doesn't target
 `origin/main`.
@@ -30,15 +31,23 @@ module before launching; a large diff multiplies the panel's cost.
 
 ## 2. Review and verify
 
-Tell the user the panel is starting and how many agents it uses (one reviewer plus up to one
-verifier per focus). Then run:
+Tell the user the panel is starting and how many agents it uses (one reviewer per focus, and a
+verifier only for a reviewer that reports findings). Then run:
 
 ```
 Workflow({
   scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/review.js",
-  args: { bundle: "<absolute bundle path>", focuses: <manifest focuses> }
+  args: {
+    bundle: "<absolute bundle path>",
+    focuses: <manifest focuses>,
+    pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
+  }
 })
 ```
+
+`pluginRoot` must be the absolute path: a workflow script can't read the environment, and the
+agents need it to open the plugin's `docs/standards.md` and `docs/testing-playbook.md`, which are
+not in the project under review.
 
 Surface the workflow's `log()` lines as they arrive. It returns `{bundle, reviews}`: one object per
 focus, already in the shape `review-synth` reads. A reviewer or verifier that died comes back as
@@ -46,10 +55,15 @@ focus, already in the shape `review-synth` reads. A reviewer or verifier that di
 
 If the Workflow tool is not available in this session, run the same pipeline with the Agent tool:
 for each focus in `focuses`, launch `swift-harness:<focus>` (all in one message), and as each
-returns findings, launch `swift-harness:verifier` with only those findings and the bundle path,
-never the reviewer's reasoning. Build the per-focus objects exactly as `workflows/review.js` does:
-unverified findings keep `verified: false`, a failed agent gives `not-reviewed`, and an absent
-`swiftui` focus gives `not-applicable`.
+returns findings, launch `swift-harness:verifier` with only those findings, the bundle path and the
+absolute docs paths, never the reviewer's reasoning. Give every prompt the absolute paths
+`${CLAUDE_PLUGIN_ROOT}/docs/standards.md`, `${CLAUDE_PLUGIN_ROOT}/docs/testing-playbook.md` and
+`${CLAUDE_PLUGIN_ROOT}/docs/decisions/0001-review-severity-for-standards-violations.md`. Build the
+per-focus objects exactly as `reconcile()` in `workflows/review.js` does: keep the reviewer's
+`kind`, `rule`, category and location; keep the verifier's `verification_note`; accept a lower
+severity for a `standards-violation` only when the verifier gave a `downgrade_reason`; unverified
+findings keep `verified: false`, a failed agent gives `not-reviewed`, and an absent `swiftui` focus
+gives `not-applicable`.
 
 ## 3. Synthesize
 
@@ -61,8 +75,8 @@ findings). Then run:
 "$SG" review-synth --run-directory .harness/runs/<runID> .harness/runs/<runID>/review-findings/*.json
 ```
 
-It drops findings without a failure scenario or without verification, dedupes by file, line and
-category, applies the verdict rule, writes `review.json`, and prints at most 30 lines. Exit 2 means
+It drops findings without a failure scenario, standards violations that cite no rule, and
+findings without verification, dedupes by file, line and category, applies the verdict rule, writes `review.json`, and prints at most 30 lines. Exit 2 means
 an input broke the contract: fix the file you wrote, don't hand-edit the verdict.
 
 ## 4. Report
@@ -71,8 +85,9 @@ Relay the summary as printed: the verdict first (`merge`, `fix-then-merge` or `r
 any `NOT REVIEWED` focus, then the top findings with `file:line`, scenario and fix. Don't add
 findings the panel didn't verify and don't soften the verdict.
 
-- `refactor-needed`: a verified architecture blocker. Say what structure has to change and propose
-  the design; don't patch lines.
+- `refactor-needed`: a verified architecture blocker, usually a `standards-violation` whose fix
+  moves logic across a module boundary. Say what structure has to change, cite the rule, and
+  propose the design; don't patch lines.
 - `fix-then-merge`: offer to fix the blocker and major findings, then re-run `check --tier push`
   and this review. A `NOT REVIEWED` focus alone also gives this verdict: re-run the review.
 - `merge`: say so, and list minor and nit findings as optional.

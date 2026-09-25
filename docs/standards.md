@@ -296,6 +296,11 @@ struct ItemsFeatureTests {
 - **Tell:** `track("screen_view", ["id": ...])` with a string name or an unbounded payload.
 - **Enforced by:** review · **Source:** [harness design §6.1.1](superpowers/specs/2026-09-24-swift-harness-foundation-design.md) (analytics reference shape). Incident: none yet.
 
+**D7. Live clients perform IO and map to domain models; nothing else.**
+- **Do:** a `*Live` module sends the request, decodes the response, and maps it (and its errors, per E1) to the interface's domain models. Business rules and transformations (filtering, truncating, sorting, thresholds, defaults, fallbacks, formatting for display) live in a Core feature or a library module, where host tests cover them without a transport double.
+- **Tell:** a `*Live` endpoint that changes the domain value after decoding: `.prefix(n)`, `.filter`, a length or count check, a hard-coded fallback value, a computed display string; a product rule change that means editing a Live module.
+- **Enforced by:** review (architecture reviewer) · **Source:** [Live, preview and test dependencies](https://github.com/pointfreeco/swift-dependencies/blob/1.17.1/Sources/Dependencies/Documentation.docc/Articles/LivePreviewTest.md): the live value is the dependency's real-world implementation, so logic in it is replaced wholesale by every test and preview value and never runs under `TestStore`. Incident: none yet.
+
 ### Example: client pair
 
 ```swift

@@ -1,0 +1,157 @@
+// Runs workflows/review.js against stubbed agents. Run: node tests/review_workflow_test.mjs
+// Regressions caught: reviewers never told where the plugin's standards live; the verifier's
+// reasoning lost before review.json; a verifier downgrading a cited standards violation with no
+// evidence, which is how a structural finding used to end up as `merge`.
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const source = readFileSync(join(root, 'workflows/review.js'), 'utf8').replace(
+  /^export const meta/m,
+  'const meta',
+)
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+const script = new AsyncFunction('args', 'agent', 'pipeline', 'log', source)
+
+const PLUGIN = '/opt/plugins/swift-harness'
+const BUNDLE = '/work/app/.harness/runs/r1/review-input'
+
+async function run({ args, reviews = {}, verify = () => null }) {
+  const calls = []
+  const agent = async (prompt, opts) => {
+    calls.push({ prompt, opts })
+    const [stage, focus] = opts.label.split(':')
+    if (stage === 'review') return reviews[focus] ?? { findings: [] }
+    return verify(focus, prompt)
+  }
+  const pipeline = async (items, ...stages) =>
+    Promise.all(
+      items.map(async (item, index) => {
+        let value = item
+        for (const stage of stages) value = await stage(value, item, index)
+        return value
+      }),
+    )
+  const result = await script(args, agent, pipeline, () => {})
+  return { result, calls }
+}
+
+const findings = (result, focus) => result.reviews.find(r => r.focus === focus).findings
+
+const baseArgs = { bundle: BUNDLE, focuses: ['architecture', 'concurrency'], pluginRoot: PLUGIN }
+
+const violation = {
+  kind: 'standards-violation',
+  rule: 'D7',
+  severity: 'blocker',
+  category: 'logic-in-live-client',
+  file: 'Sources/FactClientLive/Live.swift',
+  line: 12,
+  title: 'length rule in a Live client',
+  failure_scenario: 'the next change to the limit edits an untested IO module',
+  evidence: 'Live.swift:12 `.prefix(140)`',
+  fix: 'move the limit to the feature reducer',
+}
+const defect = { ...violation, kind: 'defect', rule: undefined, line: 30, category: 'data-race' }
+
+const tests = {
+  async 'a missing or relative pluginRoot is rejected — catches agents told to read standards that are not there'() {
+    await assert.rejects(run({ args: { ...baseArgs, pluginRoot: undefined } }), /pluginRoot/)
+    await assert.rejects(run({ args: { ...baseArgs, pluginRoot: 'plugins/sh' } }), /pluginRoot/)
+  },
+
+  async 'every reviewer and verifier prompt names the absolute standards and playbook — catches agents citing rules they could not read'() {
+    const { calls } = await run({
+      args: baseArgs,
+      reviews: { architecture: { findings: [violation] } },
+      verify: () => ({ findings: [{ ...violation, verified: true, verification_note: 'ok' }] }),
+    })
+    assert.equal(calls.length, 3)
+    for (const { prompt, opts } of calls) {
+      assert.ok(prompt.includes(`${PLUGIN}/docs/standards.md`), opts.label)
+      assert.ok(prompt.includes(`${PLUGIN}/docs/testing-playbook.md`), opts.label)
+    }
+  },
+
+  async 'a reviewer with no findings gets no verifier — catches the agent count the skill reports drifting from the workflow'() {
+    const { calls, result } = await run({ args: baseArgs })
+    assert.deepEqual(calls.map(c => c.opts.label).sort(), ['review:architecture', 'review:concurrency'])
+    assert.equal(result.reviews.find(r => r.focus === 'architecture').status, 'reviewed')
+  },
+
+  async 'the verification note, kind and rule reach the focus file — catches the verifier reasoning and the cited rule being dropped'() {
+    const { result } = await run({
+      args: baseArgs,
+      reviews: { architecture: { findings: [violation] } },
+      verify: () => ({
+        findings: [
+          { ...violation, kind: 'defect', rule: 'A5', verified: true, verification_note: 'D7 Tell matches Live.swift:12' },
+        ],
+      }),
+    })
+    const [finding] = findings(result, 'architecture')
+    assert.equal(finding.verification_note, 'D7 Tell matches Live.swift:12')
+    assert.equal(finding.kind, 'standards-violation')
+    assert.equal(finding.rule, 'D7')
+    assert.equal(finding.verified, true)
+  },
+
+  async 'a standards violation keeps its severity unless the verifier gives a downgrade reason — catches a structural blocker quietly becoming a merge'() {
+    const verifyWith = extra => () => ({
+      findings: [{ ...violation, severity: 'minor', verified: true, verification_note: 'n', ...extra }],
+    })
+    const unexplained = await run({ args: baseArgs, reviews: { architecture: { findings: [violation] } }, verify: verifyWith({}) })
+    assert.equal(findings(unexplained.result, 'architecture')[0].severity, 'blocker')
+
+    const explained = await run({
+      args: baseArgs,
+      reviews: { architecture: { findings: [violation] } },
+      verify: verifyWith({ downgrade_reason: '.swiftgate.toml grants FactClientLive a reasoned exception' }),
+    })
+    const [finding] = findings(explained.result, 'architecture')
+    assert.equal(finding.severity, 'minor')
+    assert.match(finding.verification_note, /downgraded: .swiftgate.toml grants/)
+  },
+
+  async 'a defect may be downgraded without a reason and never raised — catches the downgrade guard leaking onto reproduced defects'() {
+    const lowered = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [{ ...defect, severity: 'major' }] } },
+      verify: () => ({ findings: [{ ...defect, severity: 'minor', verified: true, verification_note: 'n' }] }),
+    })
+    assert.equal(findings(lowered.result, 'concurrency')[0].severity, 'minor')
+    const raised = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [{ ...defect, severity: 'minor' }] } },
+      verify: () => ({ findings: [{ ...defect, severity: 'blocker', verified: true, verification_note: 'n' }] }),
+    })
+    assert.equal(findings(raised.result, 'concurrency')[0].severity, 'minor')
+  },
+
+  async 'a finding with no kind is a defect — catches older reviewer output bypassing the defect path'() {
+    const { kind, ...legacy } = defect
+    const { result } = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [legacy] } },
+      verify: () => ({ findings: [{ ...legacy, verified: true, verification_note: 'n' }] }),
+    })
+    assert.equal(findings(result, 'concurrency')[0].kind, 'defect')
+  },
+}
+
+let failed = 0
+for (const [name, test] of Object.entries(tests)) {
+  try {
+    await test()
+    console.log(`ok   ${name}`)
+  } catch (error) {
+    failed++
+    console.log(`FAIL ${name}\n     ${error.message.split('\n').join('\n     ')}`)
+  }
+}
+if (failed) {
+  console.log(`${failed} failed`)
+  process.exit(1)
+}

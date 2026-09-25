@@ -8,12 +8,20 @@ struct ReviewSynthesisTests {
   static func finding(
     _ severity: Severity, category: String = "data-race", file: String = "Sources/Core/A.swift",
     line: Int? = 10, scenario: String? = "two sends race on count and one increment is lost",
-    verified: Bool? = true, title: String = "shared mutable count"
+    verified: Bool? = true, title: String = "shared mutable count",
+    kind: ReviewFinding.Kind? = nil, rule: String? = nil
   ) -> ReviewFinding {
     ReviewFinding(
       severity: severity, category: category, file: file, line: line, title: title,
       failureScenario: scenario, evidence: "Sources/Core/A.swift:10 mutates `count` off-actor",
-      fix: "isolate count to the actor", verified: verified)
+      fix: "isolate count to the actor", verified: verified, kind: kind, rule: rule)
+  }
+
+  static func violation(_ severity: Severity, rule: String? = "D7") -> ReviewFinding {
+    finding(
+      severity, category: "logic-in-live-client", file: "Sources/FactClientLive/Live.swift",
+      scenario: "the next rule change to fact length edits an IO module no Core test covers",
+      title: "business rule in a Live client", kind: .standardsViolation, rule: rule)
   }
 
   /// Every focus reviewed with no findings, except the overrides given.
@@ -225,6 +233,108 @@ struct ReviewSynthesisTests {
     #expect(review.focus == .testQuality)
     #expect(review.findings.first?.failureScenario?.hasPrefix("increment breaks") == true)
     #expect(try FocusReviewJSON.decode(FocusReviewJSON.encode(review)) == review)
+  }
+
+  @Test(
+    "a verified architecture standards violation at blocker is refactor-needed — catches a structural rule break being waved through because no user-visible defect was reproduced"
+  )
+  func architectureViolationBlockerIsRefactor() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.architecture, [Self.violation(.blocker)])))
+    #expect(report.verdict == .refactorNeeded)
+    #expect(report.findings.first?.finding.kind == .standardsViolation)
+  }
+
+  @Test(
+    "a verified architecture standards violation at major is fix-then-merge — catches a MUST-rule break reaching merge"
+  )
+  func architectureViolationMajorIsFix() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.architecture, [Self.violation(.major)])))
+    #expect(report.verdict == .fixThenMerge)
+  }
+
+  @Test(
+    "a standards violation blocker outside architecture is fix-then-merge — catches a non-structural rule break demanding a redesign",
+    arguments: [ReviewFocus.concurrency, .testQuality, .apiErrors, .swiftui])
+  func otherViolationBlockerIsFix(focus: ReviewFocus) throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(focus, [Self.violation(.blocker)])))
+    #expect(report.verdict == .fixThenMerge)
+  }
+
+  @Test(
+    "a standards violation citing no rule is dropped — catches a taste opinion posing as a standards break",
+    arguments: [nil, "", "  "])
+  func violationWithoutRuleDropped(rule: String?) throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.architecture, [Self.violation(.blocker, rule: rule)])))
+    #expect(report.verdict == .merge)
+    #expect(report.dropped.map(\.reason) == [.noRuleCitation])
+  }
+
+  @Test(
+    "a defect needs no rule citation — catches the rule requirement dropping reproduced defects")
+  func defectWithoutRuleKept() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.concurrency, [Self.finding(.major, kind: .defect)])))
+    #expect(report.verdict == .fixThenMerge)
+  }
+
+  @Test(
+    "a finding with no kind decodes as a defect — catches focus files written before the kind field failing synthesis"
+  )
+  func missingKindIsDefect() throws {
+    let json = Data(
+      #"""
+      {"schemaVersion":1,"focus":"architecture","status":"reviewed","findings":[
+       {"severity":"blocker","category":"layering","file":"Sources/A.swift","line":3,
+        "title":"t","failure_scenario":"s","evidence":"e","fix":"f","verified":true}]}
+      """#.utf8)
+    let review = try FocusReviewJSON.decode(json)
+    #expect(review.findings.first?.kind == nil)
+    #expect(review.findings.first?.effectiveKind == .defect)
+    #expect(
+      try ReviewSynthesis.synthesize(Self.inputs([.architecture: review])).verdict
+        == .refactorNeeded)
+  }
+
+  @Test(
+    "kind, rule and verification_note round-trip and reach review.json — catches the verifier's reasoning or the cited rule being lost before the report"
+  )
+  func kindRuleAndNoteRoundTrip() throws {
+    let json = Data(
+      #"""
+      {"schemaVersion":1,"focus":"architecture","status":"reviewed","findings":[
+       {"severity":"blocker","category":"logic-in-live-client","file":"Sources/L.swift","line":7,
+        "title":"t","failure_scenario":"s","evidence":"e","fix":"f","verified":true,
+        "kind":"standards-violation","rule":"D7","verification_note":"traced L.swift:7; no exception applies"}]}
+      """#.utf8)
+    let review = try FocusReviewJSON.decode(json)
+    let finding = try #require(review.findings.first)
+    #expect(finding.kind == .standardsViolation)
+    #expect(finding.rule == "D7")
+    #expect(finding.verificationNote == "traced L.swift:7; no exception applies")
+    #expect(try FocusReviewJSON.decode(FocusReviewJSON.encode(review)) == review)
+
+    let report = try ReviewSynthesis.synthesize(Self.inputs([.architecture: review]))
+    let encoded = try JSONEncoder().encode(report)
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let merged = try #require((object["findings"] as? [[String: Any]])?.first)
+    let written = try #require(merged["finding"] as? [String: Any])
+    #expect(written["verification_note"] as? String == "traced L.swift:7; no exception applies")
+    #expect(written["kind"] as? String == "standards-violation")
+    #expect(written["rule"] as? String == "D7")
+  }
+
+  @Test(
+    "the summary names the rule a standards violation breaks — catches a verdict line the author can't trace to a standard"
+  )
+  func summaryNamesRule() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.architecture, [Self.violation(.blocker)])))
+    let summary = ReviewSummary.render(report, reportPath: "review.json")
+    #expect(summary.contains("[blocker] architecture/logic-in-live-client (D7)"))
   }
 
   @Test(

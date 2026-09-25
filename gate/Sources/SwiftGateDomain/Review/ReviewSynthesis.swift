@@ -29,8 +29,16 @@ public enum ReviewVerdict: String, Sendable, Codable {
   case refactorNeeded = "refactor-needed"
 }
 
-/// One verifier-checked finding in the shared review contract (spec §9.1).
+/// One verifier-checked finding in the shared review contract (spec §9.1, refined by
+/// `docs/decisions/0001-review-severity-for-standards-violations.md`).
 public struct ReviewFinding: Sendable, Equatable, Codable {
+  /// How the finding was verified. A defect is verified by reproducing its failure scenario; a
+  /// standards violation by its cited rule, the quoted code, and why the rule applies.
+  public enum Kind: String, Sendable, Codable {
+    case defect
+    case standardsViolation = "standards-violation"
+  }
+
   public let severity: Severity
   /// Short kebab-case defect class (`data-race`, `layering`); with `file` and `line` it is the
   /// dedupe key, so reviewers of different focuses reporting one defect merge.
@@ -38,16 +46,24 @@ public struct ReviewFinding: Sendable, Equatable, Codable {
   public let file: String
   public let line: Int?
   public let title: String
-  /// Concrete input or state → wrong outcome. A finding without one is dropped.
+  /// Concrete input or state → wrong outcome; for a standards violation, the maintenance or
+  /// correctness risk the rule prevents. A finding without one is dropped.
   public let failureScenario: String?
   public let evidence: String
   public let fix: String
   /// Set by the verifier; only `true` survives synthesis.
   public let verified: Bool?
+  /// Absent in focus files written before the field existed; read through ``effectiveKind``.
+  public let kind: Kind?
+  /// The standards or playbook rule id a standards violation breaks (`D7`, `P5`).
+  public let rule: String?
+  /// What the verifier traced; kept so a reader of `review.json` can audit the confirmation.
+  public let verificationNote: String?
 
   public init(
     severity: Severity, category: String, file: String, line: Int?, title: String,
-    failureScenario: String?, evidence: String, fix: String, verified: Bool?
+    failureScenario: String?, evidence: String, fix: String, verified: Bool?,
+    kind: Kind? = nil, rule: String? = nil, verificationNote: String? = nil
   ) {
     self.severity = severity
     self.category = category
@@ -58,15 +74,25 @@ public struct ReviewFinding: Sendable, Equatable, Codable {
     self.evidence = evidence
     self.fix = fix
     self.verified = verified
+    self.kind = kind
+    self.rule = rule
+    self.verificationNote = verificationNote
   }
 
   private enum CodingKeys: String, CodingKey {
-    case severity, category, file, line, title, evidence, fix, verified
+    case severity, category, file, line, title, evidence, fix, verified, kind, rule
     case failureScenario = "failure_scenario"
+    case verificationNote = "verification_note"
   }
+
+  public var effectiveKind: Kind { kind ?? .defect }
 
   var hasFailureScenario: Bool {
     !(failureScenario ?? "").allSatisfy(\.isWhitespace)
+  }
+
+  var citesRule: Bool {
+    !(rule ?? "").allSatisfy(\.isWhitespace)
   }
 }
 
@@ -143,6 +169,8 @@ public struct ReviewReport: Sendable, Equatable, Codable {
     public enum Reason: String, Sendable, Codable {
       case noFailureScenario = "no-failure-scenario"
       case unverified
+      /// A standards violation that names no rule can't be checked against the standards.
+      case noRuleCitation = "no-rule-citation"
     }
     public let focus: ReviewFocus
     public let finding: ReviewFinding
@@ -202,6 +230,10 @@ public enum ReviewSynthesis {
       for finding in review.findings {
         guard finding.hasFailureScenario else {
           dropped.append(.init(focus: focus, finding: finding, reason: .noFailureScenario))
+          continue
+        }
+        guard finding.effectiveKind == .defect || finding.citesRule else {
+          dropped.append(.init(focus: focus, finding: finding, reason: .noRuleCitation))
           continue
         }
         guard finding.verified == true else {
@@ -297,8 +329,9 @@ public enum ReviewSummary {
       let finding = merged.finding
       let location = finding.line.map { "\(finding.file):\($0)" } ?? finding.file
       let focuses = merged.focuses.map(\.rawValue).joined(separator: ",")
+      let rule = finding.effectiveKind == .standardsViolation ? " (\(finding.rule ?? ""))" : ""
       lines.append(
-        "\(index + 1). [\(finding.severity.rawValue)] \(focuses)/\(finding.category) \(location) — \(finding.title)"
+        "\(index + 1). [\(finding.severity.rawValue)] \(focuses)/\(finding.category)\(rule) \(location) — \(finding.title)"
       )
       lines.append("   scenario: \(truncated(finding.failureScenario ?? ""))")
     }
