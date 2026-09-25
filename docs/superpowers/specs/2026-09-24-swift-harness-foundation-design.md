@@ -60,10 +60,30 @@ docs/
   standards.md            # rule → violation tell → incident (or source until one exists)
   testing-playbook.md     # tiers, determinism, regression litmus
 gate/                     # Swift package: `swiftgate` executable + tests + Fixtures/
-hooks/                    # hooks.json + thin shims → `swiftgate hook <event>`
-skills/                   # swift-bootstrap, swift-architecture, swift-tdd, swift-test-gate
-templates/                # files /swift-bootstrap stamps into an app repo
+bin/swiftgate             # shim: builds gate/ on source-hash change, then execs the binary
+hooks/hooks.json          # every hook calls ${CLAUDE_PLUGIN_ROOT}/bin/swiftgate hook <event>
+skills/                   # bootstrap, architecture, tdd, test-gate, review, validate, comment-audit
+agents/                   # reviewer subagents (one focus each) + finding verifier
+workflows/                # multi-agent orchestration scripts: review (Foundation), validate, milestone
+templates/                # files /swift-harness:bootstrap stamps into an app repo
 ```
+
+Component notes (checked against the Claude Code plugin docs, 2026-09-24):
+
+- **Namespacing.** Plugin skills and workflows are invoked as `/swift-harness:<name>`, so names drop
+  the `swift-` prefix (`/swift-harness:review`, `/swift-harness:validate`). Elsewhere this spec's
+  `/swift-review`-style names refer to these.
+- **Workflows vs. skills.** A workflow is a deterministic multi-agent script (fan-out, verify,
+  synthesize). A skill is the entry point that sequences gate calls and, where needed, invokes the
+  workflow. Foundation ships the `review` workflow; `validate` and `milestone` workflows arrive in
+  sub-projects 2–4.
+- **Loops are not a component.** Claude Code has no loop component. A loop is a skill or workflow
+  designed to be re-run (e.g. under `/loop`), with its state in `.harness/ledger.md`, not in the
+  conversation.
+- **Resolving `swiftgate`.** Hooks use `${CLAUDE_PLUGIN_ROOT}/bin/swiftgate` explicitly rather than
+  depending on the plugin `bin/` being on PATH (the docs don't confirm that). Git hooks run outside
+  Claude Code, so `bootstrap` installs a stable symlink (`~/.local/bin/swiftgate` → the plugin shim)
+  and `lefthook.yml` calls that path; `doctor` reports `BLOCKED` if it's missing or stale.
 
 ### 4.2 Per-app layer stamped by `/swift-bootstrap`
 
