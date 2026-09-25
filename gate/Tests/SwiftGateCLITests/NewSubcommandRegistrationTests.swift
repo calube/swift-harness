@@ -14,8 +14,11 @@ struct NewSubcommandRegistrationTests {
   /// silently resolves to the wrong command (e.g. a help command, or a same-named sibling) fails
   /// the assertion instead of merely not throwing.
   static let invocations: [(name: String, arguments: [String], leafCommandName: String)] = [
-    ("evidence check", ["evidence", "check"], "check"),
-    ("evidence check --at", ["evidence", "check", "--at", "HEAD~1"], "check"),
+    ("evidence check", ["evidence", "check", "--design", "docs/designs/example.md"], "check"),
+    (
+      "evidence check --at",
+      ["evidence", "check", "--design", "docs/designs/example.md", "--at", "HEAD~1"], "check"
+    ),
     (
       "evidence capture",
       ["evidence", "capture", "--design", "docs/designs/example.md", "--", "swift", "build"],
@@ -62,6 +65,7 @@ struct NewSubcommandRegistrationTests {
     "context-pack",
     "design-lint",
     "docs-lint",
+    "evidence check", "evidence check --at",
   ]
 
   @Test(
