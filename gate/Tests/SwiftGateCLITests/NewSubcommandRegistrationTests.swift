@@ -58,9 +58,15 @@ struct NewSubcommandRegistrationTests {
       "\(invocation.name) resolved to \(type(of: parsed).configuration.commandName ?? "<nil>")")
   }
 
+  /// `index set` graduated from a stub to a real command (spec §6.2); running it for real here
+  /// would resolve this checkout's actual git common dir and write into the real, shared
+  /// `swift-harness/plans/index.json` as a test side effect. Its own behavior — including that it
+  /// never exits 0 on a bad input — is covered by `IndexSetCommandTests`.
+  static let stubInvocations = invocations.filter { $0.leafCommandName != "set" }
+
   @Test(
     "every stub subcommand exits 2, never 0 — catches a stub passing a gate before it does real work",
-    arguments: invocations)
+    arguments: stubInvocations)
   func stubsExitBlocked(
     _ invocation: (name: String, arguments: [String], leafCommandName: String)
   ) async throws {
