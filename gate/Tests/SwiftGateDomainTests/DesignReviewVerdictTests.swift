@@ -355,7 +355,38 @@ struct DesignReviewVerdictTests {
   // MARK: - Reused Foundation finding rules
 
   @Test(
-    "unverified, scenario-less and rule-less findings are dropped as review-synth drops them — catches the design verdict forking the finding contract"
+    "code and design review drop the same finding for the same reason — catches the two verify steps drifting apart",
+    arguments: [
+      (scenario: String?.none, verified: Bool?.some(true), kind: ReviewFinding.Kind?.none),
+      (scenario: "   ", verified: true, kind: nil),
+      (scenario: "a load spike evicts the cache", verified: true, kind: .standardsViolation),
+      (scenario: "a load spike evicts the cache", verified: false, kind: nil),
+      (scenario: "a load spike evicts the cache", verified: nil, kind: nil),
+      (scenario: "a load spike evicts the cache", verified: true, kind: nil),
+    ])
+  func codeAndDesignDropAlike(
+    scenario: String?, verified: Bool?, kind: ReviewFinding.Kind?
+  ) throws {
+    let design = Self.finding(.major, verified: verified, scenario: scenario, kind: kind)
+    let code = ReviewFinding(
+      severity: .major, category: design.finding.category, file: "Sources/Core/A.swift", line: 4,
+      title: design.finding.title, failureScenario: scenario, evidence: design.finding.evidence,
+      fix: design.finding.fix, verified: verified, kind: kind, rule: nil)
+
+    let codeReport = try ReviewSynthesis.synthesize(
+      ReviewFocus.allCases.map {
+        FocusReview(
+          focus: $0, status: .reviewed, reason: nil, findings: $0 == .architecture ? [code] : [])
+      })
+    let designReport = try Self.synthesize([Self.reviewed(.challenger, [design])], tier: .quick)
+
+    #expect(codeReport.dropped.map(\.reason) == designReport.dropped.map(\.reason))
+    #expect(codeReport.findings.count == designReport.findings.count)
+    #expect(codeReport.dropped.count + codeReport.findings.count == 1)
+  }
+
+  @Test(
+    "unverified, scenario-less and rule-less findings are dropped with their reasons — catches a dropped design blocker still gating"
   )
   func dropsLikeReviewSynth() throws {
     let report = try Self.synthesize(

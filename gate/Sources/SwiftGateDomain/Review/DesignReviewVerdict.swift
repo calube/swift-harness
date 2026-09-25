@@ -254,7 +254,7 @@ public enum DesignReviewSynthesis {
         break
       }
       for designFinding in review.findings {
-        if let reason = dropReason(designFinding.finding) {
+        if let reason = ReviewSynthesis.dropReason(designFinding.finding) {
           dropped.append(.init(reviewer: reviewer, finding: designFinding, reason: reason))
           continue
         }
@@ -297,14 +297,6 @@ public enum DesignReviewSynthesis {
     }
     // A missing reviewer or research lane may hide a blocker; the fix is to re-run it.
     return driving.isEmpty && !anyGap ? .ready : .revise
-  }
-
-  /// The `review-synth` drop rules, in its order.
-  static func dropReason(_ finding: ReviewFinding) -> ReviewReport.Dropped.Reason? {
-    if !finding.hasFailureScenario { return .noFailureScenario }
-    if finding.effectiveKind == .standardsViolation, !finding.citesRule { return .noRuleCitation }
-    if finding.verified != true { return .unverified }
-    return nil
   }
 
   private static func anchors(under section: MarkdownDocument.Section?) -> Set<String> {
