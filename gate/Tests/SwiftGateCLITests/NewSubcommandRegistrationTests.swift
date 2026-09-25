@@ -60,6 +60,7 @@ struct NewSubcommandRegistrationTests {
     "plan-schedule",
     "prose",
     "context-pack",
+    "design-lint",
   ]
 
   @Test(
