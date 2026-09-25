@@ -22,16 +22,52 @@ gate="$root/gate"
 config="${SWIFTGATE_BUILD_CONFIG:-release}"
 cache="${SWIFTGATE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/swift-harness}"
 
-hash="$(
-  cd "$gate"
-  {
-    find Sources -type f -name '*.swift' -print0 | sort -z | xargs -0 shasum
-    shasum Package.swift
-    [ -f Package.resolved ] && shasum Package.resolved
-    echo "$config"
-  } | shasum | cut -c1-16
-)"
+# Hashing every source costs ~40ms, most of a PreToolUse hook's budget. A stamp remembers the
+# hash; while nothing under gate/ is newer than it (edits, and deletions via directory mtimes), the
+# hash still holds. The stamp is written before hashing, so an edit made during hashing is newer.
+stamp="$cache/stamps/$(printf '%s:%s' "$gate" "$config" | shasum | cut -c1-16)"
+if [ -f "$stamp" ] && [ -z "$(
+  cd "$gate" && find Sources Package.swift Package.resolved -newer "$stamp" -print 2>/dev/null | head -n 1
+)" ]; then
+  hash="$(cat "$stamp")"
+else
+  mkdir -p "$cache/stamps"
+  pending="$stamp.$$"
+  : >"$pending.before"
+  hash="$(
+    cd "$gate"
+    {
+      find Sources -type f -name '*.swift' -print0 | sort -z | xargs -0 shasum
+      shasum Package.swift
+      [ -f Package.resolved ] && shasum Package.resolved
+      echo "$config"
+    } | shasum | cut -c1-16
+  )"
+  printf '%s' "$hash" >"$pending"
+  touch -r "$pending.before" "$pending"
+  rm -f "$pending.before"
+fi
 binary="$cache/bin/$hash/swiftgate"
+
+if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
+  # Hooks run under Claude Code timeouts on every tool call, and a cold build takes minutes: build
+  # in the background and leave the hooks inactive until the binary lands. A lock older than 30
+  # minutes belongs to a build that died.
+  lock="$cache/building-$hash"
+  mkdir -p "$cache"
+  find "$cache" -maxdepth 1 -name "building-$hash" -mmin +30 -exec rmdir {} + 2>/dev/null || true
+  if mkdir "$lock" 2>/dev/null; then
+    (
+      "$self" --version >"$cache/build-$hash.log" 2>&1 || true
+      rmdir "$lock"
+    ) </dev/null >/dev/null 2>&1 &
+  fi
+  rm -f "${pending:-}"
+  if [ "${2:-}" = "session-start" ]; then
+    echo "swift-harness: swiftgate is building in the background (log: $cache/build-$hash.log); its hooks are inactive until the build finishes."
+  fi
+  exit 0
+fi
 
 if [ ! -x "$binary" ]; then
   echo "swift-harness: building swiftgate ($config, $hash)…" >&2
@@ -42,6 +78,10 @@ if [ ! -x "$binary" ]; then
   tmp="$binary.tmp.$$"
   cp "$built" "$tmp"
   mv -f "$tmp" "$binary"
+fi
+
+if [ -n "${pending:-}" ] && [ -f "$pending" ]; then
+  if [ -x "$binary" ]; then mv -f "$pending" "$stamp"; else rm -f "$pending"; fi
 fi
 
 # `self-test` finds the fixtures and sample app of the checkout this shim belongs to.

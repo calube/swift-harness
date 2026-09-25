@@ -21,6 +21,8 @@ public final class FakeGit: Git {
   private let failure: GitError?
   private let prefix: String
   private let addedSince: [AddedLines]
+  private let revisions: [String: String]
+  private let hashes: [String: String]
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
 
@@ -29,10 +31,15 @@ public final class FakeGit: Git {
   ///   - mergeBase: what ``mergeBase(_:_:)`` returns for any pair of refs.
   ///   - prefix: what ``workingDirectoryPrefix()`` returns.
   ///   - addedSince: what ``addedLines(since:)`` returns for any ref.
+  ///   - revisions: what ``revision(_:)`` answers per ref; others are `nil`.
+  ///   - contentHashes: what ``contentHashes(of:)`` answers per path; others are omitted.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
-    prefix: String = "", addedSince: [AddedLines] = [], failure: GitError? = nil
+    prefix: String = "", addedSince: [AddedLines] = [], revisions: [String: String] = [:],
+    contentHashes: [String: String] = [:], failure: GitError? = nil
   ) {
+    self.revisions = revisions
+    self.hashes = contentHashes
     self.prefix = prefix
     self.addedSince = addedSince
     self.staged = staged
@@ -83,7 +90,12 @@ public final class FakeGit: Git {
 
   public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {
     if let failure { throw failure }
-    return [:]
+    return hashes.filter { paths.contains($0.key) }
+  }
+
+  public func revision(_ ref: String) async throws(GitError) -> String? {
+    if let failure { throw failure }
+    return revisions[ref]
   }
 
   public func workingDirectoryPrefix() async throws(GitError) -> String {

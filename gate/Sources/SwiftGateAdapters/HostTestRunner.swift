@@ -7,15 +7,27 @@ public struct HostTestSelection: Sendable, Equatable {
   public let packagePath: String
   public let targets: [TestTargetReference]
 
+  private let explicitFilter: String?
+
   public init(packagePath: String, targets: [TestTargetReference]) {
     self.packagePath = packagePath
     self.targets = targets
+    explicitFilter = nil
+  }
+
+  /// Runs only the tests `filter` selects within `targets` (for example one changed test).
+  public init(packagePath: String, targets: [TestTargetReference], filter: String) {
+    self.packagePath = packagePath
+    self.targets = targets
+    explicitFilter = filter
   }
 
   /// One `--filter` matching every test in the selected targets and nothing else. Test ids start
   /// with the target name for both frameworks (`Target.Class/test`, `Target.Suite/test()`).
   public var filter: String {
-    "^(" + targets.map { NSRegularExpression.escapedPattern(for: $0.name) }.joined(separator: "|")
+    explicitFilter
+      ?? "^("
+      + targets.map { NSRegularExpression.escapedPattern(for: $0.name) }.joined(separator: "|")
       + ")\\."
   }
 }

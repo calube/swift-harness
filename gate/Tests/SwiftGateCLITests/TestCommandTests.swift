@@ -37,6 +37,13 @@ struct ProbeRepository {
 
   func remove() { try? FileManager.default.removeItem(at: root) }
 
+  func write(_ path: String, _ content: String) throws {
+    let url = root.appending(path: path)
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(content.utf8).write(to: url)
+  }
+
   static func manifest() throws -> PackageManifest {
     try PackageManifest(
       describeJSON: Fixture.data("SwiftPM/describe-XUnitProbe.json"),

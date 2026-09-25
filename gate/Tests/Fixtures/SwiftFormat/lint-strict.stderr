@@ -1,0 +1,6 @@
+Unformatted.swift:3:1: error: [Indentation] unindent by 2 spaces
+Unformatted.swift:3:11: error: [Spacing] add 1 space
+Unformatted.swift:4:10: error: [Spacing] remove 1 space
+Unformatted.swift:4:21: error: [Spacing] add 1 space
+Unformatted.swift:4:29: error: [Spacing] add 1 space
+/REPO/gate/Fixtures/format/Broken.swift:1:15: error: expected value and ')' to end tuple

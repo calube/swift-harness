@@ -63,11 +63,28 @@ public struct LiveGit: Git {
   }
 
   public func stagedContents(of paths: [String]) async throws(GitError) -> [String: String] {
+    guard !paths.isEmpty else { return [:] }
+    // `cat-file --batch` reads one object name per line, so a path with a newline cannot be named.
+    if let bad = paths.first(where: { $0.contains("\n") }) {
+      throw .unparseableOutput(command: "cat-file", detail: "path contains a newline: \(bad)")
+    }
+    // `:<path>` names the index entry, root-relative.
+    let request = paths.map { ":\($0)\n" }.joined()
+    let arguments = ["cat-file", "--batch"]
+    let output = try await execute(arguments, standardInput: Data(request.utf8))
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    if output.stdout.truncated {
+      throw .unparseableOutput(command: "cat-file", detail: "output exceeded the capture cap")
+    }
+    let blobs = try CatFileBatch.blobs(in: output.stdout.bytes, requested: paths.count)
     var contents: [String: String] = [:]
-    for path in paths {
-      // `:<path>` names the index entry, root-relative; the leading colon also keeps a path that
-      // starts with `-` from parsing as an option.
-      contents[path] = try await run(["cat-file", "blob", ":\(path)"])
+    for (path, blob) in zip(paths, blobs) {
+      guard let blob else {
+        throw .commandFailed(
+          arguments: ["cat-file", "--batch", ":\(path)"], status: output.status,
+          stderr: "\(path) is not in the index")
+      }
+      contents[path] = String(decoding: blob, as: UTF8.self)
     }
     return contents
   }
@@ -95,6 +112,16 @@ public struct LiveGit: Git {
 
   public func workingDirectoryPrefix() async throws(GitError) -> String {
     try await run(["rev-parse", "--show-prefix"]).trimmingCharacters(in: .newlines)
+  }
+
+  public func revision(_ ref: String) async throws(GitError) -> String? {
+    try Self.validate(ref: ref)
+    let arguments = ["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"]
+    let output = try await execute(arguments)
+    // `--quiet` makes an unresolvable name exit 1 with no diagnostics.
+    if output.status == .exited(1), output.stderr.bytes.isEmpty { return nil }
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {
@@ -126,13 +153,15 @@ public struct LiveGit: Git {
     "-c", "diff.mnemonicPrefix=false",
   ]
 
-  private func execute(_ arguments: [String]) async throws(GitError) -> ProcessOutput {
+  private func execute(_ arguments: [String], standardInput: Data? = nil) async throws(GitError)
+    -> ProcessOutput
+  {
     do {
       return try await runner.run(
         ProcessInvocation(
           executable: executable, arguments: Self.configOverrides + arguments,
           environmentOverlay: Self.environmentOverlay, workingDirectory: repositoryRoot,
-          timeout: timeout))
+          standardInput: standardInput, timeout: timeout))
     } catch {
       throw .process(error)
     }
@@ -157,6 +186,40 @@ public struct LiveGit: Git {
 
   private static func nulSeparated(_ text: String) -> [String] {
     text.split(separator: "\0").map(String.init)
+  }
+}
+
+/// Parses `git cat-file --batch` output: per request, `<oid> <type> <size>\n<bytes>\n`, or
+/// `<name> missing\n` / `<name> ambiguous\n` when the name resolves to no single object.
+enum CatFileBatch {
+  /// One entry per request, in order; `nil` where git found no object.
+  static func blobs(in output: Data, requested: Int) throws(GitError) -> [Data?] {
+    let bytes = [UInt8](output)
+    var index = 0
+    var blobs: [Data?] = []
+    while blobs.count < requested {
+      guard let newline = bytes[index...].firstIndex(of: UInt8(ascii: "\n")) else {
+        throw .unparseableOutput(command: "cat-file", detail: "truncated header")
+      }
+      let header = String(decoding: bytes[index..<newline], as: UTF8.self)
+      index = newline + 1
+      if header.hasSuffix(" missing") || header.hasSuffix(" ambiguous") {
+        blobs.append(nil)
+        continue
+      }
+      let fields = header.split(separator: " ")
+      guard fields.count == 3, let size = Int(fields[2]), size >= 0,
+        index + size + 1 <= bytes.count
+      else {
+        throw .unparseableOutput(command: "cat-file", detail: "bad header: \(header)")
+      }
+      guard fields[1] == "blob" else {
+        throw .unparseableOutput(command: "cat-file", detail: "not a blob: \(header)")
+      }
+      blobs.append(Data(bytes[index..<(index + size)]))
+      index += size + 1
+    }
+    return blobs
   }
 }
 

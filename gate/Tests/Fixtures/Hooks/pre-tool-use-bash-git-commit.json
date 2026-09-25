@@ -1,0 +1,19 @@
+{
+  "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
+  "prompt_id": "550e8400-e29b-41d4-a716-446655440000",
+  "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
+  "cwd": "/REPO",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git commit -m \"feat: add counter\"",
+    "description": "Commit the counter feature",
+    "timeout": 120000,
+    "run_in_background": false
+  },
+  "tool_use_id": "toolu_01ABC123",
+  "effort": {
+    "level": "high"
+  }
+}

@@ -32,9 +32,9 @@ public enum CheckTier: String, Sendable, CaseIterable {
     case .fast, .push: return []
     case .ready:
       return [
-        PendingStep(name: "stress", requires: "swiftgate stress"),
-        PendingStep(name: "prove", requires: "swiftgate prove"),
-        PendingStep(name: "reach", requires: "per-test reach"),
+        PendingStep(
+          name: "simulator prove and stress",
+          requires: "prove and stress of T2/T3 tests (host tests are proven, stressed and reached)"),
         PendingStep(name: "mutate", requires: "swiftgate mutate"),
       ]
     }

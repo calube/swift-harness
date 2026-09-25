@@ -89,7 +89,7 @@ public enum ReportRenderer {
 
 extension Severity {
   /// Display order: most severe first.
-  fileprivate var rank: Int {
+  public var rank: Int {
     switch self {
     case .blocker: 0
     case .major: 1

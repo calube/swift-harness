@@ -21,7 +21,7 @@ struct CheckTierTests {
     #expect(CheckTier.fast.pendingSteps.isEmpty)
     #expect(CheckTier.push.pendingSteps.isEmpty)
     #expect(
-      CheckTier.ready.pendingSteps.map(\.name) == ["stress", "prove", "reach", "mutate"])
+      CheckTier.ready.pendingSteps.map(\.name) == ["simulator prove and stress", "mutate"])
     #expect(!CheckTier.fast.runsT2 && CheckTier.push.runsT2 && CheckTier.ready.runsT2)
     #expect(!CheckTier.push.runsT3 && CheckTier.ready.runsT3)
   }

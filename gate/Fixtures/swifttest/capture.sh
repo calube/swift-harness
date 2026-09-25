@@ -31,6 +31,9 @@ capture() {
 
 capture pass "$probe" "$probe_path" 'ProbeTests\.Pass' --enable-code-coverage
 sed -e "s#$root#/REPO#g" "$(cd "$probe" && swift test --show-codecov-path)" >"$out/pass-codecov.json"
+# Coverage of a run that executes no test: every Probe line is instrumented but none ran.
+(cd "$probe" && swift test --parallel --enable-code-coverage --filter '^EmptyTests\.' >/dev/null 2>&1)
+sed -e "s#$root#/REPO#g" "$(cd "$probe" && swift test --show-codecov-path)" >"$out/zero-codecov.json"
 capture fail "$probe" "$probe_path" 'ProbeTests\.Fail'
 capture skip "$probe" "$probe_path" 'ProbeTests\.Skip'
 capture crash "$probe" "$probe_path" 'ProbeTests\.Crash'
@@ -42,6 +45,21 @@ mkdir -p "$broken"
 rsync -a --exclude .build "$probe/" "$broken/"
 sed -i '' 's/value \* 2/value * "2"/' "$broken/Sources/Probe/Probe.swift"
 capture build-error "$(cd "$broken" && pwd -P)" "$probe_path" 'ProbeTests\.Pass'
+
+# Proof scenarios: the passing tests run against the code under test with its change reverted.
+# `reverted`: the source still compiles but computes the old (wrong) result.
+reverted="$work/reverted"
+mkdir -p "$reverted"
+rsync -a --exclude .build "$probe/" "$reverted/"
+sed -i '' 's/value \* 2/value * 3/' "$reverted/Sources/Probe/Probe.swift"
+capture reverted "$(cd "$reverted" && pwd -P)" "$probe_path" 'ProbeTests\.Pass'
+
+# `compile-only`: the reverted source lacks the function the tests call.
+missing="$work/missing"
+mkdir -p "$missing"
+rsync -a --exclude .build "$probe/" "$missing/"
+sed -i '' 's/public func double/func removedDouble/' "$missing/Sources/Probe/Probe.swift"
+capture compile-only "$(cd "$missing" && pwd -P)" "$probe_path" 'ProbeTests\.Pass'
 
 # An environment failure: build output moved to another path, so its module cache is stale.
 moved="$work/moved"

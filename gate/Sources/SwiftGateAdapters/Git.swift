@@ -29,6 +29,10 @@ public protocol Git: Sendable {
   /// larger repository strips this prefix to get its own paths.
   func workingDirectoryPrefix() async throws(GitError) -> String
 
+  /// The commit `ref` names, or `nil` when it names none (for example `HEAD` before the first
+  /// commit).
+  func revision(_ ref: String) async throws(GitError) -> String?
+
   /// The best common ancestor of two commits, or `nil` if their histories are unrelated.
   func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String?
 }

@@ -119,11 +119,22 @@ private struct SpawnRequest: Sendable {
       return .failure(.launchFailed(executable: executable, reason: error.reason))
     }
 
+    let stdin: Int32?
+    do {
+      stdin = try invocation.standardInput.map(Self.unlinkedFile(holding:))
+    } catch {
+      stdoutPipe.closeAll()
+      stderrPipe.closeAll()
+      return .failure(.launchFailed(executable: executable, reason: error.reason))
+    }
+
     let clock = ContinuousClock()
     let start = clock.now
     let pid: pid_t
-    switch spawn(stdout: stdoutPipe.write, stderr: stderrPipe.write) {
-    case .success(let spawned): pid = spawned
+    let spawned = spawn(stdin: stdin, stdout: stdoutPipe.write, stderr: stderrPipe.write)
+    if let stdin { close(stdin) }
+    switch spawned {
+    case .success(let child): pid = child
     case .failure(let error):
       stdoutPipe.closeAll()
       stderrPipe.closeAll()
@@ -198,11 +209,41 @@ private struct SpawnRequest: Sendable {
     }
   }
 
-  private func spawn(stdout: Int32, stderr: Int32) -> Result<pid_t, SystemError> {
+  /// Standard input is a file rather than a pipe: the child reads it at its own pace, so a child
+  /// that writes a lot before reading cannot deadlock against a parent blocked on a full pipe.
+  private static func unlinkedFile(holding data: Data) throws(SystemError) -> Int32 {
+    var template = Array((NSTemporaryDirectory() + "swiftgate-stdin.XXXXXX").utf8CString)
+    let fd = template.withUnsafeMutableBufferPointer { mkstemp($0.baseAddress) }
+    guard fd >= 0 else { throw SystemError(code: errno) }
+    // mkstemp filled in the X's; the trailing NUL is not part of the path.
+    unlink(String(decoding: template.dropLast().map { UInt8(bitPattern: $0) }, as: UTF8.self))
+    _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+    var offset = 0
+    while offset < data.count {
+      let written = data.withUnsafeBytes { buffer in
+        Darwin.write(fd, buffer.baseAddress?.advanced(by: offset), data.count - offset)
+      }
+      if written < 0 {
+        if errno == EINTR { continue }
+        let code = errno
+        close(fd)
+        throw SystemError(code: code)
+      }
+      offset += written
+    }
+    lseek(fd, 0, SEEK_SET)
+    return fd
+  }
+
+  private func spawn(stdin: Int32?, stdout: Int32, stderr: Int32) -> Result<pid_t, SystemError> {
     var fileActions: posix_spawn_file_actions_t?
     posix_spawn_file_actions_init(&fileActions)
     defer { posix_spawn_file_actions_destroy(&fileActions) }
-    posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
+    if let stdin {
+      posix_spawn_file_actions_adddup2(&fileActions, stdin, 0)
+    } else {
+      posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
+    }
     posix_spawn_file_actions_adddup2(&fileActions, stdout, 1)
     posix_spawn_file_actions_adddup2(&fileActions, stderr, 2)
     if let directory = invocation.workingDirectory {

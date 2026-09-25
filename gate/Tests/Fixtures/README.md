@@ -45,11 +45,14 @@ file is one where `swift test` wrote none.
 | Scenario | Filter | What it shows |
 |---|---|---|
 | `pass` (with `--enable-code-coverage`) | `ProbeTests\.Pass` | one passing XCTest and one Swift Testing case; `pass-codecov.json` is the llvm-cov export from `--show-codecov-path` |
+| `zero-codecov.json` only (with `--enable-code-coverage`) | `^EmptyTests\.` | the llvm-cov export of a run that executes no test: `Probe.swift` instrumented, nothing covered |
 | `fail` | `ProbeTests\.Fail` | an `XCTAssertEqual` and an `#expect` failure |
 | `skip` | `ProbeTests\.Skip` | `XCTSkip` with and without a message; `.disabled` with and without a reason |
 | `crash` | `ProbeTests\.Crash` | an index-out-of-range trap in each framework |
 | `zero` | `^EmptyTests\.` | a target with no tests |
 | `build-error` | `ProbeTests\.Pass` | a copy of the package (no build output) with a type error in `Probe.swift` |
+| `reverted` | `ProbeTests\.Pass` | a copy with `double` computing `value * 3`: the passing tests fail on their assertions, as `prove` expects with a source change reverted |
+| `compile-only` | `ProbeTests\.Pass` | a copy without the public `double` the tests call: no report, compile errors located in the test files |
 | `stale-module-cache` | `ProbeTests\.Pass` | a copy including `.build/`, so the module cache path is stale (recorded as `/MOVED/XUnitProbe`) |
 
 Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
@@ -140,3 +143,59 @@ of an all-zero UDID. The scratch path is replaced with `/SCRATCH`.
 - `simctl clone` prints only the new UDID; `launch` prints `<bundle id>: <pid>`.
 - An unknown device exits 148 with `Invalid device: <udid>`.
 - `bootstatus -b` boots the device and exits once it has finished booting.
+
+## SwiftFormat
+
+Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's
+own gate) are the inputs.
+
+| File | Capture |
+|---|---|
+| `SwiftFormat/lint-strict.stderr`, `SwiftFormat/lint-strict.status` | `(cd gate/Fixtures/format && swift format lint --strict Formatted.swift Unformatted.swift Broken.swift) 2>&1 >/dev/null \| sed "s#$ROOT#/REPO#g"`; the status file holds the exit status |
+
+Observed behavior the adapter relies on:
+
+- Diagnostics go to stderr as `<path>:<line>:<column>: error: [<Rule>] <message>` (`warning:`
+  without `--strict`), with the path as given on the command line. A file that does not parse is
+  reported with its absolute path and no `[Rule]`.
+- Exit status is 1 when any diagnostic is printed under `--strict`, else 0. A path that does not
+  exist is silently skipped with status 0, so the gate passes only existing files.
+
+## Hooks
+
+`Hooks/*.json` are Claude Code hook stdin payloads. They are built from the documented schema,
+not captured from a live session (capturing needs a paid nested `claude` run): each carries the
+fields the docs list for its event, with the docs' example values, paths rooted at `/REPO`, and a
+fixed `session_id`. Tests swap `/REPO` for a probe repository. Re-check them against the docs
+whenever Claude Code's hook contract changes.
+
+Sources, fetched 2026-09-24 as Markdown (`curl -sL <url>.md`):
+
+- Hooks reference, https://code.claude.com/docs/en/hooks — common input fields; SessionStart,
+  PreToolUse (Bash/Edit/Write `tool_input`), PostToolUse and Stop inputs; JSON output and decision
+  control; exit-code semantics; timeouts.
+- Plugins reference, https://code.claude.com/docs/en/plugins-reference, and plugin components,
+  https://code.claude.com/docs/en/plugins/components — `hooks/hooks.json` format and
+  `${CLAUDE_PLUGIN_ROOT}`.
+
+Contract points the hooks rely on:
+
+- Every payload has `session_id`, `transcript_path`, `cwd`, `hook_event_name`; tool events add
+  `tool_name`, `tool_input`, `tool_use_id`. File-tool `tool_input.file_path` is always absolute.
+- Inside a subagent every event also carries `agent_id` (and `agent_type`); the main thread never
+  does. That is how a worker is told apart from the orchestrator.
+- Stop carries `stop_hook_active`: `true` when Claude is continuing because a Stop hook blocked.
+  Claude Code ends the turn itself after 8 consecutive blocks; swiftgate releases after 3.
+- A hook decides by exiting 0 with JSON on stdout. PreToolUse denies with
+  `hookSpecificOutput.permissionDecision: "deny"` plus `permissionDecisionReason` (shown to
+  Claude). PostToolUse and Stop use top-level `decision: "block"` with `reason`.
+  `hookSpecificOutput.additionalContext` adds context (SessionStart, PreToolUse, PostToolUse);
+  `systemMessage` shows the user a message without continuing the turn.
+- Exit 2 also blocks, with stderr as the reason; any other non-zero exit is a non-blocking error,
+  so swiftgate uses exit 1 only for a malformed payload. A hook that times out renders no
+  decision, and on PreToolUse the call proceeds.
+- `additionalContext`, `systemMessage` and plain stdout are capped at 10,000 characters.
+- Plugin hooks live in `hooks/hooks.json` under a top-level `hooks` key, in the `settings.json`
+  shape. With `args` set, the hook runs in exec form: `command` and each `args` element have
+  `${CLAUDE_PLUGIN_ROOT}` substituted and no shell is involved. `timeout` is in seconds
+  (default 600 for command hooks).
