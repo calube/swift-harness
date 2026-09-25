@@ -40,7 +40,7 @@ struct NewSubcommandRegistrationTests {
     ("plan claim", ["plan", "claim", "example-plan", "--session", "session-123"], "claim"),
     ("plan release", ["plan", "release", "example-plan"], "release"),
     ("plan release --force", ["plan", "release", "example-plan", "--force"], "release"),
-    ("plan-schedule", ["plan-schedule"], "plan-schedule"),
+    ("plan-schedule", ["plan-schedule", "ledger.json"], "plan-schedule"),
     ("plan-lint", ["plan-lint"], "plan-lint"),
     ("context-pack", ["context-pack", "--role", "worker"], "context-pack"),
     ("index set", ["index", "set", "example-plan", "designing", "resume text"], "set"),
@@ -57,6 +57,7 @@ struct NewSubcommandRegistrationTests {
   static let implemented: Set<String> = [
     "plan claim", "plan release", "plan release --force", "index set", "design-diff",
     "design-diff --chain", "design-scope", "evidence capture",
+    "plan-schedule",
   ]
 
   @Test(
@@ -89,6 +90,22 @@ struct NewSubcommandRegistrationTests {
       Issue.record("\(invocation.name) exited 0 instead of reporting not-implemented")
     } catch let exitCode as ExitCode {
       #expect(exitCode.rawValue == 2, "\(invocation.name) exited \(exitCode.rawValue), not 2")
+    }
+  }
+
+  @Test(
+    "plan-schedule with no argument fails to parse, naming the missing ledger — catches a cwd default silently reading the wrong file"
+  )
+  func planScheduleRequiresLedgerArgument() async throws {
+    await #expect(throws: (any Error).self) {
+      _ = try await SwiftGate.asyncParseAsRoot(["plan-schedule"])
+    }
+    do {
+      _ = try await SwiftGate.asyncParseAsRoot(["plan-schedule"])
+      Issue.record("plan-schedule with no argument parsed instead of failing")
+    } catch {
+      #expect(!(error is ExitCode), "parse failure should not be a bare ExitCode")
+      #expect(String(describing: error).contains("ledger"), "\(error)")
     }
   }
 }
