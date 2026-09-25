@@ -52,9 +52,10 @@ struct ProbeRepository {
 
   /// Replays `scenario`'s recorded reports and console output for every `swift test`.
   static func swiftPM(
-    replaying scenario: String, coveragePaths: [String: String] = [:]
+    replaying scenario: String, coveragePaths: [String: String] = [:],
+    manifest served: PackageManifest? = nil
   ) throws -> FakeSwiftPM {
-    FakeSwiftPM(serving: [try manifest()], coveragePaths: coveragePaths) {
+    FakeSwiftPM(serving: [try served ?? manifest()], coveragePaths: coveragePaths) {
       request throws(SwiftPMError) in
       let swiftTesting = LiveSwiftPM.swiftTestingReportPath(for: request.xunitOutputPath)
       for (name, destination) in [
