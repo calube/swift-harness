@@ -1,0 +1,4 @@
++  case .itemsResponse(.success(let items)):
++    state.items = IdentifiedArray(uniqueElements: items)
++    state.isEmptyStateVisible = items.isEmpty
++    return .none

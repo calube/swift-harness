@@ -3,3 +3,4 @@
 **/.harness/hook-state/
 **/.harness/derived-data/
 .harness/orchestrator.lock
+**/.harness/judge-cache/

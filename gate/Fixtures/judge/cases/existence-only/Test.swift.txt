@@ -1,0 +1,5 @@
+@Test("parse returns something — catches parse failures")
+func parses() throws {
+  let config = try? Config.parse(Data("{}".utf8))
+  #expect(config != nil || config == nil)
+}

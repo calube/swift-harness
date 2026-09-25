@@ -1,0 +1,4 @@
++  case .loginResponse(.failure(let error)):
++    state.isLoading = false
++    state.alert = AlertState { TextState(error.userMessage) }
++    return .none

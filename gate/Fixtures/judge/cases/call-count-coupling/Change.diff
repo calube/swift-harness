@@ -1,0 +1,3 @@
++  public func refresh() async {
++    items = (try? await api.fetchItems()) ?? items
++  }

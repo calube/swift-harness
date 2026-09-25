@@ -1,0 +1,4 @@
+@Test("1999 cents renders $19.99 in en_US — catches prices shown as $1,999.00")
+func cents() {
+  #expect(PriceFormatter(locale: Locale(identifier: "en_US")).formatted(1999) == "$19.99")
+}

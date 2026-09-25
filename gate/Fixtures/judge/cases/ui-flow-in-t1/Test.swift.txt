@@ -1,0 +1,8 @@
+@Test("checkout works — catches checkout bugs")
+func checkoutFlow() throws {
+  let app = XCUIApplication()
+  app.launch()
+  app.buttons["Add to cart"].tap()
+  app.buttons["Checkout"].tap()
+  XCTAssertTrue(app.staticTexts["Thanks!"].waitForExistence(timeout: 5))
+}

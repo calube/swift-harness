@@ -254,7 +254,30 @@ struct SelfTestCommand: AsyncParsableCommand {
   )
   var harnessRoot: String?
 
+  @Flag(
+    help: "Calibrate the judge instead: precision and recall per question on gate/Fixtures/judge.")
+  var judge = false
+
+  @Option(
+    help: ArgumentHelp(
+      "With --judge: answer with a live backend (claude) instead of the stored recording. "
+        + "Costs money and sends the calibration set to the backend."))
+  var judgeBackend: JudgeBackend?
+
+  @Option(help: "With --judge-backend: the backend's model.")
+  var model = JudgeFactory.defaultModel
+
+  @Flag(help: "With --judge-backend: replace the stored recording with the live answers.")
+  var record = false
+
   @OptionGroup var output: OutputOptions
+
+  func validate() throws {
+    if !judge, judgeBackend != nil || record {
+      throw ValidationError("--judge-backend and --record need --judge")
+    }
+    if record, judgeBackend == nil { throw ValidationError("--record needs --judge-backend") }
+  }
 
   func run() async throws {
     guard
@@ -264,6 +287,17 @@ struct SelfTestCommand: AsyncParsableCommand {
         "pass --harness-root, or run through bin/swiftgate, which sets \(Self.harnessRootVariable)")
     }
     let root = URL(filePath: path, directoryHint: .isDirectory).resolvingSymlinksInPath()
+    if judge {
+      let live = judgeBackend.flatMap {
+        JudgeFactory.make(
+          .enabled(backend: $0, thresholds: JudgeThresholds(advisory: 0, block: 1), model: model),
+          runner: LiveProcessRunner(), cacheDirectory: nil)
+      }
+      try await StaticCheckRun.execute(root: root, format: output.format) {
+        await JudgeSelfTest.run(harnessRoot: root, judge: live, record: record)
+      }
+      return
+    }
     try await StaticCheckRun.execute(root: root, format: output.format) {
       await SelfTest.run(harnessRoot: root)
     }

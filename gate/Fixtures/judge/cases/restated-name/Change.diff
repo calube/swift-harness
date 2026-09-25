@@ -1,0 +1,3 @@
++  case .toggleFavoriteTapped:
++    state.isFavorite.toggle()
++    return .run { [id = state.id, fav = state.isFavorite] _ in try await api.setFavorite(id, fav) }

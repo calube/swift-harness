@@ -35,7 +35,7 @@ struct HookDependencies: Sendable {
       formatter: LiveSwiftFormatter(runner: runner, repositoryRoot: root.path),
       xcode: LiveXcodeSelection(
         runner: runner, developerDirectoryOverride: environment["DEVELOPER_DIR"]),
-      sweep: PendingOrphanCloneSweep(), commitJudge: DisabledCommitCommentJudge(),
+      sweep: PendingOrphanCloneSweep(), commitJudge: ConfiguredCommitCommentJudge.live,
       environment: environment)
   }
 }
@@ -52,8 +52,8 @@ struct PendingOrphanCloneSweep: OrphanCloneSweeping {
 }
 
 /// The judge's comment questions on a Claude-authored commit (spec §7.5): advisory, cached by
-/// content hash, run in an isolated reviewer. No judge backend exists yet, so the commit hook runs
-/// only the mechanical `comments --staged` pass and this seam answers nothing.
+/// content hash, run in an isolated reviewer. Answers nothing unless the repository enables the
+/// judge.
 protocol CommitCommentJudging: Sendable {
   /// Proposed trims for the staged comments, as context for Claude, or `nil`.
   func review(root: URL) async -> String?

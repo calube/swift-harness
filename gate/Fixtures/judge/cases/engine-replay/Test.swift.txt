@@ -1,0 +1,6 @@
+@Test("replaying seed 42 with the recorded inputs reaches the recorded final state — catches nondeterminism that breaks saved replays")
+func replay() throws {
+  let log = try InputLog.fixture("level1")
+  let final = log.inputs.reduce(Engine.State(seed: 42), Engine.step)
+  #expect(final == log.expectedFinalState)
+}

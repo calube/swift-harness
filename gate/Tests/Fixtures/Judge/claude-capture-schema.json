@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["fails-if-broken"],"properties":{"fails-if-broken":{"type":"object","additionalProperties":false,"required":["yes","no","rationale"],"properties":{"yes":{"type":"number","minimum":0,"maximum":1},"no":{"type":"number","minimum":0,"maximum":1},"rationale":{"type":"string"}}}}}

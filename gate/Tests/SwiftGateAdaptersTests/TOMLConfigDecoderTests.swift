@@ -79,6 +79,7 @@ struct TOMLConfigDecoderTests {
 
       [judge]
       backend = "claude"
+      model = "opus"
       advisory_threshold = 0.6
       block_threshold = 0.9
       """)
@@ -103,7 +104,8 @@ struct TOMLConfigDecoderTests {
           name: "HealthCore", hostTestable: false,
           reason: "HealthKit types in public API; tests run on simulator"),
       ],
-      judge: .enabled(backend: .claude, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9)))
+      judge: .enabled(
+        backend: .claude, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9), model: "opus"))
     #expect(config == expected)
     #expect(config.kind(ofModule: "GameEngine") == .engine)
     #expect(config.kind(ofModule: "Checkout") == .feature)

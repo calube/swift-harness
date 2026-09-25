@@ -1,0 +1,5 @@
+@Test("a 10% discount on two $5 items totals $9 — catches customers charged the undiscounted price")
+func discountedTotal() {
+  let cart = Cart(items: [Item(price: 5, quantity: 2)], discount: 0.1)
+  #expect(cart.total == 9)
+}

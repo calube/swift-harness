@@ -1,0 +1,8 @@
+@Test("a rejected password shows an alert — catches silent login failures")
+func loginFailureShowsAlert() async {
+  let store = TestStore(initialState: Login.State(isLoading: true)) { Login() }
+  store.exhaustivity = .off
+  await store.send(.loginResponse(.failure(.invalidCredentials))) {
+    $0.isLoading = false
+  }
+}

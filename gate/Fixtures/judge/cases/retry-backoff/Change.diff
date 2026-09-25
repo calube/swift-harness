@@ -1,0 +1,7 @@
++  for attempt in 0..<3 {
++    do { return try await transport.send(request) }
++    catch let error as TransportError where error.isRetryable {
++      try await clock.sleep(for: .seconds(1 << attempt))
++    }
++  }
++  throw APIError.unavailable

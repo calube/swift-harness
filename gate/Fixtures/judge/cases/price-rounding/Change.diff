@@ -1,0 +1,4 @@
++  public func formatted(_ cents: Int) -> String {
++    let dollars = Decimal(cents) / 100
++    return dollars.formatted(.currency(code: "USD").locale(locale))
++  }

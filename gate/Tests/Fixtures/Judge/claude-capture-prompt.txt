@@ -1,0 +1,8 @@
+Answer each question about the Swift test below as a probability distribution over its options (probabilities sum to 1). Give a one-line rationale.
+
+Question fails-if-broken: Would this test fail if the behavior it names were broken? Options: yes, no.
+
+Test:
+```swift
+@Test("doubling 2 gives 4") func doubles() { #expect(double(2) == 4) }
+```

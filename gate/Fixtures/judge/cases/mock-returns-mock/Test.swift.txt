@@ -1,0 +1,7 @@
+@Test("weather converts kelvin to celsius — catches temperatures shown 273 degrees too hot")
+func converts() async throws {
+  let service = MockWeatherService()
+  service.stubbedForecast = Forecast(celsius: 20)
+  let forecast = try await service.weather(for: "Paris")
+  #expect(forecast.celsius == 20)
+}

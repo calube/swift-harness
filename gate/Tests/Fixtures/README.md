@@ -216,3 +216,23 @@ Observed behavior the adapter relies on:
   after the project, or else the only scheme that is also a target.
 - Listing resolves the project's packages first (16s cold on the sample app).
 - A missing project exits 66 with the error on stderr.
+
+## Judge
+
+Claude Code 2.1.282, run from a scratch directory with the schema in
+`Judge/claude-capture-schema.json` (the shape `ClaudeJudgePrompt.schema` builds for a one-question
+set) and the prompt in `Judge/claude-capture-prompt.txt` on stdin:
+
+| File | Capture |
+|---|---|
+| `Judge/claude-result.json` | `claude -p --output-format json --json-schema "$(cat claude-capture-schema.json)" --restricted --tools "" --strict-mcp-config --no-session-persistence --model haiku < claude-capture-prompt.txt` (verbatim stdout, exit 0) |
+| `Judge/claude-unknown-model.json` | the same with `--model no-such-model` (verbatim stdout, exit 1; stderr was `[claude-code:unrecognized_model] {"model":"no-such-model","query_source":"sdk"}`) |
+
+Observed behavior the adapter relies on:
+
+- `--output-format json` prints one result envelope. With `--json-schema` the validated reply is
+  the `structured_output` object (and also JSON text in `result`).
+- A failed call still prints an envelope, with `is_error: true` and the message in `result`, and
+  exits 1.
+- `--restricted` ignores user, project and local settings (so plugin hooks don't run inside the
+  judge) and `--tools ""` removes every built-in tool.

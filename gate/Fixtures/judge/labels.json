@@ -1,0 +1,248 @@
+{
+  "cases": [
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "counter-increment",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "cart-total-discount",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "login-error-alert",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "debounce-search",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "date-formatting-boundary",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "retry-backoff",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "engine-replay",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "empty-list-state",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "decode-unknown-enum",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "cancel-on-dismiss",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "price-rounding",
+      "label": "good"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "assert-constructed-value",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "own-double",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "call-count-coupling",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "existence-only",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "private-state-coupling",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T2"
+      },
+      "id": "snapshot-in-t1",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "restated-name",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "partial",
+        "tier": "T1"
+      },
+      "id": "wrong-field",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "mock-returns-mock",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T3"
+      },
+      "id": "ui-flow-in-t1",
+      "label": "useless"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "logger-text-coupling",
+      "label": "useless"
+    }
+  ],
+  "questionSet": "test-quality@1",
+  "schema": 1
+}

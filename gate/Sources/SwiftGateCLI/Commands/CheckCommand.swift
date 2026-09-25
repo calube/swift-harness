@@ -13,7 +13,8 @@ enum CheckRun {
     root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
     tier: CheckTier, base: String, context: GateRun.Context,
     changedTests: ChangedTestChecks.Environment? = nil,
-    simulator: SimulatorTestCheck.Dependencies = .live()
+    simulator: SimulatorTestCheck.Dependencies = .live(),
+    judge: TestJudgeCheck.Dependencies? = nil
   ) async throws -> GateRunParts {
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
@@ -45,11 +46,18 @@ enum CheckRun {
       var t1Tier = t1.tier
       parts.findings += t1.findings
       if tier == .ready {
+        let environment = changedTests ?? .live(root: root, git: git, swiftPM: swiftPM)
         let changed = await ChangedTestChecks.ready(
-          changedTests ?? .live(root: root, git: git, swiftPM: swiftPM), graph: graph, base: base,
-          context: context)
+          environment, graph: graph, base: base, context: context)
         t1Tier = try t1Tier.merging(changed.verdict)
         parts.findings += changed.findings
+        if let judge {
+          let judged = await TestJudgeCheck.run(
+            environment, graph: graph, config: config, base: base, atReadyTier: true,
+            dependencies: judge)
+          if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
+          parts.findings += judged
+        }
       }
       parts.tiers.append(t1Tier)
     } else {
@@ -230,7 +238,7 @@ struct CheckCommand: AsyncParsableCommand {
       try await CheckRun.run(
         root: root, swiftPM: swiftPM, git: git,
         formatter: LiveSwiftFormatter(runner: LiveProcessRunner(), repositoryRoot: root.path),
-        tier: tier, base: base, context: context)
+        tier: tier, base: base, context: context, judge: .live(root: root, git: git))
     }
   }
 }

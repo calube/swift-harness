@@ -1,0 +1,5 @@
+@Test("an unknown status string decodes as .unknown — catches the whole order list failing to load when the server adds a status")
+func unknownStatus() throws {
+  let order = try JSONDecoder().decode(Order.self, from: Data(#"{"status":"refunded_partial"}"#.utf8))
+  #expect(order.status == .unknown)
+}

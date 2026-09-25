@@ -152,7 +152,7 @@ public struct Config: Sendable, Equatable {
       }
     }
 
-    if case .enabled(_, let thresholds) = judge {
+    if case .enabled(_, let thresholds, _) = judge {
       for (key, value) in [
         ("judge.advisory_threshold", thresholds.advisory),
         ("judge.block_threshold", thresholds.block),
@@ -277,11 +277,14 @@ public struct ModuleOverride: Sendable, Equatable {
 /// The judge sends test source to a model, so it is off unless a repository opts in.
 public enum JudgeConfig: Sendable, Equatable {
   case disabled
-  case enabled(backend: JudgeBackend, thresholds: JudgeThresholds)
+  /// `model` is the backend's model name; `nil` means the backend's default.
+  case enabled(backend: JudgeBackend, thresholds: JudgeThresholds, model: String? = nil)
 }
 
 public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
   case claude
+  /// Accepted so the choice is explicit; the adapter reports BLOCKED until it is built.
+  case jev
 }
 
 /// Probability thresholds: `p >= block` may block at the `ready` tier; `advisory <= p < block` is

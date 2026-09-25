@@ -1,0 +1,5 @@
+@Test("an empty response shows the empty state — catches a blank screen when the user has no items")
+func emptyResponse() async {
+  let store = TestStore(initialState: Items.State()) { Items() }
+  await store.send(.itemsResponse(.success([]))) { $0.isEmptyStateVisible = true }
+}

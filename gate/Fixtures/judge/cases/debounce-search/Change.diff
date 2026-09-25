@@ -1,0 +1,7 @@
++  case .queryChanged(let query):
++    state.query = query
++    return .run { send in
++      try await clock.sleep(for: .milliseconds(300))
++      await send(.searchResponse(try await api.search(query)))
++    }
++    .cancellable(id: CancelID.search, cancelInFlight: true)

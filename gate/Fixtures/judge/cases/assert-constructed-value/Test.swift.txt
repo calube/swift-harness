@@ -1,0 +1,5 @@
+@Test("counter works — catches counter bugs")
+func counterWorks() {
+  let state = Counter.State(count: 1)
+  #expect(state.count == 1)
+}

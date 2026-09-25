@@ -1,0 +1,5 @@
++  public func sync() async throws {
++    let changes = try await store.pendingChanges()
++    try await api.upload(changes)
++    logger.info("sync uploaded \(changes.count) changes")
++  }
