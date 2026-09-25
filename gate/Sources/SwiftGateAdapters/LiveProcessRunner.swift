@@ -1,0 +1,343 @@
+import Darwin
+import Foundation
+import Synchronization
+
+/// Runs processes with `posix_spawn` rather than `Foundation.Process` because the child must lead
+/// its own process group: on timeout or cancellation the whole group is signalled, so grandchildren
+/// (compilers, test runners, simulators) cannot survive and keep the output pipes open forever.
+///
+/// Each run blocks one dedicated thread (not a cooperative-pool thread) for its lifetime.
+public struct LiveProcessRunner: ProcessRunner {
+  private let baseEnvironment: [String: String]
+  private let terminationGracePeriod: Duration
+  private let postExitDrainLimit: Duration
+
+  /// - Parameters:
+  ///   - baseEnvironment: the environment every invocation's overlay is applied to.
+  ///   - terminationGracePeriod: time between SIGTERM and SIGKILL to the process group.
+  ///   - postExitDrainLimit: how long to keep reading after the child exits, in case a surviving
+  ///     descendant still holds the pipes open.
+  public init(
+    baseEnvironment: [String: String] = ProcessInfo.processInfo.environment,
+    terminationGracePeriod: Duration = .seconds(2),
+    postExitDrainLimit: Duration = .seconds(2)
+  ) {
+    self.baseEnvironment = baseEnvironment
+    self.terminationGracePeriod = terminationGracePeriod
+    self.postExitDrainLimit = postExitDrainLimit
+  }
+
+  public func run(_ invocation: ProcessInvocation) async throws(ProcessRunnerError)
+    -> ProcessOutput
+  {
+    let environment = effectiveEnvironment(overlay: invocation.environmentOverlay)
+    let path = try resolveExecutable(invocation.executable, environment: environment)
+    let spawn = SpawnRequest(
+      path: path, invocation: invocation, environment: environment,
+      terminationGracePeriod: terminationGracePeriod, postExitDrainLimit: postExitDrainLimit)
+    let cancellation = CancellationSignal()
+
+    let result = await withTaskCancellationHandler {
+      await withCheckedContinuation {
+        (continuation: CheckedContinuation<Result<ProcessOutput, ProcessRunnerError>, Never>) in
+        let thread = Thread {
+          continuation.resume(returning: spawn.execute(cancellation: cancellation))
+        }
+        thread.name = "swiftgate.process"
+        thread.start()
+      }
+    } onCancel: {
+      cancellation.cancel()
+    }
+    return try result.get()
+  }
+
+  private func effectiveEnvironment(overlay: [String: String?]) -> [String: String] {
+    var environment = baseEnvironment
+    for (key, value) in overlay {
+      if let value {
+        environment[key] = value
+      } else {
+        environment.removeValue(forKey: key)
+      }
+    }
+    return environment
+  }
+
+  private func resolveExecutable(_ executable: String, environment: [String: String])
+    throws(ProcessRunnerError) -> String
+  {
+    guard !executable.isEmpty else {
+      throw .launchFailed(executable: executable, reason: "empty executable")
+    }
+    if executable.contains("/") { return executable }
+    let searchPath = environment["PATH"] ?? ""
+    for directory in searchPath.split(separator: ":") where !directory.isEmpty {
+      let candidate = "\(directory)/\(executable)"
+      if isExecutableFile(candidate) { return candidate }
+    }
+    throw .launchFailed(executable: executable, reason: "not found on PATH \(searchPath)")
+  }
+
+  private func isExecutableFile(_ path: String) -> Bool {
+    var info = stat()
+    guard stat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return false }
+    return access(path, X_OK) == 0
+  }
+}
+
+private final class CancellationSignal: Sendable {
+  private let flag = Atomic<Bool>(false)
+
+  func cancel() { flag.store(true, ordering: .releasing) }
+  var isCancelled: Bool { flag.load(ordering: .acquiring) }
+}
+
+private struct SpawnRequest: Sendable {
+  let path: String
+  let invocation: ProcessInvocation
+  let environment: [String: String]
+  let terminationGracePeriod: Duration
+  let postExitDrainLimit: Duration
+
+  private enum Termination {
+    case none
+    case timedOut
+    case cancelled
+  }
+
+  func execute(cancellation: CancellationSignal) -> Result<ProcessOutput, ProcessRunnerError> {
+    let executable = invocation.executable
+    if cancellation.isCancelled { return .failure(.cancelled(executable: executable)) }
+
+    let stdoutPipe: Pipe
+    let stderrPipe: Pipe
+    do {
+      stdoutPipe = try Pipe.make()
+      stderrPipe = try Pipe.make()
+    } catch {
+      return .failure(.launchFailed(executable: executable, reason: error.reason))
+    }
+
+    let clock = ContinuousClock()
+    let start = clock.now
+    let pid: pid_t
+    switch spawn(stdout: stdoutPipe.write, stderr: stderrPipe.write) {
+    case .success(let spawned): pid = spawned
+    case .failure(let error):
+      stdoutPipe.closeAll()
+      stderrPipe.closeAll()
+      return .failure(.launchFailed(executable: executable, reason: error.reason))
+    }
+    close(stdoutPipe.write)
+    close(stderrPipe.write)
+
+    var stdoutReader = StreamReader(fd: stdoutPipe.read, cap: invocation.maxCapturedBytesPerStream)
+    var stderrReader = StreamReader(fd: stderrPipe.read, cap: invocation.maxCapturedBytesPerStream)
+    defer {
+      stdoutReader.close()
+      stderrReader.close()
+    }
+
+    let deadline = start.advanced(by: invocation.timeout)
+    var status: ExitStatus?
+    var exitedAt: ContinuousClock.Instant?
+    var termination = Termination.none
+    var terminateSentAt: ContinuousClock.Instant?
+    var killSent = false
+
+    while true {
+      let now = clock.now
+      if termination == .none {
+        if cancellation.isCancelled {
+          termination = .cancelled
+        } else if status == nil, now >= deadline {
+          termination = .timedOut
+        }
+        if termination != .none {
+          kill(-pid, SIGTERM)
+          terminateSentAt = now
+        }
+      } else if !killSent, let sent = terminateSentAt, now - sent >= terminationGracePeriod {
+        kill(-pid, SIGKILL)
+        killSent = true
+      }
+
+      if status == nil, let reaped = Self.reap(pid) {
+        status = reaped
+        exitedAt = now
+      }
+      if let exitedAt {
+        let drained = !stdoutReader.isOpen && !stderrReader.isOpen
+        let drainExpired = now - exitedAt >= postExitDrainLimit
+        let waitingOnKill = termination != .none && !killSent && !drained
+        if drained || (drainExpired && !waitingOnKill) { break }
+      }
+
+      Self.pollReadable(&stdoutReader, &stderrReader, timeoutMilliseconds: 20)
+    }
+
+    let elapsed = clock.now - start
+    switch termination {
+    case .cancelled:
+      return .failure(.cancelled(executable: executable))
+    case .timedOut:
+      return .failure(
+        .timedOut(
+          executable: executable, after: invocation.timeout, stdout: stdoutReader.captured,
+          stderr: stderrReader.captured))
+    case .none:
+      // `status` is always set here: the loop only exits after the child is reaped.
+      guard let status else {
+        return .failure(.launchFailed(executable: executable, reason: "child was never reaped"))
+      }
+      return .success(
+        ProcessOutput(
+          status: status, stdout: stdoutReader.captured, stderr: stderrReader.captured,
+          elapsed: elapsed))
+    }
+  }
+
+  private func spawn(stdout: Int32, stderr: Int32) -> Result<pid_t, SystemError> {
+    var fileActions: posix_spawn_file_actions_t?
+    posix_spawn_file_actions_init(&fileActions)
+    defer { posix_spawn_file_actions_destroy(&fileActions) }
+    posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
+    posix_spawn_file_actions_adddup2(&fileActions, stdout, 1)
+    posix_spawn_file_actions_adddup2(&fileActions, stderr, 2)
+    if let directory = invocation.workingDirectory {
+      posix_spawn_file_actions_addchdir_np(&fileActions, directory)
+    }
+
+    var attributes: posix_spawnattr_t?
+    posix_spawnattr_init(&attributes)
+    defer { posix_spawnattr_destroy(&attributes) }
+    // CLOEXEC_DEFAULT keeps unrelated descriptors (other runs' pipes) out of the child.
+    let flags =
+      POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK
+      | POSIX_SPAWN_CLOEXEC_DEFAULT
+    posix_spawnattr_setflags(&attributes, Int16(flags))
+    posix_spawnattr_setpgroup(&attributes, 0)
+    var defaultSignals = sigset_t()
+    sigfillset(&defaultSignals)
+    posix_spawnattr_setsigdefault(&attributes, &defaultSignals)
+    var noMask = sigset_t()
+    sigemptyset(&noMask)
+    posix_spawnattr_setsigmask(&attributes, &noMask)
+
+    let argv = CStringArray([path] + invocation.arguments)
+    let envp = CStringArray(environment.map { "\($0.key)=\($0.value)" }.sorted())
+    defer {
+      argv.free()
+      envp.free()
+    }
+
+    var pid: pid_t = 0
+    let rc = posix_spawn(&pid, path, &fileActions, &attributes, argv.pointers, envp.pointers)
+    return rc == 0 ? .success(pid) : .failure(SystemError(code: rc))
+  }
+
+  private static func reap(_ pid: pid_t) -> ExitStatus? {
+    var raw: Int32 = 0
+    while true {
+      let result = waitpid(pid, &raw, WNOHANG)
+      if result == pid { break }
+      if result == -1, errno == EINTR { continue }
+      return nil
+    }
+    let signal = raw & 0x7f
+    return signal == 0 ? .exited((raw >> 8) & 0xff) : .signaled(signal)
+  }
+
+  private static func pollReadable(
+    _ first: inout StreamReader, _ second: inout StreamReader, timeoutMilliseconds: Int32
+  ) {
+    var fds: [pollfd] = []
+    if first.isOpen { fds.append(pollfd(fd: first.fd, events: Int16(POLLIN), revents: 0)) }
+    if second.isOpen { fds.append(pollfd(fd: second.fd, events: Int16(POLLIN), revents: 0)) }
+    guard !fds.isEmpty else {
+      usleep(UInt32(timeoutMilliseconds) * 1000)
+      return
+    }
+    guard poll(&fds, nfds_t(fds.count), timeoutMilliseconds) > 0 else { return }
+    for entry in fds where entry.revents != 0 {
+      if entry.fd == first.fd { first.drainAvailable() } else { second.drainAvailable() }
+    }
+  }
+}
+
+private struct SystemError: Error {
+  let code: Int32
+  var reason: String { String(cString: strerror(code)) }
+}
+
+private struct Pipe {
+  let read: Int32
+  let write: Int32
+
+  static func make() throws(SystemError) -> Pipe {
+    var fds: [Int32] = [0, 0]
+    guard pipe(&fds) == 0 else { throw SystemError(code: errno) }
+    for fd in fds { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+    _ = fcntl(fds[0], F_SETFL, fcntl(fds[0], F_GETFL) | O_NONBLOCK)
+    return Pipe(read: fds[0], write: fds[1])
+  }
+
+  func closeAll() {
+    close(read)
+    close(write)
+  }
+}
+
+private struct StreamReader {
+  let fd: Int32
+  let cap: Int
+  private(set) var isOpen = true
+  private(set) var captured = CapturedStream()
+
+  init(fd: Int32, cap: Int) {
+    self.fd = fd
+    self.cap = cap
+  }
+
+  mutating func drainAvailable() {
+    var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+    while isOpen {
+      let count = buffer.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, $0.count) }
+      if count > 0 {
+        append(buffer[0..<count])
+      } else if count == 0 {
+        close()
+      } else if errno == EINTR {
+        continue
+      } else {
+        if errno != EAGAIN { close() }
+        return
+      }
+    }
+  }
+
+  mutating func close() {
+    guard isOpen else { return }
+    isOpen = false
+    Darwin.close(fd)
+  }
+
+  private mutating func append(_ bytes: ArraySlice<UInt8>) {
+    let room = max(0, cap - captured.bytes.count)
+    if bytes.count > room { captured.truncated = true }
+    captured.bytes.append(contentsOf: bytes.prefix(room))
+  }
+}
+
+private struct CStringArray {
+  let pointers: [UnsafeMutablePointer<CChar>?]
+
+  init(_ strings: [String]) {
+    pointers = strings.map { strdup($0) } + [nil]
+  }
+
+  func free() {
+    for pointer in pointers { Darwin.free(pointer) }
+  }
+}

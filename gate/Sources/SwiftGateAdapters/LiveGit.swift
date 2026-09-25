@@ -1,0 +1,234 @@
+import Foundation
+import SwiftGateDomain
+
+/// ``Git`` over the `git` CLI via a ``ProcessRunner``.
+public struct LiveGit: Git {
+  private let runner: any ProcessRunner
+  private let repositoryRoot: String
+  private let executable: String
+  private let timeout: Duration
+
+  /// - Parameter repositoryRoot: the worktree's top-level directory.
+  public init(
+    runner: any ProcessRunner, repositoryRoot: String, executable: String = "git",
+    timeout: Duration = .seconds(60)
+  ) {
+    self.runner = runner
+    self.repositoryRoot = repositoryRoot
+    self.executable = executable
+    self.timeout = timeout
+  }
+
+  public func changedFiles(since ref: String) async throws(GitError) -> [String] {
+    try Self.validate(ref: ref)
+    let tracked = try await run(["diff", "--name-only", "-z", "--no-renames", ref, "--"])
+    let untracked = try await run([
+      "ls-files", "-z", "--full-name", "--others", "--exclude-standard",
+    ])
+    let paths = Self.nulSeparated(tracked) + Self.nulSeparated(untracked)
+    return Array(Set(paths)).sorted()
+  }
+
+  public func stagedAddedLines() async throws(GitError) -> [AddedLines] {
+    let diff = try await run([
+      "diff", "--cached", "--unified=0", "--no-color", "--no-ext-diff", "--no-textconv",
+      "--no-relative", "--find-renames", "--diff-filter=ACMR", "--src-prefix=a/",
+      "--dst-prefix=b/",
+    ])
+    return try UnifiedDiff.addedLines(in: diff)
+  }
+
+  public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {
+    let root = URL(filePath: repositoryRoot, directoryHint: .isDirectory)
+    let existing = paths.filter {
+      var isDirectory: ObjCBool = false
+      return FileManager.default.fileExists(
+        atPath: root.appending(path: $0).path, isDirectory: &isDirectory) && !isDirectory.boolValue
+    }
+    var hashes: [String: String] = [:]
+    for start in stride(from: 0, to: existing.count, by: Self.hashBatchSize) {
+      let batch = Array(existing[start..<min(start + Self.hashBatchSize, existing.count)])
+      let output = try await run(["hash-object", "--"] + batch)
+      let lines = output.split(separator: "\n").map(String.init)
+      guard lines.count == batch.count else {
+        throw .unparseableOutput(
+          command: "hash-object", detail: "expected \(batch.count) hashes, got \(lines.count)")
+      }
+      for (path, hash) in zip(batch, lines) { hashes[path] = hash }
+    }
+    return hashes
+  }
+
+  public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {
+    try Self.validate(ref: first)
+    try Self.validate(ref: second)
+    let arguments = ["merge-base", first, second]
+    let output = try await execute(arguments)
+    // Exit 1 with no diagnostics is git's answer "no common ancestor"; bad refs exit 128.
+    if output.status == .exited(1), output.stderr.bytes.isEmpty { return nil }
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  /// Keeps each argv well under `ARG_MAX` for large change sets.
+  private static let hashBatchSize = 256
+
+  /// Pins behavior that user or repository config could otherwise change. `GIT_OPTIONAL_LOCKS=0`
+  /// stops read-only commands from taking `index.lock`, which concurrent sessions would contend on.
+  private static let environmentOverlay: [String: String?] = [
+    "LC_ALL": "C",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "GIT_TERMINAL_PROMPT": "0",
+    "GIT_EXTERNAL_DIFF": nil,
+    "GIT_DIFF_OPTS": nil,
+  ]
+
+  private static let configOverrides = [
+    "-c", "core.quotePath=true", "-c", "color.ui=never", "-c", "diff.noprefix=false",
+    "-c", "diff.mnemonicPrefix=false",
+  ]
+
+  private func execute(_ arguments: [String]) async throws(GitError) -> ProcessOutput {
+    do {
+      return try await runner.run(
+        ProcessInvocation(
+          executable: executable, arguments: Self.configOverrides + arguments,
+          environmentOverlay: Self.environmentOverlay, workingDirectory: repositoryRoot,
+          timeout: timeout))
+    } catch {
+      throw .process(error)
+    }
+  }
+
+  private func run(_ arguments: [String]) async throws(GitError) -> String {
+    let output = try await execute(arguments)
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    if output.stdout.truncated {
+      throw .unparseableOutput(command: arguments[0], detail: "output exceeded the capture cap")
+    }
+    return output.stdout.text
+  }
+
+  private static func failure(_ arguments: [String], _ output: ProcessOutput) -> GitError {
+    .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text)
+  }
+
+  private static func validate(ref: String) throws(GitError) {
+    if ref.isEmpty || ref.hasPrefix("-") { throw .invalidRef(ref) }
+  }
+
+  private static func nulSeparated(_ text: String) -> [String] {
+    text.split(separator: "\0").map(String.init)
+  }
+}
+
+/// Parses `git diff --unified=0` output with fixed `a/`/`b/` prefixes.
+enum UnifiedDiff {
+  static func addedLines(in diff: String) throws(GitError) -> [AddedLines] {
+    var result: [AddedLines] = []
+    var currentPath: String?
+    var ranges: [ClosedRange<Int>] = []
+
+    func flush() {
+      if let currentPath, !ranges.isEmpty {
+        result.append(AddedLines(path: currentPath, ranges: ranges))
+      }
+      currentPath = nil
+      ranges = []
+    }
+
+    // `+++ ` is a header only before a file's first hunk; after that it is an added content line
+    // that happens to start with `++ `.
+    var inFileHeader = false
+    for line in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+      if line.hasPrefix("diff --git ") {
+        flush()
+        inFileHeader = true
+      } else if inFileHeader, line.hasPrefix("+++ ") {
+        let target = String(line.dropFirst(4))
+        currentPath = target == "/dev/null" ? nil : try pathAfterPrefix(target)
+      } else if line.hasPrefix("@@ ") {
+        inFileHeader = false
+        if currentPath != nil, let range = try addedRange(inHunkHeader: line) {
+          ranges.append(range)
+        }
+      }
+    }
+    flush()
+    return result
+  }
+
+  /// `@@ -a[,b] +c[,d] @@`: added lines are `c ..< c + d`; `d` defaults to 1 and 0 means none.
+  private static func addedRange(inHunkHeader header: Substring) throws(GitError)
+    -> ClosedRange<Int>?
+  {
+    let fields = header.split(separator: " ")
+    guard fields.count >= 3, fields[2].hasPrefix("+") else {
+      throw .unparseableOutput(command: "diff", detail: "bad hunk header: \(header)")
+    }
+    let parts = fields[2].dropFirst().split(separator: ",", omittingEmptySubsequences: false)
+    guard let start = Int(parts[0]), parts.count <= 2 else {
+      throw .unparseableOutput(command: "diff", detail: "bad hunk header: \(header)")
+    }
+    let count: Int
+    if parts.count == 2 {
+      guard let parsed = Int(parts[1]) else {
+        throw .unparseableOutput(command: "diff", detail: "bad hunk header: \(header)")
+      }
+      count = parsed
+    } else {
+      count = 1
+    }
+    return count == 0 ? nil : start...(start + count - 1)
+  }
+
+  private static func pathAfterPrefix(_ target: String) throws(GitError) -> String {
+    let unquoted = target.hasPrefix("\"") ? try unquote(target) : target
+    guard unquoted.hasPrefix("b/") else {
+      throw .unparseableOutput(command: "diff", detail: "unexpected path: \(target)")
+    }
+    return String(unquoted.dropFirst(2))
+  }
+
+  /// Reverses git's C-style path quoting, including octal-escaped UTF-8 bytes.
+  static func unquote(_ quoted: String) throws(GitError) -> String {
+    let bytes = Array(quoted.utf8)
+    guard bytes.count >= 2, bytes.first == UInt8(ascii: "\""), bytes.last == UInt8(ascii: "\"")
+    else {
+      throw .unparseableOutput(command: "diff", detail: "bad quoted path: \(quoted)")
+    }
+    var output: [UInt8] = []
+    var index = 1
+    let end = bytes.count - 1
+    while index < end {
+      let byte = bytes[index]
+      guard byte == UInt8(ascii: "\\") else {
+        output.append(byte)
+        index += 1
+        continue
+      }
+      index += 1
+      guard index < end else {
+        throw .unparseableOutput(command: "diff", detail: "bad quoted path: \(quoted)")
+      }
+      let escaped = bytes[index]
+      let simple: [UInt8: UInt8] = [
+        UInt8(ascii: "a"): 0x07, UInt8(ascii: "b"): 0x08, UInt8(ascii: "t"): 0x09,
+        UInt8(ascii: "n"): 0x0A, UInt8(ascii: "v"): 0x0B, UInt8(ascii: "f"): 0x0C,
+        UInt8(ascii: "r"): 0x0D, UInt8(ascii: "\""): 0x22, UInt8(ascii: "\\"): 0x5C,
+      ]
+      if let mapped = simple[escaped] {
+        output.append(mapped)
+        index += 1
+      } else if index + 2 < end,
+        let octal = UInt8(String(decoding: bytes[index...(index + 2)], as: UTF8.self), radix: 8)
+      {
+        output.append(octal)
+        index += 3
+      } else {
+        throw .unparseableOutput(command: "diff", detail: "bad escape in path: \(quoted)")
+      }
+    }
+    return String(decoding: output, as: UTF8.self)
+  }
+}

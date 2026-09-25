@@ -1,0 +1,31 @@
+import Foundation
+import SwiftGateDomain
+
+/// Read-only repository queries the gate needs. Paths are repository-relative.
+public protocol Git: Sendable {
+  /// Files that differ between `ref` and the working tree (committed, staged, or unstaged, including
+  /// deletions), plus untracked files that are not ignored. Sorted, unique.
+  func changedFiles(since ref: String) async throws(GitError) -> [String]
+
+  /// Lines added by the staged change, per file. Files whose staged change adds no lines (pure
+  /// deletions, binary files) are omitted.
+  func stagedAddedLines() async throws(GitError) -> [AddedLines]
+
+  /// Git blob hash of each file's current working-tree content. Paths that do not exist are
+  /// omitted.
+  func contentHashes(of paths: [String]) async throws(GitError) -> [String: String]
+
+  /// The best common ancestor of two commits, or `nil` if their histories are unrelated.
+  func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String?
+}
+
+/// Every case means git could not answer, which is never evidence about the code: `blocked`.
+public enum GitError: Error, Sendable, Equatable {
+  case process(ProcessRunnerError)
+  case commandFailed(arguments: [String], status: ExitStatus, stderr: String)
+  /// Refs beginning with `-` would be parsed by git as options.
+  case invalidRef(String)
+  case unparseableOutput(command: String, detail: String)
+
+  public var verdict: Verdict { .blocked }
+}

@@ -1,4 +1,5 @@
 import Testing
+
 @testable import SwiftGateCLI
 
 @Suite("swiftgate --version")
