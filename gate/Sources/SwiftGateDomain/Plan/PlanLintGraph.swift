@@ -15,6 +15,8 @@ public enum PlanLintGraph {
   public static let writeSetOverlapRuleID = "plan-lint.write-set-overlap"
   public static let hotFileRuleID = "plan-lint.hot-file"
   public static let singleDependentChainRuleID = "plan-lint.single-dependent-chain"
+  public static let packMissingRuleID = "plan-lint.pack-missing"
+  public static let packUnknownTaskRuleID = "plan-lint.pack-unknown-task"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -205,6 +207,39 @@ public enum PlanLintGraph {
     return findings
   }
 
+  // MARK: - Worker pack inputs (spec §9.3: a task's pack must actually have been resolved)
+
+  /// The command is expected to build one worker pack per ledger task before calling `plan-lint`
+  /// (spec §9.3). A task absent from `workerPacks` isn't "not sized yet" — it's a pack that failed
+  /// to build, and without this check ``PlanLintCoverage/sizeFindings(task:modulesTouched:workerPack:bounds:)``
+  /// would simply skip its over-budget bound, so a broken pack reads as proven within budget. A
+  /// `workerPacks` key that names no task in `ledger.tasks` is reported too, since a mis-keyed map
+  /// would otherwise silently never reach the task it was meant for.
+  public static func workerPackFindings(ledger: Ledger, workerPacks: [String: ContextPack])
+    throws(ReportContractViolation) -> [Finding]
+  {
+    var findings: [Finding] = []
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) where workerPacks[task.id] == nil {
+      findings.append(
+        try Finding(
+          ruleID: packMissingRuleID, severity: .major, file: task.id, line: nil,
+          message:
+            "task \(task.id) has no resolved worker pack; its pack-budget bound went unchecked",
+          failureScenario:
+            "a pack that failed to build reads as within budget instead of unproven"))
+    }
+    let taskIDs = Set(ledger.tasks.map(\.id))
+    for key in workerPacks.keys.sorted() where !taskIDs.contains(key) {
+      findings.append(
+        try Finding(
+          ruleID: packUnknownTaskRuleID, severity: .major, file: key, line: nil,
+          message: "workerPacks names \"\(key)\", which isn't a task in this ledger",
+          failureScenario:
+            "a mis-keyed worker pack silently never reaches the task it was meant for"))
+    }
+    return findings
+  }
+
   // MARK: - Entry point
 
   /// Runs every `plan-lint` rule family in one pass: ``PlanLintCoverage``'s coverage, gate-strength
@@ -213,8 +248,8 @@ public enum PlanLintGraph {
   /// function's job is resolving what those functions need (a task's touched modules from `graph`,
   /// its worker pack from `workerPacks`) and concatenating the results, so `plan-lint`'s command
   /// stays a thin IO shell that calls this once. `workerPacks` is each task's already-built context
-  /// pack, keyed by task id; a task missing from it is treated as having no pack yet (no sizing
-  /// finding from that family, since there's nothing to measure).
+  /// pack, keyed by task id; a task the command failed to build one for, or a stray key naming no
+  /// task, is ``workerPackFindings(ledger:workerPacks:)``'s job, not silently skipped here.
   public static func allFindings(
     design: DesignDocument, designPath: String, ledger: Ledger, ledgerPath: String,
     graph: ModuleGraph, workerPacks: [String: ContextPack], bounds: PlanConfig
@@ -237,6 +272,7 @@ public enum PlanLintGraph {
     findings += try hotFileFindings(ledger: ledger, ledgerPath: ledgerPath)
     findings += try singleDependentChainFindings(
       ledger: ledger, graph: graph, ledgerPath: ledgerPath)
+    findings += try workerPackFindings(ledger: ledger, workerPacks: workerPacks)
 
     return findings
   }

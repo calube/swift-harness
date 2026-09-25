@@ -205,6 +205,49 @@ struct PlanLintGraphTests {
     #expect(touched == ["ModuleA", "ModuleB"])
   }
 
+  // MARK: - Worker pack inputs (spec §9.3: a pack must actually have been resolved)
+
+  @Test(
+    "a ledger task with no resolved worker pack is a major finding — catches a pack that failed to build reading as in budget"
+  )
+  func packMissingIsMajorFinding() throws {
+    let tasks = [
+      Self.task(id: "a", writeSet: ["Sources/ModuleA/A.swift"]),
+      Self.task(id: "b", writeSet: ["Sources/ModuleA/B.swift"]),
+    ]
+    let pack = ContextPack(
+      role: .worker, slices: [ContextPackSlice(sourceLabel: "standards", lines: ["one line"])])
+    let findings = try PlanLintGraph.workerPackFindings(
+      ledger: Self.ledger(tasks: tasks, waves: []), workerPacks: ["a": pack])
+    #expect(findings.count == 1)
+    #expect(findings[0].ruleID == PlanLintGraph.packMissingRuleID)
+    #expect(findings[0].severity == .major)
+    #expect(findings[0].file == "b")
+  }
+
+  @Test("a workerPacks key naming no ledger task is a major finding")
+  func packUnknownTaskIsMajorFinding() throws {
+    let tasks = [Self.task(id: "a", writeSet: ["Sources/ModuleA/A.swift"])]
+    let pack = ContextPack(
+      role: .worker, slices: [ContextPackSlice(sourceLabel: "standards", lines: ["one line"])])
+    let findings = try PlanLintGraph.workerPackFindings(
+      ledger: Self.ledger(tasks: tasks, waves: []), workerPacks: ["a": pack, "ghost-task": pack])
+    #expect(findings.count == 1)
+    #expect(findings[0].ruleID == PlanLintGraph.packUnknownTaskRuleID)
+    #expect(findings[0].severity == .major)
+    #expect(findings[0].file == "ghost-task")
+  }
+
+  @Test("a pack for every task and no unknown keys has no worker-pack finding")
+  func packsResolvedForEveryTaskHasNoFinding() throws {
+    let tasks = [Self.task(id: "a", writeSet: ["Sources/ModuleA/A.swift"])]
+    let pack = ContextPack(
+      role: .worker, slices: [ContextPackSlice(sourceLabel: "standards", lines: ["one line"])])
+    let findings = try PlanLintGraph.workerPackFindings(
+      ledger: Self.ledger(tasks: tasks, waves: []), workerPacks: ["a": pack])
+    #expect(findings.isEmpty)
+  }
+
   // MARK: - Entry point: one call runs every family, no re-implementation
 
   @Test(
