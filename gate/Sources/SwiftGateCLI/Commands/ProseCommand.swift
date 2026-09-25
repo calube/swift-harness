@@ -16,7 +16,7 @@ enum ProseCheck {
     }
     var findings: [Finding] = []
     for file in files {
-      let url = URL(filePath: file, relativeTo: root)
+      let url = file.hasPrefix("/") ? URL(filePath: file) : root.appending(path: file)
       let text: String
       do {
         text = try String(contentsOf: url, encoding: .utf8)
