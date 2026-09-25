@@ -200,16 +200,102 @@ struct DesignLintEvidenceTests {
   @Test("an [UNVERIFIED] bullet with no Risks or Open questions sections at all is flagged")
   func unverifiedWithNoRisksOrOpenQuestionsSectionsIsFlagged() throws {
     let text = """
-      ## Decision
+      ## Evidence
 
-      - Use the queue-backed approach [UNVERIFIED]
+      - [UNVERIFIED] the underlying claim text
       """
     let findings = try Self.check(Self.parse(text))
     #expect(findings.contains { $0.ruleID == "design-lint.unverified-uncovered" })
   }
 
-  @Test("an [UNVERIFIED] bullet is not flagged once Risks has any content")
-  func unverifiedCoveredByRisksIsNotFlagged() throws {
+  @Test(
+    "five [UNVERIFIED] bullets plus one unrelated Risks bullet gives five findings — catches the coverage check being satisfied by unrelated content in the section"
+  )
+  func fiveUnverifiedBulletsWithOneUnrelatedRiskGivesFiveFindings() throws {
+    let text = """
+      ## Evidence
+
+      - [UNVERIFIED] claim one is unverified
+      - [UNVERIFIED] claim two is unverified
+      - [UNVERIFIED] claim three is unverified
+      - [UNVERIFIED] claim four is unverified
+      - [UNVERIFIED] claim five is unverified
+
+      ## Risks
+
+      - Some unrelated risk about something else entirely.
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" }.count == 5)
+  }
+
+  @Test("an [UNVERIFIED] bullet exactly restated in Risks is not flagged")
+  func unverifiedExactlyRestatedInRisksIsNotFlagged() throws {
+    let text = """
+      ## Evidence
+
+      - [UNVERIFIED] the underlying claim text
+
+      ## Risks
+
+      - the underlying claim text
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  }
+
+  @Test(
+    "an [UNVERIFIED] bullet restated with extra context around it in Open questions is not flagged"
+  )
+  func unverifiedRestatedWithExtraContextIsNotFlagged() throws {
+    let text = """
+      ## Evidence
+
+      - [UNVERIFIED] the underlying claim text
+
+      ## Open questions
+
+      - There's uncertainty here: the underlying claim text — needs confirmation before ship.
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  }
+
+  @Test(
+    "an [UNVERIFIED] bullet restated with different case and whitespace in Risks is not flagged")
+  func unverifiedRestatedWithDifferentCaseAndWhitespaceIsNotFlagged() throws {
+    let text = """
+      ## Evidence
+
+      - [UNVERIFIED] The Underlying   Claim Text
+
+      ## Risks
+
+      - the underlying claim text
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  }
+
+  @Test(
+    "an [UNVERIFIED] bullet only paraphrased (not restated) in Risks is still flagged — catches a mechanical check accepting a summary it can't actually verify"
+  )
+  func unverifiedParaphrasedNotRestatedIsFlagged() throws {
+    let text = """
+      ## Evidence
+
+      - [UNVERIFIED] the underlying claim text
+
+      ## Risks
+
+      - a completely different description with no shared wording
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.contains { $0.ruleID == "design-lint.unverified-uncovered" })
+  }
+
+  @Test("an [UNVERIFIED] bullet restated in both Risks and Open questions is not flagged")
+  func unverifiedInBothRisksAndOpenQuestionsIsNotFlagged() throws {
     let text = """
       ## Decision
 
@@ -217,25 +303,43 @@ struct DesignLintEvidenceTests {
 
       ## Risks
 
-      - Something worth tracking, unrelated wording is fine.
+      - [UNVERIFIED] Use the queue-backed approach — risk noted.
+
+      ## Open questions
+
+      - [UNVERIFIED] Use the queue-backed approach — question noted.
       """
     let findings = try Self.check(Self.parse(text))
     #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
   }
 
-  @Test("an [UNVERIFIED] bullet is not flagged once Open questions has any content")
-  func unverifiedCoveredByOpenQuestionsIsNotFlagged() throws {
+  // MARK: - [UNVERIFIED] is forbidden in Decision (spec §11: refuted or [UNVERIFIED], never in Decision)
+
+  @Test(
+    "an [UNVERIFIED]-tagged Decision bullet is flagged, not accepted as merely tagged — catches an unverified claim backing a decision"
+  )
+  func unverifiedDecisionBulletIsFlagged() throws {
     let text = """
       ## Decision
 
       - Use the queue-backed approach [UNVERIFIED]
-
-      ## Open questions
-
-      - Something worth tracking, unrelated wording is fine.
       """
     let findings = try Self.check(Self.parse(text))
-    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+    #expect(findings.contains { $0.ruleID == "design-lint.unverified-in-decision" })
+    // Carrying the [UNVERIFIED] tag must not be read as satisfying "each tagged."
+    #expect(findings.contains { $0.ruleID == "design-lint.untagged-bullet" } == false)
+  }
+
+  @Test("a Decision bullet tagged with a supported claim and no [UNVERIFIED] is not flagged")
+  func decisionBulletWithoutUnverifiedIsNotFlagged() throws {
+    let text = """
+      ## Decision
+
+      - Use the queue-backed approach [ev-good-claim]
+      """
+    let findings = try Self.check(
+      Self.parse(text), claims: [Self.claim(id: "ev-good-claim", status: .supported)])
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-in-decision" } == [])
   }
 
   // MARK: - Perf & scale's seven dimensions
@@ -328,23 +432,22 @@ struct DesignLintEvidenceTests {
     #expect(findings.filter { $0.ruleID == "design-lint.untagged-bullet" } == [])
   }
 
-  @Test("[UNVERIFIED] appearing in both Risks and Open questions is not flagged")
-  func unverifiedInBothRisksAndOpenQuestionsIsNotFlagged() throws {
-    let text = """
-      ## Decision
+  // MARK: - Shared valid design doc fixture (used across sibling design-lint suites)
 
-      - Use the queue-backed approach [UNVERIFIED]
+  @Test("the repo's valid design doc fixture has no evidence-tag findings")
+  func repoValidDesignFixtureHasNoFindings() throws {
+    let findings = try Self.check(
+      try Self.fixture("valid.md"),
+      claims: [Self.claim(id: "ev-tca-effect-run-supports-cancellation", status: .supported)])
+    #expect(findings == [])
+  }
 
-      ## Risks
-
-      - [UNVERIFIED] Some risk worth tracking.
-
-      ## Open questions
-
-      - [UNVERIFIED] Some open question worth tracking.
-      """
-    let findings = try Self.check(Self.parse(text))
-    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  @Test("the repo's valid design doc fixture still has no diagram/budget findings")
+  func repoValidDesignFixtureHasNoDiagramFindings() throws {
+    let document = try Self.fixture("valid.md")
+    let findings = try DesignLintDiagrams.check(
+      document: document, docPath: "docs/example/designs/x.md", budgets: DocsBudgets())
+    #expect(findings == [])
   }
 
   // MARK: - Findings carry rule ids and a locatable file

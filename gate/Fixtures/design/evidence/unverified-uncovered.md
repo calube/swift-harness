@@ -6,9 +6,9 @@ tier: standard
 
 # Example: unverified claim with nothing to back it
 
-## Decision
+## Evidence
 
-- Use the queue-backed approach [UNVERIFIED]
+- [UNVERIFIED] the queue-backed approach avoids a server migration
 
 ## Risks
 

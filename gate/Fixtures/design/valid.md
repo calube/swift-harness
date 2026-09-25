@@ -57,7 +57,7 @@ sequenceDiagram
 | Module | Kind | Reason |
 |---|---|---|
 | OrderQueueFeature | feature | owns the reducer and queue state |
-| OrderQueueCore | core | pure queue model, no I/O |
+| OrderQueueCore | library | pure queue model, no I/O |
 
 ## Test plan by tier
 
@@ -74,19 +74,21 @@ Every enqueue, submit attempt and drop is logged with the queue depth at that po
 
 - throughput: up to 5 queued orders per device at once [ev-tca-effect-run-supports-cancellation]
 - tail latency: submit retries back off up to 30s [UNVERIFIED]
-- fan-out: one submit effect per queued order, run serially
-- failure isolation: one failed submit doesn't block the rest of the queue
-- resources: queue persists to on-device storage, bounded to 5 entries
-- backpressure: a full queue rejects new orders with a clear error
+- fan-out: one submit effect per queued order, run serially [ev-tca-effect-run-supports-cancellation]
+- failure isolation: one failed submit doesn't block the rest of the queue [ev-tca-effect-run-supports-cancellation]
+- resources: queue persists to on-device storage, bounded to 5 entries [ev-tca-effect-run-supports-cancellation]
+- backpressure: a full queue rejects new orders with a clear error [ev-tca-effect-run-supports-cancellation]
 - 10×: 50 queued orders still drain within one retry window [UNVERIFIED]
 
 ## Risks
 
-- Silent background submission may violate App Store review guidelines — see Open questions.
+- The App Store review guidelines allow silent background submission of a queued order — see Open questions.
+- Tail latency: submit retries back off up to 30s under sustained load — needs a longer soak test before launch.
 
 ## Open questions
 
 - Does silent background submission need explicit guest consent?
+- 10×: 50 queued orders still drain within one retry window — confirm under real device thermal throttling.
 
 ## Changelog
 
