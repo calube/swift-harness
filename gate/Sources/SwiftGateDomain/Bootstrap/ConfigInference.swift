@@ -156,7 +156,8 @@ public enum ConfigInference {
     }
     return InferredConfig(
       xcode: survey.xcodeVersion, appScheme: survey.schemes.flatMap(appScheme),
-      packages: packageGlobs(survey.packageDirectories), simulator: simulator(among: iPhones),
+      packages: packageGlobs(survey.packageDirectories),
+      simulator: simulator(among: iPhones, xcodeVersion: survey.xcodeVersion),
       packageDirectories: survey.packageDirectories.sorted(), availableDevices: iPhones)
   }
 
@@ -188,11 +189,19 @@ public enum ConfigInference {
     return targetSchemes.count == 1 ? targetSchemes.first : nil
   }
 
-  /// The newest iOS runtime's base-model iPhone (`iPhone 17` over `iPhone 17 Pro`), newest
-  /// generation first.
-  static func simulator(among iPhones: [InferredSimulator]) -> InferredSimulator? {
-    guard let newest = iPhones.map({ ToolVersion($0.os) }).max() else { return nil }
-    let onNewest = iPhones.filter { ToolVersion($0.os) == newest }
+  /// The base-model iPhone (`iPhone 17` over `iPhone 17 Pro`, newest generation first) on the
+  /// runtime matching the selected Xcode's major.minor, else on the newest iOS runtime. Every
+  /// machine with that Xcode can install its own runtime; a newer one is a per-machine extra, and
+  /// snapshot references recorded on it fail everywhere else.
+  static func simulator(among iPhones: [InferredSimulator], xcodeVersion: String?)
+    -> InferredSimulator?
+  {
+    let matchingXcode = xcodeVersion.map { xcode in
+      iPhones.filter { majorMinor($0.os) == majorMinor(xcode) }
+    }
+    let candidates = matchingXcode.flatMap { $0.isEmpty ? nil : $0 } ?? iPhones
+    guard let newest = candidates.map({ ToolVersion($0.os) }).max() else { return nil }
+    let onNewest = candidates.filter { ToolVersion($0.os) == newest }
     func generation(_ name: String) -> Int? {
       let parts = name.split(separator: " ")
       guard parts.count == 2 else { return nil }
@@ -204,6 +213,10 @@ public enum ConfigInference {
       return base
     }
     return onNewest.min { $0.device < $1.device }
+  }
+
+  private static func majorMinor(_ version: String) -> [Int] {
+    Array(ToolVersion(version).components.prefix(2))
   }
 }
 

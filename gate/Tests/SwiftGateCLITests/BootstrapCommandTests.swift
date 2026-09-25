@@ -202,7 +202,7 @@ struct BootstrapCommandTests {
     let config = try #require(try ConfigLoader().load(repositoryRoot: sandbox.repository))
     #expect(config.packages == ["Packages/Core"])
     #expect(config.xcode == "26.2")
-    #expect(config.simulator == SimulatorConfig(device: "iPhone 17", os: "26.4"))
+    #expect(config.simulator == SimulatorConfig(device: "iPhone 17", os: "26.2"))
     #expect(config.appScheme == InferredConfig.placeholder)
     #expect(outcome.text.contains("not a git repository"))
     #expect(sandbox.probe.installCount == 0)

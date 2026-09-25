@@ -46,7 +46,7 @@ struct ConfigInferenceTests {
   func simulatorChoice() {
     let inferred = ConfigInference.infer(
       RepositorySurvey(
-        packageDirectories: ["P"], schemes: nil, xcodeVersion: "26.2",
+        packageDirectories: ["P"], schemes: nil, xcodeVersion: nil,
         devices: [
           Self.device("iPhone 17 Pro", "iOS-26-4"), Self.device("iPhone 17", "iOS-26-4"),
           Self.device("iPhone 16", "iOS-26-4"), Self.device("iPhone 17", "iOS-26-2"),
@@ -54,6 +54,25 @@ struct ConfigInferenceTests {
           Self.device("Apple TV", "tvOS-26-4"),
         ]))
     #expect(inferred.simulator == InferredSimulator(device: "iPhone 17", os: "26.4"))
+  }
+
+  @Test(
+    "the runtime matching the selected Xcode wins over a newer one — catches pinning a runtime another machine with the same Xcode lacks, whose rendering fails every recorded snapshot"
+  )
+  func simulatorMatchesXcode() {
+    let devices = [
+      Self.device("iPhone 17", "iOS-26-4"), Self.device("iPhone 17 Pro", "iOS-26-4"),
+      Self.device("iPhone 17", "iOS-26-2"), Self.device("iPhone 16", "iOS-26-2"),
+    ]
+    let matched = ConfigInference.infer(
+      RepositorySurvey(
+        packageDirectories: ["P"], schemes: nil, xcodeVersion: "26.2", devices: devices))
+    #expect(matched.simulator == InferredSimulator(device: "iPhone 17", os: "26.2"))
+
+    let noMatch = ConfigInference.infer(
+      RepositorySurvey(
+        packageDirectories: ["P"], schemes: nil, xcodeVersion: "26.1", devices: devices))
+    #expect(noMatch.simulator == InferredSimulator(device: "iPhone 17", os: "26.4"))
   }
 
   @Test(
