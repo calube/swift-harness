@@ -4,8 +4,7 @@ How tests are written, placed, and judged in a swift-harness app. It's for anyon
 
 Every rule here names what enforces it:
 
-- A `swiftgate` command and rule id that exists today: `swiftgate lint`, `testlint`, `arch`, `impact`, `coverage`, `check`, `test`, `prove`, `stress`, `reach`, `stats`.
-- A command marked **(planned)**: `mutate`, `snapshots record`, `judge`. The rule already applies; until the command lands, the reviewer checks it by hand.
+- A `swiftgate` command and rule id: `swiftgate lint`, `testlint`, `arch`, `impact`, `coverage`, `check`, `test`, `prove`, `stress`, `reach`, `mutate`, `snapshots record`, `judge`, `stats`. Every rule id is listed in [standards.md § Rule id index](standards.md#rule-id-index).
 - `review`: human or review-agent judgment. No tool can see it.
 
 Waivers use the same-line syntax from [standards.md § Escape hatches](standards.md#escape-hatches): `// swiftgate:allow <rule-id> — <reason>`. A bare allow is itself a gating finding, and every allow is counted in the run report.
@@ -47,7 +46,7 @@ Every Swift Testing test gets a display name in this shape:
 // Bad: no display name. `test.unnamed` fails the gate.
 @Test func factFailure() async { … }
 
-// Bad: names exist, but the regression is vague. The judge (planned) scores this low.
+// Bad: names exist, but the regression is vague. The judge scores this low.
 @Test("fact works — catches bugs")
 ```
 
@@ -55,7 +54,7 @@ XCTest methods (XCUITests) can't carry a display name. Put the regression in a `
 
 If you can't write the "catches" half, the test probably doesn't protect anything. Delete it or find the regression it guards.
 
-**Enforced by:** `swiftgate testlint` rule `test.unnamed` (missing display name); `swiftgate judge` **(planned)** question "how specific is the regression name"; review.
+**Enforced by:** `swiftgate testlint` rule `test.unnamed` (missing display name); `swiftgate judge` question `judge.name-specificity` ("how specific is the regression name"); review.
 
 ## 3. Rules
 
@@ -77,9 +76,9 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 - **Enforced by:** `swiftgate test` / `check` read the xUnit reports (T1) and the xcresult (T2, T3) · **Source:** incident: none yet.
 
 **P4. Snapshots never record during a test run.**
-- **Do:** leave `record:` out, or set it to `.never`. Re-record only through `swiftgate snapshots record` **(planned)** on the pinned simulator from `.swiftgate.toml`, so reference changes show up in the diff.
+- **Do:** leave `record:` out, or set it to `.never`. Re-record only through `swiftgate snapshots record` on the pinned simulator from `.swiftgate.toml`, so reference changes show up in the diff.
 - **Tell:** `record: .all`, `.missing` or `.failed` in a test; a new `__Snapshots__/*.png` that nobody reviewed. The library default, `.missing`, silently writes a new reference and **passes**.
-- **Enforced by:** `lint` `snap.record-mode` (any `record:` other than `.never` or `nil` is RED); the gate runs every tier with `SNAPSHOT_TESTING_RECORD=never` (the SwiftPM adapter sets it; `test --tier t2` **(planned)** sets it for `xcodebuild`) so a missing reference fails · **Source:** [swift-snapshot-testing record modes](https://github.com/pointfreeco/swift-snapshot-testing). Incident: none yet.
+- **Enforced by:** `lint` `snap.record-mode` (any `record:` other than `.never` or `nil` is RED); the gate runs every tier with `SNAPSHOT_TESTING_RECORD=never` (the SwiftPM adapter sets it; `test --tier t2|t3` sets `TEST_RUNNER_SNAPSHOT_TESTING_RECORD=never` for `xcodebuild`) so a missing reference fails · **Source:** [swift-snapshot-testing record modes](https://github.com/pointfreeco/swift-snapshot-testing). Incident: none yet.
 
 **P5. `TestStore` is exhaustive by default.**
 - **Do:** assert every state change in `send`'s and `receive`'s trailing closure. If a test must be non-exhaustive, justify it on the same line.
@@ -97,8 +96,8 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 - **Enforced by:** `testlint` `test.sleep`, `test.swallowed-error`; Core code is covered by `lint` `det.*` ([standards.md § 3](standards.md#3-dependencies-and-clients), D1) · **Source:** incident: none yet.
 
 **P8. Stress new and changed tests before ready.**
-- **Do:** expect new or changed host tests to run 10 times at the `ready` tier. Any failure is RED. `swift test` on Swift 6.2 has no shuffle or repeat option, so each run is its own `--parallel` process: Swift Testing runs the tests concurrently and XCTest spreads them over worker processes, so their order is not fixed.
-- **Tell:** a test that depends on run order, shared mutable state, or wall time.
+- **Do:** expect new or changed host tests to run 10 times at the `ready` tier. Any failure is RED. `stress` runs N separate `swift test --parallel` processes over the selected tests. It does not shuffle: `swift test` on Swift 6.2 has no shuffle or repeat option. What varies between runs is scheduling: Swift Testing runs the tests concurrently and XCTest spreads them over worker processes.
+- **Tell:** a test that depends on shared mutable state, wall time, or another test running first or concurrently. A dependency on declaration order alone can survive `stress`; review looks for it.
 - **Enforced by:** `swiftgate stress --n 10` (also in `check --tier ready`) rule `stress.failed` · **Source:** incident: none yet.
 
 **P9. A changed Core, Client or Live file comes with a test change in the same module.**
@@ -118,7 +117,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P11. T3 is a closed list of flows.**
 - **Do:** declare each end-to-end flow as a `[[flows]]` entry with a reason. Name the XCUITest class or method (after `test`) starting with the flow name; matching ignores case and punctuation.
 - **Tell:** an XCUITest whose class and method match no flow; more flows than `pyramid.max_flows`.
-- **Enforced by:** `testlint` `test.xcuitest-unlisted-flow`; the `max_flows` cap **(planned)** · **Source:** incident: none yet.
+- **Enforced by:** `testlint` `test.xcuitest-unlisted-flow`; `test --tier t3` (and `check --tier ready`) judges the UI tests that actually ran: `t3.unmapped-flow` (a test matching no flow), `t3.flow-untested` (a flow no test covered), `t3.max-flows` (more UI tests than `pyramid.max_flows`). Loading `.swiftgate.toml` also rejects more `[[flows]]` entries than `max_flows` · **Source:** incident: none yet.
 
 ## 4. Pyramid enforcement
 
@@ -127,7 +126,7 @@ Raw tier counts are easy to game, so the gate checks where tests live and what t
 | Rule | How it's detected | Enforced by |
 |---|---|---|
 | Every XCUITest maps to a `[[flows]]` entry | test and class names vs. config | `testlint` `test.xcuitest-unlisted-flow` |
-| At most `max_flows` flows | config | **(planned)** |
+| At most `max_flows` flows, and at most `max_flows` UI tests | config; the UI tests a T3 run executed | config validation (`swiftgate.config`); `test --tier t3` rule `t3.max-flows` |
 | A T2 test that renders no view or snapshot and imports only Core/Client modules belongs at T1 | SwiftSyntax import and call scan | `testlint` `test.misplaced-t2` |
 | Every Core, Client and Live module has at least one T1 test | module graph vs. discovered tests | `swiftgate coverage` / `check --tier push` rule `coverage.no-t1-tests` |
 | At least `diff_coverage_min` of changed Core/Client/Live lines are covered by T1 alone | `swift test --enable-code-coverage` → llvm-cov JSON ∩ diff | `swiftgate coverage` |
@@ -163,7 +162,7 @@ Run it on a path relative to the repository root, e.g. `swiftgate testlint Packa
 ### 5.2 Behavioral (push and ready)
 
 - **`prove`:** each new or changed host test fails on an assertion with the source change reverted (P2).
-- **`mutate` (planned):** mutation testing on **changed** Core/Client/Live lines, re-running the affected T1 tests. Operators: negate a conditional, shift a relational boundary (`<` ↔ `<=`), return a default, remove a call, remove an effect or `send`. Any surviving mutant is RED at `ready`, unless the line carries `// swiftgate:equivalent-mutant — <reason>`. Costs about 5–15s per mutant; capped at `[mutation] max_mutants` with sampling beyond; never runs in the Stop hook.
+- **`mutate` (`swiftgate mutate`, and in `check --tier ready`):** mutation testing on **changed** Core/Client/Live lines, re-running the affected T1 tests. Operators: negate a conditional, shift a relational boundary (`<` ↔ `<=`), return a default, remove a call, remove an effect or `send`. Any surviving mutant is RED `mutate.survived` at `ready`, unless the line carries `// swiftgate:equivalent-mutant — <reason>`; a mutant that doesn't compile is `mutate.unviable` and left out of the kill rate. Each mutant builds and tests in its own scratch worktree, in parallel workers: seconds for a small package, minutes for TCA packages. Capped at `[mutation] max_mutants` (default 30) with sampling beyond; skipped while T1 is RED; never runs in the Stop hook. `review-input` also runs it, so reviewers see surviving mutants.
 - **Per-test reach (`swiftgate reach`, and in `check --tier ready`):** each new or changed host test runs alone with coverage. Zero production lines covered in the module it targets (`<Module>` for `<Module>Tests`, otherwise its local production dependencies) is RED `reach.no-production-lines`; failing when run alone is RED `reach.fails-alone`.
 
 ### 5.3 Judgment
@@ -272,7 +271,7 @@ struct APIClientLiveTests {
 ```
 
 Why it passes the gate:
-- The backoff is asserted at its edges: nothing at 999ms, a retry at 1s. An off-by-one in the delay, or a retry with no delay at all, fails. This is also the kind of test that kills `<` ↔ `<=` mutants (`mutate`, planned).
+- The backoff is asserted at its edges: nothing at 999ms, a retry at 1s. An off-by-one in the delay, or a retry with no delay at all, fails. This is also the kind of test that kills `<` ↔ `<=` mutants (`mutate`).
 - The comment above the suite is a kept *why*: it explains a footgun a reader can't recover from the code.
 - `.serialized` plus `withMainSerialExecutor` is the P6 incident fix; `.timeLimit` turns a regression of it into a failure rather than a hang.
 - No real sleeps (`test.sleep`); the clock is injected.

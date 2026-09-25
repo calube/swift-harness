@@ -62,8 +62,11 @@ runs, `P8`) and per-test reach (each test covers its own module).
   `prove.no-evidence`: treat as BLOCKED.
 - `reach.no-production-lines`: the test runs no code in the module it targets; test the module.
 - `stress.failed` / `stress.crashed` is a flake: find the shared state or real time (`P6`, `P7`), never retry.
-- `swiftgate.not-run` notes list steps this build can't run yet (such as `mutate`); report them as
-  not run, never as passed.
+- `mutate.survived`: a changed line no test pins; add the assertion that kills it (or mark a truly
+  equivalent mutant `// swiftgate:equivalent-mutant — <reason>`). `mutate not run: T1 is RED`
+  clears once T1 is green.
+- `swiftgate.not-run` notes list steps this build can't run yet (such as simulator prove and
+  stress); report them as not run, never as passed.
 
 ## Report
 

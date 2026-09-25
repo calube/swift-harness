@@ -599,6 +599,10 @@ if items.isEmpty { return }
 
 ## Rule id index
 
+Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column cite [testing-playbook.md](testing-playbook.md). A test checks this table against the rule registries, so an id is added here in the same change that adds the rule.
+
+### Code rules (`lint`, `arch`, `comments`, `testlint`)
+
 | Rule id | Section |
 |---|---|
 | `det.date-init`, `det.uuid-init`, `det.task-sleep`, `det.async-after`, `det.random` | D1, G1 |
@@ -607,7 +611,50 @@ if items.isEmpty { return }
 | `safety.try-bang`, `safety.as-bang`, `safety.fatal-error` | E2 |
 | `safety.unchecked-sendable`, `safety.nonisolated-unsafe`, `safety.preconcurrency` | C2 |
 | `tca.banned-api` | A6 |
-| `snap.record-mode` | testing playbook |
-| arch (module graph) | A1, A2, A3, D2, D4 |
-| comments | K1, K2 |
+| `snap.record-mode` | playbook P4 |
+| `arch.undeclared-kind`, `arch.config-module-mismatch` | A1, A3 |
+| `arch.ui-framework-in-core` | A2 |
+| `arch.core-main-actor-isolation` | C5 |
+| `arch.live-dependency`, `arch.live-depends-on-feature`, `arch.vendor-dependency` | D2, D3 |
+| `arch.dependency-client-test-value` | D4 |
+| `arch.engine-replay-test` | G1, playbook P10 |
+| `comments.restates-code`, `comments.long-block`, `comments.test-body`, `comments.trivial-private-doc`, `comments.ai-prose` | K1 |
+| `comments.commented-out-code`, `comments.diff-narration`, `comments.line-reference`, `comments.todo-without-link`, `comments.private-reference` | K2 |
+| `comments.unjustified-suppression` | [Escape hatches](#escape-hatches), C2, E2 |
+| `test.unnamed` | playbook P1 |
+| `test.no-assertion`, `test.tautology`, `test.existence-only`, `test.asserts-own-double`, `test.duplicate` | playbook §5.1 |
+| `test.non-exhaustive-store` | playbook P5 |
+| `test.testclock-serialized` | playbook P6 |
+| `test.sleep`, `test.swallowed-error` | playbook P7, D1 |
+| `test.misplaced-t2` | playbook §4 |
+| `test.xcuitest-unlisted-flow` | playbook P11 |
 
+### Test evidence (`test`, `check`)
+
+| Rule id | Section |
+|---|---|
+| `t1.test-failed`, `t1.crashed`, `t1.build-failed`, `t1.skip-without-reason`, `t1.no-tests`, `t1.no-evidence`, `t1.runner` | playbook P3 |
+| `t2.test-failed`, `t2.crashed`, `t2.build-failed`, `t2.skip-without-reason`, `t2.no-tests`, `t2.no-evidence`, `t2.runner` | playbook P3 |
+| `t3.test-failed`, `t3.crashed`, `t3.build-failed`, `t3.skip-without-reason`, `t3.no-tests`, `t3.no-evidence`, `t3.runner` | playbook P3 |
+| `t3.unmapped-flow`, `t3.flow-untested`, `t3.max-flows`, `t3.app-container` | playbook P11 |
+| `sim.retry-configured` | playbook P3 (a retried test hides a flake) |
+| `snapshots.recorded` | playbook P4 (`snapshots record`) |
+| `impact.untested-change` | playbook P9 |
+| `coverage.diff`, `coverage.uncovered-lines`, `coverage.no-data`, `coverage.no-t1-tests`, `coverage.summary` | playbook §4 |
+| `prove.not-proven`, `prove.compile-only`, `prove.crashed`, `prove.fails-at-head`, `prove.no-evidence`, `prove.summary` | playbook P2 |
+| `stress.failed`, `stress.crashed`, `stress.no-evidence` | playbook P8 |
+| `reach.no-production-lines`, `reach.fails-alone`, `reach.no-data`, `changed-tests.summary` | playbook §5.2 |
+| `mutate.survived`, `mutate.killed`, `mutate.unviable`, `mutate.no-evidence`, `mutate.bare-equivalent`, `mutate.summary` | playbook §5.2 |
+| `judge.fails-if-broken`, `judge.tier`, `judge.name-specificity`, `judge.asserts-implementation`, `judge.not-run` | playbook §5.4 |
+| `judge.loses-fact`, `judge.right-size` | K1 (the commit-comment judge) |
+
+### Harness and environment
+
+| Rule id | Section |
+|---|---|
+| `format.parse`, and `format.<rule>` for each `swift format lint --strict` rule | [Platform and toolchain](#platform-and-toolchain) |
+| `swiftgate.allow-missing-reason` | [Escape hatches](#escape-hatches) |
+| `swiftgate.config`, `swiftgate.environment`, `swiftgate.scopes-fallback`, `swiftgate.not-run`, `swiftgate.nothing-selected`, `swiftgate.budget` | the gate's own notes: an invalid `.swiftgate.toml` is RED, a missing tool or input is BLOCKED, the rest never gate |
+| `swiftgate.self-test`, `swiftgate.self-test.judge`, `swiftgate.self-test.judge-metrics` | H1 |
+| `doctor.xcode-pin`, `doctor.toolchain`, `doctor.simulator-runtime`, `doctor.disk`, `doctor.shim`, `doctor.swiftlint`, `doctor.issue-reporting`, `doctor.upgrade-hazard` | `swiftgate doctor`; [Toolchain hazards](#toolchain-hazards) |
+| `guard.raw-xcodebuild`, `guard.simctl-all`, `guard.snapshot-record`, `guard.global-derived-data`, `guard.snapshot-reference`, `guard.package-resolved`, `guard.xcresult`, `guard.plan-state` | [hooks.md](hooks.md) (PreToolUse guards) |
