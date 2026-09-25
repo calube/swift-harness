@@ -225,3 +225,50 @@ or quotes original bytes must read the file itself (as `DesignSha` and the conte
   over subsections). **`docs-lint` budgets inherit the `architecture` default too:** decide deliberately whether
   it applies outside design docs.
 - Fixtures: `GF/design/diagrams/{missing-diagrams,unknown-type,known-types-with-direction,blank-and-comment-fences}.md`.
+
+## Wave 7
+
+**The shared valid design, `GF/design/valid.md`.** It must produce zero findings under every design-lint rule.
+When a new rule finds it invalid, the task that adds the rule fixes the fixture. It never builds a private
+"valid" copy to route around it. Every tag in it must be honest: cite an `ev-` claim only where that claim
+supports the bullet, and otherwise use `[UNVERIFIED]` with a restatement in Risks or Open questions.
+`design-lint-command` must assert that it's clean under every rule together.
+
+**Design-lint, shared conventions.** Each rule family is a static `check(...) throws(ReportContractViolation) ->
+[Finding]` with rule ids prefixed `design-lint.`, and every finding is `major` (gating).
+
+**Evidence tags** (`D/Design/DesignLintEvidence.swift`)
+- `DesignLintEvidence.check(document:docPath:claims:)`, with `claims: [Claim]`.
+- Rule ids: `design-lint.untagged-bullet` (Evidence, Decision and Perf), `design-lint.unknown-claim` (any tagged
+  section), `design-lint.citation-not-supported` (Decision only, spec §5.3), `design-lint.unverified-in-decision`,
+  `design-lint.unverified-uncovered`, `design-lint.perf-missing-dimension`.
+- Coverage is mechanical: the unverified bullet's text, with `[UNVERIFIED]` and `[ev-…]` tags stripped,
+  whitespace collapsed, case ignored and a trailing period dropped, must be contained in some Risks or
+  Open-questions bullet. A paraphrase doesn't count. The spec's Risks row now says this.
+- `DesignLintEvidence.PerfDimension: CaseIterable`: `throughput`, `tailLatency`, `fanOut`, `failureIsolation`,
+  `resources`, `backpressure`, `tenX`, each with a public `displayName`.
+
+**Sections and ids** (`D/Design/DesignLintSections.swift`)
+- `DesignLintSections.check(document:docPath:otherDesignIds:)`. `otherDesignIds: Set<String>` holds the `req-`/`test-`
+  ids DEFINED by every other design. The caller scans `docs/**/designs/*.md`. A citation never goes in the set.
+- Rule ids: `design-lint.section-missing`, `.section-order`, `.problem-empty`, `.requirement-id-form`,
+  `.requirement-id-duplicate`, `.test-id-form`, `.test-id-duplicate`, `.test-tier-invalid`, `.options-count`,
+  `.module-kind-unknown`.
+- `DesignDocument.RequiredSection` (`.anchor`, `.name`) is the one ordered list of required sections, read by
+  both the parser and the lint. Module kinds are `ModuleKind` raw values: `feature`, `engine`, `render`,
+  `library`, `client`, `test-support`.
+- Baseline fixture: `GF/design/sections/complete.md`.
+
+**Design review verdict** (`D/Review/DesignReviewVerdict.swift`, `C/Commands/ReviewCommands.swift`)
+- `review-synth --run-directory <dir> --design <doc> --tier quick|standard|deep [--json] [files…]`. Exit 0 on any
+  verdict (`ready`, `revise`, `rethink`), and `design-review.json` is written. Exit 2 on a bad or missing tier, an
+  unknown or duplicate reviewer, an anchor absent from the doc (matched case-sensitively, never inside a fence),
+  or an unreadable file. Nothing is written on exit 2.
+- `design-review.json`: `schemaVersion`, `tier`, `verdict`, `required`, `rerun`, `findings[{finding, reviewers}]`,
+  `dropped`, `notReviewed`, `notResearched`.
+- Reviewer input: `{schemaVersion: 1, reviewer, status: reviewed|not-reviewed|not-researched, reason?, findings}`.
+  A finding uses `location: {anchor}` and carries no `file` or `line`.
+- Reviewers: `evidence-auditor`, `standards-reviewer`, `challenger`, `pre-mortem`. Required: quick = none, standard
+  = the first 3, deep = all 4. `quick` is `ready` when no file is given, or every given file is `reviewed` with
+  no kept blocker or major.
+- `ReviewSynthesis.dropReason(_:)` is the ONE verify-step drop rule for both code and design review. Don't copy it.

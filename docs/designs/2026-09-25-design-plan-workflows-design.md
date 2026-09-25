@@ -240,7 +240,7 @@ File `docs/<area>/designs/<slug>.md`. Sections, in order:
 | Test plan by tier | bullets `test-…: behaviour — tier T1/T2/T3` | ids D18 form; tier present |
 | Observability | prose + bullets | present |
 | Perf & scale | bullets: throughput, tail latency, fan-out, failure isolation, resources, backpressure, 10× | each tagged; all seven named |
-| Risks | bullets | every `[UNVERIFIED]` bullet elsewhere appears here or in Open questions |
+| Risks | bullets | every `[UNVERIFIED]` bullet elsewhere appears here or in Open questions: its text, with tags stripped, whitespace collapsed, case ignored and a trailing period dropped, is contained in one of these bullets |
 | Open questions | bullets | as above |
 | Changelog | dated entries from clarify and amend (§8.4) | append-only |
 

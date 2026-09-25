@@ -72,12 +72,12 @@ Every enqueue, submit attempt and drop is logged with the queue depth at that po
 
 ## Perf & scale
 
-- throughput: up to 5 queued orders per device at once [ev-tca-effect-run-supports-cancellation]
+- throughput: up to 5 queued orders per device at once [UNVERIFIED]
 - tail latency: submit retries back off up to 30s [UNVERIFIED]
-- fan-out: one submit effect per queued order, run serially [ev-tca-effect-run-supports-cancellation]
-- failure isolation: one failed submit doesn't block the rest of the queue [ev-tca-effect-run-supports-cancellation]
-- resources: queue persists to on-device storage, bounded to 5 entries [ev-tca-effect-run-supports-cancellation]
-- backpressure: a full queue rejects new orders with a clear error [ev-tca-effect-run-supports-cancellation]
+- fan-out: one submit effect per queued order, run serially [UNVERIFIED]
+- failure isolation: one failed submit doesn't block the rest of the queue [UNVERIFIED]
+- resources: queue persists to on-device storage, bounded to 5 entries [UNVERIFIED]
+- backpressure: a full queue rejects new orders with a clear error [UNVERIFIED]
 - 10×: 50 queued orders still drain within one retry window [UNVERIFIED]
 
 ## Risks
@@ -87,6 +87,11 @@ Every enqueue, submit attempt and drop is logged with the queue depth at that po
 
 ## Open questions
 
+- Throughput: up to 5 queued orders per device at once — to confirm in the first build's T2 run.
+- Fan-out: one submit effect per queued order, run serially — to confirm in the first build's T2 run.
+- Failure isolation: one failed submit doesn't block the rest of the queue — to confirm in the first build's T2 run.
+- Resources: queue persists to on-device storage, bounded to 5 entries — to confirm in the first build's T2 run.
+- Backpressure: a full queue rejects new orders with a clear error — to confirm in the first build's T2 run.
 - Does silent background submission need explicit guest consent?
 - 10×: 50 queued orders still drain within one retry window — confirm under real device thermal throttling.
 
