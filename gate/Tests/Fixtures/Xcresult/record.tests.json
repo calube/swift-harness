@@ -1,0 +1,82 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-capture",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C54",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "XcresultProbeTests.swift:15: XCTAssertEqual failed: (\"4\") is not equal to (\"5\") - 2 + 2 should be 5",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.032s",
+                  "durationInSeconds" : 0.0316469669342041,
+                  "name" : "testAddsWrong()",
+                  "nodeIdentifier" : "ProbeFailXCTests/testAddsWrong()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailXCTests/testAddsWrong",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "ProbeFailXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            },
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "CounterViewSnapshotTests.swift:18: Issue recorded: Record mode is on. Automatically recorded snapshot: …\n\nopen \"file:///SCRATCH/Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__/CounterViewSnapshotTests/counterWithFact.1.png\"\n\nTurn record mode off and re-run \"counterWithFact\" to assert against the newly-recorded snapshot",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "1s",
+                  "durationInSeconds" : 1,
+                  "name" : "counter with a loaded fact renders unchanged — catches layout regressions in the counter screen",
+                  "nodeIdentifier" : "CounterViewSnapshotTests/counterWithFact()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/CounterViewSnapshotTests/counterWithFact()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "CounterViewSnapshotTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/CounterViewSnapshotTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "CounterUISnapshotTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "CounterFeature-Package",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

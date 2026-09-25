@@ -4,3 +4,4 @@
 **/.harness/runs/
 DerivedData/
 .DS_Store
+**/.harness/derived-data/

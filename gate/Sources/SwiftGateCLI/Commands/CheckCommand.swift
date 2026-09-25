@@ -11,7 +11,7 @@ enum CheckRun {
 
   static func run(
     root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, base: String,
-    context: GateRun.Context
+    context: GateRun.Context, simulator: SimulatorTestCheck.Dependencies = .live()
   ) async throws -> GateRunParts {
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
@@ -44,6 +44,12 @@ enum CheckRun {
     } else {
       parts.findings.append(
         try note("T1 not run: \(ConfigLoader.fileName) is needed to find the packages to test"))
+    }
+    if let config, let graph = scopes.graph {
+      parts.append(
+        try await runSimulatorTiers(
+          root: root, git: git, tier: tier, base: base, config: config, graph: graph,
+          context: context, dependencies: simulator))
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -119,7 +125,7 @@ enum CheckRun {
     }
   }
 
-  private static func changedSinceMergeBase(git: any Git, base: String) async
+  static func changedSinceMergeBase(git: any Git, base: String) async
     -> Result<[String], BlockedReason>
   {
     do throws(GitError) {

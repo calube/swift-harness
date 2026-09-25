@@ -13,7 +13,10 @@ struct CheckCommandTests {
   ) async throws -> (parts: GateRunParts, report: RunReport) {
     let parts = try await CheckRun.run(
       root: repository.root, swiftPM: swiftPM, git: git, tier: tier, base: "origin/main",
-      context: repository.context())
+      context: repository.context(),
+      simulator: SimulatorTestCheck.Dependencies(
+        makeDevices: { _ in FakeDevices() }, xcodebuild: FakeXcodebuild(),
+        reader: FakeXcresultReader(scenario: "pass")))
     let report = try RunReport(
       runID: "r", durationMilliseconds: 1, tiers: parts.tiers, findings: parts.findings,
       allowances: parts.allowances)
@@ -56,7 +59,7 @@ struct CheckCommandTests {
   }
 
   @Test(
-    "push runs every T1 target with coverage, impact and presence, and names T2 as not run — catches push claiming GREEN for steps it skipped"
+    "push runs every T1 target with coverage, impact and presence, and T2 on the affected packages — catches push skipping the simulator tier"
   )
   func push() async throws {
     let repository = try ProbeRepository()
@@ -67,9 +70,11 @@ struct CheckCommandTests {
     let (parts, _) = try await check(.push, in: repository, swiftPM: swiftPM, git: git)
 
     #expect(swiftPM.testRequests.count == 1)
-    let notRun = parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }
-    #expect(notRun.map(\.message).allSatisfy { $0.hasPrefix("T2 not run") })
-    #expect(notRun.count == 1 && notRun.allSatisfy { !$0.severity.failsGate })
+    #expect(!parts.findings.contains { $0.ruleID == CheckRun.notRunRuleID })
+    // The probe has no simulator target, so T2 selects nothing and says so without failing.
+    let t2 = parts.findings.filter { $0.ruleID == SimulatorTestCheck.nothingSelectedRuleID }
+    #expect(t2.map(\.message).allSatisfy { $0.hasPrefix("T2:") })
+    #expect(t2.count == 1 && t2.allSatisfy { !$0.severity.failsGate })
     // The probe's EmptyTests target is empty on purpose: evidence, not an exit code, says so.
     #expect(parts.findings.contains { $0.ruleID == HostTestEvidenceRules.noTestsRuleID })
   }
@@ -86,6 +91,9 @@ struct CheckCommandTests {
     #expect(
       parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }.count
         == CheckTier.ready.pendingSteps.count)
+    #expect(
+      parts.findings.filter { $0.ruleID == SimulatorTestCheck.nothingSelectedRuleID }
+        .map(\.message).sorted().map { $0.prefix(3) } == ["T2:", "T3:"])
   }
 
   @Test(

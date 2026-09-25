@@ -60,7 +60,7 @@ read_parts() {
 # Machine paths, the clone's identity, and the machine's device list (in "no destination" errors)
 # are replaced; everything else is verbatim.
 scrub() {
-  sed -e "s#$work#/SCRATCH#g" -e "s#$root#/REPO#g" -e "s#$clone#CLONE-UDID#g" \
+  sed -e "s#/private$work#/SCRATCH#g" -e "s#$work#/SCRATCH#g" -e "s#$root#/REPO#g" -e "s#$clone#CLONE-UDID#g" \
     -e "s#swift-harness-$$-capture#swift-harness-PID-capture#g" "$1" |
     perl -pe 's/(\\n\\n\\tAvailable destinations for)(?:[^"\\]|\\.)*/$1 <elided by capture.sh>/'
 }
@@ -73,7 +73,7 @@ capture() {
   for test in "$@"; do only+=("-only-testing:CounterUISnapshotTests/$test"); done
   local bundle="$work/$scenario.xcresult"
   local started=$SECONDS
-  (cd "$package" && TEST_RUNNER_SNAPSHOT_TESTING_RECORD=never xcodebuild test \
+  (cd "$package" && TEST_RUNNER_SNAPSHOT_TESTING_RECORD="${RECORD:-never}" xcodebuild test \
     -scheme CounterFeature-Package -destination "$destination" -derivedDataPath "$derived/${DERIVED_KEY:-main}" \
     -resultBundlePath "$bundle" -skipMacroValidation "${only[@]}" \
     >"$work/$scenario.xcodebuild.log" 2>&1)
@@ -83,7 +83,7 @@ capture() {
 }
 
 scenarios=("$@")
-[ ${#scenarios[@]} -eq 0 ] && scenarios=(pass fail skip crash zero no-destination build-error missing-bundle)
+[ ${#scenarios[@]} -eq 0 ] && scenarios=(pass fail skip crash zero no-destination build-error record missing-bundle)
 for scenario in "${scenarios[@]}"; do
   case "$scenario" in
   pass) capture pass "$package" "id=$clone" CounterViewSnapshotTests ProbePassXCTests ;;
@@ -93,6 +93,7 @@ for scenario in "${scenarios[@]}"; do
   zero) capture zero "$package" "id=$clone" NoSuchSuite ;;
   no-destination) capture no-destination "$package" "id=00000000-0000-0000-0000-000000000000" ProbePassXCTests ;;
   build-error) DERIVED_KEY=broken capture build-error "$broken/CounterFeature" "id=$clone" ProbePassXCTests ;;
+  record) RECORD=all capture record "$package" "id=$clone" CounterViewSnapshotTests ProbeFailXCTests ;;
   missing-bundle) read_parts missing-bundle "$work/missing.xcresult" ;;
   *) echo "unknown scenario $scenario" >&2 && exit 2 ;;
   esac

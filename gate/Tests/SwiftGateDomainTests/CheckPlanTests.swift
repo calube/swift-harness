@@ -15,15 +15,15 @@ struct CheckTierTests {
   }
 
   @Test(
-    "steps this build cannot run yet are listed per tier, never counted as passing — catches push or ready reporting T2/T3 GREEN without running them"
+    "steps this build cannot run yet are listed per tier, never counted as passing — catches push or ready reporting a step GREEN without running it, or push skipping T2"
   )
   func notRunYet() {
     #expect(CheckTier.fast.pendingSteps.isEmpty)
-    #expect(CheckTier.push.pendingSteps.map(\.name) == ["T2"])
+    #expect(CheckTier.push.pendingSteps.isEmpty)
     #expect(
-      CheckTier.ready.pendingSteps.map(\.name) == [
-        "T2", "T3", "stress", "prove", "reach", "mutate",
-      ])
+      CheckTier.ready.pendingSteps.map(\.name) == ["stress", "prove", "reach", "mutate"])
+    #expect(!CheckTier.fast.runsT2 && CheckTier.push.runsT2 && CheckTier.ready.runsT2)
+    #expect(!CheckTier.push.runsT3 && CheckTier.ready.runsT3)
   }
 }
 

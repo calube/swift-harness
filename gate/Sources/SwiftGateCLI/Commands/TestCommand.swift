@@ -86,7 +86,8 @@ struct TestCommand: AsyncParsableCommand {
     case t1, t2, t3
   }
 
-  @Option(help: "Tier to run: t1 (host swift test). t2 and t3 need the simulator adapters.")
+  @Option(
+    help: "Tier to run: t1 (host swift test), t2 (simulator tests), t3 (app UI flows).")
   var tier: TierOption
 
   @Option(help: "Only packages affected by changes since this ref (committed or not).")
@@ -94,19 +95,22 @@ struct TestCommand: AsyncParsableCommand {
 
   @OptionGroup var output: OutputOptions
 
-  func validate() throws {
-    guard tier == .t1 else {
-      throw ValidationError("--tier \(tier.rawValue) is not available yet; only t1 runs today")
-    }
-  }
-
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
-    try await GateRun.execute(root: root, format: output.format, command: "test t1") { context in
-      try await TestCheck.run(
-        root: root, swiftPM: swiftPM, git: git, affectedSince: affectedSince, context: context)
+    try await GateRun.execute(
+      root: root, format: output.format, command: "test \(tier.rawValue)"
+    ) { context in
+      switch tier {
+      case .t1:
+        try await TestCheck.run(
+          root: root, swiftPM: swiftPM, git: git, affectedSince: affectedSince, context: context)
+      case .t2, .t3:
+        try await TestCheck.runSimulator(
+          tier: tier == .t2 ? .t2 : .t3, root: root, swiftPM: swiftPM, git: git,
+          affectedSince: affectedSince, dependencies: .live(), context: context)
+      }
     }
   }
 }

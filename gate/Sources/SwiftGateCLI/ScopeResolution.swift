@@ -61,6 +61,14 @@ enum ScopeResolution {
   /// The live SwiftPM for a repository root, with the root resolved the way `describe` reports
   /// paths.
   static func liveSwiftPM(root: URL) -> any SwiftPM {
-    LiveSwiftPM(runner: LiveProcessRunner(), repositoryRoot: root.resolvingSymlinksInPath().path)
+    LiveSwiftPM(runner: LiveProcessRunner(), repositoryRoot: describeRoot(root))
+  }
+
+  /// `realpath(3)`, not `resolvingSymlinksInPath()`: Foundation maps `/private/tmp` back to
+  /// `/tmp`, while `describe` reports the `/private` form.
+  static func describeRoot(_ root: URL) -> String {
+    guard let resolved = realpath(root.path, nil) else { return root.path }
+    defer { free(resolved) }
+    return String(cString: resolved)
   }
 }

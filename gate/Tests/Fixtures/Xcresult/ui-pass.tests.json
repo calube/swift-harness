@@ -1,0 +1,53 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-TOKEN",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C54",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "4s",
+                  "durationInSeconds" : 4.908062934875488,
+                  "name" : "testIncrementAndDecrementUpdateTheDisplayedCount()",
+                  "nodeIdentifier" : "CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "CounterFlowUITests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "SampleAppUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "SampleApp",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

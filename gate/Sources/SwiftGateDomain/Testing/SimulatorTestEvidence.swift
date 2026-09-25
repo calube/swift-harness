@@ -17,11 +17,15 @@ public struct SimulatorTestEvidence: Sendable, Equatable {
   public let testSourceFiles: [String]
   /// Absolute path that compiler locations are relative to.
   public let repositoryRoot: String
+  /// `.all` only for `swiftgate snapshots record`, where a record-mode issue means "recorded".
+  public let recording: SnapshotRecording
 
   public init(
     tier: Tier, testTargets: [TestTargetReference], succeeded: Bool, testResults: Data,
-    buildResults: Data?, testSourceFiles: [String], repositoryRoot: String
+    buildResults: Data?, testSourceFiles: [String], repositoryRoot: String,
+    recording: SnapshotRecording = .never
   ) {
+    self.recording = recording
     self.tier = tier
     self.testTargets = testTargets
     self.succeeded = succeeded
@@ -75,6 +79,7 @@ public enum SimulatorTestEvidenceRules {
     var judge = SimulatorJudgement(
       tier: evidence.tier, targets: evidence.testTargets, sources: evidence.testSourceFiles,
       root: evidence.repositoryRoot)
+    judge.recording = evidence.recording
     judge.run(evidence)
     return judge.outcome
   }
@@ -101,6 +106,7 @@ private struct SimulatorJudgement {
   let targets: [TestTargetReference]
   let sources: [String]
   let root: String
+  var recording = SnapshotRecording.never
   var findings: [Finding] = []
   var blocked = false
   var passed = 0
@@ -143,7 +149,10 @@ private struct SimulatorJudgement {
         "\(target.name) executed no tests; a selected \(tier.rawValue) target must run at least one"
       )
     }
-    if !evidence.succeeded, !findings.contains(where: { $0.severity.failsGate }), !blocked {
+    // Recording fails every assertion it records, so its nonzero exit is expected.
+    if !evidence.succeeded, evidence.recording == .never,
+      !findings.contains(where: { $0.severity.failsGate }), !blocked
+    {
       block(.runner, "xcodebuild test exited nonzero but its result bundle shows no failure")
     }
   }
@@ -189,6 +198,12 @@ private struct SimulatorJudgement {
       }
       return false
     case .failed:
+      if recording == .all, !testCase.messages.isEmpty,
+        testCase.messages.allSatisfy(SnapshotReferences.isRecordMessage)
+      {
+        passed += 1
+        return true
+      }
       failed += 1
       judgeFailure(testCase)
       return true

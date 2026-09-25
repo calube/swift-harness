@@ -22,15 +22,16 @@ public enum CheckTier: String, Sendable, CaseIterable {
   /// Diff coverage and per-module T1 presence.
   public var runsCoverage: Bool { self != .fast }
 
+  /// Simulator tests of the packages the change affects.
+  public var runsT2: Bool { self != .fast }
+  /// The app's UI flows.
+  public var runsT3: Bool { self == .ready }
+
   public var pendingSteps: [PendingStep] {
-    let simulator = PendingStep(name: "T2", requires: "simulator tests (swiftgate test --tier t2)")
     switch self {
-    case .fast: return []
-    case .push: return [simulator]
+    case .fast, .push: return []
     case .ready:
       return [
-        simulator,
-        PendingStep(name: "T3", requires: "UI flow tests (swiftgate test --tier t3)"),
         PendingStep(name: "stress", requires: "swiftgate stress"),
         PendingStep(name: "prove", requires: "swiftgate prove"),
         PendingStep(name: "reach", requires: "per-test reach"),

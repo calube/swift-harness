@@ -148,11 +148,8 @@ struct TestCommandTests {
     #expect(gitDown.tiers.first?.verdict == .blocked)
   }
 
-  @Test(
-    "only --tier t1 is accepted until the simulator tiers exist — catches t2 silently running nothing"
-  )
+  @Test("--affected-since is parsed for t1 — catches the scope flag being dropped")
   func tierValidation() throws {
-    #expect(throws: (any Error).self) { try SwiftGate.parseAsRoot(["test", "--tier", "t2"]) }
     let command = try #require(
       try SwiftGate.parseAsRoot(["test", "--tier", "t1", "--affected-since", "main"])
         as? TestCommand)

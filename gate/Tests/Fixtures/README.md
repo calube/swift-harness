@@ -100,7 +100,15 @@ machine's device list from the "no destination" error; the rest is verbatim.
 | `zero` | `NoSuchSuite` | exit 0; a `Test Plan` node with no children |
 | `no-destination` | an all-zero device id | exit 70; empty device, no test nodes, an `Uncategorized` build error |
 | `build-error` | `ProbePassXCTests`, with the probe broken to not compile | exit 65; no test nodes; a `Swift Compiler Error` with a `sourceURL` |
+| `record` | `CounterViewSnapshotTests`, `ProbeFailXCTests`, with `RECORD=all` (`TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all`) | exit 65; the snapshot case fails with `Issue recorded: Record mode is on. Automatically recorded snapshot: …` beside a real assertion failure |
 | `missing-bundle` | `xcresulttool` against a path that does not exist | `.stderr` + `.status` per subcommand (exit 64) |
+
+`Xcresult/ui-pass.{tests,build-results}.json` are captured by `gate/Fixtures/xcresult/capture-ui.sh`
+(run from the repository root): a real `swiftgate test --tier t3` of the SampleApp's app scheme
+(its one XCUITest, `CounterFlowUITests`), read back with the same two `xcresulttool` subcommands.
+The repository path becomes `/REPO`, the clone's name `swift-harness-PID-TOKEN` and its UDID
+`CLONE-UDID`. It shows XCUITest cases under a `UI test bundle` node, identified
+`<Class>/<method>()`.
 
 Observed behavior the evidence rules rely on:
 
@@ -113,6 +121,13 @@ Observed behavior the evidence rules rely on:
   XCTest crashes name only the crashing symbol.
 - A build error's `sourceURL` is `file://<abs path>#…&StartingLineNumber=<0-based>&…`.
 - An unresolved destination records a device whose `deviceId` is empty.
+
+## Doctor
+
+Captured on the machine the gate was built on (Xcode 26.2):
+`xcodebuild -version > Doctor/xcodebuild-version.txt`, `swift --version > Doctor/swift-version.txt`
+(both verbatim), and `Doctor/Package.resolved-CounterFeature.json`, a verbatim copy of
+`examples/SampleApp/Packages/CounterFeature/Package.resolved` (format version 3).
 
 ## Simctl
 

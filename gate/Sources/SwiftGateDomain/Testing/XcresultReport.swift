@@ -20,12 +20,18 @@ public struct XcresultTestCase: Sendable, Equatable {
   /// The case's `Failure Message` nodes in report order. Xcode files skip reasons and crash
   /// descriptions here too.
   public let messages: [String]
+  /// The case ran in a UI test bundle (an XCUITest), not a unit test bundle.
+  public let isUITest: Bool
 
-  public init(identifier: String, targetName: String, result: Result, messages: [String]) {
+  public init(
+    identifier: String, targetName: String, result: Result, messages: [String],
+    isUITest: Bool = false
+  ) {
     self.identifier = identifier
     self.targetName = targetName
     self.result = result
     self.messages = messages
+    self.isUITest = isUITest
   }
 }
 
@@ -44,24 +50,29 @@ public struct XcresultTestResults: Sendable, Equatable {
       throw XcresultParseError(detail: "test results: \(error)")
     }
     var cases: [XcresultTestCase] = []
-    for node in raw.testNodes { collect(node, target: nil, into: &cases) }
+    for node in raw.testNodes { collect(node, target: nil, isUITest: false, into: &cases) }
     return XcresultTestResults(
       ranOnDevice: raw.devices.contains { !$0.deviceId.isEmpty }, testCases: cases)
   }
 
   private static func collect(
-    _ node: RawNode, target: String?, into cases: inout [XcresultTestCase]
+    _ node: RawNode, target: String?, isUITest: Bool, into cases: inout [XcresultTestCase]
   ) {
     switch node.nodeType {
     case "Unit test bundle", "UI test bundle":
-      for child in node.children ?? [] { collect(child, target: node.name, into: &cases) }
+      for child in node.children ?? [] {
+        collect(
+          child, target: node.name, isUITest: node.nodeType == "UI test bundle", into: &cases)
+      }
     case "Test Case":
       cases.append(
         XcresultTestCase(
           identifier: node.nodeIdentifier ?? node.name, targetName: target ?? "",
-          result: result(node.result), messages: failureMessages(node)))
+          result: result(node.result), messages: failureMessages(node), isUITest: isUITest))
     default:
-      for child in node.children ?? [] { collect(child, target: target, into: &cases) }
+      for child in node.children ?? [] {
+        collect(child, target: target, isUITest: isUITest, into: &cases)
+      }
     }
   }
 
