@@ -85,16 +85,17 @@ struct PlanScheduleCommand: ParsableCommand {
     abstract: "Schedule ledger tasks into Kahn topological waves, split by disjoint write sets.",
     discussion:
       "Reads a ledger.json-shaped file (schemaVersion, resume, maxParallel, tasks, waves — its "
-      + "own `waves` field is ignored, never trusted), defaulting to `ledger.json` in the "
-      + "working directory, and recomputes `waves` from `tasks` and `maxParallel` (spec §6.2): "
-      + "Kahn topological layers by dependency depth, then within each layer a greedy "
-      + "id-ascending first fit so two tasks whose write sets overlap never share a wave, "
-      + "capped at `maxParallel` tasks per wave. Exit 0 with the waves. Exit 1, naming the "
-      + "task ids involved, on a dependency cycle or a dependency naming a task not in the "
-      + "ledger. Exit 2 when the file can't be read or isn't a valid ledger.json.")
+      + "own `waves` field is ignored, never trusted) and recomputes `waves` from `tasks` and "
+      + "`maxParallel` (spec §6.2): Kahn topological layers by dependency depth, then within "
+      + "each layer a greedy id-ascending first fit so two tasks whose write sets overlap never "
+      + "share a wave, capped at `maxParallel` tasks per wave. Exit 0 with the waves. Exit 1, "
+      + "naming the task ids involved, on a dependency cycle or a dependency naming a task not "
+      + "in the ledger. Exit 2 when the file can't be read or isn't a valid ledger.json. "
+      + "Ledgers live in the plan-state directory, not the working directory, so <ledger> is "
+      + "required — a cwd default would silently read the wrong file, or none.")
 
   @Argument(help: "Path to a ledger.json-shaped file.")
-  var ledger: String = "ledger.json"
+  var ledger: String
 
   @OptionGroup var output: OutputOptions
 
