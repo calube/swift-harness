@@ -19,6 +19,9 @@ enum CheckRun {
     let mutation: MutateCheck.Environment
     /// `nil` never asks a judge: it is a paid external call, so only commands a person runs opt in.
     let judge: TestJudgeCheck.Dependencies?
+    /// `PushDocGates` hands this straight to `EvidenceCheckRun.run`, which resolves its own
+    /// `LiveGit` from it: `--at HEAD` always reads the real repository, independent of `git` above.
+    let runner: any ProcessRunner
 
     /// Unset steps get live adapters around `swiftPM` and `git`.
     init(
@@ -26,7 +29,8 @@ enum CheckRun {
       simulator: SimulatorTestCheck.Dependencies = .live(),
       changedTests: ChangedTestChecks.Environment? = nil,
       mutation: MutateCheck.Environment? = nil,
-      judge: TestJudgeCheck.Dependencies? = nil
+      judge: TestJudgeCheck.Dependencies? = nil,
+      runner: any ProcessRunner = LiveProcessRunner()
     ) {
       self.swiftPM = swiftPM
       self.git = git
@@ -35,6 +39,7 @@ enum CheckRun {
       self.changedTests = changedTests ?? .live(root: root, git: git, swiftPM: swiftPM)
       self.mutation = mutation ?? .live(root: root, git: git)
       self.judge = judge
+      self.runner = runner
     }
 
     static func live(root: URL, judge: Bool) -> Dependencies {
@@ -43,7 +48,7 @@ enum CheckRun {
       return Dependencies(
         root: root, swiftPM: ScopeResolution.liveSwiftPM(root: root), git: git,
         formatter: LiveSwiftFormatter(runner: runner, repositoryRoot: root.path),
-        judge: judge ? .live(root: root, git: git) : nil)
+        judge: judge ? .live(root: root, git: git) : nil, runner: runner)
     }
   }
 
@@ -112,6 +117,10 @@ enum CheckRun {
         try await runSimulatorTiers(
           root: root, tier: tier, changed: changed, config: config, graph: graph,
           context: context, dependencies: dependencies.simulator))
+    }
+    // Design-doc evidence needs no module graph or config, so it runs independent of both.
+    if tier != .fast {
+      parts.findings += try await PushDocGates.run(root: root, runner: dependencies.runner)
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -260,6 +269,103 @@ enum CheckRun {
     try Finding(
       ruleID: StaticCheckReport.environmentRuleID, severity: .minor, file: ".", line: nil,
       message: message, failureScenario: nil)
+  }
+}
+
+/// Push's design-doc evidence gate (spec §5.4): re-checks every `approved`/`built` design's claims
+/// at `HEAD`, through the exact in-process path `swiftgate evidence check` runs — no rule here
+/// decides what's stale; `EvidenceCheck`/`EvidenceCheckRun` own that. A `proposed`,
+/// `superseded-by` or status-less design is left for its own lifecycle stage, never silently
+/// gated; an `.unknown` status is surfaced instead of silently skipped.
+///
+/// Extension point for the next two `CheckCommand` edits (spec §5.1): `calibrate` seeds calibration
+/// freshness and `docs-lint`/`prose` wiring both add their own `if tier != .fast` step beside this
+/// one and merge their findings into `parts.findings` the same way.
+enum PushDocGates {
+  static let staleClaimRuleID = "evidence-check.stale-claim"
+  static let statusUnknownRuleID = "evidence-check.status-unknown"
+  static let blockedRuleID = "evidence-check.blocked"
+  static let summaryRuleID = "evidence-check.summary"
+
+  static func run(root: URL, runner: any ProcessRunner) async throws(ReportContractViolation)
+    -> [Finding]
+  {
+    let designs = RepositoryFiles.list(
+      root: root, under: "docs", where: DesignDocument.isDesignDocPath)
+    var findings: [Finding] = []
+    var checked = 0
+    for design in designs {
+      guard let text = try? String(contentsOf: root.appending(path: design), encoding: .utf8)
+      else {
+        findings.append(
+          try Finding(
+            ruleID: blockedRuleID, severity: .major, file: design, line: nil,
+            message: "could not be read; its evidence was not checked at HEAD.",
+            failureScenario: nil))
+        continue
+      }
+      guard let status = DesignDocument(markdown: MarkdownDocument.parse(text)).status else {
+        continue  // No frontmatter status at all: not yet on the spec §5.4 lifecycle.
+      }
+      switch status {
+      case .proposed, .supersededBy: continue
+      case .unknown(let raw):
+        findings.append(
+          try Finding(
+            ruleID: statusUnknownRuleID, severity: .major, file: design, line: nil,
+            message:
+              "frontmatter status \"\(raw)\" is none of proposed, approved, built or "
+              + "superseded-by: <slug> (spec §5.4); its evidence was not checked at HEAD.",
+            failureScenario: nil))
+        continue
+      case .approved, .built: break
+      }
+      checked += 1
+      let outcome = await EvidenceCheckRun.run(
+        options: .init(design: design, at: "HEAD", packageResolved: "Package.resolved", sdk: nil),
+        root: root, runner: runner)
+      findings += try evidenceFindings(for: design, outcome: outcome)
+    }
+    findings.append(
+      try Finding(
+        ruleID: summaryRuleID, severity: .nit, file: ".", line: nil,
+        message:
+          "evidence check (push tier): \(designs.count) design doc(s) found, \(checked) "
+          + "approved or built and checked at HEAD.",
+        failureScenario: nil))
+    return findings
+  }
+
+  private static func evidenceFindings(
+    for design: String, outcome: EvidenceCheckRun.Outcome
+  ) throws(ReportContractViolation) -> [Finding] {
+    switch outcome {
+    case .blocked(let message):
+      return [
+        try Finding(
+          ruleID: blockedRuleID, severity: .major, file: design, line: nil,
+          message: "evidence check could not run at HEAD: \(message)", failureScenario: nil)
+      ]
+    case .checked(_, let results):
+      var findings: [Finding] = []
+      for result in results where result.isFailing {
+        findings.append(
+          try Finding(
+            ruleID: staleClaimRuleID, severity: .major, file: design, line: nil,
+            message:
+              "claim \(result.claimID) is stale or failing at HEAD: \(detail(result.outcome))",
+            failureScenario: nil))
+      }
+      return findings
+    }
+  }
+
+  private static func detail(_ outcome: EvidenceCheckResult.Outcome) -> String {
+    switch outcome {
+    case .passed, .relocated: return ""
+    case .failed(let failure): return "\(failure)"
+    case .stale(let reason): return "\(reason)"
+    }
   }
 }
 

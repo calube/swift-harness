@@ -99,7 +99,9 @@ public enum KnownIdSources {
 
   private static func docIds(root: URL) -> SourceResult {
     var result = SourceResult()
-    for path in RepositoryFiles.list(root: root, under: "docs", where: isDesignDoc) {
+    let paths = RepositoryFiles.list(
+      root: root, under: "docs", where: DesignDocument.isDesignDocPath)
+    for path in paths {
       do {
         let text = try String(contentsOf: root.appending(path: path), encoding: .utf8)
         let design = DesignDocument(markdown: MarkdownDocument.parse(text))
@@ -118,12 +120,5 @@ public enum KnownIdSources {
     let components = path.split(separator: "/")
     guard components.count >= 2, components.last == "claims.jsonl" else { return false }
     return components[components.count - 2].hasSuffix(".evidence")
-  }
-
-  private static func isDesignDoc(_ path: String) -> Bool {
-    guard path.hasSuffix(".md") else { return false }
-    let components = path.split(separator: "/")
-    guard components.count >= 2 else { return false }
-    return components[components.count - 2] == "designs"
   }
 }

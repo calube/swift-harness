@@ -165,7 +165,7 @@ public enum DocsLintPolicy {
           failureScenario: nil)
       ]
     }
-    guard !isDesignDoc(document.path) else { return [] }
+    guard !DesignDocument.isDesignDocPath(document.path) else { return [] }
 
     let words = totalProseWords(document.markdown.sections)
     if isRouter(document.path) {
@@ -211,17 +211,6 @@ public enum DocsLintPolicy {
   private static func isRouter(_ path: String) -> Bool {
     let components = path.split(separator: "/")
     return components.first == "docs" && components.last == "index.md"
-  }
-
-  /// The `docs/**/designs/<name>.md` shape `plan claim --design` also matches: an `.md` file whose
-  /// immediate parent directory is literally named `designs`. Matching any path *component* named
-  /// `designs` would also catch `docs/redesigns/x.md` and `notes-designs/x.md`, neither of which is
-  /// a design doc.
-  private static func isDesignDoc(_ path: String) -> Bool {
-    guard path.hasSuffix(".md") else { return false }
-    let components = path.split(separator: "/")
-    guard components.count >= 2 else { return false }
-    return components[components.count - 2] == "designs"
   }
 
   private static func isAgentsFile(_ path: String) -> Bool {

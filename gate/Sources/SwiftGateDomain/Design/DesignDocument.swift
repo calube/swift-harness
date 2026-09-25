@@ -161,4 +161,18 @@ public struct DesignDocument: Sendable, Equatable {
     let behaviour = String(bullet.remainder[bullet.remainder.startIndex..<tierRange.lowerBound])
     return TestPlanBullet(id: id, behaviour: behaviour, tier: tier)
   }
+
+  /// The `docs/**/designs/<name>.md` shape `plan claim --design` also matches: an `.md` file whose
+  /// immediate parent directory is literally named `designs`. Matching any path *component* named
+  /// `designs` would also catch `docs/redesigns/x.md` and `notes-designs/x.md`, neither of which is
+  /// a design doc. Only the last two path components matter, so `repoRelativePath` works whether
+  /// it's rooted at the repository (`docs/designs/x.md`) or at `docs/` itself (`designs/x.md`) —
+  /// every caller (`docs-lint`, the known-id feed, `check --tier push`) walks the tree the same
+  /// way; none of them re-derives this shape on its own.
+  public static func isDesignDocPath(_ repoRelativePath: String) -> Bool {
+    guard repoRelativePath.hasSuffix(".md") else { return false }
+    let components = repoRelativePath.split(separator: "/")
+    guard components.count >= 2 else { return false }
+    return components[components.count - 2] == "designs"
+  }
 }
