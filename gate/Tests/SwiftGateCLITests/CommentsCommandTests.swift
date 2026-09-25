@@ -1,3 +1,4 @@
+import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
@@ -27,6 +28,26 @@ struct CommentsCommandTests {
     #expect(result.findings.map(\.file) == ["Sources/A.swift"])
     #expect(git.contentReads == ["examples/App/Sources/A.swift"])
   }
+  @Test(
+    "staged files under a configured exclude are not checked — catches pre-commit blocking commits to vendored code or seeded rule fixtures the config excludes"
+  )
+  func excludedDirectories() async throws {
+    let narration = FakeGit.StagedFile(content: "// Now uses the cache.\n", addedLines: [1...1])
+    let git = FakeGit(staged: [
+      "Vendor/Lib/A.swift": narration, "Sources/B.swift": narration,
+    ])
+    let collector = SwiftSourceCollector(
+      root: URL(filePath: "/repo", directoryHint: .isDirectory), excluding: ["Vendor"])
+    guard
+      case .checked(let result) = await CommentsCheck.run(
+        git: git, scopes: Self.scopes, isExcluded: collector.isExcluded)
+    else {
+      Issue.record("expected checked")
+      return
+    }
+    #expect(result.findings.map(\.file) == ["Sources/B.swift"])
+  }
+
   @Test(
     "checks only staged Swift files and only their added lines — catches pre-commit blocking on untouched code"
   )

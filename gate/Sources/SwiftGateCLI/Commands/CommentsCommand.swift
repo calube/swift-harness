@@ -15,11 +15,16 @@ enum CommentsCheck {
     }
     switch await ScopeResolution.resolve(config: config, root: root, swiftPM: swiftPM) {
     case .failed(let outcome): return outcome
-    case .resolved(let scopes): return await run(git: git, scopes: scopes)
+    case .resolved(let scopes):
+      let collector = SwiftSourceCollector(root: root, excluding: config?.exclude ?? [])
+      return await run(git: git, scopes: scopes, isExcluded: collector.isExcluded)
     }
   }
 
-  static func run(git: any Git, scopes: ResolvedScopes) async -> StaticCheckOutcome {
+  /// - Parameter isExcluded: takes a project-relative path; excluded files are not checked.
+  static func run(
+    git: any Git, scopes: ResolvedScopes, isExcluded: (String) -> Bool = { _ in false }
+  ) async -> StaticCheckOutcome {
     let prefix: String
     let added: [AddedLines]
     let contents: [String: String]
@@ -27,6 +32,7 @@ enum CommentsCheck {
       prefix = try await git.workingDirectoryPrefix()
       added = try await git.stagedAddedLines().filter {
         $0.path.hasSuffix(".swift") && $0.path.hasPrefix(prefix)
+          && !isExcluded(String($0.path.dropFirst(prefix.count)))
       }
       contents = try await git.stagedContents(of: added.map(\.path))
     } catch {
