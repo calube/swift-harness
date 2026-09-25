@@ -15,7 +15,7 @@ public enum ConfigSchema {
       in: root, at: "",
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
-        "budgets", "clients", "modules", "judge", "exclude",
+        "budgets", "clients", "modules", "judge", "docs", "plan", "exclude",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -36,6 +36,8 @@ public enum ConfigSchema {
     let clients = readClients(&reader, root)
     let modules = readModules(&reader, root)
     let judge = readJudge(&reader, root)
+    let docs = readDocs(&reader, root)
+    let plan = readPlan(&reader, root)
 
     // A key that failed to read was replaced by a placeholder; rule violations on that placeholder
     // (or anything under it) would only restate the read issue.
@@ -48,7 +50,7 @@ public enum ConfigSchema {
     let invariantIssues = Config.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, exclude: exclude
+      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude
     ).filter { !restatesReadIssue($0) }
     let issues = reader.issues + invariantIssues
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
@@ -56,7 +58,7 @@ public enum ConfigSchema {
     return try Config(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, exclude: exclude)
+      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude)
   }
 
   private static func readSimulator(_ reader: inout Reader, _ root: [String: ConfigValue])
@@ -180,6 +182,71 @@ public enum ConfigSchema {
     return .enabled(
       backend: backend, thresholds: JudgeThresholds(advisory: advisory, block: block), model: model)
   }
+
+  private static func readDocs(_ reader: inout Reader, _ root: [String: ConfigValue])
+    -> DocsConfig
+  {
+    let path = "docs"
+    let defaults = DocsConfig()
+    guard let table = reader.table(root, path, at: "") else { return defaults }
+    reader.rejectUnknownKeys(
+      in: table, at: path,
+      allowed: ["managed_files", "banned_phrases", "anchors", "sentence_ceiling", "budgets"])
+    let bannedPhrases = reader.tableArray(table, "banned_phrases", at: path).map {
+      phrasePath, phraseTable in
+      reader.rejectUnknownKeys(in: phraseTable, at: phrasePath, allowed: ["phrase", "reason"])
+      return BannedPhrase(
+        phrase: reader.string(phraseTable, "phrase", at: phrasePath, required: true) ?? "",
+        reason: reader.string(phraseTable, "reason", at: phrasePath, required: true) ?? "")
+    }
+    return DocsConfig(
+      managedFiles: reader.stringArray(table, "managed_files", at: path) ?? defaults.managedFiles,
+      bannedPhrases: bannedPhrases,
+      anchors: reader.stringArray(table, "anchors", at: path) ?? defaults.anchors,
+      sentenceCeiling: reader.integer(table, "sentence_ceiling", at: path)
+        ?? defaults.sentenceCeiling,
+      budgets: readDocsBudgets(&reader, table, at: path))
+  }
+
+  private static func readDocsBudgets(
+    _ reader: inout Reader, _ docsTable: [String: ConfigValue], at docsPath: String
+  ) -> DocsBudgets {
+    let path = Reader.join(docsPath, "budgets")
+    let defaults = DocsBudgets()
+    guard let table = reader.table(docsTable, "budgets", at: docsPath) else { return defaults }
+    reader.rejectUnknownKeys(
+      in: table, at: path, allowed: ["router", "topic", "design", "agents_md_lines", "sections"])
+    return DocsBudgets(
+      router: reader.integer(table, "router", at: path) ?? defaults.router,
+      topic: reader.integer(table, "topic", at: path) ?? defaults.topic,
+      design: reader.integer(table, "design", at: path) ?? defaults.design,
+      agentsMdLines: reader.integer(table, "agents_md_lines", at: path) ?? defaults.agentsMdLines,
+      sections: reader.stringIntTable(table, "sections", at: path))
+  }
+
+  private static func readPlan(_ reader: inout Reader, _ root: [String: ConfigValue])
+    -> PlanConfig
+  {
+    let path = "plan"
+    let defaults = PlanConfig()
+    guard let table = reader.table(root, path, at: "") else { return defaults }
+    reader.rejectUnknownKeys(
+      in: table, at: path,
+      allowed: [
+        "max_parallel", "est_lines_min", "est_lines_max", "max_modules_per_task",
+        "max_tests_per_task", "worker_pack_token_budget",
+      ])
+    return PlanConfig(
+      maxParallel: reader.integer(table, "max_parallel", at: path) ?? defaults.maxParallel,
+      estLinesMin: reader.integer(table, "est_lines_min", at: path) ?? defaults.estLinesMin,
+      estLinesMax: reader.integer(table, "est_lines_max", at: path) ?? defaults.estLinesMax,
+      maxModulesPerTask: reader.integer(table, "max_modules_per_task", at: path)
+        ?? defaults.maxModulesPerTask,
+      maxTestsPerTask: reader.integer(table, "max_tests_per_task", at: path)
+        ?? defaults.maxTestsPerTask,
+      workerPackTokenBudget: reader.integer(table, "worker_pack_token_budget", at: path)
+        ?? defaults.workerPackTokenBudget)
+  }
 }
 
 /// Typed, issue-collecting access to config tables. A read that fails records an issue and
@@ -286,6 +353,30 @@ private struct Reader {
       }
     }
     return strings
+  }
+
+  /// An arbitrary-key table of integers, such as `[docs.budgets.sections]`. A key whose value
+  /// isn't an integer is dropped and reported; it never silently becomes 0.
+  mutating func stringIntTable(
+    _ table: [String: ConfigValue], _ key: String, at prefix: String
+  ) -> [String: Int] {
+    guard let nested = self.table(table, key, at: prefix) else { return [:] }
+    let path = Self.join(prefix, key)
+    var result: [String: Int] = [:]
+    for entryKey in nested.keys.sorted() {
+      let entryPath = Self.join(path, entryKey)
+      switch nested[entryKey]! {
+      case .integer(let i):
+        if let intValue = Int(exactly: i) {
+          result[entryKey] = intValue
+        } else {
+          issues.append(.outOfRange(path: entryPath, value: "\(i)", allowed: "a platform Int"))
+        }
+      case let other:
+        issues.append(.wrongType(path: entryPath, expected: "integer", found: other.typeName))
+      }
+    }
+    return result
   }
 
   /// An array of tables, as `[[key]]` produces. Returns each table with its indexed path.

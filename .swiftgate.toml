@@ -29,3 +29,14 @@ reason = "process, git and file-system adapters behind protocols; no reducers"
 name = "SwiftGateTestSupport"
 kind = "test-support"
 reason = "test doubles shared by the gate's own tests"
+
+[docs]
+managed_files = ["docs/index.md", "AGENTS.md"]
+
+[[docs.banned_phrases]]
+phrase = "leverage"
+reason = "vague business jargon; say what changed"
+
+[[docs.banned_phrases]]
+phrase = "utilize"
+reason = "plain word is \"use\""

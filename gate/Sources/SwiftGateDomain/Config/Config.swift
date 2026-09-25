@@ -22,6 +22,8 @@ public struct Config: Sendable, Equatable {
   /// Only modules that deviate from the defaults (`feature`, host-testable) need entries.
   public let modules: [ModuleOverride]
   public let judge: JudgeConfig
+  public let docs: DocsConfig
+  public let plan: PlanConfig
   /// Repository-relative directories that whole-repository checks skip, such as fixtures that
   /// violate the rules on purpose.
   public let exclude: [String]
@@ -38,12 +40,14 @@ public struct Config: Sendable, Equatable {
     clients: ClientsConfig = ClientsConfig(),
     modules: [ModuleOverride] = [],
     judge: JudgeConfig = .disabled,
+    docs: DocsConfig = DocsConfig(),
+    plan: PlanConfig = PlanConfig(),
     exclude: [String] = []
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, exclude: exclude)
+      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     self.xcode = xcode
     self.appScheme = appScheme
@@ -56,6 +60,8 @@ public struct Config: Sendable, Equatable {
     self.clients = clients
     self.modules = modules
     self.judge = judge
+    self.docs = docs
+    self.plan = plan
     self.exclude = exclude
   }
 
@@ -74,11 +80,18 @@ public struct Config: Sendable, Equatable {
   static func invariantIssues(
     xcode: String, appScheme: String, packages: [String], simulator: SimulatorConfig,
     pyramid: PyramidConfig, flows: [Flow], mutation: MutationConfig, budgets: Budgets,
-    clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, exclude: [String]
+    clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, docs: DocsConfig,
+    plan: PlanConfig, exclude: [String]
   ) -> [ConfigIssue] {
     var issues: [ConfigIssue] = []
     func requireText(_ value: String, _ path: String) {
       if value.isBlank { issues.append(.emptyValue(path: path)) }
+    }
+    func requireRepoRelativePath(_ path: String, _ fieldPath: String, allowed: String) {
+      let components = path.split(separator: "/")
+      if path.isBlank || path.hasPrefix("/") || components.contains("..") {
+        issues.append(.outOfRange(path: fieldPath, value: path, allowed: allowed))
+      }
     }
 
     requireText(xcode, "xcode")
@@ -168,12 +181,69 @@ public struct Config: Sendable, Equatable {
       }
     }
     for (index, path) in exclude.enumerated() {
-      let components = path.split(separator: "/")
-      if path.isBlank || path.hasPrefix("/") || components.contains("..") {
+      requireRepoRelativePath(
+        path, "exclude[\(index)]", allowed: "a repository-relative directory")
+    }
+
+    for (index, path) in docs.managedFiles.enumerated() {
+      requireText(path, "docs.managed_files[\(index)]")
+      requireRepoRelativePath(
+        path, "docs.managed_files[\(index)]", allowed: "a repository-relative path")
+    }
+    for (index, phrase) in docs.bannedPhrases.enumerated() {
+      requireText(phrase.phrase, "docs.banned_phrases[\(index)].phrase")
+      requireText(phrase.reason, "docs.banned_phrases[\(index)].reason")
+    }
+    if docs.sentenceCeiling < 1 {
+      issues.append(
+        .outOfRange(
+          path: "docs.sentence_ceiling", value: "\(docs.sentenceCeiling)", allowed: ">= 1"))
+    }
+    let docsBudgetEntries: [(String, Int)] = [
+      ("docs.budgets.router", docs.budgets.router), ("docs.budgets.topic", docs.budgets.topic),
+      ("docs.budgets.design", docs.budgets.design),
+      ("docs.budgets.agents_md_lines", docs.budgets.agentsMdLines),
+    ]
+    for (path, value) in docsBudgetEntries where value < 1 {
+      issues.append(.outOfRange(path: path, value: "\(value)", allowed: ">= 1"))
+    }
+    for name in docs.budgets.sections.keys.sorted() {
+      let value = docs.budgets.sections[name]!
+      if value < 1 {
         issues.append(
-          .outOfRange(
-            path: "exclude[\(index)]", value: path, allowed: "a repository-relative directory"))
+          .outOfRange(path: "docs.budgets.sections.\(name)", value: "\(value)", allowed: ">= 1"))
       }
+    }
+
+    if plan.maxParallel < 1 {
+      issues.append(
+        .outOfRange(path: "plan.max_parallel", value: "\(plan.maxParallel)", allowed: ">= 1"))
+    }
+    if plan.estLinesMin < 1 {
+      issues.append(
+        .outOfRange(path: "plan.est_lines_min", value: "\(plan.estLinesMin)", allowed: ">= 1"))
+    }
+    if plan.estLinesMax < plan.estLinesMin {
+      issues.append(
+        .outOfRange(
+          path: "plan.est_lines_max", value: "\(plan.estLinesMax)",
+          allowed: ">= plan.est_lines_min"))
+    }
+    if plan.maxModulesPerTask < 1 {
+      issues.append(
+        .outOfRange(
+          path: "plan.max_modules_per_task", value: "\(plan.maxModulesPerTask)", allowed: ">= 1"))
+    }
+    if plan.maxTestsPerTask < 1 {
+      issues.append(
+        .outOfRange(
+          path: "plan.max_tests_per_task", value: "\(plan.maxTestsPerTask)", allowed: ">= 1"))
+    }
+    if plan.workerPackTokenBudget < 1 {
+      issues.append(
+        .outOfRange(
+          path: "plan.worker_pack_token_budget", value: "\(plan.workerPackTokenBudget)",
+          allowed: ">= 1"))
     }
     return issues
   }
@@ -308,4 +378,117 @@ public struct JudgeThresholds: Sendable, Equatable {
 
 extension String {
   var isBlank: Bool { allSatisfy(\.isWhitespace) }
+}
+
+/// Rules `docs-lint` and `prose` apply to markdown under `docs/`, `AGENTS.md` and design docs.
+/// Absent from a repository's config, `docs-lint` and `prose` still run with these defaults.
+public struct DocsConfig: Sendable, Equatable {
+  public static let defaultSentenceCeiling = 40
+
+  /// Repository-relative paths `docs-lint` requires to exist, such as the stamped router and the
+  /// `AGENTS.md` pointer.
+  public let managedFiles: [String]
+  public let bannedPhrases: [BannedPhrase]
+  /// Extra anchors `docs-lint`'s non-vacuity check accepts, beyond the ids it already knows.
+  public let anchors: [String]
+  /// Words per sentence before `prose` flags it; an estimate, tuned like the other prose budgets.
+  public let sentenceCeiling: Int
+  public let budgets: DocsBudgets
+
+  public init(
+    managedFiles: [String] = [],
+    bannedPhrases: [BannedPhrase] = [],
+    anchors: [String] = [],
+    sentenceCeiling: Int = Self.defaultSentenceCeiling,
+    budgets: DocsBudgets = DocsBudgets()
+  ) {
+    self.managedFiles = managedFiles
+    self.bannedPhrases = bannedPhrases
+    self.anchors = anchors
+    self.sentenceCeiling = sentenceCeiling
+    self.budgets = budgets
+  }
+}
+
+/// A phrase `docs-lint`'s banned-phrases family rejects. `reason` is mandatory: a ban nobody can
+/// explain is a ban nobody can act on when it fires.
+public struct BannedPhrase: Sendable, Equatable {
+  public let phrase: String
+  public let reason: String
+
+  public init(phrase: String, reason: String) {
+    self.phrase = phrase
+    self.reason = reason
+  }
+}
+
+/// Prose word budgets. Tables, diagrams and code never count toward any of these.
+public struct DocsBudgets: Sendable, Equatable {
+  public static let defaultRouterWords = 400
+  public static let defaultTopicWords = 800
+  public static let defaultDesignWords = 1_200
+  public static let defaultAgentsMdLines = 60
+
+  /// Budget for `docs/index.md` and area routers.
+  public let router: Int
+  /// Budget for a one-topic doc file.
+  public let topic: Int
+  /// Whole-design-doc default; an estimate, tuned from real designs (spec §5.3).
+  public let design: Int
+  public let agentsMdLines: Int
+  /// Per design-section-anchor word budget. A section absent here falls back to `design`.
+  public let sections: [String: Int]
+
+  public init(
+    router: Int = Self.defaultRouterWords,
+    topic: Int = Self.defaultTopicWords,
+    design: Int = Self.defaultDesignWords,
+    agentsMdLines: Int = Self.defaultAgentsMdLines,
+    sections: [String: Int] = [:]
+  ) {
+    self.router = router
+    self.topic = topic
+    self.design = design
+    self.agentsMdLines = agentsMdLines
+    self.sections = sections
+  }
+}
+
+/// Bounds `plan-schedule` and `plan-lint` enforce on a decomposed plan (spec §9.3).
+public struct PlanConfig: Sendable, Equatable {
+  public static let defaultMaxParallel = 3
+  public static let defaultEstLinesMin = 40
+  public static let defaultEstLinesMax = 400
+  public static let defaultMaxModulesPerTask = 2
+  public static let defaultMaxTestsPerTask = 6
+  public static let defaultWorkerPackTokenBudget = 15_000
+
+  /// Width cap on `plan-schedule`'s wave layers.
+  public let maxParallel: Int
+  /// Below this, `plan-lint` warns a task is too small to be its own unit.
+  public let estLinesMin: Int
+  /// Above this, `plan-lint` errors: split the task.
+  public let estLinesMax: Int
+  /// Only an interface + live pair may share a task above 1.
+  public let maxModulesPerTask: Int
+  public let maxTestsPerTask: Int
+  /// Estimated tokens (UTF-8 bytes / 4) a worker's `context-pack` may hold before `plan-lint`
+  /// flags it as over budget.
+  public let workerPackTokenBudget: Int
+
+  public init(
+    maxParallel: Int = Self.defaultMaxParallel,
+    estLinesMin: Int = Self.defaultEstLinesMin,
+    estLinesMax: Int = Self.defaultEstLinesMax,
+    maxModulesPerTask: Int = Self.defaultMaxModulesPerTask,
+    maxTestsPerTask: Int = Self.defaultMaxTestsPerTask,
+    workerPackTokenBudget: Int = Self.defaultWorkerPackTokenBudget
+  ) {
+    self.maxParallel = maxParallel
+    self.estLinesMin = estLinesMin
+    self.estLinesMax = estLinesMax
+    self.maxModulesPerTask = maxModulesPerTask
+    self.maxTestsPerTask = maxTestsPerTask
+    self.workerPackTokenBudget = workerPackTokenBudget
+  }
 }
