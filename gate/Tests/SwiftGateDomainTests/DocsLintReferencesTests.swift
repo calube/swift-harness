@@ -8,10 +8,14 @@ struct DocsLintReferencesTests {
     DocsLintReferences.DocFile(path: path, text: text)
   }
 
+  /// `repoPaths` defaults to exactly the given files' own paths — every fixture doc counts as a
+  /// tracked file unless a test names a different set (to add non-doc tracked files, or to test a
+  /// file the corpus mentions but doesn't itself carry).
   static func check(
-    _ files: [DocsLintReferences.DocFile], claims: [Claim] = []
+    _ files: [DocsLintReferences.DocFile], claims: [Claim] = [], repoPaths: Set<String>? = nil
   ) throws -> [Finding] {
-    try DocsLintReferences.check(files: files, claims: claims)
+    try DocsLintReferences.check(
+      files: files, claims: claims, repoPaths: repoPaths ?? Set(files.map { $0.path }))
   }
 
   static func claim(_ id: String) -> Claim {
@@ -280,6 +284,83 @@ struct DocsLintReferencesTests {
       See [missing](designs/does-not-exist.md).
       """)
     let findings = try Self.check([doc])
+    #expect(findings.contains { $0.ruleID == "docs-lint.broken-relative-link" })
+  }
+
+  // MARK: - Relative links: every extension, resolved against every tracked file
+
+  @Test("a relative link to an untracked source file is flagged")
+  func brokenSourceFileLinkIsFlagged() throws {
+    let doc = Self.file(
+      "docs/handoffs/note.md",
+      """
+      See [the rule](../../gate/Sources/SwiftGateDomain/Docs/Missing.swift).
+      """)
+    let findings = try Self.check(
+      [doc], repoPaths: ["gate/Sources/SwiftGateDomain/Docs/DocsLintReferences.swift"])
+    #expect(findings.contains { $0.ruleID == "docs-lint.broken-relative-link" })
+  }
+
+  @Test("a relative link to a tracked source file passes")
+  func validSourceFileLinkPasses() throws {
+    let doc = Self.file(
+      "docs/handoffs/note.md",
+      """
+      See [the rule](../../gate/Sources/SwiftGateDomain/Docs/DocsLintReferences.swift).
+      """)
+    let findings = try Self.check(
+      [doc], repoPaths: ["gate/Sources/SwiftGateDomain/Docs/DocsLintReferences.swift"])
+    #expect(findings.filter { $0.ruleID == "docs-lint.broken-relative-link" } == [])
+  }
+
+  @Test("a relative link to a tracked directory (trailing /) passes")
+  func validDirectoryLinkPasses() throws {
+    let doc = Self.file(
+      "docs/designs/x.md",
+      """
+      See [the ADRs](../adrs/).
+      """)
+    let findings = try Self.check(
+      [doc], repoPaths: ["docs/adrs/0001-something.md", "docs/designs/x.md"])
+    #expect(findings.filter { $0.ruleID == "docs-lint.broken-relative-link" } == [])
+  }
+
+  @Test("a relative link to an untracked directory is flagged")
+  func missingDirectoryLinkIsFlagged() throws {
+    let doc = Self.file(
+      "docs/designs/x.md",
+      """
+      See [nothing here](../nonexistent-dir/).
+      """)
+    let findings = try Self.check([doc], repoPaths: ["docs/designs/x.md"])
+    #expect(findings.contains { $0.ruleID == "docs-lint.broken-relative-link" })
+  }
+
+  @Test("an image link resolves when the image is tracked and is flagged when it isn't")
+  func imageLinkBothWays() throws {
+    let doc = Self.file(
+      "docs/index.md",
+      """
+      ![valid](img/x.png)
+      ![broken](img/missing.png)
+      """)
+    let findings = try Self.check([doc], repoPaths: ["docs/img/x.png"])
+    let broken = findings.filter { $0.ruleID == "docs-lint.broken-relative-link" }
+    #expect(broken.count == 1)
+    #expect(broken.first?.message.contains("docs/img/missing.png") == true)
+  }
+
+  @Test(
+    "a link whose path is only a string prefix of a tracked file's name, not its directory, is flagged"
+  )
+  func pathThatOnlyPrefixesAFileNameIsFlagged() throws {
+    let doc = Self.file(
+      "docs/handoffs/note.md",
+      """
+      See [not a directory](../../gate/Sour).
+      """)
+    let findings = try Self.check(
+      [doc], repoPaths: ["gate/Sources/SwiftGateDomain/Docs/DocsLintReferences.swift"])
     #expect(findings.contains { $0.ruleID == "docs-lint.broken-relative-link" })
   }
 

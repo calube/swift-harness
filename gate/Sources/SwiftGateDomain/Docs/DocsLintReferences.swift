@@ -5,7 +5,7 @@ import Foundation
 /// | Family | Check |
 /// |---|---|
 /// | Reference integrity | every `req-`/`test-`/`ev-` id mentioned resolves; a bare `ADR NNNN` mention is flagged unless linked; every requirement is cited outside its defining doc |
-/// | Relative links | every relative `.md` link resolves inside the corpus |
+/// | Relative links | every relative link — any extension, or none — resolves against the repo's tracked files |
 /// | Router reachability | every `docs/` doc is reachable from `docs/index.md` |
 ///
 /// Unlike ``DesignLintSections`` and its siblings, this rule reads the *whole* docs corpus at
@@ -13,11 +13,17 @@ import Foundation
 /// file's path and raw text (§5.10's "no IO in the domain": the FS read lives in the CLI's
 /// `DocsTreeReader` adapter, not here). Two decisions worth stating for later readers:
 ///
-/// - **Anchors are never checked.** Spec §6.2 says only "every relative `.md` link resolves" —
-///   nothing about the `#fragment` a link may carry. This rule confirms the linked *file* exists
-///   and leaves the fragment unverified, on both `path.md#anchor` and bare `#anchor` links.
-/// - **Only links to a `.md` path are resolved.** A relative link to a non-Markdown file (source,
-///   image, …) is out of this family's scope and is neither resolved nor flagged.
+/// - **Anchors are never checked.** Spec §6.2 says only "every relative link resolves" — nothing
+///   about the `#fragment` a link may carry. This rule confirms the linked *file* or *directory*
+///   exists and leaves the fragment unverified, on both `path#anchor` and bare `#anchor` links.
+/// - **Every relative link is checked, not just `.md`.** Docs cite repo files (source, images,
+///   directories) by relative path just as often as they cite other docs, so a link resolves
+///   against `repoPaths` — every tracked file, repo-relative, that `docs-lint-command` supplies
+///   from `git ls-files` — not just the docs corpus. A link whose destination ends in `/`, or
+///   whose last path segment has no `.`, is a *directory* link: it resolves when some tracked
+///   file has that directory as a path prefix. Anything else is a *file* link: it resolves only
+///   when its exact path is tracked. `.md` links additionally feed router reachability below,
+///   which needs the narrower docs corpus (`files`), not every tracked file.
 ///
 /// `MarkdownDocument`'s own `Section.links` includes links written inside fenced code (nothing
 /// filters them there), so this rule does its own fence- and inline-code-aware scan rather than
@@ -41,11 +47,11 @@ public enum DocsLintReferences {
   public static let routerRoot = "docs/index.md"
 
   public static func check(
-    files: [DocFile], claims: [Claim] = []
+    files: [DocFile], claims: [Claim] = [], repoPaths: Set<String>
   ) throws(ReportContractViolation) -> [Finding] {
     let scans = files.map(DocScan.init)
     let pathSet = Set(files.map(\.path))
-    let resolutions = resolvedLinks(scans: scans)
+    let resolutions = resolvedLinks(scans: scans, repoPaths: repoPaths)
 
     var findings: [Finding] = []
     try findings.append(contentsOf: danglingIDFindings(scans: scans, claims: claims))
@@ -151,7 +157,7 @@ public enum DocsLintReferences {
     var findings: [Finding] = []
     for occurrence in resolutions {
       switch occurrence.resolution {
-      case .outOfScope, .resolvedInCorpus:
+      case .resolved:
         continue
       case .climbsAboveRoot:
         findings.append(
@@ -160,16 +166,16 @@ public enum DocsLintReferences {
             line: nil,
             message:
               "link \"\(occurrence.destination)\" climbs above the repo root; a relative link "
-              + "never resolves outside the docs corpus (spec §6.2 relative links).",
+              + "never resolves outside the repo (spec §6.2 relative links).",
             failureScenario: nil))
-      case .resolvedOutsideCorpus(let resolved):
+      case .broken(let resolved):
         findings.append(
           try Finding(
             ruleID: "docs-lint.broken-relative-link", severity: .major, file: occurrence.from,
             line: nil,
             message:
-              "link \"\(occurrence.destination)\" resolves to \"\(resolved)\", which isn't in "
-              + "the docs corpus (spec §6.2 relative links).",
+              "link \"\(occurrence.destination)\" resolves to \"\(resolved)\", which isn't a "
+              + "tracked file or directory (spec §6.2 relative links).",
             failureScenario: nil))
       }
     }
@@ -188,9 +194,14 @@ public enum DocsLintReferences {
   ) throws(ReportContractViolation) -> [Finding] {
     guard pathSet.contains(routerRoot) else { return [] }
 
+    // Reachability uses the docs corpus (`pathSet`), not `repoPaths`: a `.md` link can be a
+    // perfectly real tracked file and still fall outside the narrower set `docs-lint-command`
+    // scanned, in which case it contributes no edge but also no broken-link finding.
     var adjacency: [String: Set<String>] = [:]
     for occurrence in resolutions {
-      guard case .resolvedInCorpus(let resolved) = occurrence.resolution else { continue }
+      guard let resolved = resolvedPath(occurrence.resolution), resolved.hasSuffix(".md"),
+        pathSet.contains(resolved)
+      else { continue }
       adjacency[occurrence.from, default: []].insert(resolved)
     }
 
@@ -219,11 +230,10 @@ public enum DocsLintReferences {
   // MARK: - Link resolution shared by both link families
 
   private enum LinkResolution: Equatable {
-    /// Not a `.md`-suffixed relative link — out of this family's scope (spec §6.2: only relative
-    /// `.md` links are checked).
-    case outOfScope
-    case resolvedInCorpus(String)
-    case resolvedOutsideCorpus(String)
+    case resolved(String)
+    /// Normalized to a repo-relative path, but that path — or, for a directory link, no path
+    /// under it — is untracked.
+    case broken(String)
     case climbsAboveRoot
   }
 
@@ -233,14 +243,13 @@ public enum DocsLintReferences {
     let resolution: LinkResolution
   }
 
-  private static func resolvedLinks(scans: [DocScan]) -> [LinkOccurrence] {
-    let pathSet = Set(scans.map(\.path))
+  private static func resolvedLinks(scans: [DocScan], repoPaths: Set<String>) -> [LinkOccurrence] {
     var occurrences: [LinkOccurrence] = []
     for scan in scans {
       for lineLinks in scan.linksPerLine {
         for link in lineLinks where isRelativeDocLink(link.destination) {
           let classified = classify(
-            resolve(from: scan.path, destination: link.destination), pathSet: pathSet)
+            resolve(from: scan.path, destination: link.destination), repoPaths: repoPaths)
           occurrences.append(
             LinkOccurrence(from: scan.path, destination: link.destination, resolution: classified)
           )
@@ -250,18 +259,36 @@ public enum DocsLintReferences {
     return occurrences
   }
 
-  private static func classify(_ raw: RawResolution, pathSet: Set<String>) -> LinkResolution {
-    switch raw {
-    case .outOfScope: return .outOfScope
-    case .climbsAboveRoot: return .climbsAboveRoot
-    case .resolved(let path):
-      return pathSet.contains(path) ? .resolvedInCorpus(path) : .resolvedOutsideCorpus(path)
+  /// The resolved repo-relative path behind a link, whether it turned out to be tracked or not —
+  /// reachability reads this directly rather than through `repoPaths` membership (see the type
+  /// doc's third decision).
+  private static func resolvedPath(_ resolution: LinkResolution) -> String? {
+    switch resolution {
+    case .resolved(let path), .broken(let path): return path
+    case .climbsAboveRoot: return nil
     }
   }
 
+  private static func classify(_ raw: RawResolution, repoPaths: Set<String>) -> LinkResolution {
+    switch raw {
+    case .climbsAboveRoot: return .climbsAboveRoot
+    case .resolved(let path, let isDirectory):
+      let tracked = isDirectory ? directoryIsTracked(path, in: repoPaths) : repoPaths.contains(path)
+      return tracked ? .resolved(path) : .broken(path)
+    }
+  }
+
+  /// A directory link resolves when some tracked file lives under it — git never tracks a bare
+  /// directory. The repo root (`path == ""`, from a link like `../`) is trivially tracked as long
+  /// as the repo has any tracked file at all.
+  private static func directoryIsTracked(_ path: String, in repoPaths: Set<String>) -> Bool {
+    if path.isEmpty { return !repoPaths.isEmpty }
+    let prefix = path + "/"
+    return repoPaths.contains { $0.hasPrefix(prefix) }
+  }
+
   private enum RawResolution: Equatable {
-    case outOfScope
-    case resolved(String)
+    case resolved(path: String, isDirectory: Bool)
     case climbsAboveRoot
   }
 
@@ -275,14 +302,18 @@ public enum DocsLintReferences {
 
   /// Resolves `destination` against `docPath`'s directory: strips a trailing `#fragment` (never
   /// verified — see the type doc), decodes percent-escapes (`%20` → space), then walks `..`
-  /// segments against the directory stack. Anything short of a `.md`-suffixed decoded path is
-  /// `.outOfScope`; a `..` past the stack's start is `.climbsAboveRoot` — this never falls back to
-  /// resolving against the real filesystem.
+  /// segments against the directory stack. A `..` past the stack's start is `.climbsAboveRoot` —
+  /// this never falls back to resolving against the real filesystem. `isDirectory` is true when
+  /// the destination ends `/`, or its last segment has no `.` (so `../adrs/` and `../gate/Sour`
+  /// are both directory-shaped; `directoryIsTracked` still separates a real directory from a
+  /// string that merely prefixes a file name).
   private static func resolve(from docPath: String, destination: String) -> RawResolution {
     let withoutFragment = destination.split(
       separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0]
-    guard let decoded = String(withoutFragment).removingPercentEncoding, decoded.hasSuffix(".md")
-    else { return .outOfScope }
+    // A destination percent-encoding can't decode is used as written rather than dropped, so it
+    // still resolves (almost certainly to something untracked) instead of silently passing.
+    let decoded = String(withoutFragment).removingPercentEncoding ?? String(withoutFragment)
+    let endsWithSlash = decoded.hasSuffix("/")
 
     var stack: [String]
     let remainder: Substring
@@ -303,7 +334,9 @@ public enum DocsLintReferences {
         stack.append(String(component))
       }
     }
-    return .resolved(stack.joined(separator: "/"))
+
+    let isDirectory = endsWithSlash || !(stack.last?.contains(".") ?? false)
+    return .resolved(path: stack.joined(separator: "/"), isDirectory: isDirectory)
   }
 
   // MARK: - Per-file scan
