@@ -7,7 +7,7 @@ Open items:
   - Point-Free baseline verified 2026-09-24 (§6.2); target TCA 1.26.x, NOT 2.0 beta.
   - Xcode pinned to installed 26.2 (build 17C48; sim runtimes iOS 26.2, 26.4). No Xcode 27 (needs macOS upgrade). Moving to 26.6 later = re-capture xcresult fixtures + bump pin.
   - Confirm current Claude Code Stop-hook input field for re-entry (`stop_hook_active`) against hook docs (§7).
-Sub-projects after this one: (2) Simulator QA, (3) Agentic profiling, (4) Review/validation loops & workflows.
+Sub-projects after this one: (2) Design & plan workflows, (3) Simulator QA, (4) Agentic profiling, (5) Build loop & workflows.
 -->
 
 ## 1. Purpose
@@ -32,9 +32,10 @@ ledgers, one shared verdict vocabulary) and none of its backend-specific machine
 | # | Sub-project | Depends on | Delivers |
 |---|---|---|---|
 | 1 | **Foundation** (this spec) | — | plugin skeleton, `swiftgate` core, standards, playbook, hooks, bootstrap, core skills |
-| 2 | Simulator QA | 1 | `swiftgate sim`, launch-arg dependency scenarios, QA skill driving `agent-device`, screenshot + accessibility-tree evidence |
-| 3 | Agentic profiling | 1, 2 | `swiftgate profile` / `leaks`: xctrace + `leaks` summarized to compact JSON; signpost-scoped measurements; XCTMetric baselines |
-| 4 | Loops & workflows | 1–3 | review panel (shared verdict contract), validation loop, milestone build loop with ledger |
+| 2 | Design & plan workflows | 1 | `/swift-harness:design` (frame → cited-evidence research with symbol probes + claim checking → design doc → 3-agent review incl. self-reflect → published as a Claude Artifact for comment/approval) and `/swift-harness:plan` (DAG decomposition with per-task write sets, gates, acceptance tests → wave scheduling → `swiftgate plan-lint` → ledger). Ledger canonical in git (`.harness/ledger.json`), orchestrator-only writes; Artifact is the visual view |
+| 3 | Simulator QA | 1 | `swiftgate sim`, launch-arg dependency scenarios, QA skill driving `agent-device`, screenshot + accessibility-tree evidence |
+| 4 | Agentic profiling | 1, 3 | `swiftgate profile` / `leaks`: xctrace + `leaks` summarized to compact JSON; signpost-scoped measurements; XCTMetric baselines |
+| 5 | Build loop & workflows | 1–4 | executes ledger waves across worktrees; review→fix→re-gate loop; full reviewer set; `validate` workflow with sim QA + profile diff |
 
 ## 3. Locked decisions
 
