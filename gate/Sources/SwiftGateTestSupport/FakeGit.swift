@@ -19,16 +19,19 @@ public final class FakeGit: Git {
   private let changed: [String]?
   private let mergeBaseResult: String?
   private let failure: GitError?
+  private let prefix: String
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
 
   /// - Parameters:
   ///   - changed: what ``changedFiles(since:)`` returns; defaults to the staged paths.
   ///   - mergeBase: what ``mergeBase(_:_:)`` returns for any pair of refs.
+  ///   - prefix: what ``workingDirectoryPrefix()`` returns.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
-    failure: GitError? = nil
+    prefix: String = "", failure: GitError? = nil
   ) {
+    self.prefix = prefix
     self.staged = staged
     self.changed = changed
     self.mergeBaseResult = mergeBase
@@ -72,6 +75,11 @@ public final class FakeGit: Git {
   public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {
     if let failure { throw failure }
     return [:]
+  }
+
+  public func workingDirectoryPrefix() async throws(GitError) -> String {
+    if let failure { throw failure }
+    return prefix
   }
 
   public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {

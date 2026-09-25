@@ -1,6 +1,6 @@
 .build/
 .swiftpm/
 *.xcresult
-.harness/runs/
+**/.harness/runs/
 DerivedData/
 .DS_Store

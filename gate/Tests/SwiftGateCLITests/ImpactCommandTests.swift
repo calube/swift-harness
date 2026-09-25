@@ -38,7 +38,8 @@ struct ImpactCommandTests {
     ])
     defer { try? FileManager.default.removeItem(at: root) }
     let git = FakeGit(changed: Self.changed, mergeBase: "abc123")
-    let outcome = await ImpactCheck.run(root: root, git: git, base: "origin/main")
+    let outcome = await ImpactCheck.run(
+      root: root, git: git, base: "origin/main", scopes: PathConventionModuleScopes())
     #expect(git.changedSinceRefs == ["abc123"])
     let report = try StaticCheckReport.make(runID: "r", durationMilliseconds: 1, outcome: outcome)
     #expect(report.findings.map(\.file) == ["Packages/Feed/Sources/FeedCore/Reducer.swift"])
@@ -57,7 +58,8 @@ struct ImpactCommandTests {
     let invalid = try StaticCheckReport.make(
       runID: "r", durationMilliseconds: 1,
       outcome: await ImpactCheck.run(
-        root: root, git: FakeGit(changed: Self.changed, mergeBase: "abc"), base: "origin/main"))
+        root: root, git: FakeGit(changed: Self.changed, mergeBase: "abc"), base: "origin/main",
+        scopes: PathConventionModuleScopes()))
     #expect(invalid.verdict == .red)
     #expect(invalid.findings.first?.file == ImpactExemptions.fileName)
 
@@ -68,9 +70,26 @@ struct ImpactCommandTests {
     ] {
       let report = try StaticCheckReport.make(
         runID: "r", durationMilliseconds: 1,
-        outcome: await ImpactCheck.run(root: empty, git: git, base: "origin/main"))
+        outcome: await ImpactCheck.run(
+          root: empty, git: git, base: "origin/main", scopes: PathConventionModuleScopes()))
       #expect(report.verdict == .blocked)
     }
+  }
+
+  @Test(
+    "a project nested in a larger repository judges only its own changes by its own paths — catches impact silently GREEN from a subdirectory"
+  )
+  func nestedProject() async throws {
+    let root = try makeRepository()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let git = FakeGit(
+      changed: ["examples/App/Packages/Feed/Sources/FeedCore/Reducer.swift", "Other/X.swift"],
+      mergeBase: "abc", prefix: "examples/App/")
+    let report = try StaticCheckReport.make(
+      runID: "r", durationMilliseconds: 1,
+      outcome: await ImpactCheck.run(
+        root: root, git: git, base: "origin/main", scopes: PathConventionModuleScopes()))
+    #expect(report.findings.map(\.file) == ["Packages/Feed/Sources/FeedCore/Reducer.swift"])
   }
 
   @Test("--base defaults to origin/main — catches impact silently diffing against nothing")

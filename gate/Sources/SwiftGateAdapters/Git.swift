@@ -19,6 +19,11 @@ public protocol Git: Sendable {
   /// omitted.
   func contentHashes(of paths: [String]) async throws(GitError) -> [String: String]
 
+  /// Where the adapter's root sits inside the worktree, with a trailing slash (`""` at the
+  /// toplevel). Every path this protocol returns is toplevel-relative, so a project nested in a
+  /// larger repository strips this prefix to get its own paths.
+  func workingDirectoryPrefix() async throws(GitError) -> String
+
   /// The best common ancestor of two commits, or `nil` if their histories are unrelated.
   func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String?
 }

@@ -7,6 +7,26 @@ import Testing
 
 @Suite("swiftgate comments --staged")
 struct CommentsCommandTests {
+  static let scopes = ResolvedScopes(
+    resolver: PathConventionModuleScopes(), graph: nil, notices: [])
+
+  @Test(
+    "a project nested in a larger repository checks only its own files, by its own paths — catches module scopes missing every file of a nested project"
+  )
+  func nestedProject() async throws {
+    let git = FakeGit(
+      staged: [
+        "examples/App/Sources/A.swift": .init(
+          content: "// Now uses the cache.\nlet a = 1\n", addedLines: [1...2]),
+        "Other/B.swift": .init(content: "// Now uses the cache.\n", addedLines: [1...1]),
+      ], prefix: "examples/App/")
+    guard case .checked(let result) = await CommentsCheck.run(git: git, scopes: Self.scopes) else {
+      Issue.record("expected checked")
+      return
+    }
+    #expect(result.findings.map(\.file) == ["Sources/A.swift"])
+    #expect(git.contentReads == ["examples/App/Sources/A.swift"])
+  }
   @Test(
     "checks only staged Swift files and only their added lines — catches pre-commit blocking on untouched code"
   )
@@ -16,7 +36,7 @@ struct CommentsCommandTests {
         content: "// TODO: old debt\n// Now uses the cache.\nlet a = 1\n", addedLines: [2...3]),
       "README.md": .init(content: "// Now uses the cache.\n", addedLines: [1...1]),
     ])
-    let outcome = await CommentsCheck.run(git: git)
+    let outcome = await CommentsCheck.run(git: git, scopes: Self.scopes)
     guard case .checked(let result) = outcome else {
       Issue.record("expected a checked outcome, got \(outcome)")
       return
@@ -30,7 +50,7 @@ struct CommentsCommandTests {
     "a git failure is BLOCKED, never GREEN — catches commits passing when git could not be read")
   func gitFailureBlocks() async throws {
     let git = FakeGit(failure: .invalidRef("-x"))
-    let outcome = await CommentsCheck.run(git: git)
+    let outcome = await CommentsCheck.run(git: git, scopes: Self.scopes)
     let report = try StaticCheckReport.make(runID: "r1", durationMilliseconds: 3, outcome: outcome)
     #expect(report.verdict == .blocked)
     #expect(report.tiers.map(\.verdict) == [.blocked])
@@ -39,7 +59,8 @@ struct CommentsCommandTests {
   @Test("nothing staged is GREEN with no work — catches empty commits failing")
   func nothingStaged() async throws {
     let report = try StaticCheckReport.make(
-      runID: "r1", durationMilliseconds: 1, outcome: await CommentsCheck.run(git: FakeGit()))
+      runID: "r1", durationMilliseconds: 1,
+      outcome: await CommentsCheck.run(git: FakeGit(), scopes: Self.scopes))
     #expect(report.verdict == .green)
     #expect(report.findings.isEmpty)
   }
@@ -51,7 +72,8 @@ struct CommentsCommandTests {
         content: "// It's worth noting the cache is shared.\nlet a = 1\n", addedLines: [1...2])
     ])
     let report = try StaticCheckReport.make(
-      runID: "r1", durationMilliseconds: 1, outcome: await CommentsCheck.run(git: git))
+      runID: "r1", durationMilliseconds: 1,
+      outcome: await CommentsCheck.run(git: git, scopes: Self.scopes))
     #expect(report.findings.map(\.ruleID) == ["comments.ai-prose"])
     #expect(report.verdict == .green)
 
@@ -59,7 +81,8 @@ struct CommentsCommandTests {
       "A.swift": .init(content: "// print(total)\nlet a = 1\n", addedLines: [1...1])
     ])
     let red = try StaticCheckReport.make(
-      runID: "r1", durationMilliseconds: 1, outcome: await CommentsCheck.run(git: blocking))
+      runID: "r1", durationMilliseconds: 1,
+      outcome: await CommentsCheck.run(git: blocking, scopes: Self.scopes))
     #expect(red.verdict == .red)
   }
 

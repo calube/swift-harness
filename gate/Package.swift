@@ -36,7 +36,8 @@ let package = Package(
       ]
     ),
     .target(name: "SwiftGateTestSupport", dependencies: ["SwiftGateDomain", "SwiftGateAdapters"]),
-    .testTarget(name: "SwiftGateDomainTests", dependencies: ["SwiftGateDomain"]),
+    .testTarget(
+      name: "SwiftGateDomainTests", dependencies: ["SwiftGateDomain", "SwiftGateTestSupport"]),
     .testTarget(
       name: "SwiftGateAdaptersTests",
       dependencies: ["SwiftGateDomain", "SwiftGateAdapters", "SwiftGateTestSupport"]

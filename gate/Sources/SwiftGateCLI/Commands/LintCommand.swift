@@ -1,20 +1,21 @@
 import ArgumentParser
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateRules
 
 /// Determinism, client-boundary, observability, escape-hatch and banned-API rules.
 enum LintCheck {
-  static func run(root: URL, paths: [String]) -> StaticCheckOutcome {
-    switch StaticCheckInputs.load(root: root, paths: paths) {
-    case .failed(let outcome):
-      return outcome
-    case .loaded(let config, let sources):
-      let context = RuleContext(
-        scopes: PathConventionModuleScopes(),
-        vendorModules: config?.clients.vendorModules ?? [])
-      return StaticCheck.evaluate(RuleCatalog.lint, sources, context: context)
+  static func run(root: URL, paths: [String], swiftPM: any SwiftPM) async -> StaticCheckOutcome {
+    let inputs: StaticCheckInputs.Loaded
+    switch await StaticCheckInputs.load(root: root, paths: paths, swiftPM: swiftPM) {
+    case .failed(let outcome): return outcome
+    case .loaded(let loaded): inputs = loaded
     }
+    let context = RuleContext(
+      scopes: inputs.scopes.resolver, vendorModules: inputs.config?.clients.vendorModules ?? [])
+    return inputs.scopes.appendingNotices(
+      to: StaticCheck.evaluate(RuleCatalog.lint, inputs.sources, context: context))
   }
 }
 
@@ -31,7 +32,8 @@ struct LintCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     try await StaticCheckRun.execute(root: root, format: output.format) {
-      LintCheck.run(root: root, paths: paths)
+      await LintCheck.run(
+        root: root, paths: paths, swiftPM: ScopeResolution.liveSwiftPM(root: root))
     }
   }
 }

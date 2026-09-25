@@ -69,6 +69,10 @@ public struct LiveGit: Git {
     return hashes
   }
 
+  public func workingDirectoryPrefix() async throws(GitError) -> String {
+    try await run(["rev-parse", "--show-prefix"]).trimmingCharacters(in: .newlines)
+  }
+
   public func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String? {
     try Self.validate(ref: first)
     try Self.validate(ref: second)

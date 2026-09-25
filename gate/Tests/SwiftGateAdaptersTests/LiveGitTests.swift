@@ -209,6 +209,21 @@ struct LiveGitTests {
   }
 
   @Test(
+    "a root inside the worktree reports its prefix — catches toplevel-relative paths matched against a nested project"
+  )
+  func workingDirectoryPrefix() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("examples/App/A.swift", "a\n")
+    _ = try await repo.commitAll("base")
+    let nested = LiveGit(
+      runner: repo.runner, repositoryRoot: repo.root.appending(path: "examples/App").path)
+
+    #expect(try await nested.workingDirectoryPrefix() == "examples/App/")
+    #expect(try await repo.adapter.workingDirectoryPrefix() == "")
+  }
+
+  @Test(
     "unknown ref is a BLOCKED error, not an empty change set — catches silently skipping all tests")
   func unknownRef() async throws {
     let repo = try await TemporaryGitRepository()

@@ -1,0 +1,63 @@
+{
+  "dependencies" : [
+
+  ],
+  "manifest_display_name" : "GameEngine",
+  "name" : "GameEngine",
+  "path" : "/REPO/examples/SampleApp/Packages/GameEngine",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "GameEngine",
+      "targets" : [
+        "GameEngine"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "GameEngineTests",
+      "module_type" : "SwiftTarget",
+      "name" : "GameEngineTests",
+      "path" : "Tests/GameEngineTests",
+      "sources" : [
+        "GameEngineTests.swift"
+      ],
+      "target_dependencies" : [
+        "GameEngine"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "GameEngine",
+      "module_type" : "SwiftTarget",
+      "name" : "GameEngine",
+      "path" : "Sources/GameEngine",
+      "product_memberships" : [
+        "GameEngine"
+      ],
+      "sources" : [
+        "GameEngine.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

@@ -1,12 +1,15 @@
-/// What a module is for, which decides the rules that apply to its files.
+/// The part a module plays in the architecture model; rules and tier selection key off it.
 public enum ModuleRole: Sendable, Hashable {
-  /// Platform-neutral logic, including client interfaces that are not `*Live`.
+  /// Host-testable logic: TCA features, engines, libraries.
   case core
+  /// Views and rendering layers; thin, tested on the simulator.
   case ui
-  /// A client module's interface half.
+  /// A client interface (`FooClient`): models, `@DependencyClient`, test and preview values.
   case client
-  /// A client module's `*Live` half: the only place IO and vendor SDKs may live.
+  /// A client implementation (`FooClientLive`): the only place IO and vendor SDKs may live;
+  /// imported only by the app target.
   case clientLive
+  /// The composition root (the Xcode app target).
   case app
   /// A test target, and the tier its tests run in.
   case tests(Tier)
@@ -70,10 +73,10 @@ public struct StaticModuleScopes: ModuleScopeResolving {
   }
 }
 
-/// Interim classifier from SwiftPM directory layout (`Sources/<Module>/`, `Tests/<Module>/`) and
+/// Fallback classifier for repositories without a `.swiftgate.toml` (so no package list to build a
+/// ``ModuleGraph`` from): SwiftPM directory layout (`Sources/<Module>/`, `Tests/<Module>/`) plus
 /// module-name suffixes. It recognises only what naming makes unambiguous and returns `nil`
-/// otherwise; in particular it never infers a simulator (T2) test target, so rules that need tier
-/// placement stay quiet until the module graph supplies it.
+/// otherwise; in particular it never infers a client interface or a simulator (T2) test target.
 public struct PathConventionModuleScopes: ModuleScopeResolving {
   public init() {}
 

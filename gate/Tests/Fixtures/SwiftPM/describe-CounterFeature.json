@@ -1,0 +1,151 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "apiclient",
+      "path" : "/REPO/examples/SampleApp/Packages/APIClient",
+      "type" : "fileSystem"
+    },
+    {
+      "identity" : "logclient",
+      "path" : "/REPO/examples/SampleApp/Packages/LogClient",
+      "type" : "fileSystem"
+    },
+    {
+      "identity" : "swift-composable-architecture",
+      "requirement" : {
+        "exact" : [
+          "1.26.2"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-composable-architecture"
+    },
+    {
+      "identity" : "swift-snapshot-testing",
+      "requirement" : {
+        "exact" : [
+          "1.19.6"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-snapshot-testing"
+    }
+  ],
+  "manifest_display_name" : "CounterFeature",
+  "name" : "CounterFeature",
+  "path" : "/REPO/examples/SampleApp/Packages/CounterFeature",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "CounterCore",
+      "targets" : [
+        "CounterCore"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "CounterUI",
+      "targets" : [
+        "CounterUI"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "CounterUISnapshotTests",
+      "module_type" : "SwiftTarget",
+      "name" : "CounterUISnapshotTests",
+      "path" : "Tests/CounterUISnapshotTests",
+      "product_dependencies" : [
+        "ComposableArchitecture",
+        "SnapshotTesting"
+      ],
+      "sources" : [
+        "CounterViewSnapshotTests.swift"
+      ],
+      "target_dependencies" : [
+        "CounterUI",
+        "CounterCore"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "CounterUI",
+      "module_type" : "SwiftTarget",
+      "name" : "CounterUI",
+      "path" : "Sources/CounterUI",
+      "product_dependencies" : [
+        "ComposableArchitecture"
+      ],
+      "product_memberships" : [
+        "CounterUI"
+      ],
+      "sources" : [
+        "CounterView.swift"
+      ],
+      "target_dependencies" : [
+        "CounterCore"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "CounterCoreTests",
+      "module_type" : "SwiftTarget",
+      "name" : "CounterCoreTests",
+      "path" : "Tests/CounterCoreTests",
+      "product_dependencies" : [
+        "APIClient",
+        "LogClient",
+        "ComposableArchitecture"
+      ],
+      "sources" : [
+        "CounterFeatureTests.swift"
+      ],
+      "target_dependencies" : [
+        "CounterCore"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "CounterCore",
+      "module_type" : "SwiftTarget",
+      "name" : "CounterCore",
+      "path" : "Sources/CounterCore",
+      "product_dependencies" : [
+        "APIClient",
+        "LogClient",
+        "ComposableArchitecture"
+      ],
+      "product_memberships" : [
+        "CounterCore",
+        "CounterUI"
+      ],
+      "sources" : [
+        "CounterFeature.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}
