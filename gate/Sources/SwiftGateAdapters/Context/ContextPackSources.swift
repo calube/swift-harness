@@ -1,0 +1,136 @@
+import Foundation
+import SwiftGateDomain
+
+/// Gathers a `context-pack` role's raw inputs from disk into ``ContextSource`` values and other
+/// domain inputs. Every slicing decision — which lines of a source end up in the pack — stays in
+/// `ContextPack` (`SwiftGateDomain`); this type only reads files and hands their untouched
+/// contents to the domain builders.
+public enum ContextPackFiles {
+  public enum Failure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+  }
+
+  /// Resolves `path` against `root` (repo-relative paths only; the CLI never accepts an absolute
+  /// path so a pack can't cite the operator's own machine — worker-brief `docs-lint.local-path`).
+  public static func resolve(_ path: String, root: URL) -> URL {
+    root.appending(path: path)
+  }
+
+  /// Reads a whole file verbatim as a labelled ``ContextSource``. `label` is what the pack's
+  /// slices will cite as their source, so callers pass the same string a reader would expect to
+  /// see next to a quoted line (usually `path` itself).
+  public static func read(label: String, path: String, root: URL) -> Result<ContextSource, Failure>
+  {
+    guard let text = try? String(contentsOf: resolve(path, root: root), encoding: .utf8) else {
+      return .failure(.unreadable(path: path))
+    }
+    return .success(ContextSource(label: label, rawText: text))
+  }
+}
+
+/// Finds one claim's exact `claims.jsonl` line by id, so its raw text can travel into a pack
+/// unmodified (never a re-serialization of the decoded value).
+public enum ContextPackClaims {
+  public static func rawLine(forID id: String, in claimsRawText: String) -> String? {
+    let decoder = JSONDecoder()
+    for line in claimsRawText.split(separator: "\n", omittingEmptySubsequences: true) {
+      guard let data = line.data(using: .utf8),
+        let claim = try? decoder.decode(Claim.self, from: data)
+      else { continue }
+      if claim.id == id { return String(line) }
+    }
+    return nil
+  }
+}
+
+/// Reads the file a claim's citation points at, so a claim checker or evidence auditor pack can
+/// carry the cited excerpt (`CitationExcerptSlicer` does the actual excerpting, in the domain
+/// layer — this only locates and reads the right file for each citation kind).
+public enum ContextPackCitationSource {
+  public enum Failure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+  }
+
+  /// - Returns: the source's label (what the pack will cite) and its raw text.
+  public static func resolve(
+    _ citation: Citation, evidenceLayout: EvidenceLayout, repoRoot: URL
+  ) -> Result<(label: String, rawText: String), Failure> {
+    switch citation.kind {
+    case .file:
+      let path = filePath(fromLoc: citation.loc)
+      guard
+        let text = try? String(
+          contentsOf: ContextPackFiles.resolve(path, root: repoRoot), encoding: .utf8)
+      else { return .failure(.unreadable(path: path)) }
+      return .success((label: path, rawText: text))
+    case .snapshot, .capture, .probe:
+      let path = "\(evidenceLayout.root)/\(citation.loc)"
+      guard
+        let text = try? String(
+          contentsOf: ContextPackFiles.resolve(path, root: repoRoot), encoding: .utf8)
+      else { return .failure(.unreadable(path: path)) }
+      return .success((label: citation.loc, rawText: text))
+    case .answer:
+      let path = evidenceLayout.answersFile
+      guard
+        let text = try? String(
+          contentsOf: ContextPackFiles.resolve(path, root: repoRoot), encoding: .utf8)
+      else { return .failure(.unreadable(path: path)) }
+      return .success((label: "answers.jsonl", rawText: text))
+    }
+  }
+
+  /// `loc` for a `file` citation is `<path>:L<a>[-L<b>]`; the path is everything before `:L`.
+  private static func filePath(fromLoc loc: String) -> String {
+    guard let marker = loc.range(of: ":L") else { return loc }
+    return String(loc[loc.startIndex..<marker.lowerBound])
+  }
+}
+
+/// Loads `ledger.json` and finds one task by id, for a worker pack.
+public enum ContextPackLedger {
+  public enum Failure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+    case malformed(path: String)
+    case taskNotFound(id: String, ledgerPath: String)
+  }
+
+  public static func task(id: String, ledgerPath: String, root: URL) -> Result<LedgerTask, Failure>
+  {
+    guard let data = try? Data(contentsOf: ContextPackFiles.resolve(ledgerPath, root: root)) else {
+      return .failure(.unreadable(path: ledgerPath))
+    }
+    guard let ledger = try? LedgerJSON.decode(data) else {
+      return .failure(.malformed(path: ledgerPath))
+    }
+    guard let task = ledger.tasks.first(where: { $0.id == id }) else {
+      return .failure(.taskNotFound(id: id, ledgerPath: ledgerPath))
+    }
+    return .success(task)
+  }
+}
+
+/// Which `docs/standards.md` anchors are in scope for a set of module kinds (spec §5.10: drafter
+/// and worker packs both carry "standards anchors for the module kinds in scope"). A gathering
+/// decision, not a slicing one — `MarkdownAnchorSlicer` still does the actual cut.
+public enum ContextPackModuleKindAnchors {
+  /// Every kind's Core shape and use-when guidance lives in the standards doc's Architecture
+  /// section; three kinds also have a dedicated section worth adding.
+  public static func anchors(for kinds: [ModuleKind]) -> [String] {
+    guard !kinds.isEmpty else { return [] }
+    var anchors: [String] = ["2-architecture"]
+    for kind in kinds {
+      let extra: String?
+      switch kind {
+      case .engine: extra = "8-engine-modules"
+      case .client: extra = "3-dependencies-and-clients"
+      case .render: extra = "6-swiftui-performance"
+      case .feature, .library, .testSupport: extra = nil
+      }
+      if let extra, !anchors.contains(extra) {
+        anchors.append(extra)
+      }
+    }
+    return anchors
+  }
+}

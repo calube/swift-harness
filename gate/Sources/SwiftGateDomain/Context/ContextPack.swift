@@ -284,19 +284,50 @@ enum ClaimLineFilter {
   }
 }
 
+/// Filters a module-graph dump's raw lines to those naming at least one touched module — the
+/// research lane needs only the neighbourhood of the modules it's investigating, never the whole
+/// graph. No structural `ModuleGraph` renderer exists (or is needed) here: whatever text a caller
+/// hands in as the module-graph source, this only keeps the lines that mention a touched module,
+/// the same verbatim-line-filter shape `ClaimLineFilter` already uses.
+enum ModuleGraphLineFilter {
+  static func lines(in graphLines: [String], touching touchedModules: [String]) -> [String] {
+    guard !touchedModules.isEmpty else { return [] }
+    return graphLines.filter { line in touchedModules.contains { line.contains($0) } }
+  }
+}
+
 // MARK: - Per-role inputs
 
-/// spec §5.10 research lane row: frame answers, area and a lane brief (opaque text, passed
-/// through), plus only the existing claims pinned to the same version — a cache hit is a claim
-/// already proven for this exact pin, so the lane doesn't re-derive it.
+/// spec §5.10 research lane row: frame answers, area, a module-graph slice for the touched
+/// modules named in the frame answers, and a lane brief (opaque text, passed through), plus
+/// existing claims pinned to the same version — both the repo's own and the user-level evidence
+/// reuse cache's — since a cache hit is a claim already proven for this exact pin, so the lane
+/// doesn't re-derive it.
 public struct ResearchLaneInputs: Sendable {
+  public let frameAnswers: ContextSource
+  public let area: String
+  public let moduleGraph: ContextSource
+  public let touchedModules: [String]
   public let briefs: [ContextSource]
   public let claims: ContextSource
+  /// Live (non-tombstoned) claims for `pin` from the user-level evidence reuse cache
+  /// (`EvidenceCacheStore.contents(of: .package(pin:))`); the caller resolves the cache, this
+  /// type only renders what it found.
+  public let cacheHits: [CachedClaim]
   public let pin: String
 
-  public init(briefs: [ContextSource], claims: ContextSource, pin: String) {
+  public init(
+    frameAnswers: ContextSource, area: String, moduleGraph: ContextSource,
+    touchedModules: [String], briefs: [ContextSource], claims: ContextSource,
+    cacheHits: [CachedClaim], pin: String
+  ) {
+    self.frameAnswers = frameAnswers
+    self.area = area
+    self.moduleGraph = moduleGraph
+    self.touchedModules = touchedModules
     self.briefs = briefs
     self.claims = claims
+    self.cacheHits = cacheHits
     self.pin = pin
   }
 }
@@ -556,14 +587,41 @@ extension ContextPack {
 
   /// spec §5.10 research lane row.
   public static func researchLanePack(_ inputs: ResearchLaneInputs) -> ContextPack {
-    var slices = inputs.briefs.map { ContextPackSlice($0) }
-    let cacheHits = ClaimLineFilter.lines(
+    var slices: [ContextPackSlice] = [ContextPackSlice(inputs.frameAnswers)]
+    slices.append(ContextPackSlice(sourceLabel: "area", anchor: nil, lines: [inputs.area]))
+
+    let graphLines = ModuleGraphLineFilter.lines(
+      in: MarkdownAnchorSlicer.rawLines(inputs.moduleGraph.rawText),
+      touching: inputs.touchedModules)
+    if !graphLines.isEmpty {
+      slices.append(
+        ContextPackSlice(sourceLabel: inputs.moduleGraph.label, anchor: nil, lines: graphLines))
+    }
+
+    slices.append(contentsOf: inputs.briefs.map { ContextPackSlice($0) })
+
+    let repoCacheHits = ClaimLineFilter.lines(
       in: MarkdownAnchorSlicer.rawLines(inputs.claims.rawText)
     ) { $0.citation.pin == inputs.pin }
-    if !cacheHits.isEmpty {
+    if !repoCacheHits.isEmpty {
       slices.append(
-        ContextPackSlice(sourceLabel: inputs.claims.label, anchor: nil, lines: cacheHits))
+        ContextPackSlice(sourceLabel: inputs.claims.label, anchor: nil, lines: repoCacheHits))
     }
+
+    if !inputs.cacheHits.isEmpty {
+      let lines = inputs.cacheHits.compactMap { cached -> String? in
+        guard let data = try? ClaimJSON.encodeLine(cached.claim.claim) else { return nil }
+        var text = String(decoding: data, as: UTF8.self)
+        if text.hasSuffix("\n") { text.removeLast() }
+        return text
+      }
+      if !lines.isEmpty {
+        slices.append(
+          ContextPackSlice(
+            sourceLabel: "evidence cache: \(inputs.pin)", anchor: nil, lines: lines))
+      }
+    }
+
     return ContextPack(role: .researchLane, slices: slices)
   }
 
