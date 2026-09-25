@@ -27,17 +27,12 @@ struct RuleFixtureTests {
 
   private static func findings(ruleID: String, variant: String) throws -> [(String, [Finding])] {
     let rule = try #require(RuleCatalog.all.first { $0.descriptor.id == ruleID })
-    let manifest = try manifest(for: ruleID)
-    let context = try manifest.context()
     let files = try swiftFiles(in: fixturesRoot.appending(path: "\(ruleID)/\(variant)"))
     #expect(!files.isEmpty, "\(ruleID)/\(variant) has no fixtures")
-    return try files.map { file in
-      let input = SourceInput(
-        path: manifest.path(forFileNamed: file.lastPathComponent),
-        text: try String(contentsOf: file, encoding: .utf8))
-      let result = try RuleEngine(rules: [rule]).run([input], context: context)
-      return (file.lastPathComponent, result.findings.filter { $0.ruleID == ruleID })
-    }
+    return try RuleFixtureCheck.run(
+      rule: rule, manifest: manifest(for: ruleID),
+      files: files.map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
+    ).map { ($0.fileName, $0.findings) }
   }
 
   @Test(

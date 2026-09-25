@@ -44,4 +44,6 @@ if [ ! -x "$binary" ]; then
   mv -f "$tmp" "$binary"
 fi
 
+# `self-test` finds the fixtures and sample app of the checkout this shim belongs to.
+export SWIFTGATE_HARNESS_ROOT="$root"
 exec "$binary" "$@"
