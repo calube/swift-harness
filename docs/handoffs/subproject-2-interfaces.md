@@ -401,3 +401,41 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 - Reads prose through `MarkdownDocument.proseLines` (line-numbered, skips code, inline code, tables, diagrams,
   HTML comments, frontmatter). Reuse it; don't add a markdown reader.
 - Not wired into any tier or hook yet; the repo's docs don't pass. `plugin-docs-pass-docs-lint-and-prose` wires it.
+
+## Wave 11
+
+**`context-pack`** (`A/Context/ContextPackSources.swift`, `C/Commands/ContextPackCommand.swift`)
+- `swiftgate context-pack --role <role> [flags]` for all 8 `ContextPackRole`s (an exhaustive switch, no `default`).
+  Flags, all repo-relative: `--design --claims --claim-id --brief --pin --template --frame-answers --area
+  --module-graph --probe-verdicts --standards --playbook --module-kind --standards-anchor --doc-anchor
+  --question-set --task-sizing-bounds --ledger --task-id --key --cache-home` (defaults to `$HOME`).
+- Writes `.harness/context-pack/<role>[-<key>].md` and prints the token estimate (bytes / 4).
+  `ContextPackRun.run(role:options:root:) -> Outcome{.written(Written{role, relativePath, tokens, notes}),
+  .invalid, .violation}`.
+- Exit 0 written, 1 domain violation (a missing anchor, never a thinner pack), 2 bad `--role`, unreadable input,
+  unknown value, or a touched module missing from the graph. An absent OPTIONAL input is a note.
+- The research-lane pack follows spec §5.10: frame answers, area, module-graph slice for the modules the frame
+  answers name (`touchedModules`, decoded with design-scope's type), user-cache hits for the pin from
+  `EvidenceCacheStore` (tombstones excluded; "no cache hits for <pin>" is a note), the repo's same-pin claims,
+  and the lane brief.
+
+**`design-lint`** (`A/Design/DesignLintInputs.swift`, `C/Commands/DesignLintCommand.swift`)
+- `swiftgate design-lint <doc> [--json]` runs sections-and-ids, evidence tags, diagrams-and-budgets and `prose`
+  in one pass. Exit 0 clean, 1 findings, 2 unreadable or malformed input.
+- New rule ids: `design-lint.status-unknown`, `.claims-file-missing`, `.mermaid-syntax` (major);
+  `.mmdc-unavailable`, `.claims-file-unreadable-lines` (minor). `mmdc` validates fences when on PATH;
+  otherwise the minor note, never blocked.
+- `GF/design/valid.md` is clean under every family together, with `GF/design/valid.evidence/claims.jsonl`
+  citing the real TCA 1.26.2 line (capture recipe in `gate/Fixtures/design/README.md`).
+- Prose's em-dash rule exempts exactly the §5.3 ` — tier T<n>` tail of a `test-…:` bullet
+  (`ProseRules.isTestPlanTierSeparator`), so `prose` and `design-lint` agree on design docs.
+
+**`docs-lint`** (`A/Docs/DocsTreeReader.swift`, `C/Commands/DocsLintCommand.swift`, `GF/docs-lint/`)
+- `swiftgate docs-lint [--json]`, no positional args. Scans `docs/**/*.md` plus root `AGENTS.md`; `repoPaths`
+  from real `git ls-files -z --full-name`. A `CLAUDE.md` symlink counts once; directory symlinks don't loop.
+- One corpus type: `DocsLintPolicy.ScannedDocument{path, rawText, markdown}`; `DocsLintReferences.DocFile` is a
+  typealias. Builder: `DocsTreeReader(runner:).read(repositoryRoot:) async throws(ReadFailure) ->
+  Corpus{documents, repoPaths}`. Reference findings carry real line numbers.
+- Exit 0 clean, 1 any finding, 2 unreadable docs or git failure. Minor, non-gating: `docs-lint.no-docs-section`,
+  `docs-lint.no-docs-directory`.
+- Not wired into any tier or hook yet.
