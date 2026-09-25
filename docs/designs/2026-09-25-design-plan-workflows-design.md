@@ -454,7 +454,8 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
   overhead share. Prose appears only where a diagram can't carry it: problem, risks, open questions.
 - **`prose`** — mechanical plain-English checks over designs, ADRs and docs: adverbs, em-dashes,
   number words where numerals fit, passive voice, filler and business-jargon lists, sentence-length
-  ceiling. Rule set written fresh for the harness. Runs inside `design-lint` and at pre-push over
+  ceiling. The §5.3 ` — tier T<n>` tail of a `test-…:` bullet is syntax, not an em-dash finding. Rule set
+  written fresh for the harness. Runs inside `design-lint` and at pre-push over
   changed docs.
 - **`design-diff`** — changes touching a `req-…` line, Decision, Module kinds or Test plan →
   `amend`; anything else → `clarify`. Also verifies a clarify chain link by link.

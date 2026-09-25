@@ -71,6 +71,22 @@ struct ProseRulesTests {
     #expect(try Self.hits(.emDash, in: text).map(\.message) == [])
   }
 
+  @Test(
+    "the tier separator on a test-plan bullet passes while every other em-dash is flagged — catches prose failing every spec-compliant design doc, or the exemption leaking into free prose"
+  )
+  func testPlanTierSeparatorPasses() throws {
+    let text = """
+      ## Test plan by tier
+
+      - test-queue-drains-on-reconnect: queued orders submit once online \u{2014} tier T2
+      - test-queue-survives-relaunch: order kept \u{2014} even after a crash \u{2014} tier T1
+      - A note \u{2014} tier T1
+      """
+    let design = DesignDocument(markdown: MarkdownDocument.parse(text))
+    #expect(design.testPlan.map(\.tier) == ["T2", "T1"])
+    #expect(try Self.hits(.emDash, in: text).map(\.line) == [4, 5])
+  }
+
   // MARK: - Number words
 
   @Test("a number word where a numeral fits is flagged — catches spelled-out counts passing")

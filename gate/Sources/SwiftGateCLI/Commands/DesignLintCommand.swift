@@ -67,26 +67,13 @@ enum DesignLintCheck {
       document: document, docPath: docPath, claims: claimsLoaded.claims ?? [])
     findings += try DesignLintDiagrams.check(document: document, docPath: docPath, budgets: budgets)
     findings += try ProseRules.check(
-      proseInput(rawText), file: docPath, sentenceCeiling: sentenceCeiling)
+      rawText, file: docPath, sentenceCeiling: sentenceCeiling)
     findings += try statusFindings(document: document, docPath: docPath)
     findings += try claimsFileFindings(
       document: document, docPath: docPath, claimsLoaded: claimsLoaded)
     findings += try mermaidFindings(
       mermaidOutcome, hasMermaidFences: hasMermaidFences, docPath: docPath)
     return findings
-  }
-
-  // MARK: - Prose input
-
-  /// Spec §5.3's Test plan by tier bullets require a literal em-dash before "tier"
-  /// (`DesignDocument`'s own separator, ` — tier `): that's the template's structural syntax, not
-  /// free prose, so `prose.em-dash` would otherwise flag every spec-compliant test-plan bullet in
-  /// every design doc. `prose` sees that one token normalised to a semicolon; `DesignDocument`
-  /// still parses the untouched `rawText`, so this has no effect on any other rule family.
-  private static let testPlanTierSeparator = " \u{2014} tier "
-
-  private static func proseInput(_ rawText: String) -> String {
-    rawText.replacingOccurrences(of: testPlanTierSeparator, with: "; tier ")
   }
 
   // MARK: - Frontmatter status

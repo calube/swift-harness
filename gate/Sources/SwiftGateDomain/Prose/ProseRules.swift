@@ -192,6 +192,7 @@ public enum ProseRules {
       let token = tokens[index]
       let text = sentence.text(token)
       guard text.contains("\u{2014}") || text == "--" else { return nil }
+      guard !isTestPlanTierSeparator(tokens, index, in: sentence) else { return nil }
       let from = tokens[max(0, index - 1)].lowerBound
       let to = tokens[min(tokens.count - 1, index + 1)].upperBound
       return Hit(
@@ -200,6 +201,22 @@ public enum ProseRules {
           "em-dash in \"\(sentence.text(from..<to))\": use a comma, colon, parentheses or "
           + "two sentences")
     }
+  }
+}
+
+extension ProseRules {
+  /// Spec §5.3 makes ` — tier T<n>` the required tail of a `test-…:` bullet (the separator
+  /// `DesignDocument` parses), so that one em-dash is syntax, not prose.
+  static func isTestPlanTierSeparator(
+    _ tokens: [Range<Int>], _ index: Int, in sentence: ProseSentence
+  ) -> Bool {
+    guard sentence.text(tokens[index]) == "\u{2014}", index == tokens.count - 3,
+      sentence.text(tokens[index + 1]) == "tier",
+      sentence.text(tokens[index + 2]).wholeMatch(of: /T[0-3]\.?/) != nil
+    else { return false }
+    let block = String(sentence.characters).trimmingCharacters(in: .whitespaces)
+    let item = block.hasPrefix("- ") ? block.dropFirst(2) : Substring(block)
+    return item.hasPrefix("test-")
   }
 }
 
