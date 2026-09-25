@@ -98,4 +98,18 @@ struct TierPlanTests {
       selected(try plan([path], tier: .t2, config: config)) == ["LogClient": ["LogClientLiveTests"]]
     )
   }
+
+  @Test(
+    "allOf selects every T1 target in every package — catches an unscoped run skipping a package")
+  func allOf() throws {
+    let plan = TierPlan(allOf: try SampleGraph.graph(), tier: .t1)
+
+    #expect(
+      selected(plan) == [
+        "APIClient": ["APIClientLiveTests"], "CounterFeature": ["CounterCoreTests"],
+        "GameEngine": ["GameEngineTests"],
+        "HTTPClient": ["HTTPClientLiveTests", "HTTPClientTests"],
+        "LogClient": ["LogClientLiveTests", "LogClientTests"],
+      ])
+  }
 }

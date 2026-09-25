@@ -1,0 +1,13 @@
+[1/1] Testing ProbeTests.CrashXCTests/testCrashes
+Test Suite 'Selected tests' started at 2026-09-24 21:13:09.911.
+Test Suite 'XUnitProbePackageTests.xctest' started at 2026-09-24 21:13:09.911.
+Test Suite 'CrashXCTests' started at 2026-09-24 21:13:09.911.
+Test Case '-[ProbeTests.CrashXCTests testCrashes]' started.
+Swift/ContiguousArrayBuffer.swift:692: Fatal error: Index out of range
+
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite CrashSwiftTests started.
+◇ Test crashes() started.
+Swift/ContiguousArrayBuffer.swift:692: Fatal error: Index out of range

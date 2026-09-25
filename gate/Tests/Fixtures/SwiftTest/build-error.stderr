@@ -1,0 +1,13 @@
+Building for debugging...
+[0/8] /REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/XUnitProbePackageTests.derived/runner.swift
+[1/8] Write sources
+[5/8] Write swift-version--58304C5D6DBC2206.txt
+[7/10] Emitting module Probe
+[8/10] Compiling Probe Probe.swift
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Sources/Probe/Probe.swift:2:11: error: cannot convert value of type 'String' to expected argument type 'Int'
+ 1 | public func double(_ value: Int) -> Int {
+ 2 |   value * "2"
+   |           `- error: cannot convert value of type 'String' to expected argument type 'Int'
+ 3 | }
+ 4 | 
+error: fatalError

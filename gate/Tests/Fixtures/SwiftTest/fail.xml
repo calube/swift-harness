@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="1" failures="1" time="0.254707417">
+<testcase classname="ProbeTests.FailXCTests" name="testDoublesWrong" time="0.254707417">
+<failure message="failure"></failure>
+</testcase>
+</testsuite>
+</testsuites>

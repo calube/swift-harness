@@ -60,6 +60,11 @@ public struct TierPlan: Sendable, Equatable {
     self.unmappedPaths = unmapped.sorted()
   }
 
+  /// Every test target the tier owns, for a run not scoped to a change.
+  public init(allOf graph: ModuleGraph, tier: Tier) {
+    self.init(changedPaths: graph.packages.map(\.manifestPath), graph: graph, tier: tier)
+  }
+
   private static func isDocumentation(_ path: String) -> Bool {
     path.hasSuffix(".md") || path.split(separator: "/").contains { $0.hasSuffix(".docc") }
   }

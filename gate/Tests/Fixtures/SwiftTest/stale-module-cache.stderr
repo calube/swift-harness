@@ -1,0 +1,13 @@
+[0/1] Planning build
+Building for debugging...
+[0/8] /MOVED/XUnitProbe/.build/arm64-apple-macosx/debug/XUnitProbePackageTests.derived/runner.swift
+[1/8] Write sources
+[5/8] Write swift-version--58304C5D6DBC2206.txt
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+[7/10] Emitting module Probe
+<unknown>:0: error: PCH was compiled with module cache path '/REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/ModuleCache/2KXMNF4MZQOG3', but the path is currently '/MOVED/XUnitProbe/.build/arm64-apple-macosx/debug/ModuleCache/2KXMNF4MZQOG3'
+<unknown>:0: error: missing required module 'SwiftShims'
+[8/10] Compiling Probe Probe.swift
+<unknown>:0: error: PCH was compiled with module cache path '/REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/ModuleCache/2KXMNF4MZQOG3', but the path is currently '/MOVED/XUnitProbe/.build/arm64-apple-macosx/debug/ModuleCache/2KXMNF4MZQOG3'
+<unknown>:0: error: missing required module 'SwiftShims'
+error: fatalError

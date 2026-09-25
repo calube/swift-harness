@@ -130,7 +130,7 @@ public struct LiveSwiftPM: SwiftPM {
     return path
   }
 
-  static func swiftTestingReportPath(for xunitPath: String) -> String {
+  public static func swiftTestingReportPath(for xunitPath: String) -> String {
     let url = URL(filePath: xunitPath)
     let stem = url.deletingPathExtension().lastPathComponent
     let renamed = url.deletingLastPathComponent().appending(path: "\(stem)-swift-testing")

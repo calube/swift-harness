@@ -1,0 +1,17 @@
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+[2/5] Compiling Probe Probe.swift
+[3/5] Emitting module Probe
+[4/12] Emitting module EmptyTests
+[5/12] Compiling EmptyTests Empty.swift
+[6/12] Compiling ProbeTests CrashTests.swift
+[7/12] Compiling ProbeTests FailTests.swift
+[8/12] Compiling ProbeTests PassTests.swift
+[9/12] Emitting module ProbeTests
+[10/12] Compiling ProbeTests SkipTests.swift
+[11/14] Compiling XUnitProbePackageTests runner.swift
+[12/14] Emitting module XUnitProbePackageTests
+[12/14] Write Objects.LinkFileList
+[13/14] Linking XUnitProbePackageTests
+Build complete! (0.78s)

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="1" failures="1" skipped="0" time="0.00044775">
+    <testcase classname="ProbeTests.FailSwiftTests" name="doublesWrong()" time="0.000224417" >
+      <failure message="Expectation failed: (double(3) &#8594; 6) == 7 (error)" />
+    </testcase>
+  </testsuite>
+</testsuites>

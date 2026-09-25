@@ -1,0 +1,62 @@
+{
+  "dependencies" : [
+
+  ],
+  "manifest_display_name" : "XUnitProbe",
+  "name" : "XUnitProbe",
+  "path" : "/REPO/gate/Fixtures/swifttest/XUnitProbe",
+  "platforms" : [
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "ProbeTests",
+      "module_type" : "SwiftTarget",
+      "name" : "ProbeTests",
+      "path" : "Tests/ProbeTests",
+      "sources" : [
+        "CrashTests.swift",
+        "FailTests.swift",
+        "PassTests.swift",
+        "SkipTests.swift"
+      ],
+      "target_dependencies" : [
+        "Probe"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "Probe",
+      "module_type" : "SwiftTarget",
+      "name" : "Probe",
+      "path" : "Sources/Probe",
+      "sources" : [
+        "Probe.swift"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "EmptyTests",
+      "module_type" : "SwiftTarget",
+      "name" : "EmptyTests",
+      "path" : "Tests/EmptyTests",
+      "sources" : [
+        "Empty.swift"
+      ],
+      "target_dependencies" : [
+        "Probe"
+      ],
+      "type" : "test"
+    }
+  ],
+  "tools_version" : "6.2"
+}

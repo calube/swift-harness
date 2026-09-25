@@ -36,14 +36,17 @@ public struct RunStore: Sendable {
   }
 
   /// Writes the run's `report.json` and appends its summary to `history.jsonl`.
-  public func record(_ report: RunReport, finishedAt: Date) throws(RunStoreError) {
+  public func record(_ report: RunReport, finishedAt: Date, command: String? = nil)
+    throws(RunStoreError)
+  {
     let directory = try runDirectory(for: report.runID)
     let reportFile = directory.appending(path: RunLayout.reportFileName)
     let reportData: Data
     let line: Data
     do {
       reportData = try RunReportJSON.encode(report)
-      line = try RunHistoryJSON.encodeLine(RunHistoryRecord(report: report, finishedAt: finishedAt))
+      line = try RunHistoryJSON.encodeLine(
+        RunHistoryRecord(report: report, finishedAt: finishedAt, command: command))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }

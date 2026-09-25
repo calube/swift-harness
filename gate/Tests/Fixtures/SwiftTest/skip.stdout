@@ -1,0 +1,10 @@
+[1/2] Testing ProbeTests.SkipXCTests/testSkippedWithReason
+[2/2] Testing ProbeTests.SkipXCTests/testSkippedWithoutReason
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite SkipSwiftTests started.
+➜ Test disabledWithReason() skipped: "flaky on CI"
+➜ Test disabledWithoutReason() skipped.
+✔ Suite SkipSwiftTests passed after 0.001 seconds.
+✔ Test run with 2 tests in 1 suite passed after 0.001 seconds.

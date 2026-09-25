@@ -1,0 +1,23 @@
+[1/1] Testing ProbeTests.FailXCTests/testDoublesWrong
+Test Suite 'Selected tests' started at 2026-09-24 21:13:08.789.
+Test Suite 'XUnitProbePackageTests.xctest' started at 2026-09-24 21:13:08.790.
+Test Suite 'FailXCTests' started at 2026-09-24 21:13:08.790.
+Test Case '-[ProbeTests.FailXCTests testDoublesWrong]' started.
+/REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/FailTests.swift:7: error: -[ProbeTests.FailXCTests testDoublesWrong] : XCTAssertEqual failed: ("4") is not equal to ("5") - double(2) should be 5
+Test Case '-[ProbeTests.FailXCTests testDoublesWrong]' failed (0.224 seconds).
+Test Suite 'FailXCTests' failed at 2026-09-24 21:13:09.014.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.224 (0.224) seconds
+Test Suite 'XUnitProbePackageTests.xctest' failed at 2026-09-24 21:13:09.014.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.224 (0.224) seconds
+Test Suite 'Selected tests' failed at 2026-09-24 21:13:09.014.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.224 (0.225) seconds
+
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite FailSwiftTests started.
+◇ Test doublesWrong() started.
+✘ Test doublesWrong() recorded an issue at FailTests.swift:13:5: Expectation failed: (double(3) → 6) == 7
+✘ Test doublesWrong() failed after 0.001 seconds with 1 issue.
+✘ Suite FailSwiftTests failed after 0.001 seconds with 1 issue.
+✘ Test run with 1 test in 1 suite failed after 0.001 seconds with 1 issue.

@@ -1,0 +1,9 @@
+[1/1] Testing ProbeTests.PassXCTests/testDoubles
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite PassSwiftTests started.
+◇ Test doubles() started.
+✔ Test doubles() passed after 0.001 seconds.
+✔ Suite PassSwiftTests passed after 0.001 seconds.
+✔ Test run with 1 test in 1 suite passed after 0.001 seconds.

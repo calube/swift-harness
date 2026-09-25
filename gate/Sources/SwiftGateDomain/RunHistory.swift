@@ -33,15 +33,18 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
 
   public let schemaVersion: Int
   public let runID: String
+  /// What ran, for example `lint` or `check fast`. Absent in records written before it existed.
+  public let command: String?
   public let finishedAt: Date
   public let verdict: Verdict
   public let durationMilliseconds: Int
   public let tiers: [TierResult]
   public let findingCount: Int
 
-  public init(report: RunReport, finishedAt: Date) {
+  public init(report: RunReport, finishedAt: Date, command: String? = nil) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
+    self.command = command
     self.finishedAt = finishedAt
     self.verdict = report.verdict
     self.durationMilliseconds = report.durationMilliseconds
