@@ -100,7 +100,7 @@ memory pressure.
 
 ### 3. Checking a report before merging
 
-Read every report against this list. Each item caught a real defect in waves 1–5.
+Read every report against this list. Each item caught a real defect in waves 1–7.
 
 | Check | What it caught |
 |---|---|
@@ -111,6 +111,11 @@ Read every report against this list. Each item caught a real defect in waves 1�
 | **Deviations outside the write set.** Are they justified, and do they collide with a later task's file? Update the plan's Merge points if they do | `HookRunner.swift`, `Rule.swift`, `standards.md` rule-index rows |
 | **"Pre-existing red" claims.** Verify on `main` yourself. A real pre-existing red is a harness bug: fix it in a separate branch and merge it first | `coverage.no-t1-tests` on the test-support module → new `test-support` kind |
 | **A spec gap surfaced by the implementation.** Fix it in the spec, the interfaces note and the plan in the same commit | `designSha` hashes content git never stores → revisions are found by walking history |
+| **"All N" claims.** Count the implementation against the task's Does line. Worker prompts require one line per Does/Tests bullet naming its test | "all 8 roles" delivered 3 context-pack builders |
+| **Severity matches the spec.** `minor` and `nit` never fail the gate. A spec "violation" must be `major` | design-lint budget findings shipped as advisory |
+| **A second copy of shared logic.** A worker that can't edit a shared file re-implements it. Clear the edit and extract one function instead | review-synth's drop step copied into the design path; the section order list held twice |
+| **Routing around a shared fixture.** A rule that finds `GF/design/valid.md` invalid fixes it, never a private "valid" copy. Read the fixture diff: every citation must support its bullet | three rule families failed `valid.md`; the first fix tagged 5 Perf bullets with an unrelated claim |
+| **A check that can't fail.** Build the smallest input the rule exists to catch, and ask whether the implementation flags it | `[UNVERIFIED]` coverage passed whenever Risks was non-empty |
 | **Recurring minor gate findings.** A non-gating finding that shows up every wave is a real gap | untested config range validation |
 
 A fix round is a `SendMessage` to the **same** worker, which keeps its context. List the exact change, the tests to
@@ -144,8 +149,8 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 
 ## Known issues to watch
 
-- A Foundation shim test ("swiftgate shim caches and rebuilds") failed once on a cold rebuild. If it recurs, run
-  `flake-hunter`.
+- Latency-budget tests assert the fastest of several runs (cold hooks, cached shim, hook commands). A flake there
+  now means a real regression or a new single-shot timing assert: check which before retrying.
 - The review workflow reads a contributor ADR at runtime until the packaging wave moves the contract into
   `plugin/docs/` (ADR 0002, steering).
 - From the packaging wave on, the root `bin/swiftgate` is gone. Run `plugin/bin/swiftgate`, and seed worktrees by

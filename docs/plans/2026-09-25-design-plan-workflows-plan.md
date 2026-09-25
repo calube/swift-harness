@@ -3,10 +3,10 @@
 <!-- RESUME
 Status: BUILDING — waves 1–7 merged on local main (2026-09-25), push tier GREEN (936 tests). Main NOT pushed to origin (user decision pending); backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 8 — design-scope-tier-recommendation, docs-lint-policy-and-budgets, docs-lint-references-and-links. Before it, while the machine is idle: fix the shim/hook latency flake (see Open items). Follow the runbook's wave loop.
+Next action: wave 8 — design-scope-tier-recommendation, docs-lint-policy-and-budgets, docs-lint-references-and-links. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
-Open items: shim test "swiftgate shim caches and rebuilds" flaked in 2 of 3 wave-6 workers, and hook-latency tests hit 1093ms vs a 1000ms limit in wave 7; cause is its wall-clock asserts (cold hooks <2s, cached run <1s) under parallel-build load, NOT the .build clone (shim_test.sh deletes the copied .build). Next failure: quote the FAIL: line. Planned fix: min-of-N timing, copy gate/ without .build; Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
+Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
 
