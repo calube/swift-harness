@@ -104,6 +104,45 @@ Also changed on the SampleApp: `8c14d73` (the `emit` test above) and `18f5d81` (
 12 files). Before that, the first edit to any of those files surfaced unrelated `LineLength` and
 `Indentation` findings.
 
+## Live Claude Code session
+
+Three headless sessions (Claude Code 2.1.282) against the bootstrapped SampleApp copy, plugin
+loaded with `--plugin-dir` (nothing installed globally), `--setting-sources project,local` so no
+user-level hooks ran, and `SWIFTGATE_HOOK_RECORD_DIR` capturing every payload and outcome.
+
+| Session | Prompt | Hooks that fired | Result |
+|---|---|---|---|
+| a | add a "last changed" date to CounterCore's reducer | SessionStart 1, PreToolUse 10, PostToolUse 7, Stop 1 | The model read `det.date-init` from the session context and used `@Dependency(\.date.now)` unprompted; every PostToolUse lint was clean; Stop ran `check --tier fast`: GREEN (10.8s), silent. |
+| a2 | add a literal `Date()` to the reducer, don't fix what hooks report | SessionStart 1, PreToolUse 1, PostToolUse 1, Stop 4 | PostToolUse blocked with `det.date-init` at the edited line (31ms). Stop blocked RED 1/3, 2/3, 3/3 (`det.date-init` plus three `t1.build-failed`: the file has no `import Foundation`), then released with the `RED — not done` system message. |
+| c | run raw `xcodebuild … test` | SessionStart 1, PreToolUse 1, Stop 1 | PreToolUse denied `guard.raw-xcodebuild`; the reason reached the model verbatim. Stop with no changed files: silent in 146ms. |
+
+Every hook exited 0 (stream `hook_response` events agree with the recorder). Session a's Stop
+also showed a gap in the dogfood set-up, not the harness: `acceptEdits` doesn't allow Bash, so
+the model's own `swiftgate check` waited for approval; the Stop hook ran the check anyway.
+
+Latency, in-process (`elapsed_ms` from the recorder outcome files, 30 invocations):
+
+| Hook | n | median | max |
+|---|---|---|---|
+| SessionStart (context) | 3 | 6ms | 40ms (first, cold module-map cache) |
+| PreToolUse (allow / deny) | 11 / 1 | 0ms / 1ms | 0ms / 1ms |
+| PostToolUse (format + lint) | 8 | 34ms | 187ms (first edit in a session) |
+| Stop, full `check --tier fast` | 2 | — | 6.9s RED, 10.8s GREEN |
+| Stop re-entry (cached verdict) | 3 | 102ms | 103ms |
+
+Adding the shim and process start, replaying recorded payloads through `bin/swiftgate` averages
+33ms (PreToolUse) and 36ms (SessionStart) end to end.
+
+Schema: the recorded payloads were compared field by field with the hook fixtures. No field
+swiftgate reads differed (`session_id`, `cwd`, `hook_event_name`, `tool_name`,
+`tool_input.command`/`file_path`, `stop_hook_active`, `source`), so no decoder change was needed.
+Differences were in unread fields only (listed in `gate/Tests/Fixtures/README.md`). Seven
+fixtures are now the scrubbed live payloads; one test's expected command changed to the live one.
+
+Not exercised live: subagent payloads (`agent_id`), Write, SessionStart `resume`, and the git
+pre-commit / pre-push hooks (the plan's T7.6 lists those; they run through lefthook, not Claude
+Code, and are covered by the bootstrap section above).
+
 ## Known gaps, not fixed
 
 - Fixed since: `impact.untested-change` fired on formatting-only source changes (`18f5d81` was RED
