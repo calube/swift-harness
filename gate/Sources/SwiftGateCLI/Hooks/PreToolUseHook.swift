@@ -43,12 +43,19 @@ enum PreToolUseHook {
         return deny(violation)
       }
     }
-    for form in forms {
-      guard let target = PlanStateGuard.target(ofResolvedPath: form) else { continue }
-      let locks = await PlanLocks.read(PlanStateGuard.lockScope(of: target), git: dependencies.git)
+    for form in ToolPath.resolvedAbsolutes(
+      path, cwd: payload.cwd, home: dependencies.environment["HOME"])
+    {
+      guard var target = PlanStateGuard.target(ofResolvedPath: form) else { continue }
+      var plans: [PlanStateGuard.PlanRecord] = []
+      if case .designArtifact(let document) = target {
+        target = .designArtifact(document: ToolPath.canonical(document))
+        plans = await PlanLocks.records(root: root, git: dependencies.git)
+      }
+      let locks = PlanLocks.read(PlanStateGuard.lockScope(of: target))
       if let violation = PlanStateGuard.evaluate(
-        target, locks: locks, environmentValue: environmentValue, sessionID: payload.sessionID,
-        agentID: payload.agentID)
+        target, locks: locks, plans: plans, environmentValue: environmentValue,
+        sessionID: payload.sessionID, agentID: payload.agentID)
       {
         return deny(violation)
       }
@@ -106,22 +113,38 @@ enum ToolPath {
   /// kernel does, including a dangling link a write would create the target of). A relative path
   /// resolves against `cwd`; a leading `~/` also resolves against `home`.
   static func resolvedForms(_ path: String, cwd: String, home: String?) -> [String] {
-    var absolutes: [String] = []
-    if path.hasPrefix("/") {
-      absolutes.append(path)
-    } else {
-      absolutes.append(cwd + "/" + path)
-      if let home, path.hasPrefix("~/") { absolutes.append(home + "/" + path.dropFirst(2)) }
-    }
     var forms: [String] = [path]
-    for absolute in absolutes {
-      for form in [
-        absolute, CanonicalPath.of(URL(filePath: absolute)), physical(absolute),
-      ] where !forms.contains(form) {
+    for form in absolutes(path, cwd: cwd, home: home)
+      + resolvedAbsolutes(path, cwd: cwd, home: home) where !forms.contains(form)
+    {
+      forms.append(form)
+    }
+    return forms
+  }
+
+  /// Only the canonical forms of ``resolvedForms(_:cwd:home:)``: every place the write can land,
+  /// spelled so it compares equal to another canonical path naming the same file.
+  static func resolvedAbsolutes(_ path: String, cwd: String, home: String?) -> [String] {
+    var forms: [String] = []
+    for absolute in absolutes(path, cwd: cwd, home: home) {
+      for form in [CanonicalPath.of(URL(filePath: absolute)), canonical(absolute)]
+      where !forms.contains(form) {
         forms.append(form)
       }
     }
     return forms
+  }
+
+  /// ``physical(_:)``, then `realpath` over what exists, which also settles letter case.
+  static func canonical(_ absolute: String) -> String {
+    CanonicalPath.of(URL(filePath: physical(absolute)))
+  }
+
+  private static func absolutes(_ path: String, cwd: String, home: String?) -> [String] {
+    guard !path.hasPrefix("/") else { return [path] }
+    var absolutes = [cwd + "/" + path]
+    if let home, path.hasPrefix("~/") { absolutes.append(home + "/" + path.dropFirst(2)) }
+    return absolutes
   }
 
   static func physical(_ absolute: String) -> String {
@@ -158,7 +181,7 @@ enum ToolPath {
 
 /// Reads plan locks for the guard. Read-only by contract: claiming is `swiftgate plan claim`'s job.
 enum PlanLocks {
-  static func read(_ scope: PlanStateGuard.LockScope, git: any Git) async -> [String] {
+  static func read(_ scope: PlanStateGuard.LockScope) -> [String] {
     switch scope {
     case .none:
       return []
@@ -166,12 +189,35 @@ enum PlanLocks {
       return contents(plan.orchestratorLock).map { [$0] } ?? []
     case .everyPlan(let layout):
       return every(layout)
-    case .everyPlanInRepository:
-      // No common dir means no lock can be found, so only the override can allow the write.
-      guard let common = try? await git.commonDirectory(),
-        let layout = try? PlanStateLayout(commonDirectory: common)
-      else { return [] }
-      return every(layout)
+    }
+  }
+
+  /// Every plan under the repository's common dir with the design its `plan.json` names, resolved
+  /// against the worktree toplevel. None when git can't place the common dir or the toplevel, so
+  /// only the override can allow a design write.
+  static func records(root: URL, git: any Git) async -> [PlanStateGuard.PlanRecord] {
+    guard let common = try? await git.commonDirectory(),
+      let layout = try? PlanStateLayout(commonDirectory: common),
+      let prefix = try? await git.workingDirectoryPrefix()
+    else { return [] }
+    let base = CanonicalPath.of(root)
+    let nested = "/" + prefix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let toplevel =
+      prefix.isEmpty ? base : base.hasSuffix(nested) ? String(base.dropLast(nested.count)) : base
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    return names.sorted().compactMap { name in
+      guard let plan = try? layout.plan(name) else { return nil }
+      let design: PlanStateGuard.PlanRecord.Design
+      if let data = FileManager.default.contents(atPath: plan.planFile),
+        let file = try? PlanFileJSON.decode(data), !file.design.isEmpty
+      {
+        let named = file.design.hasPrefix("/") ? file.design : toplevel + "/" + file.design
+        design = .named(ToolPath.canonical(named))
+      } else {
+        design = .unreadable
+      }
+      return PlanStateGuard.PlanRecord(
+        name: name, lock: contents(plan.orchestratorLock), design: design)
     }
   }
 

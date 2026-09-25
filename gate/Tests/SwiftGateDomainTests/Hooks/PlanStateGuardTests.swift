@@ -6,8 +6,13 @@ struct PlanStateGuardTests {
   static let common = "/r/.git"
   static func layout() throws -> PlanStateLayout { try PlanStateLayout(commonDirectory: common) }
   static func feed() throws -> PlanStateLayout.Plan { try layout().plan("2026-09-24-feed") }
+  static let doc = "/r/docs/feed/designs/offline.md"
+  static let owners = [
+    PlanStateGuard.PlanRecord(name: "a", lock: "session-a", design: .named(doc))
+  ]
+
   static func guardedTargets() throws -> [PlanStateGuard.Target] {
-    [.planFile(try feed()), .sharedPlanFile(try layout()), .designArtifact]
+    [.planFile(try feed()), .sharedPlanFile(try layout()), .designArtifact(document: doc)]
   }
 
   @Test(
@@ -75,22 +80,22 @@ struct PlanStateGuardTests {
   }
 
   @Test(
-    "design docs and every evidence file are design artifacts — catches workers editing an approved design, its claims or its amendments",
+    "design docs and every evidence file are artifacts of their design doc — catches workers editing an approved design, its claims or its amendments",
     arguments: [
-      "/r/docs/designs/2026-09-25-feed.md",
-      "/r/docs/feed/designs/2026-09-25-feed.md",
-      "/r/docs/feed/sub/designs/offline.md",
-      "/r/DOCS/Feed/Designs/offline.MD",
-      "/wt/sibling/docs/feed/designs/offline.md",
-      "/r/docs/feed/designs/offline.evidence/claims.jsonl",
-      "/r/docs/feed/designs/offline.evidence/amendments.jsonl",
-      "/r/docs/feed/designs/offline.evidence/snapshots/UIKit/UIView.md",
-      "/r/docs/feed/designs/offline.evidence/captures/c1.txt",
-      "/r/docs/feed/designs/offline.evidence/probes/Probe_ev_x.swift",
-      "/r/docs/feed/designs/Offline.EVIDENCE/claims.jsonl",
+      ("/r/docs/designs/2026-09-25-feed.md", "/r/docs/designs/2026-09-25-feed.md"),
+      ("/r/docs/feed/designs/2026-09-25-feed.md", "/r/docs/feed/designs/2026-09-25-feed.md"),
+      ("/r/docs/feed/sub/designs/offline.md", "/r/docs/feed/sub/designs/offline.md"),
+      ("/r/DOCS/Feed/Designs/offline.MD", "/r/DOCS/Feed/Designs/offline.MD"),
+      ("/wt/sibling/docs/feed/designs/offline.md", "/wt/sibling/docs/feed/designs/offline.md"),
+      ("/r/docs/feed/designs/offline.evidence/claims.jsonl", PlanStateGuardTests.doc),
+      ("/r/docs/feed/designs/offline.evidence/amendments.jsonl", PlanStateGuardTests.doc),
+      ("/r/docs/feed/designs/offline.evidence/snapshots/UIKit/UIView.md", PlanStateGuardTests.doc),
+      ("/r/docs/feed/designs/offline.evidence/captures/c1.txt", PlanStateGuardTests.doc),
+      ("/r/docs/feed/designs/offline.evidence/probes/Probe_ev_x.swift", PlanStateGuardTests.doc),
+      ("/r/docs/feed/designs/Offline.EVIDENCE/claims.jsonl", "/r/docs/feed/designs/Offline.md"),
     ])
-  func designArtifacts(path: String) {
-    #expect(PlanStateGuard.target(ofResolvedPath: path) == .designArtifact)
+  func designArtifacts(path: String, document: String) {
+    #expect(PlanStateGuard.target(ofResolvedPath: path) == .designArtifact(document: document))
   }
 
   @Test(
@@ -136,8 +141,8 @@ struct PlanStateGuardTests {
     for target in try Self.guardedTargets() {
       #expect(
         PlanStateGuard.evaluate(
-          target, locks: ["session-a"], environmentValue: "1", sessionID: "session-a",
-          agentID: "a1b2c3d4")?.ruleID == EditGuard.planStateRuleID)
+          target, locks: ["session-a"], plans: Self.owners, environmentValue: "1",
+          sessionID: "session-a", agentID: "a1b2c3d4")?.ruleID == EditGuard.planStateRuleID)
     }
   }
 
@@ -167,10 +172,10 @@ struct PlanStateGuardTests {
   }
 
   @Test(
-    "the index and design artifacts need any plan's lock held by this session — catches an unclaimed session writing shared state"
+    "the index needs any plan's lock held by this session — catches an unclaimed session writing shared state"
   )
   func anyLockForSharedState() throws {
-    for target in [PlanStateGuard.Target.sharedPlanFile(try Self.layout()), .designArtifact] {
+    for target in [PlanStateGuard.Target.sharedPlanFile(try Self.layout())] {
       #expect(
         PlanStateGuard.evaluate(
           target, locks: ["other", "session-a"], environmentValue: nil, sessionID: "session-a",
@@ -180,5 +185,67 @@ struct PlanStateGuardTests {
           target, locks: ["other"], environmentValue: nil, sessionID: "session-a", agentID: nil)?
           .ruleID == EditGuard.planStateRuleID)
     }
+  }
+}
+
+@Suite("Design artifact ownership")
+struct DesignOwnershipTests {
+  static let docA = "/r/docs/feed/designs/offline.md"
+  static let docB = "/r/docs/search/designs/search.md"
+  static let plans = [
+    PlanStateGuard.PlanRecord(name: "2026-09-24-feed", lock: "session-a", design: .named(docA)),
+    PlanStateGuard.PlanRecord(name: "2026-09-25-search", lock: "session-b", design: .named(docB)),
+  ]
+
+  static func decide(
+    _ document: String, session: String, plans: [PlanStateGuard.PlanRecord] = plans,
+    environmentValue: String? = nil, agentID: String? = nil
+  ) -> GuardViolation? {
+    PlanStateGuard.evaluate(
+      .designArtifact(document: document), locks: [], plans: plans,
+      environmentValue: environmentValue, sessionID: session, agentID: agentID)
+  }
+
+  @Test(
+    "only the holder of the plan whose plan.json names the design may write it — catches plan A's holder editing plan B's design"
+  )
+  func ownerOnly() {
+    #expect(Self.decide(Self.docB, session: "session-b") == nil)
+    #expect(Self.decide(Self.docA, session: "session-a") == nil)
+    let crossed = Self.decide(Self.docB, session: "session-a")
+    #expect(crossed?.ruleID == EditGuard.planStateRuleID)
+    #expect(crossed?.reason.contains("2026-09-25-search") == true)
+  }
+
+  @Test(
+    "a design no plan names is denied with the claim hint, even to a lock holder — catches an unowned design written by whoever holds any lock"
+  )
+  func unnamedDesign() {
+    let violation = Self.decide("/r/docs/feed/designs/orphan.md", session: "session-a")
+    #expect(violation?.ruleID == EditGuard.planStateRuleID)
+    #expect(violation?.reason.contains("swiftgate plan claim <slug>") == true)
+  }
+
+  @Test(
+    "a holder whose plan.json is unreadable is denied — catches a corrupt plan.json failing open"
+  )
+  func unreadablePlanFile() {
+    let plans = [
+      PlanStateGuard.PlanRecord(name: "2026-09-24-feed", lock: "session-a", design: .unreadable)
+    ]
+    let violation = Self.decide(Self.docA, session: "session-a", plans: plans)
+    #expect(violation?.ruleID == EditGuard.planStateRuleID)
+    #expect(violation?.reason.contains("plan.json") == true)
+  }
+
+  @Test(
+    "the override allows any design to a main session but never to a subagent — catches the escape hatch breaking or leaking to workers"
+  )
+  func overrideAndSubagent() {
+    #expect(Self.decide("/r/docs/x/designs/orphan.md", session: "s", environmentValue: "1") == nil)
+    #expect(Self.decide(Self.docB, session: "s", plans: [], environmentValue: "1") == nil)
+    #expect(
+      Self.decide(Self.docB, session: "session-b", environmentValue: "1", agentID: "w")?.ruleID
+        == EditGuard.planStateRuleID)
   }
 }

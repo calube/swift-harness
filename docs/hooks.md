@@ -46,7 +46,7 @@ Who may write:
 |---|---|
 | a file in `swift-harness/plans/<plan>/` | the session whose id is in that plan's `orchestrator.lock` |
 | `swift-harness/plans/index.json` | a session holding any plan's lock |
-| a design doc or evidence file | a session holding any lock under this repository's common dir |
+| a design doc, or a file in its `<doc>.evidence/` | the session holding the lock of the plan whose `plan.json` `design` names that doc |
 | `orchestrator.lock` | nobody; only `swiftgate plan claim` and `swiftgate plan release` write it |
 
 `SWIFT_HARNESS_ORCHESTRATOR=1` in the session's environment allows every row except the last. A
@@ -56,7 +56,10 @@ are the workers the rule exists for. A worker that finds the design wrong report
 
 The guard only reads locks; it never claims a plan. A held lock counts until
 `swiftgate plan release` removes it. If git can't name the common dir, no design lock can be
-found, so only the override allows a design write.
+found, so only the override allows a design write. The same holds when no plan names the doc,
+or when the holder's `plan.json` is missing or corrupt: claim the plan with a `plan.json` that
+names the doc first. `design` is resolved against the worktree toplevel and compared as a
+canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
 
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.

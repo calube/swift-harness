@@ -13,6 +13,8 @@ struct PlanStateScenario {
   static let recordedPath = "\"/REPO/.harness/plans/2026-09-24-counter/ledger.json\""
   static let planA = "2026-09-24-counter"
   static let planB = "2026-09-25-search"
+  static let designA = "docs/counter/designs/offline.md"
+  static let designB = "docs/search/designs/search.md"
 
   var harness: HookHarness
   /// Canonical, as `Git.commonDirectory()` reports it.
@@ -27,13 +29,23 @@ struct PlanStateScenario {
     layout = try PlanStateLayout(commonDirectory: common)
     harness.git = FakeGit(
       changed: [], mergeBase: "base", commonDirectory: common, failure: gitFailure)
-    for plan in [Self.planA, Self.planB] {
+    for (plan, design) in [(Self.planA, Self.designA), (Self.planB, Self.designB)] {
       try write(layout.plan(plan).ledgerFile, "{}\n")
-      try write(layout.plan(plan).planFile, "{}\n")
+      try writePlanFile(plan, design: design)
     }
     try write(layout.indexFile, "{}\n")
     try harness.repository.write("docs/counter/designs/offline.md", "# Offline\n")
     try harness.repository.write("docs/counter/designs/offline.evidence/claims.jsonl", "")
+    try harness.repository.write(Self.designB, "# Search\n")
+    try harness.repository.write("docs/counter/designs/orphan.md", "# Orphan\n")
+  }
+
+  func writePlanFile(_ plan: String, design: String) throws {
+    let file = PlanFile(
+      schemaVersion: 1, slug: plan, design: design, designSha: "3f1c", approval: nil,
+      clarifyChain: [], tier: "standard", resume: "planned")
+    try write(
+      layout.plan(plan).planFile, String(decoding: try PlanFileJSON.encode(file), as: UTF8.self))
   }
 
   var root: URL { harness.repository.root }
@@ -60,12 +72,22 @@ struct PlanStateScenario {
   func decision(
     _ filePath: String, subagent: Bool = false, cwd: URL? = nil
   ) async throws -> String? {
+    try await output(filePath, subagent: subagent, cwd: cwd)?["permissionDecision"]
+  }
+
+  /// The denial's reason, or `nil` when the call is allowed.
+  func reason(_ filePath: String) async throws -> String? {
+    try await output(filePath)?["permissionDecisionReason"]
+  }
+
+  private func output(
+    _ filePath: String, subagent: Bool = false, cwd: URL? = nil
+  ) async throws -> [String: String]? {
     let (result, _) = try await harness.run(
       .preToolUse, subagent ? "pre-tool-use-write-ledger-subagent" : "pre-tool-use-write-ledger",
       cwd: cwd, replacing: [Self.recordedPath: "\"\(filePath)\""])
     guard result.stdout != nil else { return nil }
-    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
-    return output["permissionDecision"]
+    return try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
   }
 
   /// Every file under the plans root with its contents.
@@ -263,5 +285,65 @@ struct PreToolUseGuardTests {
       .preToolUse, "pre-tool-use-write-ledger-subagent",
       replacing: [PlanStateScenario.recordedPath: "\"\(scenario.layout.indexFile)\""])
     #expect(milliseconds < 50)
+  }
+
+  @Test(
+    "a design and its evidence are writable only by the holder of the plan whose plan.json names it — catches plan A's holder editing plan B's design"
+  )
+  func designOwnedByNamingPlan() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    let root = scenario.root.path
+    let designB = root + "/" + PlanStateScenario.designB
+    let evidenceB = root + "/docs/search/designs/search.evidence/claims.jsonl"
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    try scenario.claim(PlanStateScenario.planB, by: "another-session")
+
+    #expect(try await scenario.decision(designB) == "deny")
+    #expect(try await scenario.decision(evidenceB) == "deny")
+    #expect(try await scenario.reason(designB)?.contains(PlanStateScenario.planB) == true)
+
+    try scenario.claim(PlanStateScenario.planA, by: "another-session")
+    try scenario.claim(PlanStateScenario.planB, by: PlanStateScenario.session)
+    try scenario.symlink("links/search", to: root + "/docs/search/designs")
+    #expect(try await scenario.decision(designB) == nil)
+    #expect(try await scenario.decision(evidenceB) == nil)
+    #expect(try await scenario.decision(root + "/links/search/search.md") == nil)
+    #expect(try await scenario.decision(root + "/" + PlanStateScenario.designA) == "deny")
+  }
+
+  @Test(
+    "a design no plan names is denied to a lock holder with the claim hint, and the override allows it — catches unowned designs written by any holder"
+  )
+  func unnamedDesignDenied() async throws {
+    var scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let orphan = scenario.root.path + "/docs/counter/designs/orphan.md"
+    let newDesign = scenario.root.path + "/docs/fresh/designs/fresh.md"
+
+    for path in [orphan, newDesign] {
+      #expect(try await scenario.decision(path) == "deny", "\(path)")
+      #expect(
+        try await scenario.reason(path)?.contains("swiftgate plan claim <slug>") == true, "\(path)")
+    }
+    scenario.harness.environment = [OrchestratorMarker.environmentVariable: "1"]
+    #expect(try await scenario.decision(orphan) == nil)
+    #expect(try await scenario.decision(newDesign) == nil)
+  }
+
+  @Test(
+    "a holder whose plan.json is corrupt is denied its design — catches an unreadable plan.json failing open"
+  )
+  func corruptPlanFileDenied() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    try scenario.write(
+      try scenario.layout.plan(PlanStateScenario.planA).planFile, "{\"design\": ")
+
+    let design = scenario.root.path + "/" + PlanStateScenario.designA
+    #expect(try await scenario.decision(design) == "deny")
+    #expect(try await scenario.reason(design)?.contains("plan.json") == true)
   }
 }
