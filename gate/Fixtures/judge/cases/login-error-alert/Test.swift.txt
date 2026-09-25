@@ -1,0 +1,8 @@
+@Test("a rejected password shows the error alert and stops the spinner — catches a login screen stuck loading after a 401")
+func loginFailure() async {
+  let store = TestStore(initialState: Login.State(isLoading: true)) { Login() }
+  await store.send(.loginResponse(.failure(.invalidCredentials))) {
+    $0.isLoading = false
+    $0.alert = AlertState { TextState("That password didn't match.") }
+  }
+}

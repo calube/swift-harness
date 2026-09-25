@@ -8,17 +8,21 @@ public struct PackageManifest: Sendable, Equatable {
   public let path: String
   /// Repository-relative directories of the package's local (`path:`) dependencies.
   public let localDependencyPaths: [String]
+  /// Identities of the package's source-control and registry dependencies, as declared (not the
+  /// transitive graph).
+  public let remoteDependencies: [String]
   /// Product name → the targets it vends.
   public let products: [String: [String]]
   public let targets: [PackageTarget]
 
   public init(
     name: String, path: String, localDependencyPaths: [String] = [],
-    products: [String: [String]] = [:], targets: [PackageTarget]
+    remoteDependencies: [String] = [], products: [String: [String]] = [:], targets: [PackageTarget]
   ) {
     self.name = name
     self.path = path
     self.localDependencyPaths = localDependencyPaths
+    self.remoteDependencies = remoteDependencies
     self.products = products
     self.targets = targets
   }
@@ -33,6 +37,8 @@ public struct PackageManifest: Sendable, Equatable {
     }
     let path = try Self.relative(raw.path, to: repositoryRoot)
     var localDependencyPaths: [String] = []
+    let remoteDependencies = (raw.dependencies ?? []).filter { $0.type != "fileSystem" }
+      .map(\.identity).sorted()
     for dependency in raw.dependencies ?? [] where dependency.type == "fileSystem" {
       guard let dependencyPath = dependency.path else {
         throw .malformedDescription("fileSystem dependency '\(dependency.identity)' has no path")
@@ -43,6 +49,7 @@ public struct PackageManifest: Sendable, Equatable {
       name: raw.name,
       path: path,
       localDependencyPaths: localDependencyPaths,
+      remoteDependencies: remoteDependencies,
       products: Dictionary(
         (raw.products ?? []).map { ($0.name, $0.targets) }, uniquingKeysWith: { first, _ in first }),
       targets: raw.targets.map { target in

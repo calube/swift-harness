@@ -1,0 +1,5 @@
+@Test("toggleFavoriteTapped toggles favorite — catches toggleFavoriteTapped not toggling favorite")
+func toggles() async {
+  let store = TestStore(initialState: Row.State(id: 1)) { Row() } withDependencies: { $0.api.setFavorite = { _, _ in } }
+  await store.send(.toggleFavoriteTapped) { $0.isFavorite = true }
+}

@@ -1,0 +1,24 @@
+{
+  "project" : {
+    "configurations" : [
+      "Debug",
+      "Release"
+    ],
+    "name" : "SampleApp",
+    "schemes" : [
+      "APIClient",
+      "APIClientLive",
+      "CounterCore",
+      "CounterUI",
+      "HTTPClient",
+      "HTTPClientLive",
+      "LogClient",
+      "LogClientLive",
+      "SampleApp"
+    ],
+    "targets" : [
+      "SampleApp",
+      "SampleAppUITests"
+    ]
+  }
+}

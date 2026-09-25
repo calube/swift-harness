@@ -1,0 +1,6 @@
+@Test("sync logs the upload — catches sync not logging")
+func syncLogs() async throws {
+  let log = LogRecorder()
+  try await Syncer(store: .mock(pending: 2), api: .noop, logger: log).sync()
+  #expect(log.messages == ["sync uploaded 2 changes"])
+}

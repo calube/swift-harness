@@ -1,0 +1,8 @@
+@Test("leaving the screen stops polling — catches a background poll draining battery after dismissal")
+func stopsPolling() async {
+  let clock = TestClock()
+  let store = TestStore(initialState: Status.State()) { Status() } withDependencies: { $0.continuousClock = clock }
+  await store.send(.onAppear)
+  await store.send(.onDisappear)
+  await clock.advance(by: .seconds(60))
+}

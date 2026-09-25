@@ -1,0 +1,4 @@
++  public var total: Decimal {
++    let subtotal = items.reduce(0) { $0 + $1.price * Decimal($1.quantity) }
++    return discount.map { subtotal * (1 - $0) } ?? subtotal
++  }

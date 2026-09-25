@@ -1,0 +1,18 @@
+{
+  "devices" : [
+    {
+      "architecture" : "",
+      "deviceId" : "",
+      "deviceName" : "",
+      "modelName" : "",
+      "osVersion" : "",
+      "platform" : ""
+    }
+  ],
+  "testNodes" : [
+
+  ],
+  "testPlanConfigurations" : [
+
+  ]
+}

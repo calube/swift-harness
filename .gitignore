@@ -6,3 +6,5 @@
 **/.harness/orchestrator.lock
 DerivedData/
 .DS_Store
+**/.harness/derived-data/
+**/.harness/judge-cache/

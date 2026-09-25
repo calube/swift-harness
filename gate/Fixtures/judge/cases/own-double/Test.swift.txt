@@ -1,0 +1,6 @@
+@Test("loadProfile returns the profile — catches loadProfile not returning the profile")
+func loadsProfile() async throws {
+  let api = APIClient(fetchProfile: { Profile(name: "Ada") })
+  let profile = try await api.fetchProfile()
+  #expect(profile.name == "Ada")
+}

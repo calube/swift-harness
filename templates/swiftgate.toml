@@ -1,0 +1,26 @@
+# swiftgate project profile. `swiftgate bootstrap` writes this file once and never rewrites it;
+# edit it freely. Shape: the swift-harness design spec, section 5.4.
+schema = 1
+xcode = {{XCODE}}
+app_scheme = {{APP_SCHEME}}
+packages = {{PACKAGES}}
+
+[simulator]
+device = {{DEVICE}}
+os = {{OS}}
+
+# T3 UI flows are a closed list (testing playbook P11). Declare one entry per XCUITest flow:
+# [[flows]]
+# name = "checkout"
+# reason = "revenue-critical; crosses three features"
+
+# Modules that deviate from the defaults (kind "feature", host-testable) need an entry.
+# Kinds: feature | engine | render | library | client.
+# [[modules]]
+# name = "GameEngine"
+# kind = "engine"
+# reason = "60Hz fixed-timestep simulation; per-frame store overhead unjustified"
+
+# Vendor SDK modules allowed only inside *Live modules:
+# [clients]
+# vendor_modules = ["FirebaseAnalytics"]

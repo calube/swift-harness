@@ -1,0 +1,4 @@
++  public func weather(for city: String) async throws -> Forecast {
++    let raw = try await transport.get("/weather?city=\(city)")
++    return try Forecast(celsius: raw.kelvin - 273.15)
++  }

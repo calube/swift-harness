@@ -64,9 +64,11 @@ enum StopHook {
         path: "swiftgate-\(runID)", directoryHint: .isDirectory)
     do {
       let parts = try await CheckRun.run(
-        root: root, swiftPM: dependencies.swiftPM, git: dependencies.git,
-        formatter: dependencies.formatter, tier: .fast, base: "origin/main",
-        context: GateRun.Context(runID: runID, directory: directory))
+        root: root, tier: .fast, base: "origin/main",
+        context: GateRun.Context(runID: runID, directory: directory),
+        dependencies: CheckRun.Dependencies(
+          root: root, swiftPM: dependencies.swiftPM, git: dependencies.git,
+          formatter: dependencies.formatter))
       let report = try RunReport(
         runID: runID, durationMilliseconds: GateRun.milliseconds(clock.now - start),
         tiers: parts.tiers, findings: parts.findings, allowances: parts.allowances)

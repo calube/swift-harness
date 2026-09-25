@@ -1,0 +1,6 @@
++  public static func step(_ state: State, _ input: Input) -> State {
++    var next = state
++    next.position += input.thrust * state.dt
++    next.rng.advance()
++    return next
++  }

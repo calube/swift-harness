@@ -1,0 +1,3 @@
++  case .incrementButtonTapped:
++    state.count += 1
++    return .none

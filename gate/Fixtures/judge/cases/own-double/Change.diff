@@ -1,0 +1,4 @@
++  public func loadProfile() async throws -> Profile {
++    let profile = try await api.fetchProfile()
++    return Profile(name: profile.name.trimmingCharacters(in: .whitespaces))
++  }

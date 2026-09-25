@@ -1,0 +1,11 @@
+# Style only. Correctness rules (determinism bans, client boundaries, suppression reasons) live in
+# `swiftgate lint`; rules that fight `swift format` are off.
+excluded:
+  - .build
+  - .harness
+  - DerivedData
+disabled_rules:
+  - trailing_comma
+  - opening_brace
+  - line_length
+  - todo

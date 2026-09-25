@@ -1,0 +1,11 @@
+# Managed by `swiftgate bootstrap`. Git hooks run outside Claude Code, so they call the stable
+# symlink bootstrap installs rather than a plugin path that changes between versions.
+pre-commit:
+  commands:
+    swiftgate-comments:
+      run: '"$HOME/.local/bin/swiftgate" comments --staged'
+
+pre-push:
+  commands:
+    swiftgate-push:
+      run: '"$HOME/.local/bin/swiftgate" check --tier push'

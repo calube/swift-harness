@@ -64,7 +64,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P1. Every test names the regression it catches.**
 - **Do:** name every test with section 2's convention. The regression is a user-visible or caller-visible symptom.
 - **Tell:** a `@Test` with no string; a "catches" clause that restates the behavior ("catches increment not incrementing") or says nothing ("catches bugs").
-- **Enforced by:** `testlint` `test.unnamed`; `judge` **(planned)**; review · **Source:** incident: none yet.
+- **Enforced by:** `testlint` `test.unnamed`; `judge` (advisory; gates at `ready` only past `block_threshold`); review · **Source:** incident: none yet.
 
 **P2. A new test fails red before it passes green.**
 - **Do:** write the test first and watch it fail on an **assertion**, not on a compile error or a missing import. Then write the code.
@@ -170,7 +170,7 @@ Run it on a path relative to the repository root, e.g. `swiftgate testlint Packa
 
 Some slop only a reader sees: vacuous or restated regression names, tests coupled to implementation details, over-mocking, the wrong abstraction level. The `swift-test-gate` skill carries a rubric for these, and review agents apply it.
 
-### 5.4 Judge seam: `swiftgate judge` (planned)
+### 5.4 Judge seam: `swiftgate judge`
 
 The judgment layer sits behind a `Judge` protocol. Its contract is typed questions in, calibrated probabilities out. No free-form prose verdicts.
 
@@ -185,6 +185,7 @@ The judgment layer sits behind a `Judge` protocol. Its contract is typed questio
 - **Policy is thresholds:** p ≥ `block_threshold` may block at `ready`; between `advisory_threshold` and `block_threshold` is advisory; below is ignored. The judge alone never makes a run RED below `ready`.
 - **Cache:** keyed by hash of test, diff, question-set version, backend and model. Re-runs are stable and free. Only new or changed tests are judged.
 - **Calibration:** `gate/Fixtures/judge/` holds labeled useless and good tests. `swiftgate self-test --judge` reports precision and recall per question and fails if a question-set or backend change makes them worse.
+- **Commands:** `swiftgate judge [--ready]` asks about the new and changed host tests; `check --tier ready` runs it with the ready policy, and the pre-commit hook asks the comment questions on Claude-authored commits (advisory). `swiftgate self-test --judge` scores the stored recording offline; `--judge-backend claude --record` re-asks the live backend and replaces it. `[judge] model` picks the backend's model (default `sonnet`). `backend = "jev"` is accepted but reports BLOCKED until its adapter exists. A backend failure is a non-gating `judge.not-run` note.
 - **Opt-in:** `[judge] backend = "none"` is the default. A remote backend sends test source off the machine, so each repository turns it on deliberately and must set both thresholds.
 
 ## 6. Library notes for tests

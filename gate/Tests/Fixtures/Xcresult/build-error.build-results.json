@@ -1,0 +1,36 @@
+{
+  "actionTitle" : "Testing workspace CounterFeature with scheme CounterFeature-Package",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "arm64",
+    "deviceId" : "CLONE-UDID",
+    "deviceName" : "swift-harness-PID-capture",
+    "modelName" : "iPhone 17",
+    "osBuildNumber" : "23C54",
+    "osVersion" : "26.2",
+    "platform" : "iOS Simulator"
+  },
+  "endTime" : 1790304757.278,
+  "errorCount" : 2,
+  "errors" : [
+    {
+      "issueType" : "Uncategorized",
+      "message" : "Testing cancelled because the build failed."
+    },
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "Swift Compiler Error",
+      "message" : "Type of expression is ambiguous without a type annotation",
+      "sourceURL" : "file:///SCRATCH/Broken/CounterFeature/Tests/CounterUISnapshotTests/XcresultProbeTests.swift#EndingColumnNumber=6&EndingLineNumber=8&StartingColumnNumber=6&StartingLineNumber=8&Timestamp=811997525.1799721"
+    }
+  ],
+  "startTime" : 1790304724.789,
+  "status" : "failed",
+  "warningCount" : 0,
+  "warnings" : [
+
+  ]
+}

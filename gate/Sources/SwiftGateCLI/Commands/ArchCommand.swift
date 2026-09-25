@@ -49,7 +49,7 @@ enum ArchCheck {
     }
   }
 
-  private static func loadSettings(graph: ModuleGraph, swiftPM: any SwiftPM) async
+  static func loadSettings(graph: ModuleGraph, swiftPM: any SwiftPM) async
     -> Result<[String: PackageSettings], SettingsFailure>
   {
     await withTaskGroup(of: (String, Result<PackageSettings, SwiftPMError>).self) { group in

@@ -1,0 +1,6 @@
+@Test("tapping + twice shows 2 — catches the counter not advancing on tap")
+func incrementTwice() async {
+  let store = TestStore(initialState: Counter.State()) { Counter() }
+  await store.send(.incrementButtonTapped) { $0.count = 1 }
+  await store.send(.incrementButtonTapped) { $0.count = 2 }
+}

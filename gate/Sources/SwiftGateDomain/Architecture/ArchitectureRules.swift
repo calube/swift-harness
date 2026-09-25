@@ -111,7 +111,7 @@ public enum ArchitectureRules {
   }
 
   /// `@Reducer` enums break under MainActor default isolation (TCA issue #3768).
-  static let coreMainActorIsolation = GraphRule(
+  public static let coreMainActorIsolation = GraphRule(
     id: "arch.core-main-actor-isolation", severity: .major,
     summary: "a Core module sets MainActor default isolation"
   ) { input in

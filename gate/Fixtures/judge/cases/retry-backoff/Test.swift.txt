@@ -1,0 +1,7 @@
+@Test("three retryable failures surface .unavailable — catches the client retrying forever on a dead server")
+func givesUpAfterThree() async {
+  let attempts = LockIsolated(0)
+  let client = APIClient.live(transport: .init { _ in attempts.withValue { $0 += 1 }; throw TransportError.timeout }, clock: ImmediateClock())
+  await #expect(throws: APIError.unavailable) { try await client.fetchItems() }
+  #expect(attempts.value == 3)
+}

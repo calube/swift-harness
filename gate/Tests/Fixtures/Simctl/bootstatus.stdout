@@ -1,0 +1,46 @@
+Monitoring boot status for swift-harness-71754-capture (F59E25E2-6DDE-4203-BEE9-A7A51BE97CA2).
+Booting device...
+[2026-09-25 02:53:42 +0000] Status=0, isTerminal=NO, Elapsed=00:00.
+	Booting
+
+[2026-09-25 02:53:43 +0000] Status=2, isTerminal=NO, Elapsed=00:00.
+	Waiting on Data Migration
+		Reason:(null)
+		Migration Elapsed:00:00 seconds
+
+[2026-09-25 02:53:43 +0000] Status=4, isTerminal=NO, Elapsed=00:01.
+	Waiting on System App
+
+[2026-09-25 02:53:44 +0000] Status=4, isTerminal=NO, Elapsed=00:02.
+	Waiting on System App
+
+[2026-09-25 02:53:45 +0000] Status=4, isTerminal=NO, Elapsed=00:03.
+	Waiting on System App
+
+[2026-09-25 02:53:46 +0000] Status=4, isTerminal=NO, Elapsed=00:04.
+	Waiting on System App
+
+[2026-09-25 02:53:47 +0000] Status=4, isTerminal=NO, Elapsed=00:05.
+	Waiting on System App
+
+[2026-09-25 02:53:48 +0000] Status=4, isTerminal=NO, Elapsed=00:06.
+	Waiting on System App
+
+[2026-09-25 02:53:49 +0000] Status=4, isTerminal=NO, Elapsed=00:07.
+	Waiting on System App
+
+[2026-09-25 02:53:50 +0000] Status=4, isTerminal=NO, Elapsed=00:08.
+	Waiting on System App
+
+[2026-09-25 02:53:51 +0000] Status=4, isTerminal=NO, Elapsed=00:09.
+	Waiting on System App
+
+[2026-09-25 02:53:52 +0000] Status=4, isTerminal=NO, Elapsed=00:10.
+	Waiting on System App
+
+[2026-09-25 02:53:53 +0000] Status=4, isTerminal=NO, Elapsed=00:11.
+	Waiting on System App
+
+[2026-09-25 02:53:54 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:12.
+	Finished
+

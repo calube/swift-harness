@@ -1,0 +1,7 @@
+@Test("refresh calls fetchItems exactly once then logs 'refresh done' — catches refresh regressions")
+func refreshCallsAPI() async {
+  let calls = LockIsolated<[String]>([])
+  let model = ItemsModel(api: .init(fetchItems: { calls.withValue { $0.append("fetchItems") }; return [] }), log: { calls.withValue { $0.append($0) } })
+  await model.refresh()
+  #expect(calls.value == ["fetchItems", "refresh done"])
+}

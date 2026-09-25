@@ -1,0 +1,3 @@
+Error: File or directory doesn't exist at path: /SCRATCH/missing.xcresult.
+Usage: xcresulttool get build-results [--schema] [--schema-version <schema-version>] --path <path> [--compact]
+  See 'xcresulttool get build-results --help' for more information.

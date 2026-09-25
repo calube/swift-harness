@@ -1,0 +1,97 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-capture",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C54",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "XcresultProbeTests.swift:15: XCTAssertEqual failed: (\"4\") is not equal to (\"5\") - 2 + 2 should be 5",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.019s",
+                  "durationInSeconds" : 0.018728017807006836,
+                  "name" : "testAddsWrong()",
+                  "nodeIdentifier" : "ProbeFailXCTests/testAddsWrong()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailXCTests/testAddsWrong",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "ProbeFailXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.00047s",
+                  "durationInSeconds" : 0.0004730224609375,
+                  "name" : "testAdds()",
+                  "nodeIdentifier" : "ProbePassXCTests/testAdds()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests/testAdds",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "ProbePassXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "XcresultProbeTests.swift:21: Expectation failed: (3 * 3 → 9) == 10",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "multipliesWrong()",
+                  "nodeIdentifier" : "ProbeFailSwiftTests/multipliesWrong()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailSwiftTests/multipliesWrong()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "ProbeFailSwiftTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeFailSwiftTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "CounterUISnapshotTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "CounterFeature-Package",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

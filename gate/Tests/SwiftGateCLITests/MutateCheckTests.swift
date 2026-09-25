@@ -154,14 +154,16 @@ struct MutateCheckTests {
 
     // The probe's empty test target makes its T1 RED.
     let parts = try await CheckRun.run(
-      root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
-      tier: .ready, base: "origin/main", context: repository.context(),
-      changedTests: ChangedTestChecks.Environment(
-        root: repository.root, git: git, swiftPM: swiftPM,
-        scratch: FakeScratchWorktrees(root: repository.root), scratchSwiftPM: { _ in swiftPM }),
-      mutation: MutateCheck.Environment(
-        root: repository.root, git: git, scratch: FakeScratchWorktrees(root: repository.root),
-        toolchain: toolchain, workers: 1, timeout: MutantTimeout()))
+      root: repository.root, tier: .ready, base: "origin/main", context: repository.context(),
+      dependencies: CheckRun.Dependencies(
+        root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
+        simulator: .fake,
+        changedTests: ChangedTestChecks.Environment(
+          root: repository.root, git: git, swiftPM: swiftPM,
+          scratch: FakeScratchWorktrees(root: repository.root), scratchSwiftPM: { _ in swiftPM }),
+        mutation: MutateCheck.Environment(
+          root: repository.root, git: git, scratch: FakeScratchWorktrees(root: repository.root),
+          toolchain: toolchain, workers: 1, timeout: MutantTimeout())))
 
     #expect(parts.findings.contains { $0.message == "mutate not run: T1 is RED" })
     #expect(toolchain.builds.isEmpty)

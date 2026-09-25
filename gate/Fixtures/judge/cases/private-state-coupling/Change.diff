@@ -1,0 +1,4 @@
++  public mutating func add(_ item: Item) {
++    if let index = storage.firstIndex(where: { $0.id == item.id }) { storage[index].quantity += 1 }
++    else { storage.append(item) }
++  }

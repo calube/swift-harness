@@ -13,8 +13,10 @@ struct CheckCommandTests {
     formatter: FakeSwiftFormatter = FakeSwiftFormatter()
   ) async throws -> (parts: GateRunParts, report: RunReport) {
     let parts = try await CheckRun.run(
-      root: repository.root, swiftPM: swiftPM, git: git, formatter: formatter, tier: tier,
-      base: "origin/main", context: repository.context())
+      root: repository.root, tier: tier, base: "origin/main", context: repository.context(),
+      dependencies: CheckRun.Dependencies(
+        root: repository.root, swiftPM: swiftPM, git: git, formatter: formatter,
+        simulator: .fake))
     let report = try RunReport(
       runID: "r", durationMilliseconds: 1, tiers: parts.tiers, findings: parts.findings,
       allowances: parts.allowances)
@@ -57,7 +59,7 @@ struct CheckCommandTests {
   }
 
   @Test(
-    "push runs every T1 target with coverage, impact and presence, and names T2 as not run — catches push claiming GREEN for steps it skipped"
+    "push runs every T1 target with coverage, impact and presence, and T2 on the affected packages — catches push skipping the simulator tier"
   )
   func push() async throws {
     let repository = try ProbeRepository()
@@ -68,9 +70,11 @@ struct CheckCommandTests {
     let (parts, _) = try await check(.push, in: repository, swiftPM: swiftPM, git: git)
 
     #expect(swiftPM.testRequests.count == 1)
-    let notRun = parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }
-    #expect(notRun.map(\.message).allSatisfy { $0.hasPrefix("T2 not run") })
-    #expect(notRun.count == 1 && notRun.allSatisfy { !$0.severity.failsGate })
+    #expect(!parts.findings.contains { $0.ruleID == CheckRun.notRunRuleID })
+    // The probe has no simulator target, so T2 selects nothing and says so without failing.
+    let t2 = parts.findings.filter { $0.ruleID == SimulatorTestCheck.nothingSelectedRuleID }
+    #expect(t2.map(\.message).allSatisfy { $0.hasPrefix("T2:") })
+    #expect(t2.count == 1 && t2.allSatisfy { !$0.severity.failsGate })
     // The probe's EmptyTests target is empty on purpose: evidence, not an exit code, says so.
     #expect(parts.findings.contains { $0.ruleID == HostTestEvidenceRules.noTestsRuleID })
   }
@@ -90,6 +94,9 @@ struct CheckCommandTests {
         finding.ruleID == CheckRun.notRunRuleID
           && pending.contains { finding.message.hasPrefix($0) }
       }.count == pending.count)
+    #expect(
+      parts.findings.filter { $0.ruleID == SimulatorTestCheck.nothingSelectedRuleID }
+        .map(\.message).sorted().map { $0.prefix(3) } == ["T2:", "T3:"])
   }
 
   @Test(
@@ -103,11 +110,13 @@ struct CheckCommandTests {
     let scratch = FakeScratchWorktrees(root: repository.root)
 
     let parts = try await CheckRun.run(
-      root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
-      tier: .ready, base: "origin/main", context: repository.context(),
-      changedTests: ChangedTestChecks.Environment(
-        root: repository.root, git: git, swiftPM: swiftPM, scratch: scratch,
-        scratchSwiftPM: { _ in swiftPM }))
+      root: repository.root, tier: .ready, base: "origin/main", context: repository.context(),
+      dependencies: CheckRun.Dependencies(
+        root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
+        simulator: .fake,
+        changedTests: ChangedTestChecks.Environment(
+          root: repository.root, git: git, swiftPM: swiftPM, scratch: scratch,
+          scratchSwiftPM: { _ in swiftPM })))
 
     let notes = parts.findings.filter { $0.ruleID == ChangedTestChecks.summaryRuleID }
     #expect(notes.map(\.message).map { $0.prefix(6) } == ["reach:", "stress", "prove:"])

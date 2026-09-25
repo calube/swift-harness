@@ -1,0 +1,29 @@
+{
+  "actionTitle" : "CounterFeature-Package",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "",
+    "deviceId" : "",
+    "deviceName" : "",
+    "modelName" : "",
+    "osVersion" : "",
+    "platform" : ""
+  },
+  "endTime" : 1790304711.882,
+  "errorCount" : 1,
+  "errors" : [
+    {
+      "issueType" : "Uncategorized",
+      "message" : "Unable to find a device matching the provided destination specifier:\n\t\t{ id:00000000-0000-0000-0000-000000000000 }\n\n\tThe requested device could not be found because no available devices matched the request.\n\n\tAvailable destinations for <elided by capture.sh>"
+    }
+  ],
+  "startTime" : 1790304711.882,
+  "status" : "succeeded",
+  "warningCount" : 0,
+  "warnings" : [
+
+  ]
+}

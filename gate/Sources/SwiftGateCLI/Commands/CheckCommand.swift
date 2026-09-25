@@ -9,12 +9,50 @@ import SwiftGateRules
 enum CheckRun {
   static let notRunRuleID = "swiftgate.not-run"
 
+  /// Every adapter a tier can reach. Steps a tier does not run never touch theirs.
+  struct Dependencies: Sendable {
+    let swiftPM: any SwiftPM
+    let git: any Git
+    let formatter: any SwiftFormatter
+    let simulator: SimulatorTestCheck.Dependencies
+    let changedTests: ChangedTestChecks.Environment
+    let mutation: MutateCheck.Environment
+    /// `nil` never asks a judge: it is a paid external call, so only commands a person runs opt in.
+    let judge: TestJudgeCheck.Dependencies?
+
+    /// Unset steps get live adapters around `swiftPM` and `git`.
+    init(
+      root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
+      simulator: SimulatorTestCheck.Dependencies = .live(),
+      changedTests: ChangedTestChecks.Environment? = nil,
+      mutation: MutateCheck.Environment? = nil,
+      judge: TestJudgeCheck.Dependencies? = nil
+    ) {
+      self.swiftPM = swiftPM
+      self.git = git
+      self.formatter = formatter
+      self.simulator = simulator
+      self.changedTests = changedTests ?? .live(root: root, git: git, swiftPM: swiftPM)
+      self.mutation = mutation ?? .live(root: root, git: git)
+      self.judge = judge
+    }
+
+    static func live(root: URL, judge: Bool) -> Dependencies {
+      let runner = LiveProcessRunner()
+      let git = LiveGit(runner: runner, repositoryRoot: root.path)
+      return Dependencies(
+        root: root, swiftPM: ScopeResolution.liveSwiftPM(root: root), git: git,
+        formatter: LiveSwiftFormatter(runner: runner, repositoryRoot: root.path),
+        judge: judge ? .live(root: root, git: git) : nil)
+    }
+  }
+
   static func run(
-    root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
-    tier: CheckTier, base: String, context: GateRun.Context,
-    changedTests: ChangedTestChecks.Environment? = nil,
-    mutation: MutateCheck.Environment? = nil
+    root: URL, tier: CheckTier, base: String, context: GateRun.Context,
+    dependencies: Dependencies
   ) async throws -> GateRunParts {
+    let swiftPM = dependencies.swiftPM
+    let git = dependencies.git
     let config: Config?
     switch StaticCheckInputs.loadConfig(root: root) {
     case .failure(let failure): return try t0Only(failure.outcome, milliseconds: 0)
@@ -33,8 +71,8 @@ enum CheckRun {
     // T0 finishes in well under a second, so it runs before T1 rather than beside it: the arch
     // check's `dump-package` would otherwise wait on the package lock T1's build holds.
     let t0 = try await runT0(
-      root: root, swiftPM: swiftPM, git: git, formatter: formatter, tier: tier, base: base,
-      config: config, scopes: scopes, changed: changed)
+      root: root, swiftPM: swiftPM, git: git, formatter: dependencies.formatter, tier: tier,
+      base: base, config: config, scopes: scopes, changed: changed)
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
@@ -45,23 +83,35 @@ enum CheckRun {
       var t1Tier = t1.tier
       parts.findings += t1.findings
       if tier == .ready {
+        let environment = dependencies.changedTests
         let changed = await ChangedTestChecks.ready(
-          changedTests ?? .live(root: root, git: git, swiftPM: swiftPM), graph: graph, base: base,
-          context: context)
+          environment, graph: graph, base: base, context: context)
         t1Tier = try t1Tier.merging(changed.verdict)
         parts.findings += changed.findings
         let mutated = try await mutate(after: t1Tier) {
           await MutateCheck.run(
-            mutation ?? .live(root: root, git: git), graph: graph, config: config, base: base,
-            context: context)
+            dependencies.mutation, graph: graph, config: config, base: base, context: context)
         }
         t1Tier = mutated.tier
         parts.findings += mutated.findings
+        if let judge = dependencies.judge {
+          let judged = await TestJudgeCheck.run(
+            environment, graph: graph, config: config, base: base, atReadyTier: true,
+            dependencies: judge)
+          if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
+          parts.findings += judged
+        }
       }
       parts.tiers.append(t1Tier)
     } else {
       parts.findings.append(
         try note("T1 not run: \(ConfigLoader.fileName) is needed to find the packages to test"))
+    }
+    if let config, let graph = scopes.graph {
+      parts.append(
+        try await runSimulatorTiers(
+          root: root, tier: tier, changed: changed, config: config, graph: graph,
+          context: context, dependencies: dependencies.simulator))
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -151,7 +201,7 @@ enum CheckRun {
     }
   }
 
-  private static func changedSinceMergeBase(git: any Git, base: String) async
+  static func changedSinceMergeBase(git: any Git, base: String) async
     -> Result<[String], BlockedReason>
   {
     do throws(GitError) {
@@ -233,15 +283,12 @@ struct CheckCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let swiftPM = ScopeResolution.liveSwiftPM(root: root)
     try await GateRun.execute(
       root: root, format: output.format, command: "check \(tier.rawValue)"
     ) { context in
       try await CheckRun.run(
-        root: root, swiftPM: swiftPM, git: git,
-        formatter: LiveSwiftFormatter(runner: LiveProcessRunner(), repositoryRoot: root.path),
-        tier: tier, base: base, context: context)
+        root: root, tier: tier, base: base, context: context,
+        dependencies: .live(root: root, judge: true))
     }
   }
 }

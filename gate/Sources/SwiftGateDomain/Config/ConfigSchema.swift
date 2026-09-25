@@ -159,7 +159,7 @@ public enum ConfigSchema {
     let path = "judge"
     guard let table = reader.table(root, path, at: "") else { return .disabled }
     reader.rejectUnknownKeys(
-      in: table, at: path, allowed: ["backend", "advisory_threshold", "block_threshold"])
+      in: table, at: path, allowed: ["backend", "model", "advisory_threshold", "block_threshold"])
     let rawBackend = reader.string(table, "backend", at: path, required: true)
     let backend: JudgeBackend?
     switch rawBackend {
@@ -174,8 +174,10 @@ public enum ConfigSchema {
     let required = backend != nil
     let advisory = reader.double(table, "advisory_threshold", at: path, required: required)
     let block = reader.double(table, "block_threshold", at: path, required: required)
+    let model = reader.string(table, "model", at: path)
     guard let backend, let advisory, let block else { return .disabled }
-    return .enabled(backend: backend, thresholds: JudgeThresholds(advisory: advisory, block: block))
+    return .enabled(
+      backend: backend, thresholds: JudgeThresholds(advisory: advisory, block: block), model: model)
   }
 }
 

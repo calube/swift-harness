@@ -1,0 +1,8 @@
+@Test("a task due at 23:59 today reads 'Due today', not 'Overdue' — catches tasks flagged overdue hours early")
+func dueLateToday() {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = TimeZone(identifier: "America/New_York")!
+  let now = Date(timeIntervalSince1970: 1_700_000_000)
+  let due = calendar.date(bySettingHour: 23, minute: 59, second: 0, of: now)!
+  #expect(DueLabel.dueLabel(for: due, now: now, calendar: calendar) == "Due today")
+}

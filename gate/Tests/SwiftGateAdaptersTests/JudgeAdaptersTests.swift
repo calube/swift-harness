@@ -1,0 +1,157 @@
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+import SwiftGateTestSupport
+import Synchronization
+import Testing
+
+@Suite("judge adapters")
+struct JudgeAdaptersTests {
+  /// The one-question set the real capture was made with.
+  static let captureSet = JudgeQuestionSet(
+    id: "capture", version: 1, subjectDescription: "a Swift test",
+    questions: [JudgeQuestionSet.tests.questions[0]])
+
+  static let subject = JudgeSubject(
+    id: "T.doubles()", file: "Tests/T.swift", line: 3,
+    source: "@Test(\"doubling 2 gives 4\") func doubles() { #expect(double(2) == 4) }",
+    context: "+ func double(_ x: Int) -> Int { x * 2 }", declaredTier: "T1")
+
+  static func replaying(_ fixture: String, status: Int32) -> FakeProcessRunner {
+    FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(
+        status: .exited(status), stdout: (try? Fixture.text("Judge/\(fixture)")) ?? "", stderr: "")
+    }
+  }
+
+  @Test(
+    "a real claude result envelope parses into a normalized distribution — catches the judge misreading structured_output"
+  )
+  func parsesRealResult() throws {
+    let answers = try ClaudeJudgeReply.parse(
+      Fixture.data("Judge/claude-result.json"), stderr: "", for: Self.captureSet)
+    #expect(answers.count == 1)
+    #expect(answers[0].question == "fails-if-broken")
+    #expect(abs(answers[0].probability(of: "yes") - 0.99) < 1e-9)
+    #expect(answers[0].rationale?.isEmpty == false)
+  }
+
+  @Test(
+    "a real error envelope is a backend error with claude's message — catches an API failure read as an empty answer"
+  )
+  func parsesRealError() throws {
+    #expect {
+      try ClaudeJudgeReply.parse(
+        Fixture.data("Judge/claude-unknown-model.json"), stderr: "", for: Self.captureSet)
+    } throws: { error in
+      guard case JudgeError.backend(let message) = error else { return false }
+      return message.contains("no-such-model")
+    }
+  }
+
+  @Test(
+    "a reply that omits a question is malformed — catches a partial reply silently skipping a question"
+  )
+  func missingQuestionIsMalformed() throws {
+    #expect(throws: JudgeError.self) {
+      try ClaudeJudgeReply.parse(
+        Fixture.data("Judge/claude-result.json"), stderr: "", for: JudgeQuestionSet.tests)
+    }
+  }
+
+  @Test(
+    "the schema builder produces exactly the schema the capture was made with — catches the fixture drifting from what the adapter sends"
+  )
+  func schemaMatchesCapture() throws {
+    let built =
+      try JSONSerialization.jsonObject(
+        with: Data(ClaudeJudgePrompt.schema(for: Self.captureSet).utf8)) as? NSDictionary
+    let captured =
+      try JSONSerialization.jsonObject(
+        with: Fixture.data("Judge/claude-capture-schema.json")) as? NSDictionary
+    #expect(built == captured)
+  }
+
+  @Test(
+    "the claude judge runs claude -p with the schema, no tools or settings, and the subject on stdin — catches the judge running with tools, hooks or a transcript"
+  )
+  func invocation() async throws {
+    let runner = Self.replaying("claude-result.json", status: 0)
+    let judge = ClaudeCLIJudge(runner: runner, model: "haiku")
+
+    let answers = try await judge.answer(Self.subject, questions: Self.captureSet)
+
+    #expect(answers.first?.question == "fails-if-broken")
+    let call = try #require(runner.invocations.first)
+    #expect(call.executable == "claude")
+    for flag in [
+      "-p", "--restricted", "--strict-mcp-config", "--no-session-persistence", "--json-schema",
+    ] {
+      #expect(call.arguments.contains(flag))
+    }
+    let tools = try #require(call.arguments.firstIndex(of: "--tools"))
+    #expect(call.arguments[tools + 1] == "")
+    let model = try #require(call.arguments.firstIndex(of: "--model"))
+    #expect(call.arguments[model + 1] == "haiku")
+    let prompt = String(decoding: call.standardInput ?? Data(), as: UTF8.self)
+    #expect(prompt.contains(Self.subject.source))
+    #expect(prompt.contains(Self.subject.context))
+    #expect(prompt.contains("fails-if-broken"))
+  }
+
+  @Test(
+    "the cache answers a repeat question without the backend and misses when the model changes — catches paying twice for a stable test or reusing another model's answers"
+  )
+  func caching() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-judge-cache-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let runner = Self.replaying("claude-result.json", status: 0)
+    let cache = FileJudgeCache(directory: directory)
+
+    let sonnet = CachingJudge(ClaudeCLIJudge(runner: runner, model: "sonnet"), cache: cache)
+    let first = try await sonnet.answer(Self.subject, questions: Self.captureSet)
+    let second = try await sonnet.answer(Self.subject, questions: Self.captureSet)
+    #expect(first == second)
+    #expect(runner.invocations.count == 1)
+
+    let opus = CachingJudge(ClaudeCLIJudge(runner: runner, model: "opus"), cache: cache)
+    _ = try await opus.answer(Self.subject, questions: Self.captureSet)
+    #expect(runner.invocations.count == 2)
+  }
+
+  @Test(
+    "a disabled judge constructs no backend — catches test source leaving the machine in a repository that never opted in"
+  )
+  func disabledBuildsNothing() {
+    let runner = Self.replaying("claude-result.json", status: 0)
+    #expect(JudgeFactory.make(.disabled, runner: runner, cacheDirectory: nil) == nil)
+    #expect(runner.invocations.isEmpty)
+  }
+
+  @Test("the Jev backend reports not configured — catches a stub silently answering nothing")
+  func jevIsBlocked() async {
+    let judge = JudgeFactory.make(
+      .enabled(backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9)),
+      runner: Self.replaying("claude-result.json", status: 0), cacheDirectory: nil)
+    await #expect {
+      _ = try await judge?.answer(Self.subject, questions: .tests)
+    } throws: { error in
+      guard case JudgeError.notConfigured = error else { return false }
+      return (error as? JudgeError)?.verdict == .blocked
+    }
+  }
+
+  @Test(
+    "a recording for another question-set version is refused — catches calibration run against stale answers"
+  )
+  func recordingVersionChecked() async {
+    let judge = RecordedJudge(
+      .init(
+        questionSet: "test-quality@0", identity: JudgeIdentity(backend: "claude", model: "sonnet"),
+        answers: [:]))
+    await #expect(throws: JudgeError.self) {
+      _ = try await judge.answer(Self.subject, questions: .tests)
+    }
+  }
+}
