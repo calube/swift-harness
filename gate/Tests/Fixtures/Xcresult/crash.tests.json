@@ -1,0 +1,95 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-capture",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C54",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Crash: xctest at implicit closure #1 in ProbeCrashXCTests.testCrashes()",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "testCrashes()",
+                  "nodeIdentifier" : "ProbeCrashXCTests/testCrashes()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeCrashXCTests/testCrashes",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "ProbeCrashXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeCrashXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            },
+            {
+              "children" : [
+                {
+                  "duration" : "0.00067s",
+                  "durationInSeconds" : 0.0006650686264038086,
+                  "name" : "testAdds()",
+                  "nodeIdentifier" : "ProbePassXCTests/testAdds()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests/testAdds",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "ProbePassXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            },
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Crash: xctest at freestanding macro expansion #1 of expect in module CounterUISnapshotTests file XcresultProbeTests.swift line 57 column 7",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "crashes()",
+                  "nodeIdentifier" : "ProbeCrashSwiftTests/crashes()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeCrashSwiftTests/crashes()",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "ProbeCrashSwiftTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeCrashSwiftTests",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "CounterUISnapshotTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "CounterFeature-Package",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

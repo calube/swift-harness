@@ -1,0 +1,108 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-capture",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C54",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Test skipped",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.0086s",
+                  "durationInSeconds" : 0.008584976196289062,
+                  "name" : "testSkippedWithoutReason()",
+                  "nodeIdentifier" : "ProbeSkipXCTests/testSkippedWithoutReason()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipXCTests/testSkippedWithoutReason",
+                  "nodeType" : "Test Case",
+                  "result" : "Skipped"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "Test skipped - needs network",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "duration" : "0.0017s",
+                  "durationInSeconds" : 0.001707911491394043,
+                  "name" : "testSkippedWithReason()",
+                  "nodeIdentifier" : "ProbeSkipXCTests/testSkippedWithReason()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipXCTests/testSkippedWithReason",
+                  "nodeType" : "Test Case",
+                  "result" : "Skipped"
+                }
+              ],
+              "name" : "ProbeSkipXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Skipped"
+            },
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Test 'disabledWithoutReason()' skipped",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "disabledWithoutReason()",
+                  "nodeIdentifier" : "ProbeSkipSwiftTests/disabledWithoutReason()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipSwiftTests/disabledWithoutReason()",
+                  "nodeType" : "Test Case",
+                  "result" : "Skipped"
+                },
+                {
+                  "children" : [
+                    {
+                      "name" : "Test 'disabledWithReason()' skipped: flaky on CI",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "disabledWithReason()",
+                  "nodeIdentifier" : "ProbeSkipSwiftTests/disabledWithReason()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipSwiftTests/disabledWithReason()",
+                  "nodeType" : "Test Case",
+                  "result" : "Skipped"
+                }
+              ],
+              "name" : "ProbeSkipSwiftTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbeSkipSwiftTests",
+              "nodeType" : "Test Suite",
+              "result" : "Skipped"
+            }
+          ],
+          "name" : "CounterUISnapshotTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Skipped"
+        }
+      ],
+      "name" : "CounterFeature-Package",
+      "nodeType" : "Test Plan",
+      "result" : "Skipped"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

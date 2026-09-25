@@ -73,3 +73,43 @@ Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
   or cache failures print `<unknown>:0: error: …` instead.
 - Toggling `--enable-code-coverage` rebuilds the package (about 20s for the SampleApp's TCA
   package), so every T1 run enables it.
+
+## Xcresult (T2/T3 evidence)
+
+Xcode 26.2 (17C48), `xcresulttool` version 24514, schema 0.1.0. The subcommands the gate uses:
+`xcrun xcresulttool get test-results tests --path <bundle>` (the test tree) and
+`xcrun xcresulttool get build-results --path <bundle>` (build errors). `get test-results summary`
+also exists but its failures carry no `file:line`, so the gate does not read it.
+
+`Xcresult/<scenario>.{tests.json,build-results.json,status}` are captured by
+`gate/Fixtures/xcresult/capture.sh` (run from the repository root). It clones the pinned
+simulator (iPhone 17, iOS 26.2), copies `examples/SampleApp/Packages` to a scratch directory, adds
+`gate/Fixtures/xcresult/XcresultProbeTests.swift` to the copy's `CounterUISnapshotTests` target,
+and runs `xcodebuild test -scheme CounterFeature-Package -skipMacroValidation
+-only-testing:CounterUISnapshotTests/<suite>…` per scenario with `-derivedDataPath` under
+`.harness/DerivedData/`. `status` is `xcodebuild`'s exit status. The script replaces the scratch
+path with `/SCRATCH`, the clone's UDID with `CLONE-UDID`, its PID with `PID`, and elides the
+machine's device list from the "no destination" error; the rest is verbatim.
+
+| Scenario | Selection | What it shows |
+|---|---|---|
+| `pass` | `CounterViewSnapshotTests` (the real snapshot test), `ProbePassXCTests` | exit 0; both frameworks' cases under a `Unit test bundle` node |
+| `fail` | `ProbeFailXCTests`, `ProbeFailSwiftTests`, `ProbePassXCTests` | exit 65; each failure's `Failure Message` is `<File>.swift:<line>: <text>` |
+| `skip` | `ProbeSkipXCTests`, `ProbeSkipSwiftTests` | exit 0; skip reasons for both frameworks |
+| `crash` | `ProbeCrashXCTests`, `ProbeCrashSwiftTests`, `ProbePassXCTests` | exit 65; the runner restarts after each crash and runs the rest |
+| `zero` | `NoSuchSuite` | exit 0; a `Test Plan` node with no children |
+| `no-destination` | an all-zero device id | exit 70; empty device, no test nodes, an `Uncategorized` build error |
+| `build-error` | `ProbePassXCTests`, with the probe broken to not compile | exit 65; no test nodes; a `Swift Compiler Error` with a `sourceURL` |
+| `missing-bundle` | `xcresulttool` against a path that does not exist | `.stderr` + `.status` per subcommand (exit 64) |
+
+Observed behavior the evidence rules rely on:
+
+- Unlike host `swift test --parallel`, the bundle records XCTest skips, with reasons. XCTest:
+  `Test skipped` or `Test skipped - <reason>`. Swift Testing: `Test '<name>' skipped` or
+  `Test '<name>' skipped: <reason>`.
+- A failure's location is a file name only; the rules resolve it against the selected targets'
+  sources.
+- A crash's message starts `Crash: `. Swift Testing crashes name `file <File>.swift line <n>`;
+  XCTest crashes name only the crashing symbol.
+- A build error's `sourceURL` is `file://<abs path>#…&StartingLineNumber=<0-based>&…`.
+- An unresolved destination records a device whose `deviceId` is empty.

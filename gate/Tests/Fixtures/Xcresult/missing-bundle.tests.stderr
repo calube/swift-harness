@@ -1,0 +1,3 @@
+Error: File or directory doesn't exist at path: /SCRATCH/missing.xcresult.
+Usage: xcresulttool get test-results tests [--schema] [--schema-version <schema-version>] --path <path> [--compact]
+  See 'xcresulttool get test-results tests --help' for more information.
