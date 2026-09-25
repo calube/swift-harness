@@ -25,7 +25,7 @@ ledgers, one shared verdict vocabulary) and none of its backend-specific machine
 
 - Shipping macOS apps. Apps are iOS-only; macOS appears solely as a host-test platform for Core packages.
 - CI. Local-only for now; everything is designed so a CI job can later run the same `swiftgate` command.
-- Simulator driving, profiling, review panels — sub-projects 2–4.
+- Simulator driving, profiling, review panels — sub-projects 2–5.
 
 ## 2. Decomposition
 
@@ -77,7 +77,7 @@ Component notes (checked against the Claude Code plugin docs, 2026-09-24):
 - **Workflows vs. skills.** A workflow is a deterministic multi-agent script (fan-out, verify,
   synthesize). A skill is the entry point that sequences gate calls and, where needed, invokes the
   workflow. Foundation ships the `review` workflow; `validate` and `milestone` workflows arrive in
-  sub-projects 2–4.
+  sub-projects 3–5.
 - **Loops are not a component.** Claude Code has no loop component. A loop is a skill or workflow
   designed to be re-run (e.g. under `/loop`), with its state in `.harness/ledger.md`, not in the
   conversation.
@@ -266,7 +266,7 @@ Reference shapes:
     unimplemented default would fail every test. Tests may assert that critical error paths log.
 - **Tracing** — `TracingClient` span API (`withSpan(StaticString, attributes) { ... }`). Live maps
   each span to an `OSSignposter` interval (names stay `StaticString`, so Instruments sees them —
-  sub-project 3's profiler consumes these) and to Datadog/Sentry spans remotely. Test value records
+  sub-project 4's profiler consumes these) and to Datadog/Sentry spans remotely. Test value records
   spans. Live modules wrap their IO (requests, decodes, cache hits) in spans.
 
 Direct `Logger`, `OSSignposter`, `print`, and vendor logging SDK calls are banned outside
@@ -286,7 +286,7 @@ pointfree.co posts. No standard may cite an API not verified here; re-verify on 
 | Library | Pin (from) | Notes |
 |---|---|---|
 | swift-composable-architecture | 1.26.2 | **Target the 1.x shape.** TCA 2.0 (`@Feature`, `Update`) is a subscriber-only beta — do not use. Enable the `ComposableArchitecture2Deprecations` package trait permanently. |
-| swift-dependencies | 1.17.1 | `@DependencyClient` endpoints default to fail-and-report; `static let testValue = Self()` = fully unimplemented. `@DependencyEntry` available. App-launch overrides via `prepareDependencies {}` (sub-project 2 scenario injection). Previews: `#Preview(traits: .dependencies {})`. |
+| swift-dependencies | 1.17.1 | `@DependencyClient` endpoints default to fail-and-report; `static let testValue = Self()` = fully unimplemented. `@DependencyEntry` available. App-launch overrides via `prepareDependencies {}` (sub-project 3 scenario injection). Previews: `#Preview(traits: .dependencies {})`. |
 | swift-navigation | 2.11.2 | |
 | swift-case-paths | 1.10.0 | Prefer `some CasePath` over `AnyCasePath`. |
 | swift-snapshot-testing | 1.19.6 | Record modes `.all/.failed/.missing/.never`; **default `.missing` silently records** — see §7.2 rule 4. Use `record:` param / `withSnapshotTesting` / `.snapshots(record:)` trait; globals `isRecording`/`diffTool` deprecated. Package is Swift 5 language mode. |
@@ -323,8 +323,8 @@ Each rule: **do X · the tell you broke it · incident (or source, until an inci
 | 3 | Dependencies & clients | `@DependencyClient` with live/test/preview; test value fails loudly by default; no singletons; every service is a `FooClient`/`FooClientLive` pair; typed analytics events | lint + `arch` |
 | 4 | Errors | typed domain errors; no `try!`/`fatalError` outside true preconditions; `reportIssue` for programmer errors | lint |
 | 5 | Observability | log via `LogClient` (structured, privacy-tagged attributes, per-module category); spans via `TracingClient` on meaningful operations; no direct `Logger`/`OSSignposter`/`print`/vendor SDK outside their Live modules | lint + `arch` |
-| 6 | SwiftUI performance | stable identity; no `AnyView`; lazy containers; granular observation | review (+ profiling in sub-project 3) |
-| 7 | Accessibility | identifiers + labels on interactive elements | lint (+ QA in sub-project 2) |
+| 6 | SwiftUI performance | stable identity; no `AnyView`; lazy containers; granular observation | review (+ profiling in sub-project 4) |
+| 7 | Accessibility | identifiers + labels on interactive elements | lint (+ QA in sub-project 3) |
 | 8 | Checker hygiene | every lint/arch rule has a seeded-violation fixture | `self-test` |
 
 ## 7. Testing playbook
@@ -398,7 +398,7 @@ asserting only values the test configured on its own double; `try?` or empty `ca
   module it targets → `RED`.
 
 **Judgment (LLM).** A test-slop rubric in `swift-test-gate` (and a review-panel member in
-sub-project 4) for what tools can't see: vacuous or restated regression names,
+sub-project 5) for what tools can't see: vacuous or restated regression names,
 implementation-detail coupling, over-mocking, wrong abstraction level.
 
 **Judge seam (`swiftgate judge`).** The judgment layer is an adapter behind a `Judge` protocol whose
@@ -493,13 +493,13 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `swift-architecture` | judgment layer: design a feature/module, recommend kind via fit signals, scaffold Core/UI package pair |
 | `swift-tdd` | test-first with `TestStore` and engine replay/property patterns; regression litmus |
 | `/swift-comment-audit` | judgment pass over a diff's comments: keep / trim / delete with proposed edits; Swift-specific, written fresh for this harness |
-| `/swift-validate` (thin) | `check --tier ready` → evidence summary in `.harness/runs/<id>/` + PR-body-ready block. Sub-project 2 adds sim QA of changed flows; sub-project 3 adds before/after profile diff and leak check |
-| `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design, SwiftUI best practices (when UI is touched) — via the `review` workflow (§9.2), seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 4 adds observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
+| `/swift-validate` (thin) | `check --tier ready` → evidence summary in `.harness/runs/<id>/` + PR-body-ready block. Sub-project 3 adds sim QA of changed flows; sub-project 4 adds before/after profile diff and leak check |
+| `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design, SwiftUI best practices (when UI is touched) — via the `review` workflow (§9.2), seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 5 adds observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
 | `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
 
 ### 9.1 Review verdict contract
 
-Shared by every reviewer and by sub-project 4's panel so findings merge cleanly:
+Shared by every reviewer and by sub-project 5's panel so findings merge cleanly:
 
 - Finding fields: `severity` (blocker / major / minor / nit), `file:line`, `failure_scenario`
   (concrete input/state → wrong outcome), `evidence` (tool output, test, or code citation), `fix`.
