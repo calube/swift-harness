@@ -281,3 +281,84 @@ Observed behavior the adapter relies on:
 Observed behavior synthesis relies on: two reviewers citing the same rule at the same line invent
 different `category` strings (`live-client-logic`, `logic-in-live-client`), so standards
 violations dedupe on `rule`, not `category`.
+
+## Probe
+
+Apple Swift version 6.2 (swiftlang-6.2.3.3.20 clang-1700.6.3.2), `arm64-apple-macosx26.0`.
+`Probe/<scenario>.{stdout,status}` are `swift build` runs of a scratch package outside the repo
+(stderr was empty for every scenario, so it is not captured). Each probe file is named after the
+enum it declares, `Probe_<id>.swift`, per spec §6.2 — `swiftgate probe` attributes a diagnostic
+back to its claim by matching the diagnostic's file name against this convention.
+
+```
+SCRATCH=$(mktemp -d)
+mkdir -p "$SCRATCH/Sources/ProbeScratch"
+cat > "$SCRATCH/Package.swift" <<'SWIFT'
+// swift-tools-version:6.2
+import PackageDescription
+
+let package = Package(
+  name: "ProbeScratch",
+  targets: [
+    .target(name: "ProbeScratch")
+  ]
+)
+SWIFT
+cat > "$SCRATCH/Sources/ProbeScratch/Probe_ev_good_effect_cancel.swift" <<'SWIFT'
+enum Probe_ev_good_effect_cancel {
+  static func run() -> Int { 1 + 1 }
+}
+SWIFT
+cat > "$SCRATCH/Sources/ProbeScratch/Probe_ev_warns_but_compiles.swift" <<'SWIFT'
+enum Probe_ev_warns_but_compiles {
+  static func run() -> Int {
+    let unused = 42
+    return 1
+  }
+}
+SWIFT
+# good.{stdout,status}: swift build here (only the two files above)
+
+cat > "$SCRATCH/Sources/ProbeScratch/Probe_ev_fabricated_symbol.swift" <<'SWIFT'
+enum Probe_ev_fabricated_symbol {
+  static func run() -> Int {
+    fabricatedAPIThatDoesNotExist()
+  }
+}
+SWIFT
+cat > "$SCRATCH/Sources/ProbeScratch/Probe_ev_wrong_signature.swift" <<'SWIFT'
+enum Probe_ev_wrong_signature {
+  static func run() -> Bool {
+    "abc".hasPrefix(5)
+  }
+}
+SWIFT
+rm -rf "$SCRATCH/.build"
+# mixed.{stdout,status}: swift build here (all four probe files above)
+
+cat > "$SCRATCH/Sources/ProbeScratch/Extra.swift" <<'SWIFT'
+let extraSyntaxError: Int =
+SWIFT
+rm -rf "$SCRATCH/.build"
+# unattributed.{stdout,status}: swift build here (the four probes plus Extra.swift, which
+# is not a probe file — its errors match no `Probe_<id>.swift` name)
+```
+
+Each build's absolute scratch path is replaced with `/SCRATCH`.
+
+| Scenario | Probe files | What it shows |
+|---|---|---|
+| `good` | good, warns | exit 0; the only diagnostic is the `warns` probe's warning |
+| `mixed` | good, warns, fabricated, wrong-signature | exit 1; `fabricated` and `wrong-signature` each fail with one `error:` in their own file only; `good` and `warns` have no error |
+| `unattributed` | mixed + `Extra.swift` (not a probe) | exit 1; `Extra.swift`'s syntax error recurs once per compile job, attributable to no claim |
+
+Observed behavior the domain relies on:
+
+- A diagnostic's primary line is `<abs path>:<line>:<col>: error|warning: <message>`, optionally
+  suffixed `[#<category>]` on a warning; the following source-snippet and caret-continuation lines
+  carry no `path:line:col:` prefix, so a line-anchored match never mistakes them for a diagnostic.
+- Diagnostics print on stdout, not stderr, under plain `swift build`.
+- A parse error in one file is re-emitted once per remaining compile job in the same invocation
+  (`unattributed.stdout` shows `Extra.swift`'s error five times) — attribution must not assume one
+  diagnostic per file, and a probe's own single real error must not be mistaken for several.
+- A warning never fails its build (`good.status` is `0`); only `error:` lines do.
