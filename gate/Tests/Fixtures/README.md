@@ -363,6 +363,31 @@ Observed behavior the domain relies on:
   diagnostic per file, and a probe's own single real error must not be mistaken for several.
 - A warning never fails its build (`good.status` is `0`); only `error:` lines do.
 
+### `swiftgate probe` on the iOS simulator
+
+Xcode 26.2 (17C48), iphonesimulator SDK 26.2. `Probe/ios-sampleapp.{stdout,status}` are one real
+`swiftgate probe --json` run against the SampleApp's `CounterFeature` package (target
+`CounterCore`, swift-composable-architecture 1.26.2), with the two snippets in
+`gate/Fixtures/probe/ios-snippets/`: a `@Reducer` feature (real TCA API, passes) and
+`Effect<Int>.teleport(to:)` (fabricated, fails). stderr held only the shim's own build log, so it
+is not captured. Run from the repository root with a cold `.harness/probe/` and an empty cache
+home; wall time was 80s including a 36s rebuild of `swiftgate` by the shim:
+
+```sh
+mkdir -p docs/designs/probe-sampleapp.evidence/probes
+cp gate/Fixtures/probe/ios-snippets/*.snippet.swift docs/designs/probe-sampleapp.evidence/probes/
+HOME_DIR=$(mktemp -d)
+bin/swiftgate probe --design docs/designs/probe-sampleapp.md \
+  --package examples/SampleApp/Packages/CounterFeature --target CounterCore \
+  --cache-home "$HOME_DIR" --json > gate/Tests/Fixtures/Probe/ios-sampleapp.stdout
+echo $? > gate/Tests/Fixtures/Probe/ios-sampleapp.status
+rm -rf docs/designs/probe-sampleapp.evidence
+```
+
+The output holds no machine path: diagnostics are recorded against the evidence-relative wrapper
+(`probes/Probe_<id>.swift`), which has the same line numbers as the scratch copy `xcodebuild`
+compiled. The local `APIClient` and `LogClient` products are left out with a note.
+
 ## DesignSha
 
 git 2.50.1 (Apple Git-155). `DesignSha/*.md` are the inputs, not tool output: each

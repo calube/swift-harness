@@ -30,7 +30,14 @@ struct NewSubcommandRegistrationTests {
       ["evidence", "find", "swift-argument-parser", "--pkg", "swift-argument-parser@1.8.2"],
       "find"
     ),
-    ("probe", ["probe", "--design", "docs/designs/example.md"], "probe"),
+    (
+      "probe",
+      [
+        "probe", "--design", "docs/designs/example.md", "--package", "Packages/Example",
+        "--target", "Example",
+      ],
+      "probe"
+    ),
     ("design-scope", ["design-scope"], "design-scope"),
     ("design-lint", ["design-lint", "docs/designs/example.md"], "design-lint"),
     (
@@ -67,6 +74,7 @@ struct NewSubcommandRegistrationTests {
     "docs-lint",
     "evidence check", "evidence check --at",
     "evidence find", "evidence find --pkg",
+    "probe",
   ]
 
   @Test(
