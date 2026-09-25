@@ -24,3 +24,21 @@ os = {{OS}}
 # Vendor SDK modules allowed only inside *Live modules:
 # [clients]
 # vendor_modules = ["FirebaseAnalytics"]
+
+# docs-lint and prose are opt-in: repo-specific anchors, banned phrases (each needs a reason),
+# and per-file word budgets. Router and topic default to 400 / 800 words; AGENTS.md defaults to
+# 60 lines; a whole design doc defaults to ~1,200 words.
+# [docs]
+# managed_files = ["docs/index.md"]
+#
+# [[docs.banned_phrases]]
+# phrase = "leverage"
+# reason = "vague business jargon; say what changed"
+#
+# [docs.budgets]
+# router = 400
+# topic = 800
+
+# Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
+# [plan]
+# max_parallel = 3
