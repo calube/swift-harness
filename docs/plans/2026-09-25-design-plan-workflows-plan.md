@@ -1,0 +1,536 @@
+# Design & plan workflows — implementation plan
+
+<!-- RESUME
+Status: NOT STARTED (plan written 2026-09-25).
+Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
+Next action: wave 1 — bootstrap-stamps-docs-router, claim-and-amendment-records, cli-subcommand-stubs.
+Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
+Interfaces note: docs/handoffs/subproject-2-interfaces.md (the orchestrator creates it at the first merge).
+Open items: Artifact `db` call shape (design-render-design-page pre-step); live `agent_id` payload (plugin-installs-for-real).
+Progress: git log. Update this header at every wave merge.
+-->
+
+## Decisions made while planning
+
+| Decision | Evidence | Reversal |
+|---|---|---|
+| No edits to `gate/Package.swift` or `hooks/hooks.json`. Markdown is read by a line-oriented reader in `SwiftGateDomain`; no new dependency. | Every §5.3 construct is line-level (headings, bullets, fences, tables, frontmatter). The PreToolUse matcher already covers `Edit\|Write\|MultiEdit\|NotebookEdit`. | Add `swift-markdown` behind `MarkdownDocument` |
+| Milestones run in the requested order. Inside a milestone, waves follow `plan-schedule`'s rules: Kahn layers, id tie-break, disjoint write sets, width 3. | User's build order; laptop memory pressure | Drop the barriers and recompute |
+| The PreToolUse guard writes the per-plan lock: a main-session write into an unlocked plan dir claims it with an exclusive create. | §6.3 names the lock but no writer. Nothing writes `.harness/orchestrator.lock` today. | Add a `swiftgate plan claim` command |
+| The design review verdict is a gate rule, `review-synth --design`, not workflow JS. | §3.3: every deterministic check lives in `swiftgate` | Move the rule into `design-review.js` |
+| The commit-message check is `swiftgate comments --commit-msg <file>`. | §6.3 calls it "the same check" | Give it its own subcommand |
+| Context-pack token count = UTF-8 bytes / 4, labelled an estimate. | No offline tokenizer | Swap the estimator |
+| `design-scope` recommends deep when a change adds a dependency and a module kind, adds ≥ 2 modules, or touches ≥ 4 modules. | §8.1 defines only quick's rule | Move thresholds to config |
+| `design-render` refuses a doc that fails `design-lint`. | An unlinted design must never reach approval | Render with a warning banner |
+| The calibration pass record is committed: `gate/Fixtures/calibrate-design/last-pass.json`. | `.harness/` is per worktree and gitignored, so every task worktree would have to recalibrate | Move it under `.harness/` |
+| `evidence capture` and `probe` take `--design <doc>` to locate `<slug>.evidence/`. | §6.1 signatures name no target | Infer from the `design/<slug>` branch |
+| `RepositoryScriptTests` runs every `tests/*_test.mjs`. | Otherwise each workflow task edits that file | — |
+
+## How to work this plan
+
+- **Worktrees.** Per task, the orchestrator runs `git worktree add ../swift-harness-<task-id> -b <task-id>` from
+  main after the previous wave merged. One committer per worktree. Workers commit locally and don't push.
+- **Workers** get [`worker-brief.md`](../handoffs/worker-brief.md), this plan's Decisions and "How to work"
+  sections, their task section, and the interfaces note. Reports: ≤ 200 words, in the brief's shape.
+- **Interfaces note** `docs/handoffs/subproject-2-interfaces.md`: the orchestrator appends each wave's "notes
+  for next waves" (type names, file formats, flags) at merge and adds its router row. Workers read it and never edit it.
+- **Gate evidence.** A task is done when `bin/swiftgate check --tier <gate>` is GREEN in its worktree, plus the
+  brief's self-gate. The report quotes the verdict line and run id. Agent, skill and workflow tasks (gate
+  `fast`) also quote their `node tests/…` output and validator result.
+- **Merge.** Once every task in a wave reports green, the orchestrator merges the branches into main in id order,
+  re-runs the wave's highest gate, updates RESUME, and removes the worktrees. Nothing is pushed without the user.
+- **Id policy (spec §5.1).** Task ids and wave numbers are local to this plan. They never appear in code,
+  comments, test names or commit messages. Commit messages describe behaviour, e.g.
+  `feat(gate): design-lint flags untagged decision bullets`.
+- **Toolchain facts.** `xcodebuild` needs `-skipMacroValidation`. Never add `swift-issue-reporting` as a direct
+  dependency before Swift 6.4. `swift test` 6.2 can't shuffle or repeat, so order-independence tests
+  permute inputs themselves. Host XCTest skips are invisible under `--parallel`: gate toolchain-dependent
+  tests with Swift Testing `.enabled(if:)` traits and a reason.
+- **Expected red window.** From the wave 17 merge until calibration seeds merge (wave 22), the plugin repo's
+  push tier is red on calibration freshness. Waves 18–21 gate on `fast`.
+- **Paths.** `D/` = `gate/Sources/SwiftGateDomain/`, `R/` = `gate/Sources/SwiftGateRules/`, `A/` =
+  `gate/Sources/SwiftGateAdapters/`, `C/` = `gate/Sources/SwiftGateCLI/`, `S/` =
+  `gate/Sources/SwiftGateTestSupport/`, `TD/` `TR/` `TA/` `TC/` = `gate/Tests/SwiftGate{Domain,Rules,Adapters,CLI}Tests/`,
+  `FX/` = `gate/Tests/Fixtures/` (captured tool output only), `GF/` = `gate/Fixtures/` (hand-authored fixtures).
+
+### Merge points (hot files)
+
+| File | Edited only by |
+|---|---|
+| `gate/Package.swift`, `hooks/hooks.json` | nobody |
+| `C/SwiftGate.swift`, `TA/RepositoryScriptTests.swift` | `cli-subcommand-stubs` (each stub file then has one owner) |
+| `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml` | `config-docs-and-plan-sections` |
+| other `templates/*`, `.gitignore` | `bootstrap-stamps-docs-router` |
+| `A/Git.swift`, `A/LiveGit.swift`, `S/FakeGit.swift` | `plan-state-paths-in-git-common-dir` |
+| `C/Commands/CheckCommand.swift` | `push-tier-runs-doc-gates` |
+| `C/Commands/SelfTestCommand.swift` | `self-test-runs-evidence-and-design-seeds` |
+| `FX/README.md` | `probe-diagnostic-verdicts`, `design-diff-and-design-sha`, `probe-builds-scratch-package` (3 waves) |
+| `C/Commands/DesignRenderCommand.swift`, `skills/design/SKILL.md`, `docs/hooks.md`, `docs/e2e-report.md` | sequential owners, one per wave (see tasks) |
+
+## Wave map
+
+```mermaid
+flowchart LR
+  subgraph fnd["Foundation changes and formats"]
+    w1["1: bootstrap-stamps-docs-router<br/>claim-and-amendment-records<br/>cli-subcommand-stubs"] --> w2["2: config-docs-and-plan-sections<br/>ledger-and-plan-model<br/>markdown-and-design-doc-model"]
+    w2 --> w3["3: plan-state-paths-in-git-common-dir<br/>probe-diagnostic-verdicts"]
+    w3 --> w4["4: edit-guard-covers-design-and-plan-state<br/>known-id-leak-rules<br/>session-start-reads-shared-plan-index"]
+    w4 --> w5["5: commit-message-id-check<br/>index-set-under-file-lock"]
+  end
+  subgraph mech["Mechanical gates"]
+    w6["6: context-pack-slicing<br/>design-diff-and-design-sha<br/>design-lint-diagrams-and-budgets"] --> w7["7: design-lint-evidence-tags<br/>design-lint-sections-and-ids<br/>design-review-verdict"]
+    w7 --> w8["8: design-scope-tier-recommendation<br/>docs-lint-policy-and-budgets<br/>docs-lint-references-and-links"]
+    w8 --> w9["9: evidence-capture-command<br/>evidence-check-rules<br/>evidence-reuse-cache-store"]
+    w9 --> w10["10: plan-lint-coverage-and-sizing<br/>plan-schedule-waves<br/>prose-rules-and-command"]
+    w10 --> w11["11: context-pack-command<br/>design-lint-command<br/>docs-lint-command"]
+    w11 --> w12["12: evidence-check-command<br/>evidence-find-command<br/>plan-lint-graph-and-waves"]
+    w12 --> w13["13: probe-builds-scratch-package"]
+    w13 --> w14["14: plan-lint-command<br/>push-tier-runs-doc-gates"]
+  end
+  subgraph rnd["Render and metrics"]
+    w15["15: design-render-design-page<br/>stats-design-and-plan-metrics"] --> w16["16: design-render-ledger-page"]
+  end
+  subgraph agt["Agent layer"]
+    w17["17: calibrate-design-command<br/>design-research-lane-agents<br/>design-research-workflow"] --> w18["18: design-review-workflow<br/>prose-skill-written-fresh"]
+    w18 --> w19["19: design-review-agents<br/>design-single-step-agents"]
+    w19 --> w20["20: design-skill-frame-to-draft<br/>plan-skill"]
+    w20 --> w21["21: design-skill-review-publish-amend"]
+  end
+  subgraph sd["Seeds"]
+    w22["22: calibration-seeds-labelled-by-construction"] --> w23["23: plugin-docs-pass-docs-lint-and-prose<br/>self-test-runs-evidence-and-design-seeds"]
+    w23 --> w24["24: self-test-runs-plan-docs-prose-id-seeds"]
+  end
+  subgraph acc["Acceptance"]
+    w25["25: plugin-installs-for-real"] --> w26["26: nonexistent-api-run-refutes-claim"]
+    w26 --> w27["27: sampleapp-standard-design-to-plan"]
+  end
+  w5 --> w6
+  w14 --> w15
+  w16 --> w17
+  w21 --> w22
+  w24 --> w25
+```
+
+| Waves | Milestone | Tasks | Why split this way |
+|---|---|---|---|
+| 1–5 | Foundation changes and formats | 13 | layer 0 (8 tasks) → 3 waves; guard, ids, session start; then index and commit-msg |
+| 6–14 | Mechanical gates | 24 | 15 rule/domain tasks → 5 waves; 7 commands → 3 (probe alone: sole cold build); 2 integrators |
+| 15–16 | Render and metrics | 3 | ledger page shares the render command file |
+| 17–21 | Agent layer | 10 | agents test first; skills after the agents and gates they call |
+| 22–24 | Seeds | 4 | calibration record first, so push goes green again |
+| 25–27 | Acceptance | 3 | all write `docs/e2e-report.md` |
+
+---
+
+## Foundation changes and formats
+
+### `bootstrap-stamps-docs-router`
+- Deps: — · Gate: push · estLines: 300
+- Writes: `D/Bootstrap/BootstrapPlan.swift`, `A/Bootstrap.swift`, `templates/AGENTS.md`, `templates/gitignore`, `templates/lefthook.yml`, `templates/docs-index.md` (new), `templates/design-doc.md` (new), `.gitignore`, `TD/BootstrapRouterTests.swift`
+- Does: §6.3 bootstrap row. Stamps the `docs/index.md` router and the AGENTS.md pointer. Stops stamping `.harness/plans/`. Removes `.harness/plans/` and repo-level `orchestrator.lock` ignore entries. Ignores `.harness/probe/`, `.harness/context-pack/`, `.harness/task-status.json`. lefthook gains `commit-msg: swiftgate comments --commit-msg {1}`. `design-doc.md` is the §5.3 skeleton.
+- Tests: fresh repo gets router and pointer, no `.harness/plans/` — catches plan state stamped per worktree · stale ignore entries removed, others kept · stamped AGENTS.md ≤ 60 lines · second run is a no-op · template sections in §5.3 order.
+- Sizing exception: Domain + Adapters + `templates/` (not a module).
+
+### `claim-and-amendment-records`
+- Deps: — · Gate: push · estLines: 260
+- Writes: `D/Evidence/Claim.swift`, `D/Evidence/Amendment.swift`, `D/Evidence/EvidenceLayout.swift`, `D/Docs/IdPolicy.swift`, `TD/ClaimRecordTests.swift`
+- Does: §5.1 id forms; §5.2 claim, 5 citation kinds, status machine; §5.5 amendment record; `<slug>.evidence/` layout.
+- Tests: claim JSONL round-trips byte-stable — catches schema drift · `quote-fail` → `supported` rejected — catches a mechanical fail laundered by the checker · any status → `stale` allowed · 2-word or `<slug>-R1` id rejected · `clarify` record with `review` rejected.
+
+### `cli-subcommand-stubs`
+- Deps: — · Gate: push · estLines: 260
+- Writes: `C/SwiftGate.swift`, `TA/RepositoryScriptTests.swift`, `TC/NewSubcommandRegistrationTests.swift`, new `C/Commands/{Evidence,EvidenceCheck,EvidenceCapture,EvidenceFind,Probe,DesignScope,DesignLint,DesignDiff,DesignRender,DocsLint,Prose,PlanSchedule,PlanLint,ContextPack,Index,Calibrate}Command.swift`
+- Does: the one edit to `SwiftGate.swift`. Each stub parses its §6.1 arguments and `--json`, then exits 2 "not implemented". `RepositoryScriptTests` runs every `tests/*_test.mjs`.
+- Tests: every §6.1 command parses its arguments — catches a skill calling an unregistered command · stubs exit 2, never 0 — catches a stub passing a gate · a new `tests/*_test.mjs` is discovered.
+- Sizing exception: 17 files, 1 module; thin by design.
+
+### `config-docs-and-plan-sections`
+- Deps: — · Gate: push · estLines: 220
+- Writes: `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml`, `TD/DocsPlanConfigTests.swift`
+- Does: `[docs]` (managed files, banned phrases with reasons, repo anchors, sentence ceiling); `[docs.budgets]` (per design section, router, topic, AGENTS.md 60 lines, design ~1,200 words); `[plan]` (`max_parallel` 3, estLines 40/400, 2 modules, 6 tests, worker pack 15k tokens). The harness opts into `[docs]`.
+- Tests: defaults apply when absent · unknown `[plan]` key rejected — catches a typo disabling a bound · banned phrase without reason rejected · nested `[docs.budgets]` parses.
+
+### `ledger-and-plan-model`
+- Deps: — · Gate: push · estLines: 240
+- Writes: `D/Plan/Ledger.swift`, `D/Plan/PlanFile.swift`, `D/Plan/TaskStatusReport.swift`, `D/Plan/WriteSet.swift`, `TD/LedgerModelTests.swift`
+- Does: §5.6 `plan.json`, §5.7 `ledger.json`, §5.9 `design-conflict` report, write-set overlap.
+- Tests: both files round-trip byte-stable · unknown status preserved — catches later build states dropped · `a/` overlaps `a/b.swift`, `a/b` doesn't overlap `a/bc` — catches false-disjoint waves · report evidence decodes as a claim citation.
+
+### `markdown-and-design-doc-model`
+- Deps: — · Gate: push · estLines: 320
+- Writes: `D/Docs/MarkdownDocument.swift`, `D/Design/DesignDocument.swift`, `TD/MarkdownDocumentTests.swift`, `GF/design/valid.md` (new)
+- Does: frontmatter, anchored sections, tagged bullets, fences with language and Mermaid type, tables, relative links, prose word count. `DesignDocument` gives typed §5.3 sections. `GF/design/valid.md` is the shared valid design; later tasks read it and never edit it.
+- Tests: section by anchor · Mermaid type detected · prose count skips tables, code, diagrams — catches budgets charging diagrams · `#` inside a fence isn't a heading · requirement bullets yield ids and tags.
+
+### `plan-state-paths-in-git-common-dir`
+- Deps: — · Gate: push · estLines: 180
+- Writes: `D/Plan/PlanStateLayout.swift`, `A/Git.swift`, `A/LiveGit.swift`, `S/FakeGit.swift`, `TA/GitCommonDirTests.swift`, `TD/PlanStateLayoutTests.swift`
+- Does: `Git.commonDirectory()` (absolute) and `Git.blobContents(_:)`; `PlanStateLayout` maps the common dir to `swift-harness/plans/{index.json, <plan>/plan.json, ledger.json, orchestrator.lock}`. The only `Git` protocol edit in this plan.
+- Tests: main checkout and a `git worktree add` checkout resolve the same dir — catches per-worktree plan state · relative output made absolute · blob read by id · no layout path under `.harness/`.
+- Sizing exception: `FakeGit` ships with its protocol.
+
+### `probe-diagnostic-verdicts`
+- Deps: — · Gate: push · estLines: 200
+- Writes: `D/Evidence/ProbeVerdict.swift`, `TD/ProbeVerdictTests.swift`, `FX/Probe/` (new), `FX/README.md`
+- Does: wraps each snippet in `enum Probe_<id>` (id sanitised), attributes compiler diagnostics to probe files, per-probe `pass`/`fail`; an unattributed error is a gate error. Fixtures captured from a real `swift build` of a scratch package with good and fabricated probes.
+- Tests: fabricated API fails only its own probe — catches one probe failing siblings · wrong signature fails · warnings don't fail · `ev-` ids sanitise to legal, unique identifiers · unattributed error → exit 2, never pass.
+
+### `edit-guard-covers-design-and-plan-state`
+- Deps: plan-state-paths-in-git-common-dir · Gate: push · estLines: 300
+- Writes: `D/Hooks/Guards.swift`, `C/Hooks/PreToolUseHook.swift`, `docs/hooks.md`, `TD/Hooks/PlanStateGuardTests.swift`, `TC/PreToolUseGuardTests.swift`
+- Does: §6.3 rows 2–4. Resolve the tool path (relative, `..`, symlink) with `CanonicalPath` before matching. Scope: common-dir `index.json`, `plan.json`, `ledger.json`; `docs/**/designs/*.md`; `*.evidence/**`. Per-plan lock with the claim rule (Decisions). `SWIFT_HARNESS_ORCHESTRATOR=1` overrides; any `agent_id` is never orchestrator.
+- Tests: subagent write to design doc, claim file, ledger denied · relative and symlinked forms denied like absolute — catches path-form bypass · session B denied plan A's ledger · first main-session write claims the lock; a racing claim loses · env override allows · `agent_id` plus env var still denied.
+
+### `known-id-leak-rules`
+- Deps: claim-and-amendment-records · Gate: push · estLines: 220
+- Writes: `R/Comments/CommentRules.swift`, `R/Testlint/TestlintRules.swift`, `D/Docs/KnownIds.swift`, `TR/IdLeakRulesTests.swift`
+- Does: D18 in `comments` and `testlint`: a known-id set plus `[A-Z]{1,3}\d+[a-z]?`, `Phase N`, `Stage N`, `Wave N`. `KnownIds` builds the set from ledger, claim and doc ids (pure).
+- Tests: comment with a ledger task id flagged — catches local ids in code · test name with an `ev-` id flagged · `Wave 3` flagged · "phase-locked loop" not flagged — catches over-matching · id inside a longer identifier not flagged.
+
+### `session-start-reads-shared-plan-index`
+- Deps: plan-state-paths-in-git-common-dir · Gate: push · estLines: 160
+- Writes: `D/Hooks/SessionContext.swift`, `C/Hooks/SessionStartHook.swift`, `TD/Hooks/SharedPlanIndexContextTests.swift`
+- Does: §6.3 rows 1 and 7. `PlanIndex` read through `PlanStateLayout`; adds `PlanIndex.encode()`; plan injection capped with an overflow count, well under 10,000 characters.
+- Tests: linked worktree sees the main checkout's plans — catches empty plan context in task worktrees · 200 plans render under the cap with an overflow count · a leftover `.harness/plans/index.json` is ignored.
+
+### `commit-message-id-check`
+- Deps: known-id-leak-rules, plan-state-paths-in-git-common-dir, ledger-and-plan-model · Gate: push · estLines: 220
+- Writes: `A/KnownIdSources.swift`, `C/Commands/CommentsCommand.swift`, `C/Commands/TestlintCommand.swift`, `C/StaticCheckInputs.swift`, `TC/CommitMessageIdCheckTests.swift`
+- Does: gathers ids from every common-dir ledger, `docs/**/*.evidence/claims.jsonl` and docs; feeds both commands; adds `comments --commit-msg <file>`.
+- Tests: message naming a ledger task id exits 1 — catches ids in history · clean message exits 0 · ids read from a linked worktree's shared ledger · outside a git repo → exit 2, not pass.
+
+### `index-set-under-file-lock`
+- Deps: session-start-reads-shared-plan-index, cli-subcommand-stubs · Gate: push · estLines: 180
+- Writes: `A/PlanState/PlanIndexStore.swift`, `C/Commands/IndexCommand.swift`, `TC/IndexSetCommandTests.swift`
+- Does: §5.8, §6.2: read-modify-write of the shared `index.json` under a one-slot `FileCountingLock`.
+- Tests: two concurrent `index set` for different slugs both land — catches lost updates · malformed index → exit 2, file untouched · a linked worktree writes the shared index · `swiftgate gc` leaves `…/swift-harness/plans/` untouched (§4).
+
+## Mechanical gates
+
+### `context-pack-slicing`
+- Deps: markdown-and-design-doc-model, claim-and-amendment-records, ledger-and-plan-model · Gate: push · estLines: 320
+- Writes: `D/Context/ContextPack.swift`, `TD/ContextPackTests.swift`
+- Does: §5.10: verbatim, anchor-selected slices for all 8 roles; token estimate; budget flag.
+- Tests: every pack line is a verbatim substring of its source — catches summarising · worker pack holds only sections covering its `covers` ids · claim-checker pack holds only cited ranges · research pack includes same-pin cache hits · over-budget worker pack flagged.
+
+### `design-diff-and-design-sha`
+- Deps: markdown-and-design-doc-model, cli-subcommand-stubs · Gate: push · estLines: 260
+- Writes: `D/Design/DesignDiff.swift`, `C/Commands/DesignDiffCommand.swift`, `TD/DesignDiffTests.swift`, `FX/DesignSha/` (new), `FX/README.md`
+- Does: §5.4 `designSha` (blob id of the doc minus `status:`, computed in-process); §8.4 class and changed ids; clarify-chain check link by link. Revisions as paths or `<ref>:<path>`.
+- Tests: `designSha` equals captured `git hash-object` output · status change keeps `designSha` — catches approval lost on merge · `req-` line edit → `amend` — catches an amend posing as clarify · Problem typo → `clarify` · chain with one forged link rejected.
+
+### `design-lint-diagrams-and-budgets`
+- Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 200
+- Writes: `D/Design/DesignLintDiagrams.swift`, `TD/DesignLintDiagramsTests.swift`, `GF/design/diagrams/` (new)
+- Does: D22–D23: Architecture has ≥ 2 Mermaid blocks of a known type and ≤ 80 prose words; section and whole-doc budgets.
+- Tests: Architecture without Mermaid flagged · unknown diagram type flagged · section over budget flagged · a long table costs no budget.
+
+### `design-lint-evidence-tags`
+- Deps: markdown-and-design-doc-model, claim-and-amendment-records · Gate: push · estLines: 240
+- Writes: `D/Design/DesignLintEvidence.swift`, `TD/DesignLintEvidenceTests.swift`, `GF/design/evidence/` (new)
+- Does: D5: Evidence, Decision, Perf bullets tagged; cited ids exist and are `supported`; each `[UNVERIFIED]` also in Risks or Open questions; Perf names all 7 dimensions.
+- Tests: untagged Decision bullet flagged · citation of a `refuted` claim flagged — catches a lie reaching Decision · `[UNVERIFIED]` missing from Risks flagged · Perf without backpressure flagged · tag to an unknown id flagged.
+
+### `design-lint-sections-and-ids`
+- Deps: markdown-and-design-doc-model, claim-and-amendment-records · Gate: push · estLines: 200
+- Writes: `D/Design/DesignLintSections.swift`, `TD/DesignLintSectionsTests.swift`, `GF/design/sections/` (new)
+- Does: §5.3 structure: sections present and ordered, Problem non-empty, ids in D18 form and repo-unique (known ids as input), test tiers, 2–3 options, module kinds from the standards model.
+- Tests: missing Risks flagged · requirement id duplicated across designs flagged · test item without tier flagged · 4 options flagged · unknown module kind flagged.
+
+### `design-review-verdict`
+- Deps: markdown-and-design-doc-model · Gate: push · estLines: 200
+- Writes: `D/Review/DesignReviewVerdict.swift`, `C/Commands/ReviewCommands.swift`, `TD/DesignReviewVerdictTests.swift`
+- Does: §8.2 as `review-synth --design <doc>`: Foundation §9.1 findings located by section anchor → `ready` · `revise` · `rethink`, plus the reviewers to re-run.
+- Tests: `NOT REVIEWED` or `NOT RESEARCHED` is never `ready` — catches a dead agent passing · blocker on Decision → `rethink` · major elsewhere → `revise` naming only that reviewer · anchor absent from the doc → contract violation.
+
+### `design-scope-tier-recommendation`
+- Deps: cli-subcommand-stubs · Gate: push · estLines: 170
+- Writes: `D/Design/DesignScope.swift`, `C/Commands/DesignScopeCommand.swift`, `TD/DesignScopeTests.swift`
+- Does: §8.1: frame answers + module graph → tier and reasons (deep rule in Decisions).
+- Tests: new dependency never offered quick — catches under-researched designs · new module kind never quick · one-module change offers quick · 4-module change → deep with reasons.
+
+### `docs-lint-policy-and-budgets`
+- Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 220
+- Writes: `D/Docs/DocsLintPolicy.swift`, `TD/DocsLintPolicyTests.swift`
+- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets.
+- Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged.
+
+### `docs-lint-references-and-links`
+- Deps: markdown-and-design-doc-model · Gate: push · estLines: 240
+- Writes: `D/Docs/DocsLintReferences.swift`, `TD/DocsLintReferencesTests.swift`
+- Does: families reference integrity, relative links, router reachability.
+- Tests: dangling `ev-` id flagged · bare `ADR 0004` flagged · requirement cited nowhere else flagged · broken relative link flagged · doc unreachable from `docs/index.md` flagged.
+
+### `evidence-capture-command`
+- Deps: cli-subcommand-stubs, claim-and-amendment-records · Gate: push · estLines: 170
+- Writes: `A/Evidence/EvidenceCapture.swift`, `C/Commands/EvidenceCaptureCommand.swift`, `TC/EvidenceCaptureCommandTests.swift`
+- Does: argv only; stores stdout, stderr and exit status at `captures/<sha256>.txt`; prints a `capture` citation.
+- Tests: citation hash matches stored bytes · failing command's status stored, not hidden · shell metacharacters not interpreted.
+
+### `evidence-check-rules`
+- Deps: claim-and-amendment-records, probe-diagnostic-verdicts · Gate: push · estLines: 280
+- Writes: `D/Evidence/EvidenceCheck.swift`, `TD/EvidenceCheckTests.swift`
+- Does: D3 per-kind rules (§5.2 table); `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`).
+- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` without a decision record → fail.
+
+### `evidence-reuse-cache-store`
+- Deps: claim-and-amendment-records · Gate: push · estLines: 260
+- Writes: `D/Evidence/EvidenceCache.swift`, `A/Evidence/EvidenceCacheStore.swift`, `TA/EvidenceCacheStoreTests.swift`
+- Does: §8.6 cache (home injectable): package claims per pin; checker verdicts by (claim text hash, quote hash); snapshots and probe results per SDK; `origin`, reuse count, tombstones; appends under a one-slot `FileCountingLock`.
+- Tests: codebase claim refused — catches reused stale code facts · tombstone hides a refuted claim · reuse count increments · concurrent appends both land · verdict reused across repos.
+
+### `plan-lint-coverage-and-sizing`
+- Deps: ledger-and-plan-model, markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 240
+- Writes: `D/Plan/PlanLintCoverage.swift`, `TD/PlanLintCoverageTests.swift`
+- Does: §9.2 coverage against the design text passed in; §9.3 bounds; pack sizes as input.
+- Tests: design requirement in no `covers` → error — catches a dropped requirement · estLines 401 → error, 39 → warning · 3 modules → error; interface + live pair allowed · 7 tests → error · over-budget pack → error.
+
+### `plan-schedule-waves`
+- Deps: ledger-and-plan-model, cli-subcommand-stubs, config-docs-and-plan-sections · Gate: push · estLines: 220
+- Writes: `D/Plan/PlanSchedule.swift`, `C/Commands/PlanScheduleCommand.swift`, `TD/PlanScheduleTests.swift`
+- Does: §6.2: Kahn layers, greedy write-set split, id tie-break, width cap.
+- Tests: overlapping write sets never share a wave — catches merge collisions · cap 3 splits 7 tasks 3/3/1 · output identical over permuted inputs · cycle → exit 1 naming it · missing dep → exit 1.
+
+### `prose-rules-and-command`
+- Deps: markdown-and-design-doc-model, config-docs-and-plan-sections, cli-subcommand-stubs · Gate: push · estLines: 320
+- Writes: `D/Prose/ProseRules.swift`, `C/Commands/ProseCommand.swift`, `TD/ProseRulesTests.swift`
+- Does: D24 rules written fresh from §6.2's list; skips code, tables, diagrams, frontmatter. Don't open any existing style-guide or wordsmith skill (§14).
+- Tests: adverb · em-dash · number word where a numeral fits · jargon phrase · sentence over the ceiling · code fences and tables ignored — catches false positives on code.
+
+### `context-pack-command`
+- Deps: context-pack-slicing, evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push · estLines: 200
+- Writes: `A/Context/ContextPackSources.swift`, `C/Commands/ContextPackCommand.swift`, `TC/ContextPackCommandTests.swift`
+- Does: gathers role inputs; writes `.harness/context-pack/<role>[-<key>].md`; prints the token count.
+- Tests: worker pack for a fixture task has the expected sections · unknown `--role` → exit 2 · missing standards anchor → exit 1, never an empty pack — catches a silently thin pack.
+
+### `design-lint-command`
+- Deps: design-lint-sections-and-ids, design-lint-evidence-tags, design-lint-diagrams-and-budgets, prose-rules-and-command · Gate: push · estLines: 200
+- Writes: `A/Design/DesignLintInputs.swift`, `C/Commands/DesignLintCommand.swift`, `TC/DesignLintCommandTests.swift`
+- Does: loads doc, `claims.jsonl` and repo ids; runs the 3 rule groups and `prose`; `mmdc` validation when on PATH, else a note.
+- Tests: shared valid design exits 0 · untagged Decision exits 1 with its anchor · no `mmdc` → note, exit 0, never blocked · prose violation in the same run.
+
+### `docs-lint-command`
+- Deps: docs-lint-references-and-links, docs-lint-policy-and-budgets, cli-subcommand-stubs · Gate: push · estLines: 180
+- Writes: `A/Docs/DocsTreeReader.swift`, `C/Commands/DocsLintCommand.swift`, `TC/DocsLintCommandTests.swift`, `GF/docs-lint/` (new)
+- Does: reads `docs/` and root `AGENTS.md`; both families; `[docs]` optional.
+- Tests: one violation per family, each reported · no `[docs]` → generic families only · `CLAUDE.md` symlink counted once.
+
+### `evidence-check-command`
+- Deps: evidence-check-rules, cli-subcommand-stubs · Gate: push · estLines: 220
+- Writes: `A/Evidence/EvidenceFiles.swift`, `C/Commands/EvidenceCheckCommand.swift`, `TC/EvidenceCheckCommandTests.swift`
+- Does: reads claims, `Package.resolved`, cited files (tree or `--at` via `Git.contents`), snapshots, captures, probe verdicts; exit 1 on fail or `stale`.
+- Tests: temp repo: deleting a cited line → `stale` at `--at HEAD` — catches drift · relocation reports the new `loc` · missing `claims.jsonl` → exit 2.
+
+### `evidence-find-command`
+- Deps: evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push · estLines: 150
+- Writes: `D/Evidence/EvidenceQuery.swift`, `C/Commands/EvidenceFindCommand.swift`, `TC/EvidenceFindCommandTests.swift`
+- Does: searches repo claims and the cache; `--pkg` filter; status, origin, reuse count.
+- Tests: repo and cache hits carry origin · `--pkg` excludes other versions — catches cross-version reuse · tombstoned claims hidden.
+
+### `plan-lint-graph-and-waves`
+- Deps: plan-schedule-waves · Gate: push · estLines: 200
+- Writes: `D/Plan/PlanLintGraph.swift`, `TD/PlanLintGraphTests.swift`
+- Does: §9.2 DAG, gate ≥ test tier, wave disjointness, waves = schedule, hot-file warning.
+- Tests: cycle → error · hand-edited waves → error — catches ledger tampering · overlap inside a wave → error · `fast` gate on a T2 test → error · path in 3 tasks → warning.
+
+### `probe-builds-scratch-package`
+- Deps: probe-diagnostic-verdicts, evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push + one recorded iOS-simulator probe run · estLines: 320
+- Writes: `A/Probe/ProbeBuilder.swift`, `C/Commands/ProbeCommand.swift`, `TA/ProbeBuilderTests.swift`, `TC/ProbeCommandTests.swift`, `FX/README.md`, `GF/probe/` (new)
+- Does: §6.2. One scratch package per worktree at `.harness/probe/`, pinned to the target's `Package.resolved`, depending only on products the target already uses. iOS: `xcodebuild` through `ProcessRunner` with `-skipMacroValidation` and the worktree's `-derivedDataPath`; host-only packages: `swift build`. Never a direct `swift-issue-reporting` dependency; no MainActor default isolation; build only (no `swift test`, no simulator boot). Verdicts cached per SDK; written to `<slug>.evidence/probes/`.
+- Tests: host fixture: real API passes, fabricated API and wrong signature fail — catches a hallucinated API reaching Decision · xcodebuild argv has `-skipMacroValidation` and per-worktree DerivedData · same pins and SDK hit the cache with no build · scratch manifest never lists `swift-issue-reporting`.
+- Alone in its wave: the only cold build, which eases memory pressure.
+
+### `plan-lint-command`
+- Deps: plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, context-pack-command, plan-state-paths-in-git-common-dir · Gate: push · estLines: 220
+- Writes: `A/PlanState/PlanStateStore.swift`, `C/Commands/PlanLintCommand.swift`, `TC/PlanLintCommandTests.swift`
+- Does: reads shared `plan.json` and `ledger.json`, the design at `designSha` via `Git.blobContents`, the module graph, worker pack sizes.
+- Tests: requirement added to the working-tree design after approval doesn't change the result — catches linting the wrong revision · hand-edited waves exit 1 · clean plan exits 0 · unknown `designSha` → exit 2.
+
+### `push-tier-runs-doc-gates`
+- Deps: prose-rules-and-command, docs-lint-command, evidence-check-command · Gate: push · estLines: 240
+- Writes: `C/Commands/CheckCommand.swift`, `D/Design/CalibrationRecord.swift`, `TC/PushTierDocGatesTests.swift`
+- Does: the one `CheckCommand` edit. Push adds `prose` on changed docs, `docs-lint`, `evidence check --at HEAD` over `approved`/`built` designs, and (plugin repo, when `agents/design-*.md` exist) calibration freshness: hash of `agents/design-*.md` + `workflows/design-*.js` vs `last-pass.json`.
+- Tests: stale claim in an approved design → red · same in a `proposed` design → unchecked · changed design prompt without a new pass → red — catches uncalibrated prompts shipping · fast tier runs none of these.
+
+## Render and metrics
+
+### `design-render-design-page`
+- Deps: design-lint-command, design-diff-and-design-sha, evidence-check-command · Gate: push · estLines: 380
+- Writes: `D/Design/DesignRender.swift`, `D/Design/ArtifactPageShell.swift`, `C/Commands/DesignRenderCommand.swift`, `TD/DesignRenderTests.swift`
+- Does: D21 design page: Mermaid rendered, options as a comparison table, evidence badges that expand to the quote, requirements by title, prose only for problem, risks, open questions. Approve / Request changes write `{decision, designSha, at}` to page `db`. Pre-step: load the `artifact-design` and `artifact-capabilities` skills; record the `db` call shape and page contract in the interfaces note before coding.
+- Tests: each claim status gets its badge · titles shown; ids only in `data-` attributes — catches ids as reader words · quotes HTML-escaped — catches script injection · buttons carry the doc's `designSha` · lint-failing doc → exit 1, no HTML.
+
+### `stats-design-and-plan-metrics`
+- Deps: claim-and-amendment-records, ledger-and-plan-model · Gate: push · estLines: 280
+- Writes: `D/Design/DesignMetrics.swift`, `C/Commands/StatsCommand.swift`, `TD/DesignMetricsTests.swift`
+- Does: §10/§12 metrics from claims, amendments, ledger and `.harness/runs/design-<id>/phases.jsonl` (format defined here; the design skill writes it).
+- Tests: escape rate counts a `supported` claim later amended — catches over-trust going unmeasured · refute and `[UNVERIFIED]` rate per lane · tokens, cost, wall per agent and phase · estimate error only when `actualLines` exists · reviewer precision from Request-changes and dismissals.
+
+### `design-render-ledger-page`
+- Deps: design-render-design-page, plan-schedule-waves · Gate: push · estLines: 240
+- Writes: `D/Design/LedgerRender.swift`, `C/Commands/DesignRenderCommand.swift`, `TD/LedgerRenderTests.swift`
+- Does: `design-render --ledger <plan>`: task DAG, wave timeline, requirement × task matrix, predicted overhead share; reuses the page shell.
+- Tests: uncovered requirement shown as a gap — catches a view hiding a gap · DAG edges equal deps · waves in schedule order.
+
+## Agent layer
+
+### `calibrate-design-command`
+- Deps: push-tier-runs-doc-gates · Gate: push · estLines: 260
+- Writes: `A/Calibration/DesignCalibrationRunner.swift`, `C/Commands/CalibrateCommand.swift`, `TC/CalibrateDesignCommandTests.swift`
+- Does: runs each agent with seeds under `gate/Fixtures/calibrate-design/<agent>/<case>/` through the Foundation judge's Claude CLI runner; a full pass writes `last-pass.json` with the `CalibrationRecord` hash.
+- Tests (recorded runner): all labels met → record written with the current hash · one miss → exit 1, record untouched — catches a regressed prompt passing · case without a label → exit 1.
+
+### `design-research-lane-agents`
+- Deps: context-pack-command, evidence-find-command, probe-builds-scratch-package · Gate: fast · estLines: 280
+- Writes: `agents/design-lane-codebase.md`, `agents/design-lane-apple-docs.md`, `agents/design-lane-packages.md`, `agents/design-lane-prior-decisions.md`, `tests/design_agents_test.mjs`
+- Does: §7.1 lanes, `sonnet`, read-only. Emit `new` claims, probe snippets for every API relied on, and `needsDecision` asks. Cite `.build/checkouts` at pins; Apple snapshots back semantics only. The test checks every `agents/design-*.md`: native model name, read-only tools unless declared, no relay or proxy agent types.
+- Tests: `design_agents_test.mjs` green · a file naming a relay type fails it — catches D2 drift · `plugin-dev:plugin-validator` passes.
+
+### `design-research-workflow`
+- Deps: context-pack-command, evidence-find-command, probe-builds-scratch-package · Gate: fast · estLines: 300
+- Writes: `workflows/design-research.js`, `tests/design_research_workflow_test.mjs`
+- Does: §7.1, §3.4: ≤ 4 lanes, ≤ 3 in flight, each given its pack path; dead or malformed lane → `NOT RESEARCHED`; early return with `needsDecision[]` once the fan-out settles; `resumeFromRunId` replays the unchanged prefix. No filesystem or network. Pre-step: load the `workflow-authoring` skill.
+- Tests (stubbed agents, as `review_workflow_test.mjs`): never > 3 in flight · dead lane → `NOT RESEARCHED`, siblings kept · malformed return → `NOT RESEARCHED` · 2 asking lanes → one early return with both asks.
+
+### `design-review-workflow`
+- Deps: design-review-verdict, context-pack-command · Gate: fast · estLines: 260
+- Writes: `workflows/design-review.js`, `tests/design_review_workflow_test.mjs`
+- Does: §7.2: 3 `opus` reviewers, pre-mortem at deep, per-reviewer packs, anchored findings, `NOT REVIEWED` on death; a `reviewers` arg re-runs only those named. The skill runs `review-synth --design` on the result.
+- Tests: dead reviewer → `NOT REVIEWED` · revise round runs only named reviewers — catches cost blow-up · deep adds the pre-mortem; standard doesn't.
+
+### `prose-skill-written-fresh`
+- Deps: prose-rules-and-command · Gate: fast · estLines: 160
+- Writes: `skills/prose/SKILL.md`
+- Does: D24 plugin-owned prose skill, mirroring `swiftgate prose`; the drafter applies it before `design-lint`. Written from spec §6.2 only; don't read any existing wordsmith or style-guide skill.
+- Tests: `swiftgate prose skills/prose/SKILL.md` exits 0 · every `prose` rule id appears in the skill — catches skill and gate drifting · `plugin-dev:skill-reviewer` passes.
+
+### `design-review-agents`
+- Deps: design-research-lane-agents, design-review-verdict · Gate: fast · estLines: 300
+- Writes: `agents/design-evidence-auditor.md`, `agents/design-standards-conformance.md`, `agents/design-challenger.md`, `agents/design-pre-mortem.md`
+- Does: §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger is written fresh: it carries the intent of the self-reflect questions (best end-to-end design, not merely complete) without copying their text.
+- Tests: `design_agents_test.mjs` green · `plugin-validator` passes. Behaviour is calibrated by `calibration-seeds-labelled-by-construction`.
+
+### `design-single-step-agents`
+- Deps: design-research-lane-agents · Gate: fast · estLines: 240
+- Writes: `agents/design-claim-checker.md`, `agents/design-drafter.md`, `agents/design-decomposer.md`
+- Does: §7.3, `opus`. Checker judges only `quote-ok` claims. Drafter uses `templates/design-doc.md` and `supported` claims only, applies `skills/prose`, returns text. Decomposer proposes tasks within §9.3 bounds and fixes `plan-lint` errors in one round.
+- Tests: `design_agents_test.mjs` green · `plugin-validator` passes.
+
+### `design-skill-frame-to-draft`
+- Deps: design-research-workflow, design-single-step-agents, prose-skill-written-fresh, design-scope-tier-recommendation, design-lint-command, docs-lint-command, evidence-check-command, evidence-capture-command · Gate: fast · estLines: 350
+- Writes: `skills/design/SKILL.md`, `skills/design/references/frame-research-verify.md`, `tests/skill_commands_test.mjs`
+- Does: §3.1 frame → draft. `AskUserQuestion` only, recommended option first; answers become `answer` claims. `design-scope`; research with halt/ask/resume (≤ 4 asks per prompt); `evidence check`, `probe`, claim checker; drafter via the Agent tool; `design-lint` + `docs-lint`; `phases.jsonl`. Quick tier: one lane + drafter, no ADR, no review. Agents return content; the skill writes every file.
+- Tests: `skill_commands_test.mjs` runs `bin/swiftgate <cmd> --help` for every command and flag any skill names — catches instructions drifting from the CLI · `swiftgate prose` clean · `skill-reviewer` passes.
+
+### `plan-skill`
+- Deps: design-single-step-agents, plan-lint-command, design-render-ledger-page, index-set-under-file-lock, design-diff-and-design-sha · Gate: fast · estLines: 300
+- Writes: `skills/plan/SKILL.md`
+- Does: §3.2, §9: runs only when approval matches `designSha` directly or through a verified clarify chain; `evidence check --at HEAD` first; decomposer + one `SendMessage` fix round; `plan-schedule`, `plan-lint`; writes shared `plan.json` and `ledger.json`; `index set`; publishes the ledger page. Remaining errors halt and ask.
+- Tests: `prose` clean · `skill-reviewer` passes · `skill_commands_test.mjs` green after merge.
+
+### `design-skill-review-publish-amend`
+- Deps: design-skill-frame-to-draft, design-review-workflow, design-review-agents, design-render-design-page, design-diff-and-design-sha · Gate: fast · estLines: 330
+- Writes: `skills/design/SKILL.md`, `skills/design/references/review-publish-amend.md`
+- Does: review → `review-synth --design` → one revise round (2 at deep). Publish: `design/<slug>` branch, status `proposed`, `design-render`, Artifact with `comments` and `db`, approval read with `ArtifactData`, status `approved`, merge. `--revise` via `ArtifactComments`. `--amend` and clarify via `design-diff`, amendment records, 2-agent delta review, `needs-replan`. A `stale` claim spawns a one-claim lane. Area router rows; ADRs at standard and deep.
+- Tests: `skill_commands_test.mjs` green · `prose` clean · `skill-reviewer` passes.
+
+## Seeds
+
+### `calibration-seeds-labelled-by-construction`
+- Deps: calibrate-design-command, design-review-agents, design-single-step-agents, design-research-workflow, design-review-workflow · Gate: push · estLines: 220
+- Writes: `gate/Fixtures/calibrate-design/` (new)
+- Does: §12 layer 2: claim checker (overstated claim vs genuine quote), evidence auditor (decision contradicting evidence), standards conformance (UIKit in a Core module), challenger and auditor (option on a probe-refuted API). Runs `calibrate design` live; commits `last-pass.json`.
+- Tests: `swiftgate calibrate design` passes · `check --tier push` green again.
+
+### `plugin-docs-pass-docs-lint-and-prose`
+- Deps: calibration-seeds-labelled-by-construction, design-skill-review-publish-amend, plan-skill · Gate: push · estLines: 200
+- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`
+- Does: the repo's docs pass `docs-lint` and `prose`; AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Explicit exception to the brief's README rule.
+- Tests: `swiftgate docs-lint` exit 0 on this repo · `check --tier push` green.
+
+### `self-test-runs-evidence-and-design-seeds`
+- Deps: calibration-seeds-labelled-by-construction (push must be green), every command task in "Mechanical gates" · Gate: push · estLines: 320
+- Writes: `C/Commands/SelfTestCommand.swift`, `TC/DesignSeedsSelfTestTests.swift`, `GF/seeds/evidence-check/`, `GF/seeds/probe/`, `GF/seeds/design-lint/`, `GF/seeds/design-diff/`
+- Does: the one `SelfTestCommand` edit: a runner over `GF/seeds/<command>/<case>/expected.json`. Seeds: evidence (forged quote, wrong file, wrong pin, tampered capture); probe (fabricated API, wrong signature; host build); design-lint (untagged Decision, refuted citation, `[UNVERIFIED]` not in Risks, Architecture without Mermaid, unknown diagram type, over budget); design-diff (requirement edit posing as clarify).
+- Tests: each seed yields its rule id · a seed that passes fails self-test — catches a gate that stopped catching lies · case without `expected.json` → hygiene failure.
+
+### `self-test-runs-plan-docs-prose-id-seeds`
+- Deps: self-test-runs-evidence-and-design-seeds · Gate: push · estLines: 240
+- Writes: `GF/seeds/plan-lint/`, `GF/seeds/docs-lint/`, `GF/seeds/prose/`, `GF/seeds/comments/`, `GF/seeds/testlint/`
+- Does: seeds only, per §12: plan-lint (uncovered requirement, cycle, overlapping wave, hand-edited waves, oversize task, over-budget pack); docs-lint (dangling id, bare ADR number, unreachable doc, vacuous anchor, over-budget file); prose (adverb, em-dash, number word, jargon); comments/testlint (id leak, codename leak).
+- Tests: `swiftgate self-test` green with every new seed red as labelled.
+- Sizing exception: fixtures only.
+
+## Acceptance
+
+Not code slices; the §13 checks are the tests. Record evidence (commands, verdicts, tokens, wall time) in `docs/e2e-report.md`.
+
+### `plugin-installs-for-real`
+- Deps: all earlier waves · Gate: ready · estLines: 80
+- Writes: `docs/e2e-report.md`, `.claude-plugin/marketplace.json` (only if install needs a fix)
+- Does: install through the marketplace, not `--plugin-dir`. In a SampleApp session, run one design agent type by its plugin name; capture a live PreToolUse payload with `agent_id` (§14).
+- Tests: plugin agent types run · subagent write to a ledger, design doc and claim file denied · two worktrees read the same `index.json` and ledger.
+
+### `nonexistent-api-run-refutes-claim`
+- Deps: plugin-installs-for-real · Gate: ready · estLines: 80
+- Writes: `docs/e2e-report.md`
+- Does: a design request naming a fabricated API; the design branch is never merged.
+- Tests: the claim ends `refuted` or `[UNVERIFIED]` and never appears in Decision (§13).
+
+### `sampleapp-standard-design-to-plan`
+- Deps: plugin-installs-for-real · Gate: ready · estLines: 150
+- Writes: `docs/e2e-report.md`, `examples/SampleApp/docs/` (through the design PR)
+- Does: standard `/swift-harness:design` → `/swift-harness:plan` on a real SampleApp feature (candidate: `CounterFeature` history that survives relaunch; confirmed at frame). The user clicks Approve and approves the merge.
+- Tests: design approved through the Artifact, PR merged, ledger passes `plan-lint` · `swiftgate self-test` and `calibrate design` pass · §11 estimates compared with measured tokens and wall time.
+
+---
+
+## Coverage
+
+| Spec item | Tasks |
+|---|---|
+| D1 phases, workflows, halt/ask/resume (§3, §7) | design-skill-frame-to-draft, design-skill-review-publish-amend, plan-skill, design-research-workflow, design-review-workflow |
+| D2 models, no relay types (§7.3) | design-research-lane-agents, design-review-agents, design-single-step-agents |
+| D3 claims, `evidence check` (§5.2) | claim-and-amendment-records, evidence-check-rules, evidence-check-command, evidence-capture-command |
+| D4 `probe` | probe-diagnostic-verdicts, probe-builds-scratch-package |
+| D5 `design-lint` tags | design-lint-evidence-tags, design-lint-sections-and-ids, design-lint-command |
+| D6 reviewers, contract, verdicts, revise round (§7.2, §8.2) | design-review-verdict, design-review-workflow, design-review-agents, design-skill-review-publish-amend |
+| D7 Artifact approval, `--revise` (§8.3) | design-render-design-page, design-skill-review-publish-amend |
+| D8 drift, `--amend`, `design-diff`, `needs-replan` (§5.5, §5.9, §8.4) | claim-and-amendment-records, ledger-and-plan-model, design-diff-and-design-sha, design-skill-review-publish-amend |
+| D9 staleness (§8.5) | evidence-check-rules, push-tier-runs-doc-gates, plan-skill, design-skill-review-publish-amend |
+| D10 reuse cache (§8.6) | evidence-reuse-cache-store, evidence-find-command, probe-builds-scratch-package |
+| D11 durable vs ephemeral, no plan branch (§4) | plan-state-paths-in-git-common-dir, bootstrap-stamps-docs-router, index-set-under-file-lock, design-skill-review-publish-amend |
+| D12 doc shape and layout (§4, §5.3) | bootstrap-stamps-docs-router, markdown-and-design-doc-model, design-lint-sections-and-ids, design-skill-review-publish-amend |
+| D13 `docs-lint`, status frontmatter (§5.4) | docs-lint-references-and-links, docs-lint-policy-and-budgets, docs-lint-command, design-diff-and-design-sha, design-skill-review-publish-amend |
+| D14 tiers, `design-scope` (§8.1) | design-scope-tier-recommendation, design-skill-frame-to-draft |
+| D15 ledger, `plan-schedule`, `plan-lint`, decomposer (§5.7, §9) | ledger-and-plan-model, plan-schedule-waves, plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, plan-lint-command, design-single-step-agents, plan-skill |
+| D16 sizing (§9.3) | config-docs-and-plan-sections, plan-lint-coverage-and-sizing |
+| D17 context engineering (§5.10, §10) | context-pack-slicing, context-pack-command, session-start-reads-shared-plan-index, docs-lint-policy-and-budgets, stats-design-and-plan-metrics |
+| D18 id policy (§5.1) | claim-and-amendment-records, known-id-leak-rules, commit-message-id-check, bootstrap-stamps-docs-router |
+| D19 shared state in the git common dir (§4, §6.3) | plan-state-paths-in-git-common-dir, session-start-reads-shared-plan-index, edit-guard-covers-design-and-plan-state, index-set-under-file-lock |
+| D20 proving the harness catches lies (§12, §13) | self-test-runs-evidence-and-design-seeds, self-test-runs-plan-docs-prose-id-seeds, calibrate-design-command, calibration-seeds-labelled-by-construction, stats-design-and-plan-metrics, all 3 acceptance tasks |
+| D21 visual-first Artifacts | design-render-design-page, design-render-ledger-page |
+| D22 Mermaid in design docs | markdown-and-design-doc-model, design-lint-diagrams-and-budgets, design-render-design-page |
+| D23 word budgets | config-docs-and-plan-sections, design-lint-diagrams-and-budgets, docs-lint-policy-and-budgets |
+| D24 `prose` skill + `swiftgate prose` | prose-rules-and-command, prose-skill-written-fresh, design-lint-command, push-tier-runs-doc-gates |
+| §6.3 common-dir resolution | plan-state-paths-in-git-common-dir, session-start-reads-shared-plan-index, edit-guard-covers-design-and-plan-state |
+| §6.3 absolute-path matching · per-plan lock · guard scope | edit-guard-covers-design-and-plan-state |
+| §6.3 bootstrap | bootstrap-stamps-docs-router |
+| §6.3 id / codename checks, `commit-msg` hook | known-id-leak-rules, commit-message-id-check, bootstrap-stamps-docs-router |
+| §6.3 hook budget | session-start-reads-shared-plan-index |
+| §6.1 exit codes, `--json` | cli-subcommand-stubs, each command task |
+| §4 `gc` never touches plans; §5.8 index | index-set-under-file-lock |
+| §11 caps, per-worktree probe package, locked appends | design-research-workflow, probe-builds-scratch-package, evidence-reuse-cache-store |
+| §13 acceptance | plugin-installs-for-real, nonexistent-api-run-refutes-claim, sampleapp-standard-design-to-plan |
+| §14 open items (`agent_id`, Artifact capabilities) | plugin-installs-for-real, design-render-design-page |
+| §15 Foundation corrections | bootstrap-stamps-docs-router, plugin-docs-pass-docs-lint-and-prose |
+
+## Not in this plan
+
+| Item | Why |
+|---|---|
+| Creating task worktrees, running waves, merging, the build loop, the `built` transition, wave-boundary `evidence check` calls, writing `actualLines` | Sub-project 5 (§1). This plan ships the formats it consumes; `stats` reads `actualLines` when present |
+| Simulator QA and profiling evidence | Sub-projects 3 and 4 |
+| CI jobs | §1 non-goal; every check is a CLI command a job can call |
+| Machine-wide agent cap | Out of scope per §11 and §14 |
+| Bundling `mmdc` | §5.3: syntax validation runs only when it's on PATH |

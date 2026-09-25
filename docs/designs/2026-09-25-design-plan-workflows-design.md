@@ -1,8 +1,8 @@
 # swift-harness — sub-project 2: design & plan workflows
 
 <!-- RESUME
-Status: SPEC WRITTEN 2026-09-25, awaiting user review. Source of truth for every decision: docs/handoffs/2026-09-25-subproject-2-brainstorm-decisions.md (D1–D20; D19 amends D11).
-Next action: user review → writing-plans (plan to docs/plans/).
+Status: APPROVED 2026-09-25. Source of truth for every decision: docs/handoffs/2026-09-25-subproject-2-brainstorm-decisions.md (D1–D20; D19 amends D11).
+Next action: build per docs/plans/2026-09-25-design-plan-workflows-plan.md.
 Read first: this header → §2 (decision map) → the section you need. Grep; don't read the whole file.
 Corrects Foundation spec §2 row 2 and §4.2 (plan-state location, "ledger canonical in git") — see §15.
 Open: agent_id not yet seen live in hook payloads; Artifact runtime capabilities (comments, db) are a claude.ai dependency.

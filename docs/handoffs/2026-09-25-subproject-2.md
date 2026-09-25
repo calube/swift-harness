@@ -2,8 +2,9 @@
 
 <!-- RESUME
 State (2026-09-25): brainstorm COMPLETE (D1–D24). Spec written and pushed:
-  docs/designs/2026-09-25-design-plan-workflows-design.md — awaiting user review.
-Next action: user approves the spec → write the implementation plan (docs/plans/) → build it wave by wave with workers.
+  docs/designs/2026-09-25-design-plan-workflows-design.md — approved. Plan written:
+  docs/plans/2026-09-25-design-plan-workflows-plan.md (NOT STARTED).
+Next action: build it wave by wave with workers, starting at the plan's wave 1.
 Read first: this file → spec RESUME header → spec §2 decision map. Decision log:
   docs/handoffs/2026-09-25-subproject-2-brainstorm-decisions.md. Grep the spec for sections; don't read it whole.
 -->

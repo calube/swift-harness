@@ -15,6 +15,7 @@ one of the two area indexes below.
 | Looking up why a review-severity rule exists | [`adrs/README.md`](adrs/README.md) |
 | Reading or extending a design (Foundation, design & plan workflows, …) | [`designs/README.md`](designs/README.md) |
 | Picking up mid-build, or handing work to the next session | [`handoffs/2026-09-25-subproject-2.md`](handoffs/2026-09-25-subproject-2.md), [`handoffs/2026-09-25-subproject-2-brainstorm-decisions.md`](handoffs/2026-09-25-subproject-2-brainstorm-decisions.md), [`handoffs/worker-brief.md`](handoffs/worker-brief.md) |
+| Building sub-project 2 (design & plan workflows): tasks, waves, merge points | [`plans/2026-09-25-design-plan-workflows-plan.md`](plans/2026-09-25-design-plan-workflows-plan.md) |
 | Understanding how the Foundation build was sequenced | [`plans/2026-09-24-foundation-plan.md`](plans/2026-09-24-foundation-plan.md) — temporary: `docs/plans/` is committed only until sub-project 2's own (uncommitted) ledger exists |
 
 ## The framework in 30 seconds

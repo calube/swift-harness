@@ -1,13 +1,12 @@
 # swift-harness worker brief (read fully before starting)
 
-You are a worker implementing tasks from the swift-harness Foundation plan. An orchestrator session
+You are a worker implementing tasks from a swift-harness implementation plan (named in your prompt). An orchestrator session
 owns the plan and merges your work. Your task IDs and worktree are given in your prompt.
 
 ## Sources of truth (read only what you need)
-- Plan: `docs/plans/2026-09-24-foundation-plan.md` — read the "Decisions", "How to work
-  this plan" sections and YOUR task sections only (grep for `### T<id>`).
-- Spec: `docs/designs/2026-09-24-swift-harness-foundation-design.md` — grep for the
-  sections your task cites (e.g. `§5.4`, `### 7.4`). Do not read the whole spec unless needed.
+- Plan: the file named in your prompt (e.g. `docs/plans/2026-09-25-design-plan-workflows-plan.md`) — read its
+  "Decisions" and "How to work this plan" sections and YOUR task sections only (grep for the task id).
+- Spec: the design the plan names — grep for the sections your task cites (e.g. `§5.4`, `### 7.4`). Do not read the whole spec unless needed.
 
 ## Rules
 1. **TDD.** For each behavior: write the failing test first, named `@Test("<behavior> — catches <regression>")`
@@ -23,9 +22,10 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
    (plus `tests/shim_test.sh` if you touched `bin/` or `gate/Package.swift`). Timeouts up to 10 min are fine.
 5. **Commits.** One commit per task (more if natural), message `feat(gate): …` / `test(gate): …` /
    `docs: …` / `feat(examples): …`, ending with a blank line and
-   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push your branch (`git push -u origin HEAD`).
+   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push only if your prompt says so.
+   Never put a plan task id or wave number in a commit message, code, comment or test name.
    Never force-push. Never commit to a branch other than the one checked out in your worktree.
-6. **Do NOT edit** the plan file, the spec file, or `README.md`. If the plan/spec is wrong or ambiguous,
+6. **Do NOT edit** the plan file, the spec file, or `README.md` (unless your task's write set names it). If the plan/spec is wrong or ambiguous,
    make the smallest sensible choice, and report it as a DEVIATION.
 7. **Comments:** only non-obvious *why*; no narration of changes; no line numbers; no local paths.
 8. **Dependencies:** only those in the plan's Decisions table unless unavoidable (report it).
