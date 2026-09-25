@@ -294,14 +294,48 @@ struct DocsLintCommandTests {
     #expect(report.verdict.exitCode == 1)
   }
 
-  @Test("a missing docs/ directory is empty, not an error — a repo with no docs yet still runs")
+  @Test(
+    "a missing docs/ directory is empty, not an error, but names itself in a non-gating note — catches an empty corpus silently passing as though docs/ existed"
+  )
   func missingDocsDirectoryIsEmptyNotAnError() async throws {
     let repo = try await TemporaryRepo()
     defer { repo.remove() }
     try repo.write("README.md", "# Sample\n")
     try await repo.addAll()
     let report = try await repo.report()
-    #expect(report.verdict.exitCode != 2)
+    #expect(report.verdict.exitCode == 0)
+    let note = try #require(
+      report.findings.first { $0.ruleID == DocsLintCheck.noDocsDirectoryRuleID })
+    #expect(note.severity == .minor)
+    #expect(note.file == "docs")
+  }
+
+  @Test(
+    "a missing docs/ directory still fails managed_files entries under it — catches the degradation note masking a real config drift"
+  )
+  func missingDocsDirectoryStillFlagsManagedFileMissing() async throws {
+    let repo = try await TemporaryRepo()
+    defer { repo.remove() }
+    try repo.write(
+      Config.fileName,
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "Sample"
+      packages = ["Sample"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+
+      [docs]
+      managed_files = ["docs/index.md"]
+      """)
+    try await repo.addAll()
+    let report = try await repo.report()
+    #expect(report.verdict.exitCode == 1)
+    #expect(report.findings.contains { $0.ruleID == "docs-lint.managed-file-missing" })
+    #expect(report.findings.contains { $0.ruleID == DocsLintCheck.noDocsDirectoryRuleID })
   }
 
   // MARK: - Report shape

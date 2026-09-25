@@ -11,6 +11,8 @@ import SwiftGateRules
 /// defaults — but that's worth saying out loud rather than leaving silent.
 enum DocsLintCheck {
   static let noDocsSectionRuleID = "docs-lint.no-docs-section"
+  static let noDocsDirectoryRuleID = "docs-lint.no-docs-directory"
+  private static let docsDirectoryName = "docs"
 
   static func run(root: URL, runner: any ProcessRunner) async -> StaticCheckOutcome {
     let docsConfig: DocsConfig
@@ -38,6 +40,16 @@ enum DocsLintCheck {
             message:
               "no [docs] table in \(Config.fileName): docs-lint ran the generic families only, "
               + "with default budgets and no repo-specific anchors.",
+            failureScenario: nil))
+      }
+      if !corpus.docsDirectoryExists {
+        findings.append(
+          try Finding(
+            ruleID: noDocsDirectoryRuleID, severity: .minor, file: Self.docsDirectoryName,
+            line: nil,
+            message:
+              "no docs/ directory: docs-lint scanned an empty docs corpus (root AGENTS.md only, "
+              + "if present).",
             failureScenario: nil))
       }
       return .checked(RuleRunResult(findings: findings, allowances: []))

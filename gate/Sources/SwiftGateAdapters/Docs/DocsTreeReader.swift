@@ -11,10 +11,18 @@ public struct DocsTreeReader: Sendable {
   public struct Corpus: Sendable, Equatable {
     public let documents: [DocsLintPolicy.ScannedDocument]
     public let repoPaths: Set<String>
+    /// Whether `docs/` exists at all. A repository with none still scans (an empty `documents`
+    /// list is a normal input, not an error) — but a caller that stays silent about it hides a
+    /// degraded run, so `docs-lint-command` turns this into a visible, non-gating note.
+    public let docsDirectoryExists: Bool
 
-    public init(documents: [DocsLintPolicy.ScannedDocument], repoPaths: Set<String>) {
+    public init(
+      documents: [DocsLintPolicy.ScannedDocument], repoPaths: Set<String>,
+      docsDirectoryExists: Bool = true
+    ) {
       self.documents = documents
       self.repoPaths = repoPaths
+      self.docsDirectoryExists = docsDirectoryExists
     }
   }
 
@@ -52,30 +60,34 @@ public struct DocsTreeReader: Sendable {
   /// - Parameter repositoryRoot: the worktree root `docs/` and `AGENTS.md` are read relative to,
   ///   and the working directory `git ls-files` runs in.
   public func read(repositoryRoot: URL) async throws(ReadFailure) -> Corpus {
-    var documents = try scanDocsDirectory(repositoryRoot: repositoryRoot)
+    let (scanned, docsDirectoryExists) = try scanDocsDirectory(repositoryRoot: repositoryRoot)
+    var documents = scanned
     if let agents = try readAgentsFile(repositoryRoot: repositoryRoot) {
       documents.append(agents)
     }
     let repoPaths = try await trackedFiles(repositoryRoot: repositoryRoot)
-    return Corpus(documents: documents.sorted { $0.path < $1.path }, repoPaths: repoPaths)
+    return Corpus(
+      documents: documents.sorted { $0.path < $1.path }, repoPaths: repoPaths,
+      docsDirectoryExists: docsDirectoryExists)
   }
 
   // MARK: - Filesystem: docs/ and AGENTS.md
 
   /// Absent entirely, `docs/` scans as empty rather than an error — a repository that hasn't
-  /// written any docs yet is a normal (if uninteresting) input, not a malformed one.
+  /// written any docs yet is a normal (if uninteresting) input, not a malformed one. The caller
+  /// still learns it happened, through the returned `docsDirectoryExists` flag.
   private func scanDocsDirectory(repositoryRoot: URL) throws(ReadFailure)
-    -> [DocsLintPolicy.ScannedDocument]
+    -> (documents: [DocsLintPolicy.ScannedDocument], docsDirectoryExists: Bool)
   {
     let docsRoot = repositoryRoot.appending(
       path: Self.docsDirectoryName, directoryHint: .isDirectory)
     var isDirectory: ObjCBool = false
     guard FileManager.default.fileExists(atPath: docsRoot.path, isDirectory: &isDirectory),
       isDirectory.boolValue
-    else { return [] }
+    else { return ([], false) }
     var documents: [DocsLintPolicy.ScannedDocument] = []
     try walk(docsRoot, repoPath: Self.docsDirectoryName, into: &documents)
-    return documents
+    return (documents, true)
   }
 
   /// Recurses into real directories; a symlinked directory is never entered, so a symlink cycle
