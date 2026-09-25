@@ -38,9 +38,14 @@ enum StaticCheckReport {
   {
     let findings: [Finding]
     let verdict: Verdict
+    var allowances: [AllowanceCount] = []
     switch outcome {
     case .checked(let result):
       findings = result.findings
+      let perRule = Dictionary(grouping: result.allowances, by: \.ruleID)
+      allowances = try perRule.map { ruleID, waived throws(ReportContractViolation) in
+        try AllowanceCount(ruleID: ruleID, count: waived.count)
+      }
       verdict = result.findings.contains { $0.severity.failsGate } ? .red : .green
     case .blocked(let reason):
       findings = [
@@ -60,7 +65,8 @@ enum StaticCheckReport {
     let tier = try TierResult(
       tier: .t0, verdict: verdict, durationMilliseconds: durationMilliseconds, testCounts: nil)
     return try RunReport(
-      runID: runID, durationMilliseconds: durationMilliseconds, tiers: [tier], findings: findings)
+      runID: runID, durationMilliseconds: durationMilliseconds, tiers: [tier], findings: findings,
+      allowances: allowances)
   }
 }
 

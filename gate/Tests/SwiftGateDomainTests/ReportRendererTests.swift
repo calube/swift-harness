@@ -22,6 +22,7 @@ struct ReportRendererTests {
       "swiftgate RED · run 20260924T101500Z-a1b2 · 4.2s",
       "  T0 RED 310ms",
       "  T1 GREEN 3.9s · 41 passed, 0 failed, 1 skipped",
+      "allowed: 3 (det.date-init 1, safety.try-bang 2)",
       "findings: 2 (1 gating)",
       "  major    Packages/Core/Sources/Feed/FeedReducer.swift:42  determinism.date-now: "
         + "Date() in a Core module; inject a clock",
@@ -67,6 +68,19 @@ struct ReportRendererTests {
     let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
     #expect(lines.count == ReportRenderer.maxHumanLines)
     #expect(lines.allSatisfy { $0.count <= 240 })
+  }
+
+  @Test(
+    "waivers are shown on a clean run and many waived rules stay on one bounded line — catches allows hidden from review or blowing the cap"
+  )
+  func allowanceLine() throws {
+    let allowances = try (0..<60).map { try AllowanceCount(ruleID: "rule.number\($0)", count: 1) }
+    let report = try RunReport(
+      runID: "r1", durationMilliseconds: 10, tiers: [], findings: [], allowances: allowances)
+    let lines = ReportRenderer.human(report).split(separator: "\n").map(String.init)
+    let line = try #require(lines.first { $0.hasPrefix("allowed: 60 (") })
+    #expect(line.count <= ReportRenderer.maxMessageCharacters + 20)
+    #expect(lines.last == "details: .harness/runs/r1/")
   }
 
   @Test("--json renders the full versioned report — catches JSON consumers getting the capped view")

@@ -20,7 +20,7 @@ public enum ReportRenderer {
   }
 
   /// Longest rendered finding message; the rest is in the full report.
-  static let maxMessageCharacters = 160
+  public static let maxMessageCharacters = 160
 
   public static func human(_ report: RunReport) -> String {
     var header = [
@@ -34,6 +34,10 @@ public enum ReportRenderer {
         line += " · \(counts.passed) passed, \(counts.failed) failed, \(counts.skipped) skipped"
       }
       header.append(line)
+    }
+    if !report.allowances.isEmpty {
+      let perRule = report.allowances.map { "\($0.ruleID) \($0.count)" }.joined(separator: ", ")
+      header.append("allowed: \(report.allowanceTotal) (\(oneLine(perRule)))")
     }
     let footer = "details: \(RunLayout.runDirectory(for: report.runID))"
 

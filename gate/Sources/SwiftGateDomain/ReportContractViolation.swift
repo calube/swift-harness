@@ -4,6 +4,7 @@ public enum ReportContractViolation: Error, Sendable, Equatable {
   case empty(field: String)
   case outOfRange(field: String, value: Int)
   case duplicateTier(Tier)
+  case duplicateAllowance(String)
   case greenWithFailedTests(Tier, failed: Int)
   case unsupportedSchemaVersion(Int)
   case verdictMismatch(stored: Verdict, derived: Verdict)

@@ -25,11 +25,25 @@ struct RunReportTests {
         Finding(
           ruleID: "comments.narration", severity: .nit, file: "App/Sources/App.swift", line: nil,
           message: "Comment restates the code", failureScenario: nil),
+      ],
+      allowances: [
+        AllowanceCount(ruleID: "safety.try-bang", count: 2),
+        AllowanceCount(ruleID: "det.date-init", count: 1),
       ])
   }
 
   static let goldenJSON = """
     {
+      "allowances" : [
+        {
+          "count" : 1,
+          "rule" : "det.date-init"
+        },
+        {
+          "count" : 2,
+          "rule" : "safety.try-bang"
+        }
+      ],
       "durationMilliseconds" : 4210,
       "findings" : [
         {
@@ -127,6 +141,43 @@ struct RunReportTests {
           failureScenario: nil)
       ])
     #expect(report.verdict == .green)
+  }
+
+  @Test(
+    "a v1 report written before allowances existed still decodes, with none — catches history and hook consumers breaking on old run records"
+  )
+  func decodesReportWithoutAllowances() throws {
+    let start = try #require(Self.goldenJSON.range(of: "  \"allowances\" : ["))
+    let end = try #require(Self.goldenJSON.range(of: "  ],\n  \"durationMilliseconds\""))
+    let legacy = Self.goldenJSON.replacingCharacters(
+      in: start.lowerBound..<end.upperBound, with: "  \"durationMilliseconds\"")
+    #expect(!legacy.contains("allowances"))
+    let decoded = try RunReportJSON.decode(Data(legacy.utf8))
+    #expect(decoded.allowances.isEmpty)
+    #expect(decoded.findings == (try Self.sampleReport()).findings)
+  }
+
+  @Test(
+    "allowance counts are kept sorted by rule and reject non-positive or repeated rules — catches double-counted waivers"
+  )
+  func allowanceValidation() throws {
+    let report = try RunReport(
+      runID: "r", durationMilliseconds: 0, tiers: [], findings: [],
+      allowances: [
+        AllowanceCount(ruleID: "z.rule", count: 1), AllowanceCount(ruleID: "a.rule", count: 3),
+      ])
+    #expect(report.allowances.map(\.ruleID) == ["a.rule", "z.rule"])
+    #expect(report.allowanceTotal == 4)
+    #expect(throws: ReportContractViolation.outOfRange(field: "count", value: 0)) {
+      try AllowanceCount(ruleID: "a.rule", count: 0)
+    }
+    #expect(throws: ReportContractViolation.duplicateAllowance("a.rule")) {
+      try RunReport(
+        runID: "r", durationMilliseconds: 0, tiers: [], findings: [],
+        allowances: [
+          AllowanceCount(ruleID: "a.rule", count: 1), AllowanceCount(ruleID: "a.rule", count: 1),
+        ])
+    }
   }
 
   @Test("decoding rejects an unknown schemaVersion — catches a consumer misreading a future schema")

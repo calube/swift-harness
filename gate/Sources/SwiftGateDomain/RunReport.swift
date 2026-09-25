@@ -81,6 +81,33 @@ extension TierResult: Codable {
   }
 }
 
+/// How many findings of one rule a run waived with a justified `swiftgate:allow`. Waivers are
+/// counted so a rising number is visible in reports and history rather than silently absorbed.
+public struct AllowanceCount: Sendable, Equatable {
+  public let ruleID: String
+  public let count: Int
+
+  public init(ruleID: String, count: Int) throws(ReportContractViolation) {
+    try requireNonEmpty(ruleID, field: "rule")
+    if count < 1 { throw .outOfRange(field: "count", value: count) }
+    self.ruleID = ruleID
+    self.count = count
+  }
+}
+
+extension AllowanceCount: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case ruleID = "rule"
+    case count
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    try self.init(
+      ruleID: c.decode(String.self, forKey: .ruleID), count: c.decode(Int.self, forKey: .count))
+  }
+}
+
 /// The result of one `swiftgate` run: the `--json` output and the unit of run history.
 ///
 /// `verdict` is derived, never stored independently, so it cannot disagree with its parts: it is
@@ -93,21 +120,31 @@ public struct RunReport: Sendable, Equatable {
   public let durationMilliseconds: Int
   public let tiers: [TierResult]
   public let findings: [Finding]
+  /// Waived findings per rule, sorted by rule id. Waivers never affect the verdict.
+  public let allowances: [AllowanceCount]
+
+  public var allowanceTotal: Int { allowances.reduce(0) { $0 + $1.count } }
 
   public var verdict: Verdict {
     let findingsVerdict: Verdict = findings.contains { $0.severity.failsGate } ? .red : .green
     return Verdict.merged(tiers.map(\.verdict) + [findingsVerdict])
   }
 
-  public init(runID: String, durationMilliseconds: Int, tiers: [TierResult], findings: [Finding])
-    throws(ReportContractViolation)
-  {
+  public init(
+    runID: String, durationMilliseconds: Int, tiers: [TierResult], findings: [Finding],
+    allowances: [AllowanceCount] = []
+  ) throws(ReportContractViolation) {
     try requireNonEmpty(runID, field: "runID")
     try requireNonNegative(durationMilliseconds, field: "durationMilliseconds")
     var seen = Set<Tier>()
     for tier in tiers.map(\.tier) where !seen.insert(tier).inserted {
       throw .duplicateTier(tier)
     }
+    var seenRules = Set<String>()
+    for ruleID in allowances.map(\.ruleID) where !seenRules.insert(ruleID).inserted {
+      throw .duplicateAllowance(ruleID)
+    }
+    self.allowances = allowances.sorted { $0.ruleID < $1.ruleID }
     self.runID = runID
     self.durationMilliseconds = durationMilliseconds
     self.tiers = tiers
@@ -117,7 +154,7 @@ public struct RunReport: Sendable, Equatable {
 
 extension RunReport: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runID, verdict, durationMilliseconds, tiers, findings
+    case schemaVersion, runID, verdict, durationMilliseconds, tiers, findings, allowances
   }
 
   public init(from decoder: any Decoder) throws {
@@ -130,7 +167,9 @@ extension RunReport: Codable {
       runID: c.decode(String.self, forKey: .runID),
       durationMilliseconds: c.decode(Int.self, forKey: .durationMilliseconds),
       tiers: c.decode([TierResult].self, forKey: .tiers),
-      findings: c.decode([Finding].self, forKey: .findings))
+      findings: c.decode([Finding].self, forKey: .findings),
+      // Added to v1 additively; reports recorded before it have no waivers to show.
+      allowances: c.decodeIfPresent([AllowanceCount].self, forKey: .allowances) ?? [])
     let stored = try c.decode(Verdict.self, forKey: .verdict)
     guard stored == verdict else {
       throw ReportContractViolation.verdictMismatch(stored: stored, derived: verdict)
@@ -145,6 +184,7 @@ extension RunReport: Codable {
     try c.encode(durationMilliseconds, forKey: .durationMilliseconds)
     try c.encode(tiers, forKey: .tiers)
     try c.encode(findings, forKey: .findings)
+    try c.encode(allowances, forKey: .allowances)
   }
 }
 
