@@ -357,7 +357,7 @@ struct EvidenceCheckTests {
   static let captureBytes = Data("$ swift --version\nSwift version 6.2\nexit 0\n".utf8)
 
   static func captureClaim(hash: String, quote: String? = nil) -> Claim {
-    claim(.capture, loc: "captures/\(hash).txt", pin: hash, quote: quote)
+    claim(.capture, loc: "captures/\(hash).txt", pin: "sha256:\(hash)", quote: quote)
   }
 
   @Test("an intact capture passes — catches a hash computed over something other than the bytes")
@@ -379,7 +379,9 @@ struct EvidenceCheckTests {
     let sources = InMemoryEvidenceSources(evidenceFiles: ["captures/\(hash).txt": tampered])
     #expect(
       Self.outcome(Self.captureClaim(hash: hash), sources)
-        == .failed(.captureHashMismatch(pinned: hash, actual: CaptureDigest.sha256Hex(tampered))))
+        == .failed(
+          .captureHashMismatch(
+            pinned: "sha256:\(hash)", actual: "sha256:\(CaptureDigest.sha256Hex(tampered))")))
   }
 
   @Test(
@@ -388,13 +390,31 @@ struct EvidenceCheckTests {
   func captureNameMismatchFails() {
     let hash = CaptureDigest.sha256Hex(Self.captureBytes)
     let other = CaptureDigest.sha256Hex(Data("other".utf8))
-    let claim = Self.claim(.capture, loc: "captures/\(hash).txt", pin: other)
+    let claim = Self.claim(.capture, loc: "captures/\(hash).txt", pin: "sha256:\(other)")
     let sources = InMemoryEvidenceSources(evidenceFiles: ["captures/\(hash).txt": Self.captureBytes]
     )
     #expect(Self.outcome(claim, sources) == .failed(.captureNameMismatch))
     #expect(
       Self.outcome(Self.claim(.capture, loc: "captures/abc.txt", pin: "abc"), sources)
         == .failed(.locMalformed(expected: .capture)))
+  }
+
+  @Test(
+    "a capture pin must be sha256: plus lowercase hex — catches a pin format drifting from what capture writes",
+    arguments: ["", "SHA256:", "sha256:upper", "sha256:long", "sha1:"])
+  func capturePinFormat(form: String) {
+    let hash = CaptureDigest.sha256Hex(Self.captureBytes)
+    let pin: String
+    switch form {
+    case "sha256:upper": pin = "sha256:" + hash.uppercased()
+    case "sha256:long": pin = "sha256:" + hash + "0"
+    default: pin = form + hash
+    }
+    let sources = InMemoryEvidenceSources(evidenceFiles: ["captures/\(hash).txt": Self.captureBytes]
+    )
+    let claim = Self.claim(.capture, loc: "captures/\(hash).txt", pin: pin)
+    #expect(Self.outcome(claim, sources) == .failed(.pinMalformed))
+    #expect(Self.outcome(Self.captureClaim(hash: hash), sources) == .passed)
   }
 
   @Test(

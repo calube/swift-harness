@@ -279,7 +279,8 @@ public enum AnswerRecordJSON {
 }
 
 public enum CaptureDigest {
-  /// Lowercase hex SHA-256 of the stored output: a capture's `pin` and its file-name stem.
+  /// Lowercase hex SHA-256 of the stored output: a capture's file-name stem, and its `pin` after
+  /// the `sha256:` prefix.
   public static func sha256Hex(_ data: Data) -> String {
     SHA256.hash(data: data).map { byte in
       let hex = String(byte, radix: 16)
@@ -437,12 +438,14 @@ private struct Checker<Sources: EvidenceSources> {
     let nameHash = String(citation.loc.dropFirst(prefix.count).dropLast(suffix.count))
     guard Self.isSHA256Hex(nameHash) else { return .failed(.locMalformed(expected: .capture)) }
     guard let pin = citation.pin else { return .failed(.pinMissing) }
-    guard Self.isSHA256Hex(pin) else { return .failed(.pinMalformed) }
-    guard nameHash == pin else { return .failed(.captureNameMismatch) }
+    let pinPrefix = "sha256:"
+    guard pin.hasPrefix(pinPrefix), Self.isSHA256Hex(String(pin.dropFirst(pinPrefix.count)))
+    else { return .failed(.pinMalformed) }
+    guard pinPrefix + nameHash == pin else { return .failed(.captureNameMismatch) }
     guard let data = sources.evidenceFile(citation.loc) else {
       return .failed(.storedFileMissing)
     }
-    let actual = CaptureDigest.sha256Hex(data)
+    let actual = pinPrefix + CaptureDigest.sha256Hex(data)
     guard actual == pin else { return .failed(.captureHashMismatch(pinned: pin, actual: actual)) }
     if let quote = citation.quote, !String(decoding: data, as: UTF8.self).contains(quote) {
       return .failed(.quoteNotFound)
