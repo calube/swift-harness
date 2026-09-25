@@ -65,18 +65,19 @@ Every locked decision and where this spec carries it. Doubles as the self-review
 
 ### 3.1 `/swift-harness:design` phases
 
+```mermaid
+flowchart LR
+  FR["frame<br/>main session"] --> RS["research<br/>design-research.js"]
+  RS --> VF["verify<br/>evidence check · probe<br/>claim checker"]
+  VF --> DR["draft<br/>opus subagent"]
+  DR --> RV["review<br/>design-review.js"]
+  RV --> PB["publish<br/>Artifact · approval · merge"]
+  FR -.- SC(["design-scope picks tier"])
+  DR -.- LN(["design-lint · docs-lint · prose"])
+  PB -.- RN(["design-render"])
 ```
- frame ──► research ──► verify ──► draft ──► review ──► publish
- (main)   (workflow)   (gates +   (opus     (workflow)  (main: Artifact,
-           design-      claim      subagent)  design-     approval, merge)
-           research.js  checker)              review.js
-   │           │           │          │          │           │
-   └── design-scope      evidence   design-lint  │        design-render
-       picks tier        check,     docs-lint    │
-                         probe                   │
-         ▲                                       │
-         └──────── halt → AskUserQuestion → resume (any phase boundary)
-```
+
+Any phase boundary can halt → `AskUserQuestion` → resume (§3.4).
 
 | Phase | Runs in | Does | Exit gate |
 |---|---|---|---|
@@ -89,11 +90,14 @@ Every locked decision and where this spec carries it. Doubles as the self-review
 
 ### 3.2 `/swift-harness:plan` phases
 
-```
- approved design ──► decompose ──► plan-schedule ──► plan-lint ──► index set ──► publish
-                     (opus          (Kahn layers,      (errors       (FileLock)     (Artifact
-                      subagent,      greedy split)      block)                       ledger view)
-                      ≤1 fix round)
+```mermaid
+flowchart LR
+  AD["approved design"] --> DC["decompose<br/>opus subagent, ≤1 fix round"]
+  DC --> PS["plan-schedule<br/>Kahn layers, greedy split"]
+  PS --> PL["plan-lint<br/>errors block"]
+  PL -->|fail| DC
+  PL --> IX["index set<br/>FileLock"]
+  IX --> PU["publish<br/>Artifact ledger view"]
 ```
 
 Runs only when the design's approval record matches its current `designSha` (directly or through a
