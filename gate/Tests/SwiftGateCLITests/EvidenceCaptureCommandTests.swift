@@ -35,7 +35,6 @@ struct EvidenceCaptureCommandTests {
       let citation = try #require(report.citation)
       #expect(citation.kind == .capture)
       let capturePath = try #require(report.capturePath)
-      #expect(capturePath == citation.loc)
 
       // Recompute the hash from the bytes read back from disk, never from a value the code
       // returned, so a citation that lies about what it stored is caught.
@@ -44,6 +43,16 @@ struct EvidenceCaptureCommandTests {
       #expect(citation.pin == "sha256:\(recomputed)")
       #expect(capturePath.hasSuffix("/\(recomputed).txt"))
       #expect(String(decoding: onDisk, as: UTF8.self).contains("hello capture"))
+
+      // `loc` is relative to <slug>.evidence/ (the evidence root), not the repo root: `evidence
+      // check` resolves snapshot/capture/probe/answer locs there, so the citation travels with
+      // the doc.
+      #expect(citation.loc == "captures/\(recomputed).txt")
+      let evidenceRoot = root.appending(
+        path: EvidenceLayout(designDocPath: Self.design).root, directoryHint: .isDirectory)
+      let resolved = evidenceRoot.appending(path: citation.loc)
+      #expect(FileManager.default.fileExists(atPath: resolved.path))
+      #expect(resolved.path == root.appending(path: capturePath).path)
     }
   }
 

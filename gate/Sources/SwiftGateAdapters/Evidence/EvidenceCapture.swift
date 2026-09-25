@@ -28,8 +28,8 @@ public enum EvidenceCapture {
   /// - Parameters:
   ///   - argv: the exact argv, executable first. Passed straight to ``ProcessRunner``.
   ///   - evidenceRoot: the on-disk directory the capture file is written into.
-  ///   - repoRelativeCapturesDirectory: the same directory, repo-relative, so the citation's
-  ///     `loc` never carries an absolute or home-relative path.
+  ///   - repoRelativeCapturesDirectory: the same directory, repo-relative, used only for
+  ///     ``Outcome/capturePath`` (printed for a human, never used as the citation's `loc`).
   ///   - workingDirectory: the captured command's own working directory, or `nil` to inherit the
   ///     runner's.
   public static func run(
@@ -61,11 +61,14 @@ public enum EvidenceCapture {
       return .failure(.io("can't write `\(fileName)`: \(error.localizedDescription)"))
     }
 
-    let loc = repoRelativeCapturesDirectory + "/" + fileName
-    let citation = Citation(kind: .capture, loc: loc, pin: "sha256:\(hash)")
+    // The citation's loc is evidence-root-relative (spec §5.2: the checker resolves
+    // snapshot/capture/probe/answer locs against <slug>.evidence/), never the repo-relative path
+    // — the capture directory is always named `captures` directly under that root.
+    let citation = Citation(kind: .capture, loc: "captures/" + fileName, pin: "sha256:\(hash)")
+    let capturePath = repoRelativeCapturesDirectory + "/" + fileName
     return .success(
       Outcome(
-        citation: citation, capturePath: loc, status: output.status, stdout: stdout,
+        citation: citation, capturePath: capturePath, status: output.status, stdout: stdout,
         stderr: stderr))
   }
 
