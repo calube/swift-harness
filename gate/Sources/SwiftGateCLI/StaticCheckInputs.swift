@@ -10,13 +10,21 @@ enum StaticCheckInputs {
     let config: Config?
     let sources: [SourceInput]
     let scopes: ResolvedScopes
+    /// Ledger/claim/doc ids to reject in comments and test names (spec §5.1). Empty when the
+    /// caller passed no `git` to `load` — callers that don't need the id-leak rules never pay for
+    /// gathering them.
+    let knownIds: Set<String>
   }
 
   case loaded(Loaded)
   case failed(StaticCheckOutcome)
 
   /// An empty `paths` means the whole repository, minus the config's `exclude` directories.
-  static func load(root: URL, paths: [String], swiftPM: any SwiftPM) async -> StaticCheckInputs {
+  /// - Parameter git: when non-nil, ``KnownIdSources`` reads the known-id feed through it; omit it
+  ///   for a check that doesn't run the id-leak rules.
+  static func load(root: URL, paths: [String], swiftPM: any SwiftPM, git: (any Git)? = nil)
+    async -> StaticCheckInputs
+  {
     let config: Config?
     switch loadConfig(root: root) {
     case .success(let loaded): config = loaded
@@ -25,13 +33,22 @@ enum StaticCheckInputs {
     switch await ScopeResolution.resolve(config: config, root: root, swiftPM: swiftPM) {
     case .failed(let outcome): return .failed(outcome)
     case .resolved(let scopes):
-      return collect(root: root, paths: paths, config: config, scopes: scopes)
+      let knownIds: Set<String>
+      if let git {
+        knownIds = await KnownIdSources.load(root: root, git: git)
+      } else {
+        knownIds = []
+      }
+      return collect(root: root, paths: paths, config: config, scopes: scopes, knownIds: knownIds)
     }
   }
 
   /// Reads the sources for an already-resolved config and scopes, so several checks in one run
   /// describe the packages once.
-  static func collect(root: URL, paths: [String], config: Config?, scopes: ResolvedScopes)
+  static func collect(
+    root: URL, paths: [String], config: Config?, scopes: ResolvedScopes,
+    knownIds: Set<String> = []
+  )
     -> StaticCheckInputs
   {
     do throws(SourceCollectionError) {
@@ -40,7 +57,7 @@ enum StaticCheckInputs {
       return .loaded(
         Loaded(
           config: config, sources: collected.map { SourceInput(path: $0.path, text: $0.text) },
-          scopes: scopes))
+          scopes: scopes, knownIds: knownIds))
     } catch {
       return .failed(.blocked(reason: "sources: \(error)"))
     }

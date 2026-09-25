@@ -120,12 +120,13 @@ struct BootstrapRouterTests {
   }
 
   @Test(
-    "bootstrap does not wire a commit-msg hook yet, and tracks only the hooks the shipped template installs — catches enforcement landing before `swiftgate comments --commit-msg` exists to run it"
+    "bootstrap wires a commit-msg hook, and tracks every hook the shipped template installs — catches lefthook.yml gaining a stanza bootstrap never checks is installed"
   )
-  func noCommitMsgHookBeforeItsCommandExists() throws {
-    #expect(BootstrapPlanner.gitHooks == ["pre-commit", "pre-push"])
+  func commitMsgHookWiredWithItsCommand() throws {
+    #expect(BootstrapPlanner.gitHooks == ["pre-commit", "pre-push", "commit-msg"])
     let text = try template("templates/lefthook.yml")
-    #expect(!text.contains("commit-msg"))
+    #expect(text.contains("commit-msg"))
+    #expect(text.contains("comments --commit-msg"))
   }
 
   @Test(

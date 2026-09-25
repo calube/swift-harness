@@ -17,13 +17,16 @@ enum CommentsCheck {
     case .failed(let outcome): return outcome
     case .resolved(let scopes):
       let collector = SwiftSourceCollector(root: root, excluding: config?.exclude ?? [])
-      return await run(git: git, scopes: scopes, isExcluded: collector.isExcluded)
+      let knownIds = await KnownIdSources.load(root: root, git: git)
+      return await run(
+        git: git, scopes: scopes, isExcluded: collector.isExcluded, knownIds: knownIds)
     }
   }
 
   /// - Parameter isExcluded: takes a project-relative path; excluded files are not checked.
   static func run(
-    git: any Git, scopes: ResolvedScopes, isExcluded: (String) -> Bool = { _ in false }
+    git: any Git, scopes: ResolvedScopes, isExcluded: (String) -> Bool = { _ in false },
+    knownIds: Set<String> = []
   ) async -> StaticCheckOutcome {
     let prefix: String
     let added: [AddedLines]
@@ -45,32 +48,81 @@ enum CommentsCheck {
     let inputs = zip(added, local).compactMap { staged, lines in
       contents[staged.path].map { SourceInput(path: lines.path, text: $0) }
     }
-    let context = RuleContext(scopes: scopes.resolver)
+    let context = RuleContext(scopes: scopes.resolver, knownIds: knownIds)
     return scopes.appendingNotices(
       to: StaticCheck.evaluate(RuleCatalog.comments, inputs, context: context, restrictTo: local))
+  }
+}
+
+/// The `commit-msg` hook (spec §6.3): the exact scan `comments.leaked-id` runs, applied to a
+/// commit message's raw text instead of an extracted Swift comment, since a message is never
+/// Swift source.
+enum CommitMessageCheck {
+  static func run(path: String, root: URL, git: any Git) async -> StaticCheckOutcome {
+    // A message can only be judged clean or leaking when the known-id feed is trustworthy; outside
+    // a repository (or one git can't answer for) there is no ledger to read, so this must block
+    // rather than silently pass every message as clean.
+    guard (try? await git.commonDirectory()) != nil else {
+      return .blocked(reason: "not a git repository")
+    }
+    let text: String
+    do {
+      text = try String(contentsOf: URL(filePath: path), encoding: .utf8)
+    } catch {
+      return .blocked(reason: "commit message \(path): \(error.localizedDescription)")
+    }
+    let knownIds = await KnownIdSources.load(root: root, git: git)
+    do throws(ReportContractViolation) {
+      let findings = try IdLeakScan.matches(in: text, knownIds: knownIds).map {
+        match throws(ReportContractViolation) in
+        try Finding(
+          ruleID: "comments.leaked-id", severity: .major, file: path,
+          line: lineNumber(of: match.range.lowerBound, in: text), message: match.message,
+          failureScenario: nil)
+      }
+      return .checked(RuleRunResult(findings: findings, allowances: []))
+    } catch {
+      return .blocked(reason: "rule engine: \(error)")
+    }
+  }
+
+  private static func lineNumber(of index: String.Index, in text: String) -> Int {
+    text[text.startIndex..<index].count(where: \.isNewline) + 1
   }
 }
 
 struct CommentsCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "comments",
-    abstract: "Check comments on staged added lines (pre-commit).")
+    abstract: "Check comments on staged added lines (pre-commit), or a commit message (commit-msg)."
+  )
 
-  @Flag(help: "Check the lines the staged change adds. Required; the only supported mode.")
+  @Flag(help: "Check the lines the staged change adds.")
   var staged = false
+
+  @Option(help: "Check a commit message file for leaked ledger/claim/doc ids (commit-msg hook).")
+  var commitMsg: String?
 
   @OptionGroup var output: OutputOptions
 
   func validate() throws {
-    guard staged else { throw ValidationError("pass --staged") }
+    switch (staged, commitMsg) {
+    case (true, nil), (false, .some): break
+    case (true, .some): throw ValidationError("pass either --staged or --commit-msg, not both")
+    case (false, nil): throw ValidationError("pass --staged or --commit-msg <file>")
+    }
   }
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     try await StaticCheckRun.execute(root: root, format: output.format) {
-      await CommentsCheck.run(
-        root: root, git: git, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+      if let commitMsg {
+        await CommitMessageCheck.run(path: commitMsg, root: root, git: git)
+      } else {
+        await CommentsCheck.run(
+          root: root, git: git, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+      }
     }
   }
 }

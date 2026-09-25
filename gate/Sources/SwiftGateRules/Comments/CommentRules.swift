@@ -490,8 +490,12 @@ struct LeakedIdRule: CommentPatternRule {
 /// caller supplies the set ``KnownIds`` builds) and a codename-shaped token (`Phase N`/`Stage
 /// N`/`Wave N`, or the bare task-id shape `[A-Z]{1,3}\d{1,2}[a-z]?`). Both checks require a
 /// whole-word match, so an id or codename embedded inside a longer identifier is left alone.
-enum IdLeakScan {
-  static func matches(in text: String, knownIds: Set<String>) -> [(
+///
+/// Public so the commit-message check (`swiftgate comments --commit-msg`) can run the identical
+/// scan over a commit message's raw text, which never goes through comment extraction: spec §6.3
+/// calls the two checks "the same check", so the algorithm has exactly one home.
+public enum IdLeakScan {
+  public static func matches(in text: String, knownIds: Set<String>) -> [(
     range: Range<String.Index>, message: String
   )] {
     var found: [(range: Range<String.Index>, message: String)] = []

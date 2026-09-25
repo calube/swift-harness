@@ -316,6 +316,13 @@ struct BootstrapPlanTests {
     #expect(noLefthook.notes.contains { $0.hasPrefix("lefthook is not installed") })
   }
 
+  @Test(
+    "commit-msg is a tracked hook — catches lefthook.yml gaining the stanza while bootstrap keeps reporting it uninstalled forever"
+  )
+  func commitMsgHookTracked() {
+    #expect(BootstrapPlanner.gitHooks.contains("commit-msg"))
+  }
+
   @Test("the registry round-trips sorted and unique — catches status listing a repository twice")
   func registry() throws {
     let registry = ProjectRegistry(projects: ["/b", "/a"]).adding("/b")
