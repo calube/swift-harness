@@ -97,6 +97,7 @@ Every module keeps three invariants: logic lives in a platform-neutral, host-tes
 | `render` | SpriteKit / `Canvas` / Metal reading engine state; no rules | Rendering layers |
 | `library` | Plain Swift | Shared utilities |
 | `client` | `FooClient` / `FooClientLive` pair (section 3) | Services: networking, images, analytics, persistence, keychain, auth, flags, push, location |
+| `test-support` | Test doubles and fixtures (`FooClientTestSupport`); only test targets may depend on it | Helpers shared across test targets; exempt from T1 presence and diff coverage |
 
 **A1. Declare every non-TCA Core.**
 - **Do:** a Core that isn't a TCA feature gets a `[[modules]]` entry in `.swiftgate.toml` with a `kind` and a `reason`. Pick a non-`feature` kind when you see per-frame updates, render loops, high-rate sensor/audio/camera streams, thin SDK wrappers where a reducer is pure ceremony, or store overhead in a profile.
@@ -618,6 +619,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `tca.banned-api` | A6 |
 | `snap.record-mode` | playbook P4 |
 | `arch.undeclared-kind`, `arch.config-module-mismatch` | A1, A3 |
+| `arch.test-support-dependency` | A1 |
 | `arch.ui-framework-in-core` | A2 |
 | `arch.core-main-actor-isolation` | C5 |
 | `arch.live-dependency`, `arch.live-depends-on-feature`, `arch.vendor-dependency` | D2, D3 |

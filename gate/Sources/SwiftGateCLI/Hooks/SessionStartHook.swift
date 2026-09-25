@@ -104,6 +104,7 @@ enum SessionStartHook {
     case .client: "client"
     case .clientLive: "client-live"
     case .app: "app"
+    case .testSupport: "test-support"
     case .tests: nil
     }
   }

@@ -15,7 +15,7 @@ os = {{OS}}
 # reason = "revenue-critical; crosses three features"
 
 # Modules that deviate from the defaults (kind "feature", host-testable) need an entry.
-# Kinds: feature | engine | render | library | client.
+# Kinds: feature | engine | render | library | client | test-support.
 # [[modules]]
 # name = "GameEngine"
 # kind = "engine"

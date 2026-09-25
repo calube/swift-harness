@@ -182,6 +182,7 @@ public struct ModuleGraph: ModuleScopeResolving {
     }
     let isLiveName = target.name.hasSuffix("Live")
     switch override?.kind {
+    case .testSupport?: return .testSupport
     case .client?: return isLiveName ? .clientLive : .client
     case .render?: return .ui
     default: break
@@ -196,6 +197,7 @@ public struct ModuleGraph: ModuleScopeResolving {
     if let override, override.kind != .feature { return override.kind }
     switch role {
     case .client, .clientLive: return .client
+    case .testSupport: return .testSupport
     case .core, .ui, .app, .tests: return .feature
     }
   }

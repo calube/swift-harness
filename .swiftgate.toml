@@ -27,5 +27,5 @@ reason = "process, git and file-system adapters behind protocols; no reducers"
 
 [[modules]]
 name = "SwiftGateTestSupport"
-kind = "library"
+kind = "test-support"
 reason = "test doubles shared by the gate's own tests"

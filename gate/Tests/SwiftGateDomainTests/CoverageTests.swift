@@ -109,6 +109,23 @@ struct DiffCoverageTests {
   }
 
   @Test(
+    "changed lines in a test-support module are not measured — catches test doubles held to production diff coverage"
+  )
+  func testSupportNotMeasured() throws {
+    let config = try SampleGraph.config(modules: [
+      ModuleOverride(name: "GameEngine", kind: .testSupport, reason: "shared fixtures")
+    ])
+    let result = try DiffCoverage.evaluate(
+      addedLines: [AddedLines(path: engine, ranges: [10...11])],
+      scopes: SampleGraph.graph(config: config),
+      coverage: LineCoverage(files: [engine: FileLineCoverage(executable: [10, 11], covered: [])]),
+      minimum: 0.9)
+
+    #expect(result.measured == 0)
+    #expect(result.findings.isEmpty)
+  }
+
+  @Test(
     "a changed Core file no T1 run compiled is reported, not silently skipped — catches coverage passing because the file was never built"
   )
   func missingFile() throws {
@@ -143,5 +160,16 @@ struct T1PresenceTests {
     let findings = try T1Presence.evaluate(SampleGraph.graph(config: config))
 
     #expect(findings.map(\.file) == ["examples/SampleApp/Packages/APIClient/Sources/APIClient"])
+  }
+
+  @Test(
+    "a test-support module needs no T1 target of its own — catches test doubles demanding tests for themselves"
+  )
+  func testSupportExempt() throws {
+    let config = try SampleGraph.config(modules: [
+      ModuleOverride(name: "APIClient", kind: .testSupport, reason: "shared fakes")
+    ])
+
+    #expect(try T1Presence.evaluate(SampleGraph.graph(config: config)) == [])
   }
 }

@@ -263,6 +263,7 @@ public enum ModuleKind: String, Sendable, Equatable, CaseIterable {
   case render
   case library
   case client
+  case testSupport = "test-support"
 }
 
 public struct ModuleOverride: Sendable, Equatable {
