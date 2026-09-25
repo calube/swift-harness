@@ -146,8 +146,8 @@ public struct MutationRunResult: Sendable, Equatable {
 
 /// Runs mutants in parallel scratch worktrees, one worker per tree, so builds never share a
 /// build directory. Each worker builds and runs each package's tests unmutated once (the
-/// baseline its timeouts scale from), then takes mutants from a shared queue: write the mutant,
-/// build, run the affected tests, restore the file.
+/// baseline its timeouts scale from), then takes mutants as ``MutantSchedule`` hands them out:
+/// write the mutant, build, run the affected tests, restore the file.
 public struct MutationRunner: Sendable {
   private let scratch: any ScratchWorktrees
   private let toolchain: any MutationToolchain
@@ -180,7 +180,8 @@ public struct MutationRunner: Sendable {
     let workerCount = min(workers, pending.count)
     var scratchFailure: String?
     if workerCount > 0 {
-      let queue = MutantQueue(pending)
+      let queue = MutantQueue(
+        pending, packages: pending.map { Set(jobs[$0].selections.map(\.packagePath)) })
       let finished = await withTaskGroup(of: WorkerOutput.self) { group in
         for worker in 1...workerCount {
           group.addTask {
@@ -232,7 +233,7 @@ public struct MutationRunner: Sendable {
             path: "\(reportIndex)-\(HostTestRunner.fileStem(selection.packagePath)).xml"
           ).path
         }
-        while let index = await queue.next() {
+        while let index = await queue.next(worker: worker) {
           let job = jobs[index]
           for selection in job.selections where baselines[selection.packagePath] == nil {
             baselines[selection.packagePath] = await baseline(
@@ -243,6 +244,7 @@ public struct MutationRunner: Sendable {
           output.outcomes.append((index, outcome.outcome))
           if let failure = outcome.fatal {
             output.failure = failure
+            await queue.finish(worker: worker)
             break
           }
         }
@@ -337,11 +339,15 @@ public struct MutationRunner: Sendable {
 }
 
 private actor MutantQueue {
-  private var remaining: ArraySlice<Int>
+  private let indices: [Int]
+  private var schedule: MutantSchedule
 
-  init(_ indices: [Int]) {
-    remaining = indices[...]
+  init(_ indices: [Int], packages: [Set<String>]) {
+    self.indices = indices
+    schedule = MutantSchedule(jobPackages: packages)
   }
 
-  func next() -> Int? { remaining.popFirst() }
+  func next(worker: Int) -> Int? { schedule.next(worker: worker).map { indices[$0] } }
+
+  func finish(worker: Int) { schedule.finish(worker: worker) }
 }
