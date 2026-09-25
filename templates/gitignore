@@ -5,3 +5,4 @@
 .harness/orchestrator.lock
 **/.harness/judge-cache/
 **/.harness/cache/
+.build/
