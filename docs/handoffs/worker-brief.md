@@ -31,6 +31,29 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
 8. **Dependencies:** only those in the plan's Decisions table unless unavoidable (report it).
 9. **Scope:** only your tasks. If blocked, stop and report — do not improvise large redesigns.
 
+## Known pitfalls (each one cost a fix round in earlier waves; check your diff against them before reporting)
+1. **Close types at trust boundaries.** Data written by another agent, a skill or a user, or read by a gate,
+   gets a closed type: an enum, not a `String`, and no `.other(String)` or `.unknown` catch-all. An unknown value fails
+   decoding and names itself. Exception: a parser of hand-written docs may keep an unknown value, but only
+   so a lint can report it.
+2. **Use an optional for "not known yet".** Never use an empty string, `0` or a placeholder to mean "not set".
+3. **Enforcement lands with its first passing input.** Don't switch on a hook, gate or check that calls a
+   command not built yet, or that fails on inputs the repo doesn't satisfy yet. Move that wiring to the task
+   that makes it pass, and say so in DEVIATIONS.
+4. **No silent fallbacks.** If you degrade on a read failure (empty set, skip, default), the degradation
+   must show up as a non-gating finding or message naming the source. Silent degradation hides corruption.
+5. **Scope authority to the resource.** A lock, claim or permission for resource A must not grant anything on
+   resource B. Test the cross case (holder of A acting on B → denied).
+6. **Prove the test guards the code.** For a guard, lock or validation, briefly remove the protection and
+   confirm the test goes red, then restore it. Mention it in your report.
+7. **Never touch this checkout's shared state from tests.** Commands that write plan state resolve the real
+   git common dir that every sibling worktree shares. Test them against a temp repo only.
+8. **State the contract for anything another task consumes.** File format, JSON keys, exit codes and flag
+   syntax go in NOTES FOR NEXT WAVES exactly, not paraphrased.
+9. **Keep out-of-write-set edits minimal and reported.** If you must touch a file outside your write set,
+   make the smallest change, name it in DEVIATIONS with the reason, and check it isn't a hot file another
+   task in your wave owns (see the plan's Merge points).
+
 ## Cost discipline
 - **Report once.** Your final message is the report. Don't send progress updates or re-report state that hasn't
   changed; each extra message costs the orchestrator a full context re-read.

@@ -4,6 +4,21 @@ How to drive the [implementation plan](../plans/2026-09-25-design-plan-workflows
 the procedure the orchestrator actually used for waves 1–5. Workers never read this file: they get the
 [worker brief](worker-brief.md). Only the orchestrator commits to `main`.
 
+## Kickoff prompt for a fresh orchestrator session
+
+Start a NEW Claude Code session in the repo root, then paste:
+
+> You are the orchestrator for sub-project 2 of swift-harness. Read, in order and nothing else up front:
+> `docs/handoffs/2026-09-25-subproject-2.md` (RESUME header only), the plan's RESUME header
+> (`docs/plans/2026-09-25-design-plan-workflows-plan.md`), this runbook
+> (`docs/handoffs/subproject-2-orchestrator-runbook.md`) in full, and the LAST wave section of
+> `docs/handoffs/subproject-2-interfaces.md`. Then run the "Resume from cold" checks and drive the next wave
+> with the wave loop. Workers get `docs/handoffs/worker-brief.md`. Check every report against the report
+> checklist before merging. Stay thin: workers read the plan and spec; you read reports, merge, gate and
+> checkpoint. Merges stay on local `main`. After each wave, refresh the backup with
+> `git push origin main:refs/heads/backup/subproject-2-wave-<N>`. Only push `origin/main` if I say so. Stop
+> and ask me before the acceptance waves (26–28), which need me present.
+
 ## Resume from cold
 
 1. Read the plan's RESUME header: the status, the next wave, and open items.
@@ -90,6 +105,7 @@ Read every report against this list. Each item caught a real defect in waves 1�
 | Check | What it caught |
 |---|---|
 | **Enforcement lands with its first passing input.** Does the task switch on a check, hook or gate that calls something not built yet? | a stamped `commit-msg` hook calling a flag that didn't exist yet (it would have failed every commit in bootstrapped repos); the calibration gate that would have been red for 6 waves |
+| **Worker brief pitfalls 1–9** were added after wave 5. Still check each report against them; the brief lowers the rate, it doesn't make it zero. |  |
 | **Types at trust boundaries are closed.** Look for `String` where an enum exists, or `.other(String)` / `.unknown` catch-alls. A parser of hand-written docs may keep unknowns *for a lint to report*; data written by workers or read by a gate must fail loudly | the ledger gate typed as `String`; an open `TaskStatus` |
 | **Scope of authority.** Guards, locks and ownership: can holder A act on B's resource? | any plan's lock could write any plan's design doc |
 | **Deviations outside the write set.** Are they justified, and do they collide with a later task's file? Update the plan's Merge points if they do | `HookRunner.swift`, `Rule.swift`, `standards.md` rule-index rows |
