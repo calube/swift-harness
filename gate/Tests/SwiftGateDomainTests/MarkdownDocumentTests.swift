@@ -173,6 +173,89 @@ struct MarkdownDocumentTests {
     #expect(risks.links[1].destination == "https://www.rfc-editor.org/rfc/rfc9110")
     #expect(!risks.links[1].isRelative)
   }
+
+  @Test(
+    "CRLF frontmatter parses the same keys and values as its LF twin — catches CRLF frontmatter being silently dropped"
+  )
+  func crlfFrontmatterParsesLikeLF() {
+    let lf = """
+      ---
+      status: approved
+      area: checkout
+      tier: standard
+      ---
+
+      # Doc
+      """
+    let crlf = lf.replacingOccurrences(of: "\n", with: "\r\n")
+    let lfDocument = MarkdownDocument.parse(lf)
+    let crlfDocument = MarkdownDocument.parse(crlf)
+    #expect(crlfDocument.frontmatter["status"] == "approved")
+    #expect(crlfDocument.frontmatter["area"] == "checkout")
+    #expect(crlfDocument.frontmatter["tier"] == "standard")
+    #expect(crlfDocument == lfDocument)
+  }
+
+  @Test(
+    "CRLF headings, fences, tables, bullets and links parse to the same structure as their LF twin — catches every construct comparing a line against a bare '---'/'#'/backtick that still carries \\r"
+  )
+  func crlfConstructsParseLikeLF() throws {
+    let lf = """
+      # Title
+
+      ## Module kinds
+
+      | Module | Kind |
+      |---|---|
+      | Foo | core |
+
+      - req-one-two: first requirement [ev-one]
+      - plain bullet
+
+      ```mermaid
+      flowchart TD
+        A --> B
+      ```
+
+      See [the playbook](../playbook.md).
+      """
+    let crlf = lf.replacingOccurrences(of: "\n", with: "\r\n")
+    let lfDocument = MarkdownDocument.parse(lf)
+    let crlfDocument = MarkdownDocument.parse(crlf)
+    #expect(crlfDocument == lfDocument)
+
+    let moduleKinds = try #require(crlfDocument.section(anchor: "module-kinds"))
+    #expect(moduleKinds.tables.first?.header == ["Module", "Kind"])
+    #expect(moduleKinds.fences.first?.mermaidDiagramType == "flowchart")
+    #expect(moduleKinds.bullets.first?.id == "req-one-two")
+    #expect(moduleKinds.links.first?.destination == "../playbook.md")
+  }
+
+  @Test(
+    "a file mixing LF and CRLF line endings parses every line consistently — catches a partial fix that only handles one terminator"
+  )
+  func mixedLineEndingsParseConsistently() throws {
+    let text =
+      "## Section One\r\n\r\nFirst line.\r\nSecond line.\n\n## Section Two\n\n- req-mixed-endings: bullet under an LF heading\r\n"
+    let document = MarkdownDocument.parse(text)
+    let one = try #require(document.section(anchor: "section-one"))
+    #expect(one.proseWordCount == 4)
+    let two = try #require(document.section(anchor: "section-two"))
+    #expect(two.bullets.first?.id == "req-mixed-endings")
+  }
+
+  @Test(
+    "a lone '\\r' inside a line is kept as content, not read as a line break — catches an over-eager fix that splits on any carriage return"
+  )
+  func loneCarriageReturnKeptAsContent() throws {
+    let text = "## Section\n\n- req-lone-cr: before\rafter\n"
+    let document = MarkdownDocument.parse(text)
+    let section = try #require(document.section(anchor: "section"))
+    #expect(section.bullets.count == 1)
+    let bullet = try #require(section.bullets.first)
+    #expect(bullet.id == "req-lone-cr")
+    #expect(bullet.remainder == "before\rafter")
+  }
 }
 
 @Suite("Design document")
