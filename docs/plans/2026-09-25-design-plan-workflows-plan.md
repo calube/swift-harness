@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–9 merged on local main (1–8 also on origin/main), push tier GREEN (1114 tests). Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–10 merged on local main (1–8 also on origin/main), push tier GREEN (1167 tests). Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 10 — plan-lint-coverage-and-sizing, plan-schedule-waves, prose-rules-and-command. Follow the runbook's wave loop.
+Next action: wave 11 — context-pack-command, design-lint-command, docs-lint-command. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: Artifact `db` call shape (design-render-design-page pre-step); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
@@ -351,8 +351,8 @@ flowchart LR
 ### `plan-lint-graph-and-waves`
 - Deps: plan-schedule-waves, plan-lint-coverage-and-sizing · Gate: push · estLines: 200
 - Writes: `D/Plan/PlanLintGraph.swift`, `TD/PlanLintGraphTests.swift`
-- Does: §9.2 DAG, gate ≥ test tier (the coverage task's mapping), wave disjointness, waves = schedule, hot-file warning.
-- Tests: cycle → error · hand-edited waves → error — catches ledger tampering · overlap inside a wave → error · `fast` gate on a T2 test → error · path in 3 tasks → warning.
+- Does: §9.2 DAG, gate ≥ test tier (the coverage task's mapping), wave disjointness, waves = schedule, hot-file warning, §9.3 single-dependent chain within one module → warning (moved here from the coverage task: it needs the whole DAG); resolves `modulesTouched` and the worker pack for `sizeFindings`.
+- Tests: cycle → error · hand-edited waves → error — catches ledger tampering · overlap inside a wave → error · `fast` gate on a T2 test → error · path in 3 tasks → warning · a→b→c chain in one module → warning.
 
 ### `probe-builds-scratch-package`
 - Deps: probe-diagnostic-verdicts, evidence-reuse-cache-store, cli-subcommand-stubs · Gate: push + one recorded iOS-simulator probe run · estLines: 320

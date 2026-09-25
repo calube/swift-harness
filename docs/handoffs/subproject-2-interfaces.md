@@ -367,3 +367,37 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 - `EvidenceCacheStore(home:lock:timeout:)`: `record`, `recordVerdict`, `markReused`, `markVerdictReused`,
   `tombstone`, `contents(of: EvidenceCacheBucket) -> EvidenceCacheContents{claims, verdicts, tombstones,
   findings}`. A corrupt line is a minor `evidence-cache.corrupt-line` finding naming the file, never dropped.
+
+## Wave 10
+
+**Plan-lint coverage and sizing** (`D/Plan/PlanLintCoverage.swift`), pure
+- `uncoveredIDs(design:tasks:)`, `coverageFindings(design:tasks:designPath:)`, `minimumGate(for: Tier) -> CheckTier`
+  (total over all four tiers; T0 and T1 → `fast`, T2 → `push`, T3 → `ready`), `testTiers(design:) -> [String: Tier]`,
+  `gateFindings(task:testTiers:)`, `sizeFindings(task:modulesTouched:workerPack:bounds: PlanConfig)`.
+- `sizeFindings` takes `modulesTouched: Set<String>` and `workerPack: ContextPack?` already resolved;
+  `plan-lint-graph-and-waves` resolves them from write sets and the module graph. Two modules pass only as
+  `X` + `XLive`.
+- Rule ids, `major` unless noted: `plan-lint.uncovered-requirement`, `.gate-too-weak`, `.est-lines-high`,
+  `.est-lines-low` (`minor`), `.too-many-modules`, `.too-many-tests`, `.pack-over-budget`. Bounds from `PlanConfig`.
+- §9.3's "single-dependent chain within one module" warning is NOT here: it needs the whole DAG, so it moved to
+  `plan-lint-graph-and-waves`.
+
+**`plan-schedule`** (`D/Plan/PlanSchedule.swift`, `C/Commands/PlanScheduleCommand.swift`)
+- `PlanSchedule.schedule(tasks: [LedgerTask], maxParallel: Int) -> Result<[[String]], PlanSchedule.ScheduleError>`;
+  `ScheduleError.cycle(ids:)` / `.missingDependency(task:dependency:)`. Deterministic: sorted by id, input order
+  ignored. Overlap uses `WriteSet`'s own rules.
+- CLI: `swiftgate plan-schedule <ledger>` (required path; a top-level hyphenated command, not `plan schedule`).
+  Reads a full ledger via `LedgerJSON.decode`, ignores its `waves`, recomputes from `tasks` + `maxParallel`.
+  Exit 0 with waves, 1 on cycle or missing dependency (message names the ids), 2 unreadable/malformed.
+  `--json` keys: `command, verdict, ledger, waves?, cycle?, missingDependencyTask?, missingDependencyOn?, message`.
+
+**`prose`** (`D/Prose/ProseRules.swift`, `C/Commands/ProseCommand.swift`)
+- `swiftgate prose <files…> [--json]`. `ProseRules.check(_:file:sentenceCeiling:)`. Exit 0 clean, 1 findings,
+  2 unreadable file or no files. `--json` is `RunReport`.
+- Rule ids, all `major`: `prose.adverb`, `.em-dash`, `.number-word`, `.passive-voice`, `.filler`, `.jargon`,
+  `.sentence-length`. Only `[docs] sentence_ceiling` is config; word lists are constants.
+- Passive voice = be-verb, optional modifier, then a listed irregular participle or an `-ed` word; state words and
+  `un…ed` are exempt; get-passives are missed.
+- Reads prose through `MarkdownDocument.proseLines` (line-numbered, skips code, inline code, tables, diagrams,
+  HTML comments, frontmatter). Reuse it; don't add a markdown reader.
+- Not wired into any tier or hook yet; the repo's docs don't pass. `plugin-docs-pass-docs-lint-and-prose` wires it.
