@@ -59,7 +59,19 @@ Before calling the change done, run `"$SG" prove --json`: in a scratch worktree 
 production source to the merge base with `origin/main` (`--base` to change) and requires each new
 or changed **host** test to fail on an assertion; compile-only failures count as not proven. T2
 snapshot tests aren't covered: check their red by hand in step 3. A test it reports
-as passing without the change is a test that catches nothing; fix the test, not the gate. For more
+as passing without the change is a test that catches nothing; fix the test, not the gate.
+
+Two shapes `prove` rejects even though the test is useful:
+
+- **A boundary test on its own.** A test that pins unchanged behavior at a boundary (a 120-character
+  fact is kept) passes with the change reverted, but `mutate` needs it to kill `>` → `>=`. Put it
+  in the same test as an assertion that fails on the revert (a 121-character fact is cut), so both
+  sides of the boundary are one proven test.
+- **An assertion that calls API the change adds.** The reverted tree doesn't compile, so `prove`
+  reports `prove.compile-only`. Assert with literals (`120`, `"Too long"`), not the new constant or
+  helper, so the test compiles against both trees.
+
+For more
 confidence on concurrency-heavy tests, `"$SG" stress --json` runs new and changed host tests 10 times (`--n`), each as a separate
 parallel process so order varies (`P8`).
 

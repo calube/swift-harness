@@ -108,7 +108,7 @@ Also changed on the SampleApp: `8c14d73` (the `emit` test above) and `18f5d81` (
 
 - Fixed since: `impact.untested-change` fired on formatting-only source changes (`18f5d81` was RED
   on push). `impact` now skips a file whose tokens match the merge base.
-- Proving boundary tests: a test that only pins unchanged behavior at a boundary (a fact of exactly
+- Fixed since (tdd skill § 5): proving boundary tests: a test that only pins unchanged behavior at a boundary (a fact of exactly
   120 characters is kept) passes with the change reverted, so `prove` rejects it on its own, even
   though `mutate` needs it to kill `>` → `>=`. Asserting both sides of the boundary in one test
   satisfies both checks. A test that calls API the change adds is `prove.compile-only`, so tests
