@@ -106,9 +106,8 @@ Also changed on the SampleApp: `8c14d73` (the `emit` test above) and `18f5d81` (
 
 ## Known gaps, not fixed
 
-- `impact.untested-change` fires on formatting-only source changes. `18f5d81` is RED on push for
-  that reason. The escape hatch is `.harness/impact-exemptions.json`, and a token-level "no
-  semantic change" check would remove the noise.
+- Fixed since: `impact.untested-change` fired on formatting-only source changes (`18f5d81` was RED
+  on push). `impact` now skips a file whose tokens match the merge base.
 - Proving boundary tests: a test that only pins unchanged behavior at a boundary (a fact of exactly
   120 characters is kept) passes with the change reverted, so `prove` rejects it on its own, even
   though `mutate` needs it to kill `>` → `>=`. Asserting both sides of the boundary in one test

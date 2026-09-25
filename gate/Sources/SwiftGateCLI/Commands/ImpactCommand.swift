@@ -26,7 +26,7 @@ enum ImpactCheck {
   static func run(
     root: URL, git: any Git, base: String, scopes: any ModuleScopeResolving
   ) async -> StaticCheckOutcome {
-    let changed: [String]
+    var changed: [String]
     do throws(GitError) {
       guard let mergeBase = try await git.mergeBase("HEAD", base) else {
         return .blocked(reason: "HEAD and \(base) share no history; pass --base <ref>")
@@ -36,6 +36,10 @@ enum ImpactCheck {
       changed = try await git.changedFiles(since: mergeBase)
         .filter { $0.hasPrefix(prefix) }
         .map { String($0.dropFirst(prefix.count)) }
+      let triviaOnly = try await triviaOnlyChanges(
+        ImpactAnalysis.sourcesNeedingTests(changedFiles: changed, scopes: scopes),
+        root: root, git: git, mergeBase: mergeBase, prefix: prefix)
+      changed.removeAll { triviaOnly.contains($0) }
     } catch {
       return .blocked(reason: "git: \(error)")
     }
@@ -62,6 +66,23 @@ enum ImpactCheck {
     } catch {
       return .blocked(reason: "impact: \(error)")
     }
+  }
+
+  /// Sources whose working-tree text differs from the merge base only in whitespace and comments.
+  /// A file missing on either side (added, deleted) or unreadable is a real change.
+  private static func triviaOnlyChanges(
+    _ paths: [String], root: URL, git: any Git, mergeBase: String, prefix: String
+  ) async throws(GitError) -> Set<String> {
+    guard !paths.isEmpty else { return [] }
+    let baseline = try await git.contents(of: paths.map { prefix + $0 }, at: mergeBase)
+    return Set(
+      paths.filter { path in
+        guard let old = baseline[prefix + path],
+          let data = FileManager.default.contents(atPath: root.appending(path: path).path)
+        else { return false }
+        return TriviaEquivalence.isTriviaOnlyChange(
+          from: old, to: String(decoding: data, as: UTF8.self))
+      })
   }
 }
 

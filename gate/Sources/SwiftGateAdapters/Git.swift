@@ -20,6 +20,10 @@ public protocol Git: Sendable {
   /// index.
   func stagedContents(of paths: [String]) async throws(GitError) -> [String: String]
 
+  /// Each path's content in the commit `ref` names, decoded as UTF-8. Paths absent from that
+  /// commit are omitted.
+  func contents(of paths: [String], at ref: String) async throws(GitError) -> [String: String]
+
   /// Git blob hash of each file's current working-tree content. Paths that do not exist are
   /// omitted.
   func contentHashes(of paths: [String]) async throws(GitError) -> [String: String]

@@ -184,6 +184,32 @@ struct LiveGitTests {
   }
 
   @Test(
+    "contents at a ref are that commit's blobs in one git process, omitting paths absent there — catches impact comparing against the working tree or failing on an added file"
+  )
+  func contentsAtRef() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("A.swift", "base a\n")
+    try repo.write("Sub/Ü b.swift", "base ü\n")
+    let base = try await repo.commitAll("base")
+    try repo.write("A.swift", "head a\n")
+    try repo.write("New.swift", "new\n")
+    _ = try await repo.commitAll("head")
+    try repo.write("A.swift", "working a\n")
+    let recorder = RecordingProcessRunner(base: repo.runner)
+    let adapter = LiveGit(runner: recorder, repositoryRoot: repo.root.path)
+
+    let contents = try await adapter.contents(
+      of: ["A.swift", "Sub/Ü b.swift", "New.swift"], at: base)
+
+    #expect(contents == ["A.swift": "base a\n", "Sub/Ü b.swift": "base ü\n"])
+    #expect(recorder.invocations.count == 1)
+    await #expect(throws: GitError.invalidRef("-x")) {
+      try await adapter.contents(of: ["A.swift"], at: "-x")
+    }
+  }
+
+  @Test(
     "user diff config cannot change parsed output — catches noprefix/color/external breaking parsing"
   )
   func hostileDiffConfig() async throws {

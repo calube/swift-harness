@@ -117,6 +117,20 @@ public enum ImpactAnalysis {
     }
   }
 
+  /// The changed files ``evaluate(changedFiles:scopes:exemptions:)`` would hold to the rule.
+  public static func sourcesNeedingTests(
+    changedFiles: [String], scopes: any ModuleScopeResolving
+  ) -> [String] {
+    changedFiles.filter { path in
+      guard let scope = scopes.scope(forFile: path) else { return false }
+      return needsTestChange(path: path, scope: scope)
+    }
+  }
+
+  private static func needsTestChange(path: String, scope: ModuleScope) -> Bool {
+    testedModule(of: scope) == nil && needsTests(scope.role) && path.hasSuffix(".swift")
+  }
+
   public static func evaluate(
     changedFiles: [String], scopes: any ModuleScopeResolving, exemptions: ImpactExemptions
   ) throws(ReportContractViolation) -> ImpactResult {
@@ -126,7 +140,7 @@ public enum ImpactAnalysis {
       guard let scope = scopes.scope(forFile: path) else { continue }
       if let tested = testedModule(of: scope) {
         testedModules.insert(tested)
-      } else if needsTests(scope.role), path.hasSuffix(".swift") {
+      } else if needsTestChange(path: path, scope: scope) {
         sourcesByModule[scope.module, default: []].append(path)
       }
     }

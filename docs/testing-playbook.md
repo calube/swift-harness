@@ -103,9 +103,9 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P9. A changed Core, Client or Live file comes with a test change in the same module.**
 - **Do:** change `<Module>Tests` in the same commit range, or file an exemption with a reason in `.harness/impact-exemptions.json`:
   ```json
-  { "schema": 1, "exemptions": [ { "module": "GameEngine", "reason": "doc comments only" } ] }
+  { "schema": 1, "exemptions": [ { "module": "GameEngine", "reason": "renamed a private helper" } ] }
   ```
-  An entry names exactly one of `module` or `path`, and a reason.
+  An entry names exactly one of `module` or `path`, and a reason. A file whose tokens match the merge base (only whitespace and comments changed, as after `swift format`) needs neither. A file that uses `#line`, `#column` or `#sourceLocation`, or doesn't parse, always counts as changed.
 - **Tell:** a logic change with no test diff. UI-flow (T3) test changes don't count.
 - **Enforced by:** `swiftgate impact` (compares against the merge base with `--base`, default `origin/main`) rule `impact.untested-change` · **Source:** incident: none yet.
 

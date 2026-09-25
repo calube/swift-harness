@@ -63,30 +63,47 @@ public struct LiveGit: Git, DiffReading {
   }
 
   public func stagedContents(of paths: [String]) async throws(GitError) -> [String: String] {
-    guard !paths.isEmpty else { return [:] }
-    // `cat-file --batch` reads one object name per line, so a path with a newline cannot be named.
-    if let bad = paths.first(where: { $0.contains("\n") }) {
+    // `:<path>` names the index entry, root-relative.
+    let blobs = try await catFileBatch(paths.map { ":\($0)" })
+    var contents: [String: String] = [:]
+    for (path, blob) in zip(paths, blobs) {
+      guard let blob else {
+        throw .commandFailed(
+          arguments: ["cat-file", "--batch", ":\(path)"], status: .exited(0),
+          stderr: "\(path) is not in the index")
+      }
+      contents[path] = String(decoding: blob, as: UTF8.self)
+    }
+    return contents
+  }
+
+  public func contents(of paths: [String], at ref: String) async throws(GitError) -> [String:
+    String]
+  {
+    try Self.validate(ref: ref)
+    let blobs = try await catFileBatch(paths.map { "\(ref):\($0)" })
+    var contents: [String: String] = [:]
+    for (path, blob) in zip(paths, blobs) {
+      if let blob { contents[path] = String(decoding: blob, as: UTF8.self) }
+    }
+    return contents
+  }
+
+  /// One `cat-file --batch` process for every object name; `nil` where git found no object.
+  private func catFileBatch(_ names: [String]) async throws(GitError) -> [Data?] {
+    guard !names.isEmpty else { return [] }
+    // `cat-file --batch` reads one object name per line, so a name with a newline cannot be sent.
+    if let bad = names.first(where: { $0.contains("\n") }) {
       throw .unparseableOutput(command: "cat-file", detail: "path contains a newline: \(bad)")
     }
-    // `:<path>` names the index entry, root-relative.
-    let request = paths.map { ":\($0)\n" }.joined()
+    let request = names.map { "\($0)\n" }.joined()
     let arguments = ["cat-file", "--batch"]
     let output = try await execute(arguments, standardInput: Data(request.utf8))
     guard output.status.isSuccess else { throw Self.failure(arguments, output) }
     if output.stdout.truncated {
       throw .unparseableOutput(command: "cat-file", detail: "output exceeded the capture cap")
     }
-    let blobs = try CatFileBatch.blobs(in: output.stdout.bytes, requested: paths.count)
-    var contents: [String: String] = [:]
-    for (path, blob) in zip(paths, blobs) {
-      guard let blob else {
-        throw .commandFailed(
-          arguments: ["cat-file", "--batch", ":\(path)"], status: output.status,
-          stderr: "\(path) is not in the index")
-      }
-      contents[path] = String(decoding: blob, as: UTF8.self)
-    }
-    return contents
+    return try CatFileBatch.blobs(in: output.stdout.bytes, requested: names.count)
   }
 
   public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {

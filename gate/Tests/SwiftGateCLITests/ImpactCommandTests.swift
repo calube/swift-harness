@@ -92,6 +92,31 @@ struct ImpactCommandTests {
     #expect(report.findings.map(\.file) == ["Packages/Feed/Sources/FeedCore/Reducer.swift"])
   }
 
+  @Test(
+    "a source whose merge-base blob differs only in whitespace and comments needs no test change, a token change still does — catches swift format output going RED or a real edit hiding as formatting"
+  )
+  func triviaOnlyChanges() async throws {
+    let path = "Packages/Feed/Sources/FeedCore/Reducer.swift"
+    let base = "func isLong(_ s: String) -> Bool { s.count > 120 }\n"
+    let formatted =
+      "/// Long facts are cut.\nfunc isLong(_ s: String) -> Bool {\n  s.count > 120\n}\n"
+    let edited = "func isLong(_ s: String) -> Bool { s.count >= 120 }\n"
+    for (working, expected) in [(formatted, Verdict.green), (edited, .red)] {
+      let root = try makeRepository(["App/" + path: working])
+      defer { try? FileManager.default.removeItem(at: root) }
+      let git = FakeGit(
+        changed: ["App/" + path], mergeBase: "abc", prefix: "App/",
+        contentsAtRef: ["App/" + path: base])
+      let report = try StaticCheckReport.make(
+        runID: "r", durationMilliseconds: 1,
+        outcome: await ImpactCheck.run(
+          root: root.appending(path: "App", directoryHint: .isDirectory), git: git,
+          base: "origin/main", scopes: PathConventionModuleScopes()))
+      #expect(report.verdict == expected)
+      #expect(git.contentRefs == ["abc"])
+    }
+  }
+
   @Test("--base defaults to origin/main — catches impact silently diffing against nothing")
   func parsesBase() throws {
     let command = try #require(try SwiftGate.parseAsRoot(["impact"]) as? ImpactCommand)

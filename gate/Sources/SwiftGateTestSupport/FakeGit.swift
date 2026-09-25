@@ -23,6 +23,8 @@ public final class FakeGit: Git {
   private let addedSince: [AddedLines]
   private let revisions: [String: String]
   private let hashes: [String: String]
+  private let contentsAtRef: [String: String]
+  private let refReads = Mutex<[String]>([])
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
 
@@ -33,11 +35,15 @@ public final class FakeGit: Git {
   ///   - addedSince: what ``addedLines(since:)`` returns for any ref.
   ///   - revisions: what ``revision(_:)`` answers per ref; others are `nil`.
   ///   - contentHashes: what ``contentHashes(of:)`` answers per path; others are omitted.
+  ///   - contentsAtRef: what ``contents(of:at:)`` answers per path for any ref; others are
+  ///     omitted.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
     prefix: String = "", addedSince: [AddedLines] = [], revisions: [String: String] = [:],
-    contentHashes: [String: String] = [:], failure: GitError? = nil
+    contentHashes: [String: String] = [:], contentsAtRef: [String: String] = [:],
+    failure: GitError? = nil
   ) {
+    self.contentsAtRef = contentsAtRef
     self.revisions = revisions
     self.hashes = contentHashes
     self.prefix = prefix
@@ -50,6 +56,9 @@ public final class FakeGit: Git {
 
   /// Refs passed to ``changedFiles(since:)``, in call order.
   public var changedSinceRefs: [String] { changedSince.withLock { $0 } }
+
+  /// Refs passed to ``contents(of:at:)``, in call order.
+  public var contentRefs: [String] { refReads.withLock { $0 } }
 
   /// Paths passed to ``stagedContents(of:)``, in call order.
   public var contentReads: [String] { reads.withLock { $0 } }
@@ -86,6 +95,14 @@ public final class FakeGit: Git {
       contents[path] = file.content
     }
     return contents
+  }
+
+  public func contents(of paths: [String], at ref: String) async throws(GitError) -> [String:
+    String]
+  {
+    if let failure { throw failure }
+    refReads.withLock { $0.append(ref) }
+    return contentsAtRef.filter { paths.contains($0.key) }
   }
 
   public func contentHashes(of paths: [String]) async throws(GitError) -> [String: String] {
