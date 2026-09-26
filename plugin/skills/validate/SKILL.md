@@ -1,6 +1,6 @@
 ---
 name: validate
-description: This skill should be used to produce ready-for-review evidence for a swift-harness Swift change — run swiftgate check --tier ready, read the run report, and emit a paste-ready PR body block with verdicts, test counts, durations and anything not run. Use when the user says "validate", "prove this is ready", "evidence for the PR", "write the testing section", "fill in how this was tested", or before opening or marking a pull request ready.
+description: This skill should be used to produce ready-for-review evidence for a swift-harness Swift change — run swiftgate check --tier ready, read the run report, and emit a paste-ready PR body block with verdicts, test counts, durations and anything not run. Use when the user says "validate", "prove this is ready", "evidence for the PR", "write the testing section", "fill in how this was tested", "summarise the tests for the PR description", or before opening or marking a pull request ready.
 ---
 
 # Validate

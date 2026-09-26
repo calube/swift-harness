@@ -6,9 +6,10 @@ and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interface
 Rehearsals 26 (install passed), 27 (the API was refuted) and 28 (design reached review, stopped at revise, nothing published)
 are merged. Their frame answers are labelled "orchestrator-answered rehearsal". The open items are in the interfaces note, Wave 28.
 Step 3: the review is done, in docs/handoffs/subproject-2-review.md (1 blocker, 12 fix tasks in 4 waves, 7 user decisions).
-Fix wave 1 is in flight (opus): design-lint-ids-unique-repo-wide, plan-lint-gates-on-covers-and-design-drift and
-evidence-check-binds-citations-to-sources, each in ../swift-harness-<task>, with the report in its last commit body.
-The lockfile fix is also still in flight. Then fix waves 2–4 from the review doc.
+Fix wave 1 and the lockfile fix are merged (push tier GREEN, 1499 tests). The ready tier is BLOCKED only because mutate's
+baseline trips LiveProcessRunnerTests; a fix for that and for mutate's build fan-out comes next, then fix waves 2–4.
+DECIDED by the user (2026-09-26): an Xcode pin mismatch ends `test` and `check` tiers BLOCKED with doctor.xcode-pin
+(the evals case xcode-pin-mismatch expects BLOCKED). It's queued as a task after the first fix wave 2 merge.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
   2. DONE (rehearsal): acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:

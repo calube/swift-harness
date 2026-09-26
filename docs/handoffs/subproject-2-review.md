@@ -206,7 +206,7 @@ Within this wave the three tasks write disjoint files.
 
 ### Needs the user's decision
 
-1. **Xcode pin mismatch (known 14).** Options:
+1. **Xcode pin mismatch (known 14). DECIDED 2026-09-26: the user chose (a), block.** Options:
    - (a) The mismatch fails t1 and t2.
    - (b) It warns only (current behaviour).
    - (c) It fails only at the push tier.
