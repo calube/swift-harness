@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-25",
+  "suite": "runner-spike",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "judgeModel": "haiku",
+    "claudeVersion": "2.1.282",
+    "harnessCommit": "0c53f13",
+    "xcode": "26.2"
+  },
+  "answers": {
+    "sandboxRunsSwift": false,
+    "scaffoldCopiesApp": true,
+    "traceShowsSkillAndAgent": true
+  },
+  "decision": {
+    "routing": "claude plugin eval",
+    "nonSwiftCases": "claude plugin eval",
+    "tdd": "thin runner",
+    "test-gate": "thin runner",
+    "validate": "thin runner"
+  },
+  "runs": [
+    {
+      "case": "routing",
+      "costUsd": 0.0,
+      "seconds": 0,
+      "result": "refused"
+    },
+    {
+      "case": "routing",
+      "costUsd": 0.44,
+      "seconds": 86,
+      "with": "1/1",
+      "without": "0/1"
+    },
+    {
+      "case": "routing",
+      "costUsd": 0.42,
+      "seconds": 122,
+      "with": "1/1"
+    },
+    {
+      "case": "routing",
+      "costUsd": 0.54,
+      "seconds": 109,
+      "with": "1/1"
+    },
+    {
+      "case": "tdd",
+      "costUsd": 0.37,
+      "seconds": 108,
+      "score": 0.67,
+      "judge": "FAIL"
+    },
+    {
+      "case": "routing",
+      "costUsd": 0.19,
+      "seconds": 38,
+      "with": "1/1"
+    }
+  ],
+  "totalCostUsd": 1.96,
+  "harnessDefects": [
+    {
+      "id": "shim-locale-hash",
+      "layer": "gate",
+      "summary": "bin/swiftgate cache key depends on locale via sort -z"
+    }
+  ]
+}
