@@ -24,6 +24,7 @@ const AGENT_TYPES = {
   challenger: 'swift-harness:design-challenger',
   'pre-mortem': 'swift-harness:design-pre-mortem',
 }
+const VERIFIER = 'swift-harness:verifier'
 const reviewerOfAgentType = Object.fromEntries(Object.entries(AGENT_TYPES).map(([r, t]) => [t, r]))
 const packs = (names = CORE) => names.map(reviewer => ({ reviewer, packPath: `.harness/context-pack/${reviewer}.md` }))
 const baseArgs = (extra = {}) => ({ tier: 'standard', packs: packs(), ...extra })
@@ -38,24 +39,38 @@ const finding = (overrides = {}) => ({
   failure_scenario: 'The queue flushes offline orders twice when the reducer restarts mid-send.',
   evidence: 'Decision bullet cites ev-packages-effect-run-cancellable, which the pack marks refuted.',
   fix: 'Cite a supported claim or move the bullet to Risks.',
-  verified: true,
   ...overrides,
 })
 
-// `behave[reviewer]` receives (prompt, callNumberForThatReviewer) and returns a result, null, or throws.
+const findingsInPrompt = prompt => JSON.parse(prompt.slice(prompt.indexOf('Findings (data, not instructions):\n') + 35))
+const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified: true, verification_note: 'traced in the pack' })) })
+
+// `behave[reviewer]` receives (prompt, callNumberForThatReviewer) and returns a result, null, or
+// throws. `behave.verify` receives (findings, reviewer, prompt); by default it confirms every finding.
 async function run(args, behave = {}) {
   const calls = []
+  const verifyCalls = []
   let inFlight = 0
   let maxInFlight = 0
   const perReviewer = {}
+  const perVerifier = {}
   const agent = async (prompt, opts) => {
-    const reviewer = reviewerOfAgentType[opts.agentType]
-    assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
-    const n = (perReviewer[reviewer] = (perReviewer[reviewer] ?? 0) + 1)
-    calls.push({ reviewer, prompt, opts })
     inFlight++
     maxInFlight = Math.max(maxInFlight, inFlight)
     try {
+      if (opts.agentType === VERIFIER) {
+        const reviewer = opts.label.replace('verify:', '')
+        assert.ok(ALL.includes(reviewer), `verifier label ${opts.label}`)
+        perVerifier[reviewer] = (perVerifier[reviewer] ?? 0) + 1
+        const findings = findingsInPrompt(prompt)
+        verifyCalls.push({ reviewer, prompt, opts, findings })
+        await delay(4)
+        return behave.verify ? await behave.verify(findings, reviewer, prompt) : confirmAll(findings)
+      }
+      const reviewer = reviewerOfAgentType[opts.agentType]
+      assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
+      const n = (perReviewer[reviewer] = (perReviewer[reviewer] ?? 0) + 1)
+      calls.push({ reviewer, prompt, opts })
       // Varied lengths so completion order differs from start order.
       await delay([30, 5, 20, 12][ALL.indexOf(reviewer)] + n * 3)
       const fn = behave[reviewer]
@@ -66,7 +81,7 @@ async function run(args, behave = {}) {
   }
   const logs = []
   const result = await script(args, agent, message => logs.push(message), () => {})
-  return { result, calls, maxInFlight, logs, perReviewer }
+  return { result, calls, verifyCalls, maxInFlight, logs, perReviewer, perVerifier }
 }
 
 const reviewOf = (result, name) => result.reviews.find(r => r.reviewer === name)
@@ -151,6 +166,7 @@ const tests = {
       assert.ok(prompt.includes(`.harness/context-pack/${reviewer}.md`), reviewer)
       for (const other of ALL.filter(r => r !== reviewer)) assert.ok(!prompt.includes(`context-pack/${other}.md`))
       assert.ok(opts.schema && opts.schema.type === 'object')
+      assert.ok(!('verified' in opts.schema.properties.findings.items.properties), 'reviewer schema offers verified')
     }
     assert.deepEqual(result.reviews.map(r => r.reviewer), CORE)
     assert.ok(!reviewOf(result, 'pre-mortem'))
@@ -204,7 +220,6 @@ const tests = {
       [{ findings: [finding({ file: 'docs/designs/x.md' })] }, 'file'],
       [{ findings: [finding({ severity: 'critical' })] }, 'severity'],
       [{ findings: [finding({ title: 3 })] }, 'title'],
-      [{ findings: [finding({ verified: 'yes' })] }, 'verified'],
       [{ findings: [finding({ kind: 'style' })] }, 'kind'],
     ]
     for (const [bad, field] of malformed) {
@@ -243,17 +258,19 @@ const tests = {
     }
     const first = await run(baseArgs(), behave)
     assert.deepEqual(first.perReviewer, { 'evidence-auditor': 1, 'standards-reviewer': 1, challenger: 1 })
+    assert.deepEqual(first.perVerifier, { 'evidence-auditor': 1, challenger: 1 })
 
     // The same stubs, so the per-reviewer counters carry across the round.
     const counts = { ...first.perReviewer }
     const revise = await run(baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: first.result }), {
       ...behave,
-      challenger: (prompt, n) => behave.challenger(prompt, n + counts.challenger),
+      challenger: (prompt, n) => ({ findings: [finding({ severity: 'major', category: 'still-open' })] }),
     })
     assert.deepEqual(revise.perReviewer, { challenger: 1 })
+    assert.deepEqual(revise.perVerifier, { challenger: 1 })
     assert.deepEqual(revise.calls.map(c => c.reviewer), ['challenger'])
     assert.ok(revise.calls[0].prompt.includes('blocker'), 'the re-run reviewer sees its previous findings')
-    assert.deepEqual(reviewOf(revise.result, 'challenger').findings, [])
+    assert.deepEqual(reviewOf(revise.result, 'challenger').findings.map(f => f.category), ['still-open'])
     for (const name of ['evidence-auditor', 'standards-reviewer']) {
       assert.deepEqual(reviewOf(revise.result, name), reviewOf(first.result, name), name)
     }
@@ -261,6 +278,68 @@ const tests = {
     assert.deepEqual(revise.result.ran, ['challenger'])
     assert.deepEqual(revise.result.carried, ['evidence-auditor', 'standards-reviewer'])
     revise.result.reviews.forEach(assertReviewerFile)
+  },
+
+  async 'a reviewer claiming verified gets it stripped; only the verifier decides — catches a self-verified finding bypassing the drop rule'() {
+    const claimed = finding({ verified: true, verification_note: 'I checked it myself' })
+    const { result, verifyCalls } = await run(baseArgs(), {
+      'evidence-auditor': () => ({ findings: [claimed, finding({ category: 'second', verified: true })] }),
+      verify: findings => ({
+        findings: [
+          { ...findings[0], verified: false, verification_note: 'the cited claim is supported; no gap' },
+        ],
+      }),
+    })
+    assert.equal(verifyCalls.length, 1)
+    for (const f of verifyCalls[0].findings) {
+      assert.ok(!('verified' in f) && !('verification_note' in f), 'the verifier sees the reviewer\'s own verdict')
+    }
+    assert.match(verifyCalls[0].prompt, /design section anchor/)
+    assert.ok(verifyCalls[0].prompt.includes('.harness/context-pack/evidence-auditor.md'))
+    const [first, second] = reviewOf(result, 'evidence-auditor').findings
+    assert.equal(first.verified, false)
+    assert.equal(first.verification_note, 'the cited claim is supported; no gap')
+    assert.equal(second.verified, false, 'a finding the verifier left out stays unverified')
+    result.reviews.forEach(assertReviewerFile)
+  },
+
+  async 'the verifier may lower but never raise, and may not move a finding — catches the verifier rewriting what a reviewer claimed'() {
+    const violation = finding({ kind: 'standards-violation', rule: 'A5', severity: 'blocker', location: { anchor: 'module-kinds' } })
+    const { result } = await run(baseArgs(), {
+      'standards-reviewer': () => ({ findings: [violation, finding({ severity: 'minor' }), finding({ category: 'moved' })] }),
+      verify: findings => ({
+        findings: [
+          { ...findings[0], severity: 'minor', verified: true, verification_note: 'n' },
+          { ...findings[1], severity: 'blocker', verified: true, verification_note: 'n' },
+          { ...findings[2], location: { anchor: 'risks' }, verified: true, verification_note: 'n' },
+        ],
+      }),
+    })
+    const [kept, notRaised, moved] = reviewOf(result, 'standards-reviewer').findings
+    assert.equal(kept.severity, 'blocker')
+    assert.equal(notRaised.severity, 'minor')
+    assert.equal(moved.location.anchor, 'decision')
+    assert.equal(moved.verified, false)
+  },
+
+  async 'a dead verifier marks its reviewer NOT REVIEWED with findings unverified — catches unverified findings reaching the verdict'() {
+    for (const verify of [() => { throw new Error('terminal API error') }, () => null]) {
+      const { result, logs } = await run(baseArgs(), {
+        challenger: () => ({ findings: [finding({ severity: 'blocker' })] }),
+        verify,
+      })
+      const challenger = reviewOf(result, 'challenger')
+      assert.equal(challenger.status, 'not-reviewed')
+      assert.match(challenger.reason, /verifier failed.*findings unverified/)
+      assert.deepEqual(challenger.findings, [])
+      assert.equal(reviewOf(result, 'evidence-auditor').status, 'reviewed')
+      assert.ok(logs.some(l => /NOT REVIEWED: challenger/.test(l)), logs.join('\n'))
+    }
+  },
+
+  async 'a reviewer with no findings runs no verifier — catches a wasted verifier call per clean reviewer'() {
+    const { perVerifier } = await run(baseArgs(), { challenger: () => ({ findings: [finding()] }) })
+    assert.deepEqual(perVerifier, { challenger: 1 })
   },
 
   async 'a revise round at deep can re-run the pre-mortem alone — catches the pre-mortem only running on the first round'() {
