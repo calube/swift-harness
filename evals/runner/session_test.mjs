@@ -2,11 +2,12 @@
 // Run: node evals/runner/session_test.mjs
 // Regressions caught: a grader file's escaped regex read with different backslashes than
 // `claude plugin eval` reads it, so the same case grades differently under the 2 runners; a
-// swiftgate command in the transcript counted as a RED verdict; tool_order passing when the
+// swiftgate command in the transcript counted as a RED verdict; a real RED missed because the
+// agent printed the report through a JSON filter; tool_order passing when the
 // `after` call never happened; a tool_used input_match matching a skill whose args only mention
 // the name; a command grader passing on a non-zero exit; the judge digest dropping hook feedback.
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,11 +46,18 @@ const run = (lines, extra = {}) => {
   return { messages: parseTrace(traceText), traceText, hooksText: '', diffText: '', createdFiles: [], workspace: tmpdir(), env: process.env, ...extra }
 }
 
-const redReport = JSON.stringify({ verdict: 'RED' }, null, 2).replace(/":/g, '" :')
-const blockedReport = redReport.replace('RED', 'BLOCKED')
+const history = (...runs) => {
+  const workspace = mkdtempSync(join(tmpdir(), 'session-history-'))
+  mkdirSync(join(workspace, '.harness/runs'), { recursive: true })
+  const lines = runs.map(([command, verdict]) => line({ command, durationMilliseconds: 1, findingCount: 0, runID: 'r', schemaVersion: 1, tiers: [{ tier: 'T1', verdict }], verdict }))
+  writeFileSync(join(workspace, '.harness/runs/history.jsonl'), lines.join('\n') + '\n')
+  return { workspace }
+}
 const command = use('Bash', { command: '"$SG" test --tier t1 --json # expect verdict RED' })
-assert.equal(gradeCode(red, run([command, result(redReport)])).passed, true, 'a RED report passes')
-assert.equal(gradeCode(red, run([command, result(blockedReport)])).passed, false, 'a BLOCKED report fails')
+assert.equal(gradeCode(red, run([command, result('RED')], history(['test t1', 'RED'], ['test t1', 'GREEN']))).passed, true, 'a RED run passes, however the agent printed it')
+assert.equal(gradeCode(red, run([command, result('"verdict" : "RED"')], history(['test t1', 'BLOCKED']))).passed, false, 'a BLOCKED run fails, whatever the transcript says')
+assert.equal(gradeCode(red, run([], history(['hook stop', 'RED'], ['test t1', 'GREEN']))).passed, false, "the stop hook's RED isn't the agent's")
+assert.equal(gradeCode(red, run([])).passed, false, 'no run history fails')
 
 const testEdit = use('Edit', { file_path: '/w/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift' })
 const coreEdit = use('Edit', { file_path: '/w/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift' })

@@ -1,8 +1,8 @@
 ---
-type: regex
-target: trace
-pattern: '\\"tier\\" : \\"T0\\"'
+type: command
 arm: with-only
+timeout_seconds: 30
+run: grep -E '"command":"check push".*"verdict":"(GREEN|RED)"' .harness/runs/history.jsonl
 ---
-A `swiftgate check` `--json` report reached the agent: only `check` runs T0. Matching the command
-text alone would pass a run where every call came back BLOCKED.
+The agent ran `swiftgate check --tier push` and it produced a verdict. swiftgate records each run in
+`.harness/runs/history.jsonl`, however the agent printed it, and a BLOCKED run doesn't count.
