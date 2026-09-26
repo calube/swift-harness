@@ -714,7 +714,8 @@ private enum SeedRunners {
   /// an optional `bounds.toml` fragment appended under `[plan]`, staged into a throwaway repo with
   /// the shared package above and a `plan.json`/`ledger.json` written where `plan claim` would —
   /// under the repo's own common dir, resolved through real git — then handed to `plan-lint`'s own
-  /// run function, never a re-implementation of its checks.
+  /// run function, never a re-implementation of its checks. An optional `amended.md` is committed
+  /// over the design after the plan is made from `design.md`, so a case can move the design on.
   /// Worker packs take their standards from `harnessRoot`, as they do in a consumer repository.
   static func planLint(caseDirectory: URL, harnessRoot: URL) async -> SeedRunOutcome {
     guard
@@ -764,6 +765,13 @@ private enum SeedRunners {
       try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
     } catch {
       return .blocked("could not write plan state: \(error)")
+    }
+    if let amended = try? String(
+      contentsOf: caseDirectory.appending(path: "amended.md"), encoding: .utf8)
+    {
+      guard repo.write(designPath, amended), await repo.git("add", "-A"),
+        await repo.git("commit", "-q", "-m", "amend")
+      else { return .blocked("could not commit amended.md") }
     }
 
     let result = await PlanLintRun.run(

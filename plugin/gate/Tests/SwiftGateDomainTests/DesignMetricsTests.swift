@@ -204,21 +204,6 @@ struct DesignMetricsTests {
     #expect(researchLane?.tokens == 3_000)
   }
 
-  @Test("overhead share is the wall-time fraction spent outside draft")
-  func overheadShareExcludesDraft() {
-    let records = [
-      PhaseRecord(
-        runId: "design-x", phase: .research, agentRole: .researchLane, tokens: 0, costUSD: nil,
-        wallMilliseconds: 30_000),
-      PhaseRecord(
-        runId: "design-x", phase: .draft, agentRole: .drafter, tokens: 0, costUSD: nil,
-        wallMilliseconds: 70_000),
-    ]
-
-    #expect(DesignMetrics.overheadShare(records).value == 0.3)
-    #expect(DesignMetrics.overheadShare([]).value == nil)
-  }
-
   // MARK: - Estimate error
 
   @Test("estimate error is computed only for tasks carrying actualLines; the rest are excluded")

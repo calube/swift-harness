@@ -37,7 +37,9 @@ private struct PlanLintRepo {
     os = "26.2"
     """
 
-  static func designText(status: String, extraRequirement: String? = nil) -> String {
+  static func designText(
+    status: String, extraRequirement: String? = nil, problem: String = "Orders are lost offline."
+  ) -> String {
     let extra = extraRequirement.map { "\n- \($0): a second behaviour nobody planned for" } ?? ""
     return """
       ---
@@ -48,7 +50,7 @@ private struct PlanLintRepo {
 
       ## Problem
 
-      Orders are lost offline.
+      \(problem)
 
       ## Requirements
 
@@ -146,7 +148,9 @@ private struct PlanLintRepo {
 
   /// Writes `plan.json` and `ledger.json` where `plan claim` would: under this repo's git common
   /// dir, resolved through real git.
-  func writePlanState(designSha: String?, ledger: Ledger) async throws {
+  func writePlanState(
+    designSha: String?, ledger: Ledger, clarifyChain: [PlanFile.ClarifyChainEntry] = []
+  ) async throws {
     let layout = try PlanStateLayout(commonDirectory: try await git.commonDirectory())
     let plan = try layout.plan(Self.slug)
     try FileManager.default.createDirectory(
@@ -155,7 +159,7 @@ private struct PlanLintRepo {
     let file = PlanFile(
       schemaVersion: 1, slug: Self.slug, design: Self.design, designSha: designSha,
       approval: designSha.map { .init(decision: .approve, designSha: $0, at: at) },
-      clarifyChain: [], tier: .standard, resume: "planned")
+      clarifyChain: clarifyChain, tier: .standard, resume: "planned")
     try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
   }
@@ -248,9 +252,9 @@ struct PlanLintCommandTests {
   }
 
   @Test(
-    "the approved revision is found behind a later status-only commit and a later content commit — catches reading only HEAD"
+    "a content commit past designSha gives a gating design-moved while coverage still reads the approved revision — catches a plan linted green against a design that moved on"
   )
-  func approvedRevisionFoundInHistory() async throws {
+  func committedAmendGivesDesignMoved() async throws {
     let repo = try await PlanLintRepo()
     defer { repo.remove() }
     try repo.write(
@@ -266,8 +270,60 @@ struct PlanLintCommandTests {
     #expect(found?.text == PlanLintRepo.designText(status: "approved"))
 
     let (report, _) = try await repo.lint()
-    #expect(report.findings == [])
-    #expect(report.verdict.exitCode == 0)
+    #expect(report.findings.map(\.ruleID) == ["plan-lint.design-moved"])
+    #expect(report.findings.first?.severity == .major)
+    #expect(report.findings.first?.file == PlanLintRepo.design)
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "the committed doc decides design-moved, never the working tree — catches an uncommitted revert hiding a committed amend"
+  )
+  func designMovedReadsTheCommittedDoc() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText), ledger: PlanLintRepo.ledger())
+    try repo.write(
+      PlanLintRepo.design,
+      PlanLintRepo.designText(status: "approved", extraRequirement: "req-orders-sync-in-order"))
+    try await repo.commit("amend")
+    try repo.write(PlanLintRepo.design, PlanLintRepo.designText(status: "approved"))
+
+    let (report, _) = try await repo.lint()
+    #expect(report.findings.map(\.ruleID) == ["plan-lint.design-moved"])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "HEAD at the end of a valid clarify chain from the approval is no design-moved, and a chain that skips HEAD is — catches a clarify forcing a replan, or a chain trusted without checking where it ends"
+  )
+  func clarifyChainEndIsAccepted() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    let approvedSha = DesignSha.of(PlanLintRepo.approvedText)
+    let clarified = PlanLintRepo.designText(
+      status: "approved", problem: "Orders are lost while the device is offline.")
+    try repo.write(PlanLintRepo.design, clarified)
+    try await repo.commit("clarify")
+    let link = PlanFile.ClarifyChainEntry(
+      fromSha: approvedSha, toSha: DesignSha.of(clarified),
+      at: Date(timeIntervalSince1970: 1_790_000_100))
+    try await repo.writePlanState(
+      designSha: approvedSha, ledger: PlanLintRepo.ledger(), clarifyChain: [link])
+
+    let (clean, _) = try await repo.lint()
+    #expect(clean.findings == [])
+    #expect(clean.verdict.exitCode == 0)
+
+    try repo.write(
+      PlanLintRepo.design,
+      PlanLintRepo.designText(
+        status: "approved", extraRequirement: "req-orders-sync-in-order",
+        problem: "Orders are lost while the device is offline."))
+    try await repo.commit("amend after the clarify")
+    let (moved, _) = try await repo.lint()
+    #expect(moved.findings.map(\.ruleID) == ["plan-lint.design-moved"])
   }
 
   @Test(

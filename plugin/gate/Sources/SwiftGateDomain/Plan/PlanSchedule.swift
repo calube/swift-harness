@@ -9,12 +9,16 @@ public enum PlanSchedule {
     case cycle(ids: [String])
     /// `task` depends on `dependency`, which isn't in the task set being scheduled.
     case missingDependency(task: String, dependency: String)
+    /// Two or more tasks share an id, given sorted and unique. Every other step keys tasks by id,
+    /// so nothing past this check can tell the copies apart.
+    case duplicateTaskID(ids: [String])
   }
 
   /// Schedules `tasks` into waves. Deterministic over any ordering of `tasks` or of a task's
   /// `deps`/`writeSet`: every step below sorts by task id before it branches, so only the ids,
   /// dependency edges and write sets — never array order — affect the result.
   ///
+  /// - Task ids must be unique, checked first: a hand-edited ledger can repeat one.
   /// - Every dependency must name another task in `tasks`, checked before any layering happens,
   ///   so a cycle and a missing dependency are never conflated.
   /// - A task's layer is one past the deepest layer of its deps (no deps → layer 0). Layering
@@ -26,6 +30,8 @@ public enum PlanSchedule {
   public static func schedule(
     tasks: [LedgerTask], maxParallel: Int
   ) -> Result<[[String]], ScheduleError> {
+    let duplicates = duplicateIDs(tasks)
+    guard duplicates.isEmpty else { return .failure(.duplicateTaskID(ids: duplicates)) }
     let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
 
     for task in tasks.sorted(by: { $0.id < $1.id }) {
@@ -70,6 +76,13 @@ public enum PlanSchedule {
       waves.append(contentsOf: buckets)
     }
     return .success(waves)
+  }
+
+  /// Every task id that appears more than once in `tasks`, sorted.
+  public static func duplicateIDs(_ tasks: [LedgerTask]) -> [String] {
+    var counts: [String: Int] = [:]
+    for task in tasks { counts[task.id, default: 0] += 1 }
+    return counts.filter { $0.value > 1 }.keys.sorted()
   }
 
   /// Finds one cycle in the subgraph `remaining` induces (edges point from a task to each of its

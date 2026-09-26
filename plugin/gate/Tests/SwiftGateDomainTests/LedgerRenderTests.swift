@@ -196,6 +196,27 @@ struct LedgerRenderTests {
     #expect(html.contains("task task-a depends on task-ghost, which isn"))
   }
 
+  @Test(
+    "a repeated task id renders an unavailable wave timeline naming it, and the DAG and overhead helpers don't trap — catches a hand-edited ledger crashing design-render"
+  )
+  func duplicateTaskIDRendersUnavailable() async {
+    await #expect(processExitsWith: .success) {
+      let tasks = [
+        LedgerRenderTests.task(id: "task-a", estLines: 10),
+        LedgerRenderTests.task(id: "task-a", estLines: 30),
+        LedgerRenderTests.task(id: "task-b", deps: ["task-a"]),
+      ]
+      let html = LedgerRenderTests.page(
+        ledger: LedgerRenderTests.ledger(tasks: tasks, waves: [["task-a", "task-a"], ["task-b"]]),
+        design: LedgerRenderTests.design(requirements: []))
+      #expect(html.contains("Wave timeline unavailable:"))
+      #expect(html.contains("task id task-a appears more than once"))
+      #expect(LedgerRender.dagMermaidSource(tasks: tasks).contains("-->"))
+      #expect(
+        LedgerRender.predictedOverheadShare(tasks: tasks, waves: [["task-a"], ["task-b"]]) != nil)
+    }
+  }
+
   // MARK: - Predicted overhead share
 
   @Test("an empty ledger's overhead share reads n/a on the rendered page, not a bogus number")

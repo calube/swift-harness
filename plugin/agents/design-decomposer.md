@@ -144,7 +144,12 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
 - `plan-lint.write-set-overlap`: make the write sets disjoint, or order the 2 tasks with `deps`.
 - `plan-lint.uncovered-requirement`: add the named `req-…` or `test-…` id to the `covers` of the
   task that delivers it, or add a task for it.
-- `plan-lint.gate-too-weak`: raise `gate` to the tier the task's tests need.
+- `plan-lint.gate-too-weak`: raise `gate` to the tier needed by the tests the task lists in
+  `tests` or covers in `covers`.
+- `plan-lint.unknown-test`: spell the `tests` id exactly as the design's test plan does.
+- `plan-lint.duplicate-task-id`: give each task its own id.
+- `plan-lint.design-moved`: the design changed after approval, and no task edit fixes that. List
+  it in `"unresolved"`.
 - `plan-lint.est-lines-high`: split the task along its tests.
 - `plan-lint.too-many-modules`: split the task per module, keeping an `X` plus `XLive` pair only.
 - `plan-lint.too-many-tests`: split the task so each covers at most the bound.

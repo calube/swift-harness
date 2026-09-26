@@ -14,11 +14,12 @@ struct PlanScheduleReport: Sendable, Equatable, Encodable {
   var cycle: [String]?
   var missingDependencyTask: String?
   var missingDependencyOn: String?
+  var duplicateTaskIDs: [String]?
   let message: String
 
   private enum CodingKeys: String, CodingKey {
     case command, verdict, ledger, waves, cycle, missingDependencyTask, missingDependencyOn,
-      message
+      duplicateTaskIDs, message
   }
 
   static func render(_ report: PlanScheduleReport, format: OutputFormat) -> String {
@@ -71,6 +72,13 @@ enum PlanScheduleRun {
         verdict: .red, ledger: ledgerPath, missingDependencyTask: task,
         missingDependencyOn: dependency,
         message: "task '\(task)' depends on unknown task '\(dependency)'")
+    case .failure(.duplicateTaskID(let ids)):
+      var report = blocked(
+        ledgerPath: ledgerPath,
+        message: "task id(s) \(ids.map { "'\($0)'" }.joined(separator: ", ")) appear more than "
+          + "once; fix the ledger before scheduling")
+      report.duplicateTaskIDs = ids
+      return report
     }
   }
 
@@ -90,7 +98,8 @@ struct PlanScheduleCommand: ParsableCommand {
       + "each layer a greedy id-ascending first fit so two tasks whose write sets overlap never "
       + "share a wave, capped at `maxParallel` tasks per wave. Exit 0 with the waves. Exit 1, "
       + "naming the task ids involved, on a dependency cycle or a dependency naming a task not "
-      + "in the ledger. Exit 2 when the file can't be read or isn't a valid ledger.json. "
+      + "in the ledger. Exit 2 when the file can't be read, isn't a valid ledger.json, or repeats a "
+      + "task id. "
       + "Ledgers live in the plan-state directory, not the working directory, so <ledger> is "
       + "required — a cwd default would silently read the wrong file, or none.")
 

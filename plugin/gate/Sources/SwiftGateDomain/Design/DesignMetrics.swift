@@ -397,9 +397,10 @@ public enum DesignMetrics {
       wallMilliseconds: records.reduce(0) { $0 + $1.wallMilliseconds })
   }
 
-  /// Share of total wall time spent outside `draft` (spec §9.3: "overhead share"). `nil` when
-  /// there's no wall time recorded at all.
-  public static func overheadShare(_ records: [PhaseRecord]) -> Rate {
+  /// Share of the recorded wall time spent outside `draft`. Not spec §9.3's overhead share, which
+  /// is a ledger figure (``LedgerRender/predictedOverheadShare(tasks:waves:)``). `nil` when there's
+  /// no wall time recorded at all.
+  public static func nonDraftWallShare(_ records: [PhaseRecord]) -> Rate {
     let total = records.reduce(0) { $0 + $1.wallMilliseconds }
     let draft = records.filter { $0.phase == .draft }.reduce(0) { $0 + $1.wallMilliseconds }
     return Rate(numerator: total - draft, denominator: total)

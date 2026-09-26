@@ -17,6 +17,8 @@ public enum PlanLintGraph {
   public static let singleDependentChainRuleID = "plan-lint.single-dependent-chain"
   public static let packMissingRuleID = "plan-lint.pack-missing"
   public static let packUnknownTaskRuleID = "plan-lint.pack-unknown-task"
+  public static let duplicateTaskIDRuleID = "plan-lint.duplicate-task-id"
+  public static let designMovedRuleID = "plan-lint.design-moved"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -51,6 +53,7 @@ public enum PlanLintGraph {
   /// Recomputes `ledger`'s schedule with ``PlanSchedule/schedule(tasks:maxParallel:)`` — never a
   /// second scheduler — and reports a cycle, a missing dependency, or a stored `waves` that
   /// disagrees with the recomputed one (a hand edit, or drift from an out-of-date decomposer run).
+  /// A repeated task id is reported instead of any of those, since no schedule exists to compare.
   public static func scheduleFindings(ledger: Ledger, ledgerPath: String)
     throws(ReportContractViolation) -> [Finding]
   {
@@ -69,6 +72,17 @@ public enum PlanLintGraph {
           message: "task \(task) depends on \(dependency), which isn't in the ledger",
           failureScenario: "a dependency on a task that doesn't exist can never be satisfied")
       ]
+    case .failure(.duplicateTaskID(let ids)):
+      var findings: [Finding] = []
+      for id in ids {
+        findings.append(
+          try Finding(
+            ruleID: duplicateTaskIDRuleID, severity: .major, file: ledgerPath, line: nil,
+            message: "task id \"\(id)\" appears more than once in the ledger",
+            failureScenario:
+              "two tasks sharing an id can't be scheduled, depended on or reported apart"))
+      }
+      return findings
     case .success(let recomputed):
       guard recomputed != ledger.waves else { return [] }
       return [
@@ -93,7 +107,8 @@ public enum PlanLintGraph {
   public static func writeSetOverlapFindings(ledger: Ledger, ledgerPath: String)
     throws(ReportContractViolation) -> [Finding]
   {
-    let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
+    let byID = Dictionary(
+      ledger.tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     var findings: [Finding] = []
     for wave in ledger.waves {
       for i in wave.indices {
@@ -157,9 +172,8 @@ public enum PlanLintGraph {
     throws(ReportContractViolation) -> [Finding]
   {
     let modulesByTask = Dictionary(
-      uniqueKeysWithValues: ledger.tasks.map {
-        ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph))
-      })
+      ledger.tasks.map { ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph)) },
+      uniquingKeysWith: { first, second in first.union(second) })
 
     var dependentsOf: [String: Set<String>] = [:]
     for task in ledger.tasks {
@@ -240,6 +254,39 @@ public enum PlanLintGraph {
     return findings
   }
 
+  // MARK: - Design drift (spec §5.4: plan-lint hashes the current doc and compares)
+
+  /// A `major` finding when the design as committed at HEAD is neither the revision the plan was
+  /// made from (`designSha`) nor the end of a verified clarify chain from the approval. The
+  /// caller hashes the committed doc, never the working tree, so an uncommitted edit can't change
+  /// the verdict either way. `headDesignSha` is `nil` when HEAD has no file at `designPath`.
+  /// `clarifyChain` is the chain's verification, or `nil` when the plan records none.
+  public static func designMovedFindings(
+    designPath: String, designSha: String, headDesignSha: String?,
+    clarifyChain: ClarifyChain.Verification?
+  ) throws(ReportContractViolation) -> [Finding] {
+    if headDesignSha == designSha { return [] }
+    if case .valid(let endSha) = clarifyChain, endSha == headDesignSha { return [] }
+    let now =
+      headDesignSha.map { "hashes to \($0)" } ?? "isn't in HEAD (deleted or renamed)"
+    let chain: String
+    switch clarifyChain {
+    case nil: chain = ""
+    case .valid(let endSha): chain = "; its clarify chain ends at \(endSha), not HEAD"
+    case .broken(let broken): chain = "; its clarify chain is broken: \(broken.message)"
+    }
+    return [
+      try Finding(
+        ruleID: designMovedRuleID, severity: .major, file: designPath, line: nil,
+        message:
+          "\(designPath) at HEAD \(now), but the plan was made from designSha \(designSha)"
+          + "\(chain). Re-approve the change with /swift-harness:design --amend, or replan",
+        failureScenario:
+          "workers build the plan's tasks against a design that has since changed, so a changed "
+          + "requirement or test ships unplanned")
+    ]
+  }
+
   // MARK: - Entry point
 
   /// Runs every `plan-lint` rule family in one pass: ``PlanLintCoverage``'s coverage, gate-strength
@@ -262,6 +309,7 @@ public enum PlanLintGraph {
     let testTiers = PlanLintCoverage.testTiers(design: design)
     for task in ledger.tasks.sorted(by: { $0.id < $1.id }) {
       findings += try PlanLintCoverage.gateFindings(task: task, testTiers: testTiers)
+      findings += try PlanLintCoverage.unknownTestFindings(task: task, design: design)
       findings += try PlanLintCoverage.sizeFindings(
         task: task, modulesTouched: modulesTouched(writeSet: task.writeSet, graph: graph),
         workerPack: workerPacks[task.id], bounds: bounds)

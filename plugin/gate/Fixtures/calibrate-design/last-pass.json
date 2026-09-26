@@ -18,7 +18,7 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.96,
+          "probability" : 0.97,
           "question" : "refuted-api-finding"
         },
         {
@@ -84,7 +84,7 @@
         {
           "answered" : "cite-a-supported-claim",
           "expected" : "cite-a-supported-claim",
-          "probability" : 0.95,
+          "probability" : 0.92,
           "question" : "fifteen-minute-tag"
         }
       ],
@@ -96,13 +96,13 @@
         {
           "answered" : "unverified-tag",
           "expected" : "unverified-tag",
-          "probability" : 0.97,
+          "probability" : 0.95,
           "question" : "fifteen-minute-tag"
         },
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.95,
+          "probability" : 0.9,
           "question" : "fifteen-minute-risk"
         }
       ],
@@ -126,7 +126,7 @@
         {
           "answered" : "blocker",
           "expected" : "blocker",
-          "probability" : 0.85,
+          "probability" : 0.8,
           "question" : "severity"
         }
       ],
@@ -150,7 +150,7 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.97,
+          "probability" : 0.98,
           "question" : "gating-finding"
         },
         {
@@ -186,7 +186,7 @@
         {
           "answered" : "probe",
           "expected" : "probe",
-          "probability" : 0.92,
+          "probability" : 0.9,
           "question" : "citation-kind"
         }
       ],
@@ -198,13 +198,13 @@
         {
           "answered" : "claim",
           "expected" : "claim",
-          "probability" : 0.96,
+          "probability" : 0.94,
           "question" : "cover"
         },
         {
           "answered" : "file",
           "expected" : "file",
-          "probability" : 0.96,
+          "probability" : 0.95,
           "question" : "citation-kind"
         }
       ],
@@ -216,7 +216,7 @@
         {
           "answered" : "needs-decision",
           "expected" : "needs-decision",
-          "probability" : 0.6,
+          "probability" : 0.8,
           "question" : "cover"
         }
       ],
@@ -228,13 +228,13 @@
         {
           "answered" : "claim-citing-checkout",
           "expected" : "claim-citing-checkout",
-          "probability" : 0.92,
+          "probability" : 0.95,
           "question" : "answer"
         },
         {
           "answered" : "swift-composable-architecture@1.26.2",
           "expected" : "swift-composable-architecture@1.26.2",
-          "probability" : 0.9,
+          "probability" : 0.94,
           "question" : "pin"
         }
       ],
@@ -318,7 +318,7 @@
         {
           "answered" : "A2",
           "expected" : "A2",
-          "probability" : 0.8,
+          "probability" : 0.9,
           "question" : "rule"
         }
       ],
@@ -337,7 +337,7 @@
       "case" : "uikit-in-live-module-only"
     }
   ],
-  "contentHash" : "b569793d825f034704e742455d677abefeef9a03f4e0ee45979fa306c2f7832f",
+  "contentHash" : "e64d0092c37ab4cae463441baddc7339113e379c500070d2973e05dcad14c696",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -354,6 +354,6 @@
     "plugin/workflows/design-review.js"
   ],
   "model" : "sonnet",
-  "passedAt" : "2026-09-26T03:35:01Z",
+  "passedAt" : "2026-09-26T15:15:58Z",
   "schemaVersion" : 1
 }

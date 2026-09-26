@@ -123,6 +123,24 @@ struct PlanLintCoverageTests {
     #expect(try PlanLintCoverage.gateFindings(task: overGated, testTiers: tiers).isEmpty)
   }
 
+  @Test(
+    "a T3 test in covers needs ready even when tests omits or misspells it — catches the gate read from tests alone"
+  )
+  func coveredTestSetsTheGate() throws {
+    let tiers = ["test-queue-drains-on-reconnect": Tier.t3]
+    let untested = Self.task(
+      gate: .fast, tests: [], covers: ["test-queue-drains-on-reconnect"])
+    let misspelled = Self.task(
+      gate: .fast, tests: ["test-queue-drains-on-reconect"],
+      covers: ["test-queue-drains-on-reconnect"])
+
+    for task in [untested, misspelled] {
+      let findings = try PlanLintCoverage.gateFindings(task: task, testTiers: tiers)
+      #expect(findings.map(\.ruleID) == [PlanLintCoverage.weakGateRuleID], "\(task.tests)")
+      #expect(findings.first?.message.contains("\"ready\"") == true)
+    }
+  }
+
   @Test("testTiers reads a design's test plan tiers, keeping the first on a duplicate id")
   func testTiersReadsDesignTestPlan() throws {
     let doc = Self.design(testPlan: [

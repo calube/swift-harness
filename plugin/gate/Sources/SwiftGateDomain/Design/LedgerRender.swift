@@ -62,7 +62,8 @@ public enum LedgerRender {
   /// else, so an edge list read back from this text equals the ledger's `deps` exactly.
   public static func dagMermaidSource(tasks: [LedgerTask]) -> String {
     let sorted = tasks.sorted { $0.id < $1.id }
-    let indexOf = Dictionary(uniqueKeysWithValues: sorted.enumerated().map { ($1.id, $0) })
+    let indexOf = Dictionary(
+      sorted.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
     var lines = ["flowchart LR"]
     for (index, task) in sorted.enumerated() {
       lines.append("  n\(index)[\"\(MermaidLabel.escape(task.id))\"]")
@@ -146,11 +147,13 @@ public enum LedgerRender {
     }
   }
 
-  static func describe(_ error: PlanSchedule.ScheduleError) -> String {
+  public static func describe(_ error: PlanSchedule.ScheduleError) -> String {
     switch error {
     case .cycle(let ids): "the tasks \(ids.joined(separator: " → ")) form a dependency cycle"
     case .missingDependency(let task, let dependency):
       "task \(task) depends on \(dependency), which isn't in the ledger"
+    case .duplicateTaskID(let ids):
+      ids.map { "task id \($0) appears more than once" }.joined(separator: "; ")
     }
   }
 
@@ -228,7 +231,7 @@ public enum LedgerRender {
   /// least `criticalPath`, and `wall` only adds more from every other wave.
   public static func predictedOverheadShare(tasks: [LedgerTask], waves: [[String]]) -> Double? {
     guard !tasks.isEmpty else { return nil }
-    let byID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
+    let byID = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     let wall = waves.reduce(0) { sum, wave in
       sum + (wave.compactMap { byID[$0]?.estLines }.max() ?? 0)
     }
