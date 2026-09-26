@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "verdict": "red",
+  "ruleIDs": ["ev-string-has-fabricated-prefix"]
+}

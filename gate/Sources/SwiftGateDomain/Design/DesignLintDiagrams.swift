@@ -67,22 +67,33 @@ public enum DesignLintDiagrams {
   // MARK: - Prose word budgets
 
   /// Only a section named in `budgets.sections` is individually checked; an unnamed section is
-  /// still bounded by `documentBudgetFinding` below.
+  /// still bounded by `documentBudgetFinding` below. Walks every depth, not just the top level —
+  /// a design doc's own `# Title` always wraps its `##` sections one level deeper, so a shallow
+  /// scan would never reach them.
   private static func sectionBudgetFindings(
     document: DesignDocument, docPath: String, budgets: DocsBudgets
   ) throws(ReportContractViolation) -> [Finding] {
+    try sectionBudgetFindings(
+      sections: document.markdown.sections, docPath: docPath, budgets: budgets)
+  }
+
+  private static func sectionBudgetFindings(
+    sections: [MarkdownDocument.Section], docPath: String, budgets: DocsBudgets
+  ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
-    for section in document.markdown.sections {
-      guard let limit = budgets.sections[section.anchor], section.proseWordCount > limit else {
-        continue
+    for section in sections {
+      if let limit = budgets.sections[section.anchor], section.proseWordCount > limit {
+        findings.append(
+          try Finding(
+            ruleID: "design-lint.section-word-budget", severity: .major, file: docPath, line: nil,
+            message:
+              "\"\(section.heading)\" is \(section.proseWordCount) prose words, "
+              + "over its \(limit)-word budget.",
+            failureScenario: nil))
       }
-      findings.append(
-        try Finding(
-          ruleID: "design-lint.section-word-budget", severity: .major, file: docPath, line: nil,
-          message:
-            "\"\(section.heading)\" is \(section.proseWordCount) prose words, "
-            + "over its \(limit)-word budget.",
-          failureScenario: nil))
+      try findings.append(
+        contentsOf: sectionBudgetFindings(
+          sections: section.subsections, docPath: docPath, budgets: budgets))
     }
     return findings
   }

@@ -1,0 +1,7 @@
+$ echo senuinel-output-value
+exit: exited 0
+
+--- stdout ---
+sentinel-output-value
+
+--- stderr ---
