@@ -85,6 +85,9 @@ public struct ClaudeCLIJudge: Judge {
         // No tools, no user/project settings (so no plugin hooks), no MCP servers, no transcript:
         // the judge reads only the prompt.
         "--restricted", "--tools", "", "--strict-mcp-config", "--no-session-persistence",
+        // `verbose: true` in the user's global config turns `--output-format json` into an array
+        // of stream events; `--restricted` doesn't reach that config, but `--settings` overrides it.
+        "--settings", #"{"verbose":false}"#,
         "--model", identity.model,
       ],
       workingDirectory: FileManager.default.temporaryDirectory.path,
