@@ -3,6 +3,445 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 
+/// A ``Rate`` shaped for `--json`: the raw counts plus the derived value (`null` when the
+/// denominator is zero), so a reader never has to recompute "n/a" from a bare percentage.
+struct RateJSON: Sendable, Equatable, Encodable {
+  let numerator: Int
+  let denominator: Int
+  let value: Double?
+
+  init(_ rate: Rate) {
+    numerator = rate.numerator
+    denominator = rate.denominator
+    value = rate.value
+  }
+}
+
+/// `swiftgate stats --design <doc>`'s report: every §10/§12 metric for one design, plus notes
+/// naming every optional input that was missing rather than silently treated as zero.
+struct DesignStatsReport: Sendable, Equatable, Encodable {
+  struct LaneRow: Sendable, Equatable, Encodable {
+    let lane: ResearchLane
+    let total: Int
+    let refuteRate: RateJSON
+    let unverifiedRate: RateJSON
+
+    init(_ metrics: LaneClaimMetrics) {
+      lane = metrics.lane
+      total = metrics.total
+      refuteRate = RateJSON(metrics.refuteRate)
+      unverifiedRate = RateJSON(metrics.unverifiedRate)
+    }
+  }
+
+  struct ReviewerRow: Sendable, Equatable, Encodable {
+    let reviewer: String
+    let accepted: Int
+    let dismissed: Int
+    let precision: RateJSON
+
+    init(_ precision: ReviewerPrecision) {
+      reviewer = precision.reviewer
+      accepted = precision.accepted
+      dismissed = precision.dismissed
+      self.precision = RateJSON(precision.precision)
+    }
+  }
+
+  struct PhaseRow: Sendable, Equatable, Encodable {
+    let phase: DesignPlanPhase
+    let runs: Int
+    let tokens: Int
+    let costUSD: Double?
+    let wallMilliseconds: Int
+
+    init(_ totals: PhaseGroupTotals<DesignPlanPhase>) {
+      phase = totals.key
+      runs = totals.runs
+      tokens = totals.tokens
+      costUSD = totals.costUSD
+      wallMilliseconds = totals.wallMilliseconds
+    }
+  }
+
+  struct AgentRow: Sendable, Equatable, Encodable {
+    let agentRole: ContextPackRole
+    let runs: Int
+    let tokens: Int
+    let costUSD: Double?
+    let wallMilliseconds: Int
+
+    init(_ totals: PhaseGroupTotals<ContextPackRole>) {
+      agentRole = totals.key
+      runs = totals.runs
+      tokens = totals.tokens
+      costUSD = totals.costUSD
+      wallMilliseconds = totals.wallMilliseconds
+    }
+  }
+
+  struct EstimateErrorRow: Sendable, Equatable, Encodable {
+    struct Task: Sendable, Equatable, Encodable {
+      let id: String
+      let estLines: Int
+      let actualLines: Int
+      let error: Int
+    }
+
+    let perTask: [Task]
+    let excludedTaskIDs: [String]
+    let meanAbsoluteError: Double?
+
+    init(_ report: EstimateErrorReport) {
+      perTask = report.perTask.map {
+        Task(id: $0.id, estLines: $0.estLines, actualLines: $0.actualLines, error: $0.error)
+      }
+      excludedTaskIDs = report.excludedTaskIDs
+      meanAbsoluteError = report.meanAbsoluteError
+    }
+
+    static let empty = EstimateErrorRow(
+      EstimateErrorReport.init(perTask:excludedTaskIDs:meanAbsoluteError:)([], [], nil))
+  }
+
+  struct ProbeRow: Sendable, Equatable, Encodable {
+    let total: Int
+    let failed: Int
+    let failRate: RateJSON
+
+    init(_ report: ProbeFailReport) {
+      total = report.total
+      failed = report.failed
+      failRate = RateJSON(report.failRate)
+    }
+  }
+
+  struct CacheRow: Sendable, Equatable, Encodable {
+    let entries: Int
+    let reuses: Int
+    let hitRate: RateJSON
+
+    init(_ report: CacheHitReport) {
+      entries = report.entries
+      reuses = report.reuses
+      hitRate = RateJSON(report.hitRate)
+    }
+  }
+
+  let command = "stats"
+  let verdict: Verdict
+  let design: String
+  let plan: String?
+  let claimLanes: [LaneRow]
+  let unknownLaneClaimCounts: [String: Int]
+  let escapeRate: RateJSON
+  let reviewerPrecision: [ReviewerRow]
+  let phaseTotals: [PhaseRow]
+  let agentTotals: [AgentRow]
+  let overheadShare: RateJSON
+  let estimateError: EstimateErrorRow
+  let probes: ProbeRow
+  let cache: CacheRow
+  let notes: [String]
+  let message: String
+}
+
+/// The deterministic body of `stats --design`: every input is optional except the design doc
+/// itself, and a missing one becomes a named note (never a silent zero) while a malformed one
+/// blocks the whole report (spec: "a malformed file is exit 2 naming file:line"). Factored out of
+/// the `ParsableCommand` so it's testable without argument parsing (matches
+/// `EvidenceFindRun`/`EvidenceCheckRun`).
+enum DesignStatsRun {
+  struct Options: Sendable, Equatable {
+    var design: String
+    var plan: String?
+    var cacheHome: String?
+  }
+
+  static func run(options: Options, root: URL, runner: any ProcessRunner) async -> DesignStatsReport
+  {
+    guard PlanFile.isValidDesignPath(options.design) else {
+      return blocked(
+        options: options,
+        "--design `\(options.design)` must be a repo-relative docs/**/designs/<name>.md path")
+    }
+    var notes: [String] = []
+    let layout = EvidenceLayout(designDocPath: options.design)
+
+    let claimsLoaded = loadClaims(root: root, layout: layout)
+    if let malformed = claimsLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = claimsLoaded.note { notes.append(note) }
+
+    let amendmentsLoaded = loadJSONL(
+      Amendment.self, root: root, path: layout.amendmentsFile, dateDecoding: .iso8601,
+      missingNote: "no amendments file at \(layout.amendmentsFile); escape rate assumes none")
+    if let malformed = amendmentsLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = amendmentsLoaded.note { notes.append(note) }
+
+    let reviewLogPath = layout.root + "/review-log.jsonl"
+    let reviewLogLoaded = loadJSONL(
+      ReviewLogRecord.self, root: root, path: reviewLogPath,
+      missingNote: "no review-log file at \(reviewLogPath); reviewer precision excluded")
+    if let malformed = reviewLogLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = reviewLogLoaded.note { notes.append(note) }
+
+    let slug = URL(filePath: options.design).deletingPathExtension().lastPathComponent
+    let phasesPath = RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl"
+    let phasesLoaded = loadJSONL(
+      PhaseRecord.self, root: root, path: phasesPath,
+      missingNote:
+        "no phases file at \(phasesPath); token/cost/wall and overhead-share metrics excluded")
+    if let malformed = phasesLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = phasesLoaded.note { notes.append(note) }
+
+    let probesLoaded = loadProbes(root: root, layout: layout)
+    if let malformed = probesLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = probesLoaded.note { notes.append(note) }
+
+    let tasksLoaded = await loadTaskEstimates(plan: options.plan, root: root, runner: runner)
+    if let malformed = tasksLoaded.malformed { return blocked(options: options, malformed) }
+    if let note = tasksLoaded.note { notes.append(note) }
+
+    let cacheLoaded = loadCache(cacheHome: options.cacheHome)
+    notes += cacheLoaded.notes
+
+    let laneReport = DesignMetrics.laneReport(claimsLoaded.claims)
+    let escapeReport = DesignMetrics.escapeRate(
+      claims: claimsLoaded.claims, amendments: amendmentsLoaded.records)
+    let reviewerRows = DesignMetrics.reviewerPrecision(reviewLogLoaded.records)
+    let phaseTotals = DesignMetrics.totalsByPhase(phasesLoaded.records)
+    let agentTotals = DesignMetrics.totalsByAgent(phasesLoaded.records)
+    let overhead = DesignMetrics.overheadShare(phasesLoaded.records)
+    let estimateErrorReport = DesignMetrics.estimateError(tasksLoaded.tasks)
+    let probeReport = DesignMetrics.probeFailRate(probesLoaded.records)
+    let cacheReport = DesignMetrics.cacheHitRate(
+      claims: cacheLoaded.claims, verdicts: cacheLoaded.verdicts)
+
+    for (lane, count) in laneReport.unknownLaneClaimCounts.sorted(by: { $0.key < $1.key }) {
+      notes.append("\(count) claim(s) name an unrecognised lane `\(lane)`")
+    }
+
+    return DesignStatsReport(
+      verdict: .green, design: options.design, plan: options.plan,
+      claimLanes: laneReport.lanes.map(DesignStatsReport.LaneRow.init),
+      unknownLaneClaimCounts: laneReport.unknownLaneClaimCounts,
+      escapeRate: RateJSON(escapeReport.rate),
+      reviewerPrecision: reviewerRows.map(DesignStatsReport.ReviewerRow.init),
+      phaseTotals: phaseTotals.map(DesignStatsReport.PhaseRow.init),
+      agentTotals: agentTotals.map(DesignStatsReport.AgentRow.init),
+      overheadShare: RateJSON(overhead),
+      estimateError: DesignStatsReport.EstimateErrorRow(estimateErrorReport),
+      probes: DesignStatsReport.ProbeRow(probeReport),
+      cache: DesignStatsReport.CacheRow(cacheReport),
+      notes: notes,
+      message:
+        "\(claimsLoaded.claims.count) claim(s), \(phasesLoaded.records.count) phase record(s)")
+  }
+
+  static func render(_ report: DesignStatsReport, format: OutputFormat) -> String {
+    switch format {
+    case .json:
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      return String(decoding: (try? encoder.encode(report)) ?? Data(), as: UTF8.self)
+    case .human:
+      guard report.verdict == .green else {
+        return "stats \(Verdict.blocked.rawValue) \(report.message)"
+      }
+      var lines = ["stats --design \(report.design): \(report.message)"]
+      lines.append("lanes:")
+      for lane in report.claimLanes {
+        lines.append(
+          "  \(lane.lane.rawValue): total=\(lane.total) refute=\(percent(lane.refuteRate)) "
+            + "unverified=\(percent(lane.unverifiedRate))")
+      }
+      lines.append("escape rate: \(percent(report.escapeRate))")
+      lines.append("reviewer precision:")
+      for reviewer in report.reviewerPrecision {
+        lines.append("  \(reviewer.reviewer): \(percent(reviewer.precision))")
+      }
+      lines.append("phases:")
+      for phase in report.phaseTotals {
+        lines.append(
+          "  \(phase.phase.rawValue): runs=\(phase.runs) tokens=\(phase.tokens) "
+            + "cost=\(cost(phase.costUSD)) wall=\(ReportRenderer.duration(phase.wallMilliseconds))")
+      }
+      lines.append("agents:")
+      for agent in report.agentTotals {
+        lines.append(
+          "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(agent.tokens) "
+            + "cost=\(cost(agent.costUSD)) wall=\(ReportRenderer.duration(agent.wallMilliseconds))")
+      }
+      lines.append("overhead share: \(percent(report.overheadShare))")
+      let mae = report.estimateError.meanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"
+      lines.append(
+        "estimate error: mean |error|=\(mae) lines over \(report.estimateError.perTask.count) "
+          + "task(s); excluded=\(report.estimateError.excludedTaskIDs.count)")
+      lines.append(
+        "probes: \(report.probes.failed)/\(report.probes.total) failed "
+          + "(\(percent(report.probes.failRate)))")
+      lines.append("cache hit rate: \(percent(report.cache.hitRate))")
+      for note in report.notes { lines.append("  note: \(note)") }
+      return lines.joined(separator: "\n")
+    }
+  }
+
+  private static func percent(_ rate: RateJSON) -> String {
+    guard let value = rate.value else { return "n/a" }
+    return String(format: "%.1f%% (%d/%d)", value * 100, rate.numerator, rate.denominator)
+  }
+
+  private static func cost(_ costUSD: Double?) -> String {
+    costUSD.map { String(format: "$%.2f", $0) } ?? "n/a"
+  }
+
+  private static func blocked(options: Options, _ message: String) -> DesignStatsReport {
+    let zero = RateJSON(Rate(numerator: 0, denominator: 0))
+    return DesignStatsReport(
+      verdict: .blocked, design: options.design, plan: options.plan, claimLanes: [],
+      unknownLaneClaimCounts: [:], escapeRate: zero, reviewerPrecision: [], phaseTotals: [],
+      agentTotals: [], overheadShare: zero, estimateError: .empty,
+      probes: DesignStatsReport.ProbeRow(
+        ProbeFailReport(total: 0, failed: 0, failRate: Rate(numerator: 0, denominator: 0))),
+      cache: DesignStatsReport.CacheRow(
+        CacheHitReport(entries: 0, reuses: 0, hitRate: Rate(numerator: 0, denominator: 0))),
+      notes: [], message: message)
+  }
+
+  // MARK: - Loaders
+
+  private static func loadClaims(root: URL, layout: EvidenceLayout)
+    -> (claims: [Claim], note: String?, malformed: String?)
+  {
+    do {
+      return (try EvidenceFiles.claims(root: root, layout: layout), nil, nil)
+    } catch {
+      switch error {
+      case .claimsFileMissing(let path):
+        return ([], "no claims file at \(path); lane and escape-rate metrics excluded", nil)
+      case .claimsFileUnreadable(let path, let detail):
+        return ([], "can't read \(path): \(detail)", nil)
+      case .malformedClaimLine(let path, let line):
+        return ([], nil, "\(path):\(line): not a valid claim record")
+      case .refNotFound, .git:
+        return ([], nil, "unexpected error reading claims: \(error)")
+      }
+    }
+  }
+
+  private static func loadJSONL<T: Decodable>(
+    _ type: T.Type, root: URL, path: String,
+    dateDecoding: JSONDecoder.DateDecodingStrategy = .deferredToDate, missingNote: String
+  ) -> (records: [T], note: String?, malformed: String?) {
+    guard let data = FileManager.default.contents(atPath: root.appending(path: path).path) else {
+      return ([], missingNote, nil)
+    }
+    do {
+      return (
+        try StrictJSONL.decode(type, data: data, path: path, dateDecoding: dateDecoding), nil, nil
+      )
+    } catch {
+      return ([], nil, "\(error.path):\(error.line): not a valid record")
+    }
+  }
+
+  private static func loadProbes(root: URL, layout: EvidenceLayout)
+    -> (records: [ProbeVerdictRecord], note: String?, malformed: String?)
+  {
+    let directory = root.appending(path: layout.probesDirectory)
+    guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) else {
+      return ([], "no probes directory at \(layout.probesDirectory); probe fail rate excluded", nil)
+    }
+    var records: [ProbeVerdictRecord] = []
+    for name in names.sorted() where name.hasSuffix(".verdict.json") {
+      let path = layout.probesDirectory + "/" + name
+      guard let data = FileManager.default.contents(atPath: root.appending(path: path).path)
+      else { continue }
+      guard let record = try? JSONDecoder().decode(ProbeVerdictRecord.self, from: data) else {
+        return ([], nil, "\(path):1: not a valid probe verdict record")
+      }
+      records.append(record)
+    }
+    return (records, nil, nil)
+  }
+
+  private static func loadTaskEstimates(plan: String?, root: URL, runner: any ProcessRunner) async
+    -> (tasks: [TaskEstimate], note: String?, malformed: String?)
+  {
+    guard let plan else {
+      return ([], "no --plan given; estimate error excluded", nil)
+    }
+    let git = LiveGit(runner: runner, repositoryRoot: root.path)
+    do {
+      let store = try await PlanStateStore.locate(slug: plan, git: git)
+      let ledger = try store.ledger()
+      let tasks = ledger.tasks.map {
+        TaskEstimate(id: $0.id, estLines: $0.estLines, actualLines: nil)
+      }
+      let note =
+        tasks.isEmpty
+        ? nil
+        : "actual line counts aren't tracked yet; \(tasks.count) task(s) excluded from estimate error"
+      return (tasks, note, nil)
+    } catch {
+      if case .missing(let path) = error {
+        return ([], "no ledger yet at \(path); estimate error excluded", nil)
+      }
+      return ([], nil, "plan `\(plan)`: \(error)")
+    }
+  }
+
+  private static func loadCache(cacheHome: String?)
+    -> (claims: [CachedClaim], verdicts: [CachedVerdict], notes: [String])
+  {
+    guard let home = cacheHome ?? ProcessInfo.processInfo.environment["HOME"] else {
+      return (
+        [], [],
+        [
+          "missing required option '--cache-home <path>' ($HOME is not set); cache hit rate excluded"
+        ]
+      )
+    }
+    let layout = EvidenceCacheLayout(home: home)
+    guard FileManager.default.fileExists(atPath: layout.root) else {
+      return ([], [], ["no evidence cache at \(layout.root); cache hit rate excluded"])
+    }
+    let store = EvidenceCacheStore(home: URL(filePath: home, directoryHint: .isDirectory))
+    var claims: [CachedClaim] = []
+    var verdicts: [CachedVerdict] = []
+    var notes: [String] = []
+    for bucket in cacheBuckets(root: layout.root) + [.verdicts] {
+      let contents: EvidenceCacheContents
+      do {
+        contents = try store.contents(of: bucket)
+      } catch {
+        notes.append("evidence cache: can't read \(bucket): \(error)")
+        continue
+      }
+      notes += contents.findings.map { "evidence cache: \($0.message)" }
+      claims += contents.claims
+      verdicts += Array(contents.verdicts.values)
+    }
+    return (claims, verdicts, notes)
+  }
+
+  /// Every bucket file that currently exists under the cache root (matches
+  /// `EvidenceFindRun.cacheBuckets`): package pins at the top level, SDK pins under `sdk/`.
+  private static func cacheBuckets(root: String) -> [EvidenceCacheBucket] {
+    let fm = FileManager.default
+    var buckets: [EvidenceCacheBucket] = []
+    for name in (try? fm.contentsOfDirectory(atPath: root)) ?? []
+    where name.hasSuffix(".jsonl") && name.contains("@") {
+      buckets.append(.package(pin: String(name.dropLast(".jsonl".count))))
+    }
+    for name in (try? fm.contentsOfDirectory(atPath: root + "/sdk")) ?? []
+    where name.hasSuffix(".jsonl") {
+      buckets.append(.sdk(pin: String(name.dropLast(".jsonl".count))))
+    }
+    return buckets
+  }
+}
+
 enum StatsRenderer {
   static func human(_ rows: [TierStats], invalidLines: Int) -> String {
     guard !rows.isEmpty else {
@@ -65,12 +504,35 @@ enum StatsRenderer {
 struct StatsCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "stats",
-    abstract: "Per-command, per-tier duration p50/p95 against budgets, from run history.")
+    abstract: "Per-command, per-tier duration p50/p95 against budgets, from run history.",
+    discussion:
+      "Without --design: per-command, per-tier duration p50/p95 against budgets, from run "
+      + "history. With --design <doc>: §10/§12 design and plan metrics (lane refute/UNVERIFIED "
+      + "rates, escape rate, reviewer precision, tokens/cost/wall per agent and phase, estimate "
+      + "error, probe fail rate, cache hit rate) for that design. Exit 0 always, except 2 for a "
+      + "malformed --design, --plan or evidence input.")
+
+  @Option(help: "Report §10/§12 metrics for this design doc instead of gate-run history stats.")
+  var design: String?
+
+  @Option(help: "The plan slug whose ledger.json backs estimate error (needs --design).")
+  var plan: String?
+
+  @Option(help: "The evidence reuse cache's home directory; defaults to $HOME (needs --design).")
+  var cacheHome: String?
 
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    if let design {
+      let report = await DesignStatsRun.run(
+        options: .init(design: design, plan: plan, cacheHome: cacheHome), root: root,
+        runner: LiveProcessRunner())
+      Console.write(DesignStatsRun.render(report, format: output.format))
+      if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
+      return
+    }
     let history = try RunStore(worktreeRoot: root).readHistory()
     // Budgets are optional context: without a readable config the table has no budget column.
     let budgets = (try? ConfigLoader().load(repositoryRoot: root))??.budgets
