@@ -844,3 +844,24 @@ against that subcommand's help. A later skill that names a missing command or fl
 **Contributor AGENTS.md**
 - The root `AGENTS.md` is a 50-line contributor guide. Nothing automated enforces "AGENTS.md names no app-only
   rule", which stays a review item.
+
+## Wave 26 (rehearsal)
+
+**Marketplace install, unattended rehearsal** (evidence in `docs/e2e-report.md`)
+- Install from the consumer repo: `claude plugin marketplace add <harness checkout> --scope project`, then
+  `claude plugin install swift-harness@<marketplace> --scope project`. Project scope still writes
+  `plugins/known_marketplaces.json`, `plugins/installed_plugins.json` and `plugins/marketplaces/` under the user's
+  Claude config, so a rehearsal removes its own entries afterwards. A directory marketplace loads the plugin from
+  the checkout, so checkout edits apply without `claude plugin update`.
+- Live subagent PreToolUse payload fields: `session_id`, `transcript_path`, `cwd`, `prompt_id`, `permission_mode`,
+  `agent_id`, `agent_type`, `effort`, `hook_event_name`, `tool_name`, `tool_input`, `tool_use_id`. A subagent's
+  payload carries the main session's `session_id`; only `agent_id`/`agent_type` tell it apart, and main-session
+  payloads have neither. `guard.plan-state` denied a subagent's writes to the ledger, design doc and `claims.jsonl`.
+- Every plugin agent is read-only, so a guarded-write test uses a `general-purpose` subagent.
+- Headless flags that worked: `--setting-sources project,local`, `--session-id` equal to `plan claim --session`,
+  `--output-format json --verbose`, `SWIFTGATE_HOOK_RECORD_DIR`. The temp consumer repo needs a local bare `origin`,
+  or Stop reports BLOCKED. Warm the gate first with `plugin/bin/swiftgate --version` under the install's
+  `CLAUDE_PLUGIN_DATA`, because the first call builds cold (about 2 min).
+- The `status` skill reads `<git common dir>/swift-harness/plans/index.json`, and a plan is active unless
+  `PlanStatus.isFinished`. `tests/plan_state_paths_test.mjs` fails on the old `.harness/plans` path.
+- `docs/e2e-report.md` has a word budget in `.swiftgate.toml` (2600 now); each new section raises it.
