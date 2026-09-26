@@ -688,10 +688,23 @@ enum ContextPackRun {
         claim.citation, evidenceLayout: evidenceLayout, repoRoot: root)
       {
       case .success(let resolved):
+        var verdict: ContextSource?
+        if claim.citation.kind == .probe {
+          let relative = ProbeVerdictRecord.path(forClaimID: claim.id)
+          let path = "\(evidenceLayout.root)/\(relative)"
+          switch ContextPackFiles.read(label: relative, path: path, root: root) {
+          case .success(let source): verdict = source
+          case .failure(.unreadable(let p)):
+            return .failure(
+              GatherFailure(
+                "no probe verdict `\(p)` for claim `\(id)`: run `swiftgate probe` first"))
+          }
+        }
         entries.append(
           ClaimToJudge(
             claimRawLine: rawLine, claimsSourceLabel: claimsPath,
-            citationSourceLabel: resolved.label, citationRawText: resolved.rawText))
+            citationSourceLabel: resolved.label, citationRawText: resolved.rawText,
+            probeVerdict: verdict))
       case .failure(.unreadable(let p)):
         return .failure(GatherFailure("can't read `\(p)` (cited by claim `\(id)`)"))
       }

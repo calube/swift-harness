@@ -26,6 +26,36 @@ struct MarkdownDocumentTests {
   }
 
   @Test(
+    "a section's own word count stops at its first subsection — catches a design doc charged once per heading level for the same words"
+  )
+  func ownBodyStopsAtFirstSubsection() throws {
+    let text = """
+      # Title
+
+      one two three
+
+      ## Options
+
+      four five
+
+      ### Option 1
+
+      six seven eight
+
+      ## Decision
+
+      nine
+      """
+    let document = MarkdownDocument.parse(text)
+    let title = try #require(document.section(anchor: "title"))
+    let options = try #require(document.section(anchor: "options"))
+    #expect(title.proseWordCount == 3)
+    #expect(options.proseWordCount == 2)
+    #expect(try #require(document.section(anchor: "option-1")).proseWordCount == 3)
+    #expect(try #require(document.section(anchor: "decision")).proseWordCount == 1)
+  }
+
+  @Test(
     "mermaid fence reports its diagram type — catches design-lint losing flowchart vs sequenceDiagram"
   )
   func mermaidDiagramTypeDetected() throws {

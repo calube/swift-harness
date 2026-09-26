@@ -214,10 +214,11 @@ public enum MarkdownAnchorSlicer {
   }
 }
 
-/// Slices a citation's cited excerpt only — the line range for a `file`/`probe` citation
-/// (`path:L<a>-L<b>`), or the line containing `quote` for a `snapshot`/`capture` citation that
-/// carries no line range. Never the whole cited file (spec §5.10: claim checker gets "cited line
-/// ranges and snapshot excerpts only").
+/// Slices a citation's cited excerpt only — the line range for a `file` citation
+/// (`path:L<a>-L<b>`), or the line containing `quote` for a citation that carries no line range.
+/// Never the whole cited file (spec §5.10: claim checker gets "cited line ranges and snapshot
+/// excerpts only"), with one exception: a probe snippet without a range is the evidence itself,
+/// a few lines that compile or don't, so it goes in whole.
 public enum CitationExcerptSlicer {
   public static func slice(for citation: Citation, rawText: String, sourceLabel: String) throws
     -> ContextPackSlice
@@ -230,13 +231,35 @@ public enum CitationExcerptSlicer {
       return ContextPackSlice(
         sourceLabel: sourceLabel, anchor: nil, lines: Array(lines[(range.start - 1)..<range.end]))
     }
+    if citation.kind == .probe {
+      return ContextPackSlice(sourceLabel: sourceLabel, anchor: nil, lines: lines)
+    }
     guard let quote = citation.quote, !quote.isEmpty else {
       throw ContextPackError.invalidCitationRange(citation.loc)
     }
-    guard let matchIndex = lines.firstIndex(where: { $0.contains(quote) }) else {
+    let spellings = [quote] + jsonEscaped(quote)
+    guard
+      let matchIndex = lines.firstIndex(where: { line in
+        spellings.contains { line.contains($0) }
+      })
+    else {
       throw ContextPackError.citationQuoteNotFound(quote, source: sourceLabel)
     }
     return ContextPackSlice(sourceLabel: sourceLabel, anchor: nil, lines: [lines[matchIndex]])
+  }
+
+  /// A quote cited from a JSONL source such as `answers.jsonl` appears there JSON-escaped, so a
+  /// `"` in the quote is `\"` in the line. Both slash spellings, since writers differ on `\/`.
+  private static func jsonEscaped(_ quote: String) -> [String] {
+    var spellings: [String] = []
+    for formatting: JSONEncoder.OutputFormatting in [.withoutEscapingSlashes, []] {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = formatting
+      guard let data = try? encoder.encode(quote) else { continue }
+      let encoded = String(decoding: data, as: UTF8.self).dropFirst().dropLast()
+      if encoded != quote { spellings.append(String(encoded)) }
+    }
+    return spellings
   }
 
   private static func lineRange(fromLoc loc: String) -> (start: Int, end: Int)? {
@@ -257,15 +280,18 @@ public struct ClaimToJudge: Sendable, Equatable {
   public let claimsSourceLabel: String
   public let citationSourceLabel: String
   public let citationRawText: String
+  /// A probe claim's `Probe_<id>.verdict.json`, label and raw text; nil for every other kind.
+  public let probeVerdict: ContextSource?
 
   public init(
     claimRawLine: String, claimsSourceLabel: String, citationSourceLabel: String,
-    citationRawText: String
+    citationRawText: String, probeVerdict: ContextSource? = nil
   ) {
     self.claimRawLine = claimRawLine
     self.claimsSourceLabel = claimsSourceLabel
     self.citationSourceLabel = citationSourceLabel
     self.citationRawText = citationRawText
+    self.probeVerdict = probeVerdict
   }
 }
 
@@ -581,6 +607,7 @@ extension ContextPack {
         try CitationExcerptSlicer.slice(
           for: claim.citation, rawText: entry.citationRawText,
           sourceLabel: entry.citationSourceLabel))
+      if let verdict = entry.probeVerdict { slices.append(ContextPackSlice(verdict)) }
     }
     return slices
   }

@@ -204,6 +204,22 @@ struct BootstrapCommandTests {
   }
 
   @Test(
+    "the stamped .gitignore ignores the rendered design pages — catches a design commit that stages the page design-render writes for publishing"
+  )
+  func gitignoreCoversDesignRender() async throws {
+    let sandbox = try Sandbox(
+      copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
+    defer { sandbox.remove() }
+
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!outcome.failed)
+    let lines = try sandbox.state()["repo/.gitignore"]?.split(separator: "\n") ?? []
+    #expect(lines.contains("**/.harness/design-render/"))
+  }
+
+  @Test(
     "a fresh repository gets a config inferred from it that the gate can load — catches a first bootstrap that leaves every check RED on its own config"
   )
   func freshRepositoryConfigLoads() async throws {
@@ -240,5 +256,42 @@ struct BootstrapCommandTests {
     #expect(outcome.failed)
     #expect(outcome.text.contains("template templates/AGENTS.md is missing"))
     #expect(try sandbox.state() == before)
+  }
+
+  @Test(
+    "the docs a fresh bootstrap stamps pass its own docs-lint and prose — catches a new repository whose first push fails on the harness's words"
+  )
+  func stampedDocsPassDocsGates() async throws {
+    let sandbox = try Sandbox(
+      copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
+    defer { sandbox.remove() }
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+    #expect(!outcome.failed)
+    let runner = LiveProcessRunner(baseEnvironment: [
+      "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+      "HOME": sandbox.home.path, "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+    ])
+    for arguments in [["init", "-q", "-b", "main"], ["add", "-A"]] {
+      let git = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: sandbox.repository.path,
+          timeout: .seconds(30)))
+      #expect(git.status.isSuccess, "git \(arguments): \(git.stderr.text)")
+    }
+
+    let outcomes = [
+      await DocsLintCheck.run(root: sandbox.repository, runner: runner),
+      ProseCheck.run(root: sandbox.repository, files: ["AGENTS.md", "docs/index.md"]),
+    ]
+
+    for checked in outcomes {
+      guard case .checked(let result) = checked else {
+        Issue.record("not checked: \(checked)")
+        continue
+      }
+      let gating = result.findings.filter { $0.severity.lintLevel == .error }
+      #expect(gating.isEmpty, "\(gating.map { "\($0.file) \($0.ruleID): \($0.message)" })")
+    }
   }
 }

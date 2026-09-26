@@ -646,6 +646,111 @@ struct ContextPackCommandTests {
     #expect(!text.contains("Guests on flaky Wi-Fi"))
   }
 
+  private func auditorOptions(
+    repository: Repository, claim: Claim
+  ) throws -> ContextPackGatherInputs {
+    let designPath = try repository.write(
+      designFixtureText, at: "docs/checkout/designs/offline-order-queue.md")
+    let line = String(decoding: try JSONEncoder().encode(claim), as: UTF8.self)
+    var options = ContextPackGatherInputs()
+    options.design = designPath
+    options.docAnchor = ["decision"]
+    options.claims = try repository.write(line + "\n", at: "claims.jsonl")
+    options.claimID = [claim.id]
+    return options
+  }
+
+  @Test(
+    "an evidence-auditor pack carries a cited probe's whole snippet and its verdict — catches review stopping on a probe claim, which has no line range or quote"
+  )
+  func evidenceAuditorPackCarriesProbeSnippetAndVerdict() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let evidence = "docs/checkout/designs/offline-order-queue.evidence"
+    let id = "ev-tca-effect-run-supports-cancellation"
+    _ = try repository.write(
+      "import ComposableArchitecture\nenum Probe_ev_tca_effect_run_supports_cancellation {\n"
+        + "  static let effect = Effect<Int>.run { _ in }.cancellable(id: 1)\n}\n",
+      at: "\(evidence)/probes/Probe_ev_tca_effect_run_supports_cancellation.swift")
+    _ = try repository.write(
+      "{\n  \"claimId\" : \"\(id)\",\n  \"diagnostics\" : [],\n  \"pins\" : {},\n"
+        + "  \"sdk\" : \"iphonesimulator26.2\",\n  \"verdict\" : \"pass\"\n}\n",
+      at: "\(evidence)/probes/Probe_ev_tca_effect_run_supports_cancellation.verdict.json")
+    let claim = Claim(
+      id: id, lane: "packages", text: "Effect.run supports cancellation.",
+      citation: Citation(
+        kind: .probe, loc: "probes/Probe_ev_tca_effect_run_supports_cancellation.swift",
+        pin: "swift-composable-architecture@1.26.2"), status: .supported)
+    let options = try auditorOptions(repository: repository, claim: claim)
+
+    let outcome = await ContextPackRun.run(
+      role: "evidence-auditor", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("import ComposableArchitecture"))
+    #expect(text.contains(".cancellable(id: 1)"))
+    #expect(text.contains("\"verdict\" : \"pass\""))
+  }
+
+  @Test(
+    "an evidence-auditor pack for a probe claim with no verdict file fails, naming the file — catches an auditor judging a probe that never ran"
+  )
+  func evidenceAuditorPackProbeWithoutVerdictFails() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let evidence = "docs/checkout/designs/offline-order-queue.evidence"
+    _ = try repository.write(
+      "enum Probe_ev_tca_effect_run_supports_cancellation {}\n",
+      at: "\(evidence)/probes/Probe_ev_tca_effect_run_supports_cancellation.swift")
+    let claim = Claim(
+      id: "ev-tca-effect-run-supports-cancellation", lane: "packages", text: "some claim text",
+      citation: Citation(
+        kind: .probe, loc: "probes/Probe_ev_tca_effect_run_supports_cancellation.swift",
+        pin: "swift-composable-architecture@1.26.2"), status: .supported)
+    let options = try auditorOptions(repository: repository, claim: claim)
+
+    let outcome = await ContextPackRun.run(
+      role: "evidence-auditor", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains("Probe_ev_tca_effect_run_supports_cancellation.verdict.json"))
+  }
+
+  @Test(
+    "an answer claim whose quote holds a double quote finds its line in answers.jsonl — catches a quote matched only against the JSON-escaped line"
+  )
+  func answerQuoteWithDoubleQuoteMatches() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let evidence = "docs/checkout/designs/offline-order-queue.evidence"
+    let answer =
+      #"{"runId":"design-20260926T125113Z","question":"What does \"history\" mean?","answer":"the list of \"count changes\""}"#
+    _ = try repository.write(answer + "\n", at: "\(evidence)/answers.jsonl")
+    let claim = Claim(
+      id: "ev-tca-effect-run-supports-cancellation", lane: "prior-decisions",
+      text: "History means the list of count changes.",
+      citation: Citation(
+        kind: .answer, loc: "answers.jsonl#design-20260926T125113Z/1", pin: nil,
+        quote: #"the list of "count changes""#), status: .supported)
+    let options = try auditorOptions(repository: repository, claim: claim)
+
+    let outcome = await ContextPackRun.run(
+      role: "evidence-auditor", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(try repository.packText(written.relativePath).contains(answer))
+  }
+
   // MARK: - Standards reviewer: Module kinds, Decision, Test plan, plus given anchors
 
   @Test(

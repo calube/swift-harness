@@ -6,5 +6,6 @@
 **/.harness/cache/
 **/.harness/probe/
 **/.harness/context-pack/
+**/.harness/design-render/
 **/.harness/task-status.json
 .build/
