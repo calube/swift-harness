@@ -184,3 +184,34 @@ Code, and are covered by the bootstrap section above).
   satisfies both checks. A test that calls API the change adds is `prove.compile-only`, so tests
   use literals, not new constants. The `tdd` skill should say both.
 - Cold-build T1 (119–166s) is over its 60s budget. The budget finding is a non-gating `minor`.
+
+## Rehearsal (unattended, 2026-09-26): a nonexistent API is refuted
+
+This is a rehearsal, not the attended acceptance run. The user was away and approved running it
+unattended. The orchestrator answered the frame questions in the user's place; those answers are
+labelled "orchestrator-answered rehearsal" below. No one clicked Approve, and the design branch
+was never merged. The design is throwaway.
+
+Set-up: `examples/SampleApp` copied to a scratch directory outside this repository, `git init`,
+the bootstrap `.gitignore` template added, and `swift package resolve` run in
+`Packages/CounterFeature`. The checkout of `swift-composable-architecture` is at `1.26.2`
+(`377da4061db10d26337a71bb279c506bb951f50f`), the version and revision `Package.resolved` pins.
+
+### The API, proven absent before the run
+
+The request leans on a `@PersistedState` macro: a TCA state property wrapper that saves a field
+across relaunches. It sounds like TCA's `@ObservableState` and `@Presents`, but it doesn't exist.
+Run from `Packages/CounterFeature` at 2026-09-26T12:23Z, before the design run started:
+
+```
+$ grep -rn 'PersistedState' .build/checkouts/swift-composable-architecture; echo "exit=$?"
+exit=1
+$ grep -rn 'PersistedState' .build/checkouts; echo "exit(all checkouts)=$?"
+exit(all checkouts)=1
+$ grep -rnE 'func persist(ed|ing)?\(' .build/checkouts/swift-composable-architecture; echo "exit=$?"
+exit=1
+```
+
+Every grep printed no match. As a control, the same tree does contain the real macros:
+`grep -rln 'macro Presents\|macro ObservableState' .build/checkouts/swift-composable-architecture/Sources`
+finds `Sources/ComposableArchitecture/Macros.swift`.
