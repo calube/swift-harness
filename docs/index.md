@@ -12,6 +12,7 @@ one of the two area indexes below.
 | Writing or reviewing tests (tiers, red/green, snapshots, flake stress) | [`testing-playbook.md`](testing-playbook.md) |
 | Working on or debugging a Claude Code hook | [`hooks.md`](hooks.md) |
 | Checking what was verified end-to-end on `examples/SampleApp` | [`e2e-report.md`](e2e-report.md) |
+| Planning or running evals of the harness and `swiftgate` (objectives, suites, eval apps) | [`../evals/README.md`](../evals/README.md) |
 | Looking up why a review-severity rule exists | [`adrs/README.md`](adrs/README.md) |
 | Reading or extending a design (Foundation, design & plan workflows, …) | [`designs/README.md`](designs/README.md) |
 | Picking up mid-build, or handing work to the next session | [`handoffs/2026-09-25-subproject-2.md`](handoffs/2026-09-25-subproject-2.md), [`handoffs/2026-09-25-subproject-2-brainstorm-decisions.md`](handoffs/2026-09-25-subproject-2-brainstorm-decisions.md), [`handoffs/worker-brief.md`](handoffs/worker-brief.md), [`handoffs/subproject-2-interfaces.md`](handoffs/subproject-2-interfaces.md), [`handoffs/subproject-2-orchestrator-runbook.md`](handoffs/subproject-2-orchestrator-runbook.md) |
