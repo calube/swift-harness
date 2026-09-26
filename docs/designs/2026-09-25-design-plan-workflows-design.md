@@ -634,7 +634,8 @@ Unit: one module's vertical slice that turns at least one `test-…` item green.
 | single-dependent chain within one module | warning |
 
 Bounds live in `.swiftgate.toml [plan]`. `stats` reports estimate error (`estLines` vs actual) and
-overhead share.
+overhead share. Overhead share = (wall − critical path) / wall, where wall sums each wave's largest `estLines`
+and the critical path is the longest `estLines`-weighted dependency chain.
 
 ## 10. Context engineering
 

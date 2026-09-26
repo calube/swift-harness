@@ -572,3 +572,17 @@ Mermaid natively from `<pre class="mermaid">`: never load a Mermaid library** (a
 - `LedgerTask.actualLines: Int?` (absent → nil, negative fails decoding, omitted when nil). Estimate error =
   `actualLines − estLines` per task that has it; `meanAbsoluteError = mean(|error|)`; others counted as excluded.
   Sub-project 5 writes `actualLines`.
+
+## Wave 16
+
+**`design-render --ledger <plan>`** (`D/Design/LedgerRender.swift`, `C/Commands/DesignRenderCommand.swift`)
+- Writes `.harness/design-render/<slug>-ledger.html`. Exit 0 written, 2 blocked (nil or unknown `designSha`,
+  unreadable plan state); no exit 1 (no lint step). JSON: `{command: "design-render", verdict, plan, output,
+  designSha, capabilities, notes, message}`; the ledger page declares no capabilities.
+- `LedgerRender.page(Input(slug:ledger:design:designSha:))` is pure. Reads the plan through `PlanStateStore` and the
+  design through `DesignAtSha`; waves from `PlanSchedule` (a stored/recomputed mismatch shows the recomputed order
+  plus a visible warning); gaps from `PlanLintCoverage.uncoveredIDs`, shown as text.
+- DAG: a Mermaid flowchart in `<pre class="mermaid">` from `dagMermaidSource(tasks:)`, labels escaped; edges equal
+  `deps`.
+- `predictedOverheadShare(tasks:waves:)` = (wall − critical path) / wall; wall sums each wave's largest `estLines`,
+  the critical path is the longest `estLines`-weighted chain. The spec now states this definition.

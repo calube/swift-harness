@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–15 merged on local main (1–8 also on origin/main), push tier GREEN (1334 tests). Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–16 merged on local main (1–15 also on origin/main), push tier GREEN (1349 tests). Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 16 — design-render-ledger-page. Follow the runbook's wave loop.
+Next action: wave 17 — calibrate-design-command, design-research-lane-agents, design-research-workflow. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
