@@ -7,10 +7,11 @@ workspace="$PWD"
 # Cases link to this script from inside their own directory, since the runner refuses a
 # scaffold path outside the case; walk up from the case to the plugin manifest.
 plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-while [ ! -f "$plugin_root/.claude-plugin/plugin.json" ]; do
+while [ ! -f "$plugin_root/plugin/.claude-plugin/plugin.json" ]; do
   [ "$plugin_root" = "/" ] && { echo "scaffold: no plugin root above the case" >&2; exit 1; }
   plugin_root="$(dirname "$plugin_root")"
 done
+plugin_root="$plugin_root/plugin"
 
 # The eval runner doesn't document the scaffold's environment; this record answers that for the
 # runner spike and names variables only, never their values.

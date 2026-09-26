@@ -138,19 +138,19 @@ ln -s "$shim" "$work/linked-swiftgate"
 # must still hash to the cached binary, or every hook goes quiet for a cold rebuild. Deleting the
 # stamp forces a rehash. A hook on a miss builds in the background without writing a stamp, so a
 # missing stamp or a build lock is the miss.
-cached_hash="$(ls "$SWIFTGATE_CACHE_DIR/bin")"
+cached_hash="$(ls "$cache/bin")"
 [ "$(printf '%s\n' "$cached_hash" | wc -l | tr -d ' ')" = 1 ] ||
   fail "expected one cached binary, found: $cached_hash"
 for locale in C en_US.UTF-8; do
-  rm -f "$SWIFTGATE_CACHE_DIR"/stamps/*
+  rm -f "$cache"/stamps/*
   payload="{\"session_id\":\"shim-test\",\"cwd\":\"$work/elsewhere\",\"hook_event_name\":\"Stop\"}"
   (cd "$work/elsewhere" && echo "$payload" | LC_ALL="$locale" "$shim" hook stop >/dev/null) ||
     fail "hook under LC_ALL=$locale exited non-zero"
-  if ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1; then
+  if ls "$cache"/building-* >/dev/null 2>&1; then
     kill_background_build || true
     fail "LC_ALL=$locale missed the cached binary $cached_hash and started a rebuild"
   fi
-  stamped="$(cat "$SWIFTGATE_CACHE_DIR"/stamps/* 2>/dev/null || true)"
+  stamped="$(cat "$cache"/stamps/* 2>/dev/null || true)"
   [ "$stamped" = "$cached_hash" ] ||
     fail "LC_ALL=$locale hashed the same sources to '$stamped', cached binary is $cached_hash"
 done
