@@ -32,8 +32,8 @@ recall on "merge verdict, ignore the tests" is 0 of 7, a gap outside this fix.
    descriptions and the app alone. I moved them in without reading them.
 3. **1 description change,** tuned on the 60 only.
 4. **Verdict** on the round-3 held-out set, 3 trials. **Regression** over the round-1 and round-2
-   held-out `tdd` and `test-gate` cases, 1 trial each. The round-2 prompts have been read, so that
-   set is seen, not held out.
+   held-out `tdd` and `test-gate` cases, 1 trial each. I have read the round-2 prompts, so that
+   set counts as seen, not held out.
 
 ## Results
 
@@ -71,7 +71,7 @@ own rounds.
 **`test-gate` shows what the plugin adds.** With the plugin, the agent named `decrementWorks` as a
 restated duplicate and rewrote it as a 1→0 edge test. The ready tier then flagged the rewrite
 `prove.not-proven`, since plain `count -= 1` also takes 1 to 0, so the agent deleted it and kept
-`floorAtZero`. It said the branch was ready only once the test change was committed. Without the
+`floorAtZero`. It said the branch would be ready once the user committed the test change. Without the
 plugin, the agent reverted the fix by hand to prove `floorAtZero`, called the branch "good to mark
 ready", and left `decrementWorks` as an optional cleanup.
 

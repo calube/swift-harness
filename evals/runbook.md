@@ -172,7 +172,7 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
   root. A scaffold needs both roots. The move broke every scaffold until they kept the 2 roots
   apart.
 - `claude plugin eval` needs the cases inside the plugin root: `--eval-dir` refuses `..`, and an
-  `evals` link inside `plugin/` is refused when a case runs. Stage a copy with
+  `evals` link inside `plugin/` makes every case fail at run time. Stage a copy with
   `evals/runner/stage_plugin.sh <dir>`, then run `claude plugin eval .` from `<dir>/plugin`. The
   script also tags a split, since `--tag` matches any of its tags, not all.
 - `tests/skill_commands_test.mjs` needs a built `swiftgate`. It finds

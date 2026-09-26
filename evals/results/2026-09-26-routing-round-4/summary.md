@@ -6,7 +6,7 @@ requests per skill, half should-trigger and half near-miss, 2 paraphrases each, 
 
 **Result: every skill scores 1.00 precision and 1.00 recall on the 40 held-out cases, 40 of 40
 at pass^3. Nothing loaded where it shouldn't have.** The tuning set found 1 flaky trial, for
-`plan`. No description change is needed.
+`plan`. None of the 5 descriptions needs a change.
 
 ## Pins
 
@@ -71,7 +71,7 @@ run went 0.53 over, which is the runs already in flight when the cap hit.
 
 1. **Verdict on the evals: working, with 1 gap.** The independent set and the staging both held.
    With every score at 1.00, precision still owes a planted break for these 5 skills.
-2. **What the evals say about the harness.** All 5 descriptions route correctly on held-out
+2. **What the evals say about the harness.** All 5 descriptions load the right skill on held-out
    requests, and none of them takes a neighbour's request. Across rounds 1 to 4, all 11 skills
    are at 1.00 held-out precision. `review` recall on merge-verdict requests and the `validate` PR
    summary shape are still open.
