@@ -27,7 +27,6 @@ public final class FakeGit: Git {
   private let common: String
   private let blobs: [String: String]
   private let history: [String: [String]]
-  private let tracked: [String]
   private let refReads = Mutex<[String]>([])
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
@@ -44,20 +43,18 @@ public final class FakeGit: Git {
   ///   - commonDirectory: what ``commonDirectory()`` returns.
   ///   - blobs: what ``blobContents(_:)`` answers per id; others are `nil`.
   ///   - history: what ``revisions(of:)`` answers per path, newest first; others are `[]`.
-  ///   - tracked: what ``trackedFiles(matching:)`` returns for any pattern.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
     prefix: String = "", addedSince: [AddedLines] = [], revisions: [String: String] = [:],
     contentHashes: [String: String] = [:], contentsAtRef: [String: String] = [:],
     commonDirectory: String = "/fake/.git", blobs: [String: String] = [:],
-    history: [String: [String]] = [:], tracked: [String] = [],
+    history: [String: [String]] = [:],
     failure: GitError? = nil
   ) {
     self.contentsAtRef = contentsAtRef
     self.common = commonDirectory
     self.blobs = blobs
     self.history = history
-    self.tracked = tracked
     self.revisions = revisions
     self.hashes = contentHashes
     self.prefix = prefix
@@ -152,10 +149,5 @@ public final class FakeGit: Git {
   public func revisions(of path: String) async throws(GitError) -> [String] {
     if let failure { throw failure }
     return history[path] ?? []
-  }
-
-  public func trackedFiles(matching _: String) async throws(GitError) -> [String] {
-    if let failure { throw failure }
-    return tracked
   }
 }

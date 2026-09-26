@@ -242,23 +242,6 @@ struct LiveGitTests {
     #expect(hashes.count == 2)
   }
 
-  @Test(
-    "tracked files matching a basename pattern are found at every depth, toplevel-relative, untracked ones are not — catches a Package.resolved rewrite missed because it sits in a nested package"
-  )
-  func trackedFilesMatching() async throws {
-    let repo = try await TemporaryGitRepository()
-    defer { repo.remove() }
-    try repo.write("Package.resolved", "{}\n")
-    try repo.write("Packages/Feature/Package.resolved", "{}\n")
-    try repo.write("Packages/Feature/Package.swift", "// swift-tools-version: 6.2\n")
-    _ = try await repo.commitAll("base")
-    try repo.write("Untracked/Package.resolved", "{}\n")
-
-    let found = try await repo.adapter.trackedFiles(matching: "*Package.resolved")
-
-    #expect(found == ["Package.resolved", "Packages/Feature/Package.resolved"])
-  }
-
   @Test("merge-base finds the fork point and nil for unrelated history — catches wrong diff base")
   func mergeBase() async throws {
     let repo = try await TemporaryGitRepository()

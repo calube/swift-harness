@@ -1,22 +1,24 @@
+import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 
 /// A backstop around every gate run: a hook denies an agent from hand-editing a committed
 /// `Package.resolved` (`guard.package-resolved`), so a gate run that rewrites one itself — a
 /// SwiftPM or xcodebuild resolve falling back off the committed pins — must never pass quietly.
-/// This snapshots every tracked `Package.resolved`'s content hash before the run and compares
-/// after; the per-invocation `--only-use-versions-from-resolved-file` /
+/// This snapshots every `Package.resolved`'s content hash before the run and compares after; the
+/// per-invocation `--only-use-versions-from-resolved-file` /
 /// `-onlyUsePackageVersionsFromResolvedFile` flags are the primary defense, so a change here means
 /// they missed a path.
 enum ResolvedFileGuard {
   static let rewrittenRuleID = "swiftgate.resolved-file-rewritten"
 
-  /// Git blob hash of each tracked `Package.resolved`'s current working-tree content. Empty (never
-  /// throws) if git can't answer, which trades a rare missed backstop for never blocking a run the
-  /// flags alone already protect.
-  static func snapshot(git: any Git) async -> [String: String] {
-    guard let paths = try? await git.trackedFiles(matching: "*Package.resolved"), !paths.isEmpty
-    else { return [:] }
+  /// Git blob hash of each `Package.resolved` under `root`'s current working-tree content
+  /// (`RepositoryFiles.list` already skips hidden directories, so never `.build/checkouts/*`'s
+  /// own copies). Empty (never throws) if git can't hash them, which trades a rare missed
+  /// backstop for never blocking a run the flags alone already protect.
+  static func snapshot(root: URL, git: any Git) async -> [String: String] {
+    let paths = RepositoryFiles.list(root: root, under: "") { $0.hasSuffix("Package.resolved") }
+    guard !paths.isEmpty else { return [:] }
     return (try? await git.contentHashes(of: paths)) ?? [:]
   }
 

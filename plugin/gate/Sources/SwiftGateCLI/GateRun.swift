@@ -40,9 +40,9 @@ enum GateRun {
     // Belt and braces beside every invocation's own --only-use-versions-from-resolved-file /
     // -onlyUsePackageVersionsFromResolvedFile: whatever `body` runs must never rewrite a committed
     // Package.resolved, on any path those flags missed.
-    let resolvedFilesBefore = await ResolvedFileGuard.snapshot(git: git)
+    let resolvedFilesBefore = await ResolvedFileGuard.snapshot(root: root, git: git)
     var parts = try await body(Context(runID: runID, directory: directory))
-    let resolvedFilesAfter = await ResolvedFileGuard.snapshot(git: git)
+    let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
     if let finding = try ResolvedFileGuard.finding(
       before: resolvedFilesBefore, after: resolvedFilesAfter)
     {

@@ -179,6 +179,13 @@ struct ResolvedFileRewriteTests {
     try await repo.commitUnresolvablePin()
     let corrupted = try String(contentsOf: repo.resolvedFile, encoding: .utf8)
     #expect(corrupted != repo.resolvedBeforeCorruption)
+    // The backstop's own comparison, in-process, against this run's real before/after content:
+    // independent evidence from whichever call site the --only-use-versions-from-resolved-file /
+    // -onlyUsePackageVersionsFromResolvedFile flags protect.
+    let selfCheck = try ResolvedFileGuard.finding(
+      before: ["MainPkg/Package.resolved": repo.resolvedBeforeCorruption],
+      after: ["MainPkg/Package.resolved": corrupted])
+    #expect(selfCheck?.ruleID == ResolvedFileGuard.rewrittenRuleID)
 
     let report = try await repo.runTestTierBinary()
 

@@ -195,13 +195,6 @@ public struct LiveGit: Git, DiffReading {
     return ids
   }
 
-  public func trackedFiles(matching pattern: String) async throws(GitError) -> [String] {
-    // `:(top)` anchors the pathspec at the repository root rather than this adapter's (possibly
-    // nested) working directory, matching the toplevel-relative paths `--full-name` reports.
-    let output = try await run(["ls-files", "-z", "--full-name", "--", ":(top)\(pattern)"])
-    return Self.nulSeparated(output).sorted()
-  }
-
   private static func isObjectID(_ text: String) -> Bool {
     (text.utf8.count == 40 || text.utf8.count == 64)
       && text.utf8.allSatisfy {
