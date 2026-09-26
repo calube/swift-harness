@@ -8,7 +8,7 @@ each one calls the same code as the `swiftgate` command it names.
 | Event | What it does | Budget |
 |---|---|---|
 | SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). | < 1s |
-| PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. On `git commit`, adds `swiftgate comments --staged` findings as advisory context. | < 50ms |
+| PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. Paths it writes go through the Edit/Write guard ([Bash writes](#bash-writes)). On `git commit`, adds `swiftgate comments --staged` findings as advisory context. | < 50ms |
 | PreToolUse (Edit/Write) | Denies hand edits to `__Snapshots__/`, `Package.resolved`, `.xcresult` bundles, and a plan's `orchestrator.lock`. Plan state and design artifacts are writable only by the orchestrating session (below). | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | Formats the file in place with `swift format`, then runs `swiftgate lint` on that file alone. A gating finding comes back as a block next to the tool result. | < 1s |
 | Stop | Runs `swiftgate check --tier fast` and blocks the stop when it is RED. | ≤ 90s |
@@ -63,6 +63,19 @@ canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
 
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.
+
+## Bash writes
+
+Each path a Bash command writes gets the same judgment, with the same payload, as a Write to it:
+redirections (`>`, `>>`, `&>`, `<>`), `tee`, the destination of `cp`, `mv`, `install` and `ln`,
+the operands of `rm`, `truncate` and `touch`, `dd of=`, and `sed -i`/`perl -i` files, anywhere in
+the command line. Relative paths resolve against the working directory and any literal `cd`
+before them. So a subagent's `echo {} > ledger.json` is denied like its Write, and the lock holder
+can still write its plan through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
+
+Known limits: the guard stops accidental and ordinary writes; it isn't a sandbox. Interpreter code
+(`python3 -c`, `node -e`), heredoc text, `eval` of a built string, targets spelled with `$VAR` or
+`$(…)`, and a recursive delete of a guarded directory's parent aren't judged.
 
 ## State
 
