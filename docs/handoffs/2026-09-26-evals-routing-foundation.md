@@ -1,10 +1,10 @@
 # Handoff: skill routing for the 6 foundation skills
 
 <!-- RESUME
-State (2026-09-26): round 1 (6 foundation skills) and the tdd/test-gate description fix are merged. Results: evals/results/2026-09-26-routing-foundation and evals/results/2026-09-26-routing-fix. The fix branch fix-tdd-test-gate-routing merged with test-gate description v2; v2 passed its round-3 tuning set (test-gate 1.00/1.00), and its held-out verdict (round-3 independent set, 20 cases × 3) was still running at merge time.
-Start by reading the "Lessons from the routing rounds" section of evals/runbook.md, then the evals-in-flight-2026-09-26 memory, which says where the unrecorded raw results are. Open, in order: (1) record the v2 held-out verdict and the live session pair (tdd decrement-floors-at-zero, test-gate hollow-test-before-ready, 1 trial per arm) in a results summary; in the tdd pair, both arms passed and the with-plugin arm showed no swiftgate RED report, so trace why. (2) Route the other 5 skills: 100 independent cases are seeded (tag round-4), about 17 USD for 3 trials, approved. (3) validate misses "summarise the tests for the PR description" and review misses "would you approve this": no fix yet.
-Runner after the plugin/ move: `claude plugin eval .` from the repo root no longer finds a plugin.json. Check `claude plugin eval --help` for how to point it at plugin/ while the cases stay in evals/ at the root, before the next run.
-Budget: about 30 USD approved for this batch; spent so far is in each results summary.
+State (2026-09-26): rounds 1 to 4 are done; results on branch evals-round-4 (not merged yet): evals/results/2026-09-26-test-gate-round-3 (test-gate v2 held out 1.00/0.97, tdd 1.00/1.00; live session pair: test-gate 1.00 with plugin vs 0.50 without, tdd passes both arms) and evals/results/2026-09-26-routing-round-4 (bootstrap, design, plan, prose, status all 1.00/1.00 held out).
+Run evals from a stage: evals/runner/stage_plugin.sh <dir>, then `claude plugin eval .` from <dir>/plugin (see the runbook).
+Open, in order: (1) merge evals-round-4 after checking git log main and messaging the orchestrator session. (2) A planted precision break for 1 round-4 skill, about 0.5 USD. (3) review recall on "would you approve this" and "merge verdict, ignore the tests"; validate misses "summarise the tests for the PR description". (4) A harder tdd session case where the plugin-off agent skips red, then 3 trials per arm; the new history-based report-seen graders still need a real run. (5) 8 status tuning cases never ran (cost cap), about 1.8 USD, only if status changes.
+Budget: the batch (about 30 USD plus about 7 added for round 4) is spent; ask before any new run.
 -->
 
 ## Scope
