@@ -44,6 +44,24 @@ Sources: https://code.claude.com/docs/en/plugin-marketplaces,
 https://code.claude.com/docs/en/plugins/install (install scopes),
 https://code.claude.com/docs/en/settings-reference (`enabledPlugins`).
 
+## Skills
+
+Each runs as `/swift-harness:<name>`.
+
+| Skill | Use it to |
+|---|---|
+| `bootstrap` | stamp or upgrade the harness in an iOS repository |
+| `architecture` | pick a new module's kind and scaffold its packages |
+| `design` | frame, research, draft, review, publish and amend a design before any code |
+| `plan` | turn an approved design into a build plan of sized, scheduled tasks |
+| `prose` | write docs that pass the plain-English rules `swiftgate prose` checks |
+| `tdd` | write a failing test first, then make it pass |
+| `test-gate` | run the pre-ready gate and judge new tests for slop |
+| `review` | run the multi-agent code review on a Swift change |
+| `comment-audit` | judge each comment a change adds: keep, trim or cut |
+| `validate` | produce ready-for-review evidence and a PR body block |
+| `status` | list active plans across this machine's bootstrapped repositories |
+
 ## Contributing
 
 `cd gate && swift build && swift test && swift format lint --strict -r Sources Tests Package.swift`.

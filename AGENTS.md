@@ -26,8 +26,10 @@ A Claude Code plugin holding SwiftUI iOS work to a consistent bar. Full docs: [`
   references, no opaque codenames (`Phase N`, `Stage N`, `[A-Z]{1,3}\d+`).
 - **A new or changed test must fail for a real reason first.** Assertion-free, tautological,
   existence-only, or sleep-based tests are findings, not passes.
-- **Plan/ledger state is orchestrator-only.** A subagent is never the orchestrator, even inside the
-  orchestrator's own session; don't hand-edit `ledger.json` or `index.json`.
+- **Plan/ledger state is orchestrator-only.** It lives in the git common dir
+  (`$(git rev-parse --git-common-dir)/swift-harness/plans/`), shared by every worktree and never
+  committed. A subagent is never the orchestrator, even inside the orchestrator's own session;
+  don't hand-edit `ledger.json` or `index.json`.
 
 Everything else — the rule catalog, testing tiers, hooks, design docs, ADRs — is in
 [`docs/index.md`](docs/index.md). Don't guess a rule; grep `docs/standards.md` or ask.

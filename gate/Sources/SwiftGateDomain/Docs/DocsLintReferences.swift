@@ -119,11 +119,25 @@ public enum DocsLintReferences {
   /// "Nowhere else" means outside the doc that defines the id — a requirement mentioned only
   /// inside its own defining doc (including a second mention there) is still flagged; one
   /// mentioned in *any* other corpus file, design or not, is not.
+  ///
+  /// A quick-tier design is exempt: it has no ADR, so nothing outside it ever cites its
+  /// requirements. Only a design doc whose `tier` frontmatter decodes to exactly
+  /// ``DesignTier/quick`` qualifies; a missing or unknown tier keeps the finding, and an unknown
+  /// one is named in its message.
   private static func requirementUncitedFindings(
     scans: [DocScan]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     for scan in scans {
+      let tier = scan.designTier
+      if tier == .known(.quick) { continue }
+      let tierNote: String
+      if case .unknown(let raw) = tier {
+        tierNote =
+          " The design's unknown tier \"\(raw)\" can't exempt it; quick is the only exempt tier."
+      } else {
+        tierNote = ""
+      }
       for id in scan.definedIDs.sorted() where id.hasPrefix("req-") {
         let citedElsewhere = scans.contains { other in
           other.path != scan.path && other.mentionedIDs.contains(id)
@@ -135,11 +149,20 @@ public enum DocsLintReferences {
             line: scan.definedIDLine[id],
             message:
               "\"\(id)\" is defined here but never cited outside its defining doc "
-              + "(spec §6.2 reference integrity).",
+              + "(spec §6.2 reference integrity)." + tierNote,
             failureScenario: nil))
       }
     }
     return findings
+  }
+
+  /// A doc's `tier` frontmatter as read for the quick-tier exemption. `.unknown` keeps a value
+  /// that isn't a ``DesignTier`` so the finding can name it.
+  private enum DocTier: Equatable {
+    case notADesign
+    case missing
+    case known(DesignTier)
+    case unknown(String)
   }
 
   // MARK: - Relative links
@@ -362,16 +385,24 @@ public enum DocsLintReferences {
     let linksPerLine: [[LineLink]]
     /// Every `req-`/`test-` id this file defines via a `- <id>: ` bullet.
     let definedIDs: Set<String>
-    /// Every `req-`/`test-`/`ev-`-shaped token mentioned anywhere in this file (definitions
-    /// included).
+    /// Every valid, standalone `req-`/`test-`/`ev-` id mentioned anywhere in this file
+    /// (definitions included).
     let mentionedIDs: Set<String>
     /// 1-based line of each mentioned id's first occurrence.
     let firstMentionLine: [String: Int]
     /// 1-based line of each defined id's `- <id>: ` bullet.
     let definedIDLine: [String: Int]
+    let designTier: DocTier
 
     init(file: DocFile) {
       self.path = file.path
+      if !DesignDocument.isDesignDocPath(file.path) {
+        self.designTier = .notADesign
+      } else if let raw = file.markdown.frontmatter["tier"] {
+        self.designTier = DesignTier(rawValue: raw).map(DocTier.known) ?? .unknown(raw)
+      } else {
+        self.designTier = .missing
+      }
       let lines = DocScan.nonFencedLines(file.rawText).map(DocScan.maskInlineCode)
       self.scanLines = lines
       self.linksPerLine = lines.enumerated().map { index, line in
@@ -392,6 +423,7 @@ public enum DocsLintReferences {
         }
         for match in line.matches(of: mentionPattern) {
           let id = String(line[match.range])
+          guard DocScan.isStandaloneID(id, at: match.range.lowerBound, in: line) else { continue }
           mentioned.insert(id)
           if firstMention[id] == nil { firstMention[id] = index + 1 }
         }
@@ -400,6 +432,18 @@ public enum DocsLintReferences {
       self.mentionedIDs = mentioned
       self.firstMentionLine = firstMention
       self.definedIDLine = definedLine
+    }
+
+    /// A mention counts only when ``IdPolicy`` accepts it (so `test-first` is a word, not an id)
+    /// and it starts its own token: `self-test-runs-…` is a task id, not a `test-` id.
+    static func isStandaloneID(_ id: String, at start: String.Index, in line: String) -> Bool {
+      if start > line.startIndex {
+        let previous = line[line.index(before: start)]
+        if previous == "-" || previous == "_" || previous.isLetter || previous.isNumber {
+          return false
+        }
+      }
+      return IdKind.allCases.contains { id.hasPrefix($0.prefix) && IdPolicy.isValid(id, kind: $0) }
     }
 
     /// Blanks fenced code blocks (opening/closing fence lines and everything between) to empty

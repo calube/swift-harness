@@ -234,6 +234,58 @@ struct DocsLintPolicyTests {
       #expect(finding.severity.failsGate)
     }
   }
+
+  // MARK: - Repo scope and per-file budgets
+
+  @Test(
+    "a prose_exclude path skips the word budgets — catches a plan or handoff charged a topic budget the repo opted out of"
+  )
+  func proseExcludedPathSkipsWordBudgets() throws {
+    let config = DocsConfig(
+      budgets: DocsBudgets(router: 1, topic: 1), proseExclude: ["docs/plans/**"])
+    let findings = try Self.check(
+      [
+        Self.doc("docs/plans/a.md", "## Notes\n\none two three"),
+        Self.doc("docs/plans/index.md", "## Notes\n\none two three"),
+        Self.doc("docs/other.md", "## Notes\n\none two three"),
+      ], config: config)
+    let budgets = findings.filter { $0.ruleID.hasSuffix("word-budget") }
+    #expect(budgets.map(\.file) == ["docs/other.md"])
+  }
+
+  @Test(
+    "a per-file budget replaces the topic budget for that file only — catches the override leaking to every doc or being ignored"
+  )
+  func perFileBudgetReplacesTopicBudget() throws {
+    let config = DocsConfig(budgets: DocsBudgets(topic: 2, files: ["docs/big.md": 4]))
+    let findings = try Self.check(
+      [
+        Self.doc("docs/big.md", "## Notes\n\none two three four"),
+        Self.doc("docs/bigger.md", "## Notes\n\none two three four"),
+        Self.doc("docs/big-over.md", "## Notes\n\none two three four five"),
+      ], config: config)
+    let budgets = findings.filter { $0.ruleID == "docs-lint.topic-word-budget" }
+    #expect(budgets.map(\.file).sorted() == ["docs/big-over.md", "docs/bigger.md"])
+    let overBig = try Self.check(
+      [Self.doc("docs/big.md", "## Notes\n\none two three four five")], config: config)
+    let finding = try #require(overBig.first { $0.ruleID == "docs-lint.topic-word-budget" })
+    #expect(finding.message.contains("4-word"))
+  }
+
+  @Test(
+    "a per-file budget replaces the router budget for a router — catches routers ignoring the override"
+  )
+  func perFileBudgetReplacesRouterBudget() throws {
+    let config = DocsConfig(budgets: DocsBudgets(router: 2, files: ["docs/index.md": 3]))
+    let under = try Self.check([Self.doc("docs/index.md", "## A\n\none two three")], config: config)
+    #expect(under.filter { $0.ruleID == "docs-lint.router-word-budget" } == [])
+    let over = try Self.check(
+      [Self.doc("docs/index.md", "## A\n\none two three four")], config: config)
+    #expect(
+      over.contains { $0.ruleID == "docs-lint.router-word-budget" && $0.message.contains("3-word") }
+    )
+  }
+
 }
 
 @Suite("Local path rule")

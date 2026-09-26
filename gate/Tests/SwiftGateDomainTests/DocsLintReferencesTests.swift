@@ -88,6 +88,32 @@ struct DocsLintReferencesTests {
     #expect(findings.filter { $0.ruleID == "docs-lint.dangling-id" } == [])
   }
 
+  @Test(
+    "hyphenated English words shorter than a valid id are not ids — catches test-first read as a dangling test id",
+    arguments: ["test-first", "test-quality", "req-line", "ev-only-two"])
+  func shortHyphenatedWordIsNotAnID(word: String) throws {
+    let doc = Self.file("docs/notes.md", "We work \(word) here.\n")
+    #expect(try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" } == [])
+  }
+
+  @Test(
+    "the tail of a longer hyphenated token is not an id — catches self-test-runs-evidence-seeds read as test-runs-evidence-seeds"
+  )
+  func tailOfHyphenatedTokenIsNotAnID() throws {
+    let doc = Self.file(
+      "docs/notes.md",
+      "Task self-test-runs-evidence-and-design-seeds and pre-req-drains-the-queue.\n")
+    #expect(try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" } == [])
+  }
+
+  @Test("a valid dangling test id is still flagged — catches the matcher dropping real ids")
+  func validDanglingTestIDIsStillFlagged() throws {
+    let doc = Self.file("docs/notes.md", "See test-foo-bar-baz for the case.\n")
+    let dangling = try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" }
+    #expect(dangling.map(\.message).contains { $0.contains("\"test-foo-bar-baz\"") })
+    #expect(dangling.count == 1)
+  }
+
   // MARK: - Reference integrity: bare ADR mentions
 
   @Test("a bare ADR NNNN mention is flagged — catches an ADR referenced without a link")
@@ -158,6 +184,60 @@ struct DocsLintReferencesTests {
       """)
     let findings = try Self.check([design, plan])
     #expect(findings.filter { $0.ruleID == "docs-lint.requirement-uncited" } == [])
+  }
+
+  static func tieredDesign(_ path: String, tier: String?) -> DocsLintReferences.DocFile {
+    let frontmatter = tier.map { "---\nstatus: proposed\ntier: \($0)\n---\n\n" } ?? ""
+    return Self.file(
+      path,
+      frontmatter + """
+        ## Requirements
+
+        - req-cited-nowhere-else: the thing must happen.
+        """)
+  }
+
+  static func uncited(_ files: [DocsLintReferences.DocFile]) throws -> [Finding] {
+    try Self.check(files).filter { $0.ruleID == "docs-lint.requirement-uncited" }
+  }
+
+  @Test(
+    "a quick-tier design's uncited requirement is not flagged — catches a quick design failing a rule it has no ADR to satisfy"
+  )
+  func quickTierDesignIsExempt() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: "quick")]) == [])
+  }
+
+  @Test(
+    "standard and deep designs keep the major finding — catches the exemption widening past quick",
+    arguments: ["standard", "deep"])
+  func standardAndDeepTiersAreFlagged(tier: String) throws {
+    let findings = try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: tier)])
+    #expect(findings.count == 1)
+    #expect(findings.first?.severity == .major)
+  }
+
+  @Test(
+    "a design with no tier is still flagged — catches a missing tier silently exempting"
+  )
+  func missingTierIsFlagged() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: nil)]).count == 1)
+  }
+
+  @Test(
+    "an unknown tier is flagged and named in the message — catches a typo like Quick exempting silently",
+    arguments: ["Quick", "fast"])
+  func unknownTierIsFlaggedAndNamed(tier: String) throws {
+    let findings = try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: tier)])
+    #expect(findings.count == 1)
+    #expect(findings.first?.message.contains("unknown tier \"\(tier)\"") == true)
+  }
+
+  @Test(
+    "quick-tier frontmatter outside a designs directory is still flagged — catches any doc opting out with a tier line"
+  )
+  func quickTierOutsideDesignsIsFlagged() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/notes/a.md", tier: "quick")]).count == 1)
   }
 
   // MARK: - Relative links: the risky part

@@ -148,7 +148,8 @@ public enum DocsLintPolicy {
   /// "Architecture" section, for instance, is bounded only by the router budget as a whole, never
   /// individually. Design docs are excluded outright: `design-lint` already checks their whole-doc
   /// and per-section budgets against `budgets.design`, so charging them a `docs-lint` topic budget
-  /// too would double-govern the same prose under two different limits.
+  /// too would double-govern the same prose under two different limits. A `[docs] prose_exclude`
+  /// path is skipped too, and `[docs.budgets.files]` replaces the router or topic budget per file.
   private static func budgetFindings(
     document: ScannedDocument, config: DocsConfig
   ) throws(ReportContractViolation) -> [Finding] {
@@ -165,27 +166,29 @@ public enum DocsLintPolicy {
           failureScenario: nil)
       ]
     }
-    guard !DesignDocument.isDesignDocPath(document.path) else { return [] }
+    guard !DesignDocument.isDesignDocPath(document.path),
+      !config.isProseExcluded(document.path)
+    else { return [] }
 
     let words = totalProseWords(document.markdown.sections)
+    let fileBudget = config.budgets.files[document.path]
     if isRouter(document.path) {
-      guard words > config.budgets.router else { return [] }
+      let budget = fileBudget ?? config.budgets.router
+      guard words > budget else { return [] }
       return [
         try Finding(
           ruleID: "docs-lint.router-word-budget", severity: .major, file: document.path, line: nil,
           message:
-            "\(document.path) is \(words) prose words, over its "
-            + "\(config.budgets.router)-word router budget.",
+            "\(document.path) is \(words) prose words, over its \(budget)-word router budget.",
           failureScenario: nil)
       ]
     }
-    guard words > config.budgets.topic else { return [] }
+    let budget = fileBudget ?? config.budgets.topic
+    guard words > budget else { return [] }
     return [
       try Finding(
         ruleID: "docs-lint.topic-word-budget", severity: .major, file: document.path, line: nil,
-        message:
-          "\(document.path) is \(words) prose words, over its "
-          + "\(config.budgets.topic)-word topic budget.",
+        message: "\(document.path) is \(words) prose words, over its \(budget)-word topic budget.",
         failureScenario: nil)
     ]
   }

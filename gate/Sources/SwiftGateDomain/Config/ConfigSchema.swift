@@ -191,7 +191,10 @@ public enum ConfigSchema {
     guard let table = reader.table(root, path, at: "") else { return defaults }
     reader.rejectUnknownKeys(
       in: table, at: path,
-      allowed: ["managed_files", "banned_phrases", "anchors", "sentence_ceiling", "budgets"])
+      allowed: [
+        "managed_files", "banned_phrases", "anchors", "sentence_ceiling", "budgets",
+        "prose_exclude",
+      ])
     let bannedPhrases = reader.tableArray(table, "banned_phrases", at: path).map {
       phrasePath, phraseTable in
       reader.rejectUnknownKeys(in: phraseTable, at: phrasePath, allowed: ["phrase", "reason"])
@@ -205,7 +208,8 @@ public enum ConfigSchema {
       anchors: reader.stringArray(table, "anchors", at: path) ?? defaults.anchors,
       sentenceCeiling: reader.integer(table, "sentence_ceiling", at: path)
         ?? defaults.sentenceCeiling,
-      budgets: readDocsBudgets(&reader, table, at: path))
+      budgets: readDocsBudgets(&reader, table, at: path),
+      proseExclude: reader.stringArray(table, "prose_exclude", at: path) ?? defaults.proseExclude)
   }
 
   private static func readDocsBudgets(
@@ -215,7 +219,8 @@ public enum ConfigSchema {
     let defaults = DocsBudgets()
     guard let table = reader.table(docsTable, "budgets", at: docsPath) else { return defaults }
     reader.rejectUnknownKeys(
-      in: table, at: path, allowed: ["router", "topic", "design", "agents_md_lines", "sections"])
+      in: table, at: path,
+      allowed: ["router", "topic", "design", "agents_md_lines", "sections", "files"])
     // A repo's [docs.budgets.sections] adds to or overrides DocsBudgets.defaultSectionWords by
     // key; it never drops a default the repo didn't mention (e.g. Architecture's 80 words).
     let sections = defaults.sections.merging(reader.stringIntTable(table, "sections", at: path)) {
@@ -226,7 +231,8 @@ public enum ConfigSchema {
       topic: reader.integer(table, "topic", at: path) ?? defaults.topic,
       design: reader.integer(table, "design", at: path) ?? defaults.design,
       agentsMdLines: reader.integer(table, "agents_md_lines", at: path) ?? defaults.agentsMdLines,
-      sections: sections)
+      sections: sections,
+      files: reader.stringIntTable(table, "files", at: path))
   }
 
   private static func readPlan(_ reader: inout Reader, _ root: [String: ConfigValue])

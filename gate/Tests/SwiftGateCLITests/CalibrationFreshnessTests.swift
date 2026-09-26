@@ -47,6 +47,12 @@ struct CalibrationFreshnessTests {
   }
 
   static func push(_ repository: ProbeRepository) async throws -> RunReport {
+    // Push also runs docs-lint, which lists tracked files with git, so the repo must be one.
+    let initialized = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: "/usr/bin/git", arguments: ["init", "-q"],
+        workingDirectory: repository.root.path, timeout: .seconds(30)))
+    #expect(initialized.status.isSuccess)
     let parts = try await CheckRun.run(
       root: repository.root, tier: .push, base: "origin/main", context: repository.context(),
       dependencies: CheckRun.Dependencies(

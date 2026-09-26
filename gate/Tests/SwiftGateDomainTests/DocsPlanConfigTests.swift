@@ -175,4 +175,93 @@ struct DocsPlanConfigTests {
       ]
     }
   }
+
+  @Test(
+    "prose_exclude and per-file budgets parse from [docs] — catches the repo's scope and budgets being dropped"
+  )
+  func proseExcludeAndFileBudgetsParse() throws {
+    let root = minimalRoot(
+      merging: [
+        "docs": .table([
+          "prose_exclude": .array([.string("docs/plans/**")]),
+          "budgets": .table(["files": .table(["docs/standards.md": .integer(5_600)])]),
+        ])
+      ])
+    let config = try ConfigSchema.config(from: root)
+    #expect(config.docs.proseExclude == ["docs/plans/**"])
+    #expect(config.docs.budgets.files == ["docs/standards.md": 5_600])
+  }
+
+  @Test(
+    "defaults exclude nothing and set no per-file budget — catches consumer docs losing strict coverage"
+  )
+  func defaultsStayStrict() {
+    #expect(DocsConfig().proseExclude == [])
+    #expect(DocsBudgets().files == [:])
+    #expect(DocsConfig().isProseExcluded("docs/plans/a.md") == false)
+  }
+
+  @Test(
+    "a non-integer or zero per-file budget is rejected — catches a stray value disabling a budget")
+  func badFileBudgetRejected() {
+    let wrongType = minimalRoot(
+      merging: [
+        "docs": .table([
+          "budgets": .table(["files": .table(["docs/a.md": .string("big")])])
+        ])
+      ])
+    #expect {
+      _ = try ConfigSchema.config(from: wrongType)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .wrongType(path: "docs.budgets.files.docs/a.md", expected: "integer", found: "string")
+      ]
+    }
+    #expect {
+      _ = try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        docs: DocsConfig(budgets: DocsBudgets(files: ["docs/a.md": 0])))
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .outOfRange(path: "docs.budgets.files.docs/a.md", value: "0", allowed: ">= 1")
+      ]
+    }
+  }
+
+  @Test(
+    "a prose_exclude glob outside the repository, or blank, is rejected — catches an exclusion that can never match"
+  )
+  func badProseExcludeRejected() {
+    #expect {
+      _ = try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        docs: DocsConfig(proseExclude: ["../docs/**", " "]))
+    } throws: { error in
+      let issues = (error as? ConfigValidationError)?.issues ?? []
+      return issues.contains(
+        .outOfRange(
+          path: "docs.prose_exclude[0]", value: "../docs/**", allowed: "a repository-relative glob")
+      )
+        && issues.contains(.emptyValue(path: "docs.prose_exclude[1]"))
+    }
+  }
+
+  @Test(
+    "prose_exclude globs match ** across directories and * within one — catches an exclusion reaching the wrong docs",
+    arguments: [
+      ("docs/plans/**", "docs/plans/a.md", true),
+      ("docs/plans/**", "docs/plans/sub/b.md", true),
+      ("docs/plans/**", "docs/plansx/a.md", false),
+      ("docs/plans/**", "docs/standards.md", false),
+      ("skills/*/SKILL.md", "skills/tdd/SKILL.md", true),
+      ("skills/*/SKILL.md", "skills/tdd/references/x.md", false),
+      ("docs/**/index.md", "docs/a/b/index.md", true),
+      ("docs/**/index.md", "docs/index.md", true),
+      ("docs/**/index.md", "docs/a/b/other.md", false),
+    ])
+  func proseExcludeGlobMatching(glob: String, path: String, excluded: Bool) {
+    #expect(DocsConfig(proseExclude: [glob]).isProseExcluded(path) == excluded)
+  }
 }
