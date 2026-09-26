@@ -3,9 +3,8 @@
 <!-- RESUME
 State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tier GREEN, 1446 tests); origin/main has 1–24,
 and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
-Rehearsals 26 (marketplace install) and 27 (the nonexistent API was refuted) are merged, and both passed.
-The frame questions were answered as "orchestrator-answered rehearsal". Rehearsal 28 is in ../swift-harness-sampleapp-standard-design-to-plan, working in a
-temp SampleApp copy. It cherry-picked 27's design-skill fix (1108a1d) and stops at questions and before Approve.
+Rehearsals 26 (install passed), 27 (the API was refuted) and 28 (design reached review, stopped at revise, nothing published)
+are merged. Their frame answers are labelled "orchestrator-answered rehearsal". The open items are in the interfaces note, Wave 28.
 Merged: the Bash write-guard defect fix (a subagent could write plan state through Bash); evals corpus 19/21 evasions.
 Also in flight: the lockfile fix (sonnet) in ../swift-harness-test-runs-keep-the-committed-lockfile. A t1 run silently rewrote a Package.resolved that named a
 missing revision; the fix also makes the no-origin/main message name --base. WAITING ON THE USER: with an Xcode pin

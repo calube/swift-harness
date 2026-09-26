@@ -901,3 +901,39 @@ against that subcommand's help. A later skill that names a missing command or fl
 - Open for review: a Bash or Write to a design doc costs about 100ms because it spawns git, while hooks.md budgets
   PreToolUse at < 50ms. `LiveProcessRunnerTests.timeoutKillsChild` flakes under heavy load (load average 50+) and
   blocked one mutate baseline.
+
+## Wave 28 (rehearsal)
+
+**SampleApp design, unattended rehearsal** (evidence in `docs/e2e-report.md`)
+- The run covered frame → research → verify → draft → review on a temp SampleApp copy, with orchestrator-answered
+  frame questions. Review never reached `ready`: the first design went to `rethink` on D2/D3 (IO in Core, forced by
+  the "no new modules" answer), and the reframed `deep` design ended `revise` with 1 major finding. Nothing was
+  published, and no approval exists. The attended run needs an interactive session (headless has no Artifact
+  tool), and its frame answers should allow a client module.
+- Measured against §11: 2.0M agent tokens across 2 designs (estimate 0.6–1M per standard design), and 78 min wall
+  across 10 turns (about 30 for the standard part) against a 10–15 min p99. §11 underestimates badly.
+- Headless resumes need `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`, or `claude -p` ends a workflow still running
+  after 600 s and still reports success. The design skill's headless section says so.
+- The markdown section "own body" stops at its first subsection, so word counts are no longer doubled. File
+  budgets in `.swiftgate.toml` are on the corrected counts.
+- Evidence-auditor and claim-checker packs carry a cited probe's whole snippet plus `Probe_<id>.verdict.json`; a
+  probe claim with no verdict file fails the pack. Quotes containing `"` match their JSON-escaped spelling.
+- Bootstrap templates (`AGENTS.md`, `docs-index.md`, `swiftgate.toml`) pass the gate's own docs checks on a fresh
+  repo, and `gitignore` covers `.harness/design-render/`. A repo whose `.swiftgate.toml` predates this still needs
+  `[docs] managed_files` added by hand.
+- The merge records 2 `prove.not-proven` findings on template-guarding tests. Prove restores only Swift sources, so
+  it can't revert a template; both tests failed before their fixes. They await the user's acceptance, as in Wave 24.
+
+**Open for the sub-project review** (from waves 26–28)
+- `plan.json` keeps its claimed tier (`quick`) and `resume: framing` after any re-scope; no command updates them.
+- The review workflow's `previous` input (~41 KB) doesn't fit headless tool input, so the session edited a copy of
+  the workflow script.
+- A reframe's review rounds continue numbering (`review-2/`…) after the rethink round.
+- `evidence check` accepts a citation range past EOF that `context-pack` rejects; `evidence check` reads
+  checkouts only at the repo root; the claim-checker pack ignores `--key`; `ResearchLanePin` reads a short SHA as
+  an SDK pin and doesn't check `--key` against the lane names.
+- A frame answer recorded as a bare option label can't support a claim about what the option meant.
+- A trailing `[UNVERIFIED].` doesn't match its Risks line; `docs-lint` didn't flag a new design doc as unreachable.
+- The claim checker refutes many claims whose text says more than their quote (35 of 124 in the reframe).
+- `calibrate design` flakes on `design-standards-conformance/uikit-in-core-module` (D2 vs A2 at p≈0.55).
+- Prove can't revert non-Swift inputs (templates), so template tests always show `prove.not-proven`.
