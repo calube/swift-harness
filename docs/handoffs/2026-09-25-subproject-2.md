@@ -1,19 +1,10 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-26): IN PROGRESS. Waves 1–24 are merged and on origin/main (push tier GREEN, 1439 tests). Wave 25 is in flight.
-Wave 25, in flight when this was written:
-  - contributor-agents-md-for-harness-developers: done at 2af43c8 in ../swift-harness-contributor-agents-md-for-harness-developers.
-    Push, docs-lint and prose are GREEN; it's 50 lines. The orchestrator reviewed and ACCEPTED it; merge it with the other wave 25 branch.
-    Follow-up for the review: no automated check enforces "AGENTS.md names no app-only rule".
-  - consumer-steering-channels (opus worker): running in ../swift-harness-consumer-steering-channels. Its full report goes in
-    its LAST commit message body, including the observed CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA values. Before touching that
-    worktree, wait until it's quiet: `ps` shows no swift or claude process working in that path, and no new commits for a few
-    minutes. Then check the report against the runbook checklist. The pre-step values must be real observations; if they're
-    missing, re-run the pre-step yourself. The leak check must be shown failing on a planted ../../docs/adrs link.
+State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tier GREEN, 1446 tests); origin/main has 1–24,
+and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
 Then, in order (the user approved this plan on 2026-09-26):
-  1. Merge wave 25 (re-check `git log main` first: the evals session also merges to main), gate, checkpoint, and back up with
-     `git push origin main:refs/heads/backup/subproject-2-wave-25`. Don't push origin/main unless the user says so.
+  1. DONE: wave 25 merged, gated and backed up.
   2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
      26 plugin-installs-for-real: install at PROJECT scope into a temp copy of examples/SampleApp, never the user's global config.
      27 nonexistent-api-run-refutes-claim: prove the API absent first, then run to the frame questions. This throwaway design is

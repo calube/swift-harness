@@ -822,3 +822,25 @@ against that subcommand's help. A later skill that names a missing command or fl
   `retries`. The user accepted them.
 - `.swiftgate.toml` excludes `evals/corpora` from the gate, and `evals/cases/**`, `evals/sessions/**` and
   `evals/corpora/**` from prose.
+
+## Wave 25
+
+**Consumer steering** ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), Steering)
+- Claude Code sets both `CLAUDE_PLUGIN_ROOT` (the plugin dir) and `CLAUDE_PLUGIN_DATA`
+  (`~/.claude/plugins/data/<plugin>-<source>`) in plugin hook processes; this was observed with
+  `claude -p --plugin-dir`. The shim needs no `SWIFT_HARNESS_PLUGIN_ROOT` fallback.
+- SessionStart adds one line: `Plugin reference docs: <abs dir> (…)`, where the path ends at the first space. It's
+  emitted only when `<dir>/standards.md` exists. Otherwise the line is `Plugin reference docs unavailable: <reason>. …`.
+  In code: `SessionContext.ReferenceDocs { found(directory:), unavailable(reason:) }`, optional
+  `Inputs.referenceDocs` (nil renders nothing). `SessionStartHook.referenceDocs(environment:)` reads only
+  `CLAUDE_PLUGIN_ROOT`, and it must be absolute.
+- The stamped `AGENTS.md` names "the plugin reference docs (path in your session context)" and never an absolute path.
+  `plugin/docs/index.md` is the consumer router for `standards.md`, `testing-playbook.md`, `review-contract.md`
+  and `hooks.md`.
+- `ConsumerSteeringTests.shippedPluginHasNoContributorDocLeaks` scans
+  `plugin/{skills,agents,workflows,templates,docs,hooks}`. It flags relative links and `${CLAUDE_PLUGIN_ROOT}` paths
+  that resolve into the repo-root `docs/{designs,adrs,plans,handoffs}`. Bare `docs/designs/` strings pass.
+
+**Contributor AGENTS.md**
+- The root `AGENTS.md` is a 50-line contributor guide. Nothing automated enforces "AGENTS.md names no app-only
+  rule", which stays a review item.
