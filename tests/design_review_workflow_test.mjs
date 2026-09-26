@@ -371,7 +371,12 @@ const tests = {
       const out = execFileSync(binary, [
         'review-synth', '--run-directory', dir, '--design', join(root, 'gate/Fixtures/design/valid.md'),
         '--tier', 'deep', '--json', ...files,
-      ], { encoding: 'utf8' })
+      ], {
+        encoding: 'utf8',
+        cwd: dir,
+        // A coverage-instrumented build writes its profile into the working directory otherwise.
+        env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'review-synth-%p.profraw') },
+      })
       const report = JSON.parse(out)
       assert.equal(report.verdict, 'rethink')
       assert.deepEqual(report.notReviewed.map(g => g.reviewer), ['pre-mortem'])
