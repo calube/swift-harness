@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url'
 export const KINDS = ['positive', 'evasion', 'near-miss', 'clean']
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
-const swiftgate = join(root, 'bin/swiftgate')
+// SWIFTGATE points the corpora at another checkout's shim, to score a fix branch before it merges.
+const swiftgate = process.env.SWIFTGATE ?? join(root, 'bin/swiftgate')
 
 export function loadCases(corpusDir) {
   const gate = basename(corpusDir)
