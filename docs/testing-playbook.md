@@ -112,7 +112,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P10. Every engine module has a replay test.**
 - **Do:** seed plus input log gives an identical final state across runs. Pin the RNG algorithm with a reference-sequence test so a change to it can't silently invalidate recorded replays.
 - **Tell:** an `engine` module in `.swiftgate.toml` with no replay test; two replays that disagree.
-- **Enforced by:** `arch` `arch.engine-replay-test`: some test in a target that depends on the engine has "replay" in its function name or display name. That's a naming heuristic, so review still checks the test really replays a seed and input log; engine code itself is covered by `det.*` and [standards.md § 8](standards.md#8-engine-modules) (G1) · **Source:** incident: none yet.
+- **Enforced by:** `arch` `arch.engine-replay-test`: some test in a target that depends on the engine has "replay" in its function name or in its display name before the `— catches` clause. A replay mentioned only in the catches clause, such as an RNG or reset test guarding recorded replays, doesn't count. The heuristic reads names, so review still checks that the test replays a seed and input log; `det.*` and [standards.md § 8](standards.md#8-engine-modules) (G1) cover the engine code itself · **Source:** incident: none yet.
 
 **P11. T3 is a closed list of flows.**
 - **Do:** declare each end-to-end flow as a `[[flows]]` entry with a reason. Name the XCUITest class or method (after `test`) starting with the flow name; matching ignores case and punctuation.

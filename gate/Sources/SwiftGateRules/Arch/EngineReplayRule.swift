@@ -4,9 +4,11 @@ import SwiftGateDomain
 /// log gives an identical final state across runs).
 ///
 /// Whether a test replays cannot be read from syntax, so the rule uses a naming heuristic: among
-/// the test targets that depend on the engine, some test function's name or `@Test` display name
-/// contains "replay" (any case). The name is the contract a reviewer checks; the rule only makes
-/// its absence impossible to miss.
+/// the test targets that depend on the engine, some test function's name, or the behavior part of
+/// its `@Test` display name (before ` — catches `), contains "replay" (any case). The catches
+/// clause is excluded because it names a regression, and an RNG or reset test can say it guards
+/// replays without replaying anything. The name is the contract a reviewer checks; the rule only
+/// makes its absence impossible to miss.
 public enum EngineReplayRule {
   public static let id = "arch.engine-replay-test"
 
@@ -44,7 +46,7 @@ public enum EngineReplayRule {
           message:
             "engine module \(engine.name) has no replay test: add a test that runs a seed and an "
             + "input log twice and expects identical final state, with \"replay\" in its name or "
-            + "display name",
+            + "in its display name before \" — catches \"",
           failureScenario: "hidden nondeterminism makes recorded games diverge on replay"))
     }
     return findings
@@ -52,7 +54,11 @@ public enum EngineReplayRule {
 
   static func mentionsReplay(_ test: TestFunction) -> Bool {
     if test.name.lowercased().contains("replay") { return true }
-    return test.testAttribute.flatMap(ChangedTestDiscovery.displayName(of:))?.lowercased()
-      .contains("replay") ?? false
+    guard let displayName = test.testAttribute.flatMap(ChangedTestDiscovery.displayName(of:))
+    else { return false }
+    let behavior = displayName.range(of: catchesSeparator).map { displayName[..<$0.lowerBound] }
+    return (behavior ?? displayName[...]).lowercased().contains("replay")
   }
+
+  private static let catchesSeparator = " — catches "
 }
