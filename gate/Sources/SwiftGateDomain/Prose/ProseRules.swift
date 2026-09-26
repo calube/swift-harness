@@ -21,6 +21,13 @@ public enum ProseRule: String, Sendable, CaseIterable {
 /// word ending in `-ed`. That misses passives with an unlisted irregular participle or a `get`
 /// auxiliary, and it can't tell a stative adjective from a passive, so common state adjectives
 /// (`closed`, `limited`, `deprecated`) and `un-…-ed` words (`unchanged`) are exempt by list.
+///
+/// Text between a pair of double quotes (straight or curly) is a mention, not a use, so the
+/// word-list rules (adverb, number-word, filler, jargon) skip it; passive voice, em-dashes and
+/// sentence length still read it. Filler `just` passes after `not` (`not just files`) or before an
+/// `-ed` participle (`the test just constructed`), where it means "only" or "a moment ago"; any
+/// other `just`, including one that means "only" before a noun or an irregular participle, is
+/// still read as the minimizer.
 public enum ProseRules {
   public static let severity: Severity = .major
 
@@ -57,7 +64,7 @@ public enum ProseRules {
     result += phraseHits(.filler, ProseLexicon.filler, words, sentence, &consumed) {
       "filler \"\($0)\": cut it"
     }
-    for (index, word) in words.enumerated() where !consumed.contains(index) {
+    for (index, word) in words.enumerated() where !consumed.contains(index) && !word.isQuoted {
       if isAdverb(word, sentenceInitial: index == 0) {
         result.append(
           Hit(
@@ -70,6 +77,8 @@ public enum ProseRules {
             rule: .numberWord, offset: word.start,
             message: "number word \"\(word.text)\": use the numeral"))
       }
+    }
+    for (index, word) in words.enumerated() where !consumed.contains(index) {
       if let end = passiveEnd(at: index, in: words, sentence: sentence) {
         result.append(
           Hit(
@@ -100,11 +109,14 @@ public enum ProseRules {
     return !ProseLexicon.lyNonAdverbs.contains(lower)
   }
 
+  /// A numeral can't open a sentence, so a number word there passes. `one` before a word ending
+  /// in a single `-s` (`one fails`) reads as a pronoun and a verb; that also passes a singular
+  /// noun ending in `-s` (`one alias`), which the rule can't tell from a verb.
   static func isNumberWord(at index: Int, in words: [ProseWord], sentence: ProseSentence) -> Bool {
     let word = words[index]
     guard ProseLexicon.numberWords.contains(word.lower) else { return false }
     guard !word.hyphenBefore, !word.hyphenAfter else { return false }
-    if word.isCapitalized, index != 0 { return false }
+    guard !word.isCapitalized, !sentence.opens(with: word) else { return false }
     guard index + 1 < words.count, sentence.onlySpaceBetween(word, words[index + 1]) else {
       return false
     }
@@ -112,6 +124,9 @@ public enum ProseRules {
     if ProseLexicon.notCountedAfterNumber.contains(next) { return false }
     if word.lower == "one" {
       if ProseLexicon.pronounAfterOne.contains(next) { return false }
+      if next.hasSuffix("s"), !["ss", "us", "is", "'s"].contains(where: next.hasSuffix) {
+        return false
+      }
       if index > 0, ProseLexicon.pronounBeforeOne.contains(words[index - 1].lower) {
         return false
       }
@@ -147,6 +162,13 @@ public enum ProseRules {
     return !ProseLexicon.statesEndingInEd.contains(lower)
   }
 
+  static func justCarriesMeaning(at index: Int, in words: [ProseWord]) -> Bool {
+    if index > 0, words[index - 1].lower == "not" { return true }
+    guard index + 1 < words.count else { return false }
+    let next = words[index + 1].lower
+    return next.hasSuffix("ed") && isParticiple(next)
+  }
+
   static func phraseHits(
     _ rule: ProseRule, _ phrases: [[String]], _ words: [ProseWord], _ sentence: ProseSentence,
     _ consumed: inout Set<Int>, message: (String) -> String
@@ -159,6 +181,8 @@ public enum ProseRules {
         guard end <= words.count else { return false }
         let span = index..<end
         guard !span.contains(where: consumed.contains) else { return false }
+        guard !span.contains(where: { words[$0].isQuoted }) else { return false }
+        if phrase == ["just"], justCarriesMeaning(at: index, in: words) { return false }
         guard !words[index].hyphenBefore, !words[end - 1].hyphenAfter else { return false }
         for (offset, part) in phrase.enumerated() {
           let word = words[index + offset]
@@ -253,12 +277,14 @@ struct ProseBlock {
   /// Splits at `.`, `!` or `?` followed by whitespace and then an uppercase letter, a digit or
   /// masked code, so `e.g. the` and `1.2` stay inside one sentence.
   func sentences() -> [ProseSentence] {
+    let quoted = quotedSpans()
     var result: [ProseSentence] = []
     var start = 0
     var index = 0
     while index < characters.count {
       if ".!?".contains(characters[index]), endsSentence(after: index) {
-        result.append(ProseSentence(characters: characters, range: start..<(index + 1)))
+        result.append(
+          ProseSentence(characters: characters, range: start..<(index + 1), quoted: quoted))
         start = index + 1
         while start < characters.count, characters[start].isWhitespace { start += 1 }
         index = start
@@ -267,7 +293,28 @@ struct ProseBlock {
       index += 1
     }
     if start < characters.count {
-      result.append(ProseSentence(characters: characters, range: start..<characters.count))
+      result.append(
+        ProseSentence(characters: characters, range: start..<characters.count, quoted: quoted))
+    }
+    return result
+  }
+
+  /// The insides of each closed pair of double quotes. A straight quote closes a straight one and
+  /// `”` closes `“`; an opening quote with no partner in the block (an inch mark) quotes nothing.
+  func quotedSpans() -> [Range<Int>] {
+    var result: [Range<Int>] = []
+    var open: (offset: Int, closer: Character)?
+    for (index, character) in characters.enumerated() {
+      if let current = open {
+        if character == current.closer {
+          result.append((current.offset + 1)..<index)
+          open = nil
+        }
+      } else if character == "\"" {
+        open = (index, "\"")
+      } else if character == "\u{201C}" {
+        open = (index, "\u{201D}")
+      }
     }
     return result
   }
@@ -291,6 +338,7 @@ struct ProseWord {
   let end: Int
   let hyphenBefore: Bool
   let hyphenAfter: Bool
+  let isQuoted: Bool
 
   var isCapitalized: Bool { text.first?.isUppercase == true }
 }
@@ -298,6 +346,7 @@ struct ProseWord {
 struct ProseSentence {
   let characters: [Character]
   let range: Range<Int>
+  let quoted: [Range<Int>]
 
   func text(_ span: Range<Int>) -> String { String(characters[span]) }
 
@@ -327,7 +376,8 @@ struct ProseSentence {
         ProseWord(
           text: text, lower: text.lowercased(), start: start, end: index,
           hyphenBefore: start > range.lowerBound && characters[start - 1] == "-",
-          hyphenAfter: index < range.upperBound && characters[index] == "-"))
+          hyphenAfter: index < range.upperBound && characters[index] == "-",
+          isQuoted: quoted.contains { $0.contains(start) }))
     }
     return result
   }
@@ -357,6 +407,14 @@ struct ProseSentence {
 
   func opening(words count: Int) -> String {
     spaceSeparatedTokens.prefix(count).map(text).joined(separator: " ")
+  }
+
+  /// True when only whitespace, emphasis, an opening bracket or an opening quote comes before
+  /// `word`, so a label like `` `probe`: one `` doesn't count as the sentence's opening.
+  func opens(with word: ProseWord) -> Bool {
+    characters[range.lowerBound..<word.start].allSatisfy {
+      $0.isWhitespace || "*_([\"\u{201C}".contains($0)
+    }
   }
 
   func onlySpaceBetween(_ first: ProseWord, _ second: ProseWord) -> Bool {
