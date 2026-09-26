@@ -92,7 +92,7 @@ struct ProseRulesTests {
   @Test("a number word where a numeral fits is flagged — catches spelled-out counts passing")
   func numberWordFlagged() throws {
     let findings = try Self.hits(
-      .numberWord, in: "The gate runs three checks and one file.\nTwenty agents run.\n")
+      .numberWord, in: "The gate runs three checks and one file.\nThen twenty agents run.\n")
     #expect(findings.map(\.line) == [1, 1, 2])
     #expect(findings.first?.message.contains("\"three\"") == true)
   }
@@ -107,6 +107,34 @@ struct ProseRulesTests {
       One could use a one-to-one mapping.
       """
     #expect(try Self.hits(.numberWord, in: text).map(\.message) == [])
+  }
+
+  @Test(
+    "a count mid-sentence stays a finding — catches the pronoun and sentence-start exemptions swallowing real counts"
+  )
+  func numberWordTruePositives() throws {
+    for sentence in [
+      "The gate runs three checks on every push.", "The hook retries five times before it stops.",
+      "- **`probe`**: one scratch package per probe.", "Unit: one module's vertical slice.",
+    ] {
+      let findings = try Self.check("# Seed\n\n\(sentence)\n")
+      #expect(findings.map(\.ruleID) == [ProseRule.numberWord.id], "\(sentence)")
+    }
+  }
+
+  @Test(
+    "a number word opening a sentence passes — catches a finding where a numeral can't start the sentence"
+  )
+  func numberWordSentenceInitial() throws {
+    #expect(try Self.check("# Seed\n\nThree checks run on every push.\n").map(\.message) == [])
+  }
+
+  @Test(
+    "one followed by a verb in -s is a pronoun and passes — catches one fails flagged as a count"
+  )
+  func numberWordOneBeforeVerb() throws {
+    let text = "# Seed\n\nA test that forgets to override one fails instead of passing.\n"
+    #expect(try Self.check(text).map(\.message) == [])
   }
 
   // MARK: - Passive voice
@@ -148,6 +176,57 @@ struct ProseRulesTests {
   func fillerNotDoubleCounted() throws {
     let findings = try Self.check("It basically works.")
     #expect(findings.map(\.ruleID) == [ProseRule.filler.id])
+  }
+
+  @Test(
+    "filler, adverbs, jargon and number words inside double quotes are mentions and pass — catches a doc naming the AI-prose tells flagged for using them"
+  )
+  func quotedMentionsPass() throws {
+    let texts = [
+      "# Seed\n\nAI-prose tells include the phrase \"it's worth noting\".\n",
+      "# Seed\n\nComment tells include AI-prose words such as \"importantly\".\n",
+      "# Seed\n\nAI-prose tells (\"it's worth noting\", \"importantly\").\n",
+      "# Seed\n\nThe list bans \u{201C}leverage\u{201D} and \u{201C}three checks\u{201D}.\n",
+    ]
+    for text in texts {
+      #expect(try Self.check(text).map(\.message) == [], "\(text)")
+    }
+  }
+
+  @Test(
+    "an unclosed double quote doesn't hide the rest of the sentence — catches a stray quote silencing the word rules"
+  )
+  func unclosedQuoteStillChecked() throws {
+    let findings = try Self.check("# Seed\n\nThe 12\" gate quickly rejects the change.\n")
+    #expect(findings.map(\.ruleID) == [ProseRule.adverb.id])
+  }
+
+  @Test(
+    "just after not, or before an -ed participle, carries meaning and passes — catches only and recently flagged as filler"
+  )
+  func justMeaningBearingPasses() throws {
+    for sentence in [
+      "The 2 audiences need different guidance, not just different files.",
+      "The check flags a value the test just constructed.",
+    ] {
+      #expect(try Self.check("# Seed\n\n\(sentence)\n").map(\.message) == [], "\(sentence)")
+    }
+  }
+
+  @Test(
+    "unquoted filler, minimizer just and adverbs stay findings — catches the quote and just exemptions swallowing real filler"
+  )
+  func fillerTruePositives() throws {
+    let cases: [(String, ProseRule)] = [
+      ("Run the gate in order to see the findings.", .filler),
+      ("It's worth noting that the gate reads the config first.", .filler),
+      ("Just run the gate.", .filler),
+      ("The gate quickly rejects the change.", .adverb),
+    ]
+    for (sentence, rule) in cases {
+      let findings = try Self.check("# Seed\n\n\(sentence)\n")
+      #expect(findings.map(\.ruleID) == [rule.id], "\(sentence)")
+    }
   }
 
   @Test("a business-jargon phrase is flagged — catches jargon passing")

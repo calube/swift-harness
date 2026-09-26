@@ -32,6 +32,10 @@ tables, Mermaid diagrams, HTML comments and frontmatter. Put a real identifier, 
 bad example in code, where it belongs anyway. A sentence never crosses a block, so each list item
 and each heading counts on its own.
 
+Words between double quotes are a mention, not a use: the adverb, number-word, filler and jargon
+rules skip them, so `tells like "it's worth noting"` passes. Passive voice, em-dashes and sentence
+length still read quoted text.
+
 ## The rules
 
 Every finding is `major` and names the rule, the line and the words that tripped it.
@@ -59,8 +63,9 @@ Fix: use a comma, a colon, parentheses or 2 sentences.
 ### `prose.number-word`
 
 Flags a number word from `zero` to `billion` that counts the next word. It lets these pass: a
-hyphenated form (`one-off`), a phrase like `one of` or `two or three`, and `one` as a pronoun
-(`the one that`, `one by one`).
+hyphenated form (`one-off`), a phrase like `one of` or `two or three`, `one` as a pronoun
+(`the one that`, `one by one`, `override one fails`), and a number word that opens a sentence,
+where a numeral can't go.
 
 Fix: use the numeral.
 
@@ -83,7 +88,9 @@ Fix: name who acts and make it the subject.
 
 Flags words and phrases that add length and no meaning, from a fixed list. The list includes
 `very`, `really`, `quite`, `just`, `simply`, `basically`, `actually`, `in order to`,
-`the fact that`, `in terms of`, `a number of`, `it's worth noting` and `of course`.
+`the fact that`, `in terms of`, `a number of`, `it's worth noting` and `of course`. `just` passes
+where it carries meaning the gate can spot: after `not` (`not just files`) and before an `-ed`
+participle (`the test just constructed`).
 
 Fix: cut it. If the sentence breaks, rebuild it around the verb.
 
