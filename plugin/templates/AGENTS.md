@@ -16,11 +16,12 @@ code. Pass `--json` for the versioned report; full logs land in `.harness/runs/<
 | Before asking for review | `swiftgate check --tier ready` (adds UI flows, prove, stress, reach) |
 | Machine trouble | `swiftgate doctor` |
 
-**Where the rules live.** In the swift-harness plugin:
+**Where the rules live.** In the plugin reference docs (path in your session context), routed
+by their `index.md`:
 
-- `docs/standards.md` — concurrency, architecture, clients, errors, logging, SwiftUI, comments.
+- `standards.md`: concurrency, architecture, clients, errors, logging, SwiftUI, comments.
   Rule ids such as `det.date-init` or `A2` point into it.
-- `docs/testing-playbook.md` — tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
+- `testing-playbook.md`: tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
 
 **This repository's own docs.** [`docs/index.md`](docs/index.md) routes every doc this repository
 has — designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.

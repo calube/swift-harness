@@ -4,7 +4,8 @@ import SwiftGateAdapters
 import SwiftGateDomain
 
 /// SessionStart (spec §8, < 1s): the module map with kinds, the Xcode pin against the selected
-/// Xcode, RESUME summaries of active plans, and the orphan-clone sweep.
+/// Xcode, RESUME summaries of active plans, the plugin's reference docs path, and the orphan-clone
+/// sweep.
 enum SessionStartHook {
   static let moduleMapCache = "module-map.json"
 
@@ -40,8 +41,31 @@ enum SessionStartHook {
 
     let inputs = SessionContext.Inputs(
       projectName: root.lastPathComponent, sessionID: payload.sessionID, modules: modules,
-      xcode: xcode, plans: await plans(git: dependencies.git), notes: notes)
+      xcode: xcode, plans: await plans(git: dependencies.git),
+      referenceDocs: referenceDocs(environment: dependencies.environment), notes: notes)
     return HookOutput.context(.sessionStart, SessionContext.render(inputs))
+  }
+
+  static let pluginRootVariable = "CLAUDE_PLUGIN_ROOT"
+
+  /// Claude Code sets `CLAUDE_PLUGIN_ROOT` in every plugin hook process. The docs directory is
+  /// named only once `standards.md` is on disk there, so the context never points agents at a
+  /// path that fails to open.
+  static func referenceDocs(environment: [String: String]) -> SessionContext.ReferenceDocs {
+    guard let root = environment[pluginRootVariable], !root.isEmpty else {
+      return .unavailable(reason: "\(pluginRootVariable) is not set in the hook environment")
+    }
+    guard root.hasPrefix("/") else {
+      return .unavailable(reason: "\(pluginRootVariable) is not an absolute path: \(root)")
+    }
+    let docs = URL(filePath: root, directoryHint: .isDirectory).appending(
+      path: "docs", directoryHint: .isDirectory
+    ).standardizedFileURL
+    let standards = docs.appending(path: "standards.md").path
+    guard FileManager.default.fileExists(atPath: standards) else {
+      return .unavailable(reason: "\(standards) does not exist")
+    }
+    return .found(directory: docs.path)
   }
 
   private static func describe(_ outcome: StaticCheckOutcome) -> String {
