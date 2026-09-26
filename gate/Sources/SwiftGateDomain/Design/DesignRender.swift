@@ -142,13 +142,15 @@ public enum DesignRender {
         .element(
           "button",
           attributes: [
-            "type": "button", "data-decision": "request-changes", "data-design-sha": designSha,
-            "disabled": "disabled",
+            "type": "button",
+            "data-decision": PlanFile.ApprovalDecision.requestChanges.rawValue,
+            "data-design-sha": designSha, "disabled": "disabled",
           ], text: "Request changes"),
         .element(
           "button",
           attributes: [
-            "type": "button", "class": "primary", "data-decision": "approve",
+            "type": "button", "class": "primary",
+            "data-decision": PlanFile.ApprovalDecision.approve.rawValue,
             "data-design-sha": designSha, "disabled": "disabled",
           ], text: "Approve"),
       ])
@@ -156,51 +158,55 @@ public enum DesignRender {
 
   /// Writes `{decision, at}` to the page's `db`: collection `approval`, document id = the
   /// revision's designSha, which the design skill reads back with `ArtifactData`.
-  static let approvalScript = """
-    (function () {
-      var status = document.getElementById("approval-status");
-      var buttons = Array.prototype.slice.call(document.querySelectorAll("button[data-decision]"));
-      var labels = { "approve": "Approved", "request-changes": "Changes requested" };
-      function show(text) { status.textContent = text; }
-      function enable(on) { buttons.forEach(function (b) { b.disabled = !on; }); }
-      var pending = window.claude && typeof window.claude.use === "function"
-        ? window.claude.use("db") : Promise.resolve(null);
-      pending.then(function (db) {
-        if (!db) {
-          show("Approval isn't available in this view. Answer in the Claude session that shared this page.");
-          return;
-        }
-        var sha = buttons[0].dataset.designSha;
-        db.collection("approval").doc(sha).get().then(function (snap) {
-          var data = snap.exists ? snap.data() : null;
-          show(data && labels[data.decision]
-            ? labels[data.decision] + " for this revision. You can change your decision."
-            : "No decision yet for this revision.");
-        }, function () { show("Couldn't read the current decision. You can still decide."); });
-        enable(true);
-        buttons.forEach(function (button) {
-          button.addEventListener("click", function () {
-            var decision = button.dataset.decision;
-            var sha = button.dataset.designSha;
-            enable(false);
-            show("Saving…");
-            db.collection("approval").doc(sha)
-              .set({ decision: decision, at: (new Date).toISOString() })
-              .then(function () {
-                show(labels[decision] + ". Tell Claude in your session to continue.");
-              }, function (error) {
-                show(error && error.code === "invalid_argument"
-                  ? "You can read this design but not decide on it. Ask its owner for Contributor access."
-                  : "Couldn't save your decision. Try again.");
-              })
-              .then(function () { enable(true); });
+  static var approvalScript: String {
+    let approve = PlanFile.ApprovalDecision.approve.rawValue
+    let requestChanges = PlanFile.ApprovalDecision.requestChanges.rawValue
+    return """
+      (function () {
+        var status = document.getElementById("approval-status");
+        var buttons = Array.prototype.slice.call(document.querySelectorAll("button[data-decision]"));
+        var labels = { "\(approve)": "Approved", "\(requestChanges)": "Changes requested" };
+        function show(text) { status.textContent = text; }
+        function enable(on) { buttons.forEach(function (b) { b.disabled = !on; }); }
+        var pending = window.claude && typeof window.claude.use === "function"
+          ? window.claude.use("db") : Promise.resolve(null);
+        pending.then(function (db) {
+          if (!db) {
+            show("Approval isn't available in this view. Answer in the Claude session that shared this page.");
+            return;
+          }
+          var sha = buttons[0].dataset.designSha;
+          db.collection("approval").doc(sha).get().then(function (snap) {
+            var data = snap.exists ? snap.data() : null;
+            show(data && labels[data.decision]
+              ? labels[data.decision] + " for this revision. You can change your decision."
+              : "No decision yet for this revision.");
+          }, function () { show("Couldn't read the current decision. You can still decide."); });
+          enable(true);
+          buttons.forEach(function (button) {
+            button.addEventListener("click", function () {
+              var decision = button.dataset.decision;
+              var sha = button.dataset.designSha;
+              enable(false);
+              show("Saving…");
+              db.collection("approval").doc(sha)
+                .set({ decision: decision, at: (new Date).toISOString() })
+                .then(function () {
+                  show(labels[decision] + ". Tell Claude in your session to continue.");
+                }, function (error) {
+                  show(error && error.code === "invalid_argument"
+                    ? "You can read this design but not decide on it. Ask its owner for Contributor access."
+                    : "Couldn't save your decision. Try again.");
+                })
+                .then(function () { enable(true); });
+            });
           });
+        }, function () {
+          show("Approval isn't available in this view. Answer in the Claude session that shared this page.");
         });
-      }, function () {
-        show("Approval isn't available in this view. Answer in the Claude session that shared this page.");
-      });
-    })();
-    """
+      })();
+      """
+  }
 }
 
 // MARK: - Sections

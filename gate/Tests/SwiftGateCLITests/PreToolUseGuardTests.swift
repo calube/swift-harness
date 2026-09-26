@@ -43,7 +43,7 @@ struct PlanStateScenario {
   func writePlanFile(_ plan: String, design: String) throws {
     let file = PlanFile(
       schemaVersion: 1, slug: plan, design: design, designSha: "3f1c", approval: nil,
-      clarifyChain: [], tier: "standard", resume: "planned")
+      clarifyChain: [], tier: .standard, resume: "planned")
     try write(
       layout.plan(plan).planFile, String(decoding: try PlanFileJSON.encode(file), as: UTF8.self))
   }

@@ -35,8 +35,14 @@ enum PlanLockRun {
         command, slug,
         "--design `\(design)` must be a repo-relative docs/**/designs/<name>.md path without `..`")
     }
-    if let tier, !PlanFile.tiers.contains(tier) {
-      return blocked(command, slug, "--tier `\(tier)` must be quick, standard or deep")
+    let parsedTier: DesignTier?
+    if let tier {
+      guard let resolved = DesignTier(rawValue: tier) else {
+        return blocked(command, slug, "--tier `\(tier)` must be quick, standard or deep")
+      }
+      parsedTier = resolved
+    } else {
+      parsedTier = nil
     }
     let lock: PlanLock
     switch await locate(slug, session: session, requireSession: true, git: git) {
@@ -66,7 +72,8 @@ enum PlanLockRun {
       var seeded = ""
       if let design, !lock.hasPlanFile {
         do {
-          let data = try PlanFileJSON.encode(PlanFile.seed(slug: slug, design: design, tier: tier))
+          let data = try PlanFileJSON.encode(
+            PlanFile.seed(slug: slug, design: design, tier: parsedTier))
           if try lock.seedPlanFile(data) { seeded = "; seeded plan.json for \(design)" }
         } catch let error as PlanLockError {
           return blocked(command, slug, "claimed, but seeding plan.json failed: \(describe(error))")

@@ -230,7 +230,7 @@ struct DesignStatsCommandTests {
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
     let file = PlanFile(
       schemaVersion: 1, slug: "queue-plan", design: Self.design, designSha: nil, approval: nil,
-      clarifyChain: [], tier: "standard", resume: "planned")
+      clarifyChain: [], tier: .standard, resume: "planned")
     try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
 
     let report = await DesignStatsRun.run(
