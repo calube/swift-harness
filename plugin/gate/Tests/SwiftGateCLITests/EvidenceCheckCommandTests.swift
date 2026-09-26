@@ -419,6 +419,47 @@ struct EvidenceCheckCommandTests {
   }
 
   @Test(
+    "a stored snapshot reached through a symbolic link fails, whether the file or its directory is the link — catches evidence-root text read from outside the design's record"
+  )
+  func symlinkedEvidenceFileRejected() async throws {
+    let manager = FileManager.default
+    let snapshots = EvidenceRepo.layout.snapshotsDirectory
+    let claim = Claim(
+      id: "ev-list-supports-swipe-actions", lane: "apple-docs", text: "List swipes.",
+      citation: Citation(
+        kind: .snapshot, loc: "snapshots/list.md", pin: "26.2", quote: "swipeActions"),
+      status: .new)
+    for linkDirectory in [false, true] {
+      let repo = try await EvidenceRepo()
+      defer { repo.remove() }
+      try repo.write("outside/list.md", "List supports swipeActions.\n")
+      try repo.writeClaims([claim])
+      if linkDirectory {
+        try manager.createDirectory(
+          at: repo.root.appending(path: EvidenceRepo.layout.root), withIntermediateDirectories: true
+        )
+        try manager.createSymbolicLink(
+          atPath: repo.root.appending(path: snapshots).path,
+          withDestinationPath: repo.root.appending(path: "outside").path)
+      } else {
+        try manager.createDirectory(
+          at: repo.root.appending(path: snapshots), withIntermediateDirectories: true)
+        try manager.createSymbolicLink(
+          atPath: repo.root.appending(path: "\(snapshots)/list.md").path,
+          withDestinationPath: repo.root.appending(path: "outside/list.md").path)
+      }
+      let outcome = await repo.check(sdk: "26.2")
+      #expect(
+        try jsonLines(outcome) == [
+          StrictLine(id: "ev-list-supports-swipe-actions", status: .quoteFail, loc: nil)
+        ], "link directory: \(linkDirectory)")
+      #expect(
+        EvidenceCheckRun.render(outcome, format: .human).contains("symlink"),
+        "link directory: \(linkDirectory)")
+    }
+  }
+
+  @Test(
     "a checkout in a nested project resolves against that project's Package.resolved, at the working tree and at a ref — catches checkouts read only at the repo root"
   )
   func nestedProjectCheckout() async throws {
