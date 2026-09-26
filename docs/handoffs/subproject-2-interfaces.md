@@ -865,3 +865,25 @@ against that subcommand's help. A later skill that names a missing command or fl
 - The `status` skill reads `<git common dir>/swift-harness/plans/index.json`, and a plan is active unless
   `PlanStatus.isFinished`. `tests/plan_state_paths_test.mjs` fails on the old `.harness/plans` path.
 - `docs/e2e-report.md` has a word budget in `.swiftgate.toml` (2600 now); each new section raises it.
+
+## Wave 27 (rehearsal)
+
+**A probe refutes a nonexistent API, unattended rehearsal** (evidence in `docs/e2e-report.md`)
+- The claim that `@PersistedState` exists at TCA 1.26.2 ended `refuted` from a failing probe and never reached
+  Decision. Putting it into Decision turns `design-lint` RED (`citation-not-supported`).
+- The design skill in a headless session (`claude -p`, which has no `AskUserQuestion`) ends the turn with at
+  most 4 numbered questions in the "Headless" shape of `references/frame-research-verify.md`. It writes and
+  claims nothing until the answers come back with `claude -p --resume <session id> "<answers>"`. Answers are
+  recorded exactly like `AskUserQuestion` answers.
+- A premise the request names (an API, a type, a behaviour) is never checked before research. It goes into the
+  `packages` brief (the `codebase` brief at `quick`), and verify's probe decides it.
+- `context-pack --role research-lane --pin` picks the reuse-cache bucket through `ResearchLanePin`: `<pkg>@<ver>`
+  reads the package bucket, a 40- or 64-hex commit reads nothing (codebase claims are never cached), and any
+  other pin reads the SDK bucket. That last case is a catch-all, noted for review. Each lane writes its own pack
+  file.
+- `docs-lint` resolves `ev-` tags against each design doc's `claims.jsonl`. A design with no claims file leaves
+  its tags dangling; an unreadable one blocks.
+- Open, for the sub-project review: a trailing `[UNVERIFIED].` doesn't match its Risks line; the gitignore
+  template doesn't cover `.harness/design-render/`; `docs-lint` didn't flag the new design doc as unreachable or
+  uncited.
+- The `docs/e2e-report.md` budget is 4000 words.

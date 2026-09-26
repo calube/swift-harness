@@ -3,9 +3,8 @@
 <!-- RESUME
 State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tier GREEN, 1446 tests); origin/main has 1–24,
 and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
-Rehearsal 26 (marketplace install) is merged: all three checks passed. In flight: rehearsal 27 in
-../swift-harness-nonexistent-api-run-refutes-claim; its full report goes in its LAST commit body. Its frame questions were
-answered as "orchestrator-answered rehearsal". Rehearsal 28 is in ../swift-harness-sampleapp-standard-design-to-plan, working in a
+Rehearsals 26 (marketplace install) and 27 (the nonexistent API was refuted) are merged, and both passed.
+The frame questions were answered as "orchestrator-answered rehearsal". Rehearsal 28 is in ../swift-harness-sampleapp-standard-design-to-plan, working in a
 temp SampleApp copy. It cherry-picked 27's design-skill fix (1108a1d) and stops at questions and before Approve.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
