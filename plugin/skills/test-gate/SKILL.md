@@ -1,6 +1,6 @@
 ---
 name: test-gate
-description: This skill should be used for the pre-ready test gate for a swift-harness Swift change — scope the diff, run swiftgate check --tier push, judge new and changed tests for slop the tools can't see, then run check --tier ready (T3 flows, prove, stress, reach). Use before opening or marking a PR ready, before asking for review, when the user says "is this ready", "run the full gate", "gate this branch", "check the tests are real", "review my tests", or after /swift-harness:tdd finishes a change.
+description: This skill should be used to judge whether a swift-harness Swift change's tests are real and to run the pre-ready test gate — scope the diff, run swiftgate check --tier push, judge new and changed tests for slop the tools can't see, then run check --tier ready (T3 flows, prove, stress, reach). Use it whenever the user asks whether their tests actually catch anything, would fail if the code were wrong, or are fake, padding or passing trivially; says "check the tests are real", "review my tests", "is this ready", "run the full gate", "gate this branch"; before opening or marking a PR ready or asking for review; or after /swift-harness:tdd finishes a change. Not for writing a test or fixing a failing or flaky one (use tdd), PR evidence text (use validate) or a merge verdict on the code (use review).
 ---
 
 # Test gate
