@@ -281,6 +281,50 @@ struct DocsLintCommandTests {
     #expect(try await repo.output().contains("docs/bad.md"))
   }
 
+  private static func claimLine(id: String) throws -> String {
+    let claim = Claim(
+      id: id, lane: "codebase", text: "some claim text",
+      citation: Citation(kind: .file, loc: "Sources/A.swift:L1-L1", pin: "abc", quote: "a"),
+      status: .supported)
+    return String(decoding: try JSONEncoder().encode(claim), as: UTF8.self)
+  }
+
+  @Test(
+    "an ev- id a design's claims.jsonl records resolves, and one it lacks dangles — catches docs-lint reading no claims"
+  )
+  func designEvidenceIDsResolveAgainstTheirClaimsFile() async throws {
+    let repo = try await TemporaryRepo()
+    defer { repo.remove() }
+    try repo.write("docs/index.md", "# Docs\n\n- [Counter design](counter/designs/count.md)\n")
+    try repo.write(
+      "docs/counter/designs/count.md",
+      "# Count\n\n## Evidence\n\n- [ev-count-is-plain-int] Count is an Int.\n"
+        + "- [ev-count-never-recorded] Nothing records this.\n")
+    try repo.write(
+      "docs/counter/designs/count.evidence/claims.jsonl",
+      try Self.claimLine(id: "ev-count-is-plain-int") + "\n")
+    try await repo.addAll()
+    let dangling = try await repo.report().findings
+      .filter { $0.ruleID == "docs-lint.dangling-id" }.map(\.message)
+    #expect(dangling.contains { $0.contains("ev-count-never-recorded") })
+    #expect(!dangling.contains { $0.contains("ev-count-is-plain-int") })
+  }
+
+  @Test(
+    "a design's malformed claims.jsonl exits 2 naming the file — catches unreadable evidence passing as dangling ids"
+  )
+  func malformedDesignClaimsFileBlocks() async throws {
+    let repo = try await TemporaryRepo()
+    defer { repo.remove() }
+    try repo.write("docs/index.md", "# Docs\n")
+    try repo.write("docs/counter/designs/count.md", "# Count\n")
+    try repo.write("docs/counter/designs/count.evidence/claims.jsonl", "{not json\n")
+    try await repo.addAll()
+    let report = try await repo.report()
+    #expect(report.verdict.exitCode == 2)
+    #expect(try await repo.output().contains("docs/counter/designs/count.evidence/claims.jsonl"))
+  }
+
   @Test(
     "a malformed .swiftgate.toml exits 1, not 2 — matches every other T0 command's config-error convention"
   )
