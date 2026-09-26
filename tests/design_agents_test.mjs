@@ -149,6 +149,94 @@ export function researchLanes(swiftSource) {
   return [...body[1].matchAll(/case\s+(\w+)(?:\s*=\s*"([^"]+)")?/g)].map(m => m[2] ?? m[1])
 }
 
+// The single-step design agents: the claim checker, the drafter and the decomposer. The design
+// skill launches each one directly and parses what it returns.
+CONTRACTS.push(
+  {
+    prefix: 'design-claim-checker',
+    keys: ['verdicts', 'skipped', 'id', 'status', 'reason'],
+    strings: [
+      '"status": "supported"',
+      '"status": "refuted"',
+      '`quote-ok`',
+      'overstate',
+      'claim-checker',
+    ],
+  },
+  {
+    prefix: 'design-drafter',
+    keys: [],
+    strings: [
+      'templates/design-doc.md',
+      'skills/prose',
+      '`supported`',
+      ' — tier T',
+      '[UNVERIFIED]',
+      'req-',
+      'test-',
+      'full design doc text',
+    ],
+  },
+  {
+    prefix: 'design-decomposer',
+    keys: [
+      'tasks', 'unresolved',
+      'id', 'deps', 'writeSet', 'gate', 'tests', 'covers', 'estLines', 'status', 'worktree',
+      'ruleId', 'task', 'reason',
+    ],
+    strings: [
+      '"status": "pending"',
+      '[plan]',
+      'est_lines_max',
+      'est_lines_min',
+      'max_modules_per_task',
+      'max_tests_per_task',
+      'worker_pack_token_budget',
+      'actualLines',
+      'one fix round',
+    ],
+  },
+)
+
+/** Raw values of a Swift `enum <name>`'s cases, the `= "…"` raw value when present. */
+export function swiftEnumRawValues(swiftSource, name) {
+  const body = new RegExp(`enum ${name}\\b[^{]*\\{([\\s\\S]*?)\\n\\s*\\}`).exec(swiftSource)
+  if (!body) throw new Error(`enum ${name} not found`)
+  return [...body[1].matchAll(/^\s*case\s+(\w+)(?:\s*=\s*"([^"]+)")?/gm)].map(m => m[2] ?? m[1])
+}
+
+/** `LedgerTask`'s JSON keys, from its `CodingKeys`. */
+export function ledgerTaskKeys(swiftSource) {
+  const match = /extension LedgerTask: Codable \{[\s\S]*?enum CodingKeys[^{]*\{\s*case ([^\n}]+)/.exec(swiftSource)
+  if (!match) throw new Error('LedgerTask CodingKeys not found')
+  return match[1].split(',').map(s => s.trim()).filter(Boolean)
+}
+
+/** Every `plan-lint.*` rule id in the given sources, with the severity it is reported at. */
+export function planLintRules(swiftSources) {
+  const ids = new Map()
+  const severities = new Map()
+  for (const source of swiftSources) {
+    for (const m of source.matchAll(/static let (\w+RuleID) = "(plan-lint\.[a-z-]+)"/g)) ids.set(m[1], m[2])
+    for (const m of source.matchAll(/ruleID: (\w+RuleID), severity: \.(\w+)/g)) severities.set(m[1], m[2])
+  }
+  return [...ids].map(([constant, id]) => ({ id, severity: severities.get(constant) }))
+}
+
+/** `## ` headings of a markdown text, outside fenced code, in order. */
+export function sectionHeadings(markdown) {
+  let fenced = false
+  const headings = []
+  for (const line of markdown.split('\n')) {
+    if (line.startsWith('```')) fenced = !fenced
+    else if (!fenced && line.startsWith('## ')) headings.push(line.trim())
+  }
+  return headings
+}
+
+const agentText = stem => readFileSync(join(root, 'agents', `${stem}.md`), 'utf8')
+const domainSource = relative => readFileSync(join(root, 'gate/Sources/SwiftGateDomain', relative), 'utf8')
+
 // A lane agent that satisfies every check, used as the base for the negative cases so each one
 // fails for the single reason it changes.
 const validLane = contract => `---
@@ -286,6 +374,57 @@ const tests = {
     })
   },
 }
+
+Object.assign(tests, {
+  'every registered contract has its agent file — catches a design skill launching an agent that does not exist'() {
+    const files = readdirSync(join(root, 'agents')).filter(f => f.startsWith('design-') && f.endsWith('.md'))
+    const orphans = CONTRACTS.filter(c => !files.some(f => f.startsWith(c.prefix))).map(c => c.prefix)
+    assert.deepEqual(orphans, [])
+  },
+
+  'the single-step agents run on opus — catches a judgment step moved to a cheaper model'() {
+    for (const stem of ['design-claim-checker', 'design-drafter', 'design-decomposer']) {
+      assert.equal(parseFrontmatter(agentText(stem)).fields.model, 'opus', stem)
+    }
+  },
+
+  'every claim status the claim checker writes is a real Claim.Status reachable from quote-ok — catches a verdict the gate cannot decode'() {
+    const statuses = swiftEnumRawValues(domainSource('Evidence/Claim.swift'), 'Status')
+    assert.ok(statuses.includes('quote-ok'), `Claim.Status parse found ${statuses}`)
+    const written = [...agentText('design-claim-checker').matchAll(/"status":\s*"([^"]+)"/g)].map(m => m[1])
+    assert.ok(written.length > 0)
+    for (const status of written) assert.ok(statuses.includes(status), `"${status}" is not a Claim.Status`)
+    assert.deepEqual([...new Set(written)].sort(), ['refuted', 'supported'])
+  },
+
+  'the drafter names every template section in the template order — catches a draft whose headings design-lint rejects'() {
+    const template = sectionHeadings(readFileSync(join(root, 'templates/design-doc.md'), 'utf8'))
+    assert.ok(template.length >= 13, `template headings: ${template}`)
+    const drafter = agentText('design-drafter')
+    const positions = template.map(h => drafter.indexOf(`\n${h}\n`))
+    template.forEach((h, i) => assert.ok(positions[i] >= 0, `drafter never names \`${h}\``))
+    assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'drafter lists the sections out of order')
+  },
+
+  'the decomposer emits every LedgerTask key except actualLines — catches a proposed task the ledger cannot decode or a fabricated line count'() {
+    const keys = ledgerTaskKeys(domainSource('Plan/Ledger.swift'))
+    assert.ok(keys.includes('actualLines') && keys.includes('estLines'), `LedgerTask keys: ${keys}`)
+    const text = agentText('design-decomposer')
+    for (const key of keys.filter(k => k !== 'actualLines')) assert.ok(text.includes(`"${key}"`), `missing "${key}"`)
+    const fences = [...text.matchAll(/```json\n([\s\S]*?)```/g)].map(m => m[1])
+    assert.ok(fences.length > 0, 'no json example')
+    for (const fence of fences) assert.ok(!fence.includes('"actualLines"'), 'a json example sets "actualLines"')
+  },
+
+  'the decomposer names every plan-lint rule id — catches a fix round that ignores an error the gate reports'() {
+    const rules = planLintRules([domainSource('Plan/PlanLintCoverage.swift'), domainSource('Plan/PlanLintGraph.swift')])
+    const gating = rules.filter(r => r.severity === 'major').map(r => r.id)
+    assert.ok(gating.length >= 12, `gating plan-lint rules: ${gating}`)
+    const text = agentText('design-decomposer')
+    const missing = rules.map(r => r.id).filter(id => !text.includes(`\`${id}\``))
+    assert.deepEqual(missing, [])
+  },
+})
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   let failed = 0
