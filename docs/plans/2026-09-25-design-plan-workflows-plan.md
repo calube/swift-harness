@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–17 merged on local main (1–15 also on origin/main), push tier GREEN (1362 tests). Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–18 merged on local main (1–15 also on origin/main), push tier GREEN (1365 tests). Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 18 — design-review-workflow, prose-skill-written-fresh. Follow the runbook's wave loop.
+Next action: wave 19 — design-review-agents, design-single-step-agents. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
@@ -437,8 +437,8 @@ flowchart LR
 
 ### `design-review-agents`
 - Deps: design-research-lane-agents, design-review-verdict · Gate: fast · estLines: 300
-- Writes: `agents/design-evidence-auditor.md`, `agents/design-standards-conformance.md`, `agents/design-challenger.md`, `agents/design-pre-mortem.md`
-- Does: prompts carry the read-only agent rules (no subagents of your own, stop at diminishing returns, never contact a human, return once; see the worker brief's cost discipline); §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger's question set is written fresh in `agents/design-challenger.md`: 5–7 questions, including "is this the best end-to-end design, not merely a complete one" and "biggest blind spot"; don't copy any existing self-reflect text.
+- Writes: `agents/design-evidence-auditor.md`, `agents/design-standards-conformance.md`, `agents/design-challenger.md`, `agents/design-pre-mortem.md`, `agents/verifier.md` (a design-findings section)
+- Does: prompts carry the read-only agent rules (no subagents of your own, stop at diminishing returns, never contact a human, return once; see the worker brief's cost discipline); §7.2, `opus`, Foundation §9.1 findings with section anchors. The challenger's question set is written fresh in `agents/design-challenger.md`: 5–7 questions, including "is this the best end-to-end design, not merely a complete one" and "biggest blind spot"; don't copy any existing self-reflect text. `agents/verifier.md` gains a section for design findings: location is a section anchor, verified against the design text and the pack's cited claims (the review workflow pipes every reviewer into it).
 - Tests: `design_agents_test.mjs` green · `plugin-validator` passes. Behaviour is calibrated by `calibration-seeds-labelled-by-construction`.
 
 ### `design-single-step-agents`
@@ -470,7 +470,7 @@ flowchart LR
 ### `calibration-seeds-labelled-by-construction`
 - Deps: calibrate-design-command, push-tier-runs-doc-gates, design-review-agents, design-single-step-agents, design-research-workflow, design-review-workflow · Gate: push · estLines: 320
 - Writes: `gate/Fixtures/calibrate-design/` (new), `C/Commands/CheckCommand.swift`, `TC/CalibrationFreshnessTests.swift`
-- Does: §12 layer 2 seeds: claim checker (overstated claim vs genuine quote), evidence auditor (decision contradicting evidence), standards conformance (UIKit in a Core module), challenger and auditor (option on a probe-refuted API). Runs `calibrate design` live and commits `last-pass.json`. In the same task, wires §6.2's pre-push rule: in the plugin repo, push is red when the `CalibrationRecord` hash differs from `last-pass.json`.
+- Does: also cover `DesignCalibrationRunner`\'s uncovered branches (a recurring minor coverage finding since it merged); §12 layer 2 seeds: claim checker (overstated claim vs genuine quote), evidence auditor (decision contradicting evidence), standards conformance (UIKit in a Core module), challenger and auditor (option on a probe-refuted API). Runs `calibrate design` live and commits `last-pass.json`. In the same task, wires §6.2's pre-push rule: in the plugin repo, push is red when the `CalibrationRecord` hash differs from `last-pass.json`.
 - Tests: `swiftgate calibrate design` passes · changed design prompt without a new pass → push red — catches uncalibrated prompts shipping · no `agents/design-*.md` → check skipped · push green on the committed record.
 
 ### `plugin-docs-pass-docs-lint-and-prose`

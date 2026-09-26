@@ -629,3 +629,29 @@ new stub is added.
 - On `needs-decision`, the design skill asks the user, then relaunches with the same `scriptPath` and args plus
   `resumeFromRunId`, carrying every answer so far. An answered lane replays its first call from cache and makes one
   follow-up call with the answer; other lanes' prompts stay byte-identical.
+
+## Wave 18
+
+**`workflows/design-review.js`**
+- Args `{tier, packs: [{reviewer, packPath}], reviewers?: […], previous?: <prior return>}`. In a revise round,
+  `packs` lists only the reviewers being re-run; the others' results carry forward from `previous`. `quick` runs no
+  reviewers (§8.1). All reviewers run at once (≤ 4). Errors: `InvalidArgsError`, `UnknownTierError`,
+  `UnknownReviewerError`, `DuplicateReviewerError`, `ReviewerNotInTierError`, `MissingPackPathError`,
+  `MissingPreviousResultError`.
+- Each reviewer pipes into an independent `swift-harness:verifier` call. The reviewer schema has no `verified`: a
+  reviewer's `verified`/`verification_note` is stripped, and the verifier decides both. Verifier death makes that
+  reviewer's findings `not-reviewed` ("verifier failed; findings unverified").
+- Return `{schemaVersion: 1, tier, status: complete|incomplete, ran, carried, reviews: [DesignReviewJSON
+  envelope]}`. The skill writes each `reviews` entry to its own file and passes them to `review-synth --design`
+  (checked end to end against the real binary).
+- Agent types: `swift-harness:design-{evidence-auditor, standards-conformance, challenger, pre-mortem}`. The
+  standards agent is `standards-conformance` but reviews as `standards-reviewer`.
+- `agents/verifier.md` is written for code findings; the workflow prompt adapts it to design anchors until the
+  agent file gains a design section (added to `design-review-agents`).
+
+**`skills/prose/SKILL.md`** (`/swift-harness:prose`)
+- Mirrors `swiftgate prose`: every rule id with what it flags, the fix, and a before/after; ceiling from
+  `[docs] sentence_ceiling` (default 40). Runs `"$SG" prose <file>` with `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`
+  and rewrites rather than argues. The drafter loads it before `design-lint`.
+- `ProseSkillTests` fail if a rule id or the ceiling drifts, or if the skill fails its own rules.
+- Skills must avoid `[A-Z]\d` tokens: `RuleAnchorTests` reads them as rule citations.
