@@ -39,26 +39,40 @@ function commandTail(text, isCode) {
   return (match ? text.slice(0, match.index) : text).trim()
 }
 
+const FENCE = /^\s*(```|~~~)/
+const LINE_CONTINUATION = /\\\s*$/
+
 // Every invocation in one markdown text: {line, words, isCode}. Code means a fenced block or an
-// inline code span; prose mentions only count when their first word is a real subcommand.
+// inline code span; prose mentions only count when their first word is a real subcommand. Inside
+// a fenced block, a line ending in `\` joins with the lines after it (a shell continuation), so a
+// flag that only appears after the wrap is still checked.
 export function extractInvocations(text) {
   const found = []
   let inFence = false
-  text.split('\n').forEach((line, index) => {
-    if (/^\s*(```|~~~)/.test(line)) {
+  const lines = text.split('\n')
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]
+    if (FENCE.test(line)) {
       inFence = !inFence
-      return
+      continue
     }
-    const segments = inFence ? [{ text: line, isCode: true }] : line.split('`').map((s, i) => ({ text: s, isCode: i % 2 === 1 }))
+    const startLine = index + 1
+    let logical = line
+    if (inFence) {
+      while (LINE_CONTINUATION.test(logical) && index + 1 < lines.length && !FENCE.test(lines[index + 1])) {
+        logical = logical.replace(LINE_CONTINUATION, ' ') + lines[++index]
+      }
+    }
+    const segments = inFence ? [{ text: logical, isCode: true }] : logical.split('`').map((s, i) => ({ text: s, isCode: i % 2 === 1 }))
     for (const segment of segments) {
       for (const match of segment.text.matchAll(INVOCATION)) {
         const start = match.index + match[0].length
         const tail = commandTail(segment.text.slice(start), segment.isCode)
         const words = tail.split(/\s+/).filter(Boolean)
-        if (words.length) found.push({ line: index + 1, words, isCode: segment.isCode })
+        if (words.length) found.push({ line: startLine, words, isCode: segment.isCode })
       }
     }
-  })
+  }
   return found
 }
 
@@ -204,6 +218,22 @@ const tests = {
         'demo/references/deep.md:1: `swiftgate evidence` has no subcommand `verify` (has: check, capture, find)',
         'demo/references/deep.md:2: `frobnicate` is not a swiftgate subcommand',
       ])
+    })
+  },
+
+  'a bad flag on a backslash-continued line fails and names it — catches a checker that only reads a wrapped command\'s first line'() {
+    withTempSkill({
+      'demo/SKILL.md': [
+        'Run this:',
+        '```',
+        '"$SG" evidence check --design <doc> \\',
+        '  --no-such-flag',
+        '```',
+      ].join('\n'),
+    }, dir => {
+      const { problems, resolved } = scanSkills(dir, help)
+      assert.deepEqual(problems, ['demo/SKILL.md:3: `swiftgate evidence check` has no flag `--no-such-flag`'])
+      assert.deepEqual(resolved.map(r => [r.line, r.path, r.flags]), [[3, 'evidence check', ['--design', '--no-such-flag']]])
     })
   },
 
