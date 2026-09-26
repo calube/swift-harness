@@ -77,6 +77,7 @@ struct NewSubcommandRegistrationTests {
     "probe",
     "plan-lint",
     "design-render",
+    "calibrate design",
   ]
 
   @Test(
