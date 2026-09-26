@@ -1,6 +1,8 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @Suite("LiveProcessRunner")
@@ -119,57 +121,108 @@ struct LiveProcessRunnerTests {
     }
   }
 
+  /// The child's own sleep. A run that returns in under half of it killed the child rather than
+  /// waiting for it, with minutes of headroom however loaded the machine is.
+  private static let childLifetime = 600
+  private static let killedWell = Duration.seconds(childLifetime / 2)
+
   @Test("timeout kills the child and throws a BLOCKED error — catches a hung tool wedging the gate")
   func timeoutKillsChild() async throws {
-    let clock = ContinuousClock()
-    let start = clock.now
-    let error = await #expect(throws: ProcessRunnerError.self) {
-      _ = try await runner.run(
+    let ready = try ReadinessFIFO()
+    defer { ready.remove() }
+    let clock = ShiftableClock()
+    let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"], now: clock.now)
+    let timeout = Duration.seconds(3600)
+    let start = ContinuousClock.now
+    let run = Task {
+      await Self.outcome(
+        runner,
         ProcessInvocation(
-          executable: "/bin/sh", arguments: ["-c", "echo started; exec sleep 30"],
-          timeout: .milliseconds(300)))
+          executable: "/bin/sh",
+          arguments: [
+            "-c", "echo started; echo ready > \"$READY\"; exec sleep \(Self.childLifetime)",
+          ],
+          environmentOverlay: ["READY": ready.path], timeout: timeout))
     }
-    #expect(clock.now - start < .seconds(10))
-    guard case .timedOut(_, let after, let stdout, _) = error else {
-      Issue.record("expected timedOut, got \(String(describing: error))")
+    #expect(await ready.firstLine() == "ready")
+    clock.advance(by: timeout)
+
+    let result = await run.value
+    #expect(ContinuousClock.now - start < Self.killedWell)
+    guard case .failure(let error) = result,
+      case .timedOut(_, let after, let stdout, _) = error
+    else {
+      Issue.record("expected timedOut, got \(result)")
       return
     }
-    #expect(after == .milliseconds(300))
+    #expect(after == timeout)
     #expect(stdout.text == "started\n")
-    #expect(error?.verdict == .blocked)
+    #expect(error.verdict == .blocked)
   }
 
   @Test(
     "timeout kills grandchildren holding the pipes — catches a hang after killing only the child")
-  func timeoutKillsProcessGroup() async {
+  func timeoutKillsProcessGroup() async throws {
+    let ready = try ReadinessFIFO()
+    defer { ready.remove() }
+    let clock = ShiftableClock()
     let patient = LiveProcessRunner(
       baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .seconds(1),
-      postExitDrainLimit: .seconds(60))
-    let clock = ContinuousClock()
-    let start = clock.now
-    await #expect(throws: ProcessRunnerError.self) {
-      _ = try await patient.run(
+      postExitDrainLimit: .seconds(3600), now: clock.now)
+    let timeout = Duration.seconds(3600)
+    let start = ContinuousClock.now
+    let lifetime = Self.childLifetime
+    let run = Task {
+      await Self.outcome(
+        patient,
         ProcessInvocation(
-          executable: "/bin/sh", arguments: ["-c", "sleep 30 & sleep 30; wait"],
-          timeout: .milliseconds(300)))
+          executable: "/bin/sh",
+          arguments: [
+            "-c", "sleep \(lifetime) & echo ready > \"$READY\"; sleep \(lifetime); wait",
+          ],
+          environmentOverlay: ["READY": ready.path], timeout: timeout))
     }
-    #expect(clock.now - start < .seconds(10))
+    #expect(await ready.firstLine() == "ready")
+    clock.advance(by: timeout)
+
+    let result = await run.value
+    #expect(ContinuousClock.now - start < Self.killedWell)
+    guard case .failure(.timedOut) = result else {
+      Issue.record("expected timedOut, got \(result)")
+      return
+    }
   }
 
   @Test("task cancellation kills the child — catches orphaned tools after a hook is interrupted")
-  func cancellationKillsChild() async {
-    let clock = ContinuousClock()
-    let start = clock.now
+  func cancellationKillsChild() async throws {
+    let ready = try ReadinessFIFO()
+    defer { ready.remove() }
+    let start = ContinuousClock.now
     let task = Task {
       try await runner.run(
-        ProcessInvocation(executable: "/bin/sleep", arguments: ["30"], timeout: .seconds(60)))
+        ProcessInvocation(
+          executable: "/bin/sh",
+          arguments: ["-c", "echo ready > \"$READY\"; exec sleep \(Self.childLifetime)"],
+          environmentOverlay: ["READY": ready.path], timeout: .seconds(3600)))
     }
+    #expect(await ready.firstLine() == "ready")
     task.cancel()
+
     let result = await task.result
-    #expect(clock.now - start < .seconds(10))
+    #expect(ContinuousClock.now - start < Self.killedWell)
     guard case .failure(let error) = result, case .cancelled = error as? ProcessRunnerError else {
       Issue.record("expected cancelled, got \(result)")
       return
+    }
+  }
+
+  private static func outcome(_ runner: LiveProcessRunner, _ invocation: ProcessInvocation) async
+    -> Result<ProcessOutput, ProcessRunnerError>
+  {
+    do {
+      return .success(try await runner.run(invocation))
+    } catch {
+      return .failure(error)
     }
   }
 
@@ -193,5 +246,23 @@ struct LiveProcessRunnerTests {
     )
     #expect(output.status == .signaled(9))
     #expect(!output.status.isSuccess)
+  }
+}
+
+/// A clock that runs with the real one until a test moves it forward, so a timeout fires exactly
+/// when the test says the child is ready, never because the machine was slow.
+private final class ShiftableClock: Sendable {
+  private let offsetNanoseconds = Atomic<Int64>(0)
+
+  var now: @Sendable () -> ContinuousClock.Instant {
+    { [self] in
+      ContinuousClock.now.advanced(by: .nanoseconds(offsetNanoseconds.load(ordering: .acquiring)))
+    }
+  }
+
+  func advance(by duration: Duration) {
+    let (seconds, attoseconds) = duration.components
+    let nanoseconds = seconds * 1_000_000_000 + attoseconds / 1_000_000_000
+    offsetNanoseconds.add(nanoseconds, ordering: .releasing)
   }
 }
