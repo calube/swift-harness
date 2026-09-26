@@ -16,6 +16,7 @@ at pass^3. Nothing loaded where it shouldn't have.** The tuning set found 1 flak
 | Judge model | `claude-haiku-4-5-20251001`, pinned; routing has no `llm` graders |
 | `claude --version` | 2.1.282 |
 | Harness | `main` `60e7603`, the first routing run on the `plugin/` layout, staged with `evals/runner/stage_plugin.sh` |
+| Later change | `main` `2e8a5c1` changed the `status` description after this run: only the plan-index path it names, not its trigger phrases. Not re-run |
 | Settings | `--runs 3 -j 2 --ablation none --scaffold`, `max_turns: 1`, tools `Read, Glob, Grep, Skill` |
 
 ## Results
