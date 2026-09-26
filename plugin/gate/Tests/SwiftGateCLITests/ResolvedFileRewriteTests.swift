@@ -179,13 +179,15 @@ struct ResolvedFileRewriteTests {
     try await repo.commitUnresolvablePin()
     let corrupted = try String(contentsOf: repo.resolvedFile, encoding: .utf8)
     #expect(corrupted != repo.resolvedBeforeCorruption)
-    // The backstop's own comparison, in-process, against this run's real before/after content:
-    // independent evidence from whichever call site the --only-use-versions-from-resolved-file /
-    // -onlyUsePackageVersionsFromResolvedFile flags protect.
-    let selfCheck = try ResolvedFileGuard.finding(
-      before: ["MainPkg/Package.resolved": repo.resolvedBeforeCorruption],
-      after: ["MainPkg/Package.resolved": corrupted])
-    #expect(selfCheck?.ruleID == ResolvedFileGuard.rewrittenRuleID)
+    // Loads this fixture's own .swiftgate.toml for real, in-process, confirming the corrupted pin
+    // sits in a package swiftgate can otherwise resolve to (`swift package describe` alone doesn't
+    // trip the defect, only a build or test does) before handing off to the real binary below.
+    switch await ConfiguredRepository.load(
+      root: repo.root, swiftPM: ScopeResolution.liveSwiftPM(root: repo.root), command: "test")
+    {
+    case .loaded(let configured): #expect(configured.config.packages == ["MainPkg"])
+    case .failed(let outcome): Issue.record("fixture config didn't load: \(outcome)")
+    }
 
     let report = try await repo.runTestTierBinary()
 
