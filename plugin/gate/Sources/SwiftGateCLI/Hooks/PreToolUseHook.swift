@@ -3,7 +3,7 @@ import SwiftGateAdapters
 import SwiftGateDomain
 
 /// PreToolUse (spec §8): Bash and Edit/Write guards (< 50ms), and the advisory comment pass on
-/// `git commit` (≤ 20s).
+/// `git commit` (≤ 20s). A path a Bash command writes is judged exactly as a file tool's path.
 enum PreToolUseHook {
   static let fileTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
 
@@ -15,21 +15,52 @@ enum PreToolUseHook {
     case "Bash"?:
       guard let command = payload.command else { return nil }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      for path in writtenPaths(command, payload: payload, home: dependencies.environment["HOME"]) {
+        if let violation = await writeViolation(
+          path, payload: payload, root: root, dependencies: dependencies)
+        {
+          let reason = "this command writes `\(path)`. " + violation.reason
+          return deny(GuardViolation(ruleID: violation.ruleID, reason: reason))
+        }
+      }
       guard BashGuard.isGitCommit(command) else { return nil }
       return await commitContext(root: root, dependencies: dependencies)
     case let tool? where fileTools.contains(tool):
       guard let path = payload.filePath else { return nil }
-      return await fileGuard(path, payload: payload, root: root, dependencies: dependencies)
+      return await writeViolation(path, payload: payload, root: root, dependencies: dependencies)
+        .map(deny)
     default:
       return nil
     }
   }
 
-  /// Every guard sees every spelling of the path the write could land on, so a relative,
+  /// The paths a Bash command writes. A copy, move or link into a directory writes each source's
+  /// name inside it, which only the filesystem can tell from a copy onto a new file's name.
+  private static func writtenPaths(_ command: String, payload: HookPayload, home: String?)
+    -> [String]
+  {
+    ShellSyntax.writeTargets(in: command).flatMap { target -> [String] in
+      guard !target.entries.isEmpty,
+        target.isDirectory
+          || ToolPath.resolvedAbsolutes(target.path, cwd: payload.cwd, home: home)
+            .contains(where: isDirectory)
+      else { return [target.path] }
+      return [target.path] + target.entries.map { target.path + "/" + $0 }
+    }
+  }
+
+  private static func isDirectory(_ path: String) -> Bool {
+    var isDirectory: ObjCBool = false
+    return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+      && isDirectory.boolValue
+  }
+
+  /// The one judgment of a write, whether a file tool names the path or a Bash command writes
+  /// it. Every guard sees every spelling of the path the write could land on, so a relative,
   /// `..`-bearing or symlinked form is judged like the canonical one.
-  private static func fileGuard(
+  static func writeViolation(
     _ path: String, payload: HookPayload, root: URL, dependencies: HookDependencies
-  ) async -> String? {
+  ) async -> GuardViolation? {
     let environmentValue = dependencies.environment[OrchestratorMarker.environmentVariable]
     let forms = ToolPath.resolvedForms(
       path, cwd: payload.cwd, home: dependencies.environment["HOME"])
@@ -40,7 +71,7 @@ enum PreToolUseHook {
       sessionID: payload.sessionID, agentID: payload.agentID)
     for form in forms {
       if let violation = EditGuard.evaluate(path: form, isOrchestrator: orchestrator) {
-        return deny(violation)
+        return violation
       }
     }
     for form in ToolPath.resolvedAbsolutes(
@@ -57,7 +88,7 @@ enum PreToolUseHook {
         target, locks: locks, plans: plans, environmentValue: environmentValue,
         sessionID: payload.sessionID, agentID: payload.agentID)
       {
-        return deny(violation)
+        return violation
       }
     }
     return nil
