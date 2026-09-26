@@ -1,9 +1,10 @@
 # Handoff: skill routing for the 6 foundation skills
 
 <!-- RESUME
-State (2026-09-26): DONE on branch evals-routing-foundation, waiting for the user to merge. Spent 31.81 of 35 USD. Results: evals/results/2026-09-26-routing-foundation/summary.md.
-Open decisions answered: the prose labels are confirmed, and the tdd rubric loosening is approved and done.
-Next action: the user decides on a fix branch for the tdd and test-gate descriptions (see "Proposed description changes" in the summary).
+State (2026-09-26): round 1 (6 foundation skills) and the tdd/test-gate description fix are merged. Results: evals/results/2026-09-26-routing-foundation and evals/results/2026-09-26-routing-fix. The fix branch fix-tdd-test-gate-routing merged with test-gate description v2; v2 passed its round-3 tuning set (test-gate 1.00/1.00), and its held-out verdict (round-3 independent set, 20 cases × 3) was still running at merge time.
+Open, in order: (1) record the v2 held-out verdict and the live session pair (tdd decrement-floors-at-zero, test-gate hollow-test-before-ready, 1 trial per arm) in a results summary; in the tdd pair, both arms passed and the with-plugin arm showed no swiftgate RED report, so trace why. (2) Route the other 5 skills: 100 independent cases are seeded (tag round-4), about 17 USD for 3 trials, approved. (3) validate misses "summarise the tests for the PR description" and review misses "would you approve this": no fix yet.
+Runner after the plugin/ move: `claude plugin eval .` from the repo root no longer finds a plugin.json. Check `claude plugin eval --help` for how to point it at plugin/ while the cases stay in evals/ at the root, before the next run.
+Budget: about 30 USD approved for this batch; spent so far is in each results summary.
 -->
 
 ## Scope
