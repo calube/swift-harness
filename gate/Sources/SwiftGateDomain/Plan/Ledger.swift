@@ -13,7 +13,7 @@ public enum TaskStatus: String, Sendable, Equatable, Codable, CaseIterable {
 }
 
 /// One `ledger.json` task entry (spec §5.7).
-public struct LedgerTask: Sendable, Equatable, Codable {
+public struct LedgerTask: Sendable, Equatable {
   public let id: String
   public let deps: [String]
   /// Exact paths or `/`-terminated prefixes (``WriteSet``).
@@ -24,10 +24,14 @@ public struct LedgerTask: Sendable, Equatable, Codable {
   public let estLines: Int
   public let status: TaskStatus
   public let worktree: String
+  /// The task's real line count, once sub-project 5's worker report writes it. `nil` until then —
+  /// never a placeholder `0` (`stats`' estimate error, spec §9.3, excludes a task without one).
+  public let actualLines: Int?
 
   public init(
     id: String, deps: [String], writeSet: [String], gate: CheckTier, tests: [String],
-    covers: [String], estLines: Int, status: TaskStatus, worktree: String
+    covers: [String], estLines: Int, status: TaskStatus, worktree: String,
+    actualLines: Int? = nil
   ) {
     self.id = id
     self.deps = deps
@@ -38,6 +42,49 @@ public struct LedgerTask: Sendable, Equatable, Codable {
     self.estLines = estLines
     self.status = status
     self.worktree = worktree
+    self.actualLines = actualLines
+  }
+}
+
+extension LedgerTask: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case id, deps, writeSet, gate, tests, covers, estLines, status, worktree, actualLines
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    let id = try c.decode(String.self, forKey: .id)
+    let actualLines = try c.decodeIfPresent(Int.self, forKey: .actualLines)
+    if let actualLines, actualLines < 0 {
+      throw DecodingError.dataCorruptedError(
+        forKey: .actualLines, in: c,
+        debugDescription: "task `\(id)`: actualLines must not be negative")
+    }
+    self.init(
+      id: id, deps: try c.decode([String].self, forKey: .deps),
+      writeSet: try c.decode([String].self, forKey: .writeSet),
+      gate: try c.decode(CheckTier.self, forKey: .gate),
+      tests: try c.decode([String].self, forKey: .tests),
+      covers: try c.decode([String].self, forKey: .covers),
+      estLines: try c.decode(Int.self, forKey: .estLines),
+      status: try c.decode(TaskStatus.self, forKey: .status),
+      worktree: try c.decode(String.self, forKey: .worktree), actualLines: actualLines)
+  }
+
+  /// `actualLines` is omitted entirely when `nil`, so an existing ledger with no notion of it
+  /// round-trips byte-stable.
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(deps, forKey: .deps)
+    try c.encode(writeSet, forKey: .writeSet)
+    try c.encode(gate, forKey: .gate)
+    try c.encode(tests, forKey: .tests)
+    try c.encode(covers, forKey: .covers)
+    try c.encode(estLines, forKey: .estLines)
+    try c.encode(status, forKey: .status)
+    try c.encode(worktree, forKey: .worktree)
+    try c.encodeIfPresent(actualLines, forKey: .actualLines)
   }
 }
 

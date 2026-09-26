@@ -94,6 +94,51 @@ struct LedgerModelTests {
   }
 
   @Test(
+    "actualLines round-trips when present and is omitted, never a placeholder 0, when absent — catches a real count confused with an unset one"
+  )
+  func actualLinesPresentAndAbsentRoundTrip() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+
+    let withActuals = LedgerTask(
+      id: "offline-queue-core-reducer", deps: [], writeSet: ["a/"], gate: .push,
+      tests: ["test-a"], covers: ["test-a"], estLines: 180, status: .pending, worktree: "../w",
+      actualLines: 210)
+    let firstPass = try encoder.encode(withActuals)
+    #expect(String(decoding: firstPass, as: UTF8.self).contains("\"actualLines\":210"))
+    let decoded = try JSONDecoder().decode(LedgerTask.self, from: firstPass)
+    #expect(decoded == withActuals)
+    #expect(try encoder.encode(decoded) == firstPass)
+
+    // Absent: sampleTask never set actualLines, so it stays nil and the key never appears.
+    #expect(Self.sampleTask.actualLines == nil)
+    let absentPass = try encoder.encode(Self.sampleTask)
+    #expect(!String(decoding: absentPass, as: UTF8.self).contains("actualLines"))
+    #expect(try JSONDecoder().decode(LedgerTask.self, from: absentPass).actualLines == nil)
+  }
+
+  @Test(
+    "a negative actualLines fails to decode, naming the task — catches a corrupt worker report treated as real data"
+  )
+  func negativeActualLinesRejected() throws {
+    let data = Data(
+      String(
+        decoding: try JSONEncoder().encode(
+          LedgerTask(
+            id: "offline-queue-core-reducer", deps: [], writeSet: ["a/"], gate: .push,
+            tests: ["test-a"], covers: ["test-a"], estLines: 180, status: .pending,
+            worktree: "../w", actualLines: 210)),
+        as: UTF8.self
+      ).replacingOccurrences(of: "210", with: "-5").utf8)
+
+    let error = #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(LedgerTask.self, from: data)
+    }
+    #expect(error != nil)
+    #expect(String(describing: error).contains("offline-queue-core-reducer"))
+  }
+
+  @Test(
     "an unrecognized gate tier fails to decode, naming the field — catches an invalid tier silently accepted"
   )
   func unknownGateTierRejected() throws {
