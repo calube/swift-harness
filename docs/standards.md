@@ -84,7 +84,7 @@ Third-party suppressions (`swiftlint:disable*`, `swiftformat:disable`, `peripher
 **C5. No MainActor default isolation in Core packages.**
 - **Do:** leave `SWIFT_DEFAULT_ACTOR_ISOLATION` unset for Core packages. Put `@MainActor` on the UI types that need it.
 - **Tell:** `.defaultIsolation(MainActor.self)` in a Core package manifest; `CaseReducerState` conformance errors on `@Reducer` enums.
-- **Enforced by:** review · **Source:** [TCA #3768](https://github.com/pointfreeco/swift-composable-architecture/issues/3768). Incident: none yet.
+- **Enforced by:** arch (package manifest default isolation) + review (`@MainActor` on the UI types) · **Source:** [TCA #3768](https://github.com/pointfreeco/swift-composable-architecture/issues/3768). Incident: none yet.
 
 ## 2. Architecture
 
