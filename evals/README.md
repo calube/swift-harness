@@ -63,6 +63,7 @@ steps 1 to 3.
 | [`suites.md`](suites.md) | The 7 suites: question, cases, grader, metrics and pass bar for each |
 | [`components.md`](components.md) | Evals per skill, agent, workflow and rule, on fixed inputs |
 | [`apps.md`](apps.md) | The eval apps and the task format |
+| [`runbook.md`](runbook.md) | Rules, layout and steps for any eval session |
 
 Planned, not yet created: `evals/tasks/` (task fixtures), `evals/runner/` (the harness that runs
 trials and grades them), `evals/results/` (1 summary per run; transcripts stay out of git).
