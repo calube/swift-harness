@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "gate",
+      "text": "What `gate` do you give the task whose tests include test-purchase-flow-ends-on-receipt?",
+      "options": [
+        "fast",
+        "push",
+        "ready"
+      ],
+      "expected": "ready"
+    }
+  ]
+}

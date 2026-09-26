@@ -100,6 +100,22 @@ struct JudgeAdaptersTests {
   }
 
   @Test(
+    "the claude judge pins verbose off through --settings — catches a global verbose config turning the json result into an event array the parser can't read"
+  )
+  func invocationPinsVerboseOff() async throws {
+    let runner = Self.replaying("claude-result.json", status: 0)
+    _ = try await ClaudeCLIJudge(runner: runner, model: "haiku")
+      .answer(Self.subject, questions: Self.captureSet)
+
+    let call = try #require(runner.invocations.first)
+    let settings = try #require(call.arguments.firstIndex(of: "--settings"))
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: Data(call.arguments[settings + 1].utf8))
+        as? [String: Any])
+    #expect(object["verbose"] as? Bool == false)
+  }
+
+  @Test(
     "the cache answers a repeat question without the backend and misses when the model changes — catches paying twice for a stable test or reusing another model's answers"
   )
   func caching() async throws {

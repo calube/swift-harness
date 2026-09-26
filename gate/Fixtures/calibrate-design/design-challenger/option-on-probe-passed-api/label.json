@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "refuted-api-finding",
+      "text": "Do you report a blocker or major finding that the chosen option depends on an API the probe showed doesn't exist?",
+      "options": [
+        "yes",
+        "no"
+      ],
+      "expected": "no"
+    }
+  ]
+}

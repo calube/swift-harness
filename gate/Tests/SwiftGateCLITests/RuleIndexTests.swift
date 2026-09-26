@@ -53,7 +53,9 @@ struct RuleIndexTests {
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
       JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
       PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,
-      PushDocGates.blockedRuleID, PushDocGates.summaryRuleID,
+      PushDocGates.blockedRuleID, PushDocGates.summaryRuleID, CalibrationFreshness.staleRuleID,
+      CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
+      CalibrationFreshness.summaryRuleID,
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,

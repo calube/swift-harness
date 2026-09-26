@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "ui-framework-finding",
+      "text": "Do you report a blocker or major finding that a Core module would import a UI framework?",
+      "options": [
+        "no",
+        "yes"
+      ],
+      "expected": "yes"
+    },
+    {
+      "id": "rule",
+      "text": "Which one rule id does your finding about PhotoEditorCore cite? Pick one.",
+      "options": [
+        "D2",
+        "A2",
+        "A5"
+      ],
+      "expected": "A2"
+    }
+  ]
+}

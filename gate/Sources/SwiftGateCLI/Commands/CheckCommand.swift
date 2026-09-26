@@ -118,9 +118,11 @@ enum CheckRun {
           root: root, tier: tier, changed: changed, config: config, graph: graph,
           context: context, dependencies: dependencies.simulator))
     }
-    // Design-doc evidence needs no module graph or config, so it runs independent of both.
+    // Design-doc evidence and calibration freshness need no module graph or config, so they run
+    // independent of both.
     if tier != .fast {
       parts.findings += try await PushDocGates.run(root: root, runner: dependencies.runner)
+      parts.findings += try CalibrationFreshness.run(root: root)
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -278,9 +280,8 @@ enum CheckRun {
 /// `superseded-by` or status-less design is left for its own lifecycle stage, never silently
 /// gated; an `.unknown` status is surfaced instead of silently skipped.
 ///
-/// Extension point for the next two `CheckCommand` edits (spec §5.1): `calibrate` seeds calibration
-/// freshness and `docs-lint`/`prose` wiring both add their own `if tier != .fast` step beside this
-/// one and merge their findings into `parts.findings` the same way.
+/// Extension point for push's other doc gates (spec §5.1): calibration freshness sits beside this
+/// one, and `docs-lint`/`prose` add their own `if tier != .fast` step the same way.
 enum PushDocGates {
   static let staleClaimRuleID = "evidence-check.stale-claim"
   static let statusUnknownRuleID = "evidence-check.status-unknown"
@@ -366,6 +367,89 @@ enum PushDocGates {
     case .failed(let failure): return "\(failure)"
     case .stale(let reason): return "\(reason)"
     }
+  }
+}
+
+/// Push's calibration freshness gate (spec §6.2): a repository that ships design agents must carry
+/// a `last-pass.json` whose content hash matches its `agents/design-*.md` and
+/// `workflows/design-*.js` as they are now. Only a repository with no design agent at all (a
+/// consumer repo) skips it, and says so; a prompt that can't be read or a record that can't be
+/// decoded gates rather than skips.
+enum CalibrationFreshness {
+  static let staleRuleID = "calibration-freshness.stale"
+  static let noRecordRuleID = "calibration-freshness.no-record"
+  static let unreadableRuleID = "calibration-freshness.unreadable"
+  static let summaryRuleID = "calibration-freshness.summary"
+
+  static func run(root: URL) throws(ReportContractViolation) -> [Finding] {
+    let record = DesignCalibrationLayout.recordPath
+    let rerun = "run `swiftgate calibrate design` and commit \(record)"
+    let hashed: [DesignCalibrationHash.File]
+    do {
+      hashed = try DesignCalibrationHash.discover(root: root)
+    } catch {
+      return [
+        try finding(
+          unreadableRuleID, .major, file: DesignCalibrationLayout.agentsDirectory,
+          "can't read the design prompts to hash them, so calibration freshness is unknown: "
+            + "\(error)")
+      ]
+    }
+    let agentsPrefix = "\(DesignCalibrationLayout.agentsDirectory)/"
+    guard hashed.contains(where: { $0.path.hasPrefix(agentsPrefix) }) else {
+      return [
+        try finding(
+          summaryRuleID, .nit, file: ".",
+          "calibration freshness skipped: no agents/design-*.md in this repository, so there is "
+            + "no design agent to calibrate.")
+      ]
+    }
+    let current = DesignCalibrationHash.hash(hashed)
+    guard let data = FileManager.default.contents(atPath: root.appending(path: record).path)
+    else {
+      return [
+        try finding(
+          noRecordRuleID, .major, file: record,
+          "\(hashed.count) design prompt file(s) and no calibration pass on record; \(rerun).")
+      ]
+    }
+    let pass: CalibrationRecord
+    do {
+      pass = try CalibrationRecord.decode(data)
+    } catch {
+      return [
+        try finding(
+          unreadableRuleID, .major, file: record, "isn't a calibration record: \(error); \(rerun).")
+      ]
+    }
+    guard pass.contentHash == current else {
+      let now = Set(hashed.map(\.path))
+      let then = Set(pass.hashedFiles)
+      let changes =
+        now.subtracting(then).sorted().map { "added \($0)" }
+        + then.subtracting(now).sorted().map { "removed \($0)" }
+      let what = changes.isEmpty ? "edited" : changes.joined(separator: ", ")
+      return [
+        try finding(
+          staleRuleID, .major, file: record,
+          "design prompts changed since the last calibration pass (\(what)): recorded hash "
+            + "\(pass.contentHash), current \(current); \(rerun).")
+      ]
+    }
+    return [
+      try finding(
+        summaryRuleID, .nit, file: record,
+        "calibration fresh: \(hashed.count) design prompt file(s) match content hash \(current), "
+          + "passed on \(pass.model).")
+    ]
+  }
+
+  private static func finding(
+    _ rule: String, _ severity: Severity, file: String, _ message: String
+  ) throws(ReportContractViolation) -> Finding {
+    try Finding(
+      ruleID: rule, severity: severity, file: file, line: nil, message: message,
+      failureScenario: nil)
   }
 }
 

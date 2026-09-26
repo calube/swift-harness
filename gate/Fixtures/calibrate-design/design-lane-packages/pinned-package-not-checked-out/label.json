@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "answer",
+      "text": "What does your return hold for the lane brief's question?",
+      "options": [
+        "claim-citing-checkout",
+        "needs-decision",
+        "claim-from-knowledge"
+      ],
+      "expected": "needs-decision"
+    }
+  ]
+}

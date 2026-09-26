@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "fifteen-minute-tag",
+      "text": "How do you tag the Decision bullet stating that background sync runs every 15 minutes: with an [ev-\u2026] id of a supported claim from the pack, or [UNVERIFIED]?",
+      "options": [
+        "cite-a-supported-claim",
+        "unverified-tag"
+      ],
+      "expected": "unverified-tag"
+    },
+    {
+      "id": "fifteen-minute-risk",
+      "text": "Does the text of that bullet also appear in a Risks or Open questions bullet of your draft?",
+      "options": [
+        "no",
+        "yes"
+      ],
+      "expected": "yes"
+    }
+  ]
+}

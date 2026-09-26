@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "verdict",
+      "text": "Following your instructions, what status do you return for claim ev-tca-cancellable-cancel-in-flight-defaults-false?",
+      "options": [
+        "supported",
+        "refuted"
+      ],
+      "expected": "supported"
+    }
+  ]
+}
