@@ -10,7 +10,7 @@
 // `merge`.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +23,10 @@ const script = new AsyncFunction('args', 'agent', 'pipeline', 'log', source)
 const PLUGIN = '/opt/plugins/swift-harness'
 const BUNDLE = '/work/app/.harness/runs/r1/review-input'
 const CORE = ['concurrency', 'architecture', 'test-quality', 'api-errors']
+// Under the gate's `swift test` the debug build exists; the shim would start a nested gate build
+// whenever its cache is cold. A plain `node` run falls back to the shim.
+const debugBuild = join(root, 'gate/.build/debug/swiftgate')
+const swiftgate = existsSync(debugBuild) ? debugBuild : join(root, 'bin/swiftgate')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 async function pipeline(items, ...stages) {
@@ -148,7 +152,7 @@ const tests = {
           writeFileSync(path, JSON.stringify(r))
           return path
         })
-        const out = execFileSync(join(root, 'bin/swiftgate'), ['review-synth', '--run-directory', dir, '--json', ...files], {
+        const out = execFileSync(swiftgate, ['review-synth', '--run-directory', dir, '--json', ...files], {
           encoding: 'utf8',
           cwd: dir,
           env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'review-synth-%p.profraw') },
