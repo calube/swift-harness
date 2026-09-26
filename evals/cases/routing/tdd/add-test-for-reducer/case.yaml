@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: routing-tdd-add-test-for-reducer
+description: >
+  Should-trigger routing case for tdd. A user asks for a behaviour change to a reducer in plain
+  words; the tdd skill must load. Source: suites.md skill-routing, components.md Skills (tdd).
+tags: [routing, tdd, should-trigger, spike]
+expected_outcome: The Skill tool loads swift-harness:tdd before any other work.
+context:
+  scaffold_script: scaffold.sh
