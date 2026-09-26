@@ -655,3 +655,29 @@ new stub is added.
   and rewrites rather than argues. The drafter loads it before `design-lint`.
 - `ProseSkillTests` fail if a rule id or the ceiling drifts, or if the skill fails its own rules.
 - Skills must avoid `[A-Z]\d` tokens: `RuleAnchorTests` reads them as rule citations.
+
+## Wave 19
+
+**Design reviewer agents** (`agents/design-{evidence-auditor, standards-conformance, challenger, pre-mortem}.md`)
+- `opus`, read-only. Output `{findings: [{location: {anchor}, severity, category, title, failure_scenario, evidence,
+  fix, kind, rule}]}`, no `verified`; anchors are `RequiredSection` values. The test reads the reviewer schema from
+  `workflows/design-review.js`, so the two can't drift.
+- Challenger questions: best end-to-end, not merely complete; biggest blind spot; hardest requirement shown or only
+  asserted; what the rejected option does better; simplest sufficient design; where runtime failure surfaces and
+  which test fails first; costliest decision to reverse.
+- No `pre-mortem` context-pack role exists (§5.10 lists none). **The design skill passes the pre-mortem the
+  challenger's pack** (the doc).
+- `agents/verifier.md` has a design-findings section: location is a section anchor, verified against the design
+  text and the pack's cited claims.
+
+**Single-step agents** (`agents/design-{claim-checker, drafter, decomposer}.md`), `opus`, Read/Grep/Glob only
+- Claim checker: takes the claim-checker pack path; judges only `quote-ok` claims; returns `{verdicts: [{id, status:
+  supported|refuted, reason}], skipped: [{id, reason}]}`.
+- Drafter: takes the drafter pack, doc path, area, tier, today's date, the prose skill path and, when revising,
+  findings. Follows `templates/design-doc.md` section order, cites `supported` claims only, uses the
+  ` — tier T<n>` test-plan syntax, and returns only the doc text.
+- Decomposer: takes the decomposer pack, plan slug and repo name. Returns `{tasks: [LedgerTask without actualLines,
+  status "pending"], unresolved: [{ruleId, task, reason}]}`; gets exactly one fix round with `plan-lint` findings.
+
+A test that runs a real `swiftgate` binary must set `cwd` and `LLVM_PROFILE_FILE` to a temp dir: under the push
+tier's coverage build the binary otherwise leaves `default.profraw` in the checkout.

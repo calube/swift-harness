@@ -84,6 +84,8 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
   on stale module paths, delete `ModuleCache` directories with `/usr/bin/find`, not a shell alias.
 - `rm` and `cp` are aliased to `rm -i` / `cp -i` in this shell and hang waiting for input. Use `/bin/rm -f`
   and `/bin/cp -f`.
+- A test that runs a real `swiftgate` binary sets `cwd` and `LLVM_PROFILE_FILE` to a temp dir, or the coverage
+  build leaves `default.profraw` in the checkout.
 - Tests that run a real command resolve this checkout's git common dir, which is shared with every sibling
   worktree. Run commands that write plan state only against a temp repo.
 
