@@ -535,7 +535,7 @@ Native model names only. The plugin never names relay or proxy agent types.
 
 | Tier | Agents | Adds | Offered when |
 |---|---|---|---|
-| quick | 2: one research lane + drafter | — | no new module kind, no new dependency |
+| quick | 3: one research lane + claim checker + drafter (without the checker no claim reaches `supported`) | — | no new module kind, no new dependency |
 | standard | ~9: 4 lanes + claim checker + drafter + 3 reviewers | — | default |
 | deep | ~12 | pre-mortem, per-option probes, 2 revise rounds | `design-scope` recommends or user picks |
 

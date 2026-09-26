@@ -681,3 +681,34 @@ new stub is added.
 
 A test that runs a real `swiftgate` binary must set `cwd` and `LLVM_PROFILE_FILE` to a temp dir: under the push
 tier's coverage build the binary otherwise leaves `default.profraw` in the checkout.
+
+## Wave 20
+
+**`skills/design/SKILL.md`** (frame → research → verify → draft; `references/frame-research-verify.md`)
+- Reads the session id from the SessionStart line `Session id: <id>` and runs
+  `plan claim <plan> --session <id> --design <doc>` at frame.
+- The claim checker runs at every tier, quick included: without it no non-probe claim reaches `supported`, and
+  every quick Decision bullet would fail design-lint. The spec's §8.1 tier table now says so.
+- At draft, `docs-lint`'s `unreachable-doc` and `requirement-uncited` findings on the new doc are tolerated against
+  a frame-time baseline: nothing links or cites the doc before publish.
+- Frame answers are claims with lane `prior-decisions`.
+- **Seam for review/publish/amend:** the "Where the draft leaves things" section in SKILL.md, plus a new
+  `references/review-publish-amend.md`.
+
+**`skills/plan/SKILL.md`** (`references/state-files.md` holds the JSON shapes and `phases.jsonl` records)
+- The claim check is `plan claim` exiting 0 for this session. Approval must match `designSha` directly or through
+  `design-diff --chain`. `evidence check --design --at HEAD` runs first; non-zero halts and asks.
+- The skill writes shared `plan.json`/`ledger.json` with the Write tool as the plan's lock holder (spec §3.2: `/plan`
+  writes them; the edit guard allows the holder). Drafts go to `.harness/plan-draft/<slug>/` and are validated by
+  `plan-schedule` and `plan-lint`, which decode strictly, before the shared files are written. Run ids are
+  `plan-<UTC>`.
+
+**`tests/skill_commands_test.mjs`** scans every `skills/**/*.md` (inline code, fences and prose) for
+`swiftgate`/`"$SG"` calls and checks each subcommand path against `--help`'s `SUBCOMMANDS:` list and each flag
+against that subcommand's help. A later skill that names a missing command or flag fails it.
+
+**Open items raised here:**
+- No command dumps the module graph, so the design and plan skills each build `module-graph.txt` themselves
+  (with `swift package describe`). Two copies of one procedure; a `swiftgate` command would replace both.
+- `docs-lint.requirement-uncited` at quick tier: a quick design has no ADR, so its requirements may never be cited
+  outside it. Decide before `plugin-docs-pass-docs-lint-and-prose` makes docs-lint gate push.
