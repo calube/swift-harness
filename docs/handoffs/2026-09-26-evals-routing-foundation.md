@@ -1,10 +1,9 @@
 # Handoff: skill routing for the 6 foundation skills
 
 <!-- RESUME
-State (2026-09-26): NOT STARTED. The first eval round is merged on main (53644b5). Worktree ../swift-harness-evals exists; its branch evals-foundation is fully merged.
-Next action: in the worktree, `git switch -c evals-routing-foundation main`, then follow "Steps" below.
-Read first: evals/runbook.md (operator role and rules), then the skill-routing section of evals/suites.md.
-Needs the user: approval before spending past 35 USD in total; answers to the open decisions below.
+State (2026-09-26): DONE on branch evals-routing-foundation, waiting for the user to merge. Spent 31.81 of 35 USD. Results: evals/results/2026-09-26-routing-foundation/summary.md.
+Open decisions answered: the prose labels are confirmed, and the tdd rubric loosening is approved and done.
+Next action: the user decides on a fix branch for the tdd and test-gate descriptions (see "Proposed description changes" in the summary).
 -->
 
 ## Scope
