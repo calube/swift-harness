@@ -3,11 +3,12 @@
 // reasoning lost before review.json; a verifier downgrading a cited standards violation with no
 // evidence, which is how a structural finding used to end up as `merge`.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// The plugin directory: every path this test reads is relative to it.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const source = readFileSync(join(root, 'workflows/review.js'), 'utf8').replace(
   /^export const meta/m,
   'const meta',
@@ -72,6 +73,22 @@ const tests = {
     for (const { prompt, opts } of calls) {
       assert.ok(prompt.includes(`${PLUGIN}/docs/standards.md`), opts.label)
       assert.ok(prompt.includes(`${PLUGIN}/docs/testing-playbook.md`), opts.label)
+    }
+  },
+
+  async 'every prompt names a review contract that ships inside the plugin — catches a consumer runtime read of a contributor doc'() {
+    const { calls } = await run({
+      args: { ...baseArgs, pluginRoot: root },
+      reviews: { architecture: { findings: [violation] } },
+      verify: () => ({ findings: [{ ...violation, verified: true, verification_note: 'ok' }] }),
+    })
+    assert.equal(calls.length, 3)
+    for (const { prompt, opts } of calls) {
+      const contract = /Review contract for finding kinds and severity: (\S+?)\.(\s|$)/.exec(prompt)?.[1]
+      assert.ok(contract, `${opts.label}: no review contract path in the prompt`)
+      assert.ok(contract.startsWith(`${root}/docs/`), `${opts.label}: ${contract} is outside the plugin's docs/`)
+      assert.doesNotMatch(contract, /\/docs\/(adrs|designs|plans|handoffs)\//, opts.label)
+      assert.ok(existsSync(contract), `${opts.label}: ${contract} does not exist in the plugin`)
     }
   },
 

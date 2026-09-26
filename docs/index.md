@@ -8,9 +8,11 @@ page or through an area index below.
 | If you're… | Read |
 |---|---|
 | New to the repo, or an agent starting a session | [`../AGENTS.md`](../AGENTS.md), then this file |
-| Writing or reviewing Swift code against the harness's rules | [`standards.md`](standards.md) |
-| Writing or reviewing tests (tiers, red/green, snapshots, flake stress) | [`testing-playbook.md`](testing-playbook.md) |
-| Working on or debugging a Claude Code hook | [`hooks.md`](hooks.md) |
+| Writing or reviewing Swift code against the harness's rules | [`plugin/docs/standards.md`](../plugin/docs/standards.md) |
+| Writing or reviewing tests (tiers, red/green, snapshots, flake stress) | [`plugin/docs/testing-playbook.md`](../plugin/docs/testing-playbook.md) |
+| Working on or debugging a Claude Code hook | [`plugin/docs/hooks.md`](../plugin/docs/hooks.md) |
+| Changing what a reviewer or verifier returns | [`plugin/docs/review-contract.md`](../plugin/docs/review-contract.md) |
+| Moving a file into or out of the shipped plugin | [ADR 0002](adrs/0002-consumer-plugin-in-plugin-dir.md): consumers get `plugin/`, contributors the rest |
 | Checking what was verified end-to-end on `examples/SampleApp` | [`e2e-report.md`](e2e-report.md) |
 | Planning or running evals of the harness and `swiftgate` (objectives, suites, eval apps) | [`../evals/README.md`](../evals/README.md), then [`../evals/runbook.md`](../evals/runbook.md) and the current eval handoff [`handoffs/2026-09-25-evals-foundation.md`](handoffs/2026-09-25-evals-foundation.md) |
 | Looking up why a review-severity rule exists | [`adrs/README.md`](adrs/README.md) |

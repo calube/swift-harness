@@ -1,0 +1,229 @@
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+
+/// PreToolUse (spec §8): Bash and Edit/Write guards (< 50ms), and the advisory comment pass on
+/// `git commit` (≤ 20s).
+enum PreToolUseHook {
+  static let fileTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
+
+  /// The JSON to print, or `nil` to leave the call to the normal permission flow.
+  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
+    -> String?
+  {
+    switch payload.toolName {
+    case "Bash"?:
+      guard let command = payload.command else { return nil }
+      if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      guard BashGuard.isGitCommit(command) else { return nil }
+      return await commitContext(root: root, dependencies: dependencies)
+    case let tool? where fileTools.contains(tool):
+      guard let path = payload.filePath else { return nil }
+      return await fileGuard(path, payload: payload, root: root, dependencies: dependencies)
+    default:
+      return nil
+    }
+  }
+
+  /// Every guard sees every spelling of the path the write could land on, so a relative,
+  /// `..`-bearing or symlinked form is judged like the canonical one.
+  private static func fileGuard(
+    _ path: String, payload: HookPayload, root: URL, dependencies: HookDependencies
+  ) async -> String? {
+    let environmentValue = dependencies.environment[OrchestratorMarker.environmentVariable]
+    let forms = ToolPath.resolvedForms(
+      path, cwd: payload.cwd, home: dependencies.environment["HOME"])
+    for form in forms {
+      if let violation = EditGuard.evaluate(path: form) {
+        return deny(violation)
+      }
+    }
+    for form in ToolPath.resolvedAbsolutes(
+      path, cwd: payload.cwd, home: dependencies.environment["HOME"])
+    {
+      guard var target = PlanStateGuard.target(ofResolvedPath: form) else { continue }
+      var plans: [PlanStateGuard.PlanRecord] = []
+      if case .designArtifact(let document) = target {
+        target = .designArtifact(document: ToolPath.canonical(document))
+        plans = await PlanLocks.records(root: root, git: dependencies.git)
+      }
+      let locks = PlanLocks.read(PlanStateGuard.lockScope(of: target))
+      if let violation = PlanStateGuard.evaluate(
+        target, locks: locks, plans: plans, environmentValue: environmentValue,
+        sessionID: payload.sessionID, agentID: payload.agentID)
+      {
+        return deny(violation)
+      }
+    }
+    return nil
+  }
+
+  private static func deny(_ violation: GuardViolation) -> String {
+    HookOutput.deny("swiftgate \(violation.ruleID): \(violation.reason)")
+  }
+
+  /// Runs on what is staged when the hook fires, so `git add … && git commit` in one command is
+  /// checked by the git pre-commit hook rather than here. Advisory: it never denies the commit.
+  private static func commitContext(root: URL, dependencies: HookDependencies) async -> String? {
+    var sections: [String] = []
+    let outcome = await CommentsCheck.run(
+      root: root, git: dependencies.git, swiftPM: dependencies.swiftPM)
+    if let report = try? StaticCheckReport.make(
+      runID: "hook", durationMilliseconds: 0, outcome: outcome), !report.findings.isEmpty
+    {
+      sections.append(
+        "`swiftgate comments --staged` on this commit (advisory here; the git pre-commit hook "
+          + "enforces the blocking rules):\n" + HookText.findings(report))
+    }
+    if let judged = await dependencies.commitJudge.review(root: root) { sections.append(judged) }
+    guard !sections.isEmpty else { return nil }
+    return HookOutput.context(.preToolUse, sections.joined(separator: "\n\n"))
+  }
+}
+
+enum HookText {
+  static let maxFindings = 20
+
+  /// One line per finding, most severe first, capped.
+  static func findings(_ report: RunReport) -> String {
+    let ordered = report.findings.enumerated()
+      .sorted { ($0.element.severity.rank, $0.offset) < ($1.element.severity.rank, $1.offset) }
+      .map(\.element)
+    var lines = ordered.prefix(maxFindings).map { finding in
+      let location = finding.line.map { "\(finding.file):\($0)" } ?? finding.file
+      return "- [\(finding.severity.rawValue)] \(finding.ruleID) \(location): \(finding.message)"
+    }
+    if ordered.count > maxFindings { lines.append("- … \(ordered.count - maxFindings) more") }
+    return lines.joined(separator: "\n")
+  }
+}
+
+/// The absolute paths a file tool's `file_path` can land on.
+enum ToolPath {
+  /// Bounds symlink expansion, as the kernel's `MAXSYMLINKS` does, so a loop can't hang the hook.
+  static let maxSymlinkHops = 32
+
+  /// The path as given, its lexical resolution (`..` removed, then symlinks resolved), and its
+  /// physical resolution (each component's symlink followed before a later `..` applies, as the
+  /// kernel does, including a dangling link a write would create the target of). A relative path
+  /// resolves against `cwd`; a leading `~/` also resolves against `home`.
+  static func resolvedForms(_ path: String, cwd: String, home: String?) -> [String] {
+    var forms: [String] = [path]
+    for form in absolutes(path, cwd: cwd, home: home)
+      + resolvedAbsolutes(path, cwd: cwd, home: home) where !forms.contains(form)
+    {
+      forms.append(form)
+    }
+    return forms
+  }
+
+  /// Only the canonical forms of ``resolvedForms(_:cwd:home:)``: every place the write can land,
+  /// spelled so it compares equal to another canonical path naming the same file.
+  static func resolvedAbsolutes(_ path: String, cwd: String, home: String?) -> [String] {
+    var forms: [String] = []
+    for absolute in absolutes(path, cwd: cwd, home: home) {
+      for form in [CanonicalPath.of(URL(filePath: absolute)), canonical(absolute)]
+      where !forms.contains(form) {
+        forms.append(form)
+      }
+    }
+    return forms
+  }
+
+  /// ``physical(_:)``, then `realpath` over what exists, which also settles letter case.
+  static func canonical(_ absolute: String) -> String {
+    CanonicalPath.of(URL(filePath: physical(absolute)))
+  }
+
+  private static func absolutes(_ path: String, cwd: String, home: String?) -> [String] {
+    guard !path.hasPrefix("/") else { return [path] }
+    var absolutes = [cwd + "/" + path]
+    if let home, path.hasPrefix("~/") { absolutes.append(home + "/" + path.dropFirst(2)) }
+    return absolutes
+  }
+
+  static func physical(_ absolute: String) -> String {
+    var pending = components(absolute)
+    var resolved: [String] = []
+    var hops = 0
+    while !pending.isEmpty {
+      let next = pending.removeFirst()
+      switch next {
+      case ".":
+        continue
+      case "..":
+        _ = resolved.popLast()
+      default:
+        let candidate = "/" + (resolved + [next]).joined(separator: "/")
+        if hops < maxSymlinkHops,
+          let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: candidate)
+        {
+          hops += 1
+          if destination.hasPrefix("/") { resolved = [] }
+          pending = components(destination) + pending
+        } else {
+          resolved.append(next)
+        }
+      }
+    }
+    return "/" + resolved.joined(separator: "/")
+  }
+
+  private static func components(_ path: String) -> [String] {
+    path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+  }
+}
+
+/// Reads plan locks for the guard. Read-only by contract: claiming is `swiftgate plan claim`'s job.
+enum PlanLocks {
+  static func read(_ scope: PlanStateGuard.LockScope) -> [String] {
+    switch scope {
+    case .none:
+      return []
+    case .plan(let plan):
+      return contents(plan.orchestratorLock).map { [$0] } ?? []
+    case .everyPlan(let layout):
+      return every(layout)
+    }
+  }
+
+  /// Every plan under the repository's common dir with the design its `plan.json` names, resolved
+  /// against the worktree toplevel. None when git can't place the common dir or the toplevel, so
+  /// only the override can allow a design write.
+  static func records(root: URL, git: any Git) async -> [PlanStateGuard.PlanRecord] {
+    guard let common = try? await git.commonDirectory(),
+      let layout = try? PlanStateLayout(commonDirectory: common),
+      let prefix = try? await git.workingDirectoryPrefix()
+    else { return [] }
+    let base = CanonicalPath.of(root)
+    let nested = "/" + prefix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let toplevel =
+      prefix.isEmpty ? base : base.hasSuffix(nested) ? String(base.dropLast(nested.count)) : base
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    return names.sorted().compactMap { name in
+      guard let plan = try? layout.plan(name) else { return nil }
+      let design: PlanStateGuard.PlanRecord.Design
+      if let data = FileManager.default.contents(atPath: plan.planFile),
+        let file = try? PlanFileJSON.decode(data), !file.design.isEmpty
+      {
+        let named = file.design.hasPrefix("/") ? file.design : toplevel + "/" + file.design
+        design = .named(ToolPath.canonical(named))
+      } else {
+        design = .unreadable
+      }
+      return PlanStateGuard.PlanRecord(
+        name: name, lock: contents(plan.orchestratorLock), design: design)
+    }
+  }
+
+  private static func every(_ layout: PlanStateLayout) -> [String] {
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    return names.sorted().compactMap { name in
+      (try? layout.plan(name)).flatMap { contents($0.orchestratorLock) }
+    }
+  }
+
+  private static func contents(_ path: String) -> String? {
+    try? String(contentsOfFile: path, encoding: .utf8)
+  }
+}

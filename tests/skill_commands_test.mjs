@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// The plugin directory: every path this test reads is relative to it.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 
 // Prefer an explicit binary, then the checkout's debug build (fresh under `swift test`). The
 // shim's cold release build would outlast the repository-script timeout, so it isn't a fallback.

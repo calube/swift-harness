@@ -13,13 +13,13 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
    (Swift Testing), run it and SEE it fail on an assertion (not only a compile error where avoidable),
    implement, run green. No assertion-free, tautological, existence-only, or sleep-based tests.
 2. **Real fixtures.** Adapter fixtures are captured from real tool runs; record the exact capture
-   command in `gate/Tests/Fixtures/README.md`. Never hand-author tool output.
+   command in `plugin/gate/Tests/Fixtures/README.md`. Never hand-author tool output.
 3. **Layering.** `SwiftGateDomain` is pure (no Foundation Process/FileManager IO); adapters behind
    protocols in `SwiftGateAdapters`; CLI thin. Swift 6 language mode, no `@unchecked Sendable`,
    `try!`, `as!`, `nonisolated(unsafe)` without a same-line reason.
 4. **Gates run in the FOREGROUND** (never background a test/build and wait). Self-gate before each commit:
-   `cd gate && swift build && swift test && swift format lint --strict -r Sources Tests Package.swift`
-   (plus `tests/shim_test.sh` if you touched `bin/` or `gate/Package.swift`). Timeouts up to 10 min are fine.
+   `cd plugin/gate && swift build && swift test && swift format lint --strict -r Sources Tests Package.swift`
+   (plus `tests/shim_test.sh` if you touched `plugin/bin/` or `plugin/gate/Package.swift`). Timeouts up to 10 min are fine.
 5. **Commits.** One commit per task (more if natural), message `feat(gate): …` / `test(gate): …` /
    `docs: …` / `feat(examples): …`, ending with a blank line and
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push only if your prompt says so.
@@ -80,7 +80,7 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
 - Host XCTest skips don't show up under `--parallel`. Gate toolchain-dependent tests with Swift Testing
   `.enabled(if:)` and a reason.
 - A green run with zero tests is not green. Confirm the test count your change should have moved.
-- A cloned `gate/.build` keeps a `ModuleCache` with headers that point at the old path. If the build fails
+- A cloned `plugin/gate/.build` keeps a `ModuleCache` with headers that point at the old path. If the build fails
   on stale module paths, delete `ModuleCache` directories with `/usr/bin/find`, not a shell alias.
 - `rm` and `cp` are aliased to `rm -i` / `cp -i` in this shell and hang waiting for input. Use `/bin/rm -f`
   and `/bin/cp -f`.

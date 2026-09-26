@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "swift-harness",
-      "source": "./",
+      "source": "./plugin",
       "description": "Engineering harness for SwiftUI iOS apps: standards, testing playbook, the swiftgate gate tool, hooks, skills, and review workflows."
     }
   ]
