@@ -25,7 +25,7 @@ Then, in order (the user approved this plan on 2026-09-26):
      (ListAgents; its name starts with swift-harness-, and it's NOT this session). Send it eval requests, and fix what's found
      until sub-project 2 is something we'd sign off on as excellent. Load the workflow-authoring skill first.
   4. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes, in progress:
-     /Users/caleb/Developer/swift-harness-research/qa-profiling-tools.md. The user named AutoMobile MCP (already at 0.0.81,
+     qa-profiling-tools.md in the sibling swift-harness-research directory. The user named AutoMobile MCP (already at 0.0.81,
      the latest), callstack agent-device and Maestro, and values simplicity and "works really well" above breadth.
 Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook
 (docs/handoffs/subproject-2-orchestrator-runbook.md), which also lists known issues and lessons → the last section of
