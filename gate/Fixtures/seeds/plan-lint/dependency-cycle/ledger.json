@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "a",
+      "deps": ["b"],
+      "writeSet": ["Sample/Sources/Core/A.swift"],
+      "gate": "fast",
+      "tests": [],
+      "covers": [],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../a"
+    },
+    {
+      "id": "b",
+      "deps": ["a"],
+      "writeSet": ["Sample/Sources/Core/B.swift"],
+      "gate": "fast",
+      "tests": [],
+      "covers": [],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../b"
+    }
+  ],
+  "waves": [["a", "b"]]
+}
