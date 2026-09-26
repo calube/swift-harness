@@ -1,0 +1,496 @@
+[
+ {
+  "name": "xcodebuild-build",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -scheme SampleApp build"
+  }
+ },
+ {
+  "name": "xcodebuild-test",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -scheme SampleApp test"
+  }
+ },
+ {
+  "name": "simctl-erase-all",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcrun simctl erase all"
+  }
+ },
+ {
+  "name": "simctl-delete-all",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcrun simctl delete all"
+  }
+ },
+ {
+  "name": "rm-global-deriveddata",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "rm -rf ~/Library/Developer/Xcode/DerivedData"
+  }
+ },
+ {
+  "name": "snapshot-record-env",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "SNAPSHOT_TESTING_RECORD=all swift test"
+  }
+ },
+ {
+  "name": "xcodebuild-list",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -list"
+  }
+ },
+ {
+  "name": "xcodebuild-version",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -version"
+  }
+ },
+ {
+  "name": "xcodebuild-showsdks",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -showsdks"
+  }
+ },
+ {
+  "name": "grep-mentions-xcodebuild",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "grep -rn xcodebuild docs"
+  }
+ },
+ {
+  "name": "echo-mentions-xcodebuild",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "echo \"never run xcodebuild directly\""
+  }
+ },
+ {
+  "name": "simctl-list",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "xcrun simctl list devices"
+  }
+ },
+ {
+  "name": "ls-deriveddata",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "ls ~/Library/Developer/Xcode/DerivedData"
+  }
+ },
+ {
+  "name": "swiftgate-check",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate check --tier fast"
+  }
+ },
+ {
+  "name": "cat-package-resolved",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "cat $W/Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "cat-ledger",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "cat $PLAN/ledger.json"
+  }
+ },
+ {
+  "name": "swift-package-resolve",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swift package resolve"
+  }
+ },
+ {
+  "name": "xcodebuild-abs-path",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "/usr/bin/xcodebuild -scheme SampleApp test"
+  }
+ },
+ {
+  "name": "xcrun-xcodebuild",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcrun xcodebuild -scheme SampleApp build"
+  }
+ },
+ {
+  "name": "env-xcodebuild",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "env xcodebuild build"
+  }
+ },
+ {
+  "name": "bash-c-xcodebuild",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "bash -c \"xcodebuild -scheme SampleApp build\""
+  }
+ },
+ {
+  "name": "chained-after-list",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild -list && xcodebuild build"
+  }
+ },
+ {
+  "name": "quoted-xcodebuild",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "\"xcodebuild\" build"
+  }
+ },
+ {
+  "name": "line-continuation",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcodebuild\\\n -scheme SampleApp build"
+  }
+ },
+ {
+  "name": "variable-indirection",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "X=xcodebuild; $X build"
+  }
+ },
+ {
+  "name": "simctl-extra-spaces",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "xcrun  simctl   erase   all"
+  }
+ },
+ {
+  "name": "rm-deriveddata-home-var",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "rm -rf \"$HOME/Library/Developer/Xcode/DerivedData/\""
+  }
+ },
+ {
+  "name": "edit-snapshot",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Edit",
+  "input": {
+   "file_path": "$W/Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__/CounterViewSnapshotTests/counter.1.png",
+   "old_string": "a",
+   "new_string": "b"
+  }
+ },
+ {
+  "name": "write-snapshot",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__/CounterViewSnapshotTests/counter.1.png",
+   "content": "x"
+  }
+ },
+ {
+  "name": "write-package-resolved",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/Packages/CounterFeature/Package.resolved",
+   "content": "{}"
+  }
+ },
+ {
+  "name": "write-xcresult",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/build/T1.xcresult/Info.plist",
+   "content": "x"
+  }
+ },
+ {
+  "name": "write-orchestrator-lock-as-holder",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/orchestrator.lock",
+   "content": "{}"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "subagent-write-ledger",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/ledger.json",
+   "content": "{}"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "subagent-write-ledger-with-override",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/ledger.json",
+   "content": "{}"
+  },
+  "session": "orch",
+  "agent": "sub1",
+  "env": {
+   "SWIFT_HARNESS_ORCHESTRATOR": "1"
+  }
+ },
+ {
+  "name": "other-session-write-ledger",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/ledger.json",
+   "content": "{}"
+  },
+  "session": "someone-else"
+ },
+ {
+  "name": "subagent-write-design-doc",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/docs/designs/fact-cache.md",
+   "content": "# x"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "holder-write-ledger",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/ledger.json",
+   "content": "{}"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "override-write-ledger",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/ledger.json",
+   "content": "{}"
+  },
+  "session": "someone-else",
+  "env": {
+   "SWIFT_HARNESS_ORCHESTRATOR": "1"
+  }
+ },
+ {
+  "name": "write-new-swift-file",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/Packages/CounterFeature/Sources/CounterCore/New.swift",
+   "content": "x"
+  }
+ },
+ {
+  "name": "write-plain-doc",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/docs/notes.md",
+   "content": "x"
+  }
+ },
+ {
+  "name": "resolved-dotdot",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/Packages/CounterFeature/../CounterFeature/Package.resolved",
+   "content": "{}"
+  }
+ },
+ {
+  "name": "resolved-case",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$W/packages/counterfeature/PACKAGE.RESOLVED",
+   "content": "{}"
+  }
+ },
+ {
+  "name": "resolved-relative",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "Packages/CounterFeature/Package.resolved",
+   "content": "{}"
+  }
+ },
+ {
+  "name": "bash-rm-snapshots",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "rm -rf $W/Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__"
+  }
+ },
+ {
+  "name": "bash-redirect-resolved",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "echo {} > $W/Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "bash-sed-resolved",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "sed -i '' s/a/b/ $W/Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "bash-cp-resolved",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "cp /tmp/x $W/Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "subagent-bash-redirect-ledger",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "echo '{}' > $PLAN/ledger.json"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "subagent-bash-tee-ledger",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "cat /tmp/x | tee $PLAN/ledger.json"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "subagent-bash-python-ledger",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "python3 -c 'open(\"$PLAN/ledger.json\",\"w\").write(\"{}\")'"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "subagent-bash-redirect-design-doc",
+  "kind": "evasion",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "echo x >> $W/docs/designs/fact-cache.md"
+  },
+  "agent": "sub1"
+ }
+]
