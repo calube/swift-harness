@@ -9,6 +9,9 @@ temp SampleApp copy. It cherry-picked 27's design-skill fix (1108a1d) and stops 
 Also in flight: the defect fix bash-writes-go-through-file-guards (opus) in ../swift-harness-bash-writes-go-through-file-guards.
 The evals session found that a subagent can write plan state, design docs and Package.resolved through Bash, because only
 Edit/Write run the file guards. Its no-model corpus is on branch evals-round-5; ask that session to re-run it after the merge.
+Also in flight: test-runs-keep-the-committed-lockfile (sonnet). A t1 run silently rewrote a Package.resolved that named a
+missing revision; the fix also makes the no-origin/main message name --base. WAITING ON THE USER: with an Xcode pin
+mismatch, should `test --tier t1/t2` fail? Today only `doctor` reports it, while evals/suites.md counts it as a fault.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
   2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
