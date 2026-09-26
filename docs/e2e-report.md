@@ -184,3 +184,56 @@ Code, and are covered by the bootstrap section above).
   satisfies both checks. A test that calls API the change adds is `prove.compile-only`, so tests
   use literals, not new constants. The `tdd` skill should say both.
 - Cold-build T1 (119–166s) is over its 60s budget. The budget finding is a non-gating `minor`.
+
+## Rehearsal (unattended, 2026-09-26): plugin installs for real
+
+A rehearsal, not the attended acceptance run: the user was away and approved running it
+unattended, so nobody answered or approved anything. The attended run repeats it.
+
+A scratch copy of `examples/SampleApp` (`git init`, local bare `origin`), Claude Code 2.1.282,
+`--setting-sources project,local`, `--model claude-sonnet-5`. A temporary logging hook in the
+copy's `.claude/settings.json` saved each hook's stdin; `SWIFTGATE_HOOK_RECORD_DIR` recorded
+swiftgate's outcomes. Install, from the copy, nothing at user scope:
+
+```
+claude plugin marketplace add <harness checkout> --scope project
+claude plugin install swift-harness@swift-harness --scope project
+```
+
+The first SessionStart said enforcement was warming up. `bin/swiftgate --version` with the same
+`CLAUDE_PLUGIN_DATA` built it in 2 min 17 s; every later hook ran it.
+
+| Test | Command | Observed |
+|---|---|---|
+| Plugin agent types run | `claude -p … --output-format json --verbose`, Agent with `subagent_type: "swift-harness:design-lane-codebase"` | `init` listed 17 `swift-harness:*` agents; the agent returned a report. In the worktree session its `Read` fired PreToolUse with `agent_type: "swift-harness:design-lane-codebase"`. |
+| Subagent writes denied | same, `--session-id` set to the id given to `swiftgate plan claim counter-reset --session <id>`, `bypassPermissions` | A `general-purpose` subagent's Write to `ledger.json`, the design doc and `<doc>.evidence/claims.jsonl`: each denied, `guard.plan-state`, 2–78 ms. The main session's same three writes succeeded. The subagent payloads carried the lock holder's `session_id`, so `agent_id` alone decided each denial. |
+| Two worktrees share plan state | `swiftgate index set counter-reset designing …`, `git worktree add`, `claude -p` in the second | Same `--git-common-dir` and `index.json` md5 from both. The second worktree's SessionStart listed `counter-reset (designing)`, and its session read the main session's `ledger.json`. |
+
+This run saw `agent_id` live (spec §14). A subagent's PreToolUse payload has `session_id`,
+`transcript_path`, `cwd`, `prompt_id`, `permission_mode`, `agent_id`, `agent_type`, `effort`,
+`hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`; a main-session payload lacks the
+2 agent fields. `agent_type` is plugin-qualified for plugin agents.
+
+Findings:
+
+- A `directory` marketplace runs the plugin from the checkout (`init` path and the reference-docs
+  line name `<checkout>/plugin`), so checkout edits apply without `claude plugin update`. Install
+  still copies `plugin/` into the Claude config's plugin cache, including the untracked
+  `gate/.build` (843 MB).
+- Project scope still writes the Claude config's `plugins/known_marketplaces.json` and
+  `plugins/installed_plugins.json` (entry `scope: project` with its `projectPath`) and an empty
+  `plugins/marketplaces/`. Neither file existed before, and the run removed all 3 afterwards. The
+  user `settings.json` didn't change. The run left the cache entry and the plugin data dir
+  (476 MB, the built gate).
+- Defect, fixed: the `status` skill read the retired `.harness/plans/index.json`, listed
+  `superseded` plans as active and looked for `-<slug>` directories. It now resolves each
+  repository's common dir. `tests/plan_state_paths_test.mjs` fails on a `.harness/plans` or
+  `.harness/orchestrator.lock` path in shipped skills, agents or workflows. `plugin/docs/hooks.md`
+  had the same stale path.
+- Without `origin/main` the first Stop came back BLOCKED and let the session end, as in the
+  bootstrap run; with it, Stop stayed silent.
+
+Needs the attended run: the fixed `status` skill end to end. It reads the user's
+`projects.json`, and registering the scratch copy would have written to the real home directory.
+
+Cost: 3 sessions, $0.38 (7 s, 44 s, 97 s); about 9 minutes in all with the cold build.
