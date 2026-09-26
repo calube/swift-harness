@@ -217,7 +217,7 @@
  },
  {
   "name": "variable-indirection",
-  "kind": "evasion",
+  "kind": "limit",
   "expect": "deny",
   "tool": "Bash",
   "input": {
@@ -475,7 +475,7 @@
  },
  {
   "name": "subagent-bash-python-ledger",
-  "kind": "evasion",
+  "kind": "limit",
   "expect": "deny",
   "tool": "Bash",
   "input": {

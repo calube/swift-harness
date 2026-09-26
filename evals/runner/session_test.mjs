@@ -5,14 +5,16 @@
 // swiftgate command in the transcript counted as a RED verdict; a real RED missed because the
 // agent printed the report through a JSON filter; tool_order passing when the
 // `after` call never happened; a tool_used input_match matching a skill whose args only mention
-// the name; a command grader passing on a non-zero exit; the judge digest dropping hook feedback.
+// the name; a command grader passing on a non-zero exit; the judge digest dropping hook feedback;
+// a trial scored while the gate was still building and every hook was off; a judge failing a
+// long final message it only saw the first 1,500 characters of.
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseValue, splitFrontmatter } from './frontmatter.mjs'
-import { digest, gradeCode, isScored, loadCase, parseTrace, scoreRun } from './session.mjs'
+import { digest, gradeCode, hooksInactive, isScored, judgePrompt, loadCase, parseTrace, scoreRun } from './session.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const cases = resolve(here, '../cases')
@@ -76,6 +78,13 @@ const dir = mkdtempSync(join(tmpdir(), 'session-test-'))
 writeFileSync(join(dir, 'x'), '')
 assert.equal(gradeCode({ type: 'file_exists', path: 'Packages/**/Tests/**/*.swift' }, run([], { createdFiles: ['Packages/A/Tests/ATests/NewTests.swift'] })).passed, true)
 assert.equal(gradeCode({ type: 'file_exists', path: 'Packages/**/Tests/**/*.swift' }, run([], { createdFiles: ['Packages/A/Sources/A/New.swift'] })).passed, false)
+
+assert.equal(hooksInactive('{"additionalContext":"swiftgate enforcement is warming up: swiftgate is being built"}'), true, 'a warming gate makes the trial an error')
+assert.equal(hooksInactive('{"additionalContext":"Session id: abc"}'), false)
+
+const longFinal = 'questions '.repeat(250) + 'END-OF-MESSAGE'
+const finalRun = run([line({ type: 'assistant', message: { content: [{ type: 'text', text: longFinal }] } })])
+assert.match(judgePrompt({ criteria: 'x' }, finalRun), /END-OF-MESSAGE/, 'the judge sees a long final message whole')
 
 const hookFeedback = line({ type: 'user', message: { content: [{ type: 'text', text: 'Stop hook feedback:\nswiftgate RED' }] } })
 assert.match(digest(parseTrace(hookFeedback)), /Stop hook feedback/)

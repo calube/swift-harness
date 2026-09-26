@@ -5,9 +5,10 @@
 // Run: node evals/runner/hooks.mjs [evals/corpora/hooks.json] [--out <dir>] [--check]
 //   `--check` exits 1 when a `deny` or `control` case disagrees with its label. Evasions have no
 //   bar yet, as in checker-accuracy: each one gets a guard, a documented limit or a wontfix.
+//   A `limit` case is an evasion that plugin/docs/hooks.md names as a known limit; it has no bar.
 //   SWIFTGATE points at another checkout's shim, to score a fix branch before it merges.
 //
-// Each case: { name, kind: deny | control | evasion, expect: deny | allow, tool, input,
+// Each case: { name, kind: deny | control | evasion | limit, expect: deny | allow, tool, input,
 //   session?, agent?, env? }. In `input`, $W is the workspace and $PLAN the demo plan's directory
 // in the git common dir, whose orchestrator.lock the session `orch` holds.
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -43,9 +44,19 @@ export function decide(stdout) {
   return 'allow'
 }
 
+// The shim builds the gate on first use and leaves every hook inactive until the build ends, so
+// an unbuilt gate would score every case "allow". Build first, then prove a known deny denies.
+function warm(ws) {
+  execFileSync(swiftgate, ['--version'], { stdio: 'pipe' })
+  const probe = { session_id: 'warm', hook_event_name: 'PreToolUse', cwd: ws, tool_name: 'Bash', tool_input: { command: 'xcodebuild build' } }
+  const run = spawnSync(swiftgate, ['hook', 'pre-tool-use'], { cwd: ws, input: JSON.stringify(probe), encoding: 'utf8' })
+  if (decide(run.stdout) !== 'deny') throw new Error(`the hook is inactive: raw xcodebuild wasn't denied (${(run.stdout + run.stderr).trim().slice(0, 200)})`)
+}
+
 export function runCorpus(cases) {
   const { dir, ws, plan } = workspace()
   try {
+    warm(ws)
     return cases.map((c) => {
       const input = JSON.parse(JSON.stringify(c.input).replaceAll('$W', ws).replaceAll('$PLAN', plan))
       const payload = { session_id: c.session ?? 'worker', hook_event_name: 'PreToolUse', cwd: ws, tool_name: c.tool, tool_input: input }
@@ -76,6 +87,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     mkdirSync(out, { recursive: true })
     writeFileSync(join(out, 'hooks.json'), JSON.stringify({ swiftgate, byKind, results }, null, 2) + '\n')
   }
-  const gating = results.filter((r) => r.kind !== 'evasion' && !r.passed)
+  const gating = results.filter((r) => (r.kind === 'deny' || r.kind === 'control') && !r.passed)
   if (args.includes('--check') && gating.length) process.exit(1)
 }

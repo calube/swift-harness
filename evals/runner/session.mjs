@@ -171,8 +171,14 @@ export function digest(messages, limit = 60000) {
   return all.length <= limit ? all : `${all.slice(0, limit / 2)}\n[… ${all.length - limit} characters cut …]\n${all.slice(-limit / 2)}`
 }
 
+// The digest cuts each message at 1,500 characters, so the final message, which many rubrics
+// judge, also goes in whole.
+export function judgePrompt(grader, run) {
+  return `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}\n\nRun transcript digest:\n${digest(run.messages)}\n\nFinal message, in full:\n${lastMessage(run.messages).slice(0, 20000)}\n\nFinal diff:\n${run.diffText.slice(0, 20000)}`
+}
+
 async function gradeLLM(grader, run, opts) {
-  const prompt = `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}\n\nRun transcript digest:\n${digest(run.messages)}\n\nFinal diff:\n${run.diffText.slice(0, 20000)}`
+  const prompt = judgePrompt(grader, run)
   const votes = []
   let cost = 0
   for (let i = 0; i < 3; i++) {
@@ -237,7 +243,9 @@ async function runTrial(c, arm, trial, opts) {
   const hooks = join(dir, 'hooks')
   const judgeHome = join(scratch, 'judge-home')
   for (const d of [home, workspace, hooks, judgeHome]) mkdirSync(d, { recursive: true })
-  const env = { ...baseEnv(home), SWIFTGATE_HOOK_RECORD_DIR: hooks }
+  // The shim caches its build under CLAUDE_PLUGIN_DATA when Claude Code sets it, which the
+  // scaffold can't know; pin the cache to the one the scaffold seeds, or every hook stays off.
+  const env = { ...baseEnv(home), SWIFTGATE_HOOK_RECORD_DIR: hooks, SWIFTGATE_CACHE_DIR: join(home, '.cache/swift-harness') }
   const started = Date.now()
   try {
     if (c.scaffold) execFileSync('bash', [c.scaffold], { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -269,9 +277,10 @@ async function runTrial(c, arm, trial, opts) {
       graders.push({ name: g.name, type: g.type, weight: g.weight, scored: isScored(g, arm), ...(verdict ?? { passed: false, explanation: `unknown grader type ${g.type}` }) })
     }
     const { score, passed } = scoreRun(graders)
+    const inactive = arm === 'with' && hooksInactive(session.stdout)
     return {
-      arm, trial, score, passed,
-      error: session.timedOut ? `timed out after ${c.timeoutSeconds}s` : result.is_error ? result.subtype ?? 'error' : null,
+      arm, trial, score, passed: passed && !inactive,
+      error: inactive ? 'hooks inactive: SessionStart says swiftgate is still building, so the trial measured nothing' : session.timedOut ? `timed out after ${c.timeoutSeconds}s` : result.is_error ? result.subtype ?? 'error' : null,
       turns: result.num_turns ?? null, costUsd: result.total_cost_usd ?? 0, judgeCostUsd: judgeCost,
       durationSeconds: Math.round((Date.now() - started) / 1000), hookRecords: readdirSync(hooks).filter((f) => f.endsWith('.outcome.json')).length,
       raw: dir, graders,
@@ -279,6 +288,12 @@ async function runTrial(c, arm, trial, opts) {
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+// A with-plugin trial whose gate was still building ran with every hook off. Its grades describe
+// a broken sandbox, not the harness, so it counts as an error.
+export function hooksInactive(traceText) {
+  return traceText.includes('swiftgate enforcement is warming up')
 }
 
 // --- Main ----------------------------------------------------------------------------------

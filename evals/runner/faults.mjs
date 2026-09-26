@@ -77,6 +77,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const check = args.includes('--check')
   let cases = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--out')
   if (!cases.length) cases = readdirSync(join(root, 'evals/faults')).map((c) => join(root, 'evals/faults', c)).filter((c) => existsSync(join(c, 'labels.json')))
+  // Build the gate before the first case, so no case's timing or verdict includes the build.
+  execFileSync(swiftgate, ['--version'], { stdio: 'pipe' })
   const results = []
   for (const c of cases) {
     const r = runCase(resolve(c))
