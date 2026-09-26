@@ -138,7 +138,9 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
   let reviewerPrecision: [ReviewerRow]
   let phaseTotals: [PhaseRow]
   let agentTotals: [AgentRow]
-  let overheadShare: RateJSON
+  let nonDraftWallShare: RateJSON
+  /// Spec §9.3's overhead share from the `--plan` ledger; `nil` without a plan or a schedule.
+  let overheadShare: Double?
   let estimateError: EstimateErrorRow
   let probes: ProbeRow
   let cache: CacheRow
@@ -190,7 +192,7 @@ enum DesignStatsRun {
     let phasesLoaded = loadJSONL(
       PhaseRecord.self, root: root, path: phasesPath,
       missingNote:
-        "no phases file at \(phasesPath); token/cost/wall and overhead-share metrics excluded")
+        "no phases file at \(phasesPath); token/cost/wall and non-draft wall share excluded")
     if let malformed = phasesLoaded.malformed { return blocked(options: options, malformed) }
     if let note = phasesLoaded.note { notes.append(note) }
 
@@ -211,7 +213,9 @@ enum DesignStatsRun {
     let reviewerRows = DesignMetrics.reviewerPrecision(reviewLogLoaded.records)
     let phaseTotals = DesignMetrics.totalsByPhase(phasesLoaded.records)
     let agentTotals = DesignMetrics.totalsByAgent(phasesLoaded.records)
-    let overhead = DesignMetrics.overheadShare(phasesLoaded.records)
+    let nonDraftWall = DesignMetrics.nonDraftWallShare(phasesLoaded.records)
+    let overhead = overheadShare(ledger: tasksLoaded.ledger)
+    if let note = overhead.note { notes.append(note) }
     let estimateErrorReport = DesignMetrics.estimateError(tasksLoaded.tasks)
     let probeReport = DesignMetrics.probeFailRate(probesLoaded.records)
     let cacheReport = DesignMetrics.cacheHitRate(
@@ -229,7 +233,7 @@ enum DesignStatsRun {
       reviewerPrecision: reviewerRows.map(DesignStatsReport.ReviewerRow.init),
       phaseTotals: phaseTotals.map(DesignStatsReport.PhaseRow.init),
       agentTotals: agentTotals.map(DesignStatsReport.AgentRow.init),
-      overheadShare: RateJSON(overhead),
+      nonDraftWallShare: RateJSON(nonDraftWall), overheadShare: overhead.share,
       estimateError: DesignStatsReport.EstimateErrorRow(estimateErrorReport),
       probes: DesignStatsReport.ProbeRow(probeReport),
       cache: DesignStatsReport.CacheRow(cacheReport),
@@ -272,7 +276,10 @@ enum DesignStatsRun {
           "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(agent.tokens) "
             + "cost=\(cost(agent.costUSD)) wall=\(ReportRenderer.duration(agent.wallMilliseconds))")
       }
-      lines.append("overhead share: \(percent(report.overheadShare))")
+      lines.append(
+        "overhead share: "
+          + (report.overheadShare.map { String(format: "%.1f%%", $0 * 100) } ?? "n/a"))
+      lines.append("non-draft wall share: \(percent(report.nonDraftWallShare))")
       let mae = report.estimateError.meanAbsoluteError.map { String(format: "%.1f", $0) } ?? "n/a"
       lines.append(
         "estimate error: mean |error|=\(mae) lines over \(report.estimateError.perTask.count) "
@@ -300,7 +307,7 @@ enum DesignStatsRun {
     return DesignStatsReport(
       verdict: .blocked, design: options.design, plan: options.plan, claimLanes: [],
       unknownLaneClaimCounts: [:], escapeRate: zero, reviewerPrecision: [], phaseTotals: [],
-      agentTotals: [], overheadShare: zero, estimateError: .empty,
+      agentTotals: [], nonDraftWallShare: zero, overheadShare: nil, estimateError: .empty,
       probes: DesignStatsReport.ProbeRow(
         ProbeFailReport(total: 0, failed: 0, failRate: Rate(numerator: 0, denominator: 0))),
       cache: DesignStatsReport.CacheRow(
@@ -365,11 +372,24 @@ enum DesignStatsRun {
     return (records, nil, nil)
   }
 
+  /// Spec §9.3's overhead share, the figure the ledger page shows: the ledger's recomputed
+  /// schedule against its critical path.
+  private static func overheadShare(ledger: Ledger?) -> (share: Double?, note: String?) {
+    guard let ledger else { return (nil, "no ledger; overhead share excluded") }
+    switch PlanSchedule.schedule(tasks: ledger.tasks, maxParallel: ledger.maxParallel) {
+    case .failure(let error):
+      return (nil, "overhead share excluded: \(LedgerRender.describe(error))")
+    case .success(let waves):
+      let share = LedgerRender.predictedOverheadShare(tasks: ledger.tasks, waves: waves)
+      return (share, share == nil ? "overhead share is n/a: no estimated task lines" : nil)
+    }
+  }
+
   private static func loadTaskEstimates(plan: String?, root: URL, runner: any ProcessRunner) async
-    -> (tasks: [TaskEstimate], note: String?, malformed: String?)
+    -> (tasks: [TaskEstimate], ledger: Ledger?, note: String?, malformed: String?)
   {
     guard let plan else {
-      return ([], "no --plan given; estimate error excluded", nil)
+      return ([], nil, "no --plan given; estimate error excluded", nil)
     }
     let git = LiveGit(runner: runner, repositoryRoot: root.path)
     do {
@@ -383,12 +403,12 @@ enum DesignStatsRun {
         missingActuals == 0
         ? nil
         : "\(missingActuals) task(s) have no actualLines yet; excluded from estimate error"
-      return (tasks, note, nil)
+      return (tasks, ledger, note, nil)
     } catch {
       if case .missing(let path) = error {
-        return ([], "no ledger yet at \(path); estimate error excluded", nil)
+        return ([], nil, "no ledger yet at \(path); estimate error excluded", nil)
       }
-      return ([], nil, "plan `\(plan)`: \(error)")
+      return ([], nil, nil, "plan `\(plan)`: \(error)")
     }
   }
 

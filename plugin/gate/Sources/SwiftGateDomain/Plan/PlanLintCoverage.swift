@@ -65,13 +65,16 @@ public enum PlanLintCoverage {
     return result
   }
 
-  /// A task's declared `gate` must be at least as strong as every one of its `tests`' tiers
-  /// demands (spec §9.2). A test id with no entry in `testTiers` is skipped — that's a coverage
-  /// or design-lint finding, not a gate-strength one.
+  /// A task's declared `gate` must be at least as strong as every test it owns demands (spec
+  /// §9.2). It owns both its `tests` and the `test-…` ids in its `covers`: `covers` is what
+  /// coverage counts, so reading `tests` alone would let a T3 item a task covers, but leaves out
+  /// of or misspells in `tests`, pass at `fast`. A test id with no entry in `testTiers` is skipped
+  /// here; ``unknownTestFindings(task:design:)`` and coverage report those.
   public static func gateFindings(
     task: LedgerTask, testTiers: [String: Tier]
   ) throws(ReportContractViolation) -> [Finding] {
-    let requiredGates = task.tests.compactMap { testTiers[$0] }.map(minimumGate(for:))
+    let owned = Set(task.tests + task.covers.filter { $0.hasPrefix("test-") })
+    let requiredGates = owned.compactMap { testTiers[$0] }.map(minimumGate(for:))
     guard let strongestRequired = requiredGates.max(by: { $0.rank < $1.rank }),
       task.gate.rank < strongestRequired.rank
     else { return [] }
@@ -79,12 +82,34 @@ public enum PlanLintCoverage {
       try Finding(
         ruleID: weakGateRuleID, severity: .major, file: task.id, line: nil,
         message:
-          "task \(task.id) declares gate \"\(task.gate.rawValue)\" but its tests need at least "
+          "task \(task.id) declares gate \"\(task.gate.rawValue)\" but the tests it names or "
+          + "covers need at least "
           + "\"\(strongestRequired.rawValue)\"",
         failureScenario:
           "a test tiered above \(task.gate.rawValue) would run green at this task's declared gate "
           + "without ever being exercised")
     ]
+  }
+
+  public static let unknownTestRuleID = "plan-lint.unknown-test"
+
+  /// One `major` finding per `tests` id the design's test plan doesn't define: a misspelled id
+  /// names a test nobody will write, and its real tier never reaches the gate check.
+  public static func unknownTestFindings(task: LedgerTask, design: DesignDocument)
+    throws(ReportContractViolation) -> [Finding]
+  {
+    let known = Set(design.testPlan.map(\.id))
+    var findings: [Finding] = []
+    for id in Set(task.tests).subtracting(known).sorted() {
+      findings.append(
+        try Finding(
+          ruleID: unknownTestRuleID, severity: .major, file: task.id, line: nil,
+          message: "task \(task.id) names test \(id), which the design's test plan doesn't define",
+          failureScenario:
+            "a misspelled test id names a test nobody writes, and its real tier never sets the "
+            + "task's gate"))
+    }
+    return findings
   }
 
   // MARK: - Task sizing (spec §9.3)

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "only-task",
+      "deps": [],
+      "writeSet": ["Sample/Sources/Core/Core.swift"],
+      "gate": "fast",
+      "tests": ["test-alpha"],
+      "covers": ["req-alpha", "test-alpha"],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../only-task"
+    },
+    {
+      "id": "only-task",
+      "deps": [],
+      "writeSet": ["Sample/Sources/Core/Other.swift"],
+      "gate": "fast",
+      "tests": ["test-alpha"],
+      "covers": ["test-alpha"],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../only-task-again"
+    }
+  ],
+  "waves": [["only-task"]]
+}

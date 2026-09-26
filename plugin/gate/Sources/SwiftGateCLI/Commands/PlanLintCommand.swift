@@ -48,6 +48,14 @@ enum PlanLintRun {
       return blocked(
         "plan `\(slug)`: no committed revision of `\(plan.design)` has designSha \(designSha)")
     }
+    let moved: [Finding]
+    do {
+      moved = try await designMovedFindings(plan: plan, designSha: designSha, git: git)
+    } catch let error as ReportContractViolation {
+      return blocked("plan-lint: \(error)")
+    } catch {
+      return blocked("plan `\(slug)`: can't read `\(plan.design)` at HEAD: \(error)")
+    }
     let designSource = ContextSource(label: plan.design, rawText: found.text)
     let design = DesignDocument(markdown: .parse(found.text))
 
@@ -88,11 +96,38 @@ enum PlanLintRun {
         ledgerPath: store.plan.ledgerFile, graph: graph, workerPacks: workerPacks,
         bounds: config.plan)
       return Result(
-        outcome: .checked(RuleRunResult(findings: findings, allowances: [])),
+        outcome: .checked(RuleRunResult(findings: moved + findings, allowances: [])),
         packFailures: packFailures, notes: sources.notes)
     } catch {
       return blocked("plan-lint: \(error)")
     }
+  }
+
+  /// The committed doc at HEAD against `designSha` (spec §5.4). HEAD, not the working tree: the
+  /// verdict must not depend on uncommitted edits. The clarify chain is verified only when HEAD
+  /// has moved, since it's the one thing that can still vouch for the new revision.
+  private static func designMovedFindings(plan: PlanFile, designSha: String, git: any Git)
+    async throws -> [Finding]
+  {
+    let headSha = try await git.contents(of: [plan.design], at: "HEAD")[plan.design].map(
+      DesignSha.of)
+    var chain: ClarifyChain.Verification?
+    if headSha != designSha, !plan.clarifyChain.isEmpty {
+      if let approval = plan.approval, approval.decision == .approve {
+        var revisions: [String: String] = [:]
+        for commit in try await git.revisions(of: plan.design) {
+          guard let text = try await git.contents(of: [plan.design], at: commit)[plan.design]
+          else { continue }
+          revisions[DesignSha.of(text)] = text
+        }
+        chain = ClarifyChain.verify(
+          approvedSha: approval.designSha,
+          links: plan.clarifyChain.map { ClarifyChain.Link(fromSha: $0.fromSha, toSha: $0.toSha) },
+          revisions: revisions)
+      }
+    }
+    return try PlanLintGraph.designMovedFindings(
+      designPath: plan.design, designSha: designSha, headDesignSha: headSha, clarifyChain: chain)
   }
 
   private static func blocked(_ reason: String) -> Result {

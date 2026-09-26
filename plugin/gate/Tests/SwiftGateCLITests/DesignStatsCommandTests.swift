@@ -247,4 +247,87 @@ struct DesignStatsCommandTests {
     #expect(report.estimateError.meanAbsoluteError == 45.0)
     #expect(report.notes.contains { $0.contains("1 task(s) have no actualLines yet") })
   }
+
+  @Test(
+    "with --plan, overhead share is the ledger's critical-path figure the ledger page shows, and the phases figure is reported as non-draft wall share — catches stats reporting a different overhead share than the spec's formula"
+  )
+  func overheadShareComesFromTheLedger() async throws {
+    let repo = try Repository()
+    defer { repo.remove() }
+    let environment: [String: String] = [
+      "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+      "HOME": FileManager.default.temporaryDirectory.path,
+      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+      "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+      "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+    ]
+    let runner = LiveProcessRunner(baseEnvironment: environment)
+    let initialised = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["init", "-q", "-b", "main"],
+        workingDirectory: repo.root.path, timeout: .seconds(30)))
+    #expect(initialised.status.isSuccess)
+
+    let liveGit = LiveGit(runner: runner, repositoryRoot: repo.root.path)
+    let plan = try PlanStateLayout(commonDirectory: try await liveGit.commonDirectory())
+      .plan("queue-plan")
+    try FileManager.default.createDirectory(
+      atPath: plan.directory, withIntermediateDirectories: true)
+    func task(_ id: String, deps: [String] = [], estLines: Int) -> LedgerTask {
+      LedgerTask(
+        id: id, deps: deps, writeSet: ["Sample/Sources/\(id)/"], gate: .fast, tests: [],
+        covers: [], estLines: estLines, status: .pending, worktree: "../app-\(id)")
+    }
+    // Waves [[a, b], [c]]: wall = 200 + 50; the critical path is b alone, 200. Share 0.2.
+    let tasks = [
+      task("a", estLines: 100), task("b", estLines: 200), task("c", deps: ["a"], estLines: 50),
+    ]
+    let ledger = Ledger(
+      schemaVersion: 1, resume: "planned", maxParallel: 3, tasks: tasks,
+      waves: [["a", "b"], ["c"]])
+    try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+
+    let slug = URL(filePath: Self.design).deletingPathExtension().lastPathComponent
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    var phases = Data()
+    for (phase, wall) in [(DesignPlanPhase.draft, 7_000), (.review, 3_000)] {
+      phases.append(
+        try encoder.encode(
+          PhaseRecord(
+            runId: "design-\(slug)", phase: phase, agentRole: nil, tokens: 10, costUSD: nil,
+            wallMilliseconds: wall)))
+      phases.append(UInt8(ascii: "\n"))
+    }
+    try repo.write(
+      String(decoding: phases, as: UTF8.self),
+      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+
+    let report = await DesignStatsRun.run(
+      options: .init(design: Self.design, plan: "queue-plan", cacheHome: try repo.freshCacheHome()),
+      root: repo.root, runner: runner)
+
+    #expect(report.verdict == .green)
+    let expected = try #require(
+      LedgerRender.predictedOverheadShare(tasks: tasks, waves: [["a", "b"], ["c"]]))
+    #expect(expected == 0.2)
+    let json = try Self.jsonObject(report)
+    #expect(json["overheadShare"] as? Double == expected)
+    let nonDraft = try #require(json["nonDraftWallShare"] as? [String: Any])
+    #expect(nonDraft["value"] as? Double == 0.3)
+    let human = DesignStatsRun.render(report, format: .human)
+    #expect(human.contains("non-draft wall share: 30.0%"))
+    #expect(human.contains("overhead share: 20.0%"))
+
+    let withoutPlan = await DesignStatsRun.run(
+      options: .init(design: Self.design, plan: nil, cacheHome: try repo.freshCacheHome()),
+      root: repo.root, runner: runner)
+    #expect(try Self.jsonObject(withoutPlan)["overheadShare"] == nil)
+    #expect(withoutPlan.notes.contains { $0.contains("overhead share excluded") })
+  }
+
+  private static func jsonObject(_ report: DesignStatsReport) throws -> [String: Any] {
+    let json = DesignStatsRun.render(report, format: .json)
+    return try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
+  }
 }

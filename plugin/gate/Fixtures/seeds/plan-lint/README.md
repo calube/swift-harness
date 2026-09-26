@@ -11,3 +11,10 @@ bound than the defaults.
 `write-set-overlap` alone: `PlanSchedule.schedule` always places two colliding-write-set tasks in
 different buckets, so any stored `waves` that groups them together has already diverged from the
 schedule it would recompute.
+
+`design-moved` adds an `amended.md`, which the runner commits over the design after the plan is
+made from `design.md`. The design at HEAD then no longer hashes to the plan's designSha.
+
+`covered-test-untested` covers a T3 test but leaves it out of `tests`. The gate is still read from
+`covers`, so `fast` is too weak. `unknown-test` misspells its `tests` id. `duplicate-task-id`
+repeats a task id, which is a finding rather than a trap.

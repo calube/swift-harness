@@ -271,4 +271,66 @@ struct PlanLintGraphTests {
     #expect(!findings.contains { $0.ruleID == PlanLintGraph.cycleRuleID })
     #expect(!findings.contains { $0.ruleID == PlanLintGraph.wavesMismatchRuleID })
   }
+
+  // MARK: - Test ids and duplicate task ids
+
+  @Test(
+    "a tests id the design's test plan doesn't define is a major unknown-test finding — catches a misspelled test id passing silently"
+  )
+  func unknownTestIDIsFlagged() throws {
+    let graph = try Self.graph([("ModuleA", "Sources/ModuleA")])
+    let doc = Self.design(testPlan: [("test-queue-drains-on-reconnect", "T1")])
+    func unknownTests(_ tests: [String]) throws -> [Finding] {
+      let task = Self.task(
+        id: "queue", writeSet: ["Sources/ModuleA/Queue.swift"], gate: .fast, tests: tests,
+        covers: ["test-queue-drains-on-reconnect"])
+      return try PlanLintGraph.allFindings(
+        design: doc, designPath: "docs/example/designs/x.md",
+        ledger: Self.ledger(tasks: [task], waves: [["queue"]]), ledgerPath: "ledger.json",
+        graph: graph, workerPacks: [:], bounds: PlanConfig()
+      ).filter { $0.ruleID == "plan-lint.unknown-test" }
+    }
+
+    let misspelled = try unknownTests(
+      ["test-queue-drains-on-reconect", "test-queue-drains-on-reconnect"])
+    #expect(misspelled.count == 1)
+    #expect(misspelled.first?.severity == .major)
+    #expect(misspelled.first?.message.contains("test-queue-drains-on-reconect") == true)
+    #expect(try unknownTests(["test-queue-drains-on-reconnect"]).isEmpty)
+  }
+
+  @Test(
+    "a repeated task id is one major duplicate-task-id finding, not a trap — catches a hand-edited ledger crashing plan-lint"
+  )
+  func duplicateTaskIDIsFinding() async {
+    await #expect(processExitsWith: .success) {
+      let targets = [PackageTarget(name: "ModuleA", type: .library, path: "Sources/ModuleA")]
+      let graph = try ModuleGraph(packages: [
+        PackageManifest(name: "Pkg", path: "", targets: targets)
+      ])
+      func task(_ id: String, deps: [String] = [], file: String) -> LedgerTask {
+        LedgerTask(
+          id: id, deps: deps, writeSet: ["Sources/ModuleA/\(file)"], gate: .push, tests: [],
+          covers: [], estLines: 100, status: .pending, worktree: "../worktree-\(id)")
+      }
+      let ledger = Ledger(
+        schemaVersion: 1, resume: "resume note", maxParallel: 3,
+        tasks: [
+          task("a", file: "A.swift"), task("a", file: "B.swift"),
+          task("b", deps: ["a"], file: "C.swift"), task("c", deps: ["b"], file: "D.swift"),
+        ],
+        waves: [["a", "a"], ["b"], ["c"]])
+
+      let findings = try PlanLintGraph.allFindings(
+        design: DesignDocument(markdown: MarkdownDocument.parse("# Example\n")),
+        designPath: "docs/example/designs/x.md", ledger: ledger, ledgerPath: "ledger.json",
+        graph: graph, workerPacks: [:], bounds: PlanConfig())
+
+      let duplicates = findings.filter { $0.ruleID == "plan-lint.duplicate-task-id" }
+      #expect(duplicates.count == 1)
+      #expect(duplicates.first?.severity == .major)
+      #expect(duplicates.first?.message.contains("\"a\"") == true)
+      #expect(!findings.contains { $0.ruleID == PlanLintGraph.wavesMismatchRuleID })
+    }
+  }
 }

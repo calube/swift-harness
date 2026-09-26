@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "only-task",
+      "deps": [],
+      "writeSet": ["Sample/Sources/Core/"],
+      "gate": "fast",
+      "tests": ["test-alpah"],
+      "covers": ["req-alpha", "test-alpha"],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../only-task"
+    }
+  ],
+  "waves": [["only-task"]]
+}
