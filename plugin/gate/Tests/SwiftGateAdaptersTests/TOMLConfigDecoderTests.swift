@@ -58,6 +58,7 @@ struct TOMLConfigDecoderTests {
       [mutation]
       max_mutants = 40
       max_workers = 2
+      build_jobs = 3
 
       [budgets]
       t0 = 4
@@ -93,7 +94,7 @@ struct TOMLConfigDecoderTests {
         Flow(name: "checkout", reason: "revenue-critical; crosses 3 features"),
         Flow(name: "onboarding", reason: "first-run gate"),
       ],
-      mutation: MutationConfig(maxMutants: 40, maxWorkers: 2),
+      mutation: MutationConfig(maxMutants: 40, maxWorkers: 2, buildJobs: 3),
       budgets: Budgets(
         t0: .seconds(4), t1: .seconds(45), t2: .seconds(300), t3: nil, stopHook: .seconds(80)),
       clients: ClientsConfig(vendorModules: ["DatadogRUM", "FirebaseAnalytics"]),
@@ -122,6 +123,7 @@ struct TOMLConfigDecoderTests {
     #expect(config.pyramid == PyramidConfig(diffCoverageMin: 0.90, maxFlows: 10))
     #expect(config.mutation.maxMutants == 30)
     #expect(config.mutation.maxWorkers == nil)
+    #expect(config.mutation.buildJobs == nil)
     #expect(config.budgets == Budgets(t0: .seconds(5), t1: .seconds(60), stopHook: .seconds(90)))
     #expect(config.flows.isEmpty && config.modules.isEmpty)
     #expect(config.judge == .disabled)
@@ -296,6 +298,18 @@ struct TOMLConfigDecoderTests {
         max_workers = 0
         """)
     #expect(found == [.outOfRange(path: "mutation.max_workers", value: "0", allowed: ">= 1")])
+  }
+
+  @Test(
+    "build_jobs below one is an error — catches a config that would build mutants with no compile job"
+  )
+  func buildJobsRange() {
+    let found = issues(
+      Self.minimal + """
+        [mutation]
+        build_jobs = 0
+        """)
+    #expect(found == [.outOfRange(path: "mutation.build_jobs", value: "0", allowed: ">= 1")])
   }
 
   @Test("enabled judge without thresholds is an error — catches a judge running with no policy")

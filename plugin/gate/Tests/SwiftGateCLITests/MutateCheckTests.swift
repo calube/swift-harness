@@ -119,10 +119,15 @@ struct MutateCheckTests {
     #expect(summary?.message.contains("2 workers") == true)
     #expect(scratch.requests.count == 2)
     #expect(scratch.requests.allSatisfy { $0.seededBuildDirectories == [Self.package] })
+    // 18 cores shared by 2 workers.
+    #expect(!toolchain.buildJobs.isEmpty)
+    #expect(toolchain.buildJobs.allSatisfy { $0 == 9 })
+    #expect(!toolchain.tests.isEmpty)
+    #expect(toolchain.tests.allSatisfy { $0.jobs == 9 })
   }
 
   @Test(
-    "[mutation] max_workers bounds the workers when --jobs is absent — catches the configured cap ignored"
+    "[mutation] max_workers bounds the workers when --jobs is absent, and build_jobs sets each worker's compile width — catches the configured caps ignored"
   )
   func configuredWorkers() async throws {
     let setup = try Setup()
@@ -132,7 +137,7 @@ struct MutateCheckTests {
     let config = try Config(
       xcode: "26.2", appScheme: "SampleApp", packages: ["examples/SampleApp/Packages/*"],
       simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
-      mutation: MutationConfig(maxMutants: 30, maxWorkers: 1))
+      mutation: MutationConfig(maxMutants: 30, maxWorkers: 1, buildJobs: 5))
 
     let judgement = await MutateCheck.run(
       setup.environment(added, toolchain: toolchain, workers: nil), graph: try Self.graph(),
@@ -141,6 +146,8 @@ struct MutateCheckTests {
     let summary = judgement.findings.first { $0.ruleID == MutationRules.summaryRuleID }
     #expect(summary?.message.contains("1 worker") == true)
     #expect(summary?.message.contains("2 workers") == false)
+    #expect(!toolchain.buildJobs.isEmpty)
+    #expect(toolchain.buildJobs.allSatisfy { $0 == 5 })
   }
 
   @Test(

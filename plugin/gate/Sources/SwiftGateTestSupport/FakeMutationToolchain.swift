@@ -9,6 +9,7 @@ public final class FakeMutationToolchain: MutationToolchain {
     public let root: URL
     public let selection: HostTestSelection
     public let timeout: Duration
+    public let jobs: Int?
   }
 
   public typealias Build = @Sendable (_ root: URL, _ packageDirectory: String) -> MutantBuildResult
@@ -17,7 +18,7 @@ public final class FakeMutationToolchain: MutationToolchain {
 
   private let buildHandler: Build
   private let testHandler: Test
-  private let recordedBuilds = Mutex<[URL]>([])
+  private let recordedBuilds = Mutex<[(root: URL, jobs: Int?)]>([])
   private let recordedTests = Mutex<[TestCall]>([])
 
   public init(
@@ -29,19 +30,23 @@ public final class FakeMutationToolchain: MutationToolchain {
   }
 
   /// Scratch roots of every build, in call order.
-  public var builds: [URL] { recordedBuilds.withLock { $0 } }
+  public var builds: [URL] { recordedBuilds.withLock { $0.map(\.root) } }
+  /// The compile width every build was given, in call order.
+  public var buildJobs: [Int?] { recordedBuilds.withLock { $0.map(\.jobs) } }
   public var tests: [TestCall] { recordedTests.withLock { $0 } }
 
-  public func buildTests(root: URL, packageDirectory: String) async -> MutantBuildResult {
-    recordedBuilds.withLock { $0.append(root) }
+  public func buildTests(root: URL, packageDirectory: String, jobs: Int?) async
+    -> MutantBuildResult
+  {
+    recordedBuilds.withLock { $0.append((root, jobs)) }
     return buildHandler(root, packageDirectory)
   }
 
   public func test(
-    root: URL, selection: HostTestSelection, timeout: Duration, reportPath: String
+    root: URL, selection: HostTestSelection, timeout: Duration, reportPath: String, jobs: Int?
   ) async -> (result: MutantTestResult, elapsed: Duration) {
     recordedTests.withLock {
-      $0.append(TestCall(root: root, selection: selection, timeout: timeout))
+      $0.append(TestCall(root: root, selection: selection, timeout: timeout, jobs: jobs))
     }
     let (result, elapsed) = testHandler(root, selection)
     return (result, elapsed)

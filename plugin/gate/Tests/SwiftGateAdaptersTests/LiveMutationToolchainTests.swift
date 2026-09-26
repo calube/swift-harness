@@ -48,7 +48,7 @@ struct LiveMutationToolchainTests {
     let runner = Self.replaying("pass")
     let (result, elapsed) = await LiveMutationToolchain(runner: runner).test(
       root: Self.root, selection: Self.selection, timeout: .seconds(25),
-      reportPath: Self.reportPath())
+      reportPath: Self.reportPath(), jobs: nil)
 
     let expected = try ["pass.xml", "pass-swift-testing.xml"].flatMap {
       try XUnitReport.parse(Fixture.data("SwiftTest/\($0)"))
@@ -69,7 +69,7 @@ struct LiveMutationToolchainTests {
   func failing() async throws {
     let (result, _) = await LiveMutationToolchain(runner: Self.replaying("fail")).test(
       root: Self.root, selection: Self.selection, timeout: .seconds(25),
-      reportPath: Self.reportPath())
+      reportPath: Self.reportPath(), jobs: nil)
 
     #expect(
       result
@@ -89,7 +89,7 @@ struct LiveMutationToolchainTests {
     }
     let (result, _) = await LiveMutationToolchain(runner: runner).test(
       root: Self.root, selection: Self.selection, timeout: .seconds(25),
-      reportPath: Self.reportPath())
+      reportPath: Self.reportPath(), jobs: nil)
     #expect(result == .timedOut(after: .seconds(25)))
   }
 
@@ -103,7 +103,7 @@ struct LiveMutationToolchainTests {
       ProcessOutput(status: .exited(1), stdout: stdout, stderr: stderr)
     }
     let result = await LiveMutationToolchain(runner: rejecting).buildTests(
-      root: Self.root, packageDirectory: "Packages/Probe")
+      root: Self.root, packageDirectory: "Packages/Probe", jobs: nil)
     guard case .failed(let log) = result else {
       Issue.record("expected failed, got \(result)")
       return
@@ -111,14 +111,17 @@ struct LiveMutationToolchainTests {
     #expect(log.contains("error:"))
     let invocation = try #require(rejecting.invocations.first)
     #expect(
-      invocation.arguments == ["build", "--build-tests", "--only-use-versions-from-resolved-file"])
+      invocation.arguments == [
+        "build", "--build-tests", "--only-use-versions-from-resolved-file", "-debug-info-format",
+        "none",
+      ])
     #expect(invocation.workingDirectory == "/scratch/tree/Packages/Probe")
 
     let missing = FakeProcessRunner { invocation throws(ProcessRunnerError) in
       throw .launchFailed(executable: invocation.executable, reason: "no such file")
     }
     let unavailable = await LiveMutationToolchain(runner: missing).buildTests(
-      root: Self.root, packageDirectory: "")
+      root: Self.root, packageDirectory: "", jobs: nil)
     guard case .unavailable = unavailable else {
       Issue.record("expected unavailable, got \(unavailable)")
       return

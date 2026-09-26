@@ -118,11 +118,14 @@ enum MutateCheck {
         mutant: mutant, originalText: text, mutatedText: mutated,
         selections: selections[mutant.file] ?? [])
     }
+    let workers = MutationWorkers.count(
+      configured: environment.workers ?? config.mutation.maxWorkers, cores: environment.cores,
+      mutants: jobs.count { !$0.selections.isEmpty })
     let run = await MutationRunner(
-      scratch: environment.scratch, toolchain: environment.toolchain,
-      workers: MutationWorkers.count(
-        configured: environment.workers ?? config.mutation.maxWorkers, cores: environment.cores,
-        mutants: jobs.count { !$0.selections.isEmpty }), timeout: environment.timeout
+      scratch: environment.scratch, toolchain: environment.toolchain, workers: workers,
+      jobs: MutationWorkers.buildJobs(
+        configured: config.mutation.buildJobs, cores: environment.cores, workers: workers),
+      timeout: environment.timeout
     ).run(
       jobs,
       tree: ScratchTreeRequest(
