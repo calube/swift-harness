@@ -1,1 +1,1 @@
-../../../../scaffold/sampleapp.sh
+../../../../scaffold/sampleapp-with-change.sh

@@ -297,7 +297,7 @@ const requests = {
 
 const PROMPT_FRONTMATTER = `---
 runs: 3
-max_turns: 2
+max_turns: 1
 timeout_seconds: 300
 allowed_tools: [Read, Glob, Grep, Skill]
 ---
@@ -362,7 +362,7 @@ function write(c) {
   writeFileSync(join(dir, 'prompt.md'), `${PROMPT_FRONTMATTER}\n${c.prompt}\n`)
   for (const [file, text] of Object.entries(graders(c))) writeFileSync(join(dir, 'graders', file), text)
   // The runner refuses a scaffold path outside the case, so each case links the shared one.
-  symlinkSync('../../../../scaffold/sampleapp.sh', join(dir, 'scaffold.sh'))
+  symlinkSync('../../../../scaffold/sampleapp-with-change.sh', join(dir, 'scaffold.sh'))
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
