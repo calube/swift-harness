@@ -29,10 +29,16 @@ enum DocsLintCheck {
       return .blocked(reason: "docs-lint: \(error)")
     }
 
+    let claims: [Claim]
+    switch designClaims(documents: corpus.documents, root: root) {
+    case .success(let loaded): claims = loaded
+    case .failure(let error): return .blocked(reason: "docs-lint: \(error)")
+    }
+
     do throws(ReportContractViolation) {
       var findings = try DocsLintPolicy.check(documents: corpus.documents, config: docsConfig)
       findings += try DocsLintReferences.check(
-        files: corpus.documents, claims: [], repoPaths: corpus.repoPaths)
+        files: corpus.documents, claims: claims, repoPaths: corpus.repoPaths)
       if !hasDocsSection {
         findings.append(
           try Finding(
@@ -56,6 +62,26 @@ enum DocsLintCheck {
     } catch {
       return .blocked(reason: "docs-lint: \(error)")
     }
+  }
+
+  /// The claims every design doc's `claims.jsonl` records, which its `ev-` tags resolve against.
+  /// A design with no claims file adds none, so its tags surface as dangling ids; a file that
+  /// can't be read or parsed blocks rather than turning every tag into a false dangling finding.
+  private static func designClaims(
+    documents: [DocsLintPolicy.ScannedDocument], root: URL
+  ) -> Result<[Claim], EvidenceFiles.LoadError> {
+    var claims: [Claim] = []
+    for document in documents where DesignDocument.isDesignDocPath(document.path) {
+      do throws(EvidenceFiles.LoadError) {
+        claims += try EvidenceFiles.claims(
+          root: root, layout: EvidenceLayout(designDocPath: document.path))
+      } catch .claimsFileMissing {
+        continue
+      } catch {
+        return .failure(error)
+      }
+    }
+    return .success(claims)
   }
 
   /// Whether `.swiftgate.toml` declares a `[docs]` table (bare or dotted, e.g.
