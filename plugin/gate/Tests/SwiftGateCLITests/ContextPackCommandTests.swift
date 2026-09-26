@@ -464,6 +464,77 @@ struct ContextPackCommandTests {
     #expect(text.contains("no cache hits for \(pin)"))
   }
 
+  @Test(
+    "a codebase lane's commit pin builds its pack and names why no cache applies — catches a commit sha read as a package pin"
+  )
+  func researchLaneCommitPinSkipsTheReuseCache() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let commit = "6ee32101d306b2fc36641d5001b89f0d1627618c"
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: commit, cacheHome: cacheHome)
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(written.notes.contains { $0.contains("\(commit) is a commit") })
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains(commit))
+  }
+
+  @Test(
+    "an SDK pin reads the SDK bucket of the reuse cache — catches an apple-docs pin read as a package pin"
+  )
+  func researchLaneSDKPinReadsTheSDKBucket() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let sdk = "iphonesimulator26.2"
+    let cacheHome = try Self.freshCacheHome(repository)
+    let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
+    let snapshot = try ReusableClaim(
+      Claim(
+        id: "ev-sdk-snapshot-hit", lane: "apple-docs", text: "a snapshot claim",
+        citation: Citation(
+          kind: .snapshot, loc: "snapshots/userdefaults.md", pin: sdk, quote: "UserDefaults"),
+        status: .supported))
+    try await store.record(snapshot, origin: .researchLane)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: sdk, cacheHome: cacheHome)
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ev-sdk-snapshot-hit"))
+  }
+
+  @Test(
+    "each research lane's pack is written under its own key — catches lanes overwriting one pack"
+  )
+  func researchLanePackIsWrittenPerLane() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    var (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "swift-composable-architecture@1.26.2", cacheHome: cacheHome)
+    options.key = "packages"
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(written.relativePath == ".harness/context-pack/research-lane-packages.md")
+  }
+
   // MARK: - Claim checker: cited ranges only
 
   @Test("claim-checker pack holds only its claims' cited ranges, never the whole cited file")

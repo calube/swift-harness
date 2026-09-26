@@ -251,7 +251,7 @@ enum ContextPackRun {
             ResearchLaneInputs(
               frameAnswers: frameAnswers, area: area, moduleGraph: moduleGraph,
               touchedModules: touchedModules, briefs: briefs, claims: claimsSource,
-              cacheHits: hits, pin: pin)), notes, nil
+              cacheHits: hits, pin: pin)), notes, o.key
         ))
     }
   }
@@ -316,10 +316,18 @@ enum ContextPackRun {
       return .failure(
         GatherFailure("missing required option '--cache-home <path>' ($HOME is not set)"))
     }
+    let bucket: EvidenceCacheBucket
+    switch ResearchLanePin(pin) {
+    case .commit:
+      return .success(
+        (hits: [], notes: ["\(pin) is a commit: the reuse cache holds no codebase claims"]))
+    case .package: bucket = .package(pin: pin)
+    case .sdk: bucket = .sdk(pin: pin)
+    }
     let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
     let contents: EvidenceCacheContents
     do {
-      contents = try store.contents(of: .package(pin: pin))
+      contents = try store.contents(of: bucket)
     } catch {
       return .failure(GatherFailure("can't read the evidence cache for `\(pin)`: \(error)"))
     }
@@ -811,6 +819,25 @@ struct ContextPackCommand: AsyncParsableCommand {
     case .violation(let message):
       FileHandle.standardError.write(Data("swiftgate context-pack: \(message)\n".utf8))
       throw ExitCode(Verdict.red.exitCode)
+    }
+  }
+}
+
+/// What a research lane's `--pin` names, which decides the reuse-cache bucket it reads. The
+/// codebase lane pins a commit, `packages` and `prior-decisions` pin `<pkg>@<version>`, and
+/// `apple-docs` pins an SDK version.
+enum ResearchLanePin: Equatable {
+  case commit
+  case package
+  case sdk
+
+  init(_ pin: String) {
+    if pin.contains("@") {
+      self = .package
+    } else if [40, 64].contains(pin.count), pin.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) {
+      self = .commit
+    } else {
+      self = .sdk
     }
   }
 }
