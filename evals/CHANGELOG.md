@@ -2,6 +2,11 @@
 
 ## 2026-09-26
 
+- **Routing round 4** for `bootstrap`, `design`, `plan`, `prose` and `status`: 1.00 precision
+  and 1.00 recall for each on 40 independent held-out cases, 40 of 40 at pass^3. The cost cap cut
+  the tuning run at 155 of 180 trials. See `results/2026-09-26-routing-round-4/summary.md`.
+- **Added `runner/stage_plugin.sh`,** which stages `plugin/` with the cases inside it, since
+  `claude plugin eval` no longer finds cases at the repo root.
 - **`test-gate` round 3:** description v2 scores precision 1.00 and recall 0.97 (29 of 30) on
   an independent held-out set, and 1.00/1.00 on the round-1 and round-2 regression set. `tdd` holds
   1.00/1.00. See `results/2026-09-26-test-gate-round-3/summary.md`.

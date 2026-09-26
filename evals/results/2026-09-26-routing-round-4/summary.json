@@ -1,0 +1,1715 @@
+{
+  "suite": "skill-routing",
+  "round": "round 4: bootstrap, design, plan, prose, status",
+  "date": "2026-09-26",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001 (no llm graders in routing)",
+    "claudeVersion": "2.1.282",
+    "harness": "main 60e7603, staged with evals/runner/stage_plugin.sh",
+    "xcode": "26.2 (17C48), Swift 6.2.3"
+  },
+  "settings": {
+    "runs": 3,
+    "concurrency": 2,
+    "ablation": "none",
+    "maxTurns": 1,
+    "scaffold": "evals/scaffold/sampleapp-with-change.sh"
+  },
+  "tuning": {
+    "note": "split-60; the cost cap stopped it at 155 of 180 trials; 8 status cases did not run",
+    "trials": 155,
+    "costUsd": 11,
+    "durationSeconds": 752,
+    "perSkill": {
+      "architecture": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "bootstrap": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "comment-audit": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "design": {
+        "expectedTrials": 24,
+        "loadedTrials": 24,
+        "tp": 24,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "plan": {
+        "expectedTrials": 24,
+        "loadedTrials": 23,
+        "tp": 23,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1,
+        "recall": 0.9583333333333334
+      },
+      "prose": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "status": {
+        "expectedTrials": 0,
+        "loadedTrials": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "precision": null,
+        "recall": null
+      }
+    },
+    "confusion": {
+      "architecture": {
+        "architecture": 12
+      },
+      "bootstrap": {
+        "bootstrap": 18
+      },
+      "none": {
+        "none": 53
+      },
+      "plan": {
+        "plan": 23,
+        "none": 1
+      },
+      "design": {
+        "design": 24
+      },
+      "prose": {
+        "prose": 18
+      },
+      "comment-audit": {
+        "comment-audit": 6
+      }
+    },
+    "passAllK": 51,
+    "casesTotal": 52,
+    "flaky": [
+      "routing-plan-after-design-skill-a"
+    ],
+    "cases": [
+      {
+        "case": "routing-bootstrap-bootstrap-new-package-a",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-bootstrap-new-package-b",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-doctor-shim-missing-a",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-doctor-shim-missing-b",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-hooks-not-firing-a",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-hooks-not-firing-b",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-install-xcode-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-install-xcode-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-swiftlint-general-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-swiftlint-general-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-upgrade-harness-files-a",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-upgrade-harness-files-b",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-approved-design-to-tasks-a",
+        "kind": "near-miss",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-approved-design-to-tasks-b",
+        "kind": "near-miss",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-error-flow-tradeoffs-a",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-error-flow-tradeoffs-b",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-haptics-module-scaffold-a",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-haptics-module-scaffold-b",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-multiplayer-approach-a",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-multiplayer-approach-b",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-push-notif-signoff-a",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-push-notif-signoff-b",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-tca-vs-mvvm-explain-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-design-tca-vs-mvvm-explain-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-plan-after-design-skill-a",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 2,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          []
+        ]
+      },
+      {
+        "case": "routing-plan-after-design-skill-b",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-multiplayer-task-ledger-a",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-multiplayer-task-ledger-b",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-no-design-yet-a",
+        "kind": "near-miss",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-no-design-yet-b",
+        "kind": "near-miss",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-notif-design-approved-a",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-notif-design-approved-b",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-sprint-plan-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-plan-sprint-plan-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-plan-todo-today-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-plan-todo-today-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-adr-draft-gated-a",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-adr-draft-gated-b",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-commit-message-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-commit-message-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-design-lint-prose-a",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-design-lint-prose-b",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-gate-prose-findings-a",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-gate-prose-findings-b",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-slack-message-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-slack-message-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-wordy-doc-comments-a",
+        "kind": "near-miss",
+        "expect": "comment-audit",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-wordy-doc-comments-b",
+        "kind": "near-miss",
+        "expect": "comment-audit",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-build-status-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-build-status-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-ci-status-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-ci-status-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 2,
+        "passed": 2,
+        "loaded": [
+          [],
+          []
+        ]
+      }
+    ],
+    "notRun": [
+      "routing-status-plans-in-flight-a",
+      "routing-status-plans-in-flight-b",
+      "routing-status-git-staged-a",
+      "routing-status-git-staged-b",
+      "routing-status-fresh-session-pick-a",
+      "routing-status-fresh-session-pick-b",
+      "routing-status-resume-lines-a",
+      "routing-status-resume-lines-b"
+    ],
+    "partialCase": "routing-status-ci-status-b ran 2 of 3"
+  },
+  "heldOut": {
+    "note": "split-40, complete",
+    "trials": 120,
+    "costUsd": 7.53,
+    "durationSeconds": 490,
+    "perSkill": {
+      "bootstrap": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "design": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "plan": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "prose": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "review": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "status": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "tdd": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 12
+      },
+      "none": {
+        "none": 36
+      },
+      "bootstrap": {
+        "bootstrap": 12
+      },
+      "design": {
+        "design": 12
+      },
+      "review": {
+        "review": 6
+      },
+      "plan": {
+        "plan": 12
+      },
+      "status": {
+        "status": 18
+      },
+      "prose": {
+        "prose": 12
+      }
+    },
+    "passAllK": 40,
+    "casesTotal": 40,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-bootstrap-bootstrap-first-test-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-bootstrap-first-test-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-gitignore-generic-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-gitignore-generic-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-bootstrap-other-repo-no-toml-a",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-other-repo-no-toml-b",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-regen-agents-toml-a",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-bootstrap-regen-agents-toml-b",
+        "kind": "should-trigger",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-amend-cache-design-a",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-amend-cache-design-b",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-review-dismiss-branch-a",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-review-dismiss-branch-b",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-store-internals-explain-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-design-store-internals-explain-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-design-supersede-retry-design-a",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-design-supersede-retry-design-b",
+        "kind": "should-trigger",
+        "expect": "design",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "design"
+          ],
+          [
+            "design"
+          ],
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-cache-plan-json-a",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-cache-plan-json-b",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-error-flow-chunks-a",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-error-flow-chunks-b",
+        "kind": "should-trigger",
+        "expect": "plan",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ],
+          [
+            "plan"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-list-open-plans-a",
+        "kind": "near-miss",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-list-open-plans-b",
+        "kind": "near-miss",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-plan-then-build-triple-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-plan-plan-then-build-triple-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-docs-testing-page-a",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-docs-testing-page-b",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-email-grammar-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-email-grammar-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-passive-voice-explain-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-passive-voice-explain-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-prose-plan-notes-wording-a",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-prose-plan-notes-wording-b",
+        "kind": "should-trigger",
+        "expect": "prose",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-blocked-plans-a",
+        "kind": "should-trigger",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-blocked-plans-b",
+        "kind": "should-trigger",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-branch-ahead-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-branch-ahead-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-other-repos-a",
+        "kind": "should-trigger",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-other-repos-b",
+        "kind": "should-trigger",
+        "expect": "status",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-status-pr-status-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-status-pr-status-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      }
+    ]
+  },
+  "costUsd": {
+    "smoke": 0.05,
+    "tuning": 11,
+    "heldOut": 7.53,
+    "total": 18.58,
+    "cap": 18.05,
+    "meanPerRun": 0.067
+  }
+}
