@@ -731,3 +731,12 @@ against that subcommand's help. A later skill that names a missing command or fl
 - `--amend` delta review carries the challenger forward from `.harness/runs/design-<slug>/review-final.json`;
   without that file it runs the full review. A `stale` claim spawns a one-claim `reresearch` lane.
 - Seeds should drive a revise → ready round and a clarify → `design-diff --chain` valid case.
+
+## Between waves 21 and 22: closed plan-file types
+
+- `PlanFile.Approval.decision` is `PlanFile.ApprovalDecision` (`approve`, `request-changes`); `PlanFile.tier` is
+  `DesignTier?` (`quick`/`standard`/`deep`). An unknown value fails decoding; `PlanFileJSON` output is unchanged
+  byte for byte. `PlanFile.tiers` is gone: parse with `DesignTier(rawValue:)`.
+- `DesignRender`'s approval buttons and page JS take their decision strings from `ApprovalDecision.rawValue`.
+- `tests/skill_commands_test.mjs` joins ` \` continuation lines inside fenced blocks before checking flags, so a
+  flag on a wrapped line is checked against its command.
