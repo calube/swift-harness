@@ -69,15 +69,8 @@ enum PreToolUseHook {
     let environmentValue = dependencies.environment[OrchestratorMarker.environmentVariable]
     let forms = ToolPath.resolvedForms(
       path, cwd: payload.cwd, home: dependencies.environment["HOME"])
-    let orchestrator = OrchestratorMarker.isOrchestrator(
-      environmentValue: environmentValue,
-      lockContents: try? String(
-        contentsOf: root.appending(path: OrchestratorMarker.lockFile), encoding: .utf8),
-      sessionID: payload.sessionID, agentID: payload.agentID)
     for form in forms {
-      if let violation = EditGuard.evaluate(path: form, isOrchestrator: orchestrator) {
-        return violation
-      }
+      if let violation = EditGuard.evaluate(path: form) { return violation }
     }
     for form in ToolPath.resolvedAbsolutes(
       path, cwd: payload.cwd, home: dependencies.environment["HOME"])

@@ -67,9 +67,6 @@ No tool call may run `swiftgate plan release --force`: taking over a lock is the
 The guard denies `swiftgate plan claim|release|set` and `index set` to a subagent, and to a main
 session whose `--session` names another id or isn't a literal.
 
-The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
-still applies to repositories that have those files.
-
 ## Bash writes
 
 The guard judges each path a Bash command writes as it judges a Write to that path, with the same
