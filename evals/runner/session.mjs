@@ -23,6 +23,7 @@
 //   command    run: a shell command in the final workspace; passes on exit 0, and when
 //              stdout_match is set, only if stdout matches it. Hidden tests go here.
 //   llm        criteria in the body; the judge model votes 3 times, 2 PASS votes pass
+// Any grader may set `arm: with-only`: the without arm reports it and leaves it out of the score.
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -186,6 +187,19 @@ async function gradeLLM(grader, run, opts) {
   return { passed: passes >= 2, explanation: `judge votes: ${votes.map((v) => v.vote).join(' ')}; ${votes.find((v) => v.vote === (passes >= 2 ? 'PASS' : 'FAIL'))?.reason ?? ''}`, cost }
 }
 
+// A `with-only` grader checks for something only the plugin provides, such as a swiftgate
+// verdict, so the `without` arm reports it but doesn't score it.
+export const isScored = (grader, arm) => !(grader.arm === 'with-only' && arm === 'without')
+
+export function scoreRun(graders) {
+  const scored = graders.filter((g) => g.scored !== false)
+  const weight = scored.reduce((s, g) => s + g.weight, 0)
+  return {
+    score: weight === 0 ? 0 : scored.reduce((s, g) => s + (g.passed ? g.weight : 0), 0) / weight,
+    passed: scored.length > 0 && scored.every((g) => g.passed),
+  }
+}
+
 // --- Running a trial -----------------------------------------------------------------------
 
 function runClaude(args, { cwd, env, timeoutMs }) {
@@ -252,12 +266,11 @@ async function runTrial(c, arm, trial, opts) {
         verdict = await gradeLLM(g, run, opts)
         judgeCost += verdict.cost
       }
-      graders.push({ name: g.name, type: g.type, weight: g.weight, ...(verdict ?? { passed: false, explanation: `unknown grader type ${g.type}` }) })
+      graders.push({ name: g.name, type: g.type, weight: g.weight, scored: isScored(g, arm), ...(verdict ?? { passed: false, explanation: `unknown grader type ${g.type}` }) })
     }
-    const weight = graders.reduce((s, g) => s + g.weight, 0)
-    const score = weight === 0 ? 0 : graders.reduce((s, g) => s + (g.passed ? g.weight : 0), 0) / weight
+    const { score, passed } = scoreRun(graders)
     return {
-      arm, trial, score, passed: graders.every((g) => g.passed),
+      arm, trial, score, passed,
       error: session.timedOut ? `timed out after ${c.timeoutSeconds}s` : result.is_error ? result.subtype ?? 'error' : null,
       turns: result.num_turns ?? null, costUsd: result.total_cost_usd ?? 0, judgeCostUsd: judgeCost,
       durationSeconds: Math.round((Date.now() - started) / 1000), hookRecords: readdirSync(hooks).filter((f) => f.endsWith('.outcome.json')).length,

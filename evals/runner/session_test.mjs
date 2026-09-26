@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseValue, splitFrontmatter } from './frontmatter.mjs'
-import { digest, gradeCode, loadCase, parseTrace } from './session.mjs'
+import { digest, gradeCode, isScored, loadCase, parseTrace, scoreRun } from './session.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const cases = resolve(here, '../cases')
@@ -71,5 +71,12 @@ assert.equal(gradeCode({ type: 'file_exists', path: 'Packages/**/Tests/**/*.swif
 
 const hookFeedback = line({ type: 'user', message: { content: [{ type: 'text', text: 'Stop hook feedback:\nswiftgate RED' }] } })
 assert.match(digest(parseTrace(hookFeedback)), /Stop hook feedback/)
+
+const verdicts = (arm) => [
+  { weight: 1, passed: true, scored: isScored({}, arm) },
+  { weight: 1, passed: false, scored: isScored({ arm: 'with-only' }, arm) },
+]
+assert.deepEqual(scoreRun(verdicts('without')), { score: 1, passed: true }, 'a with-only grader is left out of the without arm')
+assert.deepEqual(scoreRun(verdicts('with')), { score: 0.5, passed: false }, 'and still scores in the with arm')
 
 console.log('session runner: ok')
