@@ -677,7 +677,7 @@ struct EvidenceCheckTests {
   }
 
   @Test(
-    "the probe verdict record round-trips through its file path — catches probe and check disagreeing"
+    "the probe verdict record round-trips through its file path and counts only with its hashes — catches probe and check disagreeing"
   )
   func probeVerdictRecordRoundTrips() throws {
     let record = ProbeVerdictRecord(
@@ -703,6 +703,9 @@ struct EvidenceCheckTests {
       packageResolved: Self.resolved(["swift-case-paths": "1.5.0"]),
       sdkVersion: "iphonesimulator26.0")
     #expect(Self.outcome(Self.probeClaim, sources) == .failed(.probeFailed))
+    var encodedAlone = sources
+    encodedAlone.evidenceFiles[path] = try ProbeVerdictRecord.encode(record)
+    #expect(Self.failure(Self.outcome(Self.probeClaim, encodedAlone)) == "probeVerdictUnbound")
   }
 
   @Test(
