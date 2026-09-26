@@ -1,13 +1,35 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-26): IN PROGRESS. Waves 1–24 merged on local main, push tier GREEN (1439 tests); Pushed to origin/main.
-Next action: wave 25, then waves 26–28 with the user present; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
-  docs/handoffs/subproject-2-orchestrator-runbook.md ("Kickoff prompt").
-Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook → the last section of
-docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved;
-grep it by §.
-Needs the user: waves 26–28 (acceptance) are attended runs.
+State (2026-09-26): IN PROGRESS. Waves 1–24 are merged and on origin/main (push tier GREEN, 1439 tests). Wave 25 is in flight.
+Wave 25, in flight when this was written:
+  - contributor-agents-md-for-harness-developers: done at 2af43c8 in ../swift-harness-contributor-agents-md-for-harness-developers.
+    Push, docs-lint and prose are GREEN; it's 50 lines. The orchestrator reviewed and ACCEPTED it; merge it with the other wave 25 branch.
+    Follow-up for the review: no automated check enforces "AGENTS.md names no app-only rule".
+  - consumer-steering-channels (opus worker): running in ../swift-harness-consumer-steering-channels. Its full report goes in
+    its LAST commit message body, including the observed CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA values. Before touching that
+    worktree, wait until it's quiet: `ps` shows no swift or claude process working in that path, and no new commits for a few
+    minutes. Then check the report against the runbook checklist. The pre-step values must be real observations; if they're
+    missing, re-run the pre-step yourself. The leak check must be shown failing on a planted ../../docs/adrs link.
+Then, in order (the user approved this plan on 2026-09-26):
+  1. Merge wave 25 (re-check `git log main` first: the evals session also merges to main), gate, checkpoint, and back up with
+     `git push origin main:refs/heads/backup/subproject-2-wave-25`. Don't push origin/main unless the user says so.
+  2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
+     26 plugin-installs-for-real: install at PROJECT scope into a temp copy of examples/SampleApp, never the user's global config.
+     27 nonexistent-api-run-refutes-claim: prove the API absent first, then run to the frame questions. This throwaway design is
+        never merged, so the orchestrator may answer its frame questions, labelled "orchestrator-answered rehearsal".
+     28 sampleapp-standard-design-to-plan: run up to publish. STOP before the Approve click and the merge/push; those are the user's.
+        Never write an approval or answer record in the user's name.
+     Fix harness defects the rehearsal finds, through the wave loop.
+  3. The user opted in to a Workflow: review, audit and analyse all of sub-project 2 together with the evals session
+     (ListAgents; its name starts with swift-harness-, and it's NOT this session). Send it eval requests, and fix what's found
+     until sub-project 2 is something we'd sign off on as excellent. Load the workflow-authoring skill first.
+  4. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes, in progress:
+     /Users/caleb/Developer/swift-harness-research/qa-profiling-tools.md. The user named AutoMobile MCP (already at 0.0.81,
+     the latest), callstack agent-device and Maestro, and values simplicity and "works really well" above breadth.
+Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook
+(docs/handoffs/subproject-2-orchestrator-runbook.md), which also lists known issues and lessons → the last section of
+docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved; grep it by §.
 -->
 
 ## 1. Where things are
