@@ -5,6 +5,59 @@ How to work on the evals in any session: build cases, run them, record results. 
 and [`components.md`](components.md) for what to measure. The dated handoff for the current round
 lives in `docs/handoffs/` and names the scope.
 
+## Your role: operator
+
+You run the evals and you own their quality. Measuring the harness is half the job. The other half
+is checking that the evals measure it well, and fixing them when they don't. Every session ends
+with a verdict on the evals themselves, not only on the harness.
+
+### Check the evals every session
+
+| Check | How | An eval fails the check when |
+|---|---|---|
+| Graders tell good from bad | run each grader on a known-good and a known-bad output | it passes both, or fails both |
+| Cases fail for real reasons | trace every failure in error analysis to its layer | the failure traces to the case, the grader or the environment |
+| Cases discriminate | compare conditions, and plugin on and off | every condition passes, or every condition fails, so the case shows no difference |
+| Evals catch a broken harness | on a scratch branch, break 1 thing on purpose: blank a skill `description`, drop a rule from a corpus run, make a stand-in agent return malformed JSON, remove a reviewer from `review.js`. Rerun the cases that cover it | the score doesn't drop. An eval that can't see a planted break can't see a real one |
+| Results hold still | rerun a sample of cases | a case flips between trials with nothing changed. Mark it flaky, find the cause, then fix it or add trials |
+| Coverage matches the contracts | map cases to the rows in [`components.md`](components.md) and [`suites.md`](suites.md) | a contract has no case, or only cases on the side where the component must act |
+| Signal is worth the cost | cost and wall time per finding that led to an action | a case costs a lot and has never led to an action |
+
+The planted breaks never leave the scratch branch. Delete it after the rerun.
+
+### What you may change
+
+- **Change without asking:** cases, graders, corpora, the runner, and docs under `evals/`. Add
+  cases, fix a broken grader, rewrite a vague prompt, add trials to a flaky case, split a case that
+  tests 2 things.
+- **Ask first:** remove a case, lower a pass bar, loosen a grader, or change a label. These make
+  the harness look better, so they need the user's approval and a written reason.
+- **Never:** tune a case or grader toward the result you expect or want. Tune it toward telling
+  good from bad. If a fix raises the harness's score, show that the old eval was wrong, with the
+  grader's known-good and known-bad runs.
+- **Not on an eval branch:** harness code. List each harness defect the evals found, with its
+  evidence, and ask the user whether to open a fix branch.
+
+Record every eval change in `evals/CHANGELOG.md`: date, what changed, why, and the numbers before
+and after.
+
+### Report
+
+End each session with this report, in the results summary and in your final message:
+
+1. **Verdict on the evals.** 1 of:
+   - *Working as designed and giving value:* graders separate good from bad, failures trace to
+     real causes, planted breaks get caught, and the results led to at least 1 action.
+   - *Working, value unproven:* the evals are sound but haven't yet found anything to act on.
+     Say what would change that.
+   - *Needs work:* name the checks above that failed, and what you fixed or propose.
+2. **What the evals say about the harness.** Pass^k and counts per suite, the top causes from
+   error analysis, and the harness defects found.
+3. **What you changed in the evals,** from the changelog.
+4. **What you recommend next,** in order, with the cost of each.
+
+Be blunt. A finding that the evals aren't worth their cost is a useful result.
+
 ## Rules
 
 - **Evals are not plan tasks.** Don't touch the plan, the ledger, `index.json` or a plan claim. The

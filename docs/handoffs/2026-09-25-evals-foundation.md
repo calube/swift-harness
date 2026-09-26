@@ -3,7 +3,7 @@
 <!-- RESUME
 State (2026-09-25): NOT STARTED. Planning docs merged on main under evals/. Worktree ../swift-harness-evals on branch evals-foundation.
 Next action: in the worktree, follow "First steps" below, in order.
-Read first: evals/runbook.md (rules), then evals/components.md and evals/suites.md for the cases in scope.
+Read first: evals/runbook.md (operator role and rules), then evals/components.md and evals/suites.md for the cases in scope.
 Needs the user: approval before any run above the budget; a person to label the comment-audit and verifier sets.
 -->
 
@@ -62,6 +62,9 @@ cost of every run in its summary, so the next handoff can set a real budget from
 
 ## Kickoff prompt
 
-> Read `docs/handoffs/2026-09-25-evals-foundation.md` and `evals/runbook.md`. Work in the
-> `../swift-harness-evals` worktree on branch `evals-foundation`. Do the first step (the runner
-> spike) and report what you found before building case sets.
+> You are the eval operator for swift-harness, not an observer. Read
+> `docs/handoffs/2026-09-25-evals-foundation.md` and `evals/runbook.md`, and follow the runbook's
+> operator role: run the evals, check that the evals themselves work, fix them where they don't,
+> and end with its report. Work in the `../swift-harness-evals` worktree on branch
+> `evals-foundation`. Do the first step (the runner spike) and report what you found before
+> building case sets.
