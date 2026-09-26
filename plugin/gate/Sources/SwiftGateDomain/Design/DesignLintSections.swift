@@ -12,7 +12,8 @@ import Foundation
 ///
 /// Ids defined by every *other* design in the repo are an input, not something this pure check
 /// reads off disk: the caller collects `otherDesignIds` (every `req-`/`test-` id parsed from every
-/// other `docs/**/designs/*.md`) and passes it in. An id merely referenced in this doc's prose
+/// other `docs/**/designs/*.md`) and passes it in, with `otherDesignSources` naming the doc that
+/// defines each one so a duplicate finding can point at it. An id merely referenced in this doc's prose
 /// never enters this set or `document.requirements`/`document.testPlan`, so citing another
 /// design's id is never mistaken for redefining it.
 public enum DesignLintSections {
@@ -24,13 +25,16 @@ public enum DesignLintSections {
   private static let validTestTiers: Set<Tier> = [.t1, .t2, .t3]
 
   public static func check(
-    document: DesignDocument, docPath: String, otherDesignIds: Set<String> = []
+    document: DesignDocument, docPath: String, otherDesignIds: Set<String> = [],
+    otherDesignSources: [String: String] = [:]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     try findings.append(contentsOf: sectionStructureFindings(document: document, docPath: docPath))
     try findings.append(contentsOf: problemFindings(document: document, docPath: docPath))
     try findings.append(
-      contentsOf: idFindings(document: document, docPath: docPath, otherDesignIds: otherDesignIds))
+      contentsOf: idFindings(
+        document: document, docPath: docPath, otherDesignIds: otherDesignIds,
+        otherDesignSources: otherDesignSources))
     try findings.append(contentsOf: testTierFindings(document: document, docPath: docPath))
     try findings.append(contentsOf: optionsCountFindings(document: document, docPath: docPath))
     try findings.append(contentsOf: moduleKindFindings(document: document, docPath: docPath))
@@ -96,7 +100,8 @@ public enum DesignLintSections {
   // MARK: - Requirement and test-plan ids: D18 form and repo-uniqueness
 
   private static func idFindings(
-    document: DesignDocument, docPath: String, otherDesignIds: Set<String>
+    document: DesignDocument, docPath: String, otherDesignIds: Set<String>,
+    otherDesignSources: [String: String]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let requirementIDs = document.requirements.map(\.id)
@@ -112,10 +117,12 @@ public enum DesignLintSections {
     try findings.append(
       contentsOf: duplicateFindings(
         ids: requirementIDs, otherDesignIds: otherDesignIds,
+        otherDesignSources: otherDesignSources,
         ruleID: "design-lint.requirement-id-duplicate", docPath: docPath))
     try findings.append(
       contentsOf: duplicateFindings(
-        ids: testIDs, otherDesignIds: otherDesignIds, ruleID: "design-lint.test-id-duplicate",
+        ids: testIDs, otherDesignIds: otherDesignIds, otherDesignSources: otherDesignSources,
+        ruleID: "design-lint.test-id-duplicate",
         docPath: docPath))
     return findings
   }
@@ -147,7 +154,8 @@ public enum DesignLintSections {
   /// / Test plan bullet prefix only), so a bare mention elsewhere in the doc's prose never reaches
   /// this check.
   private static func duplicateFindings(
-    ids: [String], otherDesignIds: Set<String>, ruleID: String, docPath: String
+    ids: [String], otherDesignIds: Set<String>, otherDesignSources: [String: String],
+    ruleID: String, docPath: String
   ) throws(ReportContractViolation) -> [Finding] {
     var countInThisDoc: [String: Int] = [:]
     for id in ids { countInThisDoc[id, default: 0] += 1 }
@@ -157,11 +165,12 @@ public enum DesignLintSections {
     for id in ids where !reported.contains(id) {
       guard (countInThisDoc[id] ?? 0) > 1 || otherDesignIds.contains(id) else { continue }
       reported.insert(id)
+      let location = otherDesignSources[id].map { " (also defined in \($0))" } ?? ""
       findings.append(
         try Finding(
           ruleID: ruleID, severity: .major, file: docPath, line: nil,
           message:
-            "id \"\(id)\" is defined more than once; ids are unique across the repo, "
+            "id \"\(id)\" is defined more than once\(location); ids are unique across the repo, "
             + "not per design (spec §5.1).",
           failureScenario: nil))
     }

@@ -32,7 +32,8 @@ public enum DesignSha {
 }
 
 /// How one design revision differs from another (spec §8.4). A change touching a `req-` line,
-/// Decision, Module kinds or the Test plan is `amend` and needs re-approval; any other change is
+/// Decision, Module kinds or the Test plan is `amend` and needs re-approval, and so is any edit
+/// or removal of an existing Changelog line (spec §5.3: append-only); any other change is
 /// `clarify`; identical stripped content is `unchanged`.
 public struct DesignDiff: Sendable, Equatable {
   public enum Class: String, Sendable, Equatable, Codable, CaseIterable {
@@ -43,11 +44,14 @@ public struct DesignDiff: Sendable, Equatable {
 
   /// What made a change `amend`.
   public enum Trigger: String, Sendable, Equatable, Codable, CaseIterable {
-    /// A line carrying a `req-` id was added, removed or edited, anywhere in the doc.
+    /// A line carrying a `req-` id was added, removed or edited, anywhere in the doc, or a
+    /// `req-` line entered or left the Requirements section, even unchanged.
     case requirementLine = "requirement-line"
     case decision
     case moduleKinds = "module-kinds"
     case testPlan = "test-plan"
+    /// An existing Changelog line was edited, removed or reordered; appending new lines isn't.
+    case changelog
 
     /// Heading anchors (``MarkdownDocument`` slugs) of the sections this trigger protects.
     fileprivate var anchor: String? {
@@ -56,6 +60,7 @@ public struct DesignDiff: Sendable, Equatable {
       case .decision: "decision"
       case .moduleKinds: "module-kinds"
       case .testPlan: "test-plan-by-tier"
+      case .changelog: "changelog"
       }
     }
   }
@@ -94,23 +99,59 @@ public struct DesignDiff: Sendable, Equatable {
     var ids: Set<String> = []
     for trigger in Trigger.allCases {
       let changed: [String]
-      if let anchor = trigger.anchor {
+      switch trigger {
+      case .requirementLine:
+        changed = requirementLineChanges(before: before, after: after)
+      case .changelog:
+        changed = rewrittenLines(
+          old: DesignLines.sectionBodies(before, anchor: "changelog"),
+          new: DesignLines.sectionBodies(after, anchor: "changelog"))
+      case .decision, .moduleKinds, .testPlan:
+        guard let anchor = trigger.anchor else { continue }
         let oldSection = DesignLines.sectionBodies(before, anchor: anchor)
         let newSection = DesignLines.sectionBodies(after, anchor: anchor)
         guard oldSection != newSection else { continue }
         changed = symmetricDifference(oldSection, newSection)
-      } else {
-        changed = symmetricDifference(
-          before.filter { !DesignIds.requirementIds(in: $0).isEmpty },
-          after.filter { !DesignIds.requirementIds(in: $0).isEmpty })
-        guard !changed.isEmpty else { continue }
       }
+      guard !changed.isEmpty else { continue }
       triggers.append(trigger)
       for line in changed { ids.formUnion(DesignIds.all(in: line)) }
     }
     return DesignDiff(
       oldSha: oldSha, newSha: newSha, changeClass: triggers.isEmpty ? .clarify : .amend,
       triggers: triggers, changedIds: ids.sorted())
+  }
+
+  /// `req-` lines changed anywhere in the doc, plus those that entered or left the Requirements
+  /// section: a bullet moved verbatim into another section leaves the doc-wide multiset equal but
+  /// drops the requirement all the same.
+  private static func requirementLineChanges(before: [String], after: [String]) -> [String] {
+    func requirementLines(_ lines: [String]) -> [String] {
+      lines.filter { !DesignIds.requirementIds(in: $0).isEmpty }
+    }
+    let anywhere = symmetricDifference(requirementLines(before), requirementLines(after))
+    let inSection = symmetricDifference(
+      requirementLines(DesignLines.sectionBodies(before, anchor: "requirements")),
+      requirementLines(DesignLines.sectionBodies(after, anchor: "requirements")))
+    return Array(Set(anywhere + inSection)).sorted()
+  }
+
+  /// Old non-blank lines that don't survive, in order, into the new section. Lines added between
+  /// or after them are appends; an edit, removal or reorder of an old line is a rewrite.
+  private static func rewrittenLines(old: [String], new: [String]) -> [String] {
+    func entries(_ lines: [String]) -> [String] {
+      lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+    var remaining = entries(new)[...]
+    var rewritten: [String] = []
+    for line in entries(old) {
+      if let match = remaining.firstIndex(of: line) {
+        remaining = remaining[remaining.index(after: match)...]
+      } else {
+        rewritten.append(line)
+      }
+    }
+    return rewritten
   }
 
   /// Lines present more times on one side than the other, so a reorder alone changes nothing.

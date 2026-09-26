@@ -1,3 +1,5 @@
+import Foundation
+
 /// `design-lint`'s evidence-tagging rules (spec §5.3, §11, D5): every Evidence, Decision and Perf
 /// & scale bullet carries a citation tag; a Decision's cited claim must be `supported` and may
 /// never be tagged `[UNVERIFIED]`; an `[UNVERIFIED]` tag anywhere in those three sections must be
@@ -46,8 +48,7 @@ public enum DesignLintEvidence {
   public static func check(
     document: DesignDocument, docPath: String, claims: [Claim]
   ) throws(ReportContractViolation) -> [Finding] {
-    let claimsByID = Dictionary(
-      claims.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+    let claimsByID = Dictionary(grouping: claims, by: \.id)
     let taggedSections:
       [(name: String, section: MarkdownDocument.Section?, requireSupported: Bool)] = [
         ("Evidence", document.markdown.section(anchor: "evidence"), false),
@@ -55,7 +56,7 @@ public enum DesignLintEvidence {
         ("Perf & scale", document.perfAndScale, false),
       ]
 
-    var findings: [Finding] = []
+    var findings = try duplicateClaimFindings(claimsByID: claimsByID, docPath: docPath)
     for entry in taggedSections {
       try findings.append(
         contentsOf: taggingFindings(
@@ -75,7 +76,7 @@ public enum DesignLintEvidence {
 
   private static func taggingFindings(
     section: MarkdownDocument.Section?, sectionName: String, docPath: String,
-    claimsByID: [String: Claim], requireSupported: Bool
+    claimsByID: [String: [Claim]], requireSupported: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     guard let section else { return [] }
     var findings: [Finding] = []
@@ -103,7 +104,7 @@ public enum DesignLintEvidence {
             failureScenario: nil))
       }
       for tag in tags where tag != "UNVERIFIED" {
-        guard let claim = claimsByID[tag] else {
+        guard let recorded = claimsByID[tag], !recorded.isEmpty else {
           findings.append(
             try Finding(
               ruleID: "design-lint.unknown-claim", severity: .major, file: docPath, line: nil,
@@ -111,15 +112,41 @@ public enum DesignLintEvidence {
               failureScenario: nil))
           continue
         }
-        guard requireSupported, claim.status != .supported else { continue }
+        // Every record of a repeated id must be supported: trusting whichever line came last
+        // would let an appended `supported` record hide a `refuted` one.
+        let unsupported = recorded.map(\.status).filter { $0 != .supported }
+        guard requireSupported, let status = unsupported.first else { continue }
         findings.append(
           try Finding(
             ruleID: "design-lint.citation-not-supported", severity: .major, file: docPath,
             line: nil,
             message:
-              "\(sectionName) cites \"\(tag)\", which is \(claim.status.rawValue), not supported.",
+              "\(sectionName) cites \"\(tag)\", which is \(status.rawValue), not supported.",
             failureScenario: nil))
       }
+    }
+    return findings
+  }
+
+  // MARK: - Repeated claim ids
+
+  /// A claim id is the key every citation resolves through (spec §5.1), so two records under one
+  /// id leave a citation with no single answer. The finding names every status recorded; no
+  /// record is chosen over another.
+  private static func duplicateClaimFindings(
+    claimsByID: [String: [Claim]], docPath: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    var findings: [Finding] = []
+    for id in claimsByID.keys.sorted() {
+      guard let recorded = claimsByID[id], recorded.count > 1 else { continue }
+      let statuses = recorded.map(\.status.rawValue).joined(separator: ", ")
+      findings.append(
+        try Finding(
+          ruleID: "design-lint.claim-id-duplicate", severity: .major, file: docPath, line: nil,
+          message:
+            "claims.jsonl records \"\(id)\" \(recorded.count) times (\(statuses)); a claim id "
+            + "names exactly one claim.",
+          failureScenario: nil))
     }
     return findings
   }
@@ -156,8 +183,8 @@ public enum DesignLintEvidence {
     return findings
   }
 
-  /// Strips `[UNVERIFIED]`/`[ev-…]` tags, collapses whitespace runs to a single space, trims, drops
-  /// one trailing period, and lower-cases — the shared normal form both sides of the coverage match
+  /// Strips `[UNVERIFIED]`/`[ev-…]` tags, collapses whitespace runs to a single space, drops one
+  /// trailing period, trims, and lower-cases — the shared normal form both sides of the coverage match
   /// compare in.
   private static func normalizedForCoverageMatch(_ text: String) -> String {
     var stripped = ""
@@ -173,9 +200,10 @@ public enum DesignLintEvidence {
       stripped.append(text[index])
       index = text.index(after: index)
     }
-    let collapsed = stripped.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    let trimmed = collapsed.hasSuffix(".") ? String(collapsed.dropLast()) : collapsed
-    return trimmed.lowercased()
+    var collapsed = stripped.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    if collapsed.hasSuffix(".") { collapsed.removeLast() }
+    // A tag stripped from just before the final period leaves a space in front of it.
+    return collapsed.trimmingCharacters(in: .whitespaces).lowercased()
   }
 
   // MARK: - Perf & scale's seven dimensions

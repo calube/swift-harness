@@ -451,8 +451,9 @@ A clarify applies itself: it needs no review and no approval.
 3. **Delta review.** 2 agents on the changed sections, at `standard` and `deep`. `quick` has no
    reviewers: the approval is its review. Map each trigger to its section anchor:
    `requirement-line` to `requirements`, `decision` to `decision`, `module-kinds` to
-   `module-kinds`, `test-plan` to `test-plan-by-tier`. Build the evidence auditor's pack with those
-   anchors as `--doc-anchor` and the claims they cite as `--claim-id`, and the standards
+   `module-kinds`, `test-plan` to `test-plan-by-tier`, `changelog` to `changelog`. Build the
+   evidence auditor's pack with those anchors as `--doc-anchor` and the claims they cite as
+   `--claim-id`, and the standards
    reviewer's pack as review does. Run `design-review.js` with those 2 `packs`,
    `reviewers: ["evidence-auditor", "standards-reviewer"]`, and `previous` set to
    `<run>/review-final.json`, so the challenger (and the pre-mortem at `deep`) carry forward.

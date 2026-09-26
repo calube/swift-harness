@@ -245,6 +245,51 @@ struct DesignLintEvidenceTests {
   }
 
   @Test(
+    "a bullet ending \"[UNVERIFIED].\" matches its Risks restatement — catches the space left before the period defeating the match"
+  )
+  func trailingUnverifiedTagBeforePeriodMatchesRisks() throws {
+    let text = """
+      ## Evidence
+
+      - The review guidelines allow silent background submission [UNVERIFIED].
+
+      ## Risks
+
+      - The review guidelines allow silent background submission.
+      """
+    let findings = try Self.check(Self.parse(text))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  }
+
+  // MARK: - Duplicate claim ids
+
+  @Test(
+    "a claim id repeated in claims.jsonl is a gating finding and a Decision citing it is flagged whichever copy comes last — catches a later 'supported' line hiding a refuted one",
+    arguments: [
+      [Claim.Status.refuted, .supported], [Claim.Status.supported, .refuted],
+    ])
+  func duplicateClaimIdPicksNoWinner(order: [Claim.Status]) throws {
+    let text = """
+      ## Decision
+
+      - Use the queue-backed approach [ev-twice-recorded]
+      """
+    let claims = order.map { Self.claim(id: "ev-twice-recorded", status: $0) }
+    let findings = try Self.check(Self.parse(text), claims: claims)
+    let duplicate = try #require(findings.first { $0.ruleID == "design-lint.claim-id-duplicate" })
+    #expect(duplicate.severity.failsGate)
+    #expect(duplicate.message.contains("ev-twice-recorded"))
+    #expect(findings.contains { $0.ruleID == "design-lint.citation-not-supported" })
+
+    let distinct = try Self.check(
+      Self.parse(text),
+      claims: order.enumerated().map {
+        Self.claim(id: "ev-recorded-\($0.offset)", status: $0.element)
+      })
+    #expect(!distinct.contains { $0.ruleID == "design-lint.claim-id-duplicate" })
+  }
+
+  @Test(
     "an [UNVERIFIED] bullet restated with extra context around it in Open questions is not flagged"
   )
   func unverifiedRestatedWithExtraContextIsNotFlagged() throws {

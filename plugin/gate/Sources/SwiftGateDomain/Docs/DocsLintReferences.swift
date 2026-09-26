@@ -204,11 +204,24 @@ public enum DocsLintReferences {
   /// between two docs terminate instead of looping, and it marks both cycle members reachable
   /// the moment either is first reached from the root — neither is penalised for the cycle. A doc
   /// with no incoming path from the root — including a pair that only link to each other — is
-  /// never added to `visited` and is flagged.
+  /// never added to `visited` and is flagged. With no router at all, no `docs/` doc is reachable,
+  /// so each is flagged and the message says the router itself is missing.
   private static func reachabilityFindings(
     resolutions: [LinkOccurrence], pathSet: Set<String>
   ) throws(ReportContractViolation) -> [Finding] {
-    guard pathSet.contains(routerRoot) else { return [] }
+    guard pathSet.contains(routerRoot) else {
+      var findings: [Finding] = []
+      for path in pathSet.sorted() where path.hasPrefix("docs/") {
+        findings.append(
+          try Finding(
+            ruleID: "docs-lint.unreachable-doc", severity: .major, file: path, line: nil,
+            message:
+              "\"\(path)\" is never reached from \(routerRoot): \(routerRoot) doesn't exist "
+              + "(spec §6.2 router reachability).",
+            failureScenario: nil))
+      }
+      return findings
+    }
 
     // Reachability uses the docs corpus (`pathSet`), not `repoPaths`: a `.md` link can be a
     // perfectly real tracked file and still fall outside the narrower set `docs-lint-command`

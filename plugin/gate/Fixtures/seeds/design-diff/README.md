@@ -9,3 +9,6 @@ text, computed at self-test time, never hand-copied.
 `genuine-clarify/` only edits prose outside every protected section, so the chain verifies.
 `requirement-edit-posing-as-clarify/` edits a `req-` line, which `design-diff` classifies as an
 amend; the chain catches the mismatch and reports it broken.
+`requirement-moved-out-of-requirements/` moves a `req-` bullet, unchanged, from Requirements into
+Risks, and `changelog-rewritten-posing-as-clarify/` edits an existing Changelog entry. Both are
+amends, so the chain reports them broken.
