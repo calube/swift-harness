@@ -204,6 +204,22 @@ struct BootstrapCommandTests {
   }
 
   @Test(
+    "the stamped .gitignore ignores the rendered design pages — catches a design commit that stages the page design-render writes for publishing"
+  )
+  func gitignoreCoversDesignRender() async throws {
+    let sandbox = try Sandbox(
+      copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
+    defer { sandbox.remove() }
+
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!outcome.failed)
+    let lines = try sandbox.state()["repo/.gitignore"]?.split(separator: "\n") ?? []
+    #expect(lines.contains("**/.harness/design-render/"))
+  }
+
+  @Test(
     "a fresh repository gets a config inferred from it that the gate can load — catches a first bootstrap that leaves every check RED on its own config"
   )
   func freshRepositoryConfigLoads() async throws {
