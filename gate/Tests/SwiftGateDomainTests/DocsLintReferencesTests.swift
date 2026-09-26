@@ -160,6 +160,60 @@ struct DocsLintReferencesTests {
     #expect(findings.filter { $0.ruleID == "docs-lint.requirement-uncited" } == [])
   }
 
+  static func tieredDesign(_ path: String, tier: String?) -> DocsLintReferences.DocFile {
+    let frontmatter = tier.map { "---\nstatus: proposed\ntier: \($0)\n---\n\n" } ?? ""
+    return Self.file(
+      path,
+      frontmatter + """
+        ## Requirements
+
+        - req-cited-nowhere-else: the thing must happen.
+        """)
+  }
+
+  static func uncited(_ files: [DocsLintReferences.DocFile]) throws -> [Finding] {
+    try Self.check(files).filter { $0.ruleID == "docs-lint.requirement-uncited" }
+  }
+
+  @Test(
+    "a quick-tier design's uncited requirement is not flagged — catches a quick design failing a rule it has no ADR to satisfy"
+  )
+  func quickTierDesignIsExempt() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: "quick")]) == [])
+  }
+
+  @Test(
+    "standard and deep designs keep the major finding — catches the exemption widening past quick",
+    arguments: ["standard", "deep"])
+  func standardAndDeepTiersAreFlagged(tier: String) throws {
+    let findings = try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: tier)])
+    #expect(findings.count == 1)
+    #expect(findings.first?.severity == .major)
+  }
+
+  @Test(
+    "a design with no tier is still flagged — catches a missing tier silently exempting"
+  )
+  func missingTierIsFlagged() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: nil)]).count == 1)
+  }
+
+  @Test(
+    "an unknown tier is flagged and named in the message — catches a typo like Quick exempting silently",
+    arguments: ["Quick", "fast"])
+  func unknownTierIsFlaggedAndNamed(tier: String) throws {
+    let findings = try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: tier)])
+    #expect(findings.count == 1)
+    #expect(findings.first?.message.contains("unknown tier \"\(tier)\"") == true)
+  }
+
+  @Test(
+    "quick-tier frontmatter outside a designs directory is still flagged — catches any doc opting out with a tier line"
+  )
+  func quickTierOutsideDesignsIsFlagged() throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/notes/a.md", tier: "quick")]).count == 1)
+  }
+
   // MARK: - Relative links: the risky part
 
   @Test("a link climbing out of a subdir with ../ resolves against the corpus")
