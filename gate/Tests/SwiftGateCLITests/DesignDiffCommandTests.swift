@@ -92,8 +92,8 @@ private struct DesignHistoryRepo {
     let at = Date(timeIntervalSince1970: 1_790_000_000)
     let plan = PlanFile(
       schemaVersion: 1, slug: "queue", design: Self.design, designSha: nil,
-      approval: approvedSha.map { .init(decision: "approve", designSha: $0, at: at) },
-      clarifyChain: links.map { .init(fromSha: $0.0, toSha: $0.1, at: at) }, tier: "standard",
+      approval: approvedSha.map { .init(decision: .approve, designSha: $0, at: at) },
+      clarifyChain: links.map { .init(fromSha: $0.0, toSha: $0.1, at: at) }, tier: .standard,
       resume: "planned")
     let url = root.appending(path: "plan.json")
     try PlanFileJSON.encode(plan).write(to: url)

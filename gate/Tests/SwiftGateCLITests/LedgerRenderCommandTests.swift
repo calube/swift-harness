@@ -117,8 +117,8 @@ private struct LedgerRenderRepo {
     let at = Date(timeIntervalSince1970: 1_790_000_000)
     let file = PlanFile(
       schemaVersion: 1, slug: Self.slug, design: Self.design, designSha: designSha,
-      approval: designSha.map { .init(decision: "approve", designSha: $0, at: at) },
-      clarifyChain: [], tier: "standard", resume: "planned")
+      approval: designSha.map { .init(decision: .approve, designSha: $0, at: at) },
+      clarifyChain: [], tier: .standard, resume: "planned")
     try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
   }

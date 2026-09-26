@@ -10,12 +10,12 @@ struct LedgerModelTests {
     design: "docs/ordering/designs/offline-order-queue.md",
     designSha: "3f1c",
     approval: PlanFile.Approval(
-      decision: "approve", designSha: "3f1c", at: Date(timeIntervalSince1970: 1_790_236_800)),
+      decision: .approve, designSha: "3f1c", at: Date(timeIntervalSince1970: 1_790_236_800)),
     clarifyChain: [
       PlanFile.ClarifyChainEntry(
         fromSha: "3f1c", toSha: "7a2d", at: Date(timeIntervalSince1970: 1_790_240_000))
     ],
-    tier: "standard",
+    tier: .standard,
     resume: "planned; 7 tasks in 3 waves; next: sub-project 5 starts the first wave"
   )
 
@@ -77,6 +77,70 @@ struct LedgerModelTests {
     #expect(decoded == Self.sampleLedger)
     let secondPass = try LedgerJSON.encode(decoded)
     #expect(firstPass == secondPass)
+  }
+
+  @Test(
+    "an unrecognized approval decision fails to decode, naming the value — catches a bad decision silently accepted"
+  )
+  func unknownApprovalDecisionRejected() throws {
+    let validJSON = String(decoding: try PlanFileJSON.encode(Self.samplePlan), as: UTF8.self)
+    #expect(validJSON.contains("\"approve\""))
+    let corrupted = Data(validJSON.replacingOccurrences(of: "\"approve\"", with: "\"maybe\"").utf8)
+
+    let error = #expect(throws: DecodingError.self) {
+      try PlanFileJSON.decode(corrupted)
+    }
+    #expect(error != nil)
+    #expect(String(describing: error).contains("maybe"))
+  }
+
+  @Test(
+    "an unrecognized plan tier fails to decode, naming the value — catches a bad tier silently accepted"
+  )
+  func unknownPlanTierRejected() throws {
+    let validJSON = String(decoding: try PlanFileJSON.encode(Self.samplePlan), as: UTF8.self)
+    #expect(validJSON.contains("\"standard\""))
+    let corrupted = Data(
+      validJSON.replacingOccurrences(of: "\"standard\"", with: "\"extreme\"").utf8)
+
+    let error = #expect(throws: DecodingError.self) {
+      try PlanFileJSON.decode(corrupted)
+    }
+    #expect(error != nil)
+    #expect(String(describing: error).contains("extreme"))
+  }
+
+  @Test(
+    "an approval decision round-trips byte-stable for each case — catches a request-changes decision mangled on decode"
+  )
+  func approvalDecisionRoundTrips() throws {
+    for decision in PlanFile.ApprovalDecision.allCases {
+      let plan = PlanFile(
+        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.samplePlan.design,
+        designSha: "3f1c",
+        approval: PlanFile.Approval(
+          decision: decision, designSha: "3f1c", at: Date(timeIntervalSince1970: 1_790_236_800)),
+        clarifyChain: [], tier: .standard, resume: "planned")
+      let firstPass = try PlanFileJSON.encode(plan)
+      let decoded = try PlanFileJSON.decode(firstPass)
+      #expect(decoded == plan)
+      #expect(try PlanFileJSON.encode(decoded) == firstPass)
+    }
+  }
+
+  @Test(
+    "a plan's tier round-trips byte-stable for each case — catches a quick or deep tier mangled on decode"
+  )
+  func planTierRoundTrips() throws {
+    for tier in DesignTier.allCases {
+      let plan = PlanFile(
+        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.samplePlan.design,
+        designSha: nil, approval: nil, clarifyChain: [], tier: tier, resume: "framing")
+      let firstPass = try PlanFileJSON.encode(plan)
+      let decoded = try PlanFileJSON.decode(firstPass)
+      #expect(decoded == plan)
+      #expect(try PlanFileJSON.encode(decoded) == firstPass)
+    }
   }
 
   @Test(

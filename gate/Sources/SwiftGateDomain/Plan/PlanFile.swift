@@ -5,12 +5,19 @@ import Foundation
 /// ledger alongside it (``Ledger``) holds tasks and waves, so a plan can ride out an amendment's
 /// `clarifyChain` without touching task state or the wave schedule.
 public struct PlanFile: Sendable, Equatable, Codable {
+  /// The reviewer's decision on the design page (spec §8.2, `design-render`'s approval bar).
+  /// Closed so an unrecognized value fails decoding instead of a gate reading it as approved.
+  public enum ApprovalDecision: String, Sendable, Equatable, Codable, CaseIterable {
+    case approve
+    case requestChanges = "request-changes"
+  }
+
   public struct Approval: Sendable, Equatable, Codable {
-    public let decision: String
+    public let decision: ApprovalDecision
     public let designSha: String
     public let at: Date
 
-    public init(decision: String, designSha: String, at: Date) {
+    public init(decision: ApprovalDecision, designSha: String, at: Date) {
       self.decision = decision
       self.designSha = designSha
       self.at = at
@@ -42,12 +49,12 @@ public struct PlanFile: Sendable, Equatable, Codable {
   public let approval: Approval?
   public let clarifyChain: [ClarifyChainEntry]
   /// `nil` when the claim that seeded the file named no tier; `design-scope` sets it later.
-  public let tier: String?
+  public let tier: DesignTier?
   public let resume: String
 
   public init(
     schemaVersion: Int, slug: String, design: String, designSha: String?, approval: Approval?,
-    clarifyChain: [ClarifyChainEntry], tier: String?, resume: String
+    clarifyChain: [ClarifyChainEntry], tier: DesignTier?, resume: String
   ) {
     self.schemaVersion = schemaVersion
     self.slug = slug
@@ -80,11 +87,9 @@ public enum PlanFileJSON {
 }
 
 extension PlanFile {
-  public static let tiers: Set<String> = ["quick", "standard", "deep"]
-
   /// The `plan.json` a claim writes at frame: it ties the design doc to the plan, which is what
   /// lets the edit guard allow the holder's writes to it. Nothing is hashed or approved yet.
-  public static func seed(slug: String, design: String, tier: String?) -> PlanFile {
+  public static func seed(slug: String, design: String, tier: DesignTier?) -> PlanFile {
     PlanFile(
       schemaVersion: 1, slug: slug, design: design, designSha: nil, approval: nil,
       clarifyChain: [], tier: tier, resume: "framing")

@@ -274,7 +274,7 @@ struct PlanClaimCommandTests {
     #expect(seed.design == LockScenario.design)
     #expect(seed.designSha == nil)
     #expect(seed.approval == nil)
-    #expect(seed.tier == "deep")
+    #expect(seed.tier == .deep)
     #expect(try PlanFileJSON.decode(try PlanFileJSON.encode(seed)) == seed)
 
     let again = await scenario.claim(LockScenario.alice, design: "docs/other/designs/other.md")

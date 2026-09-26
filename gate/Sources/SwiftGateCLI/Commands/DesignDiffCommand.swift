@@ -130,7 +130,7 @@ enum DesignDiffRun {
       return blocked(
         .chain, Failure(.unreadable, "can't read plan `\(planPath)`: \(error)"), plan: planPath)
     }
-    guard let approval = plan.approval, approval.decision == "approve" else {
+    guard let approval = plan.approval, approval.decision == .approve else {
       var report = blocked(
         .chain,
         Failure(.noApproval, "plan `\(planPath)` records no approval, so no chain can start"),
