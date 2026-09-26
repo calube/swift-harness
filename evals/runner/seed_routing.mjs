@@ -392,6 +392,61 @@ const heldOut2 = external('routing_heldout_r2.json')
 const heldOut3 = external('routing_heldout_r3.json')
 const fiveSkills = external('routing_five_skills.json')
 
+// Round 5 tunes review and validate on the shapes rounds 2 and 3 found in held-out sets: a merge
+// or approval verdict that says to leave the tests aside, and a request to summarise a change's
+// tests for the PR description.
+const round5 = {
+  review: {
+    should: [
+      ['r5t-approve-or-not', 60, 'asks for an approval verdict on the change', [
+        'Would you approve this change if it landed in your review queue?',
+        'yes or no, would you sign off on my branch as it stands',
+      ]],
+      ['r5t-merge-ignore-tests', 60, 'merge verdict on the code, tests explicitly out of scope', [
+        'Leave the tests out of it. Is the reducer code on this branch good enough to merge?',
+        'dont care about the tests rn, just tell me if the production code here is mergeable',
+      ]],
+      ['r5t-blocking-issues', 60, 'asks what would block the merge', [
+        'What would stop you from merging my fact-dismiss branch?',
+        'anything blocking on this diff before it goes in?',
+      ]],
+    ],
+    near: [
+      ['r5t-judge-new-tests-only', 'test-gate', 60, 'judges only the tests, no merge verdict', [
+        'Forget the reducer. Are the tests I added on this branch real, or would they pass on broken code?',
+        'just the tests on my branch: do they actually catch anything',
+      ]],
+      ['r5t-explain-diff', 'none', 60, 'wants an explanation of the change, no verdict', [
+        'Walk me through what the fact-dismiss commit changes, in plain terms. No verdict needed.',
+        'summarize what my branch changes for me, just a description',
+      ]],
+    ],
+  },
+  validate: {
+    should: [
+      ['r5t-summarise-tests-for-pr', 60, 'asks for the tests summarised for the PR description', [
+        'Summarise the tests on this branch so I can paste them into the PR description.',
+        'give me a short tests-run blurb for my PR body',
+      ]],
+      ['r5t-how-verified-section', 60, 'asks for the how-it-was-verified section', [
+        'Draft the "How was this verified" part of my pull request from what actually ran.',
+        'need the verification section for the PR, based on real test results',
+      ]],
+    ],
+    near: [
+      ['r5t-write-pr-title', 'none', 60, 'PR text with no testing evidence', [
+        'Suggest a good title for my pull request about dismissing facts.',
+        'pr title for the fact dismiss change?',
+      ]],
+      ['r5t-are-tests-enough-for-pr', 'test-gate', 60, 'judges whether the tests are real before the PR', [
+        'Before I write up the PR, are the tests I added strong enough to trust, or are some hollow?',
+        'are my new tests legit before i open the pr, or padding',
+      ]],
+    ],
+  },
+}
+const heldOut5 = external('routing_heldout_r5.json')
+
 const PROMPT_FRONTMATTER = `---
 runs: 3
 max_turns: 1
@@ -412,7 +467,7 @@ const withSplit = (table, split) => Object.fromEntries(Object.entries(table).map
 
 export function expand() {
   const out = []
-  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2], [round3, 3], [withSplit(heldOut3, 40), 3], [fiveSkills, 4]]
+  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2], [round3, 3], [withSplit(heldOut3, 40), 3], [fiveSkills, 4], [round5, 5], [withSplit(heldOut5, 40), 5]]
   const seen = new Set()
   for (const [table, round] of tables) {
     for (const [skill, { should, near }] of Object.entries(table)) {
