@@ -537,3 +537,38 @@ covered on machines without `mmdc`.
 **For `plugin-docs-pass-docs-lint-and-prose`:** `isDesignDocPath` counts `docs/designs/README.md` as a design;
 decide whether router/README files are excluded before docs-lint and prose gate push. This repo's two designs
 predate §5.3 frontmatter (status lives in a RESUME comment), so push sees them as neither approved nor built.
+
+## Wave 15
+
+**Artifact `db` call shape (verified from the `artifact-design` and `artifact-capabilities` skills).** The page
+doesn't declare capabilities in its HTML. The publisher passes Artifact `capabilities: {"comments": {}, "db": {}}`.
+In the page: `const db = await window.claude.use("db");` then
+`db.collection("approval").doc(designSha).set({decision: "approve" | "request-changes", at: (new Date).toISOString()})`.
+`db` can be `null` (capability not granted); the page says so instead of failing silently. **Artifacts render
+Mermaid natively from `<pre class="mermaid">`: never load a Mermaid library** (a test guards it).
+
+**`design-render`** (`D/Design/DesignRender.swift`, `D/Design/ArtifactPageShell.swift`,
+`C/Commands/DesignRenderCommand.swift`)
+- `swiftgate design-render <doc> [--package-resolved <path>] [--sdk <v>] [--json]` runs `design-lint` and
+  `evidence check` first. Output `.harness/design-render/<slug>.html`. Exit 0 written, 1 lint gating (nothing
+  written), 2 blocked. JSON: `command, verdict, design, output, designSha, capabilities, notes, findings, message`.
+- `ArtifactPageShell(title:, body: HTMLFragment, capabilities: [ArtifactCapability], pageData: [String: String] =
+  [:], script: String? = nil)`, with `.html` and `.capabilityDeclaration`. The ledger page reuses it.
+  `HTMLEscape.escape` is the one escaper; `HTMLFragment.text` escapes. Page data reaches `<script>` only as JSON
+  that escapes `</`.
+- Titles shown; `req-…`/`ev-…` ids only in `data-` attributes. Every claim status has a badge that expands to its
+  quote; an evidence-check result overrides the recorded status. Buttons carry the doc's `designSha`.
+
+**`stats` design and plan metrics** (`D/Design/DesignMetrics.swift`, `C/Commands/StatsCommand.swift`)
+- `swiftgate stats --design <doc> [--plan <slug>] [--cache-home <dir>] [--json]`. Every rate is `nil` ("n/a") at a
+  zero denominator. Missing optional inputs are notes; a malformed file is exit 2 naming `file:line`.
+- `phases.jsonl` at `.harness/runs/design-<slug>/phases.jsonl`, written by the design skill: `{schemaVersion, runId,
+  phase: DesignPlanPhase, agentRole: ContextPackRole?, lane: ResearchLane?, tokens, costUSD?, wallMilliseconds}`.
+  `DesignPlanPhase` = frame, research, verify, draft, review, revise, publish, amend, clarify, decompose, schedule,
+  lint, index. The pre-mortem logs as `agentRole: challenger`.
+- `review-log.jsonl`: `{findingId, reviewer, disposition: accepted | dismissed, reason}` (`ReviewLogRecord`).
+- `ResearchLane` = codebase, apple-docs, packages, prior-decisions (matches `Claim.lane`). Escape = a `supported`
+  claim whose id is in an `amend` (not `clarify`) amendment's `changedIds`.
+- `LedgerTask.actualLines: Int?` (absent → nil, negative fails decoding, omitted when nil). Estimate error =
+  `actualLines − estLines` per task that has it; `meanAbsoluteError = mean(|error|)`; others counted as excluded.
+  Sub-project 5 writes `actualLines`.

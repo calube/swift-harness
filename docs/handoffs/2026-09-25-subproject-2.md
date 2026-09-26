@@ -1,8 +1,8 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-25): IN PROGRESS. Waves 1–14 merged on local main, push tier GREEN (1291 tests).
-Next action: wave 15; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
+State (2026-09-25): IN PROGRESS. Waves 1–15 merged on local main, push tier GREEN (1334 tests).
+Next action: wave 16; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
   docs/handoffs/subproject-2-orchestrator-runbook.md ("Kickoff prompt").
 Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook → the last section of
 docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved;
