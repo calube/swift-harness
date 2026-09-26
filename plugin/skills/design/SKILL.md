@@ -28,13 +28,18 @@ directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-rel
 ## Ground rules
 
 - **Ask only through `AskUserQuestion`.** Multiple choice, the recommended option first with
-  `(Recommended)` in its label, at most 4 questions per prompt. Never ask in plain text. Every
-  answer goes into `answers.jsonl` and becomes an `answer` claim.
+  `(Recommended)` in its label, at most 4 questions per prompt. Never ask in plain text while
+  `AskUserQuestion` is available. Every answer goes into `answers.jsonl` and becomes an `answer`
+  claim. A headless session (`claude -p`) has no `AskUserQuestion`: end the turn with the
+  questions in the [headless shape](references/frame-research-verify.md#headless) and stop.
 - **You write every file.** Agents and workflow scripts return content. The edit guard lets only
   the session that holds the plan write the design doc and its `<slug>.evidence/` folder, and it
   denies any subagent.
 - **The gate decides.** Never hand-check what a `swiftgate` command checks, and never edit a
   status the gate or an agent returned. When a command exits 2, report its message and stop.
+- **A premise is a claim.** An API, type or behaviour the request names isn't checked before
+  research, even when a grep would settle it. The frame carries it into the lane briefs, and
+  verify's probe decides it. Never stop the frame or rewrite the goal over a premise.
 - **Halt, ask, resume.** A choice only the user can make stops the phase. Ask, record the answer,
   then resume where you stopped (`references/frame-research-verify.md` has the resume rules).
 

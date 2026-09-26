@@ -39,6 +39,16 @@ Ask a 5th question about constraints (deadline, platform floor, a module that mu
 first. For every question keep the exact question text, the option labels as shown and the answer:
 the chosen label, or the user's own words for a free-text reply.
 
+### Headless
+
+A `claude -p` session has no `AskUserQuestion`. Do every step up to the ask, then end the turn
+with only the questions: numbered, each with its exact text, then its options as a lettered list,
+recommended first with `(Recommended)` and its description, and a last line saying the answers
+come back through `claude -p --resume <session id>`. Write no file and claim nothing before the
+answers arrive. The resuming message holds the answers, a chosen label or the user's own words,
+and they're recorded as the Branch and record step says, exactly as `AskUserQuestion` answers
+would be. The same shape serves every later ask in the skill.
+
 ### Scope
 
 Write `<run>/frame-answers.json`:
@@ -139,6 +149,8 @@ Take a `docs-lint` baseline so the draft step can tell its own findings from old
 
 - Brief, `<run>/briefs/<lane>.md`: the goal, the constraints and the questions this lane must
   answer. At `deep`, ask each lane for a probe snippet per option, not only for the chosen path.
+  Every API or type the request names goes, as the request names it, into the `packages` brief
+  (the `codebase` brief at `quick`) as a question that needs a probe snippet using it.
 - Module graph, `<run>/module-graph.txt`: the SessionStart `Modules by package` lines, then 1
   `<Target> -> <Dependency>` line per target dependency, from
   `swift package --package-path <package> describe --type json` for each package that holds a
