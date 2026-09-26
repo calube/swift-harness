@@ -768,3 +768,27 @@ against that subcommand's help. A later skill that names a missing command or fl
   the seeds themselves are data. Each family has a `valid` (green) case.
 - `design-lint.section-word-budget` now reaches nested sections; before, a doc's `#` title hid every `##` section
   from it.
+
+## Wave 23
+
+**Docs gates on push** (decided 2026-09-25)
+- Push runs `docs-lint` over the whole corpus, and `prose` over gated docs counting only lines added since the
+  merge base with `origin/main`. The fast tier runs neither. New rules: `docs-lint.blocked` and `prose.blocked`
+  (major) and `prose.summary` (nit).
+- `[docs] prose_exclude = [globs]` is skipped by prose and every word-budget check. Reachability, links and ids
+  still cover those files. `[docs.budgets.files]` maps a path to its own word budget. Both are repo config only:
+  code defaults and `templates/swiftgate.toml` stay strict for consumer projects. This repo excludes
+  `docs/plans/**`, `docs/handoffs/**`, `agents/**` and `skills/**`, and budgets its long reference docs near their
+  current size. A plain `swiftgate prose <file>` ignores `prose_exclude`.
+- `docs-lint.requirement-uncited` skips a doc under `designs/` whose frontmatter says `tier: quick`. A missing or
+  unknown tier stays major, and the message names an unknown tier.
+- `docs-lint.dangling-id` counts only ids `IdPolicy.isValid` accepts that start their own token, so `test-first`
+  and the tail of `self-test-…` no longer count.
+- The local-path rule scans code spans too, so a doc that describes it names path kinds rather than literal paths.
+- A test that runs push in a temp dir must `git init` there: push's `docs-lint` needs git.
+
+**Self-test seed families** `plan-lint`, `docs-lint`, `prose`, `comments` and `testlint`
+- `SeedRepo` (in `SelfTestCommand.swift`) builds a canonical-path throwaway git repo with `git`, `write` and
+  `seedKnownID(_:slug:)`. Reuse it for any seed that needs git.
+- `plan-lint/overlapping-wave` yields both `write-set-overlap` and `waves-mismatch`: the scheduler never groups
+  overlapping write sets, so stored waves that do also diverge from the recomputed schedule.

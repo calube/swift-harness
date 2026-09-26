@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–22 merged on local main, push tier GREEN (1396 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–23 merged on local main, push tier GREEN (1420 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 23 — plugin-docs-pass-docs-lint-and-prose (opus), self-test-runs-plan-docs-prose-id-seeds (sonnet; adds `SeedFamily` cases to `SelfTestCommand.swift`). Follow the runbook's wave loop.
+Next action: wave 24 — consumer-plugin-in-plugin-dir (the packaging wave: moves the plugin into `plugin/`; afterwards run `plugin/bin/swiftgate` and seed worktrees from `plugin/gate/.build`). Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
