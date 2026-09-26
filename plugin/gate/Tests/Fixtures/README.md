@@ -95,8 +95,8 @@ mkdir -p "$D/Dep2" && (cd "$D/Dep2" && git init -q -b main && printf '// swift-t
 (cd "$D/Consumer" && printf '// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name: "Consumer", dependencies: [.package(url: "file://%s/Dep", exact: "1.0.0"), .package(url: "file://%s/Dep2", exact: "1.0.0")], targets: [.target(name: "Consumer", dependencies: [.product(name: "Dep", package: "Dep")])])\n' "$D" "$D" > Package.swift && swift test --only-use-versions-from-resolved-file --parallel --xunit-output /tmp/x.xml)
 ```
 
-stderr is piped through `sed "s#$D#/FIXTURE#g"` for both; `status` is the exit code (`1`), `stdout`
-is empty, and neither writes an xUnit report.
+The capture pipes stderr through `sed "s#$D#/FIXTURE#g"` for both; `status` is the exit code (`1`),
+`stdout` is empty, and neither writes an xUnit report.
 
 ## Mutation (`mutate`)
 

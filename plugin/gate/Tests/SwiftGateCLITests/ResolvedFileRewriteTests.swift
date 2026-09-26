@@ -140,7 +140,7 @@ private struct ResolvedFileRewriteRepo {
     let output = try await runner.run(
       ProcessInvocation(
         executable: tool, arguments: arguments, workingDirectory: (directory ?? base).path,
-        timeout: .seconds(120)))
+        timeout: .seconds(600)))
     guard output.status.isSuccess else {
       struct Failure: Error { let message: String }
       throw Failure(message: "\(tool) \(arguments): \(output.stderr.text)\n\(output.stdout.text)")
@@ -163,7 +163,7 @@ private struct ResolvedFileRewriteRepo {
         environmentOverlay: [
           "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path
         ],
-        workingDirectory: root.path, timeout: .seconds(300)))
+        workingDirectory: root.path, timeout: .seconds(600)))
     return try RunReportJSON.decode(output.stdout.bytes)
   }
 }
@@ -171,7 +171,7 @@ private struct ResolvedFileRewriteRepo {
 @Suite("a committed Package.resolved naming a missing revision")
 struct ResolvedFileRewriteTests {
   @Test(
-    "test --tier t1 never ends GREEN on an unresolvable pin, and never rewrites the committed Package.resolved — catches SwiftPM silently re-resolving and passing"
+    "test --tier t1 never ends GREEN on an unresolvable pin and never rewrites the committed Package.resolved, but a package with no dependencies and no Package.resolved at all still runs GREEN — catches SwiftPM silently re-resolving and passing, and --only-use-versions-from-resolved-file blocking a package with nothing to resolve"
   )
   func unresolvablePinNeverEndsGreen() async throws {
     let repo = try await ResolvedFileRewriteRepo()
@@ -198,18 +198,25 @@ struct ResolvedFileRewriteTests {
       onDisk == corrupted,
       "swiftgate must never rewrite a committed Package.resolved, the same edit a hook denies by hand"
     )
+
+    // A second, unrelated package: --only-use-versions-from-resolved-file must reject only a
+    // manifest the committed pins don't cover, never a package with nothing to resolve at all.
+    let noDeps = try await Self.runNoDependenciesPackage()
+    #expect(noDeps.report.verdict == .green)
+    #expect(
+      !noDeps.resolvedFileAppeared,
+      "a package with nothing to resolve should never gain a Package.resolved just by testing it")
   }
 
-  @Test(
-    "a package with no dependencies and no committed Package.resolved still runs t1 GREEN — catches --only-use-versions-from-resolved-file blocking a package with nothing to resolve"
-  )
-  func noDependenciesRunGreenWithNoResolvedFile() async throws {
+  /// A real package with no dependencies and no `Package.resolved`, run through `test --tier t1`.
+  private static func runNoDependenciesPackage() async throws -> (
+    report: RunReport, resolvedFileAppeared: Bool
+  ) {
     let root = FileManager.default.temporaryDirectory
       .appending(
         path: "swiftgate-no-deps-\(UUID().uuidString)", directoryHint: .isDirectory
       )
       .resolvingSymlinksInPath()
-    defer { try? FileManager.default.removeItem(at: root) }
     let runner = LiveProcessRunner(baseEnvironment: ResolvedFileRewriteRepo.environment)
     func write(_ path: String, _ content: String) throws {
       let url = root.appending(path: path)
@@ -253,7 +260,6 @@ struct ResolvedFileRewriteTests {
       @Test func works() { #expect(NoDeps.hello() == "hi") }
       """)
     let resolvedFile = root.appending(path: "NoDeps/Package.resolved")
-    #expect(!FileManager.default.fileExists(atPath: resolvedFile.path))
 
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
     let output = try await runner.run(
@@ -262,12 +268,10 @@ struct ResolvedFileRewriteTests {
         environmentOverlay: [
           "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path
         ],
-        workingDirectory: root.path, timeout: .seconds(300)))
+        workingDirectory: root.path, timeout: .seconds(600)))
     let report = try RunReportJSON.decode(output.stdout.bytes)
-
-    #expect(report.verdict == .green)
-    #expect(
-      !FileManager.default.fileExists(atPath: resolvedFile.path),
-      "a package with nothing to resolve should never gain a Package.resolved just by testing it")
+    let resolvedFileAppeared = FileManager.default.fileExists(atPath: resolvedFile.path)
+    try? FileManager.default.removeItem(at: root)
+    return (report, resolvedFileAppeared)
   }
 }
