@@ -118,11 +118,13 @@ enum CheckRun {
           root: root, tier: tier, changed: changed, config: config, graph: graph,
           context: context, dependencies: dependencies.simulator))
     }
-    // Design-doc evidence and calibration freshness need no module graph or config, so they run
-    // independent of both.
+    // Design-doc evidence, calibration freshness and the docs gates need no module graph, so they
+    // run independent of it.
     if tier != .fast {
       parts.findings += try await PushDocGates.run(root: root, runner: dependencies.runner)
       parts.findings += try CalibrationFreshness.run(root: root)
+      parts.findings += try await PushDocsLintProse.run(
+        root: root, runner: dependencies.runner, git: git, base: base)
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -274,14 +276,101 @@ enum CheckRun {
   }
 }
 
+/// Push's docs gates: `docs-lint` over the whole docs corpus, then `prose` over the markdown lines
+/// added since the merge base with `base`, the same diff coverage judges. A line the change didn't
+/// add is never charged to it, so a long doc's older prose doesn't block an unrelated edit.
+/// `prose` skips paths under `.swiftgate.toml`'s `exclude` directories and `[docs] prose_exclude`
+/// globs. Anything that stops either check from running is a gating finding, never a silent pass.
+enum PushDocsLintProse {
+  static let docsLintBlockedRuleID = "docs-lint.blocked"
+  static let proseBlockedRuleID = "prose.blocked"
+  static let summaryRuleID = "prose.summary"
+
+  static func run(root: URL, runner: any ProcessRunner, git: any Git, base: String)
+    async throws(ReportContractViolation) -> [Finding]
+  {
+    var findings: [Finding]
+    switch await DocsLintCheck.run(root: root, runner: runner) {
+    case .checked(let result): findings = result.findings
+    case .blocked(let reason):
+      findings = [try blocked(docsLintBlockedRuleID, file: ".", reason)]
+    case .invalid(let reason, let file):
+      findings = [try blocked(docsLintBlockedRuleID, file: file, reason)]
+    }
+    findings += try await prose(root: root, git: git, base: base)
+    return findings
+  }
+
+  private static func prose(root: URL, git: any Git, base: String)
+    async throws(ReportContractViolation) -> [Finding]
+  {
+    let config: Config?
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(let loaded): config = loaded
+    case .failure(let failure):
+      return [try blocked(proseBlockedRuleID, file: Config.fileName, "\(failure.outcome)")]
+    }
+    let added: [AddedLines]
+    switch await CoverageCheck.addedLines(git: git, base: base) {
+    case .success(let lines): added = lines
+    case .failure(let reason):
+      return [
+        try blocked(proseBlockedRuleID, file: ".", "can't diff against \(base): \(reason.text)")
+      ]
+    }
+    let docs = config?.docs ?? DocsConfig()
+    let excludedDirectories = config?.exclude ?? []
+    let gated = added.filter { change in
+      change.path.hasSuffix(".md") && !docs.isProseExcluded(change.path)
+        && !excludedDirectories.contains { change.path.hasPrefix($0 + "/") }
+    }
+
+    var findings: [Finding] = []
+    var lineCount = 0
+    for change in gated {
+      let text: String
+      do {
+        text = try String(contentsOf: root.appending(path: change.path), encoding: .utf8)
+      } catch {
+        findings.append(
+          try blocked(
+            proseBlockedRuleID, file: change.path, "can't be read: \(error.localizedDescription)"))
+        continue
+      }
+      lineCount += change.ranges.reduce(0) { $0 + $1.count }
+      let all = try ProseRules.check(text, file: change.path, sentenceCeiling: docs.sentenceCeiling)
+      findings += all.filter { finding in
+        guard let line = finding.line else { return true }
+        return change.ranges.contains { $0.contains(line) }
+      }
+    }
+    findings.append(
+      try Finding(
+        ruleID: summaryRuleID, severity: .nit, file: ".", line: nil,
+        message:
+          "prose (push tier): \(gated.count) changed doc(s), \(lineCount) added line(s) since "
+          + "the merge base with \(base) checked.",
+        failureScenario: nil))
+    return findings
+  }
+
+  private static func blocked(_ ruleID: String, file: String, _ reason: String)
+    throws(ReportContractViolation) -> Finding
+  {
+    try Finding(
+      ruleID: ruleID, severity: .major, file: file, line: nil,
+      message: "not checked on push: \(reason)", failureScenario: nil)
+  }
+}
+
 /// Push's design-doc evidence gate (spec §5.4): re-checks every `approved`/`built` design's claims
 /// at `HEAD`, through the exact in-process path `swiftgate evidence check` runs — no rule here
 /// decides what's stale; `EvidenceCheck`/`EvidenceCheckRun` own that. A `proposed`,
 /// `superseded-by` or status-less design is left for its own lifecycle stage, never silently
 /// gated; an `.unknown` status is surfaced instead of silently skipped.
 ///
-/// Extension point for push's other doc gates (spec §5.1): calibration freshness sits beside this
-/// one, and `docs-lint`/`prose` add their own `if tier != .fast` step the same way.
+/// Push's other doc gates (spec §5.1), calibration freshness and ``PushDocsLintProse``, run beside
+/// this one in the same `if tier != .fast` step.
 enum PushDocGates {
   static let staleClaimRuleID = "evidence-check.stale-claim"
   static let statusUnknownRuleID = "evidence-check.status-unknown"
