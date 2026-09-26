@@ -156,15 +156,25 @@ struct DesignRenderJSON: Encodable {
 struct DesignRenderCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "design-render",
-    abstract: "Render a design doc's Artifact page: diagrams, options, evidence badges, approval.",
+    abstract:
+      "Render a design doc's Artifact page (diagrams, options, evidence badges, approval), or a "
+      + "plan's ledger page with --ledger.",
     discussion:
-      "Runs design-lint and evidence check over the doc, then writes "
+      "With a design doc: runs design-lint and evidence check over it, then writes "
       + ".harness/design-render/<slug>.html for the design skill to publish with the printed "
       + "capabilities. Exit 0 written, 1 when design-lint finds a gating problem (nothing is "
-      + "written), 2 when the doc, its claims or the output can't be read or written.")
+      + "written), 2 when the doc, its claims or the output can't be read or written.\n"
+      + "With --ledger <plan>: reads the plan's shared state and the design at its designSha, "
+      + "then writes .harness/design-render/<plan>-ledger.html: the task DAG, the wave timeline, "
+      + "the requirement × task coverage matrix and the predicted overhead share. Exit 0 "
+      + "written, 2 when the plan state, its designSha or the design at that revision can't be "
+      + "read.")
 
-  @Argument(help: "The repo-relative design doc to render.")
-  var doc: String
+  @Argument(help: "The repo-relative design doc to render. Omit when --ledger names a plan.")
+  var doc: String?
+
+  @Option(help: "Render this plan's ledger page instead of a design doc, naming its slug.")
+  var ledger: String?
 
   @Option(help: "The repo-relative Package.resolved that package pins are checked against.")
   var packageResolved = "Package.resolved"
@@ -177,11 +187,152 @@ struct DesignRenderCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
+    let git = LiveGit(runner: runner, repositoryRoot: root.path)
+
+    if let slug = ledger {
+      guard doc == nil else {
+        throw ValidationError("pass either a design doc or --ledger <plan>, not both")
+      }
+      let outcome = await LedgerRenderRun.run(slug: slug, root: root, git: git)
+      Console.write(LedgerRenderRun.render(outcome, slug: slug, format: output.format))
+      let code = LedgerRenderRun.exitCode(outcome)
+      if code != 0 { throw ExitCode(code) }
+      return
+    }
+
+    guard let doc else {
+      throw ValidationError("pass a design doc to render, or --ledger <plan> for its ledger page")
+    }
     let outcome = await DesignRenderRun.run(
       options: .init(design: doc, packageResolved: packageResolved, sdk: sdk), root: root,
-      git: LiveGit(runner: runner, repositoryRoot: root.path), runner: runner)
+      git: git, runner: runner)
     Console.write(DesignRenderRun.render(outcome, design: doc, format: output.format))
     let code = DesignRenderRun.exitCode(outcome)
     if code != 0 { throw ExitCode(code) }
+  }
+}
+
+/// Gathers a ledger page's inputs the same way `plan-lint` gathers `plan-lint`'s (spec §9.2):
+/// the plan's shared state under the git common dir, the design revision named by its
+/// `designSha` (walked from committed history, never the working tree), then hands them to
+/// ``LedgerRender``.
+enum LedgerRenderRun {
+  enum Outcome: Sendable, Equatable {
+    /// `path` is repo-relative; `capabilities` is the Artifact tool's `capabilities` value.
+    case written(path: String, designSha: String, capabilities: String, notes: [String])
+    case blocked(String)
+  }
+
+  static func outputPath(for slug: String) -> String {
+    ".harness/design-render/\(slug)-ledger.html"
+  }
+
+  static func run(slug: String, root: URL, git: any Git) async -> Outcome {
+    let store: PlanStateStore
+    let plan: PlanFile
+    let ledger: Ledger
+    do throws(PlanStateStoreError) {
+      store = try await PlanStateStore.locate(slug: slug, git: git)
+      plan = try store.planFile()
+      ledger = try store.ledger()
+    } catch {
+      return .blocked("plan `\(slug)`: \(describe(error))")
+    }
+
+    guard let designSha = plan.designSha else {
+      return .blocked(
+        "plan `\(slug)` has no designSha yet (claimed, not drafted): there is no design to "
+          + "render a ledger page against")
+    }
+    let found: DesignAtSha.Found?
+    do {
+      found = try await DesignAtSha.find(designSha: designSha, path: plan.design, git: git)
+    } catch {
+      return .blocked("plan `\(slug)`: can't walk the history of `\(plan.design)`: \(error)")
+    }
+    guard let found else {
+      return .blocked(
+        "plan `\(slug)`: no committed revision of `\(plan.design)` has designSha \(designSha)")
+    }
+
+    let design = DesignDocument(markdown: .parse(found.text))
+    let page = LedgerRender.page(
+      .init(slug: slug, ledger: ledger, design: design, designSha: designSha))
+    let path = outputPath(for: slug)
+    let outputURL = root.appending(path: path, directoryHint: .notDirectory)
+    do {
+      try FileManager.default.createDirectory(
+        at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(page.html.utf8).write(to: outputURL, options: .atomic)
+    } catch {
+      return .blocked("can't write \(path): \(error.localizedDescription)")
+    }
+    return .written(
+      path: path, designSha: designSha, capabilities: page.capabilityDeclaration, notes: [])
+  }
+
+  private static func describe(_ error: PlanStateStoreError) -> String {
+    switch error {
+    case .commonDirectory(let detail): "can't find the git common dir: \(detail)"
+    case .invalidPlanName(let name): "invalid plan name `\(name)`"
+    case .missing(let path): "`\(path)` doesn't exist"
+    case .unreadable(let path, let detail): "can't read `\(path)`: \(detail)"
+    case .malformed(let path, let detail): "`\(path)` is malformed: \(detail)"
+    }
+  }
+
+  static func render(_ outcome: Outcome, slug: String, format: OutputFormat) -> String {
+    switch format {
+    case .json:
+      var json = LedgerRenderJSON(plan: slug)
+      switch outcome {
+      case .written(let path, let designSha, let capabilities, let notes):
+        json.verdict = Verdict.green.rawValue
+        json.output = path
+        json.designSha = designSha
+        json.capabilities = capabilities
+        json.notes = notes
+      case .blocked(let message):
+        json.verdict = Verdict.blocked.rawValue
+        json.message = message
+      }
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      return (try? encoder.encode(json)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    case .human:
+      switch outcome {
+      case .written(let path, let designSha, let capabilities, let notes):
+        let lines = [
+          "design-render: \(Verdict.green.rawValue) wrote \(path)", "  designSha \(designSha)",
+          "  publish with capabilities \(capabilities)",
+        ]
+        return (lines + notes.map { "  note: \($0)" }).joined(separator: "\n")
+      case .blocked(let message):
+        return "design-render: \(Verdict.blocked.rawValue) \(message)"
+      }
+    }
+  }
+
+  static func exitCode(_ outcome: Outcome) -> Int32 {
+    switch outcome {
+    case .written: Verdict.green.exitCode
+    case .blocked: Verdict.blocked.exitCode
+    }
+  }
+}
+
+/// `--json` shape for `--ledger`. Keys absent for an outcome are omitted.
+struct LedgerRenderJSON: Encodable {
+  var command = "design-render"
+  var verdict = ""
+  var plan: String
+  var output: String?
+  var designSha: String?
+  var capabilities: String?
+  var notes: [String]?
+  var message: String?
+
+  init(plan: String) {
+    self.plan = plan
   }
 }
