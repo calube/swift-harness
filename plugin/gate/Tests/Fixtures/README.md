@@ -78,6 +78,26 @@ Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
 - Toggling `--enable-code-coverage` rebuilds the package (about 20s for the SampleApp's TCA
   package), so every T1 run enables it.
 
+`SwiftTest/resolved-file-missing.{stdout,stderr,status}` and
+`SwiftTest/resolved-file-stale.{stdout,stderr,status}` are `--only-use-versions-from-resolved-file`
+rejecting a package `XUnitProbe` can't reproduce (it has no dependencies), so they come from a
+throwaway pair of real git repos instead of `capture.sh`:
+
+```
+D=$(mktemp -d); mkdir -p "$D/Dep" "$D/Consumer"
+(cd "$D/Dep" && git init -q -b main && printf '// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name: "Dep", products: [.library(name: "Dep", targets: ["Dep"])], targets: [.target(name: "Dep")])\n' > Package.swift && mkdir Sources && mkdir Sources/Dep && echo 'public func depHello() -> String { "hello" }' > Sources/Dep/Dep.swift && git add -A && git -c user.name=e -c user.email=e@e commit -qm v1 && git tag 1.0.0)
+(cd "$D/Consumer" && git init -q -b main && printf '// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name: "Consumer", dependencies: [.package(url: "file://%s/Dep", exact: "1.0.0")], targets: [.target(name: "Consumer", dependencies: [.product(name: "Dep", package: "Dep")])])\n' "$D" > Package.swift && mkdir Sources && mkdir Sources/Consumer && printf 'import Dep\npublic func greeting() -> String { depHello() }\n' > Sources/Consumer/Consumer.swift)
+# resolved-file-missing: no Package.resolved at all
+(cd "$D/Consumer" && swift test --only-use-versions-from-resolved-file --parallel --xunit-output /tmp/x.xml)
+# resolved-file-stale: resolve once, then add a second dependency without re-resolving
+(cd "$D/Consumer" && swift package resolve)
+mkdir -p "$D/Dep2" && (cd "$D/Dep2" && git init -q -b main && printf '// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name: "Dep2", products: [.library(name: "Dep2", targets: ["Dep2"])], targets: [.target(name: "Dep2")])\n' > Package.swift && mkdir Sources && mkdir Sources/Dep2 && echo 'public func dep2Hello() -> String { "hello2" }' > Sources/Dep2/Dep2.swift && git add -A && git -c user.name=e -c user.email=e@e commit -qm v1 && git tag 1.0.0)
+(cd "$D/Consumer" && printf '// swift-tools-version: 6.2\nimport PackageDescription\nlet package = Package(name: "Consumer", dependencies: [.package(url: "file://%s/Dep", exact: "1.0.0"), .package(url: "file://%s/Dep2", exact: "1.0.0")], targets: [.target(name: "Consumer", dependencies: [.product(name: "Dep", package: "Dep")])])\n' "$D" "$D" > Package.swift && swift test --only-use-versions-from-resolved-file --parallel --xunit-output /tmp/x.xml)
+```
+
+stderr is piped through `sed "s#$D#/FIXTURE#g"` for both; `status` is the exit code (`1`), `stdout`
+is empty, and neither writes an xUnit report.
+
 ## Mutation (`mutate`)
 
 `LiveMutationToolchainTests` replays the `SwiftTest` captures above: `swift test --skip-build`

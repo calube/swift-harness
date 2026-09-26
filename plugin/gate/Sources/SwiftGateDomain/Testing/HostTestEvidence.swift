@@ -70,6 +70,11 @@ public enum HostTestEvidenceRules {
   public static let noTestsRuleID = "t1.no-tests"
   public static let noEvidenceRuleID = "t1.no-evidence"
   public static let runnerRuleID = "t1.runner"
+  /// `--only-use-versions-from-resolved-file` (spec: gate runs never resolve outside the
+  /// committed pins) rejecting a manifest the committed `Package.resolved` doesn't cover: named
+  /// separately from ``noEvidenceRuleID`` because the fix is exact, not a generic environment
+  /// problem.
+  public static let resolvedFileStaleRuleID = "swiftgate.resolved-file-stale"
 
   /// A package whose `swift test` could not run at all (launch failure, timeout): no evidence.
   public static func unrunnable(packagePath: String, reason: String) -> HostTestOutcome {
@@ -263,9 +268,23 @@ private struct Judgement {
       }
       return
     }
+    if let message = log.otherErrors.first(where: Self.namesAStaleResolvedFile) {
+      gate(
+        HostTestEvidenceRules.resolvedFileStaleRuleID, file: evidence.packagePath, line: nil,
+        "\(message) — run `swift package resolve` in \(evidence.packagePath) and commit "
+          + "Package.resolved")
+      return
+    }
     block(
       HostTestEvidenceRules.noEvidenceRuleID,
       "swift test in \(evidence.packagePath) wrote no test report" + errorSummary(prefix: ": "))
+  }
+
+  /// SwiftPM's two `--only-use-versions-from-resolved-file` rejections (Swift 6.2): a missing
+  /// `Package.resolved`, or one that doesn't cover a dependency the manifest now names.
+  private static func namesAStaleResolvedFile(_ line: String) -> Bool {
+    line.contains("a resolved file is required when automatic dependency resolution is disabled")
+      || line.contains("an out-of-date resolved file was detected")
   }
 
   private mutating func judgeUnreadable(_ problems: [String]) {

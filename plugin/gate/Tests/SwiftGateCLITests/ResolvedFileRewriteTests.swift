@@ -199,4 +199,75 @@ struct ResolvedFileRewriteTests {
       "swiftgate must never rewrite a committed Package.resolved, the same edit a hook denies by hand"
     )
   }
+
+  @Test(
+    "a package with no dependencies and no committed Package.resolved still runs t1 GREEN — catches --only-use-versions-from-resolved-file blocking a package with nothing to resolve"
+  )
+  func noDependenciesRunGreenWithNoResolvedFile() async throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(
+        path: "swiftgate-no-deps-\(UUID().uuidString)", directoryHint: .isDirectory
+      )
+      .resolvingSymlinksInPath()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runner = LiveProcessRunner(baseEnvironment: ResolvedFileRewriteRepo.environment)
+    func write(_ path: String, _ content: String) throws {
+      let url = root.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data((content + "\n").utf8).write(to: url)
+    }
+    try write(
+      ConfigLoader.fileName,
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "NoDeps"
+      packages = ["NoDeps"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+      """)
+    try write(
+      "NoDeps/Package.swift",
+      """
+      // swift-tools-version: 6.2
+      import PackageDescription
+      let package = Package(
+        name: "NoDeps",
+        targets: [
+          .target(name: "NoDeps"),
+          .testTarget(name: "NoDepsTests", dependencies: ["NoDeps"]),
+        ]
+      )
+      """)
+    try write(
+      "NoDeps/Sources/NoDeps/NoDeps.swift", #"public func hello() -> String { "hi" }"#)
+    try write(
+      "NoDeps/Tests/NoDepsTests/NoDepsTests.swift",
+      """
+      import Testing
+      @testable import NoDeps
+
+      @Test func works() { #expect(NoDeps.hello() == "hi") }
+      """)
+    let resolvedFile = root.appending(path: "NoDeps/Package.resolved")
+    #expect(!FileManager.default.fileExists(atPath: resolvedFile.path))
+
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: binary, arguments: ["test", "--tier", "t1", "--json"],
+        environmentOverlay: [
+          "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path
+        ],
+        workingDirectory: root.path, timeout: .seconds(300)))
+    let report = try RunReportJSON.decode(output.stdout.bytes)
+
+    #expect(report.verdict == .green)
+    #expect(
+      !FileManager.default.fileExists(atPath: resolvedFile.path),
+      "a package with nothing to resolve should never gain a Package.resolved just by testing it")
+  }
 }

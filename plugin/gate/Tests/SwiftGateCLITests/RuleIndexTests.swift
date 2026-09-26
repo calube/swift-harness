@@ -55,6 +55,8 @@ struct RuleIndexTests {
       // would make this file fail to compile on that revert, taking every other changed test's
       // `prove` down with it.
       "swiftgate.resolved-file-rewritten",
+      // Same reason: a literal, not `HostTestEvidenceRules.resolvedFileStaleRuleID`.
+      "swiftgate.resolved-file-stale",
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
       JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
       PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,
