@@ -2,6 +2,11 @@
 
 ## 2026-09-26
 
+- **First `failure-modes` run,** no model: `runner/faults.mjs` and 11 cases in `faults/`. 10 of 11
+  pass; the 1 false GREEN is a mismatched Xcode pin, which only `doctor` reports.
+- **First `guard-conformance` run, hook decisions only:** `runner/hooks.mjs` and 51 payloads in
+  `corpora/hooks.json`. Denies 15 of 15, controls 15 of 15, evasions 12 of 21; Bash writes get
+  around the file and plan-state guards. See `results/2026-09-26-no-model-suites/summary.md`.
 - **Routing round 4** for `bootstrap`, `design`, `plan`, `prose` and `status`: 1.00 precision
   and 1.00 recall for each on 40 independent held-out cases, 40 of 40 at pass^3. The cost cap cut
   the tuning run at 155 of 180 trials. See `results/2026-09-26-routing-round-4/summary.md`.

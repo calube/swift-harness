@@ -1,0 +1,1 @@
+{"command": ["check", "--tier", "push"], "expect": ["RED", "BLOCKED"], "why": "no origin/main: the diff-based checks have no base to diff against", "rule": "^swiftgate\\.environment$"}

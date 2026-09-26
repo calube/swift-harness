@@ -1,0 +1,1 @@
+{"command": ["check", "--tier", "fast"], "expect": ["RED", "BLOCKED"], "why": "an unparseable .swiftgate.toml", "rule": "^swiftgate\\.config$"}

@@ -1,0 +1,1 @@
+{"command":["check","--tier","push"],"expect":["GREEN"],"why":"control for the diff-based cases: a clean branch with origin/main passes the push tier"}

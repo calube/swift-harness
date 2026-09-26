@@ -1,0 +1,1 @@
+{"command": ["check", "--tier", "push"], "expect": ["RED", "BLOCKED"], "why": "origin/main shares no history with HEAD", "rule": "^swiftgate\\.environment$"}

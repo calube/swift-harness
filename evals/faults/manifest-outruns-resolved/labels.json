@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["RED","BLOCKED"],"why":"Package.swift requires a TCA release that no Package.resolved pin, and no published tag, satisfies"}

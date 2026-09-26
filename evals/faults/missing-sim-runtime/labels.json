@@ -1,0 +1,1 @@
+{"command":["test","--tier","t3"],"expect":["BLOCKED"],"why":"the pinned simulator runtime is not installed"}
