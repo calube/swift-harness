@@ -44,9 +44,10 @@ Who may write:
 
 | Target | Allowed |
 |---|---|
-| a file in `swift-harness/plans/<plan>/` | the session whose id is in that plan's `orchestrator.lock` |
+| `swift-harness/plans/<plan>/` and any file in it | the session whose id is in that plan's `orchestrator.lock` |
 | `swift-harness/plans/index.json` | a session holding any plan's lock |
-| a design doc, or a file in its `<doc>.evidence/` | the session holding the lock of the plan whose `plan.json` `design` names that doc |
+| a design doc, or a file in its `<doc>.evidence/` | the session holding the lock of the one plan whose `plan.json` `design` names that doc; nobody while two plans name it |
+| a plan's `plan.json` | its lock holder, by Write or Edit (never Bash), keeping `design`; a missing or unreadable one may name a doc no other plan names |
 | `orchestrator.lock` | nobody; only `swiftgate plan claim` and `swiftgate plan release` write it |
 
 `SWIFT_HARNESS_ORCHESTRATOR=1` in the session's environment allows every row except the last. A
@@ -58,8 +59,13 @@ The guard only reads locks; it never claims a plan. A held lock counts until
 `swiftgate plan release` removes it. If git can't name the common dir, no design lock can be
 found, so only the override allows a design write. The same holds when no plan names the doc,
 or when the holder's `plan.json` is missing or corrupt: claim the plan with a `plan.json` that
-names the doc first. `design` is resolved against the worktree toplevel and compared as a
+names the doc first. A relative `design` is resolved against the project root (the directory
+holding `.swiftgate.toml`), as `plan claim` and `evidence check` read it, and compared as a
 canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
+
+No tool call may run `swiftgate plan release --force`: taking over a lock is the user's call.
+`swiftgate plan claim|release|set` and `index set` are denied to a subagent, and to a main session
+whose `--session` names another id or isn't a literal.
 
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.
@@ -69,13 +75,16 @@ still applies to repositories that have those files.
 The guard judges each path a Bash command writes as it judges a Write to that path, with the same
 payload. It finds redirections (`>`, `>>`, `&>`, `<>`), `tee`, and the destination of `cp`, `mv`,
 `install` and `ln`. It also finds the operands of `rm`, `truncate` and `touch`, `dd of=`, and
-`sed -i`/`perl -i` files, anywhere in the command. Relative paths resolve against the working
+`sed -i`/`perl -i` files, and every operand of `git checkout`, `git restore`, `git rm` and
+`git mv` (after `-C`), anywhere in the command. Relative paths resolve against the working
 directory and any literal `cd` before them. The guard denies a subagent's `echo {} > ledger.json`
-as it denies its Write, and the lock holder can still write its plan through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
+as it denies its Write, and the lock holder can still write its ledger through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
 
 Known limits: the guard stops accidental and ordinary writes; it isn't a sandbox. It doesn't judge
 interpreter code (`python3 -c`, `node -e`), heredoc text, `eval` of a built string, targets spelled
-with `$VAR` or `$(…)`, or a recursive delete of a guarded directory's parent.
+with `$VAR` or `$(…)`, or a recursive delete of a guarded directory's parent. For git: a branch
+switch, `reset`, `stash`, `clean`, a parent directory, glob or `:(magic)` pathspec, and
+`--pathspec-from-file`.
 
 ## State
 

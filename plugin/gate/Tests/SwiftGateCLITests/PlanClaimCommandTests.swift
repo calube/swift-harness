@@ -255,7 +255,7 @@ struct PlanClaimCommandTests {
     _ = await PlanLockRun.release(
       slug: "2026-09-26-frame-other", session: LockScenario.bob, force: false, git: git)
     let claim = await PlanLockRun.claim(
-      slug: "2026-09-26-frame", session: PlanStateScenario.session, design: design,
+      slug: "2026-09-26-frame-other", session: PlanStateScenario.session, design: design,
       tier: "standard", git: git)
     #expect(claim.status == .claimed)
     #expect(try await scenario.decision(document) == nil)

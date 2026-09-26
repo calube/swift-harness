@@ -17,7 +17,8 @@ public struct ShellWriteTarget: Sendable, Equatable {
 extension ShellSyntax {
   /// Every path a command line may write: output redirections, `tee`, the
   /// destinations of `cp`/`mv`/`install`/`ln` (and what `mv` moves away), the operands of
-  /// `rm`/`rmdir`/`unlink`/`truncate`/`touch`, `dd of=`, and the files of `sed -i`/`perl -i`.
+  /// `rm`/`rmdir`/`unlink`/`truncate`/`touch`, `dd of=`, the files of `sed -i`/`perl -i`, and the
+  /// pathspecs of `git checkout`/`restore`/`rm`/`mv`.
   /// A relative path is relative to the shell's starting directory; after a literal `cd`, it is
   /// also named under that directory. A path the shell would expand (`$VAR`, `$(…)`, backticks),
   /// code an interpreter runs, and heredoc text name nothing: a static reading can't know them.
@@ -59,7 +60,64 @@ extension ShellSyntax {
     if let name = command.name, ["cp", "mv", "ln", "install", "ginstall"].contains(name) {
       return copyDestinations(name, arguments)
     }
+    if command.name == "git" { return gitPathspecs(arguments) }
     return writtenFiles(command.name, arguments).map { ShellWriteTarget(path: $0) }
+  }
+
+  /// The options each git subcommand that rewrites working-tree files takes with a value.
+  private static let gitPathspecValued: [String: Set<String>] = [
+    "checkout": ["-b", "-B", "--orphan", "--conflict", "--pathspec-from-file"],
+    "restore": ["-s", "--source", "--conflict", "--pathspec-from-file"],
+    "rm": ["--pathspec-from-file"],
+  ]
+
+  /// What `git checkout`, `restore`, `rm` and `mv` may rewrite or delete: every operand, the
+  /// tree-ish or branch included, since only the repository can tell a branch from a path, and a
+  /// branch name resolves to a path nothing guards. A branch switch rewrites the whole tree and
+  /// names no file, so it is judged like a recursive delete of a guarded file's parent.
+  private static func gitPathspecs(_ arguments: [String]) -> [ShellWriteTarget] {
+    let git = gitInvocation(arguments)
+    let targets: [ShellWriteTarget]
+    switch git.subcommand {
+    case "mv"?:
+      targets = copyDestinations("mv", Array(git.arguments))
+    case let name? where gitPathspecValued[name] != nil:
+      targets = scan(Array(git.arguments), valued: gitPathspecValued[name] ?? []).operands.map {
+        ShellWriteTarget(path: $0)
+      }
+    default:
+      return []
+    }
+    guard let directory = git.directory else { return targets }
+    return targets.map { target in
+      guard !target.path.hasPrefix("/"), !target.path.hasPrefix("~") else { return target }
+      return ShellWriteTarget(
+        path: directory + "/" + target.path, entries: target.entries,
+        isDirectory: target.isDirectory)
+    }
+  }
+
+  private static let gitOptionsWithValues: Set<String> = [
+    "-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
+  ]
+
+  /// A git command line split at its subcommand. `directory` is where `-C` moves git before it
+  /// runs, `nil` without one; a relative pathspec resolves under it.
+  static func gitInvocation(_ arguments: [String]) -> (
+    subcommand: String?, arguments: ArraySlice<String>, directory: String?
+  ) {
+    var rest = arguments[...]
+    var directory: String?
+    while let option = rest.first, option.hasPrefix("-") {
+      rest = rest.dropFirst()
+      guard gitOptionsWithValues.contains(option), let value = rest.first else { continue }
+      rest = rest.dropFirst()
+      if option == "-C" {
+        directory =
+          value.hasPrefix("/") || directory == nil ? value : directory.map { $0 + "/" + value }
+      }
+    }
+    return (rest.first, rest.dropFirst(), directory)
   }
 
   private static func writtenFiles(_ name: String?, _ arguments: [String]) -> [String] {

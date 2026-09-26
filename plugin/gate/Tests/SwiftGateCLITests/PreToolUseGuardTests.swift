@@ -191,7 +191,9 @@ struct PreToolUseGuardTests {
     let planB = try scenario.layout.plan(PlanStateScenario.planB)
 
     #expect(try await scenario.decision(planA.ledgerFile) == nil)
-    #expect(try await scenario.decision(planA.planFile) == nil)
+    let keptDesign = try scenario.planFileText(
+      PlanStateScenario.planA, design: PlanStateScenario.designA)
+    #expect(try await scenario.toolDecision(planA.planFile, writing: keptDesign) == nil)
     #expect(
       try await scenario.decision(
         scenario.root.path + "/links/plans/2026-09-24-counter/ledger.json") == nil)
@@ -352,5 +354,159 @@ struct PreToolUseGuardTests {
     let design = scenario.root.path + "/" + PlanStateScenario.designA
     #expect(try await scenario.decision(design) == "deny")
     #expect(try await scenario.reason(design)?.contains("plan.json") == true)
+  }
+}
+
+extension PlanStateScenario {
+  /// The hook's decision on a Write (`content`) or Edit (`edit`) of `filePath` by the main
+  /// session, from the recorded payload of that tool with its `tool_input` rewritten.
+  func toolDecision(
+    _ filePath: String, writing content: String? = nil,
+    edit: (old: String, new: String, all: Bool)? = nil
+  ) async throws -> String? {
+    let fixture = edit == nil ? "pre-tool-use-write-ledger" : "pre-tool-use-edit-swift"
+    var object = try #require(
+      try JSONSerialization.jsonObject(with: harness.payload(fixture)) as? [String: Any])
+    var input: [String: Any] = ["file_path": filePath]
+    if let content { input["content"] = content }
+    if let edit {
+      input["old_string"] = edit.old
+      input["new_string"] = edit.new
+      input["replace_all"] = edit.all
+    }
+    object["tool_input"] = input
+    let data = try JSONSerialization.data(withJSONObject: object)
+    let dependencies = harness.dependencies
+    let result = await HookRunner.run(.preToolUse, input: data) { _ in dependencies }
+    guard result.stdout != nil else { return nil }
+    let output = try harness.json(result)["hookSpecificOutput"] as? [String: String]
+    return output?["permissionDecision"]
+  }
+
+  func planFileText(_ plan: String, design: String, tier: DesignTier = .standard) throws -> String {
+    let file = PlanFile(
+      schemaVersion: 1, slug: plan, design: design, designSha: "3f1c", approval: nil,
+      clarifyChain: [], tier: tier, resume: "planned")
+    return String(decoding: try PlanFileJSON.encode(file), as: UTF8.self)
+  }
+}
+
+@Suite("PreToolUse design ownership is exclusive")
+struct DesignOwnershipHookTests {
+  @Test(
+    "a design two plans name is denied to both holders, naming both plans — catches plan B's holder co-owning plan A's design by naming it in its plan.json"
+  )
+  func sharedDesignDenied() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: "another-session")
+    try scenario.claim(PlanStateScenario.planB, by: PlanStateScenario.session)
+    try scenario.writePlanFile(PlanStateScenario.planB, design: PlanStateScenario.designA)
+    let design = scenario.root.path + "/" + PlanStateScenario.designA
+
+    #expect(try await scenario.decision(design) == "deny")
+    let reason = try await scenario.reason(design)
+    #expect(reason?.contains(PlanStateScenario.planA) == true, "\(reason ?? "")")
+    #expect(reason?.contains(PlanStateScenario.planB) == true, "\(reason ?? "")")
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    #expect(try await scenario.decision(design) == "deny")
+    #expect(
+      try await scenario.decision(
+        scenario.root.path + "/docs/counter/designs/offline.evidence/claims.jsonl") == "deny")
+  }
+
+  @Test(
+    "the holder's Write or Edit of plan.json that repoints design is denied, and one that keeps it passes — catches a holder taking over another plan's design through its own plan.json"
+  )
+  func planFileRepointDenied() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let planFile = try scenario.layout.plan(PlanStateScenario.planA).planFile
+    let current = try String(contentsOfFile: planFile, encoding: .utf8)
+    let planA = PlanStateScenario.planA
+
+    let repointed = try scenario.planFileText(planA, design: PlanStateScenario.designB)
+    #expect(try await scenario.toolDecision(planFile, writing: repointed) == "deny")
+    let orphan = try scenario.planFileText(planA, design: "docs/counter/designs/orphan.md")
+    #expect(try await scenario.toolDecision(planFile, writing: orphan) == "deny")
+    #expect(try await scenario.toolDecision(planFile, writing: "{\"design\": ") == "deny")
+    #expect(
+      try await scenario.toolDecision(
+        planFile,
+        edit: (PlanStateScenario.designA, PlanStateScenario.designB, false)) == "deny")
+
+    let retiered = try scenario.planFileText(planA, design: PlanStateScenario.designA, tier: .deep)
+    #expect(try await scenario.toolDecision(planFile, writing: retiered) == nil)
+    #expect(
+      try await scenario.toolDecision(planFile, edit: ("\"planned\"", "\"reviewing\"", false))
+        == nil)
+    #expect(try String(contentsOfFile: planFile, encoding: .utf8) == current)
+  }
+
+  @Test(
+    "a holder writing a missing or unreadable plan.json may name a design no other plan names, and not one another plan owns — catches repointing through a deleted plan.json"
+  )
+  func unreadablePlanFileNamesOnlyUnownedDesign() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let planFile = try scenario.layout.plan(PlanStateScenario.planA).planFile
+    try scenario.write(planFile, "{\"design\": ")
+    let planA = PlanStateScenario.planA
+
+    let owned = try scenario.planFileText(planA, design: PlanStateScenario.designB)
+    #expect(try await scenario.toolDecision(planFile, writing: owned) == "deny")
+    let unowned = try scenario.planFileText(planA, design: "docs/counter/designs/orphan.md")
+    #expect(try await scenario.toolDecision(planFile, writing: unowned) == nil)
+  }
+}
+
+@Suite("PreToolUse in a project nested below the git root")
+struct NestedProjectDesignTests {
+  static let environment: [String: String] = [
+    "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+    "HOME": FileManager.default.temporaryDirectory.path,
+    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+  ]
+
+  @Test(
+    "in a project below the git root, `plan claim --design docs/…` lets the holder write that doc, and `evidence check` accepts the same value — catches the guard reading plan.json's design against the git toplevel while the other commands read it against the project"
+  )
+  func claimedDesignWritable() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    let design = "docs/app/designs/offline.md"
+    try repository.write("App/.swiftgate.toml", "")
+    try repository.write("App/" + design, "# Offline\n")
+    try repository.write("App/docs/app/designs/offline.evidence/claims.jsonl", "")
+    let runner = LiveProcessRunner(baseEnvironment: Self.environment)
+    let initialized = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["init", "-q"], workingDirectory: repository.root.path,
+        timeout: .seconds(30)))
+    #expect(initialized.status.isSuccess)
+    let project = repository.root.appending(path: "App", directoryHint: .isDirectory)
+    let git = LiveGit(runner: runner, repositoryRoot: project.path)
+
+    let claim = await PlanLockRun.claim(
+      slug: "2026-09-26-offline", session: PlanStateScenario.session, design: design, git: git)
+    #expect(claim.verdict == .green, "\(claim.message)")
+    let evidence = await EvidenceCheckRun.run(
+      options: .init(design: design, at: nil, packageResolved: "Package.resolved", sdk: nil),
+      root: project, runner: runner)
+    #expect(evidence == .checked(claims: [], results: []))
+
+    var text = try Fixture.text("Hooks/pre-tool-use-write-ledger.json")
+    text = text.replacingOccurrences(
+      of: PlanStateScenario.recordedPath, with: "\"\(project.path)/\(design)\"")
+    text = text.replacingOccurrences(of: "\"/REPO", with: "\"\(project.path)")
+    let dependencies = HookDependencies(
+      git: git, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
+      formatter: FakeSwiftFormatter(), xcode: FixedXcode(version: "26.2"),
+      sweep: PendingOrphanCloneSweep(), commitJudge: DisabledCommitCommentJudge(),
+      environment: [:])
+    let result = await HookRunner.run(.preToolUse, input: Data(text.utf8)) { _ in dependencies }
+    #expect(result.stdout == nil, "\(result.stdout ?? "")")
   }
 }

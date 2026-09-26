@@ -20,6 +20,7 @@ private struct BashWriteScenario {
   ]
   static let recordedCommand = "\"swiftgate check --tier fast 2>&1 | tail -25\""
   static let designA = "docs/counter/designs/offline.md"
+  static let designB = "docs/search/designs/search.md"
   static let resolved = "Packages/Feed/Package.resolved"
   static let snapshots = "Packages/Feed/Tests/FeedTests/__Snapshots__"
 
@@ -34,6 +35,7 @@ private struct BashWriteScenario {
     main = try ProbeRepository()
     for (path, content) in [
       (Self.designA, "# Offline\n"), ("docs/counter/designs/offline.evidence/claims.jsonl", ""),
+      (Self.designB, "# Search\n"), ("notes.txt", "notes\n"),
       (Self.resolved, "{}\n"), (Self.snapshots + "/FeedTests/view.1.png", "png"),
     ] {
       try main.write(path, content)
@@ -47,10 +49,12 @@ private struct BashWriteScenario {
     let common = try await LiveGit(runner: runner, repositoryRoot: worktree.path)
       .commonDirectory()
     layout = try PlanStateLayout(commonDirectory: common)
-    for plan in [PlanStateScenario.planA, PlanStateScenario.planB] {
+    for (plan, design) in [
+      (PlanStateScenario.planA, Self.designA), (PlanStateScenario.planB, Self.designB),
+    ] {
       try write(layout.plan(plan).ledgerFile, "{}\n")
       let file = PlanFile(
-        schemaVersion: 1, slug: plan, design: Self.designA, designSha: "3f1c", approval: nil,
+        schemaVersion: 1, slug: plan, design: design, designSha: "3f1c", approval: nil,
         clarifyChain: [], tier: .standard, resume: "planned")
       try write(
         layout.plan(plan).planFile,
@@ -259,5 +263,187 @@ struct BashWriteGuardTests {
       return milliseconds
     }
     #expect(samples.min()! < 50, "fast samples: \(samples)ms, budget: 50ms")
+  }
+
+  @Test(
+    "a subagent's git checkout, restore, rm and mv of a design doc, its evidence or a ledger are denied, with or without `--`, a tree-ish, `--cached` or `-C` — catches git rewriting guarded files past the write guard"
+  )
+  func gitPathspecWritesDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    let design = BashWriteScenario.designA
+    let claims = "docs/counter/designs/offline.evidence/claims.jsonl"
+
+    for command in [
+      "git checkout -- \(design)",
+      "git checkout HEAD -- \(design)",
+      "git checkout HEAD~1 \(design)",
+      "git checkout \(design)",
+      "git checkout -f main -- \(claims)",
+      "git restore \(design)",
+      "git restore --source=HEAD~1 --worktree -- \(claims)",
+      "git restore -s HEAD \(design)",
+      "git rm \(design)",
+      "git rm -rf --cached -- \(claims)",
+      "git mv \(design) docs/counter/designs/renamed.md",
+      "git mv notes.txt \(design)",
+      "git mv -f notes.txt docs/counter/designs/offline.evidence/",
+      "git -C docs rm counter/designs/offline.md",
+      "git -C docs/counter checkout -- designs/offline.md",
+      "git -c core.autocrlf=false restore \(design)",
+      "git checkout -- \(scenario.ledgerA)",
+      "cd docs && git restore counter/designs/offline.md",
+    ] {
+      #expect(try await scenario.decision(command, subagent: true) == "deny", "\(command)")
+    }
+  }
+
+  @Test(
+    "a subagent's branch checkouts, git reads and git writes of unguarded files pass while its git rm of the design is denied — catches the git guard blocking ordinary version control"
+  )
+  func gitFalsePositivesPass() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    #expect(
+      try await scenario.decision("git rm \(BashWriteScenario.designA)", subagent: true) == "deny")
+
+    for command in [
+      "git checkout main", "git checkout -b feature", "git checkout -B feature origin/main",
+      "git checkout --orphan fresh", "git switch -c other", "git rm notes.txt",
+      "git rm --cached notes.txt", "git mv notes.txt NOTES.md", "git restore Sources/x.swift",
+      "git checkout -- Sources/x.swift", "git status", "git diff \(BashWriteScenario.designA)",
+      "git log -- \(BashWriteScenario.designA)", "git show HEAD:\(BashWriteScenario.designA)",
+      "git add \(BashWriteScenario.designA)",
+      "git commit -m \"git rm \(BashWriteScenario.designA)\"",
+    ] {
+      #expect(try await scenario.decision(command, subagent: true) == nil, "\(command)")
+    }
+  }
+
+  @Test(
+    "the lock holder removing or moving another plan's directory is denied, its own passes — catches a holder deleting another plan's lock with its directory"
+  )
+  func otherPlanDirectoryDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    try scenario.claim(PlanStateScenario.planB, by: "another-session")
+    let planB = try scenario.layout.plan(PlanStateScenario.planB).directory
+
+    for command in ["rm -rf \(planB)", "rm -rf \(planB)/", "mv \(planB) /tmp/x"] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+    #expect(try await scenario.decision("rm -rf \(scenario.planDirectoryA)") == nil)
+  }
+
+  @Test(
+    "the holder's shell write to its plan.json is denied, its ledger write passes — catches plan.json's design repointed where the guard can't read the new content"
+  )
+  func shellPlanFileWriteDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let planFile = try scenario.layout.plan(PlanStateScenario.planA).planFile
+
+    for command in [
+      "cp /tmp/plan.json \(planFile)", "sed -i '' s/offline/search/ \(planFile)",
+      "echo '{}' > \(planFile)",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+    #expect(try await scenario.decision("echo '{}' > \(scenario.ledgerA)") == nil)
+  }
+}
+
+@Suite("PreToolUse plan and index commands act only as the calling session")
+struct PlanCommandAuthorityTests {
+  static let session = PlanStateScenario.session
+  static let plan = PlanStateScenario.planA
+
+  @Test(
+    "`plan release --force` is denied from the main session and a subagent, in any spelling — catches an agent taking over another session's lock"
+  )
+  func forceReleaseDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+
+    for command in [
+      "swiftgate plan release \(Self.plan) --force",
+      "swiftgate plan release --force \(Self.plan) --session \(Self.session)",
+      "plugin/bin/swiftgate plan release \(Self.plan) --force",
+      "SWIFT_HARNESS_ORCHESTRATOR=1 ~/.local/bin/swiftgate plan release \(Self.plan) --force",
+      "cd /tmp && bash -c 'swiftgate plan release \(Self.plan) --force'",
+      "swift run swiftgate plan release \(Self.plan) --force",
+      "swiftgate --format json plan release \(Self.plan) --force",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+      #expect(try await scenario.decision(command, subagent: true) == "deny", "\(command)")
+    }
+    let reason = try await scenario.run(
+      "swiftgate plan release \(Self.plan) --force", subagent: false
+    ).output?["permissionDecisionReason"]
+    #expect(reason?.contains(EditGuard.planStateRuleID) == true)
+    #expect(reason?.contains("user") == true)
+  }
+
+  @Test(
+    "plan claim, release and set and index set naming another session are denied — catches a session releasing or claiming as the holder with the id the lock message printed"
+  )
+  func otherSessionDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+
+    for command in [
+      "swiftgate plan release \(Self.plan) --session another-session",
+      "swiftgate plan release \(Self.plan) --session=another-session",
+      "swiftgate plan claim \(Self.plan) --session another-session",
+      "swiftgate plan claim \(Self.plan) --design docs/x/designs/y.md --session another-session",
+      "swiftgate plan set \(Self.plan) --tier deep --session another-session",
+      "swiftgate index set \(Self.plan) approved --resume x --session another-session",
+      "swiftgate plan release \(Self.plan) --session \(Self.session) --session another-session",
+      "swiftgate plan release \(Self.plan) --session \"$SESSION\"",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+  }
+
+  @Test(
+    "plan claim, release and set and index set from a subagent are denied even with its own session id — catches a worker claiming, releasing or re-indexing the orchestrator's plan"
+  )
+  func subagentDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+
+    for command in [
+      "swiftgate plan claim \(Self.plan) --session \(Self.session)",
+      "swiftgate plan release \(Self.plan) --session \(Self.session)",
+      "swiftgate plan set \(Self.plan) --resume done --session \(Self.session)",
+      "swiftgate index set \(Self.plan) done --resume x",
+      "swiftgate index set \(Self.plan) done --resume x --session \(Self.session)",
+    ] {
+      #expect(try await scenario.decision(command, subagent: true) == "deny", "\(command)")
+    }
+  }
+
+  @Test(
+    "the main session's own claim, release, set and index set, other swiftgate commands and mentions in text pass — catches the authority guard blocking the design skill's own calls"
+  )
+  func ownCommandsPass() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    #expect(
+      try await scenario.decision("swiftgate plan release \(Self.plan) --force") == "deny")
+
+    for command in [
+      "swiftgate plan claim \(Self.plan) --session \(Self.session) --design docs/x/designs/y.md",
+      "swiftgate plan release \(Self.plan) --session=\(Self.session)",
+      "swiftgate plan set \(Self.plan) --tier deep --session \(Self.session)",
+      "swiftgate index set \(Self.plan) approved --resume x --session \(Self.session)",
+      "swiftgate plan-lint --plan \(Self.plan)", "swiftgate check --tier fast",
+      "echo swiftgate plan release \(Self.plan) --force",
+      "git commit -m \"docs: swiftgate plan release --force is for the user\"",
+    ] {
+      #expect(try await scenario.decision(command) == nil, "\(command)")
+    }
   }
 }
