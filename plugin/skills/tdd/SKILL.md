@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: This skill should be used for test-first development in a swift-harness Swift app — name the regression, write a Swift Testing test, watch it fail on an assertion with swiftgate, implement, go green, then prove it. Use when implementing any feature, bug fix or behavior change in Swift code, writing or fixing a test, "add a test for", "TDD this", "write the reducer", "fix this bug", or when swiftgate reports test.* testlint findings, impact.untested-change, or low diff coverage.
+description: This skill should be used for test-first work on Swift code in a swift-harness app — name the regression, write a Swift Testing test, watch it fail on an assertion with swiftgate, implement, go green, then prove it. Load it before reading code whenever the user wants a feature, bug fix or behavior change in Swift code, wants a test written, or has a test that is failing, red, broken or flaky and must pass again or be made reliable, including a snapshot test: "add a test for", "TDD this", "write the reducer", "fix this bug", "this test fails, get it passing", "make it green", "this test is flaky", "fix the snapshot test". Also use it when swiftgate reports test.* testlint findings, impact.untested-change, or low diff coverage. Not for judging whether a change's existing tests are real before a PR (use test-gate), or for only finding or explaining tests.
 ---
 
 # TDD
