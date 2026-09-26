@@ -6,6 +6,9 @@ and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interface
 Rehearsals 26 (marketplace install) and 27 (the nonexistent API was refuted) are merged, and both passed.
 The frame questions were answered as "orchestrator-answered rehearsal". Rehearsal 28 is in ../swift-harness-sampleapp-standard-design-to-plan, working in a
 temp SampleApp copy. It cherry-picked 27's design-skill fix (1108a1d) and stops at questions and before Approve.
+Also in flight: the defect fix bash-writes-go-through-file-guards (opus) in ../swift-harness-bash-writes-go-through-file-guards.
+The evals session found that a subagent can write plan state, design docs and Package.resolved through Bash, because only
+Edit/Write run the file guards. Its no-model corpus is on branch evals-round-5; ask that session to re-run it after the merge.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
   2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
