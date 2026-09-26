@@ -827,7 +827,7 @@ against that subcommand's help. A later skill that names a missing command or fl
 
 **Consumer steering** ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), Steering)
 - Claude Code sets both `CLAUDE_PLUGIN_ROOT` (the plugin dir) and `CLAUDE_PLUGIN_DATA`
-  (`~/.claude/plugins/data/<plugin>-<source>`) in plugin hook processes; this was observed with
+  (a per-plugin data dir under the user's Claude config) in plugin hook processes; this was observed with
   `claude -p --plugin-dir`. The shim needs no `SWIFT_HARNESS_PLUGIN_ROOT` fallback.
 - SessionStart adds one line: `Plugin reference docs: <abs dir> (…)`, where the path ends at the first space. It's
   emitted only when `<dir>/standards.md` exists. Otherwise the line is `Plugin reference docs unavailable: <reason>. …`.
