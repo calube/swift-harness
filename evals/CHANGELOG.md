@@ -39,3 +39,6 @@
   passes the fixed one (GREEN).
 - **Marked `swiftgate-red-seen` as `with-only`.** The without arm can't know `swiftgate` exists.
   Without arm score on run 2: 0.50 before, 0.67 after. This change lowers the harness's delta.
+- **Added `tests/review_orchestration_test.mjs`:** 6 orchestration cases for `review.js`, the only
+  workflow whose `components.md` cases had no test. Each case failed on a planted break before it
+  counted. Coverage for `review.js`: 0 of 3 listed cases before, 3 of 3 after.
