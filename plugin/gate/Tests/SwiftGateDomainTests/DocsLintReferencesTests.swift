@@ -494,6 +494,27 @@ struct DocsLintReferencesTests {
     #expect(unreachable == ["docs/orphan-a.md", "docs/orphan-b.md"])
   }
 
+  @Test(
+    "a new, unlinked design doc in a repo with no docs/index.md is flagged unreachable, naming the missing router — catches a missing router silently skipping reachability"
+  )
+  func unlinkedDesignWithNoRouterIsFlagged() throws {
+    let design = Self.file(
+      "docs/counter/designs/persist-counter-count.md",
+      """
+      # Persist the counter
+
+      Nothing links here yet.
+      """)
+    let findings = try Self.check([design])
+    let unreachable = findings.filter { $0.ruleID == "docs-lint.unreachable-doc" }
+    #expect(unreachable.map(\.file) == [design.path])
+    #expect(unreachable.first?.message.contains("docs/index.md doesn't exist") == true)
+    #expect(unreachable.first?.severity.failsGate == true)
+
+    let noDocs = try Self.check([Self.file("AGENTS.md", "# Agents\n")])
+    #expect(!noDocs.contains { $0.ruleID == "docs-lint.unreachable-doc" })
+  }
+
   // MARK: - Findings name a real line
 
   @Test("a dangling id finding names the line it's first mentioned on")

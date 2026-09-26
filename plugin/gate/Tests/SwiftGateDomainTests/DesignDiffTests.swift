@@ -211,6 +211,40 @@ struct DesignDiffClassificationTests {
     #expect(diff.changedIds == ["req-queue-drains-on-reconnect"])
   }
 
+  @Test(
+    "a req- bullet moved unchanged from Requirements into Risks is amend naming the id — catches a requirement dropped by relocation posing as clarify"
+  )
+  func requirementRelocatedOutOfRequirementsIsAmend() {
+    let line = "- req-queue-drains-on-reconnect: the queue drains once the network returns\n"
+    let moved = Doc.editing(line, "").replacingOccurrences(
+      of: "Disk full.\n", with: "Disk full.\n\n\(line)")
+    let diff = DesignDiff.compare(old: Doc.base, new: moved)
+    #expect(diff.changeClass == .amend)
+    #expect(diff.triggers == [.requirementLine])
+    #expect(diff.changedIds == ["req-queue-drains-on-reconnect"])
+  }
+
+  static let changelogBase =
+    Doc.base + "\n## Changelog\n\n- 2026-09-25: drafted\n- 2026-09-26: clarified Risks\n"
+
+  @Test(
+    "editing or removing an existing Changelog entry is amend while a pure append stays clarify — catches history rewritten under a clarify",
+    arguments: [
+      ("- 2026-09-25: drafted\n", "- 2026-09-25: drafted and approved\n"),
+      ("- 2026-09-26: clarified Risks\n", ""),
+    ])
+  func changelogRewriteIsAmend(target: String, replacement: String) {
+    let new = Self.changelogBase.replacingOccurrences(of: target, with: replacement)
+    let diff = DesignDiff.compare(old: Self.changelogBase, new: new)
+    #expect(diff.changeClass == .amend)
+    #expect(diff.triggers.map(\.rawValue) == ["changelog"])
+
+    let append = DesignDiff.compare(
+      old: Self.changelogBase, new: Self.changelogBase + "- 2026-09-27: clarified Problem\n")
+    #expect(append.changeClass == .clarify)
+    #expect(append.triggers.isEmpty)
+  }
+
   @Test("a status-only edit is unchanged with equal shas — catches a status flip read as an edit")
   func statusOnlyIsUnchanged() {
     let diff = DesignDiff.compare(

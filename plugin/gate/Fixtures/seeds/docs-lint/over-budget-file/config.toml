@@ -1,2 +1,5 @@
+[docs]
+managed_files = ["docs/index.md"]
+
 [docs.budgets]
 topic = 1

@@ -32,8 +32,8 @@ enum DesignLintCheck {
       claimsFileURL: resolve(evidenceLayout.claimsFile, in: root))
 
     let knownIds = await KnownIdSources.load(root: root, git: git)
-    let thisDocIDs = Set(document.requirements.map(\.id) + document.testPlan.map(\.id))
-    let otherDesignIds = knownIds.ids.subtracting(thisDocIDs)
+    let otherDesignSources = idsDefinedElsewhere(
+      designDocIds(root: root), linted: resolve(docPath, in: root), root: root)
 
     let fences = mermaidFences(in: document)
     let mermaidOutcome = await MermaidValidation.validate(
@@ -43,7 +43,7 @@ enum DesignLintCheck {
     do throws(ReportContractViolation) {
       let findings = try allFindings(
         document: document, docPath: docPath, rawText: text, claimsLoaded: claimsLoaded,
-        otherDesignIds: otherDesignIds, budgets: config?.docs.budgets ?? DocsBudgets(),
+        otherDesignSources: otherDesignSources, budgets: config?.docs.budgets ?? DocsBudgets(),
         sentenceCeiling: config?.docs.sentenceCeiling ?? DocsConfig.defaultSentenceCeiling,
         mermaidOutcome: mermaidOutcome, hasMermaidFences: !fences.isEmpty)
       let outcome = StaticCheckOutcome.checked(RuleRunResult(findings: findings, allowances: []))
@@ -53,16 +53,56 @@ enum DesignLintCheck {
     }
   }
 
+  // MARK: - Ids other designs define
+
+  /// The `req-`/`test-` ids each design doc under `docs/` defines, keyed by repo-relative path.
+  /// A doc that can't be read is left out here without a note of its own: ``KnownIdSources``
+  /// reads the same docs and already reports each unreadable one as a finding.
+  private static func designDocIds(root: URL) -> [String: [String]] {
+    var result: [String: [String]] = [:]
+    let paths = RepositoryFiles.list(
+      root: root, under: "docs", where: DesignDocument.isDesignDocPath)
+    for path in paths {
+      guard let text = try? String(contentsOf: root.appending(path: path), encoding: .utf8)
+      else { continue }
+      let design = DesignDocument(markdown: MarkdownDocument.parse(text))
+      result[path] = design.requirements.map(\.id) + design.testPlan.map(\.id)
+    }
+    return result
+  }
+
+  /// Every `req-`/`test-` id a design doc other than the linted one defines, mapped to the first
+  /// such doc by path. Only the linted doc's own entry is set aside, by file identity rather than
+  /// by id: subtracting its ids from the repo-wide set would also erase the very ids another doc
+  /// shares with it, which are the duplicates spec §5.1 forbids.
+  private static func idsDefinedElsewhere(
+    _ idsByPath: [String: [String]], linted: URL, root: URL
+  ) -> [String: String] {
+    let lintedIdentity = identity(of: linted)
+    var result: [String: String] = [:]
+    for path in idsByPath.keys.sorted()
+    where identity(of: resolve(path, in: root)) != lintedIdentity {
+      for id in idsByPath[path] ?? [] where result[id] == nil { result[id] = path }
+    }
+    return result
+  }
+
+  private static func identity(of url: URL) -> String {
+    url.standardizedFileURL.resolvingSymlinksInPath().path
+  }
+
   // MARK: - Combining every rule family
 
   private static func allFindings(
     document: DesignDocument, docPath: String, rawText: String,
-    claimsLoaded: DesignLintClaims.Loaded, otherDesignIds: Set<String>, budgets: DocsBudgets,
+    claimsLoaded: DesignLintClaims.Loaded, otherDesignSources: [String: String],
+    budgets: DocsBudgets,
     sentenceCeiling: Int, mermaidOutcome: MermaidValidation.Outcome, hasMermaidFences: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     findings += try DesignLintSections.check(
-      document: document, docPath: docPath, otherDesignIds: otherDesignIds)
+      document: document, docPath: docPath, otherDesignIds: Set(otherDesignSources.keys),
+      otherDesignSources: otherDesignSources)
     findings += try DesignLintEvidence.check(
       document: document, docPath: docPath, claims: claimsLoaded.claims ?? [])
     findings += try DesignLintDiagrams.check(document: document, docPath: docPath, budgets: budgets)

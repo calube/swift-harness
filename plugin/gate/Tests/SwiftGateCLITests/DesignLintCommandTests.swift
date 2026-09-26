@@ -293,6 +293,83 @@ struct DesignLintCommandTests {
     #expect(report.tiers.map(\.verdict) == [.blocked])
   }
 
+  // MARK: - Ids unique repo-wide, through the built binary
+
+  private static let gitEnvironment: [String: String] = [
+    "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+    "HOME": FileManager.default.temporaryDirectory.path,
+    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+  ]
+
+  private static func runChecked(
+    _ runner: LiveProcessRunner, _ executable: String, _ arguments: [String], in root: URL,
+    overlay: [String: String?] = [:]
+  ) async throws -> ProcessOutput {
+    try await runner.run(
+      ProcessInvocation(
+        executable: executable, arguments: arguments, environmentOverlay: overlay,
+        workingDirectory: root.path, timeout: .seconds(300)))
+  }
+
+  /// Runs the built `swiftgate design-lint <doc> --json` from `root`, as the shim would.
+  private static func lintWithBinary(_ doc: String, in root: URL, runner: LiveProcessRunner)
+    async throws -> RunReport
+  {
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let output = try await runChecked(
+      runner, binary, ["design-lint", doc, "--json"], in: root,
+      overlay: [
+        "PATH": "/swiftgate-test-path-with-no-mmdc:/usr/bin:/bin",
+        "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path,
+      ])
+    return try RunReportJSON.decode(output.stdout.bytes)
+  }
+
+  @Test(
+    "a req- id another committed design already defines turns the second doc red through the built command — catches the doc's own ids masking a repo-wide duplicate"
+  )
+  func crossDocDuplicateRequirementIsRedThroughTheCommand() async throws {
+    let repo = try DesignLintRepository()
+    defer { repo.remove() }
+    let runner = LiveProcessRunner(baseEnvironment: Self.gitEnvironment)
+    _ = try await Self.runChecked(runner, "git", ["init", "-q", "-b", "main"], in: repo.root)
+    _ = try await Self.runChecked(
+      runner, "git", ["config", "commit.gpgsign", "false"], in: repo.root)
+
+    let first = "docs/checkout/designs/offline-queue.md"
+    try repo.write(first, Self.wellFormed)
+    try repo.write(
+      "docs/checkout/designs/offline-queue.evidence/claims.jsonl", Self.wellFormedClaims)
+    _ = try await Self.runChecked(runner, "git", ["add", "-A"], in: repo.root)
+    _ = try await Self.runChecked(runner, "git", ["commit", "-q", "-m", "first"], in: repo.root)
+
+    let alone = try await Self.lintWithBinary(first, in: repo.root, runner: runner)
+    #expect(!alone.findings.contains { $0.ruleID == "design-lint.requirement-id-duplicate" })
+
+    let second = "docs/ordering/designs/order-retry.md"
+    let secondText = Self.wellFormed
+      .replacingOccurrences(
+        of: "req-queue-survives-app-relaunch", with: "req-retry-survives-app-relaunch"
+      )
+      .replacingOccurrences(of: "test-queued-orders", with: "test-retried-orders")
+      .replacingOccurrences(of: "test-queue-persists", with: "test-retry-persists")
+    try repo.write(second, secondText)
+    try repo.write("docs/ordering/designs/order-retry.evidence/claims.jsonl", Self.wellFormedClaims)
+    _ = try await Self.runChecked(runner, "git", ["add", "-A"], in: repo.root)
+    _ = try await Self.runChecked(runner, "git", ["commit", "-q", "-m", "second"], in: repo.root)
+
+    let report = try await Self.lintWithBinary(second, in: repo.root, runner: runner)
+    let duplicates = report.findings.filter {
+      $0.ruleID == "design-lint.requirement-id-duplicate"
+    }
+    #expect(report.verdict.exitCode == 1)
+    #expect(duplicates.count == 1)
+    #expect(duplicates.first?.message.contains("req-offline-queue-drains-on-reconnect") == true)
+    #expect(duplicates.first?.message.contains(first) == true)
+  }
+
   // MARK: - mmdc present (skipped where the tool isn't installed)
 
   private static func onPath(_ name: String) -> Bool {
