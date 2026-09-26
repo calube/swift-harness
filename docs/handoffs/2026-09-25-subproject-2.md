@@ -17,7 +17,7 @@ Needs the user: waves 26–28 (acceptance) are attended runs.
 | Sub-project 2 spec | [`designs/2026-09-25-design-plan-workflows-design.md`](../designs/2026-09-25-design-plan-workflows-design.md) |
 | Decision log (D1–D24) | [`2026-09-25-subproject-2-brainstorm-decisions.md`](2026-09-25-subproject-2-brainstorm-decisions.md) |
 | Foundation spec / plan | [`designs/2026-09-24-swift-harness-foundation-design.md`](../designs/2026-09-24-swift-harness-foundation-design.md) · [`plans/2026-09-24-foundation-plan.md`](../plans/2026-09-24-foundation-plan.md) (complete) |
-| Standards / playbook / ADRs | [`standards.md`](../standards.md) · [`testing-playbook.md`](../testing-playbook.md) · [`adrs/`](../adrs/README.md) |
+| Standards / playbook / ADRs | [`standards.md`](../../plugin/docs/standards.md) · [`testing-playbook.md`](../../plugin/docs/testing-playbook.md) · [`adrs/`](../adrs/README.md) |
 | End-to-end evidence | [`e2e-report.md`](../e2e-report.md) |
 | Worker brief | [`worker-brief.md`](worker-brief.md): reuse it for sub-project 2 workers |
 | Throwaway e2e repo | not kept between sessions; the acceptance waves recreate `../swift-harness-e2e` as [`e2e-report.md`](../e2e-report.md) describes |

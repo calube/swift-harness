@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Builds gate/ once per source hash, then execs the cached binary. An installed plugin builds into
+# CLAUDE_PLUGIN_DATA, which survives plugin updates where the per-version install directory does
+# not; a contributor checkout, or a terminal call through ~/.local/bin, builds into the user cache.
+# Hooks call this on every tool use, so the cached path must stay well under 100ms.
+set -euo pipefail
+
+resolve() {
+  local path="$1"
+  while [ -L "$path" ]; do
+    local target
+    target="$(readlink "$path")"
+    case "$target" in
+      /*) path="$target" ;;
+      *) path="$(dirname "$path")/$target" ;;
+    esac
+  done
+  printf '%s\n' "$path"
+}
+
+# Mirrors the gate's project lookup: the nearest .swiftgate.toml at or above the directory,
+# stopping at a git root. The hook's working directory stands in for the payload's cwd, which the
+# shell cannot read without a JSON parser.
+in_project() {
+  local dir="$1"
+  while :; do
+    [ -f "$dir/.swiftgate.toml" ] && return 0
+    [ -e "$dir/.git" ] && return 1
+    [ "$dir" = "/" ] && return 1
+    dir="$(dirname "$dir")"
+  done
+}
+
+self="$(resolve "${BASH_SOURCE[0]}")"
+root="$(cd "$(dirname "$self")/.." && pwd -P)"
+gate="$root/gate"
+config="${SWIFTGATE_BUILD_CONFIG:-release}"
+cache="${SWIFTGATE_CACHE_DIR:-${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/swift-harness}}"
+
+# Hashing every source costs ~40ms, most of a PreToolUse hook's budget. A stamp remembers the
+# hash; while nothing under gate/ is newer than it (edits, and deletions via directory mtimes), the
+# hash still holds. The stamp is written before hashing, so an edit made during hashing is newer.
+stamp="$cache/stamps/$(printf '%s:%s' "$gate" "$config" | shasum | cut -c1-16)"
+if [ -f "$stamp" ] && [ -z "$(
+  cd "$gate" && find Sources Package.swift Package.resolved -newer "$stamp" -print 2>/dev/null | head -n 1
+)" ]; then
+  hash="$(cat "$stamp")"
+else
+  mkdir -p "$cache/stamps"
+  pending="$stamp.$$"
+  : >"$pending.before"
+  hash="$(
+    cd "$gate"
+    # The sort order follows the locale, and hooks can run under a different one than the build.
+    export LC_ALL=C
+    {
+      find Sources -type f -name '*.swift' -print0 | sort -z | xargs -0 shasum
+      shasum Package.swift
+      [ -f Package.resolved ] && shasum Package.resolved
+      echo "$config"
+    } | shasum | cut -c1-16
+  )"
+  printf '%s' "$hash" >"$pending"
+  touch -r "$pending.before" "$pending"
+  rm -f "$pending.before"
+fi
+binary="$cache/bin/$hash/swiftgate"
+
+if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
+  # Hooks run under Claude Code timeouts on every tool call, and a cold build takes minutes: build
+  # in the background and leave the hooks inactive until the binary lands. A lock older than 30
+  # minutes belongs to a build that died.
+  lock="$cache/building-$hash"
+  mkdir -p "$cache"
+  find "$cache" -maxdepth 1 -name "building-$hash" -mmin +30 -exec rmdir {} + 2>/dev/null || true
+  if mkdir "$lock" 2>/dev/null; then
+    (
+      "$self" --version >"$cache/build-$hash.log" 2>&1 || true
+      rmdir "$lock"
+    ) </dev/null >/dev/null 2>&1 &
+  fi
+  rm -f "${pending:-}"
+  if [ "${2:-}" = "session-start" ] && in_project "$PWD"; then
+    # SessionStart context is the only channel that tells the model the gates are off for now.
+    context="swiftgate enforcement is warming up: swiftgate is being built in the background \
+(log: $cache/build-$hash.log). Until it finishes, the swiftgate hooks are not enforced: no \
+format or lint after edits, no command guards, no Stop-hook check, no module map. Run \
+\`swiftgate check\` yourself before claiming work is done; it builds swiftgate first if needed."
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
+      "$(printf '%s' "$context" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  fi
+  exit 0
+fi
+
+if [ ! -x "$binary" ]; then
+  echo "swift-harness: building swiftgate ($config, $hash)…" >&2
+  scratch="$cache/build/$config"
+  swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" >&2
+  built="$(swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" --show-bin-path)/swiftgate"
+  mkdir -p "$(dirname "$binary")"
+  tmp="$binary.tmp.$$"
+  cp "$built" "$tmp"
+  mv -f "$tmp" "$binary"
+fi
+
+if [ -n "${pending:-}" ] && [ -f "$pending" ]; then
+  if [ -x "$binary" ]; then mv -f "$pending" "$stamp"; else rm -f "$pending"; fi
+fi
+
+# `bootstrap` finds its templates, and `self-test` its fixtures, in the plugin this shim belongs to.
+export SWIFTGATE_HARNESS_ROOT="$root"
+exec "$binary" "$@"

@@ -10,7 +10,8 @@ validation workflows.
 
 ## Install
 
-The repository is its own plugin marketplace (`.claude-plugin/marketplace.json`). Register it once
+The repository is its own plugin marketplace (`.claude-plugin/marketplace.json`), and the plugin it
+serves is the `plugin/` directory. Register it once
 per machine, then enable the plugin only in the iOS repositories that use it, so its hooks never
 load anywhere else:
 
@@ -37,8 +38,8 @@ project` writes the plugin to the repository's `.claude/settings.json`, which yo
 Avoid the default user scope: it loads the hooks in every session on the machine. They no-op
 outside a repository with `.swiftgate.toml`, but each still spawns a process per tool call.
 
-To try a checkout without installing anything, pass it for one session:
-`claude --plugin-dir /path/to/swift-harness`.
+To try a checkout without installing anything, pass its plugin directory for a single session:
+`claude --plugin-dir /path/to/swift-harness/plugin`.
 
 Sources: https://code.claude.com/docs/en/plugin-marketplaces,
 https://code.claude.com/docs/en/plugins/install (install scopes),
@@ -64,9 +65,13 @@ Each runs as `/swift-harness:<name>`.
 
 ## Contributing
 
-`cd gate && swift build && swift test && swift format lint --strict -r Sources Tests Package.swift`.
-`swift test` also runs `tests/review_workflow_test.mjs` (needs `node`) and `tests/shim_test.sh`;
-each is reported as skipped when its interpreter is missing from `PATH`.
-`claude plugin validate .` checks the marketplace and plugin manifests.
+Contributor material (this README, `AGENTS.md`, `docs/`, `examples/`, `tests/`) stays at the root;
+everything consumers install lives in `plugin/`.
+
+`cd plugin/gate && swift build && swift test && swift format lint --strict -r Sources Tests Package.swift`.
+`swift test` also runs every `tests/*_test.mjs` (needs `node`) and `tests/shim_test.sh`, and reports
+each as skipped when its interpreter is missing from `PATH`.
+`claude plugin validate .` checks the marketplace manifest and `claude plugin validate --strict plugin`
+the plugin; `plugin/bin/swiftgate check --tier ready` runs the latter.
 
 Status: Foundation complete; live-session results in `docs/e2e-report.md`.

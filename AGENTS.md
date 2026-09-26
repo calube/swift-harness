@@ -2,10 +2,16 @@
 
 A Claude Code plugin holding SwiftUI iOS work to a consistent bar. Full docs: [`docs/index.md`](docs/index.md).
 
+This file is for contributors. The plugin that consumers install is [`plugin/`](plugin/): skills,
+agents, hooks, workflows, templates, the `swiftgate` source in `plugin/gate/`, and the reference
+docs skills read at runtime ([ADR 0002](docs/adrs/0002-consumer-plugin-in-plugin-dir.md)). Nothing
+under `plugin/` may reference a path above it, and `plugin/bin/swiftgate` is the only shim.
+
 ## Invariants you could violate without realizing
 
 - **Never re-implement a check.** Every enforcement point (hook, skill, git hook, future CI) calls
-  `swiftgate`. If you find yourself hand-writing a lint/arch/test check, stop — it belongs in `gate/`.
+  `swiftgate`. If you find yourself hand-writing a lint/arch/test check, stop: it belongs in
+  `plugin/gate/`.
 - **Core modules import no UI framework** (`SwiftUI`, `UIKit`) and touch no `URLSession.shared` or
   vendor SDK directly. IO and vendor SDKs live only in `*Live` modules, imported only by the app
   target.
@@ -32,6 +38,6 @@ A Claude Code plugin holding SwiftUI iOS work to a consistent bar. Full docs: [`
   don't hand-edit `ledger.json` or `index.json`.
 
 Everything else — the rule catalog, testing tiers, hooks, design docs, ADRs — is in
-[`docs/index.md`](docs/index.md). Don't guess a rule; grep `docs/standards.md` or ask.
+[`docs/index.md`](docs/index.md). Don't guess a rule; grep `plugin/docs/standards.md` or ask.
 
 `CLAUDE.md` in this repo is a symlink to this file.
