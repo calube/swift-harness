@@ -1,0 +1,1488 @@
+{
+  "suite": "skill-routing",
+  "round": "round 5: review and validate descriptions",
+  "date": "2026-09-26",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "claudeVersion": "2.1.282",
+    "harness": "main 90e3524, staged; review and validate descriptions from proposed-descriptions.txt applied in the stage only"
+  },
+  "settings": {
+    "ablation": "none",
+    "maxTurns": 1,
+    "concurrency": 2,
+    "scaffold": "evals/scaffold/sampleapp-with-change.sh"
+  },
+  "tuningBefore": {
+    "note": "split-60, current descriptions, 1 trial",
+    "trials": 18,
+    "costUsd": 1.3,
+    "durationSeconds": 96,
+    "perSkill": {
+      "review": {
+        "expectedTrials": 6,
+        "loadedTrials": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 2,
+        "precision": 1,
+        "recall": 0.6666666666666666
+      },
+      "test-gate": {
+        "expectedTrials": 4,
+        "loadedTrials": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 4,
+        "loadedTrials": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "review": {
+        "review": 4,
+        "none": 2
+      },
+      "none": {
+        "none": 4
+      },
+      "test-gate": {
+        "test-gate": 4
+      },
+      "validate": {
+        "validate": 4
+      }
+    },
+    "passAllK": 16,
+    "casesTotal": 18,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-review-r5t-approve-or-not-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-approve-or-not-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 0,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-blocking-issues-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-blocking-issues-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 0,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-explain-diff-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-explain-diff-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-judge-new-tests-only-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-judge-new-tests-only-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-merge-ignore-tests-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-merge-ignore-tests-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-are-tests-enough-for-pr-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-are-tests-enough-for-pr-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-how-verified-section-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-how-verified-section-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-summarise-tests-for-pr-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-summarise-tests-for-pr-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-write-pr-title-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-write-pr-title-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      }
+    ]
+  },
+  "tuningAfter": {
+    "note": "split-60, proposed descriptions, 3 trials",
+    "trials": 54,
+    "costUsd": 3.31,
+    "durationSeconds": 327,
+    "perSkill": {
+      "review": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "review": {
+        "review": 18
+      },
+      "none": {
+        "none": 12
+      },
+      "test-gate": {
+        "test-gate": 12
+      },
+      "validate": {
+        "validate": 12
+      }
+    },
+    "passAllK": 18,
+    "casesTotal": 18,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-review-r5t-approve-or-not-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-approve-or-not-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-blocking-issues-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-blocking-issues-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-explain-diff-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-explain-diff-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5t-judge-new-tests-only-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-judge-new-tests-only-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-merge-ignore-tests-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5t-merge-ignore-tests-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-are-tests-enough-for-pr-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-are-tests-enough-for-pr-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-how-verified-section-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-how-verified-section-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-summarise-tests-for-pr-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-summarise-tests-for-pr-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-write-pr-title-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-r5t-write-pr-title-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      }
+    ]
+  },
+  "heldOut": {
+    "note": "split-40, independent set, proposed descriptions, 3 trials",
+    "trials": 132,
+    "costUsd": 7.22,
+    "durationSeconds": 370,
+    "perSkill": {
+      "bootstrap": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "comment-audit": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "review": {
+        "expectedTrials": 42,
+        "loadedTrials": 39,
+        "tp": 39,
+        "fp": 0,
+        "fn": 3,
+        "precision": 1,
+        "recall": 0.9285714285714286
+      },
+      "tdd": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 42,
+        "loadedTrials": 42,
+        "tp": 42,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "review": {
+        "review": 39,
+        "none": 3
+      },
+      "comment-audit": {
+        "comment-audit": 6
+      },
+      "none": {
+        "none": 12
+      },
+      "tdd": {
+        "tdd": 12
+      },
+      "validate": {
+        "validate": 42
+      },
+      "test-gate": {
+        "test-gate": 12
+      },
+      "bootstrap": {
+        "bootstrap": 6
+      }
+    },
+    "passAllK": 43,
+    "casesTotal": 44,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-review-r5-review-before-human-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-before-human-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-concurrency-tca-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-concurrency-tca-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-cr-pr-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-cr-pr-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-merge-verdict-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-merge-verdict-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-comments-a",
+        "kind": "near-miss",
+        "expect": "comment-audit",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-comments-b",
+        "kind": "near-miss",
+        "expect": "comment-audit",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-gh-reviewer-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-gh-reviewer-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-reviewer-feedback-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-reviewer-feedback-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-testing-section-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-testing-section-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-tests-catch-anything-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-near-tests-catch-anything-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-refactor-or-ship-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-refactor-or-ship-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-would-you-approve-a",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-r5-review-would-you-approve-b",
+        "kind": "should-trigger",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-bare-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-bare-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-code-verdict-a",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-code-verdict-b",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-email-regex-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-email-regex-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-fake-tests-a",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-fake-tests-b",
+        "kind": "near-miss",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-git-hooks-a",
+        "kind": "near-miss",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-git-hooks-b",
+        "kind": "near-miss",
+        "expect": "bootstrap",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ],
+          [
+            "bootstrap"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-snapshot-red-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-near-snapshot-red-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-paste-proof-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-paste-proof-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-prove-ready-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-prove-ready-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-reviewer-asked-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-reviewer-asked-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-testing-section-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-testing-section-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-verification-notes-a",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-r5-validate-verification-notes-b",
+        "kind": "should-trigger",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      }
+    ]
+  },
+  "costUsd": {
+    "tuningBefore": 1.3,
+    "tuningAfter": 3.31,
+    "heldOut": 7.22,
+    "total": 11.83
+  }
+}
