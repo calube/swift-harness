@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "prose.em-dash"
+  ],
+  "source": "spec §6.2: em-dashes"
+}

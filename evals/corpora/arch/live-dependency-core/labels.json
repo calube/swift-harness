@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.live-dependency"
+  ],
+  "source": "D2, D3"
+}

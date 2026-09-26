@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "det.date-init"
+  ],
+  "source": "D1, G1: a wall-clock read that is not spelled Date"
+}

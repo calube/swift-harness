@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "prose.sentence-length"
+  ],
+  "source": "spec §6.2: sentence ceiling (default 40 words)"
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.vendor-dependency"
+  ],
+  "source": "D3"
+}

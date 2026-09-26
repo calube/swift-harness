@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "det.random"
+  ],
+  "source": "D1, G1"
+}

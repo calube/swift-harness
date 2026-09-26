@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "arch.engine-replay-test"
+  ],
+  "source": "G1: a test named replay that never compares 2 replays"
+}

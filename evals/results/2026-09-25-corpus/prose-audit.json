@@ -1,0 +1,328 @@
+{
+ "labelledBy": "operator; needs a person to confirm",
+ "sampling": "up to 8 per rule, random seed 7, from 285 findings over docs/*.md, docs/adrs/*.md, docs/designs/*.md",
+ "findings": [
+  {
+   "rule": "prose.adverb",
+   "file": "docs/testing-playbook.md",
+   "line": 199,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/standards.md",
+   "line": 579,
+   "label": "false-positive",
+   "why": "quoted mention, not use"
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/adrs/0001-review-severity-for-standards-violations.md",
+   "line": 14,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/hooks.md",
+   "line": 39,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/hooks.md",
+   "line": 76,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 386,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/standards.md",
+   "line": 70,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.adverb",
+   "file": "docs/testing-playbook.md",
+   "line": 335,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 551,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/standards.md",
+   "line": 5,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 408,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 108,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/index.md",
+   "line": 40,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/standards.md",
+   "line": 7,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 369,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.em-dash",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 368,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/standards.md",
+   "line": 579,
+   "label": "false-positive",
+   "why": "quoted mention, not use"
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/testing-playbook.md",
+   "line": 115,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 468,
+   "label": "false-positive",
+   "why": "quoted mention, not use"
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/testing-playbook.md",
+   "line": 120,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 396,
+   "label": "false-positive",
+   "why": "\"just\" means a moment ago"
+  },
+  {
+   "rule": "prose.filler",
+   "file": "docs/adrs/0002-consumer-plugin-in-plugin-dir.md",
+   "line": 55,
+   "label": "false-positive",
+   "why": "\"just\" means only"
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/standards.md",
+   "line": 71,
+   "label": "false-positive",
+   "why": "\"the three\" names a set, a numeral reads worse"
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/testing-playbook.md",
+   "line": 337,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/e2e-report.md",
+   "line": 111,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/adrs/0002-consumer-plugin-in-plugin-dir.md",
+   "line": 14,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/adrs/0002-consumer-plugin-in-plugin-dir.md",
+   "line": 48,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/testing-playbook.md",
+   "line": 196,
+   "label": "false-positive",
+   "why": "\"one\" is a pronoun"
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/e2e-report.md",
+   "line": 65,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.number-word",
+   "file": "docs/standards.md",
+   "line": 45,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/e2e-report.md",
+   "line": 65,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/adrs/README.md",
+   "line": 3,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/hooks.md",
+   "line": 61,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/testing-playbook.md",
+   "line": 10,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/testing-playbook.md",
+   "line": 298,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/standards.md",
+   "line": 6,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/adrs/0002-consumer-plugin-in-plugin-dir.md",
+   "line": 72,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.passive-voice",
+   "file": "docs/hooks.md",
+   "line": 53,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 393,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/designs/2026-09-25-design-plan-workflows-design.md",
+   "line": 439,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 477,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/e2e-report.md",
+   "line": 181,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/e2e-report.md",
+   "line": 5,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/testing-playbook.md",
+   "line": 91,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/testing-playbook.md",
+   "line": 91,
+   "label": "true-positive",
+   "why": null
+  },
+  {
+   "rule": "prose.sentence-length",
+   "file": "docs/designs/2026-09-24-swift-harness-foundation-design.md",
+   "line": 549,
+   "label": "true-positive",
+   "why": null
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "det.task-sleep"
+  ],
+  "source": "D1"
+}

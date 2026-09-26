@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "det.random"
+  ],
+  "source": "D1"
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.jargon"
+  ],
+  "source": "an inflection outside the list"
+}

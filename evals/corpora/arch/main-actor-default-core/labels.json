@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.core-main-actor-isolation"
+  ],
+  "source": "C5"
+}

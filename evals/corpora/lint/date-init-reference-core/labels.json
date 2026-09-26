@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "det.date-init"
+  ],
+  "source": "D1"
+}

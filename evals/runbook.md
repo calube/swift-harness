@@ -83,7 +83,7 @@ Be blunt. A finding that the evals aren't worth their cost is a useful result.
 | Path | Holds |
 |---|---|
 | `evals/cases/<area>/<name>/<case>/` | `claude plugin eval` cases: `prompt.md` or `case.yaml`, and `graders/*.md`. `<area>` is `routing`, `skills` or `agents` |
-| `evals/corpora/<gate>/<case>/` | rule corpus cases: the input files and `labels.json` (`{"kind": "positive" \| "near-miss" \| "clean", "expect": ["rule.id", …]}`) |
+| `evals/corpora/<gate>/<case>/` | rule corpus cases: the input files and `labels.json` (`{"kind": "positive" \| "evasion" \| "near-miss" \| "clean", "expect": ["rule.id", …]}`). `<gate>` names the `swiftgate` command. `evals/runner/seed_corpora.mjs` writes them; edit the seeds there, not the case files |
 | `evals/runner/` | Node scripts (`.mjs`, no dependencies, the same style as `tests/`) that run corpora and summarize results |
 | `evals/results/<date>-<suite>/` | `summary.md` and `summary.json`. Raw transcripts stay out of git; the summary names where the run kept them |
 | `tests/*_test.mjs` | workflow orchestration cases. They are deterministic, so they live with the push-tier tests, not here |
@@ -107,7 +107,7 @@ Until the packaging wave moves the plugin into `plugin/`, the repo root is the p
 ```sh
 claude plugin eval . --case 'routing/*' --runs 3 --model <pinned> --judge-model <pinned> \
   --max-cost-usd <cap> --json <scratch>/result.json --no-publish
-node evals/runner/corpus.mjs evals/corpora/prose     # once the corpus runner exists
+node evals/runner/corpus.mjs evals/corpora/prose evals/corpora/lint evals/corpora/arch --out <dir>
 ```
 
 After each run:

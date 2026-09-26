@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.test-support-dependency"
+  ],
+  "source": "A1"
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.em-dash"
+  ],
+  "source": "suites.md: an em-dash as --"
+}

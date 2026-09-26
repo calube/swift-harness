@@ -1,0 +1,6 @@
+{
+  "kind": "near-miss",
+  "expect": [],
+  "source": "wild, standards.md: a quoted word is mentioned, not used",
+  "labelledBy": "operator; needs a person to confirm"
+}

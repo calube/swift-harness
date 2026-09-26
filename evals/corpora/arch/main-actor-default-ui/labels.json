@@ -1,0 +1,5 @@
+{
+  "kind": "near-miss",
+  "expect": [],
+  "source": "C5 scope: UI modules may default to MainActor"
+}
