@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["GREEN"],"why":"control for xcode-pin-mismatch: a pin of \"26\" matches the selected 26.2 by prefix, as Doctor.matchesPin does, so it must not block"}
