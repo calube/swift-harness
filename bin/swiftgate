@@ -49,6 +49,8 @@ else
   : >"$pending.before"
   hash="$(
     cd "$gate"
+    # The sort order follows the locale, and hooks can run under a different one than the build.
+    export LC_ALL=C
     {
       find Sources -type f -name '*.swift' -print0 | sort -z | xargs -0 shasum
       shasum Package.swift
