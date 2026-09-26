@@ -63,7 +63,7 @@ Progress: git log. Update this header at every wave merge.
 |---|---|
 | `gate/Package.swift`, `hooks/hooks.json` | nobody |
 | `C/SwiftGate.swift`, `TA/RepositoryScriptTests.swift` | `cli-subcommand-stubs` (each stub file then has one owner) |
-| `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml` | `config-docs-and-plan-sections` |
+| `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `templates/swiftgate.toml`, `.swiftgate.toml` | `config-docs-and-plan-sections`; `ConfigSchema`, `Config` and `.swiftgate.toml` again in `plugin-docs-pass-docs-lint-and-prose` (wave 23) |
 | other `templates/*`, `.gitignore` | `bootstrap-stamps-docs-router`; `templates/lefthook.yml` + `gitHooks` again in `commit-message-id-check` (4 waves later) |
 | `A/Git.swift`, `A/LiveGit.swift`, `S/FakeGit.swift` | `plan-state-paths-in-git-common-dir` |
 | `C/Commands/CheckCommand.swift` | `push-tier-runs-doc-gates`, then `calibration-seeds-labelled-by-construction`, then `plugin-docs-pass-docs-lint-and-prose` (waves 14, 22, 23) |
@@ -130,8 +130,8 @@ flowchart LR
 | 15–16 | Render and metrics | 3 | ledger page shares the render command file |
 | 17–21 | Agent layer | 10 | agents test first; skills after the agents and gates they call |
 | 22–23 | Seeds | 4 | the id and plan seeds reuse the seed runner; the docs pass shares `CheckCommand.swift` with the calibration seeds, so it follows them |
-| 24 | Packaging | 1 | moves every path; must follow all code waves and precede the real install (ADR 0002) |
-| 25 | Steering | 2 | contributor and consumer channels differ (ADR 0002, Steering); both need the moved layout |
+| 24 | Packaging | 1 | moves every path; must follow all code waves and precede the real install ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)) |
+| 25 | Steering | 2 | contributor and consumer channels differ ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), Steering); both need the moved layout |
 | 26–28 | Acceptance | 3 | all write `docs/e2e-report.md` |
 
 ---
@@ -273,8 +273,8 @@ flowchart LR
 ### `docs-lint-policy-and-budgets`
 - Deps: markdown-and-design-doc-model, config-docs-and-plan-sections · Gate: push · estLines: 220
 - Writes: `D/Docs/DocsLintPolicy.swift`, `D/Docs/LocalPathRule.swift`, `TD/DocsLintPolicyTests.swift`
-- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-directory, `/Users/`, `/home/`, `/private/tmp`, `/var/folders` paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`, `~/.cache/swift-harness/` (the shim's binary cache); no config key). Docs reference repo files by relative path. The detector is a pure `LocalPathRule.scan(_ text:) -> [Finding]` so the write-time hook reuses it.
-- Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged · `~/Developer/x` and `/Users/me/x` flagged, `~/.swift-harness/` allowed — catches machine-specific paths that break for every other reader.
+- Does: families managed files, non-vacuity, banned phrases, repo anchors, budgets, **local paths** (home-relative, user-folder and system temp paths in docs; allowlist constant `DocsLintPolicy.productPaths` = `~/.swift-harness/`, `~/.local/bin/swiftgate`, `~/.cache/swift-harness/` (the shim's binary cache); no config key). Docs reference repo files by relative path. The detector is a pure `LocalPathRule.scan(_ text:) -> [Finding]` so the write-time hook reuses it.
+- Tests: missing managed file and unlisted scanned file flagged · anchor matching nothing flagged — catches vacuous rules · banned phrase flagged with its reason · 61-line AGENTS.md flagged · a home-relative path and a user-folder path flagged, `~/.swift-harness/` allowed — catches machine-specific paths that break for every other reader.
 
 ### `docs-lint-references-and-links`
 - Deps: markdown-and-design-doc-model · Gate: push · estLines: 240
@@ -292,7 +292,7 @@ flowchart LR
 - Deps: claim-and-amendment-records, probe-diagnostic-verdicts · Gate: push · estLines: 280
 - Writes: `D/Evidence/EvidenceCheck.swift`, `D/Evidence/EvidenceLayout.swift` (`answersFile`), `TD/EvidenceCheckTests.swift`
 - Does: D3 per-kind rules (§5.2 table); citation `loc` must be repo-relative (`.build/checkouts/…` included), never absolute or home-relative; `--at` re-check (moved quote → relocate `loc`; gone, pin or SDK change → `stale`). Answers live in `<slug>.evidence/answers.jsonl`, one `{runId, question, options, answer, at}` per line; `EvidenceLayout.answersFile` names it. An `answer` claim's `loc` = `answers.jsonl#<runId>/<n>` (`<n>` = 1-based ordinal of that run's answers); it passes only when that record exists. Probe claims take the verdict from `probes/Probe_<id>.verdict.json` (contract in `probe-builds-scratch-package`).
-- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` `loc` with no matching `answers.jsonl` record → fail — catches an invented user decision · absolute or `~/` `loc` → fail — catches evidence that only resolves on one machine.
+- Tests: forged quote → `quote-fail` · pin ≠ `Package.resolved` → fail — catches citing another version · tampered capture → fail · moved quote relocated · quote gone at ref → `stale` · `answer` `loc` with no matching `answers.jsonl` record → fail — catches an invented user decision · absolute or home-relative `loc` → fail — catches evidence that only resolves on one machine.
 
 ### `evidence-reuse-cache-store`
 - Deps: claim-and-amendment-records · Gate: push · estLines: 260
@@ -369,7 +369,7 @@ flowchart LR
   line; `comments --staged` also scans staged `*.md` files so pre-commit catches hand edits.
 - Tests: writing `docs/x.md` containing a home-directory path reports it with its line — catches a skill
   leaking the author's machine · `~/.swift-harness/` passes · non-markdown writes are unaffected · a
-  1,000-line doc checks in < 50ms · a staged doc with `/Users/…` fails pre-commit.
+  1,000-line doc checks in < 50ms · a staged doc with a user-folder path fails pre-commit.
 
 ### `plan-lint-command`
 - Deps: plan-lint-graph-and-waves, plan-lint-coverage-and-sizing, context-pack-command, plan-state-paths-in-git-common-dir, design-diff-and-design-sha · Gate: push · estLines: 220
@@ -475,8 +475,8 @@ flowchart LR
 
 ### `plugin-docs-pass-docs-lint-and-prose`
 - Deps: design-skill-review-publish-amend, plan-skill, push-tier-runs-doc-gates, docs-lint-command, prose-rules-and-command, calibration-seeds-labelled-by-construction · Gate: push · estLines: 280
-- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`, `C/Commands/CheckCommand.swift`, `TC/PushTierDocsLintProseTests.swift`, `D/Docs/DocsLintReferences.swift` and its tests (quick-tier exemption only)
-- Does: first exempts quick-tier designs (frontmatter `tier: quick`) from `docs-lint.requirement-uncited`, since a quick design has no ADR to cite its requirements (decided 2026-09-25); standard and deep keep it major. Then makes the repo's docs pass `docs-lint` and `prose`: AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Then, in the same task, wires push to run `docs-lint` and `prose` on changed docs. Explicit exception to the brief's README rule. Wave 23: shares `CheckCommand.swift` with the calibration seeds.
+- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`, `C/Commands/CheckCommand.swift`, `TC/PushTierDocsLintProseTests.swift`, `D/Docs/DocsLintReferences.swift` and its tests (quick-tier exemption, id matching), `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `.swiftgate.toml` (repo docs scope and per-file budgets)
+- Does: first exempts quick-tier designs (frontmatter `tier: quick`) from `docs-lint.requirement-uncited`, since a quick design has no ADR to cite its requirements (decided 2026-09-25); standard and deep keep it major. Fixes `docs-lint.dangling-id` to match only strings `IdPolicy.isValid` accepts, starting at a word boundary (not `test-first`, not the tail of `self-test-…`). Adds repo config, decided 2026-09-25: `[docs] prose_exclude` globs that the prose and word-budget checks skip, and `[docs.budgets.files]` per-file word budgets. This repo sets them in `.swiftgate.toml`: it excludes `docs/plans/`, `docs/handoffs/`, `agents/` and `skills/`, and gives its long reference docs budgets near their current size. The code defaults and `templates/swiftgate.toml` stay strict, so consumer projects keep the 800-word topic budget and full prose coverage. Push runs `prose` on changed lines only (diffed against `origin/main`, like coverage). Then makes the repo's docs pass `docs-lint` and `prose`: AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Then, in the same task, wires push to run `docs-lint` and `prose` on changed docs. Explicit exception to the brief's README rule. Wave 23: shares `CheckCommand.swift` with the calibration seeds.
 - Tests: `swiftgate docs-lint` exit 0 on this repo · dangling doc id → push red — catches docs drifting past push · prose violation in a changed doc → push red; in an unchanged doc → not run · fast tier runs neither · `check --tier push` green.
 
 ### `self-test-runs-evidence-and-design-seeds`
@@ -494,7 +494,7 @@ flowchart LR
 
 ## Packaging and steering
 
-Moves the plugin into `plugin/` and splits contributor from consumer steering (ADR 0002).
+Moves the plugin into `plugin/` and splits contributor from consumer steering ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)).
 
 ### `consumer-plugin-in-plugin-dir`
 - Deps: all code and seed waves · Gate: ready · estLines: 180 (logic; the rest is `git mv`, justified exception to the 400 cap)
@@ -505,14 +505,14 @@ Moves the plugin into `plugin/` and splits contributor from consumer steering (A
   agent and workflow paths in `tests/*.mjs`, `tests/shim_test.sh`, `plugin/gate/Tests/SwiftGateAdaptersTests/RepositoryScriptTests.swift`
   (repo-root and `tests/` paths), the calibration-freshness path globs (→ `plugin/agents/design-*.md`, `plugin/workflows/design-*.js`),
   `docs/handoffs/worker-brief.md` (self-gate `cd gate` → `cd plugin/gate`)
-- Does: ADR 0002 layout. The root `bin/swiftgate` is removed: one shim, `plugin/bin/swiftgate`, and bootstrap
+- Does: [ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md) layout. The root `bin/swiftgate` is removed: one shim, `plugin/bin/swiftgate`, and bootstrap
   repoints `~/.local/bin/swiftgate` to it. The shim builds `swiftgate` into `${CLAUDE_PLUGIN_DATA}` keyed by source hash
   (the per-version cache dir is not reused across updates); a contributor checkout still builds in place.
   The ready tier runs `claude plugin validate plugin` when `claude` is on PATH, else skips with a note (never BLOCKED).
   Root `AGENTS.md` stays contributor-facing; nothing under `plugin/` is contributor-only except `gate/Tests`.
   Also deletes the dead worktree-relative `.harness/plans` guard rule and its tests (plan state lives in the common dir).
   Moves the review verdict contract consumers read at runtime into `plugin/docs/review-contract.md` and repoints
-  `workflows/review.js`, `skills/review/SKILL.md` and `agents/*.md` at it (ADR 0002, Steering).
+  `workflows/review.js`, `skills/review/SKILL.md` and `agents/*.md` at it ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), Steering).
 - Tests: `claude plugin validate plugin` passes with no warnings — catches a root CLAUDE.md shipping to
   consumers · ready tier without `claude` on PATH → note, not BLOCKED · no file under `plugin/` references a path above `plugin/` · shim builds into the data dir and
   reuses it on a second run · bootstrap repoints an existing `~/.local/bin/swiftgate` at `plugin/bin/swiftgate` · calibration freshness finds
@@ -523,7 +523,7 @@ Moves the plugin into `plugin/` and splits contributor from consumer steering (A
 ### `contributor-agents-md-for-harness-developers`
 - Deps: consumer-plugin-in-plugin-dir · Gate: push · estLines: 120
 - Writes: `AGENTS.md`, `docs/index.md`, `docs/handoffs/worker-brief.md`
-- Does: rewrites the root `AGENTS.md` for people building the harness (ADR 0002, Steering): gate layering
+- Does: rewrites the root `AGENTS.md` for people building the harness ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), Steering): gate layering
   (domain pure, adapters behind protocols, thin CLI), fixtures captured from real tools with the command recorded,
   every new rule ships a fixture and a rule-index row, one committer per worktree, the plan and wave process, where
   the runbook and interfaces note live. App rules become one pointer to `plugin/docs/standards.md`. ≤ 60 lines.
@@ -610,7 +610,7 @@ except the install check, which must go through the marketplace.
 | D23 word budgets | config-docs-and-plan-sections, design-lint-diagrams-and-budgets, docs-lint-policy-and-budgets |
 | D24 `prose` skill + `swiftgate prose` | prose-rules-and-command, prose-skill-written-fresh, design-lint-command, plugin-docs-pass-docs-lint-and-prose |
 | D25 relative paths only (spec §6.2 docs-lint, write-time hook) | docs-lint-policy-and-budgets, markdown-writes-checked-for-local-paths, evidence-check-rules |
-| D26 contributor/consumer split + steering (ADR 0002) | consumer-plugin-in-plugin-dir, contributor-agents-md-for-harness-developers, consumer-steering-channels, plugin-installs-for-real |
+| D26 contributor/consumer split + steering ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)) | consumer-plugin-in-plugin-dir, contributor-agents-md-for-harness-developers, consumer-steering-channels, plugin-installs-for-real |
 | §6.3 common-dir resolution | plan-state-paths-in-git-common-dir, session-start-reads-shared-plan-index, edit-guard-covers-design-and-plan-state |
 | §6.3 absolute-path matching · guard scope | edit-guard-covers-design-and-plan-state |
 | §6.3 per-plan orchestrator lock | plan-claim-and-release-commands, edit-guard-covers-design-and-plan-state, design-skill-frame-to-draft |

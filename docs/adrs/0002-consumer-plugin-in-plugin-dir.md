@@ -66,7 +66,7 @@ Rules that keep the channels apart:
 
 - Nothing under `plugin/` references contributor docs (`docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs`)
   or any path above `plugin/`. A contract that consumers need at runtime, such as the review verdict contract
-  from ADR 0001 (review severity for standards violations), gets a consumer copy in `plugin/docs/`.
+  from [ADR 0001](0001-review-severity-for-standards-violations.md) (review severity for standards violations), gets a consumer copy in `plugin/docs/`.
 - Consumer docs never name the plugin's install path. SessionStart computes it each session from
   `CLAUDE_PLUGIN_ROOT` (or `SWIFT_HARNESS_PLUGIN_ROOT`, exported by the shim, if hooks don't receive it),
   so nothing machine-specific is committed.

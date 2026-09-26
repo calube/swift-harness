@@ -112,7 +112,7 @@ Spec must also fix Foundation spec §2 row 2 (`.harness/ledger.json`, "ledger ca
 - D25 Docs use relative repo paths, never machine paths. `LocalPathRule` runs at write time (PostToolUse on `*.md`,
   < 1s), at pre-commit (`comments --staged`) and in docs-lint. Evidence `loc` must be repo-relative. Allowlist:
   the harness's own product paths (`~/.swift-harness/`, `~/.local/bin/swiftgate`).
-- D26 Contributors and consumers are split (ADR 0002): `plugin/` is what ships, via marketplace `source: "./plugin"`;
+- D26 Contributors and consumers are split ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)): `plugin/` is what ships, via marketplace `source: "./plugin"`;
   the repo root is contributor space. The shim builds into `${CLAUDE_PLUGIN_DATA}`. `claude plugin validate plugin`
   joins the ready gate. Lands as a packaging wave before the first real install.
 
