@@ -45,7 +45,8 @@ A `claude -p` session has no `AskUserQuestion`. Do every step up to the ask, the
 with only the questions of 1 prompt, so at most 4, and the constraints question waits for the next
 turn like any 2nd prompt. List them numbered, each with its exact text, then its options as a
 lettered list, recommended first with `(Recommended)` and its description, and a last line saying
-the answers come back through `claude -p --resume <session id>`. Write no file and claim nothing before the
+the answers come back through `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --resume <session id>`
+(without it, `claude -p` ends a workflow still running after 600 s). Write no file and claim nothing before the
 answers arrive. The resuming message holds the answers, a chosen label or the user's own words,
 and they're recorded as the Branch and record step says, exactly as `AskUserQuestion` answers
 would be. The same shape serves every later ask in the skill.
