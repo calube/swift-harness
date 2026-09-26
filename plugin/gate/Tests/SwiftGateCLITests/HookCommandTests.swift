@@ -514,7 +514,7 @@ struct HookCommandTests {
   @Test(
     "hooks.json registers each event on the plugin's swiftgate with an event the CLI accepts — catches a hook wired to a command that does not exist"
   )
-  func hooksManifest() throws {
+  func hooksManifest() async throws {
     let data = try Data(contentsOf: Fixture.pluginRoot.appending(path: "hooks/hooks.json"))
     let manifest = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     let hooks = try #require(manifest["hooks"] as? [String: [[String: Any]]])
@@ -526,8 +526,17 @@ struct HookCommandTests {
           #expect(handler["command"] as? String == "${CLAUDE_PLUGIN_ROOT}/bin/swiftgate")
           let args = try #require(handler["args"] as? [String])
           #expect(args.count == 2 && args[0] == "hook")
-          let event = try #require(HookEvent(rawValue: args[1]))
-          #expect(event.claudeName == name)
+          let command = try #require(try SwiftGate.parseAsRoot(args) as? HookCommand)
+          // A payload Claude Code sends for this event, outside any project: the CLI must take
+          // it as its own event and stay silent, not reject it as another event's payload.
+          let payload = try JSONSerialization.data(withJSONObject: [
+            "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f", "hook_event_name": name,
+            "cwd": FileManager.default.temporaryDirectory.path,
+          ])
+          let result = await HookRunner.run(command.event, input: payload) { root in
+            HookDependencies.live(root: root, environment: [:])
+          }
+          #expect(result == .silent, "\(name): \(result.stderr ?? "")")
           #expect((handler["timeout"] as? Int).map { $0 > 0 } == true)
           wired[name] = (group["matcher"] as? String) ?? ""
         }

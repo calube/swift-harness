@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 /// The calibration content hash and pass record: what the push check will compare, so their
@@ -151,4 +152,25 @@ struct DesignCalibrationTests {
       return
     }
   }
+
+  @Test(
+    "calibration freshness hashes every plugin/agents/design-*.md and plugin/workflows/design-*.js in this checkout — catches a freshness check that silently hashes nothing after the plugin moved"
+  )
+  func hashesThePluginsDesignPrompts() throws {
+    let checkout = Fixture.checkoutRoot
+    func listed(_ directory: String, suffix: String) throws -> [String] {
+      try FileManager.default.contentsOfDirectory(
+        atPath: checkout.appending(path: directory).path
+      ).filter { $0.hasPrefix("design-") && $0.hasSuffix(suffix) }.map { "\(directory)/\($0)" }
+    }
+    let agents = try listed("plugin/agents", suffix: ".md")
+    let workflows = try listed("plugin/workflows", suffix: ".js")
+
+    let hashed = try DesignCalibrationHash.discover(root: checkout).map(\.path)
+
+    #expect(agents.count >= 10)
+    #expect(!workflows.isEmpty)
+    #expect(hashed == (agents + workflows).sorted())
+  }
+
 }
