@@ -712,3 +712,22 @@ against that subcommand's help. A later skill that names a missing command or fl
   (with `swift package describe`). Two copies of one procedure; a `swiftgate` command would replace both.
 - `docs-lint.requirement-uncited` at quick tier: a quick design has no ADR, so its requirements may never be cited
   outside it. Decide before `plugin-docs-pass-docs-lint-and-prose` makes docs-lint gate push.
+
+## Wave 21
+
+**`skills/design/SKILL.md` review → publish → amend** (`references/review-publish-amend.md`)
+- Review: per-reviewer `context-pack` packs (the pre-mortem gets the challenger's), `design-review.js`, each
+  `reviews` entry to its own file, `review-synth --design --tier <tier>`; one revise round (2 at deep) re-running
+  only reviewers with gating findings. `review-log.jsonl` `findingId` = `<design-run>/review-<r>/<n>`.
+- Publish: `design/<slug>` branch, status `proposed`, `design-render`, then Artifact publish with `capabilities
+  {"comments": {}, "db": {}}`; approval read with `ArtifactData get` (collection `approval`, `doc_id` =
+  `designSha`); `--revise` uses `ArtifactComments` read/reply/resolve. Status `approved` only with an approval
+  record for the current `designSha`; then merge and add the area router row.
+- On approval the skill writes `approval` `{decision, designSha, at}` into the plan's `plan.json`, so a clarify made
+  before `/plan` still has a chain start. With no `db`, approval goes through `AskUserQuestion` and becomes an
+  `answer` claim quoting `at designSha <sha>`.
+- `unreachable-doc` is tolerated only until publish. A `quick` design keeps tolerating `requirement-uncited` (open
+  item).
+- `--amend` delta review carries the challenger forward from `.harness/runs/design-<slug>/review-final.json`;
+  without that file it runs the full review. A `stale` claim spawns a one-claim `reresearch` lane.
+- Seeds should drive a revise → ready round and a clarify → `design-diff --chain` valid case.

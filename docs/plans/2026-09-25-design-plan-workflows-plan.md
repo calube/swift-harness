@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–20 merged on local main (1–15 also on origin/main), push tier GREEN (1365 tests). Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–21 merged and pushed to origin/main, push tier GREEN (1365 tests). Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 21 — design-skill-review-publish-amend. Follow the runbook's wave loop.
+Next action: wave 22 — calibration-seeds-labelled-by-construction, self-test-runs-evidence-and-design-seeds (after the plan.json type-closing fix merges). Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: `docs-lint.requirement-uncited` for quick-tier designs with no ADR (decide before docs-lint gates push); no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
