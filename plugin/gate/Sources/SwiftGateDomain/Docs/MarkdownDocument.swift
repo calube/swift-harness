@@ -249,7 +249,11 @@ public struct MarkdownDocument: Sendable, Equatable {
       while childEnd < range.upperBound, headings[childEnd].level > heading.level {
         childEnd += 1
       }
-      let ownBodyEnd = childEnd < headings.count ? headings[childEnd].bodyStart - 1 : lines.count
+      // The own body ends at the first subsection's heading, or at the next heading outside this
+      // section when it has none.
+      let bodyEndHeading = index + 1 < childEnd ? index + 1 : childEnd
+      let ownBodyEnd =
+        bodyEndHeading < headings.count ? headings[bodyEndHeading].bodyStart - 1 : lines.count
       let bodyLines = Array(lines[heading.bodyStart..<max(heading.bodyStart, ownBodyEnd)])
       let subsections = buildSections(lines, headings, (index + 1)..<childEnd)
       result.append(makeSection(heading, bodyLines: bodyLines, subsections: subsections))
