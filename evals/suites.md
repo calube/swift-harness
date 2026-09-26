@@ -15,6 +15,8 @@ sets the real numbers, and a later change to a bar needs a written reason in the
 | [`review-accuracy`](#review-accuracy) | Do the review and design-review agents find seeded defects without inventing others? | seeded defects | medium |
 | [`failure-modes`](#failure-modes) | When the environment breaks, does the harness say BLOCKED instead of GREEN? | injected faults | low |
 
+[`components.md`](components.md) grades each skill, agent, workflow and rule on its own inputs.
+
 `swiftgate self-test` and `calibrate design` stay what they are: fixed seeds that must go red on
 every push. The suites here are larger, change more often, and run on demand. A seed a suite finds
 useful as a permanent guard graduates into `self-test`.

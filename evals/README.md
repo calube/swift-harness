@@ -61,6 +61,7 @@ steps 1 to 3.
 | [`research.md`](research.md) | What published eval practice says (Anthropic, LangChain, Vercel, SWE-bench and others) and what we take from each |
 | [`design.md`](design.md) | How the evals work: conditions, trials, graders, metrics, the run record, cost, the error-analysis loop |
 | [`suites.md`](suites.md) | The 7 suites: question, cases, grader, metrics and pass bar for each |
+| [`components.md`](components.md) | Evals per skill, agent, workflow and rule, on fixed inputs |
 | [`apps.md`](apps.md) | The eval apps and the task format |
 
 Planned, not yet created: `evals/tasks/` (task fixtures), `evals/runner/` (the harness that runs
