@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.config-module-mismatch"
+  ],
+  "source": "A1, A3"
+}

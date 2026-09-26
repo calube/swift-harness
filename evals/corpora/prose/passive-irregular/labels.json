@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "prose.passive-voice"
+  ],
+  "source": "spec §6.2"
+}

@@ -1,0 +1,6 @@
+{
+  "kind": "near-miss",
+  "expect": [],
+  "source": "wild, ADR 0002: \"just\" means \"only\" here",
+  "labelledBy": "operator; needs a person to confirm"
+}

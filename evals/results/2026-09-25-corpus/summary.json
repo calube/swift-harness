@@ -1,0 +1,89 @@
+{
+  "date": "2026-09-25",
+  "suite": "checker-accuracy",
+  "costUsd": 0,
+  "pins": {
+    "swiftgate": "0.1.0",
+    "commit": "703539f",
+    "xcode": "26.2"
+  },
+  "gates": {
+    "prose": {
+      "cases": 36,
+      "passed": 26,
+      "byKind": {
+        "positive": 12,
+        "evasion": 6,
+        "near-miss": 17,
+        "clean": 1
+      },
+      "positiveRecall": [
+        12,
+        12
+      ],
+      "nearMissOrCleanWithFindings": 6
+    },
+    "lint": {
+      "cases": 41,
+      "passed": 36,
+      "byKind": {
+        "positive": 21,
+        "evasion": 7,
+        "near-miss": 12,
+        "clean": 1
+      },
+      "positiveRecall": [
+        21,
+        21
+      ],
+      "nearMissOrCleanWithFindings": 0
+    },
+    "arch": {
+      "cases": 27,
+      "passed": 25,
+      "byKind": {
+        "positive": 14,
+        "evasion": 4,
+        "near-miss": 8,
+        "clean": 1
+      },
+      "positiveRecall": [
+        13,
+        14
+      ],
+      "nearMissOrCleanWithFindings": 0
+    }
+  },
+  "proseAudit": {
+    "sampled": 46,
+    "population": 285,
+    "falsePositives": 7,
+    "byRule": {
+      "filler": [
+        4,
+        6
+      ],
+      "number-word": [
+        2,
+        8
+      ],
+      "adverb": [
+        1,
+        8
+      ],
+      "em-dash": [
+        0,
+        8
+      ],
+      "passive-voice": [
+        0,
+        8
+      ],
+      "sentence-length": [
+        0,
+        8
+      ]
+    },
+    "labelledBy": "operator"
+  }
+}

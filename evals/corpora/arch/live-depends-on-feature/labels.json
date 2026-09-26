@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.live-depends-on-feature"
+  ],
+  "source": "D2, D3"
+}

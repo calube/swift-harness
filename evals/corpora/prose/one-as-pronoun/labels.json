@@ -1,0 +1,6 @@
+{
+  "kind": "near-miss",
+  "expect": [],
+  "source": "wild, testing-playbook: \"one\" is a pronoun",
+  "labelledBy": "operator; needs a person to confirm"
+}

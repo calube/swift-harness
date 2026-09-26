@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.passive-voice"
+  ],
+  "source": "a get-passive; the rule documents this as a known miss"
+}

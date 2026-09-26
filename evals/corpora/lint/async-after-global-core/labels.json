@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "det.async-after"
+  ],
+  "source": "D1"
+}

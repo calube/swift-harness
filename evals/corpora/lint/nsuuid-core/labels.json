@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "det.uuid-init"
+  ],
+  "source": "D1"
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.dependency-client-test-value"
+  ],
+  "source": "D4"
+}

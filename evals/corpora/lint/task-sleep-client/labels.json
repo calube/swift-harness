@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "det.task-sleep"
+  ],
+  "source": "D1"
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "clean",
+  "expect": [],
+  "source": "eval docs written under the prose skill",
+  "paths": [
+    "evals/README.md",
+    "evals/apps.md",
+    "evals/components.md",
+    "evals/design.md",
+    "evals/research.md",
+    "evals/runbook.md",
+    "evals/suites.md"
+  ]
+}

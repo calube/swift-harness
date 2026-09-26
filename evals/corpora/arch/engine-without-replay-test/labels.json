@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.engine-replay-test"
+  ],
+  "source": "G1, playbook P10"
+}

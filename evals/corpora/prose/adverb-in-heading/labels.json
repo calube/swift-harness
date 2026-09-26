@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.adverb"
+  ],
+  "source": "suites.md: an adverb in a heading"
+}

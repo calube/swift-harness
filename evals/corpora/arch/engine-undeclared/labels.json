@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.undeclared-kind"
+  ],
+  "source": "A1"
+}

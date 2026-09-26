@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.em-dash"
+  ],
+  "source": "an en dash used as an em-dash"
+}

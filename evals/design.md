@@ -141,10 +141,10 @@ sandbox with 1 `task-lift` task that builds and tests `SampleApp`. If that works
 and write custom graders as scripts the cases call. If it doesn't, use the thin runner for the
 suites that build Swift.
 
-Either way the runner needs 1 gate change: `swiftgate hook` appends each decision to a log (event,
-tool, decision, rule id, latency) when an env var names the file. The log lets `guard-conformance`
-grade hook decisions. Today `swiftgate` records check runs in `.harness/runs/history.jsonl`, not
-PreToolUse decisions. That change is a `gate/` task with its own tests, per the first invariant.
+Either way, `guard-conformance` grades hook decisions from the gate's hook recorder: when
+`SWIFTGATE_HOOK_RECORD_DIR` names a directory, `swiftgate hook` writes each payload and its outcome
+(event, exit code, stdout, stderr, latency) there. The thin runner sets it for every trial, so the gate
+needs no change.
 
 ## Isolation
 

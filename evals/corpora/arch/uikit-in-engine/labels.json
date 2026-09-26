@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "arch.ui-framework-in-core"
+  ],
+  "source": "A2: an engine is Core"
+}

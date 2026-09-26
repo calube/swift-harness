@@ -1,0 +1,25 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "SampleApp"
+packages = ["Packages/*"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[[flows]]
+name = "counter"
+reason = "the one end-to-end path: launch, count, fetch a fact through the live API client"
+
+[clients]
+vendor_modules = []
+
+[[modules]]
+name = "GameEngine"
+kind = "engine"
+reason = "tic-tac-toe rules as a pure (State, Input) -> State step with a seeded RNG; a reducer adds ceremony only"
+
+[[modules]]
+name = "CounterMath"
+kind = "library"
+reason = "pure clamping helpers shared by features"

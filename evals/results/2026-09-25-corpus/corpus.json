@@ -1,0 +1,1686 @@
+{
+  "swiftgate": "0.1.0",
+  "commit": "703539f",
+  "droppedRules": [],
+  "gates": {
+    "prose": {
+      "cases": 36,
+      "passed": 26,
+      "byKind": {
+        "positive": 12,
+        "evasion": 6,
+        "near-miss": 17,
+        "clean": 1
+      },
+      "rules": [
+        {
+          "rule": "prose.adverb",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            1,
+            1
+          ],
+          "falsePositives": 1,
+          "negatives": 33,
+          "falsePositiveCases": [
+            "quoted-mention-adverb"
+          ]
+        },
+        {
+          "rule": "prose.em-dash",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            1,
+            2
+          ],
+          "falsePositives": 0,
+          "negatives": 33,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "prose.filler",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 3,
+          "negatives": 34,
+          "falsePositiveCases": [
+            "just-meaning-only",
+            "just-meaning-recently",
+            "quoted-mention-filler"
+          ]
+        },
+        {
+          "rule": "prose.jargon",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            1
+          ],
+          "falsePositives": 0,
+          "negatives": 33,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "prose.number-word",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 2,
+          "negatives": 34,
+          "falsePositiveCases": [
+            "number-sentence-start",
+            "one-as-pronoun"
+          ]
+        },
+        {
+          "rule": "prose.passive-voice",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            2
+          ],
+          "falsePositives": 0,
+          "negatives": 32,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "prose.sentence-length",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 35,
+          "falsePositiveCases": []
+        }
+      ],
+      "results": [
+        {
+          "name": "adverb",
+          "ms": 190,
+          "found": [
+            "prose.adverb"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.adverb"
+          ]
+        },
+        {
+          "name": "adverb-in-heading",
+          "ms": 105,
+          "found": [
+            "prose.adverb"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "prose.adverb"
+          ]
+        },
+        {
+          "name": "adverb-silently",
+          "ms": 100,
+          "found": [
+            "prose.adverb"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.adverb"
+          ]
+        },
+        {
+          "name": "em-dash",
+          "ms": 98,
+          "found": [
+            "prose.em-dash"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.em-dash"
+          ]
+        },
+        {
+          "name": "em-dash-double-hyphen",
+          "ms": 98,
+          "found": [
+            "prose.em-dash"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "prose.em-dash"
+          ]
+        },
+        {
+          "name": "en-dash-spaced",
+          "ms": 101,
+          "found": [],
+          "missed": [
+            "prose.em-dash"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "prose.em-dash"
+          ]
+        },
+        {
+          "name": "evals-docs",
+          "ms": 65,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "clean",
+          "expect": []
+        },
+        {
+          "name": "fenced-code",
+          "ms": 100,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "filler-in-order-to",
+          "ms": 99,
+          "found": [
+            "prose.filler"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.filler"
+          ]
+        },
+        {
+          "name": "filler-worth-noting",
+          "ms": 97,
+          "found": [
+            "prose.filler"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.filler"
+          ]
+        },
+        {
+          "name": "frontmatter",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "html-comment",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "inline-code",
+          "ms": 97,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "jargon-inflected",
+          "ms": 97,
+          "found": [],
+          "missed": [
+            "prose.jargon"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "prose.jargon"
+          ]
+        },
+        {
+          "name": "jargon-leverage",
+          "ms": 97,
+          "found": [
+            "prose.jargon"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.jargon"
+          ]
+        },
+        {
+          "name": "jargon-seamless",
+          "ms": 97,
+          "found": [
+            "prose.jargon"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.jargon"
+          ]
+        },
+        {
+          "name": "just-meaning-only",
+          "ms": 98,
+          "found": [
+            "prose.filler"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.filler"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "just-meaning-recently",
+          "ms": 98,
+          "found": [
+            "prose.filler"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.filler"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "ly-non-adverbs",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "number-phrases",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "number-sentence-start",
+          "ms": 97,
+          "found": [
+            "prose.number-word"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.number-word"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "number-word",
+          "ms": 99,
+          "found": [
+            "prose.number-word"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.number-word"
+          ]
+        },
+        {
+          "name": "number-word-times",
+          "ms": 98,
+          "found": [
+            "prose.number-word"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.number-word"
+          ]
+        },
+        {
+          "name": "one-as-pronoun",
+          "ms": 98,
+          "found": [
+            "prose.number-word"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.number-word"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "passive-by",
+          "ms": 98,
+          "found": [
+            "prose.passive-voice"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.passive-voice"
+          ]
+        },
+        {
+          "name": "passive-get",
+          "ms": 97,
+          "found": [],
+          "missed": [
+            "prose.passive-voice"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "prose.passive-voice"
+          ]
+        },
+        {
+          "name": "passive-irregular",
+          "ms": 97,
+          "found": [
+            "prose.passive-voice"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.passive-voice"
+          ]
+        },
+        {
+          "name": "passive-unlisted-participle",
+          "ms": 98,
+          "found": [],
+          "missed": [
+            "prose.passive-voice"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "prose.passive-voice"
+          ]
+        },
+        {
+          "name": "quoted-mention-adverb",
+          "ms": 100,
+          "found": [
+            "prose.adverb"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.adverb"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "quoted-mention-filler",
+          "ms": 100,
+          "found": [
+            "prose.filler"
+          ],
+          "missed": [],
+          "unexpected": [
+            "prose.filler"
+          ],
+          "passed": false,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "sentence-length",
+          "ms": 97,
+          "found": [
+            "prose.sentence-length"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "prose.sentence-length"
+          ]
+        },
+        {
+          "name": "state-adjective",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "table-cell",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "tier-tail",
+          "ms": 98,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "verdict-green",
+          "ms": 97,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "verdict-red",
+          "ms": 97,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        }
+      ]
+    },
+    "lint": {
+      "cases": 41,
+      "passed": 36,
+      "byKind": {
+        "positive": 21,
+        "evasion": 7,
+        "near-miss": 12,
+        "clean": 1
+      },
+      "rules": [
+        {
+          "rule": "det.async-after",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 39,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "det.date-init",
+          "positive": [
+            6,
+            6
+          ],
+          "evasion": [
+            0,
+            3
+          ],
+          "falsePositives": 0,
+          "negatives": 32,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "det.random",
+          "positive": [
+            6,
+            6
+          ],
+          "evasion": [
+            1,
+            1
+          ],
+          "falsePositives": 0,
+          "negatives": 34,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "det.task-sleep",
+          "positive": [
+            3,
+            3
+          ],
+          "evasion": [
+            1,
+            2
+          ],
+          "falsePositives": 0,
+          "negatives": 36,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "det.uuid-init",
+          "positive": [
+            4,
+            4
+          ],
+          "evasion": [
+            0,
+            1
+          ],
+          "falsePositives": 0,
+          "negatives": 36,
+          "falsePositiveCases": []
+        }
+      ],
+      "results": [
+        {
+          "name": "arc4random-core",
+          "ms": 1316,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "async-after-global-core",
+          "ms": 1077,
+          "found": [
+            "det.async-after"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.async-after"
+          ]
+        },
+        {
+          "name": "async-after-main-core",
+          "ms": 1082,
+          "found": [
+            "det.async-after"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.async-after"
+          ]
+        },
+        {
+          "name": "cf-absolute-time-core",
+          "ms": 1071,
+          "found": [],
+          "missed": [
+            "det.date-init"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "continuous-clock-sleep-core",
+          "ms": 1078,
+          "found": [],
+          "missed": [
+            "det.task-sleep"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "det.task-sleep"
+          ]
+        },
+        {
+          "name": "date-in-comment-core",
+          "ms": 1074,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "date-in-string-core",
+          "ms": 1068,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "date-init-app",
+          "ms": 1079,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "date-init-client",
+          "ms": 1067,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-init-core",
+          "ms": 1025,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-init-explicit-core",
+          "ms": 1044,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-init-live",
+          "ms": 1050,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "date-init-reference-core",
+          "ms": 1028,
+          "found": [],
+          "missed": [
+            "det.date-init"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-now-core",
+          "ms": 1153,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-qualified-core",
+          "ms": 1287,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-since-1970-core",
+          "ms": 1311,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "date-since-now-core",
+          "ms": 1569,
+          "found": [
+            "det.date-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "date-typealias-core",
+          "ms": 1221,
+          "found": [],
+          "missed": [
+            "det.date-init"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "det.date-init"
+          ]
+        },
+        {
+          "name": "dependency-clock-core",
+          "ms": 1130,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "dependency-date-core",
+          "ms": 1311,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "dependency-uuid-core",
+          "ms": 1354,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "injected-rng-core",
+          "ms": 1248,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "local-names-core",
+          "ms": 1368,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "nsuuid-core",
+          "ms": 1109,
+          "found": [],
+          "missed": [
+            "det.uuid-init"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "det.uuid-init"
+          ]
+        },
+        {
+          "name": "random-bool-core",
+          "ms": 1145,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "random-element-core",
+          "ms": 1355,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "random-in-core",
+          "ms": 1086,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "random-in-engine",
+          "ms": 1102,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "sampleapp-baseline",
+          "ms": 1104,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "clean",
+          "expect": []
+        },
+        {
+          "name": "shuffled-core",
+          "ms": 1332,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "system-rng-core",
+          "ms": 1101,
+          "found": [
+            "det.random"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.random"
+          ]
+        },
+        {
+          "name": "task-sleep-client",
+          "ms": 1098,
+          "found": [
+            "det.task-sleep"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.task-sleep"
+          ]
+        },
+        {
+          "name": "task-sleep-for-core",
+          "ms": 1106,
+          "found": [
+            "det.task-sleep"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.task-sleep"
+          ]
+        },
+        {
+          "name": "task-sleep-generic-core",
+          "ms": 1099,
+          "found": [
+            "det.task-sleep"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "det.task-sleep"
+          ]
+        },
+        {
+          "name": "task-sleep-live",
+          "ms": 1077,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "task-sleep-nanoseconds-core",
+          "ms": 1121,
+          "found": [
+            "det.task-sleep"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.task-sleep"
+          ]
+        },
+        {
+          "name": "uuid-init-client",
+          "ms": 1080,
+          "found": [
+            "det.uuid-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.uuid-init"
+          ]
+        },
+        {
+          "name": "uuid-init-core",
+          "ms": 1099,
+          "found": [
+            "det.uuid-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.uuid-init"
+          ]
+        },
+        {
+          "name": "uuid-init-explicit-core",
+          "ms": 1099,
+          "found": [
+            "det.uuid-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.uuid-init"
+          ]
+        },
+        {
+          "name": "uuid-init-log-live",
+          "ms": 1084,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "uuid-string-core",
+          "ms": 1077,
+          "found": [
+            "det.uuid-init"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "det.uuid-init"
+          ]
+        }
+      ]
+    },
+    "arch": {
+      "cases": 27,
+      "passed": 25,
+      "byKind": {
+        "positive": 14,
+        "evasion": 4,
+        "near-miss": 8,
+        "clean": 1
+      },
+      "rules": [
+        {
+          "rule": "arch.config-module-mismatch",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 26,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.core-main-actor-isolation",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            1,
+            1
+          ],
+          "falsePositives": 0,
+          "negatives": 25,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.dependency-client-test-value",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 26,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.engine-replay-test",
+          "positive": [
+            0,
+            1
+          ],
+          "evasion": [
+            0,
+            1
+          ],
+          "falsePositives": 0,
+          "negatives": 25,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.live-dependency",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 25,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.live-depends-on-feature",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 26,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.test-support-dependency",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 26,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.ui-framework-in-core",
+          "positive": [
+            3,
+            3
+          ],
+          "evasion": [
+            2,
+            2
+          ],
+          "falsePositives": 0,
+          "negatives": 22,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.undeclared-kind",
+          "positive": [
+            2,
+            2
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 25,
+          "falsePositiveCases": []
+        },
+        {
+          "rule": "arch.vendor-dependency",
+          "positive": [
+            1,
+            1
+          ],
+          "evasion": [
+            0,
+            0
+          ],
+          "falsePositives": 0,
+          "negatives": 26,
+          "falsePositiveCases": []
+        }
+      ],
+      "results": [
+        {
+          "name": "client-test-value-other-file",
+          "ms": 1269,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "client-without-test-value",
+          "ms": 1344,
+          "found": [
+            "arch.dependency-client-test-value"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.dependency-client-test-value"
+          ]
+        },
+        {
+          "name": "config-names-missing-module",
+          "ms": 1293,
+          "found": [
+            "arch.config-module-mismatch"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.config-module-mismatch"
+          ]
+        },
+        {
+          "name": "engine-replay-named-only",
+          "ms": 1296,
+          "found": [],
+          "missed": [
+            "arch.engine-replay-test"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "evasion",
+          "expect": [
+            "arch.engine-replay-test"
+          ]
+        },
+        {
+          "name": "engine-undeclared",
+          "ms": 1252,
+          "found": [
+            "arch.undeclared-kind"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.undeclared-kind"
+          ]
+        },
+        {
+          "name": "engine-without-replay-test",
+          "ms": 1336,
+          "found": [],
+          "missed": [
+            "arch.engine-replay-test"
+          ],
+          "unexpected": [],
+          "passed": false,
+          "kind": "positive",
+          "expect": [
+            "arch.engine-replay-test"
+          ]
+        },
+        {
+          "name": "live-dependency-core",
+          "ms": 1359,
+          "found": [
+            "arch.live-dependency"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.live-dependency"
+          ]
+        },
+        {
+          "name": "live-depends-on-feature",
+          "ms": 1315,
+          "found": [
+            "arch.live-depends-on-feature"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.live-depends-on-feature"
+          ]
+        },
+        {
+          "name": "log-live-dependency-core",
+          "ms": 1570,
+          "found": [
+            "arch.live-dependency"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.live-dependency"
+          ]
+        },
+        {
+          "name": "main-actor-default-core",
+          "ms": 1302,
+          "found": [
+            "arch.core-main-actor-isolation"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.core-main-actor-isolation"
+          ]
+        },
+        {
+          "name": "main-actor-default-ui",
+          "ms": 1323,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "main-actor-unsafe-flag-core",
+          "ms": 1294,
+          "found": [
+            "arch.core-main-actor-isolation"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "arch.core-main-actor-isolation"
+          ]
+        },
+        {
+          "name": "new-core-declared",
+          "ms": 1328,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "new-core-undeclared",
+          "ms": 1314,
+          "found": [
+            "arch.undeclared-kind"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.undeclared-kind"
+          ]
+        },
+        {
+          "name": "observation-in-core",
+          "ms": 1292,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "sampleapp-baseline",
+          "ms": 1293,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "clean",
+          "expect": []
+        },
+        {
+          "name": "swiftui-in-comment-core",
+          "ms": 1285,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "swiftui-in-core",
+          "ms": 1261,
+          "found": [
+            "arch.ui-framework-in-core"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.ui-framework-in-core"
+          ]
+        },
+        {
+          "name": "swiftui-in-ui",
+          "ms": 1284,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "swiftui-scoped-import-core",
+          "ms": 1260,
+          "found": [
+            "arch.ui-framework-in-core"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "arch.ui-framework-in-core"
+          ]
+        },
+        {
+          "name": "test-support-dependency-core",
+          "ms": 1291,
+          "found": [
+            "arch.test-support-dependency"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.test-support-dependency"
+          ]
+        },
+        {
+          "name": "test-support-dependency-tests",
+          "ms": 1738,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        },
+        {
+          "name": "uikit-exported-core",
+          "ms": 3542,
+          "found": [
+            "arch.ui-framework-in-core"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "evasion",
+          "expect": [
+            "arch.ui-framework-in-core"
+          ]
+        },
+        {
+          "name": "uikit-in-core",
+          "ms": 4902,
+          "found": [
+            "arch.ui-framework-in-core"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.ui-framework-in-core"
+          ]
+        },
+        {
+          "name": "uikit-in-engine",
+          "ms": 1556,
+          "found": [
+            "arch.ui-framework-in-core"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.ui-framework-in-core"
+          ]
+        },
+        {
+          "name": "vendor-dependency-core",
+          "ms": 1425,
+          "found": [
+            "arch.vendor-dependency"
+          ],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "positive",
+          "expect": [
+            "arch.vendor-dependency"
+          ]
+        },
+        {
+          "name": "vendor-dependency-live",
+          "ms": 1332,
+          "found": [],
+          "missed": [],
+          "unexpected": [],
+          "passed": true,
+          "kind": "near-miss",
+          "expect": []
+        }
+      ]
+    }
+  }
+}

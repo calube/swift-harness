@@ -1,0 +1,7 @@
+{
+  "kind": "positive",
+  "expect": [
+    "prose.number-word"
+  ],
+  "source": "spec §6.2"
+}

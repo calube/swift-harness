@@ -1,0 +1,6 @@
+{
+  "kind": "near-miss",
+  "expect": [],
+  "source": "judgment: a numeral cannot start a sentence",
+  "labelledBy": "operator; needs a person to confirm"
+}

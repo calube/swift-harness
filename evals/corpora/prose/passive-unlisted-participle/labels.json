@@ -1,0 +1,7 @@
+{
+  "kind": "evasion",
+  "expect": [
+    "prose.passive-voice"
+  ],
+  "source": "an irregular participle outside the list"
+}
