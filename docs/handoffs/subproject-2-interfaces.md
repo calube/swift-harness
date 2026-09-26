@@ -586,3 +586,46 @@ Mermaid natively from `<pre class="mermaid">`: never load a Mermaid library** (a
   `deps`.
 - `predictedOverheadShare(tasks:waves:)` = (wall − critical path) / wall; wall sums each wave's largest `estLines`,
   the critical path is the longest `estLines`-weighted chain. The spec now states this definition.
+
+## Wave 17
+
+Every `swiftgate` subcommand stub is now implemented. The stub-exits-2 test has no cases left and runs again if a
+new stub is added.
+
+**`calibrate design`** (`A/Calibration/`, `C/Commands/CalibrateCommand.swift`)
+- `swiftgate calibrate design [--model <m>] [--json]` (default model `sonnet`) runs each `agents/design-*.md` agent
+  on its seeds through the Foundation judge's Claude CLI runner. Exit 0 all labels met (writes
+  `gate/Fixtures/calibrate-design/last-pass.json`), 1 a miss or seed defect (record bytes untouched), 2 claude or
+  IO failure. Every design agent must have seeds and every seed dir must name an agent. Enforces nothing at push
+  yet: `calibration-seeds-labelled-by-construction` seeds the cases and wires freshness.
+- Case layout: `gate/Fixtures/calibrate-design/<agent-stem>/<case>/input.md` + `label.json`
+  `{"schemaVersion": 1, "questions": [{"id", "text", "options": [≥ 2 distinct], "expected"}]}` (README in that dir).
+- `CalibrationRecord{schemaVersion: 1, contentHash, hashedFiles, model, passedAt, cases: [{agent, case, answers:
+  [{question, expected, answered, probability}]}]}`; decode with `.decode`.
+- Hash: `DesignCalibrationHash.hash(discover(root:))` = sha256 over sorted `<path>\0<sha256>\n` lines of
+  `agents/design-*.md` + `workflows/design-*.js`; `isHashed(path)`. Edits and renames change it; order doesn't.
+
+**Research lane agents** (`agents/design-lane-{codebase,apple-docs,packages,prior-decisions}.md`)
+- `model: sonnet`, tools Read/Grep/Glob only (no Bash). Cache hits and same-pin claims arrive in the context pack;
+  lanes Grep `claims.jsonl` rather than run `evidence find`. Grep/Glob must target `.build/checkouts/<pkg>` directly,
+  because a search from the repo root skips gitignored paths.
+- Return `{lane, claims: [§5.2, status "new"], probes: [{claimId, swift}], needsDecision: [{question, options[2–4],
+  recommendation, evidence[]}]}`; `lane` values match `ResearchLane`.
+- `tests/design_agents_test.mjs` checks EVERY `agents/design-*.md`: `name` = file stem; `description`; `model` in
+  sonnet/opus/haiku/fable; `tools` only Read/Grep/Glob unless `toolExceptions: <Tool> — <reason>`; no relay or proxy
+  agent types. Each agent registers `{prefix, keys, strings}` in the test's `CONTRACTS`; an unregistered
+  `design-*.md` fails.
+- `claude plugin validate .` at the repo root only validates the marketplace manifest. Until packaging, validate
+  a plugin-shaped copy with `--strict`.
+
+**`workflows/design-research.js`**
+- Args `{tier: quick|standard|deep, mode: research|reresearch, claimIds?, lanes: [{name, packPath}], answers:
+  [{question, answer}]}`; `answers` required (`[]` first); `reresearch` takes exactly one lane. Errors:
+  `InvalidArgsError`, `UnknownModeError`, `UnknownTierError`, `TooManyLanesError`, `MissingClaimIdsError`,
+  `MissingPackPathError`, `UnknownLaneError`, `DuplicateLaneError`. Agent type `swift-harness:design-lane-<name>`.
+- Returns `{schemaVersion: 1, status: complete|needs-decision|incomplete, tier, mode, claimIds?, lanes: [{lane,
+  status: researched|needs-decision|not-researched, claims, probes, needsDecision} | {lane, status, reason}],
+  needsDecision: [{lane, question, options, recommendation, evidence}], unusedAnswers}`. ≤ 3 lanes in flight.
+- On `needs-decision`, the design skill asks the user, then relaunches with the same `scriptPath` and args plus
+  `resumeFromRunId`, carrying every answer so far. An answered lane replays its first call from cache and makes one
+  follow-up call with the answer; other lanes' prompts stay byte-identical.
