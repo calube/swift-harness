@@ -191,6 +191,26 @@ struct CheckCommandTests {
   }
 
   @Test(
+    "a merge base git can't resolve names the fix, not a raw git error — catches no-origin/main reported with no guidance"
+  )
+  func changedSinceMergeBaseNamesTheFix() async {
+    let git = FakeGit(
+      failure: .commandFailed(
+        arguments: ["merge-base", "HEAD", "origin/main"], status: .exited(128),
+        stderr: "fatal: Not a valid object name origin/main\n"))
+
+    let result = await CheckRun.changedSinceMergeBase(git: git, base: "origin/main")
+
+    guard case .failure(let reason) = result else {
+      Issue.record("expected a blocked reason, got \(result)")
+      return
+    }
+    #expect(reason.text.contains("pass --base <ref>"))
+    #expect(
+      !reason.text.hasPrefix("git: commandFailed"), "should not be a raw, unexplained git error")
+  }
+
+  @Test(
     "--tier parses fast, push and ready and --base defaults to origin/main — catches an unknown tier running as fast"
   )
   func parsing() throws {
