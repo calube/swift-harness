@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–21 merged; the `close-plan-file-types` fix merged on local main (push tier GREEN, 1369 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–22 merged on local main, push tier GREEN (1396 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 22 — calibration-seeds-labelled-by-construction (opus; runs `calibrate design` LIVE via the claude CLI and commits `last-pass.json`), self-test-runs-evidence-and-design-seeds (sonnet). Follow the runbook's wave loop.
+Next action: wave 23 — plugin-docs-pass-docs-lint-and-prose (opus), self-test-runs-plan-docs-prose-id-seeds (sonnet; adds `SeedFamily` cases to `SelfTestCommand.swift`). Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: `docs-lint.requirement-uncited` for quick-tier designs with no ADR (decide before docs-lint gates push); no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
@@ -72,7 +72,7 @@ Progress: git log. Update this header at every wave merge.
 | `C/Commands/CommentsCommand.swift` | `commit-message-id-check`, then `markdown-writes-checked-for-local-paths` (waves 5, 14) |
 | `AGENTS.md`, `docs/index.md`, `README.md` | `plugin-docs-pass-docs-lint-and-prose`, `consumer-plugin-in-plugin-dir`, `contributor-agents-md-for-harness-developers` (waves 23, 24, 25; README not in 25) |
 | `docs/handoffs/worker-brief.md` | `consumer-plugin-in-plugin-dir`, then `contributor-agents-md-for-harness-developers` (waves 24, 25) |
-| `C/Commands/SelfTestCommand.swift` | `self-test-runs-evidence-and-design-seeds` |
+| `C/Commands/SelfTestCommand.swift` | `self-test-runs-evidence-and-design-seeds`, then `self-test-runs-plan-docs-prose-id-seeds` (waves 22, 23) |
 | `FX/README.md` | `probe-diagnostic-verdicts`, `design-diff-and-design-sha`, `probe-builds-scratch-package` (3 waves) |
 | `C/Commands/DesignRenderCommand.swift`, `skills/design/SKILL.md`, `docs/hooks.md`, `docs/e2e-report.md` | sequential owners, one per wave (see tasks) |
 
@@ -487,7 +487,7 @@ flowchart LR
 
 ### `self-test-runs-plan-docs-prose-id-seeds`
 - Deps: self-test-runs-evidence-and-design-seeds · Gate: push · estLines: 240
-- Writes: `GF/seeds/plan-lint/`, `GF/seeds/docs-lint/`, `GF/seeds/prose/`, `GF/seeds/comments/`, `GF/seeds/testlint/`
+- Writes: `C/Commands/SelfTestCommand.swift` (new `SeedFamily` cases only), `GF/seeds/plan-lint/`, `GF/seeds/docs-lint/`, `GF/seeds/prose/`, `GF/seeds/comments/`, `GF/seeds/testlint/`
 - Does: seeds only, per §12: plan-lint (uncovered requirement, cycle, overlapping wave, hand-edited waves, oversize task, over-budget pack); docs-lint (dangling id, bare ADR number, unreachable doc, vacuous anchor, over-budget file); prose (adverb, em-dash, number word, jargon); comments/testlint (id leak, codename leak).
 - Tests: `swiftgate self-test` green with every new seed red as labelled.
 - Sizing exception: fixtures only.

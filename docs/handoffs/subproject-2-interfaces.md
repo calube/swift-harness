@@ -740,3 +740,31 @@ against that subcommand's help. A later skill that names a missing command or fl
 - `DesignRender`'s approval buttons and page JS take their decision strings from `ApprovalDecision.rawValue`.
 - `tests/skill_commands_test.mjs` joins ` \` continuation lines inside fenced blocks before checking flags, so a
   flag on a wrapped line is checked against its command.
+
+## Wave 22
+
+**Calibration seeds and freshness** (`gate/Fixtures/calibrate-design/`)
+- Seeds are `<agent>/<case>/{input.md,label.json}`, each defect paired with a clean twin. `last-pass.json` (a
+  `CalibrationRecord`) is committed from a live `swiftgate calibrate design` run: 23/23 cases, 11 agents, sonnet,
+  about 2.5 min.
+- `CalibrationFreshness.run(root:)` runs on the push and ready tiers, not fast. The rules
+  `calibration-freshness.{stale,no-record,unreadable}` are major and `.summary` is a nit. The hash covers
+  `agents/design-*.md` and the design workflows, not seeds. Editing either means rerunning `calibrate design` and
+  committing `last-pass.json`, or push and `committedRecordIsFresh` go red. A repo with no design agents skips it.
+- The Claude judge passes `--settings '{"verbose":false}'`, so a global `verbose: true` can't turn
+  `claude -p --output-format json` into an event array.
+
+**`swiftgate self-test` seed runner** (`gate/Fixtures/seeds/<command>/<case>/`)
+- `expected.json` is closed: `{"schemaVersion":1, "verdict":"red"|"green", "ruleIDs":[String]}`. `ruleIDs` is
+  sorted, unique and non-empty, and empty exactly when the verdict is green. An unknown key or value fails with a
+  named reason, and a case without `expected.json` is a hygiene failure.
+- Each family keeps its inputs in the case directory:
+  - evidence-check: `docs/example/designs/seed.md` + `seed.evidence/claims.jsonl`
+  - probe: `probes/<ev-id>.snippet.swift`, built against `gate/Fixtures/probe/HostTarget`. A probe case's
+    `ruleIDs` are the failing claim ids, since that's what `probe` reports.
+  - design-lint: `design.md`, plus an optional `design.evidence/`
+  - design-diff: `revisions/1.md` and `2.md`; the runner builds a temp repo and `plan.json`.
+- A new command family means a case in `SelfTestCommand.swift`'s private `SeedFamily` enum and `SeedRunners`;
+  the seeds themselves are data. Each family has a `valid` (green) case.
+- `design-lint.section-word-budget` now reaches nested sections; before, a doc's `#` title hid every `##` section
+  from it.
