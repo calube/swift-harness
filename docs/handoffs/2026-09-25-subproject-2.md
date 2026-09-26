@@ -5,13 +5,15 @@ State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tie
 and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
 Rehearsals 26 (install passed), 27 (the API was refuted) and 28 (design reached review, stopped at revise, nothing published)
 are merged. Their frame answers are labelled "orchestrator-answered rehearsal". The open items are in the interfaces note, Wave 28.
+Step 3 in flight: the sub-project 2 review Workflow (run wf_58d5e677-756; 4 dimensions, verify, synthesis into fix waves),
+and eval requests sent to the evals session.
 Merged: the Bash write-guard defect fix (a subagent could write plan state through Bash); evals corpus 19/21 evasions.
 Also in flight: the lockfile fix (sonnet) in ../swift-harness-test-runs-keep-the-committed-lockfile. A t1 run silently rewrote a Package.resolved that named a
 missing revision; the fix also makes the no-origin/main message name --base. WAITING ON THE USER: with an Xcode pin
 mismatch, should `test --tier t1/t2` fail? Today only `doctor` reports it, while evals/suites.md counts it as a fault.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
-  2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
+  2. DONE (rehearsal): acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
      26 plugin-installs-for-real: install at PROJECT scope into a temp copy of examples/SampleApp, never the user's global config.
      27 nonexistent-api-run-refutes-claim: prove the API absent first, then run to the frame questions. This throwaway design is
         never merged, so the orchestrator may answer its frame questions, labelled "orchestrator-answered rehearsal".
