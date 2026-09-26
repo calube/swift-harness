@@ -211,6 +211,23 @@ struct DesignLintDiagramsTests {
   }
 
   @Test(
+    "a section over budget still fires when it's nested under the design doc's own title — catches a shallow scan that only reaches top-level sections"
+  )
+  func sectionOverBudgetIsFlaggedUnderATitle() throws {
+    let text = """
+      # Design title
+
+      ## Problem
+
+      One two three four five.
+      """
+    let budgets = DocsBudgets(sections: ["problem": 3])
+    let findings = try Self.check(Self.parse(text), budgets: budgets)
+    let finding = try #require(findings.first { $0.ruleID == "design-lint.section-word-budget" })
+    #expect(finding.message.contains("Problem"))
+  }
+
+  @Test(
     "a section at or under its configured budget is not flagged — catches an off-by-one on the budget boundary"
   )
   func sectionAtBudgetIsNotFlagged() throws {
