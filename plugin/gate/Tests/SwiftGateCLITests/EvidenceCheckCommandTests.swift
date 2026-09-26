@@ -86,18 +86,19 @@ private struct EvidenceRepo {
         claimID: record.claimId, snippet: String(decoding: snippet, as: UTF8.self)
       )
       .utf8)
-    try write(
-      Self.layout.root + "/" + ProbeVerdictRecord.snippetPath(forClaimID: record.claimId), snippet)
+    try write(Self.layout.probesDirectory + "/\(record.claimId).snippet.swift", snippet)
     try write(
       Self.layout.probesDirectory + "/" + ProbeIdentifier.fileName(forClaimID: record.claimId),
       wrapper)
-    let bound = ProbeVerdictRecord(
-      claimId: record.claimId, verdict: record.verdict, diagnostics: record.diagnostics,
-      pins: record.pins, sdk: record.sdk, snippetSha256: CaptureDigest.sha256Hex(snippet),
-      sourceSha256: CaptureDigest.sha256Hex(wrapper))
+    guard
+      var bound = try JSONSerialization.jsonObject(with: try ProbeVerdictRecord.encode(record))
+        as? [String: Any]
+    else { throw CocoaError(.coderReadCorrupt) }
+    bound["snippetSha256"] = CaptureDigest.sha256Hex(snippet)
+    bound["sourceSha256"] = CaptureDigest.sha256Hex(wrapper)
     try write(
       Self.layout.root + "/" + ProbeVerdictRecord.path(forClaimID: record.claimId),
-      try ProbeVerdictRecord.encode(bound))
+      try JSONSerialization.data(withJSONObject: bound, options: [.sortedKeys]))
   }
 
   /// A verbatim `Package.resolved` from a real SwiftPM resolve (see `Tests/Fixtures/README.md`),

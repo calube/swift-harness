@@ -27,27 +27,20 @@ public struct InMemoryEvidenceSources: EvidenceSources, Sendable, Equatable {
   public var evidenceFiles: [String: Data]
   public var packageResolved: Data?
   public var sdkVersion: String?
-  public var repoSymlinks: Set<String>
-  public var evidenceSymlinks: Set<String>
 
   public init(
-    repoFiles: [String: String] = [:], repoSymlinks: Set<String> = [],
-    evidenceFiles: [String: Data] = [:], evidenceSymlinks: Set<String> = [],
+    repoFiles: [String: String] = [:], evidenceFiles: [String: Data] = [:],
     packageResolved: Data? = nil, sdkVersion: String? = nil
   ) {
     self.repoFiles = repoFiles
-    self.repoSymlinks = repoSymlinks
     self.evidenceFiles = evidenceFiles
-    self.evidenceSymlinks = evidenceSymlinks
     self.packageResolved = packageResolved
     self.sdkVersion = sdkVersion
   }
-  public func repoSymlink(_ path: String) -> String? {
-    PathPrefixes.of(path).first(where: repoSymlinks.contains)
-  }
-  public func evidenceSymlink(_ path: String) -> String? {
-    PathPrefixes.of(path).first(where: evidenceSymlinks.contains)
-  }
+
+  /// Files held by value are never links.
+  public func repoSymlink(_ path: String) -> String? { nil }
+  public func evidenceSymlink(_ path: String) -> String? { nil }
 
   public func repoFile(_ path: String) -> String? { repoFiles[path] }
   public func evidenceFile(_ path: String) -> Data? { evidenceFiles[path] }

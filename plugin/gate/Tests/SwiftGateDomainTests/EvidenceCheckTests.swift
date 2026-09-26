@@ -46,6 +46,17 @@ struct EvidenceCheckTests {
     return results[0].outcome
   }
 
+  /// The failure a new rule reports, by raw value or by case name from its description, so this
+  /// file compiles against a source tree that lacks the case and fails there on an assertion.
+  static func locPath(_ rawValue: String) -> EvidenceCheckResult.Outcome? {
+    LocPathProblem(rawValue: rawValue).map { .failed(.locPath($0)) }
+  }
+
+  static func failure(_ outcome: EvidenceCheckResult.Outcome) -> String? {
+    guard case .failed(let failure) = outcome else { return nil }
+    return String(describing: failure)
+  }
+
   static let tcaSources = InMemoryEvidenceSources(
     repoFiles: [tcaPath: tcaSource],
     packageResolved: resolved(["swift-composable-architecture": "1.26.2"]))
@@ -268,7 +279,7 @@ struct EvidenceCheckTests {
       repoFiles: [path: "x"], evidenceFiles: [path: Data("x".utf8)],
       packageResolved: Self.resolved(["swift-composable-architecture": "1.26.2"]))
     let claim = Self.claim(kind, loc: loc, pin: "swift-composable-architecture@1.26.2", quote: "x")
-    #expect(Self.outcome(claim, sources) == .failed(.locPath(.parentReference)))
+    #expect(Self.outcome(claim, sources) == Self.locPath("parent-reference"))
   }
 
   @Test(
@@ -302,7 +313,7 @@ struct EvidenceCheckTests {
     let sources = InMemoryEvidenceSources(repoFiles: [path: "x"])
     let claim = Self.claim(
       .file, loc: "\(path):L1", pin: "swift-composable-architecture@1.26.2", quote: "x")
-    #expect(Self.outcome(claim, sources) == .failed(.locPath(.buildOutput)))
+    #expect(Self.outcome(claim, sources) == Self.locPath("build-output"))
   }
 
   @Test(
@@ -335,25 +346,26 @@ struct EvidenceCheckTests {
     "a loc that passes through a symbolic link fails, in the repo and in the evidence root — catches a link hiding a checkout or a file outside the repo"
   )
   func symlinkedLocFails() {
-    let repo = InMemoryEvidenceSources(
-      repoFiles: ["Vendor/tca/Sources/A.swift": "x"], repoSymlinks: ["Vendor/tca"])
-    #expect(
-      Self.outcome(
-        Self.claim(.file, loc: "Vendor/tca/Sources/A.swift:L1", pin: "a", quote: "x"), repo)
-        == .failed(.locPath(.symlink)))
-    let evidence = InMemoryEvidenceSources(
-      evidenceFiles: ["snapshots/list.md": Data("x".utf8)], evidenceSymlinks: ["snapshots/list.md"],
-      sdkVersion: "26.0")
-    #expect(
-      Self.outcome(
-        Self.claim(.snapshot, loc: "snapshots/list.md", pin: "26.0", quote: "x"), evidence)
-        == .failed(.locPath(.symlink)))
-    let unlinked = InMemoryEvidenceSources(
-      repoFiles: ["Vendor/tca/Sources/A.swift": "x"], repoSymlinks: ["Vendor/tcb"])
-    #expect(
-      Self.outcome(
-        Self.claim(.file, loc: "Vendor/tca/Sources/A.swift:L1", pin: "a", quote: "x"), unlinked)
-        == .passed)
+    let file = Self.claim(.file, loc: "Vendor/tca/Sources/A.swift:L1", pin: "a", quote: "x")
+    let snapshot = Self.claim(.snapshot, loc: "snapshots/list.md", pin: "26.0", quote: "x")
+    let base = InMemoryEvidenceSources(
+      repoFiles: ["Vendor/tca/Sources/A.swift": "x"],
+      evidenceFiles: ["snapshots/list.md": Data("x".utf8)], sdkVersion: "26.0")
+    let cases: [(LinkedSources, Claim, EvidenceCheckResult.Outcome?)] = [
+      (LinkedSources(base: base, repoLinks: ["Vendor/tca"]), file, Self.locPath("symlink")),
+      (
+        LinkedSources(base: base, evidenceLinks: ["snapshots/list.md"]), snapshot,
+        Self.locPath("symlink")
+      ),
+      (LinkedSources(base: base, repoLinks: ["Vendor/tcb"]), file, .passed),
+      (LinkedSources(base: base, repoLinks: ["snapshots/list.md"]), snapshot, .passed),
+    ]
+    for (sources, claim, expected) in cases {
+      let outcome = EvidenceCheck.check([claim], sources: sources, mode: .workingTree).first?
+        .outcome
+      #expect(
+        outcome == expected, "\(sources.repoLinks) \(sources.evidenceLinks) \(claim.citation.loc)")
+    }
   }
 
   @Test(
@@ -371,7 +383,7 @@ struct EvidenceCheckTests {
       [forged, other, good], sources: Self.tcaSources, mode: .workingTree)
     #expect(results.map(\.claimID) == [good.id, other.id, good.id])
     #expect(
-      results.map(\.outcome) == [.failed(.duplicateClaimID), .passed, .failed(.duplicateClaimID)])
+      results.map { Self.failure($0.outcome) } == ["duplicateClaimID", nil, "duplicateClaimID"])
     #expect(results.allSatisfy { $0.claimID == other.id || $0.claimStatus == .quoteFail })
   }
 
@@ -678,21 +690,19 @@ struct EvidenceCheckTests {
       pins: ["swift-case-paths": "1.5.0"], sdk: "iphonesimulator26.0")
     let path = ProbeVerdictRecord.path(forClaimID: Self.probeID)
     #expect(path == "probes/Probe_ev_list_supports_swipe_actions.verdict.json")
-    #expect(record.snippetSha256 == nil && record.sourceSha256 == nil)
-    let bound = ProbeVerdictRecord(
-      claimId: record.claimId, verdict: record.verdict, diagnostics: record.diagnostics,
-      pins: record.pins, sdk: record.sdk,
-      snippetSha256: CaptureDigest.sha256Hex(Self.probeSnippet),
-      sourceSha256: CaptureDigest.sha256Hex(Self.probeWrapper))
+    var bound = try #require(
+      try JSONSerialization.jsonObject(with: try ProbeVerdictRecord.encode(record))
+        as? [String: Any])
+    bound["snippetSha256"] = CaptureDigest.sha256Hex(Self.probeSnippet)
+    bound["sourceSha256"] = CaptureDigest.sha256Hex(Self.probeWrapper)
     let sources = InMemoryEvidenceSources(
       evidenceFiles: [
-        path: try ProbeVerdictRecord.encode(bound), Self.probeSnippetPath: Self.probeSnippet,
-        Self.probeLoc: Self.probeWrapper,
+        path: try JSONSerialization.data(withJSONObject: bound),
+        Self.probeSnippetPath: Self.probeSnippet, Self.probeLoc: Self.probeWrapper,
       ],
       packageResolved: Self.resolved(["swift-case-paths": "1.5.0"]),
       sdkVersion: "iphonesimulator26.0")
     #expect(Self.outcome(Self.probeClaim, sources) == .failed(.probeFailed))
-    #expect(ProbeVerdictRecord.snippetPath(forClaimID: Self.probeID) == Self.probeSnippetPath)
   }
 
   @Test(
@@ -701,7 +711,7 @@ struct EvidenceCheckTests {
   func unboundProbeVerdictFails() {
     let results = EvidenceCheck.check(
       [Self.probeClaim], sources: Self.probeSources(hashes: nil), mode: .workingTree)
-    #expect(results.map(\.outcome) == [.failed(.probeVerdictUnbound)])
+    #expect(results.map { Self.failure($0.outcome) } == ["probeVerdictUnbound"])
     #expect(results.first?.claimStatus == nil)
   }
 
@@ -711,14 +721,15 @@ struct EvidenceCheckTests {
   func tamperedProbeSourceFails() {
     let edited = Data("import SwiftUI\n\nstatic func run() { List {}.teleport() }\n".utf8)
     #expect(
-      Self.outcome(Self.probeClaim, Self.probeSources(snippet: edited))
-        == .failed(.probeSourceMismatch(path: Self.probeSnippetPath)))
+      Self.failure(Self.outcome(Self.probeClaim, Self.probeSources(snippet: edited)))
+        == "probeSourceMismatch(path: \"\(Self.probeSnippetPath)\")")
     #expect(
-      Self.outcome(Self.probeClaim, Self.probeSources(wrapper: edited))
-        == .failed(.probeSourceMismatch(path: Self.probeLoc)))
+      Self.failure(Self.outcome(Self.probeClaim, Self.probeSources(wrapper: edited)))
+        == "probeSourceMismatch(path: \"\(Self.probeLoc)\")")
     #expect(
-      Self.outcome(Self.probeClaim, Self.probeSources(verdict: "fail", snippet: edited))
-        == .failed(.probeSourceMismatch(path: Self.probeSnippetPath)))
+      Self.failure(
+        Self.outcome(Self.probeClaim, Self.probeSources(verdict: "fail", snippet: edited)))
+        == "probeSourceMismatch(path: \"\(Self.probeSnippetPath)\")")
   }
 
   @Test(
@@ -726,11 +737,11 @@ struct EvidenceCheckTests {
   )
   func missingProbeSourceFails() {
     #expect(
-      Self.outcome(Self.probeClaim, Self.probeSources(snippet: nil))
-        == .failed(.probeSourceMissing(path: Self.probeSnippetPath)))
+      Self.failure(Self.outcome(Self.probeClaim, Self.probeSources(snippet: nil)))
+        == "probeSourceMissing(path: \"\(Self.probeSnippetPath)\")")
     #expect(
-      Self.outcome(Self.probeClaim, Self.probeSources(wrapper: nil))
-        == .failed(.probeSourceMissing(path: Self.probeLoc)))
+      Self.failure(Self.outcome(Self.probeClaim, Self.probeSources(wrapper: nil)))
+        == "probeSourceMissing(path: \"\(Self.probeLoc)\")")
   }
 
   // MARK: - answer
@@ -852,5 +863,29 @@ struct EvidenceCheckTests {
     let results = EvidenceCheck.check(claims, sources: try Self.answerSources(), mode: .workingTree)
     #expect(results.map(\.claimID) == ["ev-first-cited-fact", "ev-second-cited-fact"])
     #expect(results.map(\.outcome) == [.passed, .failed(.locPath(.absolute))])
+  }
+}
+
+/// Sources with symbolic links at chosen prefixes. It states every requirement itself, so this
+/// file compiles against a protocol that lacks the link lookups as well as one that has them.
+private struct LinkedSources: EvidenceSources {
+  var base: InMemoryEvidenceSources
+  var repoLinks: Set<String> = []
+  var evidenceLinks: Set<String> = []
+
+  func repoFile(_ path: String) -> String? { base.repoFile(path) }
+  func evidenceFile(_ path: String) -> Data? { base.evidenceFile(path) }
+  var packageResolved: Data? { base.packageResolved }
+  var sdkVersion: String? { base.sdkVersion }
+  func repoSymlink(_ path: String) -> String? {
+    Self.prefixes(path).first(where: repoLinks.contains)
+  }
+  func evidenceSymlink(_ path: String) -> String? {
+    Self.prefixes(path).first(where: evidenceLinks.contains)
+  }
+
+  private static func prefixes(_ path: String) -> [String] {
+    let components = path.split(separator: "/").map(String.init)
+    return components.indices.map { components[...$0].joined(separator: "/") }
   }
 }
