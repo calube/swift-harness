@@ -887,3 +887,17 @@ against that subcommand's help. A later skill that names a missing command or fl
   template doesn't cover `.harness/design-render/`; `docs-lint` didn't flag the new design doc as unreachable or
   uncited.
 - The `docs/e2e-report.md` budget is 4000 words.
+
+## Defect fix: Bash writes go through the file guards
+
+- `ShellSyntax.writeTargets(in:) -> [ShellWriteTarget]` (`path`, `entries`, `isDirectory`). Targets come from
+  redirections, `tee`, the `cp`/`mv`/`install`/`ln` destination (and `mv` sources), the operands of `rm`/`truncate`/
+  `touch`, `dd of=`, and `sed -i`/`perl -i` files. `SimpleCommand.redirectTargets` is new.
+- `PreToolUseHook.writeViolation(_:payload:root:dependencies:) -> GuardViolation?` is the single judgment of a
+  write, for file tools and Bash alike. A Bash deny reason starts with "this command writes `<path>`.".
+- Known limits (in `plugin/docs/hooks.md` § Bash writes): interpreter code, heredoc text, `eval`, `$VAR`/`$(…)`
+  targets, and a recursive delete of a guarded directory's parent. The evals hook corpus caught 19/21 evasions
+  after the fix (12/21 before); the two misses are documented limits.
+- Open for review: a Bash or Write to a design doc costs about 100ms because it spawns git, while hooks.md budgets
+  PreToolUse at < 50ms. `LiveProcessRunnerTests.timeoutKillsChild` flakes under heavy load (load average 50+) and
+  blocked one mutate baseline.

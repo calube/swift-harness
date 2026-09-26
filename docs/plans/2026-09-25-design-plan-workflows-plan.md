@@ -1,7 +1,7 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–25 and the wave 26–27 rehearsals merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1451 tests). origin/main has waves 1–24. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–25 and the wave 26–27 rehearsals merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1460 tests). origin/main has waves 1–24. Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
 Next action: acceptance waves 26–28 (plugin-installs-for-real, nonexistent-api-run-refutes-claim, sampleapp-standard-design-to-plan). The user approved running them as an unattended REHEARSAL on 2026-09-26; the real run, with its Approve click, merge and push, needs the user.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
