@@ -190,13 +190,15 @@ struct CalibrationFreshnessTests {
   }
 
   @Test(
-    "a repository with no agents/design-*.md skips the check with a note, even with design workflows present — catches consumer repos failing push on a plugin-only rule"
+    "a repository with no plugin/agents/design-*.md skips the check with a note, even with design workflows or a root agents/design-*.md present — catches consumer repos, or a checkout from before the plugin moved, failing push on a plugin-only rule"
   )
   func noDesignAgentsSkips() async throws {
     let repository = try ProbeRepository(config: nil)
     defer { repository.remove() }
     try repository.write("plugin/agents/reviewer.md", Self.agent("reviewer", body: "You review."))
     try repository.write("plugin/workflows/design-review.js", "export const steps = [];\n")
+    try repository.write(
+      "agents/design-own-reviewer.md", Self.agent("design-own-reviewer", body: "You review."))
 
     let report = try await Self.push(repository)
 

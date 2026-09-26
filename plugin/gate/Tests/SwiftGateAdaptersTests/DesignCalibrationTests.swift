@@ -54,7 +54,7 @@ struct DesignCalibrationTests {
   )
   func renameChangesHash() {
     var renamed = Self.hashedFiles
-    renamed[0] = Self.file("plugin/agents/design-claim-auditor.md", "check claims")
+    renamed[0] = Self.file("agents/design-claim-auditor.md", "check claims")
     #expect(DesignCalibrationHash.hash(renamed) != DesignCalibrationHash.hash(Self.hashedFiles))
   }
 

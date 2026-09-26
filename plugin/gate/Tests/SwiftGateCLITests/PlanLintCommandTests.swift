@@ -429,11 +429,13 @@ struct PlanLintCommandTests {
     let fromHarness = try await repo.lintWithBinary(harnessRoot: harness)
     try repo.write(PlanLintRepo.standardsPath, PlanLintRepo.standards)
     let ownWins = try await repo.lintWithBinary(harnessRoot: harness)
+    let inProcess = try await repo.lint()
 
     #expect(fromHarness.rules.contains(overBudget), "\(fromHarness)")
     #expect(!fromHarness.rules.contains(PlanLintGraph.packMissingRuleID), "\(fromHarness)")
     #expect(!ownWins.rules.contains(overBudget), "\(ownWins)")
     #expect(!ownWins.rules.contains(PlanLintGraph.packMissingRuleID), "\(ownWins)")
+    #expect(inProcess.run.packFailures.isEmpty, "\(inProcess.run.packFailures)")
   }
 
   @Test(
