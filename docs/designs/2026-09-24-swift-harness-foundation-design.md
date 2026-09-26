@@ -1,5 +1,9 @@
 # swift-harness — Foundation design
 
+> Where this design and the design & plan workflows design disagree, the later design wins: its
+> [§15 corrections](2026-09-25-design-plan-workflows-design.md#15-foundation-spec-corrections)
+> move plan state into the git common dir and move design docs under `docs/`.
+
 <!-- RESUME
 Status: FOUNDATION BUILT 2026-09-25 (plan docs/plans/2026-09-24-foundation-plan.md, all tasks M0–M7 done; 594 tests).
 Verified live in Claude Code via --plugin-dir; end-to-end results in docs/e2e-report.md.
