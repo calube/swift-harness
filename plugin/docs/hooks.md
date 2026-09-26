@@ -85,6 +85,8 @@ package manifests. Deleting the directory is always safe; it only costs re-runs.
 
 ## First run
 
-The plugin's `bin/swiftgate` builds the gate on first use. A hook that finds no built binary starts
-the build in the background and returns immediately; the hooks stay inactive until the build
-finishes, and SessionStart says so.
+The plugin's `bin/swiftgate` builds the gate on first use and again after its sources change. A
+hook that finds no binary for the current sources starts the build in the background and runs the
+last binary this gate built meanwhile (or, with no record of it, the newest one in the cache), so
+older rules keep enforcing during a rebuild. Only a cache with no binary at all leaves the hooks
+inactive until the build finishes, and SessionStart says so.

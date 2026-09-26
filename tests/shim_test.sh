@@ -155,6 +155,62 @@ for locale in C en_US.UTF-8; do
     fail "LC_ALL=$locale hashed the same sources to '$stamped', cached binary is $cached_hash"
 done
 
+# While a hook's own binary is missing (sources changed, rebuild pending) it runs the last binary
+# this gate built instead of going quiet: stale rules still enforce. The real binary is moved under
+# a stale hash, so the current hash has none.
+stale=0000000000000000
+mkdir -p "$cache/bin/$stale"
+mv "$cache/bin/$cached_hash/swiftgate" "$cache/bin/$stale/swiftgate"
+deny_payload="{\"session_id\":\"shim-test\",\"cwd\":\"$work/project\",\"hook_event_name\":\"PreToolUse\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"xcodebuild build\"}}"
+stop_rebuild() {
+  for _ in $(seq 1 25); do
+    pkill -9 -f "$work/repo/plugin/" >/dev/null 2>&1 || true
+    sleep 0.2
+    pgrep -f "$work/repo/plugin/" >/dev/null 2>&1 || break
+  done
+  rmdir "$cache/building-$cached_hash" 2>/dev/null || true
+}
+stale_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+stale_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+  fail "hook during a rebuild exited non-zero"
+stale_end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+stale_ms="$(perl -e "printf '%d', ($stale_end - $stale_start) * 1000")"
+[ -d "$cache/building-$cached_hash" ] || fail "a hook with no binary for its hash started no rebuild"
+stop_rebuild
+case "$stale_out" in
+  *'"permissionDecision":"deny"'*) ;;
+  *) fail "during a rebuild the hook did not enforce with the last good binary: '$stale_out'" ;;
+esac
+[ "$stale_ms" -lt 2000 ] || fail "a hook during a rebuild took ${stale_ms}ms, budget 2000ms"
+# The gate's own last build wins over a newer binary another checkout left in a shared cache; with
+# no record of it, the newest cached binary runs. A decoy tells which one ran.
+decoy=ffffffffffffffff
+mkdir -p "$cache/bin/$decoy"
+printf '#!/bin/sh\necho decoy\n' >"$cache/bin/$decoy/swiftgate"
+chmod +x "$cache/bin/$decoy/swiftgate"
+touch "$cache/bin/$decoy/swiftgate"
+pointer=("$cache"/last-good/*)
+[ "$(cat "${pointer[0]}" 2>/dev/null)" = "$cached_hash" ] ||
+  fail "the build did not record its hash as the last good binary"
+printf '%s\n' "$stale" >"${pointer[0]}"
+recorded_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+  fail "hook with a last-good record exited non-zero"
+stop_rebuild
+case "$recorded_out" in
+  *'"permissionDecision":"deny"'*) ;;
+  *) fail "the recorded last good binary did not run ahead of a newer one: '$recorded_out'" ;;
+esac
+/bin/rm -f "${pointer[0]}"
+newest_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+  fail "hook with no last-good record exited non-zero"
+stop_rebuild
+[ "$newest_out" = "decoy" ] || fail "with no last-good record the newest cached binary did not run: '$newest_out'"
+/bin/rm -rf "$cache/bin/$decoy" "$cache/bin/$cached_hash"
+mv "$cache/bin/$stale" "$cache/bin/$cached_hash"
+printf '%s\n' "$cached_hash" >"${pointer[0]}"
+"$shim" --version >/dev/null 2>"$work/err-restore" || fail "the restored cache did not run"
+[ ! -s "$work/err-restore" ] || fail "the restored cache rebuilt: $(cat "$work/err-restore")"
+
 # Bootstrap links ~/.local/bin/swiftgate, which git hooks call, to the shim it ran through: the
 # plugin's own. A link left at a checkout-root bin/swiftgate from before the plugin moved into
 # plugin/ is repointed, whether its old target still exists or not.
@@ -204,4 +260,4 @@ done
 stray="$(pgrep -fl "$work" 2>/dev/null || true)"
 [ -z "$stray" ] || fail "stray process(es) still running under \$work: $stray"
 
-echo "shim_test: PASS (cold samples: ${cold_samples[*]}ms, fastest ${hook_ms}ms${cold_note}; cached run samples: ${samples[*]}ms, fastest ${elapsed}ms)"
+echo "shim_test: PASS (cold samples: ${cold_samples[*]}ms, fastest ${hook_ms}ms${cold_note}; cached run samples: ${samples[*]}ms, fastest ${elapsed}ms; hook during a rebuild ${stale_ms}ms)"

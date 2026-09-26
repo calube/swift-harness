@@ -40,7 +40,10 @@ cache="${SWIFTGATE_CACHE_DIR:-${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cac
 # Hashing every source costs ~40ms, most of a PreToolUse hook's budget. A stamp remembers the
 # hash; while nothing under gate/ is newer than it (edits, and deletions via directory mtimes), the
 # hash still holds. The stamp is written before hashing, so an edit made during hashing is newer.
-stamp="$cache/stamps/$(printf '%s:%s' "$gate" "$config" | shasum | cut -c1-16)"
+key="$(printf '%s:%s' "$gate" "$config" | shasum | cut -c1-16)"
+stamp="$cache/stamps/$key"
+# The hash of the last binary this gate built, so a hook can enforce with it during a rebuild.
+last_good="$cache/last-good/$key"
 if [ -f "$stamp" ] && [ -z "$(
   cd "$gate" && find Sources Package.swift Package.resolved -newer "$stamp" -print 2>/dev/null | head -n 1
 )" ]; then
@@ -66,10 +69,28 @@ else
 fi
 binary="$cache/bin/$hash/swiftgate"
 
+# The binary to run while this gate's own is being built: the last one it built, else the newest
+# in the cache. Stale code still enforces; only a cache with no binary at all leaves hooks off.
+previous_binary() {
+  local previous=""
+  if [ -f "$last_good" ]; then
+    read -r previous <"$last_good" || true
+    previous="$cache/bin/$previous/swiftgate"
+    [ -x "$previous" ] && { printf '%s\n' "$previous"; return 0; }
+  fi
+  local newest=""
+  for previous in "$cache"/bin/*/swiftgate; do
+    [ -x "$previous" ] || continue
+    if [ -z "$newest" ] || [ "$previous" -nt "$newest" ]; then newest="$previous"; fi
+  done
+  [ -n "$newest" ] || return 1
+  printf '%s\n' "$newest"
+}
+
 if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
-  # Hooks run under Claude Code timeouts on every tool call, and a cold build takes minutes: build
-  # in the background and leave the hooks inactive until the binary lands. A lock older than 30
-  # minutes belongs to a build that died.
+  # Hooks run under Claude Code timeouts on every tool call, and a build takes minutes: build in
+  # the background and meanwhile run the previous binary, or on a cold cache leave the hooks
+  # inactive until the binary lands. A lock older than 30 minutes belongs to a build that died.
   lock="$cache/building-$hash"
   mkdir -p "$cache"
   find "$cache" -maxdepth 1 -name "building-$hash" -mmin +30 -exec rmdir {} + 2>/dev/null || true
@@ -80,6 +101,10 @@ if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
     ) </dev/null >/dev/null 2>&1 &
   fi
   rm -f "${pending:-}"
+  if previous="$(previous_binary)"; then
+    export SWIFTGATE_HARNESS_ROOT="$root"
+    exec "$previous" "$@"
+  fi
   if [ "${2:-}" = "session-start" ] && in_project "$PWD"; then
     # SessionStart context is the only channel that tells the model the gates are off for now.
     context="swiftgate enforcement is warming up: swiftgate is being built in the background \
@@ -104,7 +129,15 @@ if [ ! -x "$binary" ]; then
 fi
 
 if [ -n "${pending:-}" ] && [ -f "$pending" ]; then
-  if [ -x "$binary" ]; then mv -f "$pending" "$stamp"; else rm -f "$pending"; fi
+  if [ -x "$binary" ]; then
+    mv -f "$pending" "$stamp"
+    # Only a rehash can change the hash, so the pointer is kept current without a write per call.
+    mkdir -p "$cache/last-good"
+    printf '%s\n' "$hash" >"$last_good.$$"
+    mv -f "$last_good.$$" "$last_good"
+  else
+    rm -f "$pending"
+  fi
 fi
 
 # `bootstrap` finds its templates, and `self-test` its fixtures, in the plugin this shim belongs to.
