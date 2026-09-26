@@ -40,6 +40,8 @@ printf '%s' "$gate_hash" >"$HOME/.cache/swift-harness/stamps/$stamp_key"
 echo "gate_hash=$gate_hash" >>"$workspace/.eval/scaffold-env.txt"
 
 cp -R "$plugin_root/examples/SampleApp/." "$workspace/"
+# In this repo the root .gitignore covers SampleApp; the copy needs its own.
+{ cat "$plugin_root/.gitignore"; echo ".eval/"; } >"$workspace/.gitignore"
 git -C "$workspace" init -q -b main
 git -C "$workspace" add -A
 git -C "$workspace" -c user.name=eval -c user.email=eval@example.invalid commit -qm baseline
