@@ -6,7 +6,7 @@ Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-
 Next action: wave 23 — plugin-docs-pass-docs-lint-and-prose (opus), self-test-runs-plan-docs-prose-id-seeds (sonnet; adds `SeedFamily` cases to `SelfTestCommand.swift`). Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
-Open items: `docs-lint.requirement-uncited` for quick-tier designs with no ADR (decide before docs-lint gates push); no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
+Open items: no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
 
@@ -475,8 +475,8 @@ flowchart LR
 
 ### `plugin-docs-pass-docs-lint-and-prose`
 - Deps: design-skill-review-publish-amend, plan-skill, push-tier-runs-doc-gates, docs-lint-command, prose-rules-and-command, calibration-seeds-labelled-by-construction · Gate: push · estLines: 280
-- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`, `C/Commands/CheckCommand.swift`, `TC/PushTierDocsLintProseTests.swift`
-- Does: first makes the repo's docs pass `docs-lint` and `prose`: AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Then, in the same task, wires push to run `docs-lint` and `prose` on changed docs. Explicit exception to the brief's README rule. Wave 23: shares `CheckCommand.swift` with the calibration seeds.
+- Writes: `AGENTS.md`, `README.md`, `docs/index.md`, `docs/hooks.md`, `docs/designs/README.md`, `docs/designs/2026-09-24-swift-harness-foundation-design.md`, `docs/standards.md`, `C/Commands/CheckCommand.swift`, `TC/PushTierDocsLintProseTests.swift`, `D/Docs/DocsLintReferences.swift` and its tests (quick-tier exemption only)
+- Does: first exempts quick-tier designs (frontmatter `tier: quick`) from `docs-lint.requirement-uncited`, since a quick design has no ADR to cite its requirements (decided 2026-09-25); standard and deep keep it major. Then makes the repo's docs pass `docs-lint` and `prose`: AGENTS.md plan-state invariant names the common dir; README lists the new skills; the Foundation design points to the §15 corrections. Then, in the same task, wires push to run `docs-lint` and `prose` on changed docs. Explicit exception to the brief's README rule. Wave 23: shares `CheckCommand.swift` with the calibration seeds.
 - Tests: `swiftgate docs-lint` exit 0 on this repo · dangling doc id → push red — catches docs drifting past push · prose violation in a changed doc → push red; in an unchanged doc → not run · fast tier runs neither · `check --tier push` green.
 
 ### `self-test-runs-evidence-and-design-seeds`
