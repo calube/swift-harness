@@ -7,7 +7,7 @@ each one calls the same code as the `swiftgate` command it names.
 
 | Event | What it does | Budget |
 |---|---|---|
-| SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in `.harness/plans/index.json`, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). | < 1s |
+| SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). | < 1s |
 | PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. On `git commit`, adds `swiftgate comments --staged` findings as advisory context. | < 50ms |
 | PreToolUse (Edit/Write) | Denies hand edits to `__Snapshots__/`, `Package.resolved`, `.xcresult` bundles, and a plan's `orchestrator.lock`. Plan state and design artifacts are writable only by the orchestrating session (below). | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | Formats the file in place with `swift format`, then runs `swiftgate lint` on that file alone. A gating finding comes back as a block next to the tool result. | < 1s |
