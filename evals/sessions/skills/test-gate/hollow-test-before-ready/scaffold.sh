@@ -1,0 +1,1 @@
+../../../../scaffold/sampleapp-hollow-test.sh

@@ -2,6 +2,19 @@
 
 ## 2026-09-26
 
+- **Added round-2 routing cases:** 18 tuning cases for fixing and judging tests, and 32 held-out
+  cases that an independent agent wrote before the description fix. On the old descriptions, the
+  tuning cases scored `tdd` recall 0.40 and `test-gate` recall 0.33.
+- **`routing.mjs` takes `--round`,** and each case carries a `round-N` tag.
+- **Added the `test-gate` session case** `hollow-test-before-ready`, with its scaffold
+  `sampleapp-hollow-test.sh`. Its judge rubric passed a good synthetic transcript 3 of 3 and failed
+  4 bad ones 0 of 3. It hasn't run live.
+- **Planted precision breaks:** a bait sentence moved nothing (0 of 16 wrong loads), and the
+  near-misses caught a description that claimed its neighbours' jobs (6 of 8 wrong loads). See
+  `results/2026-09-26-routing-fix/summary.md`.
+- **Result of the description fix:** held-out `tdd` recall went from 0.67 to 1.00. On the
+  independent set, `test-gate` recall is 0.88. Precision is 1.00 throughout.
+
 - **Added 120 routing cases** for the 6 foundation skills. `evals/runner/seed_routing.mjs` writes
   them, with a 60/40 split by request. Added `evals/runner/routing.mjs`, which scores precision,
   recall, a confusion table and pass^k from kept traces, and `routing_test.mjs`.
