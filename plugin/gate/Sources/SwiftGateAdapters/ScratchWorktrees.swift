@@ -3,8 +3,8 @@ import SwiftGateDomain
 
 /// The tree `prove` runs tests in: `revision` checked out, then `copiedPaths` taken from the
 /// working tree (so uncommitted and untracked work counts) and `revertedPaths` restored to
-/// `revertTo`. A path absent from its source is absent from the scratch tree. Paths are
-/// toplevel-relative.
+/// `revertTo`. A path absent from its source is absent from the scratch tree, except that a path
+/// committed as a rename since `revertTo` gets its old content. Paths are toplevel-relative.
 public struct ScratchTreeRequest: Sendable, Equatable {
   public var revision: String
   public var revertTo: String
@@ -139,14 +139,49 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       _ = try await git(
         ["checkout", "--quiet", request.revertTo, "--"] + existing.sorted(), in: scratch.path)
     }
-    do {
-      for path in request.revertedPaths where !existing.contains(path) {
-        let destination = scratch.appending(path: path)
+    let added = request.revertedPaths.filter { !existing.contains($0) }
+    guard !added.isEmpty else { return }
+    // A file moved since `revertTo` reverts to its old content at its new path. Deleting it
+    // instead would empty every module of a package that moved directory.
+    let moved = try await renames(from: request.revertTo, to: request.revision, in: scratch)
+    for path in added {
+      let destination = scratch.appending(path: path)
+      do {
         if files.fileExists(atPath: destination.path) { try files.removeItem(at: destination) }
+      } catch {
+        throw .fileSystem("removing \(path), added since \(request.revertTo): \(error)")
       }
-    } catch {
-      throw .fileSystem("removing files added since \(request.revertTo): \(error)")
+      guard let old = moved[path] else { continue }
+      let content = try await gitData(
+        ["cat-file", "blob", "\(request.revertTo):\(old)"], in: scratch.path)
+      do {
+        try files.createDirectory(
+          at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try content.write(to: destination)
+      } catch {
+        throw .fileSystem("restoring \(old) from \(request.revertTo) as \(path): \(error)")
+      }
     }
+  }
+
+  /// New path → old path for every file `git` sees as renamed between the two commits.
+  private func renames(from base: String, to revision: String, in scratch: URL)
+    async throws(ScratchWorktreeError) -> [String: String]
+  {
+    let listed = try await git(
+      ["diff", "-z", "--name-status", "--find-renames", "--diff-filter=R", base, revision, "--"],
+      in: scratch.path)
+    var fields = listed.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)[
+      ...]
+    var moved: [String: String] = [:]
+    while let status = fields.popFirst() {
+      guard status.hasPrefix("R"), let old = fields.popFirst(), let new = fields.popFirst() else {
+        throw .git(
+          .unparseableOutput(command: "diff --name-status", detail: "unexpected entry \(status)"))
+      }
+      moved[new] = old
+    }
+    return moved
   }
 
   /// `copyItem` clones on APFS (metadata only, seconds for gigabytes) and copies elsewhere.
@@ -204,6 +239,12 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
   private func git(_ arguments: [String], in directory: String) async throws(ScratchWorktreeError)
     -> String
   {
+    String(decoding: try await gitData(arguments, in: directory), as: UTF8.self)
+  }
+
+  private func gitData(_ arguments: [String], in directory: String)
+    async throws(ScratchWorktreeError) -> Data
+  {
     let invocation = ProcessInvocation(
       executable: "git", arguments: ["--literal-pathspecs"] + arguments,
       workingDirectory: directory, timeout: timeout)
@@ -217,6 +258,6 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       throw .git(
         .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
     }
-    return output.stdout.text
+    return output.stdout.bytes
   }
 }

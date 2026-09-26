@@ -75,6 +75,49 @@ struct ScratchWorktreesTests {
   }
 
   @Test(
+    "a source moved since the merge base is reverted to its old content at its new path, not deleted — catches prove emptying every module of a package that moved directory"
+  )
+  func revertsMovedSourcesInPlace() async throws {
+    let repository = try await TemporaryGitRepository()
+    let temporary = repository.root.appending(path: "../scratch-\(UUID().uuidString)")
+      .standardizedFileURL
+    try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+    defer {
+      repository.remove()
+      try? FileManager.default.removeItem(at: temporary)
+    }
+    let lines = (1...20).map { "let line\($0) = \($0)\n" }.joined()
+    try repository.write("app/Sources/Lib/Lib.swift", lines)
+    try repository.write("app/Sources/Lib/Other.swift", "enum Other {}\n" + lines)
+    let base = try await repository.commitAll("base")
+    try repository.delete("app")
+    try repository.write("plugin/app/Sources/Lib/Lib.swift", lines + "let added = 21\n")
+    try repository.write("plugin/app/Sources/Lib/Other.swift", "enum Other {}\n" + lines)
+    try repository.write("plugin/app/Sources/Lib/New.swift", "enum New {}\n")
+    _ = try await repository.commitAll("move")
+    let adapter = LiveScratchWorktrees(
+      runner: repository.runner, repositoryRoot: repository.root.path, directory: temporary)
+
+    let contents = try await adapter.withScratchTree(
+      ScratchTreeRequest(
+        revision: "HEAD", revertTo: base,
+        copiedPaths: ["app/Sources/Lib/Lib.swift", "app/Sources/Lib/Other.swift"],
+        revertedPaths: [
+          "plugin/app/Sources/Lib/Lib.swift", "plugin/app/Sources/Lib/New.swift",
+          "plugin/app/Sources/Lib/Other.swift",
+        ])
+    ) { root in
+      [
+        read(root, "plugin/app/Sources/Lib/Lib.swift"),
+        read(root, "plugin/app/Sources/Lib/Other.swift"),
+        read(root, "plugin/app/Sources/Lib/New.swift"), read(root, "app/Sources/Lib/Lib.swift"),
+      ]
+    }
+
+    #expect(contents == [lines, "enum Other {}\n" + lines, nil, nil])
+  }
+
+  @Test(
     "by default the scratch tree is a hidden sibling of the repository — catches trees made under the symlinked temp dir, whose paths the build tools report differently"
   )
   func besideRepository() async throws {
