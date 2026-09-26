@@ -304,8 +304,8 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 - Section budgets (`[docs.budgets.sections]`, e.g. `architecture = 80`) belong to design-lint only. A design doc,
   meaning a `.md` directly under a path component named `designs`, is exempt from docs-lint's whole-file budgets
   because design-lint governs it.
-- `LocalPathRule.scan(_ text: String, file: String) -> [Finding]` is pure. It flags `~/…`, `$HOME/…`, `/Users/`,
-  `/home/`, `/private/tmp`, `/var/folders`, INCLUDING inside fenced and inline code (the spec is silent, and a
+- `LocalPathRule.scan(_ text: String, file: String) -> [Finding]` is pure. It flags home-relative paths (tilde or the
+  home variable), the macOS and Linux user-folder roots and the system temp roots, INCLUDING inside fenced and inline code (the spec is silent, and a
   copied example still breaks for its reader). URLs and system paths like `/usr/bin/find` pass.
 - `DocsLintPolicy.productPaths = ["~/.swift-harness/", "~/.local/bin/swiftgate", "~/.cache/swift-harness/"]`.
   This is a constant with no config key.
@@ -327,7 +327,7 @@ with `hdiutil -nobrowse`, always detach in a `defer`, and are skipped when `hdiu
 **Citation contract for evidence kinds.** `snapshot`, `capture`, `probe` and `answer` locs are relative to
 `<slug>.evidence/`, so citations travel with the doc: `snapshots/<name>`, `captures/<sha256hex>.txt`,
 `probes/Probe_<id>.swift`, `answers.jsonl#<runId>/<n>`. A `file` loc is repo-relative (`<path>:L<a>[-L<b>]`,
-`.build/checkouts/…` allowed); absolute, `~/`, `$HOME` and above-root locs fail. A capture's `pin` is exactly
+`.build/checkouts/…` allowed); absolute, home-relative and above-root locs fail. A capture's `pin` is exactly
 `sha256:` + 64 lowercase hex. The one sha256 hex helper is `CaptureDigest.sha256Hex(_: Data)` in
 `D/Evidence/EvidenceCheck.swift`; don't add another.
 

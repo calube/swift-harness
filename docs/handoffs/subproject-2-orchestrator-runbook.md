@@ -33,7 +33,7 @@ fresh laptop:
    section. Re-check them before wave 1 on that machine, and record any change here.
 3. Build once so worktrees have a `.build` to clone: `swift build --package-path gate`, then
    `bin/swiftgate check --tier push`. The first build compiles SwiftSyntax and takes minutes. The shim's own
-   cache, `~/.cache/swift-harness`, fills itself.
+   cache, `~/.cache/swift-harness/`, fills itself.
 4. Claude Code only needs the built-in `general-purpose` agent, the `sonnet` and `opus` models, and
    `SendMessage` for fix rounds. The build uses no user-level plugin or skill.
 5. Node tests run under node 24 without changing the global default: `mise exec node@24 -- node tests/<x>_test.mjs`.
@@ -190,7 +190,7 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - Latency-budget tests assert the fastest of several runs (cold hooks, cached shim, hook commands). A flake there
   now means a real regression or a new single-shot timing assert: check which before retrying.
 - The review workflow reads a contributor ADR at runtime until the packaging wave moves the contract into
-  `plugin/docs/` (ADR 0002, steering).
+  `plugin/docs/` ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), steering).
 - From the packaging wave on, the root `bin/swiftgate` is gone. Run `plugin/bin/swiftgate`, and seed worktrees by
   cloning `plugin/gate/.build` instead of `gate/.build`.
 - The acceptance waves are attended. The user answers the frame questions, clicks Approve, and approves the merge
