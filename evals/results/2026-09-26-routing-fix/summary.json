@@ -1,0 +1,2806 @@
+{
+  "suite": "skill-routing",
+  "round": "tdd and test-gate description fix",
+  "date": "2026-09-26",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001 (no llm graders in routing)",
+    "claudeVersion": "2.1.282",
+    "harness": "main 7052d8d plus fix-tdd-test-gate-routing c5522b6 (skills/tdd and skills/test-gate descriptions only)",
+    "xcode": "26.2 (17C48), Swift 6.2.3"
+  },
+  "settings": {
+    "runs": 3,
+    "ablation": "none",
+    "maxTurns": 1,
+    "scaffold": "evals/scaffold/sampleapp-with-change.sh"
+  },
+  "tuningBefore": {
+    "note": "round-2 tuning cases (split-60) on the old descriptions",
+    "trials": 54,
+    "perSkill": {
+      "tdd": {
+        "expectedTrials": 30,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 18,
+        "precision": 1,
+        "recall": 0.4
+      },
+      "test-gate": {
+        "expectedTrials": 18,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 12,
+        "precision": 1,
+        "recall": 0.3333333333333333
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "none": 18,
+        "tdd": 12
+      },
+      "none": {
+        "none": 6
+      },
+      "test-gate": {
+        "none": 12,
+        "test-gate": 6
+      }
+    },
+    "passAllK": 7,
+    "casesTotal": 18,
+    "flaky": [
+      "routing-tdd-flaky-counter-test-b",
+      "routing-tdd-red-after-refactor-a"
+    ],
+    "cases": [
+      {
+        "case": "routing-tdd-broken-snapshot-test-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-broken-snapshot-test-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-flaky-counter-test-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-flaky-counter-test-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 2,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-red-after-refactor-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-red-after-refactor-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-where-is-decrement-tested-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-where-is-decrement-tested-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-would-tests-catch-anything-a",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-would-tests-catch-anything-b",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-flip-to-ready-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-flip-to-ready-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-impact-wants-a-test-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-impact-wants-a-test-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-make-red-test-green-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-make-red-test-green-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-pulling-weight-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-pulling-weight-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      }
+    ]
+  },
+  "tuningAfter": {
+    "note": "round-2 tuning cases at 3 trials and round-1 split-60 cases for tdd, test-gate, validate and review at 1 trial, on the new descriptions",
+    "trials": 103,
+    "perSkill": {
+      "comment-audit": {
+        "expectedTrials": 4,
+        "loadedTrials": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "design": {
+        "expectedTrials": 2,
+        "loadedTrials": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1,
+        "recall": 0.5
+      },
+      "review": {
+        "expectedTrials": 10,
+        "loadedTrials": 9,
+        "tp": 9,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1,
+        "recall": 0.9
+      },
+      "tdd": {
+        "expectedTrials": 40,
+        "loadedTrials": 40,
+        "tp": 40,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 28,
+        "loadedTrials": 28,
+        "tp": 28,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 8,
+        "loadedTrials": 8,
+        "tp": 8,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 40
+      },
+      "none": {
+        "none": 11
+      },
+      "test-gate": {
+        "test-gate": 28
+      },
+      "review": {
+        "none": 1,
+        "review": 9
+      },
+      "comment-audit": {
+        "comment-audit": 4
+      },
+      "design": {
+        "none": 1,
+        "design": 1
+      },
+      "validate": {
+        "validate": 8
+      }
+    },
+    "passAllK": 64,
+    "casesTotal": 66,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-tdd-broken-snapshot-test-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-broken-snapshot-test-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-flaky-counter-test-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-flaky-counter-test-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-red-after-refactor-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-red-after-refactor-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-where-is-decrement-tested-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 4,
+        "passed": 4,
+        "loaded": [
+          [],
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-where-is-decrement-tested-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-would-tests-catch-anything-a",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-would-tests-catch-anything-b",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-flip-to-ready-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-flip-to-ready-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-impact-wants-a-test-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-impact-wants-a-test-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-make-red-test-green-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-make-red-test-green-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-pulling-weight-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-pulling-weight-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-concurrency-and-errors-a",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 0,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-concurrency-and-errors-b",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-merge-ready-before-teammate-a",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-merge-ready-before-teammate-b",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-my-tests-a",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-my-tests-b",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-staged-comments-a",
+        "expect": "comment-audit",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-staged-comments-b",
+        "expect": "comment-audit",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-sync-design-a",
+        "expect": "design",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 0,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-review-review-sync-design-b",
+        "expect": "design",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "design"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-safe-to-merge-a",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-safe-to-merge-b",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-comments-after-bug-fix-a",
+        "expect": "comment-audit",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-comments-after-bug-fix-b",
+        "expect": "comment-audit",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-below-zero-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-below-zero-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-reset-action-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-reset-action-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-engine-score-carries-over-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-engine-score-carries-over-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-explain-test-first-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-explain-test-first-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-judge-new-tests-before-pr-a",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-judge-new-tests-before-pr-b",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-after-tdd-cycle-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-after-tdd-cycle-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-full-gate-before-ready-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-full-gate-before-ready-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-merge-verdict-code-a",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-merge-verdict-code-b",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-testing-section-a",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-testing-section-b",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-catch-regressions-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-tests-catch-regressions-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-write-increment-test-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-write-increment-test-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-cap-count-input-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-cap-count-input-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-how-this-was-tested-a",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-how-this-was-tested-b",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-prove-ready-paste-a",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-prove-ready-paste-b",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-review-before-pr-a",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-review-before-pr-b",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-toml-syntax-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-toml-syntax-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-validate-validate-branch-a",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-validate-branch-b",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      }
+    ]
+  },
+  "heldOutRound1": {
+    "note": "the 48 round-1 held-out cases, rerun on the new descriptions",
+    "trials": 144,
+    "perSkill": {
+      "architecture": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "comment-audit": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "prose": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "review": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "status": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "tdd": {
+        "expectedTrials": 24,
+        "loadedTrials": 24,
+        "tp": 24,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 24
+      },
+      "none": {
+        "none": 36
+      },
+      "architecture": {
+        "architecture": 12
+      },
+      "comment-audit": {
+        "comment-audit": 12
+      },
+      "review": {
+        "review": 12
+      },
+      "prose": {
+        "prose": 6
+      },
+      "validate": {
+        "validate": 18
+      },
+      "test-gate": {
+        "test-gate": 18
+      },
+      "status": {
+        "status": 6
+      }
+    },
+    "passAllK": 48,
+    "casesTotal": 48,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-architecture-double-action-existing-feature-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-architecture-double-action-existing-feature-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-architecture-explain-core-ui-split-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-architecture-explain-core-ui-split-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-architecture-persistence-package-a",
+        "expect": "architecture",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-architecture-persistence-package-b",
+        "expect": "architecture",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-architecture-ui-framework-in-core-a",
+        "expect": "architecture",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-architecture-ui-framework-in-core-b",
+        "expect": "architecture",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-comment-audit-counter-change-comments-a",
+        "expect": "comment-audit",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-comment-audit-counter-change-comments-b",
+        "expect": "comment-audit",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-comment-audit-doc-comment-syntax-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-comment-audit-doc-comment-syntax-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-comment-audit-remove-commented-out-code-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-comment-audit-remove-commented-out-code-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-comment-audit-restate-the-code-a",
+        "expect": "comment-audit",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-comment-audit-restate-the-code-b",
+        "expect": "comment-audit",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ],
+          [
+            "comment-audit"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-after-gate-green-a",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-after-gate-green-b",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-human-review-tips-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-human-review-tips-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-review-main-vs-head-a",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-main-vs-head-b",
+        "expect": "review",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "review"
+          ],
+          [
+            "review"
+          ],
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-doc-wording-a",
+        "expect": "prose",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-review-review-doc-wording-b",
+        "expect": "prose",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ],
+          [
+            "prose"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-step-size-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-step-size-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-failing-client-test-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-failing-client-test-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-list-counter-tests-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-list-counter-tests-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-testing-section-after-fix-a",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-testing-section-after-fix-b",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-can-i-open-pr-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-can-i-open-pr-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-filter-one-test-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-filter-one-test-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-flaky-engine-test-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-flaky-engine-test-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-heavy-tiers-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-heavy-tiers-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-evidence-before-ready-a",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-evidence-before-ready-b",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-reviewer-wants-proof-a",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-reviewer-wants-proof-b",
+        "expect": "validate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-tests-not-slop-before-pr-a",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-tests-not-slop-before-pr-b",
+        "expect": "test-gate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-where-did-i-leave-off-a",
+        "expect": "status",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      },
+      {
+        "case": "routing-validate-where-did-i-leave-off-b",
+        "expect": "status",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "status"
+          ],
+          [
+            "status"
+          ],
+          [
+            "status"
+          ]
+        ]
+      }
+    ]
+  },
+  "heldOutRound2": {
+    "note": "32 cases an independent agent wrote before the fix; 16 ran in a batch that mixed in by mistake, on the same final descriptions, and were kept without being read first",
+    "trials": 96,
+    "perSkill": {
+      "architecture": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "review": {
+        "expectedTrials": 6,
+        "loadedTrials": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 6,
+        "precision": null,
+        "recall": 0
+      },
+      "tdd": {
+        "expectedTrials": 30,
+        "loadedTrials": 30,
+        "tp": 30,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 24,
+        "loadedTrials": 21,
+        "tp": 21,
+        "fp": 0,
+        "fn": 3,
+        "precision": 1,
+        "recall": 0.875
+      },
+      "validate": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 30
+      },
+      "architecture": {
+        "architecture": 6
+      },
+      "none": {
+        "none": 24
+      },
+      "review": {
+        "none": 6
+      },
+      "test-gate": {
+        "test-gate": 21,
+        "none": 3
+      },
+      "validate": {
+        "validate": 6
+      }
+    },
+    "passAllK": 28,
+    "casesTotal": 32,
+    "flaky": [
+      "routing-test-gate-claude-written-tests-padding-sweep-b",
+      "routing-test-gate-gut-dismiss-would-tests-notice-a"
+    ],
+    "cases": [
+      {
+        "case": "routing-tdd-diff-coverage-dismiss-path-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-diff-coverage-dismiss-path-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-dismiss-test-red-after-rebase-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-dismiss-test-red-after-rebase-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-fact-load-error-surfaced-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-fact-load-error-surfaced-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-httpclient-timeout-flaky-ci-a",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-httpclient-timeout-flaky-ci-b",
+        "expect": "tdd",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-leaderboard-client-package-scaffold-a",
+        "expect": "architecture",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-leaderboard-client-package-scaffold-b",
+        "expect": "architecture",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ],
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-locate-snapshot-tests-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-locate-snapshot-tests-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-run-named-swift-test-command-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-run-named-swift-test-command-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-teststore-flaky-why-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-teststore-flaky-why-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-approve-reducer-code-not-tests-a",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-approve-reducer-code-not-tests-b",
+        "expect": "review",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-ci-split-snapshot-job-a",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-ci-split-snapshot-job-b",
+        "expect": "none",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-claude-written-tests-padding-sweep-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-claude-written-tests-padding-sweep-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 1,
+        "loaded": [
+          [],
+          [],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-done-before-asking-human-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-done-before-asking-human-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-gut-dismiss-would-tests-notice-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 2,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-gut-dismiss-would-tests-notice-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-out-of-draft-today-a",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-out-of-draft-today-b",
+        "expect": "test-gate",
+        "kind": "should-trigger",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-verification-blurb-a",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-verification-blurb-b",
+        "expect": "validate",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-rewrite-hollow-dismiss-test-a",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-rewrite-hollow-dismiss-test-b",
+        "expect": "tdd",
+        "kind": "near-miss",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      }
+    ]
+  },
+  "plantedBreaks": {
+    "baitSentence": {
+      "tdd": {
+        "nearMissTrials": 8,
+        "wrongLoads": 0
+      },
+      "test-gate": {
+        "nearMissTrials": 8,
+        "wrongLoads": 0
+      },
+      "verdict": "not caught; the break did not change routing"
+    },
+    "claimNeighbours": {
+      "tdd": {
+        "nearMissTrials": 8,
+        "wrongLoads": 6,
+        "precisionBefore": 1,
+        "precisionAfter": 0
+      },
+      "verdict": "caught"
+    }
+  },
+  "costUsd": {
+    "baseline": 2.93,
+    "tuningAfter": 8.83,
+    "heldOut": 10.91,
+    "plantedBreaks": 1.31,
+    "testGateGraderProof": 0.09,
+    "total": 24.07
+  }
+}

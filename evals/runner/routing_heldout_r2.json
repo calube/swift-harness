@@ -1,0 +1,78 @@
+{
+  "tdd": {
+    "should": [
+      ["dismiss-test-red-after-rebase", "failing test in the branch's own package; must change code", [
+        "rebased fact-dismiss onto main and now the dismiss case in CounterCoreTests is red. it expects fact to be nil after dismissing but it's still holding the old string. get it green",
+        "`swift test` in Packages/CounterFeature: the fact-dismiss test fails, expected nil got \"42 is the answer...\". something in the reducer isn't clearing it. sort it out pls"
+      ]],
+      ["httpclient-timeout-flaky-ci", "intermittent test tied to wall-clock timing; needs stabilising", [
+        "HTTPClient's timeout test passes on my machine but dies maybe one run in five on CI. pretty sure it's leaning on real time somewhere. make it reliable",
+        "the retry/timeout case in HTTPClientTests is intermittent. I think it's racing an actual sleep. rework it so it's not at the mercy of the clock"
+      ]],
+      ["fact-load-error-surfaced", "behaviour change with no test vocabulary at all", [
+        "right now if the number fact request throws, the counter screen just shows nothing. I want an error message in state that the view can display instead",
+        "when APIClient errors out fetching the fact the user gets zero feedback. put a failure message on CounterCore's state and render it under the count"
+      ]],
+      ["diff-coverage-dismiss-path", "coverage/untested-change finding; requires writing Swift tests", [
+        "swiftgate is complaining about impact.untested-change on the dismiss handling I added in CounterCore. cover it properly",
+        "diff coverage on fact-dismiss is way under the bar, the new dismiss branch in the reducer basically has nothing exercising it. bring it up"
+      ]]
+    ],
+    "near": [
+      ["teststore-flaky-why", "none", "shares \"flaky\"; asks only for an explanation", [
+        "what usually makes a TCA TestStore test flaky? not asking you to touch anything, just want to understand it",
+        "genuinely curious, no changes: why would a reducer test with effects pass most runs and then randomly fail?"
+      ]],
+      ["locate-snapshot-tests", "none", "test vocabulary; only locating files", [
+        "where do the snapshot tests for the counter view live?",
+        "which file has CounterUI's snapshot tests in it, and where are the reference images kept?"
+      ]],
+      ["run-named-swift-test-command", "none", "user names the exact command to run", [
+        "run `swift test --filter CounterCoreTests` in Packages/CounterFeature and tell me what it prints",
+        "can you just kick off `swift test` inside Packages/GameEngine and tell me how many passed"
+      ]],
+      ["leaderboard-client-package-scaffold", "architecture", "new client module with test target; scaffolding not TDD", [
+        "need a new package for a leaderboard client that talks to our backend. interface + live split, test target included. set it up",
+        "we're adding online high scores. make me the module(s) for a LeaderboardClient, wherever the interface and the real network impl should go, tests target and all"
+      ]]
+    ]
+  },
+  "test-gate": {
+    "should": [
+      ["gut-dismiss-would-tests-notice", "judge whether new tests actually pin behaviour", [
+        "if I deleted the body of the dismiss handler, would any of the tests I added on this branch notice? go through them and tell me",
+        "not convinced the fact-dismiss tests on my branch would go red if the feature broke. assess them honestly, don't rewrite anything"
+      ]],
+      ["out-of-draft-today", "pre-ready gate plus test sanity before leaving draft", [
+        "want fact-dismiss out of draft today. run whatever gates it needs to clear and sanity check that the tests I added actually pin the behaviour",
+        "fact-dismiss is feature complete and I'm about to flip the PR from draft. put it through the full set of checks it has to pass first, tests included"
+      ]],
+      ["done-before-asking-human", "post-implementation heavy tiers before human review", [
+        "ok dismiss is done and green locally. before I bug anyone for review make sure it holds up: stress, flows, the lot",
+        "finished the dismiss work. next step before a person looks at it is the heavy test tiers and a once-over on whether the new tests are meaningful. go"
+      ]],
+      ["claude-written-tests-padding-sweep", "flag padding tests without fixing them", [
+        "claude wrote most of the tests on this branch and a few look like they just assert the initial state. flag any that are padding before I push, don't change them yet",
+        "suspicious that some of the new tests on fact-dismiss are only there to look busy. which ones would pass even with a broken reducer? just point them out"
+      ]]
+    ],
+    "near": [
+      ["pr-verification-blurb", "validate", "PR-ready framing; wants evidence text", [
+        "reviewer asked how I verified fact-dismiss. draft that part of the PR description with actual numbers",
+        "need the verification blurb for my pull request: what ran, pass counts, how long it took, and anything skipped"
+      ]],
+      ["approve-reducer-code-not-tests", "review", "says gate/tests done; wants merge verdict on code", [
+        "tests are fine, I already ran the gate. I want someone to look at the reducer code itself. would you approve this if you were on my team?",
+        "gate's green so skip the test stuff. read through the actual changes on fact-dismiss and tell me if it should merge or needs work"
+      ]],
+      ["ci-split-snapshot-job", "none", "CI/test config question, no action on branch", [
+        "our CI runs swift test on every push and it's slow. what are my options for splitting snapshot tests into their own job? just explain",
+        "general opinion: should a GitHub Actions workflow fail the build if a test only passed after a retry?"
+      ]],
+      ["rewrite-hollow-dismiss-test", "tdd", "shares slop/real vocabulary; asks to rewrite a test", [
+        "review feedback says the dismiss test asserts nothing meaningful. rewrite it so it'd actually fail if dismiss stopped clearing the fact",
+        "my testDismissFact is hollow, it passes even when I comment out the reducer change. make it a real test that catches that"
+      ]]
+    ]
+  }
+}

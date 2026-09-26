@@ -1,0 +1,507 @@
+{
+ "design": {
+  "should": [
+   [
+    "push-notif-signoff",
+    60,
+    "Wants a reviewed, approved write-up before any code.",
+    [
+     "Thinking about daily fact push notifications. Before anyone touches code I want the approach written up, reviewed and signed off.",
+     "we might add push notifs for the daily number fact. no code yet, I want a proper reviewed proposal first that I can approve"
+    ]
+   ],
+   [
+    "multiplayer-approach",
+    60,
+    "New capability; wants approach worked out before plan or code.",
+    [
+     "We want two-player mode in GameEngine. Work out the approach with me and get it to an approved doc before there's any plan or code.",
+     "two player support for the game engine, big change. walk me through options and get it written up for approval first, nothing built yet"
+    ]
+   ],
+   [
+    "error-flow-tradeoffs",
+    60,
+    "Asks for options, tradeoffs and sign-off before implementation.",
+    [
+     "I want to rethink how HTTPClient errors travel up to the counter UI. Lay out options and tradeoffs in a doc I can approve before we build anything.",
+     "error handling from HTTPClient to the screen is a mess. before changing code, give me a written proposal with the alternatives weighed, for sign-off"
+    ]
+   ],
+   [
+    "amend-cache-design",
+    40,
+    "Changing an approved design maps to --amend.",
+    [
+     "The fact-caching design got approved last week but we're dropping the disk tier. Amend it.",
+     "need to change the approved fact cache design: no on-disk layer anymore, memory only. update the approved doc accordingly"
+    ]
+   ],
+   [
+    "supersede-retry-design",
+    40,
+    "Replacing an old design maps to --supersede.",
+    [
+     "The retry design we approved assumed no backoff. Replace it with a new one that supersedes it.",
+     "old HTTP retry design is wrong (no backoff). write a successor that officially replaces it"
+    ]
+   ]
+  ],
+  "near": [
+   [
+    "haptics-module-scaffold",
+    "architecture",
+    60,
+    "Module kind and scaffold, not a pre-code design doc.",
+    [
+     "Design me a HapticsClient module: interface plus live impl, and scaffold the packages.",
+     "need a haptics wrapper package pair (client + Live). pick the shape and create it"
+    ]
+   ],
+   [
+    "approved-design-to-tasks",
+    "plan",
+    60,
+    "Approved design next step is a build plan.",
+    [
+     "The fact-caching design was approved this morning. Break it into buildable tasks now.",
+     "cache design has the thumbs up. turn it into the task breakdown we'll execute"
+    ]
+   ],
+   [
+    "tca-vs-mvvm-explain",
+    "none",
+    60,
+    "General design-pattern explanation, no repo work.",
+    [
+     "Explain the design differences between TCA and MVVM. Just talk, no code.",
+     "quick q, conceptually how does TCA's design compare to plain MVVM? no changes"
+    ]
+   ],
+   [
+    "review-dismiss-branch",
+    "review",
+    40,
+    "Merge verdict on code, not a design doc.",
+    [
+     "Is the way I designed the dismiss action in the reducer sound? Review my branch and tell me if it merges.",
+     "look at the reducer on fact-dismiss and give me a verdict: is the dismiss handling well built enough to merge"
+    ]
+   ],
+   [
+    "store-internals-explain",
+    "none",
+    40,
+    "Library internals question, no change being designed.",
+    [
+     "How is ComposableArchitecture's Store designed internally? Just explain, don't touch anything.",
+     "curious how TCA's Store works under the hood, design-wise. explanation only"
+    ]
+   ]
+  ]
+ },
+ "plan": {
+  "should": [
+   [
+    "notif-design-approved",
+    60,
+    "Approved design needs a build plan.",
+    [
+     "The push notification design is approved. Turn it into a build plan.",
+     "notifs design got signed off, go ahead and produce the build plan from it"
+    ]
+   ],
+   [
+    "multiplayer-task-ledger",
+    60,
+    "Split approved design into ledger tasks.",
+    [
+     "Two-player design just got approved. Split it into tasks with dependencies we can hand to workers.",
+     "multiplayer doc is approved. carve it up into ordered work items for the build"
+    ]
+   ],
+   [
+    "after-design-skill",
+    60,
+    "Follows /swift-harness:design approval.",
+    [
+     "/swift-harness:design reported the retry design as approved. What's next is the plan, do it.",
+     "design skill says approved on the retry one. move on to scheduling the build tasks"
+    ]
+   ],
+   [
+    "error-flow-chunks",
+    40,
+    "Approved design into implementable chunks.",
+    [
+     "Error-flow design has approval. Chop it into implementable chunks and schedule them.",
+     "ok the HTTPClient error design is approved, break it down into the actual build tasks"
+    ]
+   ],
+   [
+    "cache-plan-json",
+    40,
+    "Wants plan and task tracker from approved design.",
+    [
+     "Fact cache design is approved at its latest revision. Build the plan and the task tracker for it.",
+     "latest fact cache design is signed off. set up the plan and task tracking so we can start building"
+    ]
+   ]
+  ],
+  "near": [
+   [
+    "todo-today",
+    "none",
+    60,
+    "Personal to-do list, not a harness plan.",
+    [
+     "Give me a quick to-do list for wrapping up fact-dismiss today.",
+     "what should my checklist be for the rest of today on fact-dismiss? just bullets"
+    ]
+   ],
+   [
+    "sprint-plan",
+    "none",
+    60,
+    "Team sprint planning in chat.",
+    [
+     "Draft a two-week sprint plan for a three-person iOS team. Bullets in chat is fine.",
+     "sketch a sprint plan for next two weeks, 3 devs, nothing fancy, just reply here"
+    ]
+   ],
+   [
+    "no-design-yet",
+    "design",
+    60,
+    "No design exists; must design before planning.",
+    [
+     "I want to plan a haptics feature but there's no design for it yet. Start there and get it approved first.",
+     "haptics feature: no design exists. before any build plan, work out the approach and get it approved"
+    ]
+   ],
+   [
+    "list-open-plans",
+    "status",
+    40,
+    "Listing existing plans is status.",
+    [
+     "List the harness plans I have open on this machine with their resume points.",
+     "which swift-harness plans exist across my repos right now and what's each one's status"
+    ]
+   ],
+   [
+    "plan-then-build-triple",
+    "tdd",
+    40,
+    "Small reducer change done test-first.",
+    [
+     "Plan out a 'triple' action for the counter reducer, then just build it with a test.",
+     "quickly plan and implement a triple-the-count action in CounterFeature, test first"
+    ]
+   ]
+  ]
+ },
+ "prose": {
+  "should": [
+   [
+    "gate-prose-findings",
+    60,
+    "swiftgate prose findings to fix in markdown.",
+    [
+     "swiftgate prose flagged prose.passive-voice and prose.em-dash in README.md. Fix them.",
+     "prose gate is red on the README, passive voice and em dashes. clear those findings"
+    ]
+   ],
+   [
+    "design-lint-prose",
+    60,
+    "design-lint reports prose.* findings.",
+    [
+     "design-lint fails with prose findings on adverbs and number words in the cache design. Clean them up.",
+     "the cache design doc won't pass design-lint, it's all prose.* stuff (adverbs, numbers as words). sort the wording out"
+    ]
+   ],
+   [
+    "adr-draft-gated",
+    60,
+    "Writing an ADR the harness gates.",
+    [
+     "Draft an ADR at docs/adr/0001-use-tca.md on why we chose TCA. It has to clear the prose gate on the first run.",
+     "write up our decision to use TCA as ADR 0001 under docs/adr, and make sure swiftgate prose won't complain about it"
+    ]
+   ],
+   [
+    "docs-testing-page",
+    40,
+    "New docs/ page written to the prose rules.",
+    [
+     "Write a short docs/testing.md explaining how tests run here. The gate checks passive voice, filler and em-dashes, so avoid them.",
+     "add docs/testing.md, a page on how we run tests. keep it clean for swiftgate prose: short sentences, no filler, no jargon"
+    ]
+   ],
+   [
+    "plan-notes-wording",
+    40,
+    "Editing running prose in gated markdown.",
+    [
+     "The markdown notes in the cache design are full of long sentences and jargon. Rewrite that section so the prose checks pass.",
+     "that design doc's rationale section reads like mush, sentences go on forever. rework the wording so it passes the gate"
+    ]
+   ]
+  ],
+  "near": [
+   [
+    "wordy-doc-comments",
+    "comment-audit",
+    60,
+    "Swift comments in a change, not markdown prose.",
+    [
+     "The /// comments I staged in CounterCore are wordy and just restate the code. Which ones should go?",
+     "my staged swift comments in the reducer feel bloated. tell me keep/trim/cut for each"
+    ]
+   ],
+   [
+    "slack-message",
+    "none",
+    60,
+    "Chat message, not a gated markdown file.",
+    [
+     "Write a short, plain Slack message telling the team the counter redesign ships Monday.",
+     "need a quick slack post: counter redesign going out monday. keep it simple"
+    ]
+   ],
+   [
+    "commit-message",
+    "none",
+    60,
+    "Commit message, not gated prose.",
+    [
+     "Write a commit message for my staged change. Plain and short.",
+     "give me a one-line commit msg for what's staged, nothing wordy"
+    ]
+   ],
+   [
+    "passive-voice-explain",
+    "none",
+    40,
+    "General grammar question.",
+    [
+     "What's the difference between active and passive voice? A couple of examples.",
+     "explain passive voice vs active, with examples, general english question"
+    ]
+   ],
+   [
+    "email-grammar",
+    "none",
+    40,
+    "Proofreading an email, not repo markdown.",
+    [
+     "Grammar check this before I send it to my manager: \"we has finished the counter work and it are ready for test\"",
+     "fix the grammar in this email line pls: 'the dismiss feature have been done and are waiting on review'"
+    ]
+   ]
+  ]
+ },
+ "status": {
+  "should": [
+   [
+    "fresh-session-pick",
+    60,
+    "Session start, wants plans to resume.",
+    [
+     "Just opened a fresh session. Show me my open harness plans so I can pick one to pick back up.",
+     "new session. what harness plans do I have going so I can choose one to continue"
+    ]
+   ],
+   [
+    "plans-in-flight",
+    60,
+    "Active plans across all repos.",
+    [
+     "Across all my Swift repos, which harness plans are still in flight?",
+     "any swift-harness plans still open anywhere on this laptop?"
+    ]
+   ],
+   [
+    "resume-lines",
+    60,
+    "Explicitly asks for plan RESUME lines.",
+    [
+     "List every harness plan with its slug and RESUME line.",
+     "dump my harness plans: slug, state, and the resume line for each"
+    ]
+   ],
+   [
+    "other-repos",
+    40,
+    "Cross-repo plan overview.",
+    [
+     "What plans have I got going in the other bootstrapped repos on this machine?",
+     "check my other harness projects too, what plans are active over there"
+    ]
+   ],
+   [
+    "blocked-plans",
+    40,
+    "Plan status across projects.",
+    [
+     "Which of my harness plans are in progress or stuck right now, across projects?",
+     "show me the state of each harness plan I own, including the stalled ones"
+    ]
+   ]
+  ],
+  "near": [
+   [
+    "git-staged",
+    "none",
+    60,
+    "Git status question.",
+    [
+     "What's the git status here? What's staged?",
+     "run git status and tell me what's staged vs not"
+    ]
+   ],
+   [
+    "ci-status",
+    "none",
+    60,
+    "CI status question.",
+    [
+     "Did the last CI run on fact-dismiss pass?",
+     "what's CI saying about fact-dismiss, green or red?"
+    ]
+   ],
+   [
+    "build-status",
+    "none",
+    60,
+    "Build status, not harness plans.",
+    [
+     "Does the app build right now? Just build it and tell me.",
+     "quick build status check: does the app target compile at the moment"
+    ]
+   ],
+   [
+    "pr-status",
+    "none",
+    40,
+    "GitHub PR status.",
+    [
+     "What's the status of my PR on GitHub? Any review comments yet?",
+     "has anyone left comments on the fact-dismiss PR? where's it at"
+    ]
+   ],
+   [
+    "branch-ahead",
+    "none",
+    40,
+    "Branch position relative to main.",
+    [
+     "How far ahead of main is fact-dismiss? Commit count is fine.",
+     "status of my branch vs main: how many commits ahead or behind"
+    ]
+   ]
+  ]
+ },
+ "bootstrap": {
+  "should": [
+   [
+    "upgrade-harness-files",
+    60,
+    "Upgrade stamped harness files.",
+    [
+     "The harness files in this repo are a version behind. Bring them up to date.",
+     "our AGENTS.md and .swiftgate.toml came from an older harness release. refresh them to current"
+    ]
+   ],
+   [
+    "hooks-not-firing",
+    60,
+    "Add lefthook git hooks.",
+    [
+     "Commits here skip the gate entirely; lefthook was never wired up. Get the harness git hooks installed.",
+     "no pre-commit hooks running in this repo. hook it up the harness way"
+    ]
+   ],
+   [
+    "doctor-shim-missing",
+    60,
+    "doctor reports shim missing.",
+    [
+     "swiftgate doctor says the shim at ~/.local/bin/swiftgate is missing. Fix it.",
+     "doctor output: swiftgate link in ~/.local/bin is stale. repair it"
+    ]
+   ],
+   [
+    "other-repo-no-toml",
+    40,
+    "Repo without .swiftgate.toml needs stamping.",
+    [
+     "I cloned another iOS app into ~/code/Recipes. It has no .swiftgate.toml. Get it onto the harness.",
+     "~/code/Recipes is a swift app with none of the harness stuff. stamp it, show me what'd change first"
+    ]
+   ],
+   [
+    "regen-agents-toml",
+    40,
+    "Regenerate router and config via bootstrap.",
+    [
+     "Re-run the harness stamping so AGENTS.md and .swiftgate.toml match the repo as it is now. Show me the diff first.",
+     "packages changed since we stamped. regenerate the harness config from the current repo, diff before writing"
+    ]
+   ]
+  ],
+  "near": [
+   [
+    "bootstrap-new-package",
+    "architecture",
+    60,
+    "New module scaffold, not harness stamping.",
+    [
+     "Bootstrap a new StatsEngine package for game scoring logic, no TCA.",
+     "spin up a fresh package for score stats, plain engine not a reducer. scaffold it"
+    ]
+   ],
+   [
+    "install-xcode",
+    "none",
+    60,
+    "Tooling install unrelated to harness.",
+    [
+     "How do I install the Xcode command line tools?",
+     "what's the command to get xcode CLI tools on a new mac"
+    ]
+   ],
+   [
+    "swiftlint-general",
+    "none",
+    60,
+    "General SwiftLint setup question.",
+    [
+     "In general, how do you add SwiftLint to a plain Xcode project with no plugins? Just explain.",
+     "generic question: wiring swiftlint into an ordinary xcode project by hand, how?"
+    ]
+   ],
+   [
+    "bootstrap-first-test",
+    "tdd",
+    40,
+    "Test-first behaviour change in Swift code.",
+    [
+     "Bootstrap a failing test for a new pause action in GameEngine, then implement pause.",
+     "want GameEngine to support pausing. start with a red test and build it from there"
+    ]
+   ],
+   [
+    "gitignore-generic",
+    "none",
+    40,
+    "Generic gitignore snippet request.",
+    [
+     "What's a good .gitignore for an Xcode project? Paste one here.",
+     "give me a standard xcode gitignore in chat, don't edit files"
+    ]
+   ]
+  ]
+ }
+}

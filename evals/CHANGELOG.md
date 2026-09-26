@@ -1,5 +1,36 @@
 # Eval changelog
 
+## 2026-09-26
+
+- **Added round-2 routing cases:** 18 tuning cases for fixing and judging tests, and 32 held-out
+  cases that an independent agent wrote before the description fix. On the old descriptions, the
+  tuning cases scored `tdd` recall 0.40 and `test-gate` recall 0.33.
+- **`routing.mjs` takes `--round`,** and each case carries a `round-N` tag.
+- **Added the `test-gate` session case** `hollow-test-before-ready`, with its scaffold
+  `sampleapp-hollow-test.sh`. Its judge rubric passed a good synthetic transcript 3 of 3 and failed
+  4 bad ones 0 of 3. It hasn't run live.
+- **Planted precision breaks:** a bait sentence moved nothing (0 of 16 wrong loads), and the
+  near-misses caught a description that claimed its neighbours' jobs (6 of 8 wrong loads). See
+  `results/2026-09-26-routing-fix/summary.md`.
+- **Result of the description fix:** held-out `tdd` recall went from 0.67 to 1.00. On the
+  independent set, `test-gate` recall is 0.88. Precision is 1.00 throughout.
+
+- **Added 120 routing cases** for the 6 foundation skills. `evals/runner/seed_routing.mjs` writes
+  them, with a 60/40 split by request. Added `evals/runner/routing.mjs`, which scores precision,
+  recall, a confusion table and pass^k from kept traces, and `routing_test.mjs`.
+- **The routing scaffold now carries a change in progress** (`evals/scaffold/sampleapp-with-change.sh`):
+  a feature branch with 1 commit and 1 staged edit. On the plain scaffold, "Would you merge this
+  diff" failed 2 of 3 because no diff existed. After the fix: 3 of 3.
+- **Routing cases run at `max_turns: 1`,** down from 2, and the template case moved from 4 to 2.
+  All 136 skill loads in the first 162 trials came in turn 1. Turn 2 only spawned subagents.
+  Mean cost per run: 0.107 USD before, 0.055 after, with no change in any grade.
+- **Loosened the `tdd` rubric** `red-then-green` to accept any test runner's RED and GREEN, with
+  the user's approval. On synthetic transcripts it passes 2 of 2 good runs and fails 3 of 3 bad
+  runs. The old rubric also passed the plugin-off good transcript 3/3, so the judge wasn't
+  holding runs to the word "swiftgate". The next `tdd` session run owes a proof on real runs.
+- **Result:** held-out recall and precision 1.00 for 5 of 6 skills. `tdd` recall is 0.67.
+  See `results/2026-09-26-routing-foundation/summary.md`.
+
 ## 2026-09-25
 
 - **Added** the runner-spike cases `routing/tdd/add-test-for-reducer` and

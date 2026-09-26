@@ -1,0 +1,35 @@
+{"test-gate": {
+"should": [
+ ["r3-silent-regression-odds", "Pure judgment: would branch tests notice a regression", [
+   "say the dismiss logic quietly regressed next month. do the tests I wrote on this branch stand any chance of noticing, or are they just along for the ride?",
+   "honest take on the fact-dismiss tests I added: load-bearing, or decorative?"]],
+ ["r3-circular-mock-asserts", "Pure judgment: are new tests tautological against their own mocks", [
+   "feels like a couple of my new tests just assert whatever the stubbed APIClient hands back. are any of them circular? just tell me, don't edit",
+   "suspect some tests on this branch only check the mock's own return value against itself. which ones prove nothing about the reducer?"]],
+ ["r3-coverage-without-checks", "Pure judgment: tests execute lines but may assert nothing", [
+   "coverage on my branch looks great but I don't trust it. are the tests I added actually checking behaviour or just running the lines?",
+   "high line coverage, fine, but do my new tests verify anything? point out the ones that only exercise code without looking at the result"]],
+ ["r3-nonexhaustive-teststore", "Pure judgment: whether non-exhaustive TestStore test pins behaviour", [
+   "my new CounterCore test sets exhaustivity to off. is it still pinning down the dismiss behaviour, or is it basically waving everything through?",
+   "the TestStore test I wrote for fact dismissal is non-exhaustive. does it genuinely verify anything that matters or would it pass with the state all wrong?"]],
+ ["r3-draft-flip-test-vetting", "Readiness plus test-quality judgment before leaving draft", [
+   "fact-dismiss leaves draft after lunch. mostly worried the dismiss test is a rubber stamp. vet that and put the tests through whatever they need to clear",
+   "taking my branch out of draft soon, want the test side properly vetted first, especially whether the dismiss test proves anything at all"]]
+],
+"near": [
+ ["r3-add-nil-assertion", "tdd", "User explicitly asks to add a missing assertion", [
+   "testDismissFact only checks the action gets received. add an assertion that state.fact is nil after it",
+   "tack a check onto the dismiss test so it verifies fact ends up cleared, it's missing one"]],
+ ["r3-pr-tests-heading", "validate", "PR body testing evidence text, not test judgment", [
+   "PR template has a Tests heading. populate it for fact-dismiss with real run numbers, skipped stuff included",
+   "draft the testing notes for my pull request body: which suites ran, pass counts, timings"]],
+ ["r3-prod-code-merge-call", "review", "Merge verdict on production code, tests excluded", [
+   "leaving the test files aside, does the dismiss implementation in CounterCore have real bugs? merge or not?",
+   "ignore the tests. judge the production code on fact-dismiss: ship it, fix first, or rework?"]],
+ ["r3-mutation-testing-explainer", "none", "General concept explanation, explicitly not about this branch", [
+   "what's mutation testing and how does it expose fake tests? general explanation, don't look at my repo",
+   "in plain terms, how would mutation testing catch a test that passes no matter what? no need to touch my code"]],
+ ["r3-dismiss-test-flaky", "tdd", "Stabilising a flaky test is tdd work", [
+   "the dismiss test goes red maybe one run in ten on my machine. figure out why and make it stable",
+   "testDismissFact is broken every so often locally, pass fail pass. make it deterministic"]]
+]}}
