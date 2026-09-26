@@ -1,0 +1,2 @@
+{"citation":{"kind":"file","loc":"notes.txt:L1","pin":"HEAD","quote":"goodbye world"},"id":"ev-notes-say-hello","lane":"codebase","status":"new","text":"The notes say goodbye."}
+{"citation":{"kind":"file","loc":"notes.txt:L1","pin":"HEAD","quote":"hello world"},"id":"ev-notes-say-hello","lane":"codebase","status":"new","text":"The notes say hello."}

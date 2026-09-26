@@ -85,6 +85,28 @@ struct EvidenceCheckTests {
     #expect(Self.outcome(Self.tcaClaim(lines: "L1-L2"), Self.tcaSources) == .failed(.quoteNotFound))
   }
 
+  @Test(
+    "a range one line past a newline-terminated file fails as context-pack does — catches the final newline counted as a line"
+  )
+  func rangePastFinalNewlineFails() {
+    let path = "Sources/A.swift"
+    let text = "first\nsecond\n"
+    let sources = InMemoryEvidenceSources(repoFiles: [path: text])
+    for (range, lineCount) in [("L1-L3", 2), ("L3", 2)] {
+      let citation = Citation(kind: .file, loc: "\(path):\(range)", pin: "abc", quote: "first")
+      let claim = Claim(
+        id: "ev-some-cited-fact", lane: "codebase", text: "t", citation: citation, status: .new)
+      #expect(
+        Self.outcome(claim, sources) == .failed(.lineRangeOutOfBounds(lineCount: lineCount)),
+        "\(range)")
+      #expect(throws: ContextPackError.self, "\(range)") {
+        try CitationExcerptSlicer.slice(for: citation, rawText: text, sourceLabel: path)
+      }
+    }
+    let inBounds = Self.claim(.file, loc: "\(path):L1-L2", pin: "abc", quote: "second")
+    #expect(Self.outcome(inBounds, sources) == .passed)
+  }
+
   @Test("a line range past the end of the file fails — catches an out-of-bounds slice")
   func lineRangePastEndFails() {
     #expect(
@@ -219,12 +241,138 @@ struct EvidenceCheckTests {
       "Sources/Users/UserList.swift",
       "home/HomeFeature.swift",
       "Features/home/Users/View.swift",
-      "Sources/../Sources/A.swift",
       "./Sources/A.swift",
       "docs/$HOMEPAGE.md",
     ])
   func repoRelativePathPasses(path: String) {
     #expect(RepoRelativePath.problem(path) == nil)
+  }
+
+  @Test(
+    "any loc with a parent-directory component fails, in every kind — catches a spelling that dodges the checkout rule",
+    arguments: [
+      (
+        Citation.Kind.file,
+        "Sources/../.build/checkouts/swift-composable-architecture/Sources/A.swift:L1"
+      ),
+      (.file, "Sources/../Sources/A.swift:L1"),
+      (.file, ".build/checkouts/swift-composable-architecture/../../Sources/A.swift:L1"),
+      (.snapshot, "snapshots/../claims.jsonl"),
+      (.capture, "captures/../captures/x.txt"),
+      (.probe, "probes/../probes/Probe_ev_some_cited_fact.swift"),
+      (.answer, "snapshots/../answers.jsonl#run-a/1"),
+    ])
+  func parentReferenceFails(kind: Citation.Kind, loc: String) {
+    let path = loc.components(separatedBy: ":L")[0]
+    let sources = InMemoryEvidenceSources(
+      repoFiles: [path: "x"], evidenceFiles: [path: Data("x".utf8)],
+      packageResolved: Self.resolved(["swift-composable-architecture": "1.26.2"]))
+    let claim = Self.claim(kind, loc: loc, pin: "swift-composable-architecture@1.26.2", quote: "x")
+    #expect(Self.outcome(claim, sources) == .failed(.locPath(.parentReference)))
+  }
+
+  @Test(
+    "a checkout spelled with other letter case, extra dots or slashes is pin-checked — catches a pin bypass by respelling .build/checkouts",
+    arguments: [
+      ".BUILD/checkouts/swift-composable-architecture/Sources/A.swift",
+      ".build/Checkouts/swift-composable-architecture/Sources/A.swift",
+      "./.Build//CHECKOUTS/swift-composable-architecture/Sources/A.swift",
+      ".build/checkouts/Swift-Composable-Architecture/Sources/A.swift",
+    ])
+  func respelledCheckoutIsPinChecked(path: String) {
+    let sources = InMemoryEvidenceSources(
+      repoFiles: [path: "x"],
+      packageResolved: Self.resolved(["swift-composable-architecture": "1.26.2"]))
+    let claim = Self.claim(
+      .file, loc: "\(path):L1", pin: "swift-composable-architecture@1.0.0", quote: "x")
+    #expect(
+      Self.outcome(claim, sources)
+        == .failed(.pinVersionMismatch(pinned: "1.0.0", resolved: "1.26.2")))
+  }
+
+  @Test(
+    "a .build path that isn't a package checkout fails — catches citing a package's bare clone or a build product at any version",
+    arguments: [
+      ".build/repositories/swift-composable-architecture-1234/Sources/A.swift",
+      ".build/debug/ComposableArchitecture.swiftmodule/A.swift",
+      ".build/checkouts/swift-composable-architecture",
+      "App/.BUILD/artifacts/x/A.swift",
+    ])
+  func buildOutputFails(path: String) {
+    let sources = InMemoryEvidenceSources(repoFiles: [path: "x"])
+    let claim = Self.claim(
+      .file, loc: "\(path):L1", pin: "swift-composable-architecture@1.26.2", quote: "x")
+    #expect(Self.outcome(claim, sources) == .failed(.locPath(.buildOutput)))
+  }
+
+  @Test(
+    "a nested project's checkout is pin-checked against that project's Package.resolved — catches a nested checkout skipping the pin or borrowing the root's"
+  )
+  func nestedCheckoutUsesItsOwnResolved() {
+    let path = "examples/App/.build/checkouts/swift-composable-architecture/Sources/A.swift"
+    let sources = InMemoryEvidenceSources(
+      repoFiles: [
+        path: "x\n",
+        "examples/App/Package.resolved": String(
+          decoding: Self.resolved(["swift-composable-architecture": "1.26.2"]), as: UTF8.self),
+      ],
+      packageResolved: Self.resolved(["swift-composable-architecture": "1.0.0"]))
+    let pinned = { (version: String) in
+      Self.claim(
+        .file, loc: "\(path):L1", pin: "swift-composable-architecture@\(version)", quote: "x")
+    }
+    #expect(Self.outcome(pinned("1.26.2"), sources) == .passed)
+    #expect(
+      Self.outcome(pinned("1.0.0"), sources)
+        == .failed(.pinVersionMismatch(pinned: "1.0.0", resolved: "1.26.2")))
+    let noResolved = InMemoryEvidenceSources(
+      repoFiles: [path: "x\n"],
+      packageResolved: Self.resolved(["swift-composable-architecture": "1.26.2"]))
+    #expect(Self.outcome(pinned("1.26.2"), noResolved) == .failed(.packageResolvedMissing))
+  }
+
+  @Test(
+    "a loc that passes through a symbolic link fails, in the repo and in the evidence root — catches a link hiding a checkout or a file outside the repo"
+  )
+  func symlinkedLocFails() {
+    let repo = InMemoryEvidenceSources(
+      repoFiles: ["Vendor/tca/Sources/A.swift": "x"], repoSymlinks: ["Vendor/tca"])
+    #expect(
+      Self.outcome(
+        Self.claim(.file, loc: "Vendor/tca/Sources/A.swift:L1", pin: "a", quote: "x"), repo)
+        == .failed(.locPath(.symlink)))
+    let evidence = InMemoryEvidenceSources(
+      evidenceFiles: ["snapshots/list.md": Data("x".utf8)], evidenceSymlinks: ["snapshots/list.md"],
+      sdkVersion: "26.0")
+    #expect(
+      Self.outcome(
+        Self.claim(.snapshot, loc: "snapshots/list.md", pin: "26.0", quote: "x"), evidence)
+        == .failed(.locPath(.symlink)))
+    let unlinked = InMemoryEvidenceSources(
+      repoFiles: ["Vendor/tca/Sources/A.swift": "x"], repoSymlinks: ["Vendor/tcb"])
+    #expect(
+      Self.outcome(
+        Self.claim(.file, loc: "Vendor/tca/Sources/A.swift:L1", pin: "a", quote: "x"), unlinked)
+        == .passed)
+  }
+
+  @Test(
+    "every claim sharing an id fails, whatever each would say alone — catches a later line masking a refuted one"
+  )
+  func duplicateClaimIDsFail() {
+    let good = Self.tcaClaim()
+    let forged = Self.claim(
+      .file, loc: "\(Self.tcaPath):L4", pin: "swift-composable-architecture@1.26.2",
+      quote: "not in the file")
+    let other = Self.claim(
+      .file, loc: "\(Self.tcaPath):L1", pin: "swift-composable-architecture@1.26.2",
+      quote: "import Foundation", id: "ev-another-cited-fact")
+    let results = EvidenceCheck.check(
+      [forged, other, good], sources: Self.tcaSources, mode: .workingTree)
+    #expect(results.map(\.claimID) == [good.id, other.id, good.id])
+    #expect(
+      results.map(\.outcome) == [.failed(.duplicateClaimID), .passed, .failed(.duplicateClaimID)])
+    #expect(results.allSatisfy { $0.claimID == other.id || $0.claimStatus == .quoteFail })
   }
 
   @Test(
@@ -431,17 +579,34 @@ struct EvidenceCheckTests {
   static let probeID = "ev-list-supports-swipe-actions"
   static let probeLoc = "probes/Probe_ev_list_supports_swipe_actions.swift"
 
+  static let probeSnippetPath = "probes/ev-list-supports-swipe-actions.snippet.swift"
+  static let probeSnippet = Data("import SwiftUI\n\nstatic func run() {}\n".utf8)
+  static let probeWrapper = Data(
+    "import SwiftUI\n\nenum Probe_ev_list_supports_swipe_actions {\n  static func run() {}\n}\n"
+      .utf8)
+
+  /// A verdict bound to `probeSnippet` and `probeWrapper`; `hashes: nil` leaves both hash keys out,
+  /// the way a hand-written verdict would.
   static func probeSources(
     verdict: String = "pass", claimId: String = probeID,
     pins: String = #"{"swift-case-paths":"1.5.0"}"#,
-    sdk: String = "iphonesimulator26.0", currentSDK: String? = "iphonesimulator26.0"
+    sdk: String = "iphonesimulator26.0", currentSDK: String? = "iphonesimulator26.0",
+    hashes: (snippet: String, source: String)? = (
+      CaptureDigest.sha256Hex(probeSnippet), CaptureDigest.sha256Hex(probeWrapper)
+    ),
+    snippet: Data? = probeSnippet, wrapper: Data? = probeWrapper
   ) -> InMemoryEvidenceSources {
+    let bound =
+      hashes.map { #","snippetSha256":"\#($0.snippet)","sourceSha256":"\#($0.source)""# } ?? ""
     let json = """
-      {"claimId":"\(claimId)","verdict":"\(verdict)","diagnostics":[],"pins":\(pins),"sdk":"\(sdk)"}
+      {"claimId":"\(claimId)","verdict":"\(verdict)","diagnostics":[],"pins":\(pins),"sdk":"\(sdk)"\(bound)}
       """
+    var files = ["probes/Probe_ev_list_supports_swipe_actions.verdict.json": Data(json.utf8)]
+    files[probeSnippetPath] = snippet
+    files[probeLoc] = wrapper
     return InMemoryEvidenceSources(
-      evidenceFiles: ["probes/Probe_ev_list_supports_swipe_actions.verdict.json": Data(json.utf8)],
-      packageResolved: resolved(["swift-case-paths": "1.5.0"]), sdkVersion: currentSDK)
+      evidenceFiles: files, packageResolved: resolved(["swift-case-paths": "1.5.0"]),
+      sdkVersion: currentSDK)
   }
 
   static let probeClaim = claim(.probe, loc: probeLoc, id: probeID)
@@ -513,11 +678,59 @@ struct EvidenceCheckTests {
       pins: ["swift-case-paths": "1.5.0"], sdk: "iphonesimulator26.0")
     let path = ProbeVerdictRecord.path(forClaimID: Self.probeID)
     #expect(path == "probes/Probe_ev_list_supports_swipe_actions.verdict.json")
+    #expect(record.snippetSha256 == nil && record.sourceSha256 == nil)
+    let bound = ProbeVerdictRecord(
+      claimId: record.claimId, verdict: record.verdict, diagnostics: record.diagnostics,
+      pins: record.pins, sdk: record.sdk,
+      snippetSha256: CaptureDigest.sha256Hex(Self.probeSnippet),
+      sourceSha256: CaptureDigest.sha256Hex(Self.probeWrapper))
     let sources = InMemoryEvidenceSources(
-      evidenceFiles: [path: try ProbeVerdictRecord.encode(record)],
+      evidenceFiles: [
+        path: try ProbeVerdictRecord.encode(bound), Self.probeSnippetPath: Self.probeSnippet,
+        Self.probeLoc: Self.probeWrapper,
+      ],
       packageResolved: Self.resolved(["swift-case-paths": "1.5.0"]),
       sdkVersion: "iphonesimulator26.0")
     #expect(Self.outcome(Self.probeClaim, sources) == .failed(.probeFailed))
+    #expect(ProbeVerdictRecord.snippetPath(forClaimID: Self.probeID) == Self.probeSnippetPath)
+  }
+
+  @Test(
+    "a verdict with no snippet and source hashes fails unbound — catches a hand-written verdict accepted with no probe behind it"
+  )
+  func unboundProbeVerdictFails() {
+    let results = EvidenceCheck.check(
+      [Self.probeClaim], sources: Self.probeSources(hashes: nil), mode: .workingTree)
+    #expect(results.map(\.outcome) == [.failed(.probeVerdictUnbound)])
+    #expect(results.first?.claimStatus == nil)
+  }
+
+  @Test(
+    "an edited snippet or wrapper fails against the verdict's hashes — catches a verdict reused for code it never built"
+  )
+  func tamperedProbeSourceFails() {
+    let edited = Data("import SwiftUI\n\nstatic func run() { List {}.teleport() }\n".utf8)
+    #expect(
+      Self.outcome(Self.probeClaim, Self.probeSources(snippet: edited))
+        == .failed(.probeSourceMismatch(path: Self.probeSnippetPath)))
+    #expect(
+      Self.outcome(Self.probeClaim, Self.probeSources(wrapper: edited))
+        == .failed(.probeSourceMismatch(path: Self.probeLoc)))
+    #expect(
+      Self.outcome(Self.probeClaim, Self.probeSources(verdict: "fail", snippet: edited))
+        == .failed(.probeSourceMismatch(path: Self.probeSnippetPath)))
+  }
+
+  @Test(
+    "a verdict whose snippet or wrapper is gone fails naming the file — catches a verdict with no probe source on disk"
+  )
+  func missingProbeSourceFails() {
+    #expect(
+      Self.outcome(Self.probeClaim, Self.probeSources(snippet: nil))
+        == .failed(.probeSourceMissing(path: Self.probeSnippetPath)))
+    #expect(
+      Self.outcome(Self.probeClaim, Self.probeSources(wrapper: nil))
+        == .failed(.probeSourceMissing(path: Self.probeLoc)))
   }
 
   // MARK: - answer

@@ -31,6 +31,19 @@ public struct EvidenceFiles: EvidenceSources, Sendable {
     return Self.read(root.appending(path: path)).map { String(decoding: $0, as: UTF8.self) }
   }
 
+  /// Read from the working tree in both modes: a link git tracks is a link on disk too.
+  public func repoSymlink(_ path: String) -> String? {
+    PathPrefixes.of(path).first { prefix in
+      (try? FileManager.default.destinationOfSymbolicLink(
+        atPath: root.appending(path: prefix).path)) != nil
+    }
+  }
+
+  /// Every directory from the repo root down counts, the evidence root's own included.
+  public func evidenceSymlink(_ path: String) -> String? {
+    repoSymlink(evidenceRoot + "/" + path)
+  }
+
   public func evidenceFile(_ path: String) -> Data? {
     Self.read(root.appending(path: evidenceRoot).appending(path: path))
   }
@@ -128,8 +141,9 @@ public struct EvidenceFiles: EvidenceSources, Sendable {
     return version.isEmpty ? nil : version
   }
 
+  /// Any project's `.build`, at the root or nested, spelled in any letter case.
   private static func isUntrackedBuildPath(_ path: String) -> Bool {
-    path.split(separator: "/").first { $0 != "." } == ".build"
+    path.split(separator: "/").contains { $0.lowercased() == ".build" }
   }
 
   private static func read(_ url: URL) -> Data? {
@@ -157,4 +171,6 @@ private final class RequestedPaths: EvidenceSources {
   func evidenceFile(_ path: String) -> Data? { base.evidenceFile(path) }
   var packageResolved: Data? { base.packageResolved }
   var sdkVersion: String? { base.sdkVersion }
+  func repoSymlink(_ path: String) -> String? { base.repoSymlink(path) }
+  func evidenceSymlink(_ path: String) -> String? { base.evidenceSymlink(path) }
 }
