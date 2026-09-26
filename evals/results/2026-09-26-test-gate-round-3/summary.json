@@ -1,0 +1,1611 @@
+{
+  "suite": "skill-routing",
+  "round": "test-gate round 3: description v2 for judge-only requests and test smells",
+  "date": "2026-09-26",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001 (no llm graders in routing)",
+    "claudeVersion": "2.1.282",
+    "harness": "fix-tdd-test-gate-routing 5e9441a (test-gate v2) on the pre-plugin/ layout; the tdd and test-gate descriptions are byte-identical to main 60e7603",
+    "xcode": "26.2 (17C48), Swift 6.2.3"
+  },
+  "settings": {
+    "runs": "3 (1 for the regression set)",
+    "ablation": "none",
+    "maxTurns": 1,
+    "scaffold": "evals/scaffold/sampleapp-with-change.sh"
+  },
+  "tuningBefore": {
+    "note": "round-3 tuning cases (split-60) on the round-2 descriptions",
+    "trials": 36,
+    "costUsd": 2.11,
+    "durationSeconds": 263,
+    "perSkill": {
+      "tdd": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 18,
+        "loadedTrials": 15,
+        "tp": 15,
+        "fp": 0,
+        "fn": 3,
+        "precision": 1,
+        "recall": 0.8333333333333334
+      },
+      "validate": {
+        "expectedTrials": 6,
+        "loadedTrials": 3,
+        "tp": 3,
+        "fp": 0,
+        "fn": 3,
+        "precision": 1,
+        "recall": 0.5
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 6
+      },
+      "test-gate": {
+        "test-gate": 15,
+        "none": 3
+      },
+      "none": {
+        "none": 6
+      },
+      "validate": {
+        "none": 3,
+        "validate": 3
+      }
+    },
+    "passAllK": 9,
+    "casesTotal": 12,
+    "flaky": [
+      "routing-test-gate-r3t-test-smells-a",
+      "routing-test-gate-r3t-test-smells-b"
+    ],
+    "cases": [
+      {
+        "case": "routing-test-gate-r3t-add-missing-assertion-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-add-missing-assertion-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-grade-the-tests-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-grade-the-tests-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-hollow-test-meaning-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-hollow-test-meaning-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-summarise-tests-for-pr-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-summarise-tests-for-pr-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-test-smells-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-test-smells-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 2,
+        "loaded": [
+          [],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-wrong-state-still-passes-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-wrong-state-still-passes-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      }
+    ]
+  },
+  "tuningAfter": {
+    "note": "round-3 tuning cases (split-60) on test-gate v2",
+    "trials": 36,
+    "costUsd": 2.09,
+    "durationSeconds": 247,
+    "perSkill": {
+      "tdd": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 18,
+        "loadedTrials": 18,
+        "tp": 18,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 6,
+        "loadedTrials": 3,
+        "tp": 3,
+        "fp": 0,
+        "fn": 3,
+        "precision": 1,
+        "recall": 0.5
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 6
+      },
+      "test-gate": {
+        "test-gate": 18
+      },
+      "none": {
+        "none": 6
+      },
+      "validate": {
+        "none": 3,
+        "validate": 3
+      }
+    },
+    "passAllK": 11,
+    "casesTotal": 12,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-test-gate-r3t-add-missing-assertion-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-add-missing-assertion-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-grade-the-tests-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-grade-the-tests-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-hollow-test-meaning-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-hollow-test-meaning-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-summarise-tests-for-pr-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-summarise-tests-for-pr-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-test-smells-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-test-smells-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-wrong-state-still-passes-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3t-wrong-state-still-passes-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      }
+    ]
+  },
+  "heldOutRound3": {
+    "note": "verdict: round-3 independent held-out set (split-40), 20 cases x 3, on test-gate v2",
+    "trials": 60,
+    "costUsd": 3.45,
+    "durationSeconds": 328,
+    "perSkill": {
+      "review": {
+        "expectedTrials": 6,
+        "loadedTrials": 0,
+        "tp": 0,
+        "fp": 0,
+        "fn": 6,
+        "precision": null,
+        "recall": 0
+      },
+      "tdd": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 30,
+        "loadedTrials": 29,
+        "tp": 29,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1,
+        "recall": 0.9666666666666667
+      },
+      "validate": {
+        "expectedTrials": 6,
+        "loadedTrials": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 12
+      },
+      "test-gate": {
+        "test-gate": 29,
+        "none": 1
+      },
+      "none": {
+        "none": 6
+      },
+      "validate": {
+        "validate": 6
+      },
+      "review": {
+        "none": 6
+      }
+    },
+    "passAllK": 17,
+    "casesTotal": 20,
+    "flaky": [
+      "routing-test-gate-r3-circular-mock-asserts-a"
+    ],
+    "cases": [
+      {
+        "case": "routing-test-gate-r3-add-nil-assertion-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-add-nil-assertion-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-circular-mock-asserts-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 2,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-circular-mock-asserts-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-coverage-without-checks-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-coverage-without-checks-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-dismiss-test-flaky-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-dismiss-test-flaky-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ],
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-draft-flip-test-vetting-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-draft-flip-test-vetting-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-mutation-testing-explainer-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-mutation-testing-explainer-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-nonexhaustive-teststore-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-nonexhaustive-teststore-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-pr-tests-heading-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-pr-tests-heading-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ],
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-prod-code-merge-call-a",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-prod-code-merge-call-b",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 3,
+        "passed": 0,
+        "loaded": [
+          [],
+          [],
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-silent-regression-odds-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-r3-silent-regression-odds-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 3,
+        "passed": 3,
+        "loaded": [
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ],
+          [
+            "test-gate"
+          ]
+        ]
+      }
+    ]
+  },
+  "regressionRound1And2": {
+    "note": "regression: round-1 and round-2 held-out tdd/test-gate cases, 1 trial each, on test-gate v2; the round-2 set has been read, so it counts as seen",
+    "trials": 48,
+    "costUsd": 2.87,
+    "durationSeconds": 277,
+    "perSkill": {
+      "architecture": {
+        "expectedTrials": 2,
+        "loadedTrials": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "review": {
+        "expectedTrials": 2,
+        "loadedTrials": 1,
+        "tp": 1,
+        "fp": 0,
+        "fn": 1,
+        "precision": 1,
+        "recall": 0.5
+      },
+      "tdd": {
+        "expectedTrials": 16,
+        "loadedTrials": 16,
+        "tp": 16,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "test-gate": {
+        "expectedTrials": 12,
+        "loadedTrials": 12,
+        "tp": 12,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      },
+      "validate": {
+        "expectedTrials": 4,
+        "loadedTrials": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "precision": 1,
+        "recall": 1
+      }
+    },
+    "confusion": {
+      "tdd": {
+        "tdd": 16
+      },
+      "architecture": {
+        "architecture": 2
+      },
+      "none": {
+        "none": 12
+      },
+      "validate": {
+        "validate": 4
+      },
+      "review": {
+        "none": 1,
+        "review": 1
+      },
+      "test-gate": {
+        "test-gate": 12
+      }
+    },
+    "passAllK": 47,
+    "casesTotal": 48,
+    "flaky": [],
+    "cases": [
+      {
+        "case": "routing-tdd-counter-step-size-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-counter-step-size-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-diff-coverage-dismiss-path-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-diff-coverage-dismiss-path-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-dismiss-test-red-after-rebase-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-dismiss-test-red-after-rebase-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-fact-load-error-surfaced-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-fact-load-error-surfaced-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-failing-client-test-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-failing-client-test-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-httpclient-timeout-flaky-ci-a",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-httpclient-timeout-flaky-ci-b",
+        "kind": "should-trigger",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-leaderboard-client-package-scaffold-a",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-leaderboard-client-package-scaffold-b",
+        "kind": "near-miss",
+        "expect": "architecture",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "architecture"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-list-counter-tests-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-list-counter-tests-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-locate-snapshot-tests-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-locate-snapshot-tests-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-run-named-swift-test-command-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-run-named-swift-test-command-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-testing-section-after-fix-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-testing-section-after-fix-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-tdd-teststore-flaky-why-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-tdd-teststore-flaky-why-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-approve-reducer-code-not-tests-a",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 1,
+        "passed": 0,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-approve-reducer-code-not-tests-b",
+        "kind": "near-miss",
+        "expect": "review",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "review"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-can-i-open-pr-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-can-i-open-pr-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-ci-split-snapshot-job-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-ci-split-snapshot-job-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-claude-written-tests-padding-sweep-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-claude-written-tests-padding-sweep-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-done-before-asking-human-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-done-before-asking-human-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-filter-one-test-a",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-filter-one-test-b",
+        "kind": "near-miss",
+        "expect": "none",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          []
+        ]
+      },
+      {
+        "case": "routing-test-gate-flaky-engine-test-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-flaky-engine-test-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-gut-dismiss-would-tests-notice-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-gut-dismiss-would-tests-notice-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-heavy-tiers-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-heavy-tiers-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-out-of-draft-today-a",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-out-of-draft-today-b",
+        "kind": "should-trigger",
+        "expect": "test-gate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "test-gate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-verification-blurb-a",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-pr-verification-blurb-b",
+        "kind": "near-miss",
+        "expect": "validate",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "validate"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-rewrite-hollow-dismiss-test-a",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      },
+      {
+        "case": "routing-test-gate-rewrite-hollow-dismiss-test-b",
+        "kind": "near-miss",
+        "expect": "tdd",
+        "trials": 1,
+        "passed": 1,
+        "loaded": [
+          [
+            "tdd"
+          ]
+        ]
+      }
+    ]
+  },
+  "sessions": {
+    "note": "1 trial per arm; harness 16797f7 plus the 2 description lines. swiftgate-red-seen scored a false negative on the tdd with arm: the agent saw RED from swiftgate test through a python filter. The grader now reads .harness/runs/history.jsonl.",
+    "pins": {
+      "claudeVersion": "2.1.282 (Claude Code)",
+      "harnessCommit": "16797f7",
+      "xcode": "Xcode 26.2",
+      "model": "claude-opus-5-5",
+      "judgeModel": "claude-haiku-4-5-20251001"
+    },
+    "costUsd": 0.9,
+    "cases": [
+      {
+        "name": "skills-tdd-decrement-floors-at-zero",
+        "arms": {
+          "with": {
+            "runs": 1,
+            "passed": 0,
+            "passAll": false,
+            "meanScore": 0.75,
+            "costUsd": 0.22938525
+          },
+          "without": {
+            "runs": 1,
+            "passed": 1,
+            "passAll": true,
+            "meanScore": 1,
+            "costUsd": 0.15129895000000002
+          }
+        }
+      },
+      {
+        "name": "skills-test-gate-hollow-test-before-ready",
+        "arms": {
+          "with": {
+            "runs": 1,
+            "passed": 1,
+            "passAll": true,
+            "meanScore": 1,
+            "costUsd": 0.3508943
+          },
+          "without": {
+            "runs": 1,
+            "passed": 0,
+            "passAll": false,
+            "meanScore": 0.5,
+            "costUsd": 0.1722291
+          }
+        }
+      }
+    ],
+    "correctedTddWithScore": 1
+  },
+  "costUsd": {
+    "tracedToResultFiles": 11.42,
+    "priorSessionCountBeforeSessionPair": 17.8,
+    "approvedBatch": 30
+  }
+}
