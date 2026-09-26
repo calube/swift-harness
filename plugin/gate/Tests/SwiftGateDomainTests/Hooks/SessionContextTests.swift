@@ -48,6 +48,27 @@ struct SessionContextTests {
     #expect(text.count < SessionContext.maxCharacters)
   }
 
+  @Test(
+    "the plugin reference docs path renders ahead of plans and notes, so it survives the context clip — catches a long session context silently dropping where the rules live"
+  )
+  func referenceDocsSurviveClip() {
+    let directory = "/opt/plugins/swift-harness/docs"
+    let text = SessionContext.render(
+      SessionContext.Inputs(
+        projectName: "SampleApp", modules: [], xcode: nil, plans: .none,
+        referenceDocs: .found(directory: directory),
+        notes: [String(repeating: "n", count: SessionContext.maxCharacters * 2)]))
+    #expect(text.count <= SessionContext.maxCharacters)
+    #expect(text.contains("Plugin reference docs: \(directory) "))
+
+    let missing = SessionContext.render(
+      SessionContext.Inputs(
+        projectName: "SampleApp", modules: [], xcode: nil, plans: .none,
+        referenceDocs: .unavailable(reason: "CLAUDE_PLUGIN_ROOT is not set"), notes: []))
+    #expect(missing.contains("Plugin reference docs unavailable: CLAUDE_PLUGIN_ROOT is not set"))
+    #expect(!missing.contains("Plugin reference docs: "))
+  }
+
   @Test("groups modules by package with role and kind — catches an unreadable module map")
   func moduleMap() {
     let text = SessionContext.render(

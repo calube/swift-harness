@@ -91,6 +91,14 @@ public enum SessionContext {
     case unknown(pinned: String, reason: String)
   }
 
+  /// Where the plugin's reference docs (`standards.md`, `testing-playbook.md`, …) sit in this
+  /// install. The path differs per machine and plugin version, so consumer docs never commit it;
+  /// agents read it from session context instead.
+  public enum ReferenceDocs: Sendable, Equatable {
+    case found(directory: String)
+    case unavailable(reason: String)
+  }
+
   public enum Plans: Sendable, Equatable {
     case none
     case active([PlanSummary])
@@ -107,18 +115,21 @@ public enum SessionContext {
     /// `nil` when there is no valid config to read the pin from.
     public let xcode: Xcode?
     public let plans: Plans
+    /// `nil` when the caller has no plugin install to report.
+    public let referenceDocs: ReferenceDocs?
     /// Extra lines: a module map that could not be built, an invalid config, sweep results.
     public let notes: [String]
 
     public init(
       projectName: String, sessionID: String = "", modules: [ModuleEntry], xcode: Xcode?,
-      plans: Plans, notes: [String]
+      plans: Plans, referenceDocs: ReferenceDocs? = nil, notes: [String]
     ) {
       self.projectName = projectName
       self.sessionID = sessionID
       self.modules = modules
       self.xcode = xcode
       self.plans = plans
+      self.referenceDocs = referenceDocs
       self.notes = notes
     }
   }
@@ -148,6 +159,20 @@ public enum SessionContext {
       lines.append(
         "Session id: \(inputs.sessionID) (pass as `--session` to `swiftgate plan claim`/`plan "
           + "release`).")
+    }
+    switch inputs.referenceDocs {
+    case .found(let directory):
+      lines.append(
+        "Plugin reference docs: \(directory) (index.md routes them: standards.md for the app "
+          + "rules and rule ids in verdicts, testing-playbook.md for test tiers, "
+          + "review-contract.md for review verdicts). The path is per install: read it from here, "
+          + "never commit it.")
+    case .unavailable(let reason):
+      lines.append(
+        "Plugin reference docs unavailable: \(reason). Rule ids in verdicts point into the "
+          + "plugin's docs/standards.md.")
+    case nil:
+      break
     }
     if !inputs.modules.isEmpty {
       lines.append("Modules by package (role, kind):")
