@@ -3,6 +3,9 @@
 <!-- RESUME
 State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tier GREEN, 1446 tests); origin/main has 1–24,
 and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
+In flight: rehearsal workers (opus) for 26 in ../swift-harness-plugin-installs-for-real and 27 in
+../swift-harness-nonexistent-api-run-refutes-claim, running in parallel (27 uses --plugin-dir, so it doesn't wait on 26).
+Each puts its full report in its LAST commit body. Worker 27 stops at the frame questions and hands them to the orchestrator.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
   2. Acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
