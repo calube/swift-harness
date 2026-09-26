@@ -275,4 +275,174 @@ struct CalibrateDesignCommandTests {
     #expect(arguments[model + 1] == "sonnet")
     #expect(arguments.contains("--json-schema"))
   }
+
+  // MARK: - Seed and runner failures
+
+  static func blockedReason(_ outcome: StaticCheckOutcome) -> String? {
+    guard case .blocked(let reason) = outcome else { return nil }
+    return reason
+  }
+
+  @Test(
+    "a case with a label but no input exits 1 naming the case before any agent runs — catches a label scored against an empty prompt"
+  )
+  func missingInputFails() async throws {
+    let repository = try Repository.calibrated()
+    let directory = "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/no-input"
+    try repository.seed(
+      agent: "design-challenger", name: "no-input", token: "TOKEN-F", expected: "supported")
+    try FileManager.default.removeItem(at: repository.root.appending(path: "\(directory)/input.md"))
+    let runner = Self.recorded([:])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 1)
+    let finding = Self.findings(outcome).first { $0.ruleID == "calibrate-design.missing-input" }
+    #expect(finding?.file == directory)
+    #expect(runner.invocations.isEmpty)
+  }
+
+  @Test(
+    "a seed input that isn't UTF-8 blocks with exit 2 naming the file, before any agent runs — catches an unreadable seed skipped as if absent"
+  )
+  func unreadableInputBlocks() async throws {
+    let repository = try Repository.calibrated()
+    let input = "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/refuted-api/input.md"
+    try Data([0xFF, 0xFE, 0xFD]).write(to: repository.root.appending(path: input))
+    let runner = Self.recorded(["TOKEN-A": "overstated"])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 2)
+    #expect(Self.blockedReason(outcome)?.contains("can't read \(input)") == true)
+    #expect(runner.invocations.isEmpty)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == nil)
+  }
+
+  @Test(
+    "an agent's seed directory that can't be listed blocks with exit 2 naming it — catches its cases silently dropped from the pass"
+  )
+  func unlistableSeedDirectoryBlocks() async throws {
+    let repository = try Repository.calibrated()
+    let directory = "\(DesignCalibrationLayout.seedsDirectory)/design-challenger"
+    let url = repository.root.appending(path: directory)
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    }
+
+    let outcome = await Self.run(repository, runner: Self.recorded(["TOKEN-A": "overstated"]))
+
+    #expect(try Self.exitCode(outcome) == 2)
+    #expect(Self.blockedReason(outcome)?.contains("can't read \(directory)") == true)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == nil)
+  }
+
+  @Test(
+    "a design agent prompt that can't be read blocks with exit 2 — catches calibrating without the prompt the hash covers"
+  )
+  func unreadableAgentBlocks() async throws {
+    let repository = try Repository.calibrated()
+    let agent = repository.root.appending(path: "agents/design-challenger.md")
+    try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: agent.path)
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: agent.path)
+    }
+    let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 2)
+    let reason = try #require(Self.blockedReason(outcome))
+    #expect(reason.contains("agents/design-challenger.md"))
+    #expect(reason.contains("can't list the design agents"))
+    #expect(runner.invocations.isEmpty)
+  }
+
+  @Test(
+    "claude failing to launch blocks with exit 2 naming the case and writes nothing — catches a missing CLI read as a missed label"
+  )
+  func launchFailureBlocks() async throws {
+    let repository = try Repository.calibrated()
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      throw .launchFailed(executable: invocation.executable, reason: "not on PATH")
+    }
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 2)
+    let reason = try #require(Self.blockedReason(outcome))
+    #expect(reason.contains("design-challenger/refuted-api"))
+    #expect(reason.contains("not on PATH"))
+    #expect(runner.invocations.count == 1)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == nil)
+  }
+
+  @Test(
+    "a full pass whose record can't be written blocks with exit 2 — catches a pass reported green that left no record for push"
+  )
+  func unwritableRecordBlocks() async throws {
+    let repository = try Repository.calibrated()
+    let seeds = repository.root.appending(path: DesignCalibrationLayout.seedsDirectory)
+    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: seeds.path)
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: seeds.path)
+    }
+
+    let outcome = await Self.run(
+      repository, runner: Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"]))
+
+    #expect(try Self.exitCode(outcome) == 2)
+    #expect(
+      Self.blockedReason(outcome)?.contains("can't write \(DesignCalibrationLayout.recordPath)")
+        == true)
+  }
+
+  @Test(
+    "seeds for a non-design agent are unknown, while stray files and dot-entries are ignored — catches a reviewer outside the hash counted as calibrated"
+  )
+  func nonDesignAgentAndStrayEntries() async throws {
+    let repository = try Repository.calibrated()
+    try repository.agent("verifier", body: "You verify.")
+    try repository.seed(agent: "verifier", name: "case", token: "TOKEN-G", expected: "supported")
+    let seeds = DesignCalibrationLayout.seedsDirectory
+    try repository.write("\(seeds)/notes.txt", "not a seed\n")
+    try repository.write("\(seeds)/.cache/case/input.md", "hidden\n")
+    try repository.write("\(seeds)/design-challenger/notes.txt", "not a case\n")
+    try repository.write("\(seeds)/design-challenger/.draft/input.md", "hidden\n")
+
+    let outcome = await Self.run(repository, runner: Self.recorded([:]))
+
+    #expect(try Self.exitCode(outcome) == 1)
+    #expect(
+      Self.findings(outcome).map { "\($0.ruleID) \($0.file)" } == [
+        "calibrate-design.unknown-agent \(seeds)/verifier"
+      ])
+  }
+
+  @Test(
+    "a prompt's CRLF frontmatter is stripped and a prompt with none is sent whole — catches frontmatter calibrated as prompt text or a body dropped"
+  )
+  func systemPromptBodyVariants() async throws {
+    let repository = try Repository.calibrated()
+    try repository.write(
+      "agents/design-claim-checker.md",
+      "---\r\nname: design-claim-checker\r\ntools: Read\r\n---\r\n\r\nCRLF body.\r\n")
+    try repository.write("agents/design-challenger.md", "\nNo frontmatter here.\n---\nstill body\n")
+    let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+
+    _ = await Self.run(repository, runner: runner)
+
+    func systemPrompt(_ token: String) -> String? {
+      guard
+        let invocation = runner.invocations.first(where: {
+          String(decoding: $0.standardInput ?? Data(), as: UTF8.self).contains(token)
+        }),
+        let index = invocation.arguments.firstIndex(of: "--system-prompt")
+      else { return nil }
+      return invocation.arguments[index + 1]
+    }
+    #expect(systemPrompt("TOKEN-A") == "CRLF body.")
+    #expect(systemPrompt("TOKEN-B") == "No frontmatter here.\n---\nstill body")
+  }
 }
