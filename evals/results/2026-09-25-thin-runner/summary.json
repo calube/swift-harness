@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-25",
+  "suite": "thin-runner",
+  "pins": {
+    "model": "claude-opus-5-5",
+    "judgeModel": "haiku",
+    "claudeVersion": "2.1.282",
+    "harnessCommit": "d652a83",
+    "xcode": "26.2"
+  },
+  "runs": [
+    {
+      "arm": "with",
+      "score": 1.0,
+      "costUsd": 0.21,
+      "seconds": 210
+    },
+    {
+      "arm": "without",
+      "score": 0.5,
+      "scoreAfterWithOnly": 0.67,
+      "costUsd": 0.19,
+      "seconds": 208
+    },
+    {
+      "arm": "with",
+      "plantedBreak": "tdd skill body gutted",
+      "score": 0.25,
+      "costUsd": 0.14,
+      "seconds": 150
+    }
+  ],
+  "totalCostUsd": 0.6,
+  "findings": [
+    "agent Bash reaches the toolchain outside the sandbox",
+    "SWIFTGATE_HOOK_RECORD_DIR already records hook decisions",
+    "case discriminates on process only",
+    "outcome graders alone miss a broken skill"
+  ]
+}

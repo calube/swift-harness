@@ -32,3 +32,10 @@
 
   The bullet fix removed an `em-dash` false positive, so it raised the gate's score. The canonical
   form in the fixture shows that I wrote the old case wrong, not that the gate was right.
+- **Added the thin runner** `evals/runner/session.mjs`, with `frontmatter.mjs` and
+  `session_test.mjs`. Moved the `tdd` case to `evals/sessions/` as `task.md`, and the shared
+  scaffold to `evals/scaffold/`. The scaffold now writes the repo's `.gitignore` into the copy.
+- **Added the `hidden-floor-test` grader** to the `tdd` case. It fails the baseline app (RED) and
+  passes the fixed one (GREEN).
+- **Marked `swiftgate-red-seen` as `with-only`.** The without arm can't know `swiftgate` exists.
+  Without arm score on run 2: 0.50 before, 0.67 after. This change lowers the harness's delta.
