@@ -119,6 +119,8 @@ struct LiveProcessRunnerTests {
     }
   }
 
+  // The timeout leaves the shell seconds to print, so a loaded machine still sees its output: the
+  // test is about the kill, not about how fast `sh` starts.
   @Test("timeout kills the child and throws a BLOCKED error — catches a hung tool wedging the gate")
   func timeoutKillsChild() async throws {
     let clock = ContinuousClock()
@@ -127,14 +129,14 @@ struct LiveProcessRunnerTests {
       _ = try await runner.run(
         ProcessInvocation(
           executable: "/bin/sh", arguments: ["-c", "echo started; exec sleep 30"],
-          timeout: .milliseconds(300)))
+          timeout: .seconds(3)))
     }
-    #expect(clock.now - start < .seconds(10))
+    #expect(clock.now - start < .seconds(15))
     guard case .timedOut(_, let after, let stdout, _) = error else {
       Issue.record("expected timedOut, got \(String(describing: error))")
       return
     }
-    #expect(after == .milliseconds(300))
+    #expect(after == .seconds(3))
     #expect(stdout.text == "started\n")
     #expect(error?.verdict == .blocked)
   }
