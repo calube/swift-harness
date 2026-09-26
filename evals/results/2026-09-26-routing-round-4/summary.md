@@ -50,7 +50,7 @@ tuning cases that never ran are `plans-in-flight`, `git-staged`, `fresh-session-
 |---|---|
 | Graders tell good from bad | The routing graders are the ones rounds 1 to 3 proved; the smoke run on the new staging loaded `status` and scored it |
 | Cases fail for real reasons | The 1 tuning miss loaded nothing, which is a real recall miss, not a scaffold or harness failure |
-| Evals catch a broken harness | Not re-run for these 5 skills. A perfect score doesn't prove the near-misses would catch an overreaching description; round 2 found only a strong break shows up. **Owed:** a planted break for 1 of these skills |
+| Evals catch a broken harness | **Caught.** A planted `plan` description that claimed sprint plans, to-do lists, "plan then build", "no design yet" and plan listings took 6 of `plan`'s 10 near-miss trials: `plan` precision fell from 1.00 to 0.00. `status` and `design` held their 4 requests against it. 1 trial per case, 0.53 USD |
 | Results hold still | 0 flaky held-out cases; 1 flaky tuning case |
 | Coverage | 20 prompts per skill, written independently |
 
@@ -61,7 +61,8 @@ tuning cases that never ran are `plans-in-flight`, `git-staged`, `fresh-session-
 | Smoke, 1 case × 1 | 0.05 |
 | Tuning, 155 trials | 11.00 |
 | Held-out, 120 trials | 7.53 |
-| **Total** | **18.58** |
+| Planted break, 10 trials | 0.53 |
+| **Total** | **19.11** |
 
 **The estimate was low.** I priced the round at 0.058 USD per run, the round-3 mean. Round 4
 averaged 0.067, likely because these prompts load longer skills. The caps summed to 18.05, and the
@@ -69,13 +70,12 @@ run went 0.53 over, which is the runs already in flight when the cap hit.
 
 ## Verdict
 
-1. **Verdict on the evals: working, with 1 gap.** The independent set and the staging both held.
-   With every score at 1.00, precision still owes a planted break for these 5 skills.
+1. **Verdict on the evals: working.** The independent set and the staging both held, and a
+   planted break shows the near-misses catch an overreaching description.
 2. **What the evals say about the harness.** All 5 descriptions load the right skill on held-out
    requests, and none of them takes a neighbour's request. Across rounds 1 to 4, all 11 skills
    are at 1.00 held-out precision. `review` recall on merge-verdict requests and the `validate` PR
    summary shape are still open.
 3. **What to do next:**
-   1. A planted precision break for 1 of these skills, about 0.5 USD.
-   2. The 8 unrun `status` tuning cases, about 1.8 USD, only if `status` changes.
-   3. A `review` round and a `validate` fix for the open shapes.
+   1. The 8 unrun `status` tuning cases, about 1.8 USD, only if `status` changes.
+   2. A `review` round and a `validate` fix for the open shapes.

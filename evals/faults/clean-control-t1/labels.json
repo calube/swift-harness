@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["GREEN"],"why":"control: the unbroken app must pass, or every other case passes for the wrong reason"}

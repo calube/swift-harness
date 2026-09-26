@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["RED","BLOCKED"],"why":"every @Test attribute removed, so the tier selects 0 tests"}
