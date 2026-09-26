@@ -1,12 +1,12 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–23 merged on local main, push tier GREEN (1420 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–24 merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1439 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: wave 24 — consumer-plugin-in-plugin-dir (the packaging wave: moves the plugin into `plugin/`; afterwards run `plugin/bin/swiftgate` and seed worktrees from `plugin/gate/.build`). Follow the runbook's wave loop.
+Next action: wave 25 — consumer-steering-channels (opus), contributor-agents-md-for-harness-developers (sonnet). Then STOP: waves 26–28 are attended acceptance runs. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
-Open items: no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
+Open items: the dead `.harness/plans` guard rule still ships (its removal drops `isOrchestrator` from `EditGuard.evaluate`, so it needs its own change); no command dumps the module graph (design and plan skills each build it); `CLAUDE_PLUGIN_ROOT` in hook processes (consumer-steering-channels pre-step); live `agent_id` payload (plugin-installs-for-real).
 Progress: git log. Update this header at every wave merge.
 -->
 

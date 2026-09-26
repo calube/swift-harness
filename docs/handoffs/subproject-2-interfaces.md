@@ -792,3 +792,33 @@ against that subcommand's help. A later skill that names a missing command or fl
   `seedKnownID(_:slug:)`. Reuse it for any seed that needs git.
 - `plan-lint/overlapping-wave` yields both `write-set-overlap` and `waves-mismatch`: the scheduler never groups
   overlapping write sets, so stored waves that do also diverge from the recomputed schedule.
+
+## Wave 24
+
+**The plugin ships from `plugin/`** ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md))
+- Moved from the root into `plugin/`: `.claude-plugin/plugin.json`, `skills/`, `agents/`, `hooks/`, `workflows/`,
+  `templates/`, `bin/`, `gate/` and `docs/{standards,testing-playbook,hooks}.md`. The root keeps
+  `.claude-plugin/marketplace.json` (`source: "./plugin"`), `AGENTS.md`, `docs/`, `tests/`, `examples/` and `evals/`.
+  The root `bin/swiftgate` is gone: run `plugin/bin/swiftgate`, and seed a worktree's cache from
+  `plugin/gate/.build`.
+- The review verdict contract consumers read at runtime is `plugin/docs/review-contract.md`.
+- The shim's cache order is `SWIFTGATE_CACHE_DIR`, then `CLAUDE_PLUGIN_DATA`, then the user cache.
+  `SWIFTGATE_HARNESS_ROOT` is `plugin/`. Bootstrap repoints an existing `~/.local/bin/swiftgate` at
+  `plugin/bin/swiftgate`, whether or not the old target still exists.
+- The ready tier runs `claude plugin validate --strict plugin` when `claude` is on PATH. The rules are
+  `plugin-validate.failed` (major), and `.not-run` and `.summary` (nits).
+- `tests/plugin_boundary_test.mjs` fails when a file under `plugin/` references a path above `plugin/`.
+  `RepositoryConfigPathsTests` fails when a `[docs.budgets.files]` key, a `prose_exclude` glob, `managed_files` or
+  a calibration glob matches no file.
+- `last-pass.json` was regenerated live after the move: 23/23 cases, 11 agents, 148 s.
+- `plan-lint` reads the repo's own `docs/standards.md` when it has one, else the harness root's copy. With neither,
+  it's a named failure.
+- `self-test --sample-app <dir>` points the sample-app seeds at another checkout. Prove now reverts a renamed source
+  to its old content at its new path.
+- The dead worktree-relative `.harness/plans` guard rule is still there. Deleting it drops `isOrchestrator` from
+  `EditGuard.evaluate`, and prove needs that removal in its own change. Open item.
+- The merge commit records 4 `prove.not-proven` tests whose only edit is the checkout-root repoint to
+  `Fixture.harnessCheckout`: `packageDiscovery`, `fixtureMatchesRealDescribe`, `repositoryDocsPassDocsLint` and
+  `retries`. The user accepted them.
+- `.swiftgate.toml` excludes `evals/corpora` from the gate, and `evals/cases/**`, `evals/sessions/**` and
+  `evals/corpora/**` from prose.
