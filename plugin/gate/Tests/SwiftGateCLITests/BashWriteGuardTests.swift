@@ -156,6 +156,7 @@ struct BashWriteGuardTests {
       "truncate -s 0 \(ledger)",
       "touch \(scenario.planDirectoryA)/notes.json",
       "dd if=/dev/zero of=\(ledger) count=0",
+      "cp /tmp/ledger.json \(scenario.planDirectoryA)",
       "(cd \(scenario.planDirectoryA) && echo '{}' > ledger.json)",
       "ls && bash -c \"echo '{}' > \(ledger)\"",
       "echo x >> \(BashWriteScenario.designA)",
@@ -218,12 +219,13 @@ struct BashWriteGuardTests {
   }
 
   @Test(
-    "quoted brackets, reads, descriptor redirects, /dev/null, ordinary writes, backups and heredoc text pass for a subagent — catches the guard denying everyday commands that only mention plan state"
+    "a subagent's quoted mentions, reads, descriptor redirects, /dev/null, ordinary writes, backups and heredoc text pass while its ledger write is denied — catches the guard denying everyday commands that only mention plan state"
   )
   func ordinaryCommandsPass() async throws {
     let scenario = try await BashWriteScenario()
     defer { scenario.remove() }
     let ledger = scenario.ledgerA
+    #expect(try await scenario.decision("echo {} > \(ledger)", subagent: true) == "deny")
 
     for command in [
       "git commit -m \"record progress: echo {} > \(ledger)\"",
@@ -232,6 +234,7 @@ struct BashWriteGuardTests {
       "swift build 2>&1 | tee build.log",
       "cat \(ledger)",
       "cp \(ledger) /tmp/backup",
+      "cp \(ledger) \(scenario.worktree.path)/docs",
       "make > /dev/null 2>&1",
       "echo note >> docs/notes.md",
       "cat > notes.md <<'EOF'\necho {} > \(ledger)\nrm -rf \(BashWriteScenario.snapshots)\nEOF",
@@ -241,19 +244,18 @@ struct BashWriteGuardTests {
   }
 
   @Test(
-    "a holder's Bash write to its ledger among ordinary writes is judged target by target, fastest of 5 under 50ms — catches write-target checks blowing the PreToolUse Bash budget"
+    "a subagent command whose last write is the ledger, after ordinary writes and a backup, is denied fastest of 5 under 50ms — catches write-target checks blowing the PreToolUse Bash budget"
   )
   func fast() async throws {
     let scenario = try await BashWriteScenario()
     defer { scenario.remove() }
-    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
     let command =
-      "swift build 2>&1 | tee build.log && echo '{}' > \(scenario.ledgerA) "
-      + "&& cp \(scenario.ledgerA) /tmp/backup"
+      "swift build 2>&1 | tee build.log && cp \(scenario.ledgerA) /tmp/backup "
+      + "&& echo '{}' > \(scenario.ledgerA)"
 
     let samples = try await Latency.samples {
-      let (output, milliseconds) = try await scenario.run(command, subagent: false)
-      #expect(output == nil)
+      let (output, milliseconds) = try await scenario.run(command, subagent: true)
+      #expect(output?["permissionDecision"] == "deny")
       return milliseconds
     }
     #expect(samples.min()! < 50, "fast samples: \(samples)ms, budget: 50ms")

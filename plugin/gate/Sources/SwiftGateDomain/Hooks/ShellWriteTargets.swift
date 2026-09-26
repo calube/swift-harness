@@ -1,20 +1,41 @@
+/// A path a shell command writes, as spelled.
+public struct ShellWriteTarget: Sendable, Equatable {
+  public let path: String
+  /// The basenames `cp`, `mv`, `install` or `ln` place inside ``path`` when it is a directory.
+  /// Empty for every other write.
+  public let entries: [String]
+  /// `path` is a directory for certain: given by `-t`, or spelled with a trailing `/`.
+  public let isDirectory: Bool
+
+  public init(path: String, entries: [String] = [], isDirectory: Bool = false) {
+    self.path = path
+    self.entries = entries
+    self.isDirectory = isDirectory
+  }
+}
+
 extension ShellSyntax {
-  /// Every path a command line may write, as spelled: output redirections, `tee`, the
+  /// Every path a command line may write: output redirections, `tee`, the
   /// destinations of `cp`/`mv`/`install`/`ln` (and what `mv` moves away), the operands of
   /// `rm`/`rmdir`/`unlink`/`truncate`/`touch`, `dd of=`, and the files of `sed -i`/`perl -i`.
   /// A relative path is relative to the shell's starting directory; after a literal `cd`, it is
   /// also named under that directory. A path the shell would expand (`$VAR`, `$(…)`, backticks),
   /// code an interpreter runs, and heredoc text name nothing: a static reading can't know them.
-  public static func writeTargets(in line: String) -> [String] {
+  public static func writeTargets(in line: String) -> [ShellWriteTarget] {
     let commands = parse(line).filter { !$0.isHeredocBody }.map(\.command)
     let directories = commands.compactMap(changedDirectory)
-    var targets: [String] = []
+    var targets: [ShellWriteTarget] = []
     for command in commands {
-      for path in command.redirectTargets + writtenOperands(of: command) where isLiteral(path) {
+      let written =
+        command.redirectTargets.map { ShellWriteTarget(path: $0) } + writtenOperands(of: command)
+      for target in written where isLiteral(target.path) {
+        let path = target.path
         let underDirectories =
           path.hasPrefix("/") || path.hasPrefix("~") ? [] : directories.map { $0 + "/" + path }
-        for spelling in [path] + underDirectories where !targets.contains(spelling) {
-          targets.append(spelling)
+        for spelling in [path] + underDirectories {
+          let respelled = ShellWriteTarget(
+            path: spelling, entries: target.entries, isDirectory: target.isDirectory)
+          if !targets.contains(respelled) { targets.append(respelled) }
         }
       }
     }
@@ -33,9 +54,16 @@ extension ShellSyntax {
     return directory
   }
 
-  private static func writtenOperands(of command: SimpleCommand) -> [String] {
+  private static func writtenOperands(of command: SimpleCommand) -> [ShellWriteTarget] {
     let arguments = command.arguments
-    switch command.name {
+    if let name = command.name, ["cp", "mv", "ln", "install", "ginstall"].contains(name) {
+      return copyDestinations(name, arguments)
+    }
+    return writtenFiles(command.name, arguments).map { ShellWriteTarget(path: $0) }
+  }
+
+  private static func writtenFiles(_ name: String?, _ arguments: [String]) -> [String] {
+    switch name {
     case "tee"?:
       return scan(arguments, valued: []).operands
     case "rm"?, "rmdir"?, "unlink"?, "srm"?, "trash"?:
@@ -48,8 +76,6 @@ extension ShellSyntax {
       return scan(arguments, valued: ["-t", "-d", "-r", "-A", "--date", "--reference"]).operands
     case "dd"?:
       return arguments.filter { $0.hasPrefix("of=") }.map { String($0.dropFirst(3)) }
-    case let name? where ["cp", "mv", "ln", "install", "ginstall"].contains(name):
-      return copyDestinations(name, arguments)
     case "sed"?, "gsed"?:
       return sedFiles(arguments)
     case "perl"?:
@@ -61,9 +87,11 @@ extension ShellSyntax {
 
   private static let targetDirectoryOptions: Set<String> = ["-t", "--target-directory"]
 
-  /// Where `cp`, `mv`, `ln` and `install` write: the destination, and each source's name inside
-  /// it in case it is a directory. `mv` also removes its sources.
-  private static func copyDestinations(_ name: String, _ arguments: [String]) -> [String] {
+  /// Where `cp`, `mv`, `ln` and `install` write: the destination, with each source's name as an
+  /// entry in case it is a directory. `mv` also removes its sources.
+  private static func copyDestinations(_ name: String, _ arguments: [String])
+    -> [ShellWriteTarget]
+  {
     var valued: Set<String> = targetDirectoryOptions.union(["-S", "--suffix"])
     if name.hasSuffix("install") {
       valued.formUnion(["-m", "-o", "-g", "-B", "-f", "--mode", "--owner", "--group"])
@@ -73,22 +101,28 @@ extension ShellSyntax {
     if name.hasSuffix("install"),
       arguments.contains(where: { $0 == "-d" || $0 == "--directory" })
     {
-      return operands
+      return operands.map { ShellWriteTarget(path: $0) }
     }
-    let destination: String
+    var destination: Substring
+    var isDirectory: Bool
     if let directory = scanned.values.last(where: { targetDirectoryOptions.contains($0.option) }) {
-      destination = directory.value
+      destination = Substring(directory.value)
+      isDirectory = true
     } else if operands.count >= 2 {
-      destination = operands.removeLast()
+      destination = Substring(operands.removeLast())
+      isDirectory = false
     } else if name == "ln", let only = operands.first {
-      return [basename(only)]
+      return [ShellWriteTarget(path: basename(only))]
     } else {
       return []
     }
-    var directory = Substring(destination)
-    while directory.count > 1, directory.hasSuffix("/") { directory = directory.dropLast() }
-    let inside = operands.map { directory + "/" + basename($0) }
-    return [destination] + inside + (name == "mv" ? operands : [])
+    while destination.count > 1, destination.hasSuffix("/") {
+      destination = destination.dropLast()
+      isDirectory = true
+    }
+    let written = ShellWriteTarget(
+      path: String(destination), entries: operands.map(basename), isDirectory: isDirectory)
+    return [written] + (name == "mv" ? operands.map { ShellWriteTarget(path: $0) } : [])
   }
 
   /// `sed` writes only in place; its first operand is the script unless `-e`/`-f` gave one.

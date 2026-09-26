@@ -66,16 +66,16 @@ still applies to repositories that have those files.
 
 ## Bash writes
 
-Each path a Bash command writes gets the same judgment, with the same payload, as a Write to it:
-redirections (`>`, `>>`, `&>`, `<>`), `tee`, the destination of `cp`, `mv`, `install` and `ln`,
-the operands of `rm`, `truncate` and `touch`, `dd of=`, and `sed -i`/`perl -i` files, anywhere in
-the command line. Relative paths resolve against the working directory and any literal `cd`
-before them. So a subagent's `echo {} > ledger.json` is denied like its Write, and the lock holder
-can still write its plan through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
+The guard judges each path a Bash command writes as it judges a Write to that path, with the same
+payload. It finds redirections (`>`, `>>`, `&>`, `<>`), `tee`, and the destination of `cp`, `mv`,
+`install` and `ln`. It also finds the operands of `rm`, `truncate` and `touch`, `dd of=`, and
+`sed -i`/`perl -i` files, anywhere in the command. Relative paths resolve against the working
+directory and any literal `cd` before them. The guard denies a subagent's `echo {} > ledger.json`
+as it denies its Write, and the lock holder can still write its plan through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
 
-Known limits: the guard stops accidental and ordinary writes; it isn't a sandbox. Interpreter code
-(`python3 -c`, `node -e`), heredoc text, `eval` of a built string, targets spelled with `$VAR` or
-`$(…)`, and a recursive delete of a guarded directory's parent aren't judged.
+Known limits: the guard stops accidental and ordinary writes; it isn't a sandbox. It doesn't judge
+interpreter code (`python3 -c`, `node -e`), heredoc text, `eval` of a built string, targets spelled
+with `$VAR` or `$(…)`, or a recursive delete of a guarded directory's parent.
 
 ## State
 

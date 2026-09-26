@@ -15,14 +15,12 @@ enum PreToolUseHook {
     case "Bash"?:
       guard let command = payload.command else { return nil }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
-      for target in ShellSyntax.writeTargets(in: command) {
+      for path in writtenPaths(command, payload: payload, home: dependencies.environment["HOME"]) {
         if let violation = await writeViolation(
-          target, payload: payload, root: root, dependencies: dependencies)
+          path, payload: payload, root: root, dependencies: dependencies)
         {
-          return deny(
-            GuardViolation(
-              ruleID: violation.ruleID,
-              reason: "this command writes `\(target)`. " + violation.reason))
+          let reason = "this command writes `\(path)`. " + violation.reason
+          return deny(GuardViolation(ruleID: violation.ruleID, reason: reason))
         }
       }
       guard BashGuard.isGitCommit(command) else { return nil }
@@ -34,6 +32,27 @@ enum PreToolUseHook {
     default:
       return nil
     }
+  }
+
+  /// The paths a Bash command writes. A copy, move or link into a directory writes each source's
+  /// name inside it, which only the filesystem can tell from a copy onto a new file's name.
+  private static func writtenPaths(_ command: String, payload: HookPayload, home: String?)
+    -> [String]
+  {
+    ShellSyntax.writeTargets(in: command).flatMap { target -> [String] in
+      guard !target.entries.isEmpty,
+        target.isDirectory
+          || ToolPath.resolvedAbsolutes(target.path, cwd: payload.cwd, home: home)
+            .contains(where: isDirectory)
+      else { return [target.path] }
+      return [target.path] + target.entries.map { target.path + "/" + $0 }
+    }
+  }
+
+  private static func isDirectory(_ path: String) -> Bool {
+    var isDirectory: ObjCBool = false
+    return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+      && isDirectory.boolValue
   }
 
   /// The one judgment of a write, whether a file tool names the path or a Bash command writes
