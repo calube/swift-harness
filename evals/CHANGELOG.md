@@ -23,7 +23,7 @@
 - **Added the label kind `evasion`** next to `positive`, `near-miss` and `clean`. It reports recall
   apart from positives and has no pass bar, as `suites.md` sets out for evasions.
 - **Fixed 6 corpus cases that failed for the case's own reasons.** Before: 17 mismatches. After:
-  12, before the 5 `wild` near-misses from the `docs/` audit were added. The fixes:
+  12, counted before I added the 5 `wild` near-misses from the `docs/` audit. The fixes:
   - a jargon seed also planted the number word `two`;
   - a test-plan bullet read `` `test-…` ``, where `gate/Fixtures/design/valid.md` uses bare `test-…`;
   - a test-support module depended on the module that depended on it;
