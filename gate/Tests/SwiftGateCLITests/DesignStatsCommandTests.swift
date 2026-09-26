@@ -216,12 +216,17 @@ struct DesignStatsCommandTests {
     let plan = try layout.plan("queue-plan")
     try FileManager.default.createDirectory(
       atPath: plan.directory, withIntermediateDirectories: true)
-    let task = LedgerTask(
+    let withoutActuals = LedgerTask(
       id: "queue-core", deps: [], writeSet: ["Sample/Sources/Core/"], gate: .fast,
       tests: ["test-a"], covers: ["test-a"], estLines: 120, status: .pending,
       worktree: "../app-queue-core")
+    let withActuals = LedgerTask(
+      id: "queue-networking", deps: [], writeSet: ["Sample/Sources/Networking/"], gate: .fast,
+      tests: ["test-b"], covers: ["test-b"], estLines: 100, status: .done,
+      worktree: "../app-queue-networking", actualLines: 145)
     let ledger = Ledger(
-      schemaVersion: 1, resume: "planned", maxParallel: 3, tasks: [task], waves: [["queue-core"]])
+      schemaVersion: 1, resume: "planned", maxParallel: 3,
+      tasks: [withoutActuals, withActuals], waves: [["queue-core", "queue-networking"]])
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
     let file = PlanFile(
       schemaVersion: 1, slug: "queue-plan", design: Self.design, designSha: nil, approval: nil,
@@ -233,8 +238,13 @@ struct DesignStatsCommandTests {
       root: repo.root, runner: runner)
 
     #expect(report.verdict == .green)
+    // Without actualLines: excluded, never a fabricated zero error.
     #expect(report.estimateError.excludedTaskIDs == ["queue-core"])
-    #expect(report.estimateError.meanAbsoluteError == nil)
-    #expect(report.notes.contains { $0.contains("actual line counts aren't tracked yet") })
+    // With actualLines: included, error = actualLines - estLines = 145 - 100 = 45.
+    let included = try #require(
+      report.estimateError.perTask.first { $0.id == "queue-networking" })
+    #expect(included.error == 45)
+    #expect(report.estimateError.meanAbsoluteError == 45.0)
+    #expect(report.notes.contains { $0.contains("1 task(s) have no actualLines yet") })
   }
 }

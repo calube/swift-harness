@@ -376,12 +376,13 @@ enum DesignStatsRun {
       let store = try await PlanStateStore.locate(slug: plan, git: git)
       let ledger = try store.ledger()
       let tasks = ledger.tasks.map {
-        TaskEstimate(id: $0.id, estLines: $0.estLines, actualLines: nil)
+        TaskEstimate(id: $0.id, estLines: $0.estLines, actualLines: $0.actualLines)
       }
+      let missingActuals = tasks.count { $0.actualLines == nil }
       let note =
-        tasks.isEmpty
+        missingActuals == 0
         ? nil
-        : "actual line counts aren't tracked yet; \(tasks.count) task(s) excluded from estimate error"
+        : "\(missingActuals) task(s) have no actualLines yet; excluded from estimate error"
       return (tasks, note, nil)
     } catch {
       if case .missing(let path) = error {
