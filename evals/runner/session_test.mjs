@@ -9,12 +9,12 @@
 // a trial scored while the gate was still building and every hook was off; a judge failing a
 // long final message it only saw the first 1,500 characters of.
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseValue, splitFrontmatter } from './frontmatter.mjs'
-import { digest, gradeCode, hooksInactive, isScored, judgePrompt, loadCase, parseTrace, scoreRun } from './session.mjs'
+import { digest, gradeCode, hooksInactive, isScored, judgePrompt, keepFiles, loadCase, parseTrace, scoreRun } from './session.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const cases = resolve(here, '../cases')
@@ -85,6 +85,16 @@ assert.equal(hooksInactive('{"additionalContext":"Session id: abc"}'), false)
 const longFinal = 'questions '.repeat(250) + 'END-OF-MESSAGE'
 const finalRun = run([line({ type: 'assistant', message: { content: [{ type: 'text', text: longFinal }] } })])
 assert.match(judgePrompt({ criteria: 'x' }, finalRun), /END-OF-MESSAGE/, 'the judge sees a long final message whole')
+
+const kws = mkdtempSync(join(tmpdir(), 'keep-ws-'))
+mkdirSync(join(kws, '.harness/runs/r1/review-findings'), { recursive: true })
+writeFileSync(join(kws, '.harness/runs/r1/review.json'), '{}')
+writeFileSync(join(kws, '.harness/runs/r1/review-findings/concurrency.json'), '{}')
+writeFileSync(join(kws, '.harness/runs/r1/log.txt'), 'x')
+const kdest = mkdtempSync(join(tmpdir(), 'keep-dest-'))
+keepFiles(kws, /\.harness\/runs\/[^/]+\/(review\.json|review-findings\/[^/]+\.json)$/, kdest)
+assert.ok(existsSync(join(kdest, '.harness/runs/r1/review-findings/concurrency.json')), 'keep copies matching files with their paths')
+assert.ok(!existsSync(join(kdest, '.harness/runs/r1/log.txt')), 'and only those')
 
 const hookFeedback = line({ type: 'user', message: { content: [{ type: 'text', text: 'Stop hook feedback:\nswiftgate RED' }] } })
 assert.match(digest(parseTrace(hookFeedback)), /Stop hook feedback/)

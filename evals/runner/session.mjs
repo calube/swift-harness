@@ -23,6 +23,8 @@
 //   command    run: a shell command in the final workspace; passes on exit 0, and when
 //              stdout_match is set, only if stdout matches it. Hidden tests go here.
 //   llm        criteria in the body; the judge model votes 3 times, 2 PASS votes pass
+// A case's `keep` frontmatter, a regex over workspace-relative paths, copies matching files to
+// <raw>/<case>/<arm>-<trial>/kept/ before the workspace is deleted.
 // Any grader may set `arm: with-only`: the without arm reports it and leaves it out of the score.
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -51,6 +53,7 @@ export function loadCase(dir) {
     timeoutSeconds: data.timeout_seconds ?? 300,
     allowedTools: data.allowed_tools ?? [],
     runs: data.runs ?? 3,
+    keep: data.keep ? new RegExp(data.keep) : null,
     scaffold: existsSync(join(dir, 'scaffold.sh')) ? join(dir, 'scaffold.sh') : null,
   }
 }
@@ -261,6 +264,7 @@ async function runTrial(c, arm, trial, opts) {
     spawnSync('git', ['add', '-A', '--intent-to-add', '.'], { cwd: workspace })
     const diffText = spawnSync('git', ['diff', '--', '.', ':!.eval', ':!.harness', ':!.build'], { cwd: workspace, encoding: 'utf8', maxBuffer: 64 << 20 }).stdout
     writeFileSync(join(dir, 'diff.patch'), diffText)
+    if (c.keep) keepFiles(workspace, c.keep, join(dir, 'kept'))
     const hooksText = readdirSync(hooks).sort().map((f) => `${f}\n${readFileSync(join(hooks, f), 'utf8')}`).join('\n')
     const run = {
       messages, traceText: session.stdout, hooksText, diffText, workspace, env, judgeHome,
@@ -288,6 +292,23 @@ async function runTrial(c, arm, trial, opts) {
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+// Copies the workspace files whose relative path matches `keep` to `dest`, keeping their paths,
+// so a case can score artifacts after the trial's workspace is deleted.
+export function keepFiles(workspace, pattern, dest) {
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(workspace, rel), { withFileTypes: true })) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        if (entry.name !== '.git' && entry.name !== '.build') walk(path)
+      } else if (pattern.test(path)) {
+        mkdirSync(dirname(join(dest, path)), { recursive: true })
+        writeFileSync(join(dest, path), readFileSync(join(workspace, path)))
+      }
+    }
+  }
+  walk('')
 }
 
 // A with-plugin trial whose gate was still building ran with every hook off. Its grades describe
