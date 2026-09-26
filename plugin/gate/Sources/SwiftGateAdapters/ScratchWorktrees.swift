@@ -35,6 +35,18 @@ public enum ScratchWorktreeError: Error, Sendable, Equatable {
   public var verdict: Verdict { .blocked }
 }
 
+/// What ``LiveScratchWorktrees/sweepRegisteredOrphans()`` did: the trees it removed, and the ones
+/// it found orphaned but could not remove.
+public struct ScratchWorktreeSweep: Sendable, Equatable {
+  public var removed: [String] = []
+  public var failures: [String] = []
+
+  public init(removed: [String] = [], failures: [String] = []) {
+    self.removed = removed
+    self.failures = failures
+  }
+}
+
 /// Makes a throwaway git worktree, hands its toplevel to `body`, and always removes it.
 public protocol ScratchWorktrees: Sendable {
   func withScratchTree<T: Sendable>(
@@ -82,6 +94,7 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     let parent = directory ?? toplevel.deletingLastPathComponent()
     let prefix = ".\(toplevel.lastPathComponent)\(Self.nameMarker)"
     await sweepOrphans(in: parent, prefix: prefix, toplevel: toplevel)
+    _ = try? await sweepRegisteredOrphans()
 
     let token = UInt32.random(in: .min ... .max)  // swiftgate:allow det.random — unique name
     let scratch = parent.appending(
@@ -219,6 +232,52 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       try? FileManager.default.removeItem(at: scratch)
       _ = try? await git(["worktree", "prune"], in: toplevel.path)
     }
+  }
+
+  /// Removes every scratch tree registered with this repository whose owning process no longer
+  /// exists, whichever of its checkouts made it: a tree made from a linked worktree that has since
+  /// been removed is never beside a toplevel the per-run sweep looks in.
+  public func sweepRegisteredOrphans() async throws(ScratchWorktreeError) -> ScratchWorktreeSweep {
+    let listed = try await git(["worktree", "list", "--porcelain"], in: repositoryRoot)
+    let trees = listed.split(separator: "\n").compactMap { line -> String? in
+      guard line.hasPrefix("worktree ") else { return nil }
+      return String(line.dropFirst("worktree ".count))
+    }
+    var sweep = ScratchWorktreeSweep()
+    for tree in trees {
+      guard let owner = Self.owner(of: URL(filePath: tree).lastPathComponent), !Self.isAlive(owner)
+      else { continue }
+      do throws(ScratchWorktreeError) {
+        _ = try await git(["worktree", "remove", "--force", "--force", tree], in: repositoryRoot)
+        sweep.removed.append(tree)
+      } catch {
+        do {
+          if FileManager.default.fileExists(atPath: tree) {
+            try FileManager.default.removeItem(atPath: tree)
+          }
+          sweep.removed.append(tree)
+        } catch let removal {
+          sweep.failures.append("\(tree): \(error); \(removal)")
+        }
+      }
+    }
+    if !sweep.removed.isEmpty {
+      _ = try await git(["worktree", "prune"], in: repositoryRoot)
+    }
+    return sweep
+  }
+
+  /// The owning process id in a scratch tree's name, `.<checkout>-swiftgate-prove-<pid>-<token>`.
+  static func owner(of name: String) -> Int32? {
+    guard name.hasPrefix("."), let marker = name.range(of: nameMarker, options: .backwards)
+    else { return nil }
+    let fields = name[marker.upperBound...].split(separator: "-")
+    guard fields.count == 2, let pid = Int32(fields[0]), pid > 0 else { return nil }
+    return pid
+  }
+
+  private static func isAlive(_ pid: Int32) -> Bool {
+    !(kill(pid, 0) == -1 && errno == ESRCH)
   }
 
   /// Removes scratch trees whose owning process no longer exists, then drops their registrations.
