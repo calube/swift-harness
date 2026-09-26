@@ -65,7 +65,7 @@ struct BootstrapAdaptersTests {
     "package discovery finds the sample app's packages and skips build output and hidden directories — catches a config globbing DerivedData checkouts as project packages"
   )
   func packageDiscovery() throws {
-    let sample = Fixture.checkoutRoot.appending(path: "examples/SampleApp")
+    let sample = Fixture.harnessCheckout.appending(path: "examples/SampleApp")
     #expect(
       BootstrapFiles.packageDirectories(root: sample)
         == Fixture.samplePackages.map { "Packages/\($0)" })
@@ -84,7 +84,7 @@ struct BootstrapAdaptersTests {
     "the plugin's templates load and the rendered config passes the real config loader — catches a template edit that makes every fresh bootstrap RED"
   )
   func templatesRenderLoadableConfig() throws {
-    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.pluginRoot)
+    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.checkoutRoot)
     let root = try scratch()
     defer { try? FileManager.default.removeItem(at: root) }
     let inferred = ConfigInference.infer(
@@ -106,9 +106,9 @@ struct BootstrapAdaptersTests {
     "the docs router template loads from templates/docs-index.md, not a stale or misspelled path — catches TemplateNames.docsIndex drifting from the shipped file"
   )
   func docsIndexTemplateLoads() throws {
-    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.pluginRoot)
+    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.checkoutRoot)
     let onDisk = try String(
-      contentsOf: Fixture.pluginRoot.appending(path: "templates/docs-index.md"),
+      contentsOf: Fixture.checkoutRoot.appending(path: "templates/docs-index.md"),
       encoding: .utf8)
     #expect(templates.docsIndex == onDisk)
     #expect(!templates.docsIndex.isEmpty)
@@ -143,7 +143,7 @@ struct BootstrapAdaptersTests {
     let root = try scratch()
     defer { try? FileManager.default.removeItem(at: root) }
     try await git(["init", "-q"], in: root)
-    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.pluginRoot)
+    let templates = try BootstrapFiles.templates(harnessRoot: Fixture.checkoutRoot)
     try Data(templates.lefthook.utf8).write(to: root.appending(path: "lefthook.yml"))
     let probe = LiveBootstrapProbe(runner: LiveProcessRunner())
 

@@ -10,8 +10,7 @@ enum SelfTest {
   static let ruleID = "swiftgate.self-test"
   static let rulesDirectory = "gate/Fixtures/rules"
   static let archDirectory = "gate/Fixtures/arch"
-  /// The sample app lives in the contributor checkout, beside the plugin rather than in it, so
-  /// the command resolves it against the working directory unless told otherwise.
+  /// Relative to the checkout: the sample app sits beside the plugin, not in it.
   static let sampleDirectory = "examples/SampleApp"
   static let seedsDirectory = "gate/Fixtures/seeds"
 
@@ -26,7 +25,10 @@ enum SelfTest {
     case blocked(String)
   }
 
-  static func run(harnessRoot: URL, sampleApp: URL) async -> StaticCheckOutcome {
+  /// - Parameter sampleApp: the clean sample app; `nil` finds it under the git checkout that
+  ///   holds `harnessRoot`, or under `harnessRoot` when no checkout holds it.
+  static func run(harnessRoot: URL, sampleApp: URL? = nil) async -> StaticCheckOutcome {
+    let sampleApp = sampleApp ?? defaultSampleApp(harnessRoot: harnessRoot)
     let parts = await withTaskGroup(of: Part.self) { group in
       group.addTask { ruleFixtures(harnessRoot: harnessRoot) }
       group.addTask { await archFixtures(harnessRoot: harnessRoot) }
@@ -209,6 +211,19 @@ enum SelfTest {
     return .failures(failures)
   }
 
+  /// The checkout is the nearest directory at or above `harnessRoot` with a `.git` entry (a
+  /// directory, or the file a linked worktree has).
+  static func defaultSampleApp(harnessRoot: URL) -> URL {
+    var directory = harnessRoot.standardizedFileURL
+    while directory.path != "/" {
+      if FileManager.default.fileExists(atPath: directory.appending(path: ".git").path) {
+        return directory.appending(path: sampleDirectory, directoryHint: .isDirectory)
+      }
+      directory = directory.deletingLastPathComponent()
+    }
+    return harnessRoot.appending(path: sampleDirectory, directoryHint: .isDirectory)
+  }
+
   /// A path under the harness root reads relative to it; anything else stays absolute.
   private static func displayPath(_ url: URL, under root: URL) -> String {
     let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
@@ -389,7 +404,8 @@ private enum SeedFamily: String, Sendable {
     case .probe: await SeedRunners.probe(caseDirectory: caseDirectory, harnessRoot: harnessRoot)
     case .designLint: await SeedRunners.designLint(caseDirectory: caseDirectory)
     case .designDiff: await SeedRunners.designDiff(caseDirectory: caseDirectory)
-    case .planLint: await SeedRunners.planLint(caseDirectory: caseDirectory)
+    case .planLint:
+      await SeedRunners.planLint(caseDirectory: caseDirectory, harnessRoot: harnessRoot)
     case .docsLint: await SeedRunners.docsLint(caseDirectory: caseDirectory)
     case .prose: await SeedRunners.prose(caseDirectory: caseDirectory)
     case .comments: await SeedRunners.comments(caseDirectory: caseDirectory)
@@ -699,7 +715,8 @@ private enum SeedRunners {
   /// the shared package above and a `plan.json`/`ledger.json` written where `plan claim` would —
   /// under the repo's own common dir, resolved through real git — then handed to `plan-lint`'s own
   /// run function, never a re-implementation of its checks.
-  static func planLint(caseDirectory: URL) async -> SeedRunOutcome {
+  /// Worker packs take their standards from `harnessRoot`, as they do in a consumer repository.
+  static func planLint(caseDirectory: URL, harnessRoot: URL) async -> SeedRunOutcome {
     guard
       let design = try? String(
         contentsOf: caseDirectory.appending(path: "design.md"), encoding: .utf8),
@@ -750,7 +767,7 @@ private enum SeedRunners {
     }
 
     let result = await PlanLintRun.run(
-      slug: slug, root: repo.root, git: repo.git2, swiftPM: repo.swiftPM)
+      slug: slug, root: repo.root, git: repo.git2, swiftPM: repo.swiftPM, harnessRoot: harnessRoot)
     switch result.outcome {
     case .blocked(let reason): return .blocked(reason)
     case .invalid(let reason, _): return .blocked("invalid: \(reason)")
@@ -920,9 +937,9 @@ struct SelfTestCommand: AsyncParsableCommand {
 
   @Option(
     help:
-      "The clean sample app that must pass lint, testlint and arch. Default: \(SelfTest.sampleDirectory) under the current directory."
+      "The clean sample app that must pass lint, testlint and arch. Default: \(SelfTest.sampleDirectory) in the git checkout that holds the harness root."
   )
-  var sampleApp = SelfTest.sampleDirectory
+  var sampleApp: String?
 
   @Flag(
     help: "Calibrate the judge instead: precision and recall per question on gate/Fixtures/judge.")
@@ -971,11 +988,9 @@ struct SelfTestCommand: AsyncParsableCommand {
     try await StaticCheckRun.execute(root: root, format: output.format) {
       await SelfTest.run(
         harnessRoot: root,
-        sampleApp: CanonicalPath.url(
-          URL(
-            filePath: sampleApp, directoryHint: .isDirectory,
-            relativeTo: URL(
-              filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory))))
+        sampleApp: sampleApp.map {
+          CanonicalPath.url(URL(filePath: $0, directoryHint: .isDirectory))
+        })
     }
   }
 }

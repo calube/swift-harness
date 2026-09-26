@@ -26,7 +26,7 @@ struct MutateCheckTests {
         try FileManager.default.createDirectory(
           at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.copyItem(
-          at: Fixture.checkoutRoot.appending(path: path), to: destination)
+          at: Fixture.harnessCheckout.appending(path: path), to: destination)
       }
     }
 

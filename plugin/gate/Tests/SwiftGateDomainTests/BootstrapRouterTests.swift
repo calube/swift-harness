@@ -42,7 +42,7 @@ struct BootstrapRouterTests {
   /// `BootstrapFiles.templates(harnessRoot:)` does.
   private func template(_ relativePath: String) throws -> String {
     try String(
-      contentsOf: Fixture.pluginRoot.appending(path: relativePath), encoding: .utf8)
+      contentsOf: Fixture.checkoutRoot.appending(path: relativePath), encoding: .utf8)
   }
 
   /// The repository as it would be after applying every write in `plan`.

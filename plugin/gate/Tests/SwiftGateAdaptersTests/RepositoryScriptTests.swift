@@ -28,15 +28,15 @@ struct RepositoryScriptTests {
   /// Discovered once per test-run so a workflow task's new `tests/*_test.mjs` is picked up without
   /// editing this file (spec Decisions table).
   static let discoveredMjsScripts = mjsScripts(
-    in: Fixture.checkoutRoot.appending(path: "tests", directoryHint: .isDirectory))
+    in: Fixture.harnessCheckout.appending(path: "tests", directoryHint: .isDirectory))
 
   func run(_ executable: String, _ script: String, timeout: Duration) async throws -> ProcessOutput
   {
     try await LiveProcessRunner().run(
       ProcessInvocation(
         executable: executable,
-        arguments: [Fixture.checkoutRoot.appending(path: script).path],
-        workingDirectory: Fixture.checkoutRoot.path, timeout: timeout))
+        arguments: [Fixture.harnessCheckout.appending(path: script).path],
+        workingDirectory: Fixture.harnessCheckout.path, timeout: timeout))
   }
 
   @Test(

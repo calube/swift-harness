@@ -227,7 +227,7 @@ struct CalibrationFreshnessTests {
     "the committed last-pass.json is fresh for this checkout's design prompts — catches a prompt change merged without a calibration pass"
   )
   func committedRecordIsFresh() async throws {
-    let checkout = Fixture.checkoutRoot
+    let checkout = Fixture.harnessCheckout
     let repository = try ProbeRepository(config: nil)
     defer { repository.remove() }
     for file in try DesignCalibrationHash.discover(root: checkout) {

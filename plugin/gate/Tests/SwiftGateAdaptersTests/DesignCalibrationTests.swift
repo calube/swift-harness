@@ -169,7 +169,7 @@ struct DesignCalibrationTests {
     "calibration freshness hashes every plugin/agents/design-*.md and plugin/workflows/design-*.js in this checkout — catches a freshness check that silently hashes nothing after the plugin moved"
   )
   func hashesThePluginsDesignPrompts() throws {
-    let checkout = Fixture.checkoutRoot
+    let checkout = Fixture.harnessCheckout
     func listed(_ directory: String, suffix: String) throws -> [String] {
       try FileManager.default.contentsOfDirectory(
         atPath: checkout.appending(path: directory).path

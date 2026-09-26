@@ -128,7 +128,7 @@ struct LiveSwiftPMTests {
     "the recorded describe fixture still matches a real run — catches stale fixtures or describe format drift"
   )
   func fixtureMatchesRealDescribe() async throws {
-    let checkout = Fixture.checkoutRoot.resolvingSymlinksInPath().path
+    let checkout = Fixture.harnessCheckout.resolvingSymlinksInPath().path
     let live = LiveSwiftPM(runner: LiveProcessRunner(), repositoryRoot: checkout)
 
     let real = try await live.describe(packageDirectory: gameEngine)

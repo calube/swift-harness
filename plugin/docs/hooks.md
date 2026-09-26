@@ -61,6 +61,9 @@ or when the holder's `plan.json` is missing or corrupt: claim the plan with a `p
 names the doc first. `design` is resolved against the worktree toplevel and compared as a
 canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
 
+The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
+still applies to repositories that have those files.
+
 ## State
 
 Hook state lives in `.harness/hook-state/` (gitignored, and it writes its own `.gitignore`): the

@@ -106,14 +106,32 @@ struct EditGuardTests {
       ("/r/.harness/runs/r1/t2.xcresult/Info.plist", EditGuard.xcresultRuleID),
     ])
   func artifactsDenied(path: String, rule: String) {
-    #expect(EditGuard.evaluate(path: path)?.ruleID == rule)
+    #expect(EditGuard.evaluate(path: path, isOrchestrator: true)?.ruleID == rule)
+  }
+
+  @Test(
+    "plan ledgers and the plan index are orchestrator-only — catches a worker rewriting shared plan state"
+  )
+  func planStateIsOrchestratorOnly() {
+    for path in [
+      "/r/.harness/plans/2026-09-24-feed/ledger.json", "/r/.harness/plans/index.json",
+    ] {
+      #expect(
+        EditGuard.evaluate(path: path, isOrchestrator: false)?.ruleID == EditGuard.planStateRuleID)
+      #expect(EditGuard.evaluate(path: path, isOrchestrator: true) == nil)
+    }
+    #expect(
+      EditGuard.evaluate(path: "/r/.harness/plans/2026-09-24-feed/design.md", isOrchestrator: false)
+        == nil)
   }
 
   @Test("ordinary source edits pass — catches the guard blocking normal work")
   func sourcePasses() {
     #expect(
-      EditGuard.evaluate(path: "/r/Packages/Feed/Sources/FeedCore/Feed.swift") == nil)
-    #expect(EditGuard.evaluate(path: "/r/docs/Package.resolved.md") == nil)
+      EditGuard.evaluate(
+        path: "/r/Packages/Feed/Sources/FeedCore/Feed.swift", isOrchestrator: false)
+        == nil)
+    #expect(EditGuard.evaluate(path: "/r/docs/Package.resolved.md", isOrchestrator: false) == nil)
   }
 
   @Test(

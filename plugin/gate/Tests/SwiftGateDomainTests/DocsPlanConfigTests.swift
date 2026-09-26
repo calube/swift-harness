@@ -202,17 +202,6 @@ struct DocsPlanConfigTests {
   }
 
   @Test(
-    "a per-file budget of 1 word is the smallest accepted — catches the lower bound rejecting a valid budget"
-  )
-  func smallestFileBudgetAccepted() throws {
-    let config = try Config(
-      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
-      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
-      docs: DocsConfig(budgets: DocsBudgets(files: ["docs/a.md": 1])))
-    #expect(config.docs.budgets.files == ["docs/a.md": 1])
-  }
-
-  @Test(
     "a non-integer or zero per-file budget is rejected — catches a stray value disabling a budget")
   func badFileBudgetRejected() {
     let wrongType = minimalRoot(

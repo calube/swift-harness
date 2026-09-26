@@ -27,7 +27,7 @@ struct DesignSeedsSelfTestTests {
   /// sample-app parts of `SelfTest.run`, which have nothing to check in an empty root beyond their
   /// own (irrelevant, and ignored below) hygiene findings.
   private static func stagedCase(_ relativePath: String, in root: URL) throws {
-    let source = Fixture.pluginRoot.appending(
+    let source = Fixture.checkoutRoot.appending(
       path: "gate/Fixtures/seeds/\(relativePath)", directoryHint: .isDirectory)
     let destination = root.appending(
       path: "gate/Fixtures/seeds/\(relativePath)", directoryHint: .isDirectory)
@@ -46,10 +46,7 @@ struct DesignSeedsSelfTestTests {
     "every committed seed under gate/Fixtures/seeds fires exactly the rule id(s) its expected.json names — catches a seed drifting from the rule it exists to prove"
   )
   func everyShippedSeedMatchesItsExpectedRuleIDs() async throws {
-    let outcome = await SelfTest.run(
-      harnessRoot: Fixture.pluginRoot.resolvingSymlinksInPath(),
-      sampleApp: Fixture.checkoutRoot.appending(path: "examples/SampleApp")
-        .resolvingSymlinksInPath())
+    let outcome = await SelfTest.run(harnessRoot: Fixture.checkoutRoot.resolvingSymlinksInPath())
     #expect(Self.seedFailures(outcome) == [])
   }
 
@@ -63,8 +60,7 @@ struct DesignSeedsSelfTestTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try Self.stagedCase("design-lint/untagged-decision-bullet", in: root)
 
-    let before = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let before = await SelfTest.run(harnessRoot: root)
     #expect(Self.seedFailures(before) == [])
 
     let docURL = root.appending(
@@ -76,8 +72,7 @@ struct DesignSeedsSelfTestTests {
       with: "- Client-side queue [ev-tca-effect-run-supports-cancellation]\n")
     try text.write(to: docURL, atomically: true, encoding: .utf8)
 
-    let after = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let after = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(after).contains {
         $0.contains("expected rule id(s) [design-lint.untagged-bullet], got []")
@@ -93,8 +88,7 @@ struct DesignSeedsSelfTestTests {
     try Self.stagedCase("evidence-check/tampered-capture", in: root)
     try Self.stagedCase("evidence-check/valid", in: root)
 
-    let before = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let before = await SelfTest.run(harnessRoot: root)
     #expect(Self.seedFailures(before) == [])
 
     let capture =
@@ -109,8 +103,7 @@ struct DesignSeedsSelfTestTests {
     try FileManager.default.removeItem(at: tamperedURL)
     try FileManager.default.copyItem(at: cleanURL, to: tamperedURL)
 
-    let after = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let after = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(after).contains {
         $0.contains("expected rule id(s) [evidence-check.captureHashMismatch], got []")
@@ -133,8 +126,7 @@ struct DesignSeedsSelfTestTests {
       """.utf8
     ).write(to: expectedURL)
 
-    let outcome = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let outcome = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(outcome).contains {
         $0.contains("expected rule id(s) [evidence-check.citedFileMissing]")
@@ -152,8 +144,7 @@ struct DesignSeedsSelfTestTests {
     try FileManager.default.removeItem(
       at: root.appending(path: "gate/Fixtures/seeds/design-lint/valid/expected.json"))
 
-    let outcome = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let outcome = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(outcome).contains(
         "gate/Fixtures/seeds/design-lint/valid: no expected.json"))
@@ -169,8 +160,7 @@ struct DesignSeedsSelfTestTests {
       #"{"schemaVersion": 1, "verdict": "green", "ruleIDs": []}"#.utf8
     ).write(to: bogus.appending(path: "expected.json"))
 
-    let outcome = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let outcome = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(outcome).contains(
         "gate/Fixtures/seeds/bogus-command: no self-test runner is registered for the seed command \"bogus-command\""
@@ -196,8 +186,7 @@ struct DesignSeedsSelfTestTests {
       path: "gate/Fixtures/seeds/design-lint/valid/expected.json")
     try Data(json.utf8).write(to: expectedURL)
 
-    let outcome = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let outcome = await SelfTest.run(harnessRoot: root)
     #expect(
       Self.seedFailures(outcome).contains {
         $0.hasPrefix("gate/Fixtures/seeds/design-lint/valid/expected.json:")

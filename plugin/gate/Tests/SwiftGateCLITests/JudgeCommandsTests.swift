@@ -158,7 +158,7 @@ struct JudgeCommandsTests {
     let labels = try JSONDecoder().decode(
       JudgeCalibrationSet.self,
       from: Data(
-        contentsOf: Fixture.pluginRoot.appending(path: "gate/Fixtures/judge/labels.json")))
+        contentsOf: Fixture.checkoutRoot.appending(path: "gate/Fixtures/judge/labels.json")))
     #expect(labels.cases.filter { $0.label == .good }.count >= 10)
     #expect(labels.cases.filter { $0.label == .useless }.count >= 10)
     let byID = Dictionary(uniqueKeysWithValues: labels.cases.map { ($0.id, $0) })
@@ -174,9 +174,9 @@ struct JudgeCommandsTests {
     }
 
     let good = await JudgeSelfTest.run(
-      harnessRoot: Fixture.pluginRoot, judge: oracle, record: false)
+      harnessRoot: Fixture.checkoutRoot, judge: oracle, record: false)
     let bad = await JudgeSelfTest.run(
-      harnessRoot: Fixture.pluginRoot, judge: FakeJudge.answering(flagged: 0.9), record: false)
+      harnessRoot: Fixture.checkoutRoot, judge: FakeJudge.answering(flagged: 0.9), record: false)
 
     guard case .checked(let goodResult) = good, case .checked(let badResult) = bad else {
       Issue.record("expected both calibrations to run, got \(good) and \(bad)")
@@ -192,7 +192,7 @@ struct JudgeCommandsTests {
   )
   func recordedCalibration() async throws {
     let outcome = await JudgeSelfTest.run(
-      harnessRoot: Fixture.pluginRoot, judge: nil, record: false)
+      harnessRoot: Fixture.checkoutRoot, judge: nil, record: false)
     guard case .checked(let result) = outcome else {
       Issue.record("expected the recorded calibration to run, got \(outcome)")
       return

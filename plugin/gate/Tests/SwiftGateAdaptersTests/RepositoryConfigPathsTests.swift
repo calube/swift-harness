@@ -13,17 +13,17 @@ struct RepositoryConfigPathsTests {
     let output = try await LiveProcessRunner().run(
       ProcessInvocation(
         executable: "/usr/bin/git", arguments: ["ls-files", "-z"],
-        workingDirectory: Fixture.checkoutRoot.path, timeout: .seconds(30)))
+        workingDirectory: Fixture.harnessCheckout.path, timeout: .seconds(30)))
     #expect(output.status.isSuccess, "\(output.stderr.text)")
     return output.stdout.text.split(separator: "\0").map(String.init)
   }
 
   static func config() throws -> Config {
-    try #require(try ConfigLoader().load(repositoryRoot: Fixture.checkoutRoot))
+    try #require(try ConfigLoader().load(repositoryRoot: Fixture.harnessCheckout))
   }
 
   @Test(
-    "every [docs.budgets.files] key, managed file and prose_exclude glob matches a tracked file — catches a docs setting silently switched off by a move"
+    "every path .swiftgate.toml names matches a file the gate reads: budgeted docs docs-lint lints, managed files, prose_exclude globs, packages and excluded directories — catches a setting silently switched off by a move"
   )
   func docsPathsMatchFiles() async throws {
     let files = try await Self.tracked()
@@ -35,7 +35,7 @@ struct RepositoryConfigPathsTests {
     #expect(unbudgeted == [], "[docs.budgets.files] keys that name no tracked file")
     let linted = Set(
       try await DocsTreeReader(runner: LiveProcessRunner()).read(
-        repositoryRoot: Fixture.checkoutRoot
+        repositoryRoot: Fixture.harnessCheckout
       ).documents.map(\.path))
     let unread = docs.budgets.files.keys.filter { !linted.contains($0) }.sorted()
     #expect(unread == [], "[docs.budgets.files] keys docs-lint never reads, so never budgets")
@@ -48,15 +48,8 @@ struct RepositoryConfigPathsTests {
       !files.contains { DocsConfig(proseExclude: [glob]).isProseExcluded($0) }
     }
     #expect(idle == [], "prose_exclude globs that match no tracked file")
-  }
 
-  @Test(
-    "every package has a tracked Package.swift and every excluded directory holds tracked files — catches the gate building or excluding nothing after a move"
-  )
-  func packagesAndExclusionsMatchFiles() async throws {
-    let files = try await Self.tracked()
     let config = try Self.config()
-
     #expect(!config.packages.isEmpty)
     let missing = config.packages.filter { !files.contains("\($0)/Package.swift") }
     #expect(missing == [], "packages without a tracked Package.swift")

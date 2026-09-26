@@ -11,7 +11,7 @@ struct ProseSkillTests {
   static let path = "skills/prose/SKILL.md"
 
   static func skill() throws -> String {
-    try String(contentsOf: Fixture.pluginRoot.appending(path: path), encoding: .utf8)
+    try String(contentsOf: Fixture.checkoutRoot.appending(path: path), encoding: .utf8)
   }
 
   @Test(

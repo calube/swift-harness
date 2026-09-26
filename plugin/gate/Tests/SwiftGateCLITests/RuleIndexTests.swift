@@ -55,8 +55,8 @@ struct RuleIndexTests {
       PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,
       PushDocGates.blockedRuleID, PushDocGates.summaryRuleID, CalibrationFreshness.staleRuleID,
       CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
-      CalibrationFreshness.summaryRuleID, PluginValidateCheck.failedRuleID,
-      PluginValidateCheck.notRunRuleID, PluginValidateCheck.summaryRuleID,
+      CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
+      "plugin-validate.summary",
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,
@@ -74,7 +74,7 @@ struct RuleIndexTests {
   /// Every backticked rule id in the index section.
   static func documented() throws -> Set<String> {
     let text = try String(
-      contentsOf: Fixture.pluginRoot.appending(path: "docs/standards.md"), encoding: .utf8)
+      contentsOf: Fixture.checkoutRoot.appending(path: "docs/standards.md"), encoding: .utf8)
     let section = try #require(text.range(of: "## Rule id index")).upperBound
     let ids = text[section...].matches(of: /`([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)`/).map {
       String($0.1)

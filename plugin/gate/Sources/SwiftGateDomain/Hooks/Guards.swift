@@ -135,15 +135,15 @@ public enum BashGuard {
   }
 }
 
-/// PreToolUse guards on Edit/Write paths (spec §8): recorded or generated artifacts. Plan state
-/// lives in the git common dir and is ``PlanStateGuard``'s; `planStateRuleID` names its denials.
+/// PreToolUse guards on Edit/Write paths (spec §8): recorded or generated artifacts, and plan
+/// state only the orchestrating session may write.
 public enum EditGuard {
   public static let snapshotReferenceRuleID = "guard.snapshot-reference"
   public static let packageResolvedRuleID = "guard.package-resolved"
   public static let xcresultRuleID = "guard.xcresult"
   public static let planStateRuleID = "guard.plan-state"
 
-  public static func evaluate(path: String) -> GuardViolation? {
+  public static func evaluate(path: String, isOrchestrator: Bool) -> GuardViolation? {
     let components = path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).map(String.init)
     guard let file = components.last else { return nil }
     if components.contains("__Snapshots__") {
@@ -165,7 +165,25 @@ public enum EditGuard {
         ruleID: xcresultRuleID,
         reason: "result bundles are test evidence; editing one forges it. Re-run the tests.")
     }
+    if !isOrchestrator, isPlanState(components) {
+      return GuardViolation(
+        ruleID: planStateRuleID,
+        reason:
+          "plan ledgers and .harness/plans/index.json are written only by the orchestrating "
+          + "session. Report progress to the orchestrator instead. The orchestrator is marked by "
+          + "SWIFT_HARNESS_ORCHESTRATOR=1 or .harness/orchestrator.lock holding its session id.")
+    }
     return nil
+  }
+
+  private static func isPlanState(_ components: [String]) -> Bool {
+    for index in components.indices.dropLast()
+    where components[index] == ".harness" && components[index + 1] == "plans" {
+      let inside = components[(index + 2)...]
+      if inside.last == "ledger.json", inside.count >= 2 { return true }
+      if Array(inside) == ["index.json"] { return true }
+    }
+    return false
   }
 }
 
@@ -173,6 +191,8 @@ public enum EditGuard {
 /// in an orchestrator's session: they are the workers the rule exists for.
 public enum OrchestratorMarker {
   public static let environmentVariable = "SWIFT_HARNESS_ORCHESTRATOR"
+  /// Repository-relative; holds the orchestrating session's id.
+  public static let lockFile = ".harness/orchestrator.lock"
 
   public static func isOrchestrator(
     environmentValue: String?, lockContents: String?, sessionID: String, agentID: String?

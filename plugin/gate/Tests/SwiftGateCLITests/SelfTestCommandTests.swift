@@ -17,10 +17,7 @@ struct SelfTestCommandTests {
     "the shipped fixtures and the sample app pass — catches a rule, fixture or sample regression reaching users"
   )
   func shippedHarnessIsGreen() async throws {
-    let outcome = await SelfTest.run(
-      harnessRoot: Fixture.pluginRoot.resolvingSymlinksInPath(),
-      sampleApp: Fixture.checkoutRoot.appending(path: "examples/SampleApp")
-        .resolvingSymlinksInPath())
+    let outcome = await SelfTest.run(harnessRoot: Fixture.checkoutRoot.resolvingSymlinksInPath())
     #expect(Self.failures(outcome) == [])
     let report = try StaticCheckReport.make(runID: "r", durationMilliseconds: 1, outcome: outcome)
     #expect(report.verdict == .green)
@@ -48,8 +45,7 @@ struct SelfTestCommandTests {
       at: root.appending(path: "gate/Fixtures/arch/arch.retired-rule/bad"),
       withIntermediateDirectories: true)
 
-    let outcome = await SelfTest.run(
-      harnessRoot: root, sampleApp: root.appending(path: "examples/SampleApp"))
+    let outcome = await SelfTest.run(harnessRoot: root)
     let failures = Self.failures(outcome)
 
     #expect(

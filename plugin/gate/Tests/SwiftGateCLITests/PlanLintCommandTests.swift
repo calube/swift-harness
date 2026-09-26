@@ -22,6 +22,9 @@ private struct PlanLintRepo {
   static let slug = "queue-plan"
   static let design = "docs/designs/queue.md"
   static let packagePath = "Sample"
+  static let standardsPath = "docs/standards.md"
+  /// The smallest standards doc a worker pack builds from: the anchor its module kind cites.
+  static let standards = "# Standards\n\n## 2. Architecture\n\nKeep Core pure.\n"
 
   static let config = """
     schema = 1
@@ -107,6 +110,7 @@ private struct PlanLintRepo {
     let budget = workerPackTokenBudget.map { "\n[plan]\nworker_pack_token_budget = \($0)\n" }
     try write(ConfigLoader.fileName, Self.config + (budget ?? ""))
     try write("\(Self.packagePath)/Package.swift", "// swift-tools-version: 6.2\n")
+    try write(Self.standardsPath, Self.standards)
     try write(Self.design, Self.approvedText)
     try await commit("approved draft")
     try write(Self.design, Self.designText(status: "approved"))
@@ -165,6 +169,36 @@ private struct PlanLintRepo {
         + #""id":"ev-queue-order","lane":"codebase","status":"supported","text":"\#(padding)"}"#
         + "\n")
     try write("docs/standards.md", "# Standards\n\n## 2. Architecture\n\n\(padding)\n")
+  }
+
+  /// Makes `Sample` a package real `swift package describe` can read, for the built binary.
+  func writeDescribablePackage() throws {
+    try write(
+      "\(Self.packagePath)/Package.swift",
+      """
+      // swift-tools-version: 6.2
+      import PackageDescription
+
+      let package = Package(name: "Sample", targets: [.target(name: "Core")])
+
+      """)
+    try write("\(Self.packagePath)/Sources/Core/Queue.swift", "public enum Queue {}\n")
+  }
+
+  /// Runs the built `swiftgate plan-lint --json` here, as the shim would, with
+  /// `SWIFTGATE_HARNESS_ROOT` set to `harnessRoot` (or unset).
+  func lintWithBinary(harnessRoot: URL?) async throws -> (rules: [String], stderr: String) {
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: binary, arguments: ["plan-lint", Self.slug, "--json"],
+        environmentOverlay: [
+          "SWIFTGATE_HARNESS_ROOT": harnessRoot?.path,
+          "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path,
+        ],
+        workingDirectory: root.path, timeout: .seconds(300)))
+    let report = try RunReportJSON.decode(output.stdout.bytes)
+    return (report.findings.map(\.ruleID), output.stderr.text)
   }
 
   func lint(from directory: URL? = nil) async throws -> (report: RunReport, run: PlanLintRun.Result)
@@ -355,16 +389,51 @@ struct PlanLintCommandTests {
       designSha: DesignSha.of(PlanLintRepo.approvedText), ledger: PlanLintRepo.ledger())
     let overBudget = PlanLintCoverage.packOverBudgetRuleID
 
+    try FileManager.default.removeItem(at: repo.root.appending(path: PlanLintRepo.standardsPath))
     let bare = try await repo.lint()
     #expect(!bare.report.findings.contains { $0.ruleID == overBudget })
     #expect(bare.run.notes.contains { $0.contains("claims.jsonl") })
-    #expect(bare.run.notes.contains { $0.contains("docs/standards.md") })
+    // Neither the repository nor a harness root has a standards doc: a named failure, never a
+    // pack quietly built without standards.
+    #expect(bare.report.findings.contains { $0.ruleID == PlanLintGraph.packMissingRuleID })
+    #expect(
+      bare.run.packFailures["queue-core"]?.contains("no standards doc for worker packs") == true)
+    #expect(bare.run.packFailures["queue-core"]?.contains("SWIFTGATE_HARNESS_ROOT") == true)
 
     try repo.writeClaimsAndStandards(bytes: 900)
     let full = try await repo.lint()
     #expect(full.report.findings.contains { $0.ruleID == overBudget && $0.file == "queue-core" })
     #expect(full.run.notes.isEmpty)
     #expect(full.report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a repository without its own docs/standards.md takes the harness plugin's, and one with its own keeps it — catches worker packs built with no standards in every consumer repository"
+  )
+  func standardsFallBackToTheHarness() async throws {
+    let repo = try await PlanLintRepo(workerPackTokenBudget: 400)
+    defer { repo.remove() }
+    try repo.writeDescribablePackage()
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText), ledger: PlanLintRepo.ledger())
+    let padded =
+      PlanLintRepo.standards
+      + String(repeating: "queued orders replay in submit order; ", count: 80) + "\n"
+    try FileManager.default.removeItem(at: repo.root.appending(path: PlanLintRepo.standardsPath))
+    let harness = repo.root.appending(path: "harness-plugin", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(
+      at: harness.appending(path: "docs"), withIntermediateDirectories: true)
+    try Data(padded.utf8).write(to: harness.appending(path: "docs/standards.md"))
+    let overBudget = PlanLintCoverage.packOverBudgetRuleID
+
+    let fromHarness = try await repo.lintWithBinary(harnessRoot: harness)
+    try repo.write(PlanLintRepo.standardsPath, PlanLintRepo.standards)
+    let ownWins = try await repo.lintWithBinary(harnessRoot: harness)
+
+    #expect(fromHarness.rules.contains(overBudget), "\(fromHarness)")
+    #expect(!fromHarness.rules.contains(PlanLintGraph.packMissingRuleID), "\(fromHarness)")
+    #expect(!ownWins.rules.contains(overBudget), "\(ownWins)")
+    #expect(!ownWins.rules.contains(PlanLintGraph.packMissingRuleID), "\(ownWins)")
   }
 
   @Test(

@@ -13,7 +13,7 @@ trap '
 ' EXIT
 
 mkdir -p "$work/repo/plugin"
-cp -R "$repo_src/plugin/bin" "$work/repo/plugin/"
+cp -R "$repo_src/plugin/bin" "$repo_src/plugin/templates" "$work/repo/plugin/"
 # .build can run into the hundreds of MB; rsync leaves it behind instead of copying it and
 # throwing it away.
 rsync -a --exclude .build "$repo_src/plugin/gate/" "$work/repo/plugin/gate/"
@@ -133,6 +133,30 @@ built=("$cache"/bin/*/swiftgate)
 ln -s "$shim" "$work/linked-swiftgate"
 "$work/linked-swiftgate" --version >/dev/null 2>"$work/err3" || fail "symlinked shim failed"
 [ ! -s "$work/err3" ] || fail "symlinked shim rebuilt"
+
+# Bootstrap links ~/.local/bin/swiftgate, which git hooks call, to the shim it ran through: the
+# plugin's own. A link left at a checkout-root bin/swiftgate from before the plugin moved into
+# plugin/ is repointed, whether its old target still exists or not.
+for old_exists in yes no; do
+  app="$work/app-$old_exists"
+  home="$work/home-$old_exists"
+  mkdir -p "$app/Packages/Core" "$home/.local/bin" "$work/old-checkout/bin"
+  echo '// swift-tools-version: 6.2' >"$app/Packages/Core/Package.swift"
+  git -C "$app" init -q
+  if [ "$old_exists" = yes ]; then
+    printf '#!/bin/sh\n' >"$work/old-checkout/bin/swiftgate"
+    chmod +x "$work/old-checkout/bin/swiftgate"
+  else
+    rm -f "$work/old-checkout/bin/swiftgate"
+  fi
+  ln -sf "$work/old-checkout/bin/swiftgate" "$home/.local/bin/swiftgate"
+  (cd "$app" && HOME="$home" "$shim" bootstrap --apply >"$work/bootstrap-$old_exists.log" 2>&1) ||
+    fail "bootstrap --apply failed (old shim exists: $old_exists): $(cat "$work/bootstrap-$old_exists.log")"
+  linked="$(readlink "$home/.local/bin/swiftgate")"
+  expected="$(cd "$work/repo/plugin/bin" && pwd -P)/swiftgate"
+  [ "$linked" = "$expected" ] ||
+    fail "~/.local/bin/swiftgate points at '$linked', not the plugin shim '$expected' (old shim exists: $old_exists)"
+done
 
 echo "// changed" >> "$work/repo/plugin/gate/Sources/SwiftGateDomain/SwiftGateDomain.swift"
 "$shim" --version >/dev/null 2>"$work/err4"

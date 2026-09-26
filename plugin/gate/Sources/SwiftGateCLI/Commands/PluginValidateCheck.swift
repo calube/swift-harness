@@ -5,7 +5,7 @@ import SwiftGateDomain
 /// The ready tier's plugin check for a repository that ships a Claude Code plugin under `plugin/`
 /// (ADR 0002): `claude plugin validate --strict --json plugin`. Strict, because the warnings the
 /// runtime tolerates (a `CLAUDE.md` that never loads, an unknown manifest field) are exactly what
-/// ships unnoticed. Without `claude` on `PATH`, or when it can't run, the step is a note, never
+/// ships unnoticed. When `claude` isn't on `PATH` or can't run, the step is a note, never
 /// BLOCKED: a machine without Claude Code can still run every other gate.
 enum PluginValidateCheck {
   static let failedRuleID = "plugin-validate.failed"
@@ -15,12 +15,6 @@ enum PluginValidateCheck {
   static let pluginDirectory = "plugin"
   static let manifestPath = "\(pluginDirectory)/.claude-plugin/plugin.json"
   static let arguments = ["plugin", "validate", "--strict", "--json", pluginDirectory]
-
-  struct Environment: Sendable {
-    let runner: any ProcessRunner
-    /// The `PATH` searched for `claude`.
-    let path: String
-  }
 
   /// `claude plugin validate --json`'s report. Only what the gate reports is decoded.
   private struct Report: Decodable {
@@ -40,19 +34,11 @@ enum PluginValidateCheck {
     let contents: [Entry]
   }
 
-  static func run(root: URL, runner: any ProcessRunner, path: String)
+  static func run(root: URL, runner: any ProcessRunner)
     async throws(ReportContractViolation) -> [Finding]
   {
     guard FileManager.default.fileExists(atPath: root.appending(path: manifestPath).path) else {
       return []
-    }
-    guard HarnessFiles.isOnPath("claude", path: path) else {
-      return [
-        try finding(
-          notRunRuleID, .nit, file: manifestPath,
-          "claude plugin validate not run: claude is not on PATH, so \(pluginDirectory)/ is "
-            + "unvalidated on this machine.")
-      ]
     }
     let output: ProcessOutput
     do {
@@ -64,7 +50,8 @@ enum PluginValidateCheck {
       return [
         try finding(
           notRunRuleID, .nit, file: manifestPath,
-          "claude plugin validate not run: \(describe(error))")
+          "claude plugin validate not run, so \(pluginDirectory)/ is unvalidated on this "
+            + "machine: \(describe(error))")
       ]
     }
     guard let report = try? JSONDecoder().decode(Report.self, from: output.stdout.bytes) else {
@@ -121,7 +108,8 @@ enum PluginValidateCheck {
 
   private static func describe(_ error: ProcessRunnerError) -> String {
     switch error {
-    case .launchFailed(let executable, let reason): "\(executable) couldn't launch: \(reason)"
+    case .launchFailed(let executable, let reason):
+      "\(executable) is not on PATH or couldn't launch (\(reason))"
     case .timedOut(let executable, let after, _, _): "\(executable) timed out after \(after)"
     case .cancelled(let executable): "\(executable) was cancelled"
     }

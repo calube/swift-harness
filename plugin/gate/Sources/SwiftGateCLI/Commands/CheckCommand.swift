@@ -22,7 +22,6 @@ enum CheckRun {
     /// `PushDocGates` hands this straight to `EvidenceCheckRun.run`, which resolves its own
     /// `LiveGit` from it: `--at HEAD` always reads the real repository, independent of `git` above.
     let runner: any ProcessRunner
-    let pluginValidation: PluginValidateCheck.Environment
 
     /// Unset steps get live adapters around `swiftPM` and `git`.
     init(
@@ -31,8 +30,7 @@ enum CheckRun {
       changedTests: ChangedTestChecks.Environment? = nil,
       mutation: MutateCheck.Environment? = nil,
       judge: TestJudgeCheck.Dependencies? = nil,
-      runner: any ProcessRunner = LiveProcessRunner(),
-      pluginValidation: PluginValidateCheck.Environment? = nil
+      runner: any ProcessRunner = LiveProcessRunner()
     ) {
       self.swiftPM = swiftPM
       self.git = git
@@ -42,10 +40,6 @@ enum CheckRun {
       self.mutation = mutation ?? .live(root: root, git: git)
       self.judge = judge
       self.runner = runner
-      self.pluginValidation =
-        pluginValidation
-        ?? PluginValidateCheck.Environment(
-          runner: runner, path: ProcessInfo.processInfo.environment["PATH"] ?? "")
     }
 
     static func live(root: URL, judge: Bool) -> Dependencies {
@@ -133,9 +127,7 @@ enum CheckRun {
         root: root, runner: dependencies.runner, git: git, base: base)
     }
     if tier == .ready {
-      let validation = dependencies.pluginValidation
-      parts.findings += try await PluginValidateCheck.run(
-        root: root, runner: validation.runner, path: validation.path)
+      parts.findings += try await PluginValidateCheck.run(root: root, runner: dependencies.runner)
     }
     for step in tier.pendingSteps {
       parts.findings.append(

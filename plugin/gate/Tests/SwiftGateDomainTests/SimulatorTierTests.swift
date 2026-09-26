@@ -157,7 +157,7 @@ struct TestRetryConfigurationTests {
   )
   func retries() throws {
     let scheme = try String(
-      contentsOf: Fixture.checkoutRoot.appending(
+      contentsOf: Fixture.harnessCheckout.appending(
         path: "examples/SampleApp/SampleApp.xcodeproj/xcshareddata/xcschemes/SampleApp.xcscheme"),
       encoding: .utf8)
     let retrying = scheme.replacingOccurrences(

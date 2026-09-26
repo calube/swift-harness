@@ -13,7 +13,7 @@ struct RuleAnchorTests {
   }
 
   static func text(_ relative: String) throws -> String {
-    try String(contentsOf: Fixture.pluginRoot.appending(path: relative), encoding: .utf8)
+    try String(contentsOf: Fixture.checkoutRoot.appending(path: relative), encoding: .utf8)
   }
 
   /// Every rule a standards doc defines, from its `**<id>. Title.**` headings.
@@ -23,7 +23,7 @@ struct RuleAnchorTests {
   }
 
   static func citingFiles() throws -> [String] {
-    let root = Fixture.pluginRoot
+    let root = Fixture.checkoutRoot
     let agents = try FileManager.default.contentsOfDirectory(
       atPath: root.appending(path: "agents").path
     ).filter { $0.hasSuffix(".md") }.map { "agents/\($0)" }

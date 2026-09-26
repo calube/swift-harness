@@ -2,17 +2,18 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
 
-/// The ready tier's `claude plugin validate` step for a repository that ships a plugin under
-/// `plugin/`. The validator's JSON shapes are the ones `claude plugin validate --strict --json`
-/// prints; the runner is scripted so no test depends on a `claude` install.
+/// The ready tier's `claude plugin validate` step, for a repository that ships a plugin under
+/// `plugin/`. Every test runs the whole tier, so it exercises the step exactly where `check`
+/// wires it. The validator's JSON shapes are the ones `claude plugin validate --strict --json`
+/// prints; a scripted `claude` stands in for an install.
 @Suite("ready tier: claude plugin validate")
 struct PluginValidateCheckTests {
   static let manifest = "plugin/.claude-plugin/plugin.json"
-  static let pathWithClaude = "/opt/fake-bin"
 
   static let passed = #"""
     {"success": true, "strict": true, "target": "/r/plugin/.claude-plugin/plugin.json",
@@ -38,206 +39,175 @@ struct PluginValidateCheckTests {
      "contents": []}
     """#
 
-  /// A temp directory holding a plugin manifest, plus a directory with an executable `claude`
-  /// so the PATH probe finds one without a real install.
+  /// Answers `claude` from a script and runs everything else (git, for the doc gates) for real.
+  final class ScriptedClaude: ProcessRunner {
+    typealias Answer = @Sendable (ProcessInvocation) throws(ProcessRunnerError) -> ProcessOutput
+
+    private let answer: Answer
+    private let live = LiveProcessRunner()
+    private let recorded = Mutex<[ProcessInvocation]>([])
+
+    init(_ answer: @escaping Answer) { self.answer = answer }
+
+    var claudeCalls: [ProcessInvocation] { recorded.withLock { $0 } }
+
+    func run(_ invocation: ProcessInvocation) async throws(ProcessRunnerError) -> ProcessOutput {
+      guard invocation.executable == "claude" else { return try await live.run(invocation) }
+      recorded.withLock { $0.append(invocation) }
+      return try answer(invocation)
+    }
+  }
+
+  /// A temp git repository, with a plugin manifest unless told otherwise and no
+  /// `.swiftgate.toml`, so the tier runs T0 and its repository-level steps only.
   struct Scenario {
     let root: URL
-    let bin: URL
 
-    init(withPlugin: Bool = true) throws {
+    init(withPlugin: Bool = true) async throws {
       root = FileManager.default.temporaryDirectory
         .appending(path: "plugin-validate-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
-      bin = root.appending(path: "fake-bin", directoryHint: .isDirectory)
-      try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-      let claude = bin.appending(path: "claude").path
-      #expect(
-        FileManager.default.createFile(
-          atPath: claude, contents: Data("#!/bin/sh\nexit 0\n".utf8),
-          attributes: [.posixPermissions: 0o755]))
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       if withPlugin {
         let manifest = root.appending(path: PluginValidateCheckTests.manifest)
         try FileManager.default.createDirectory(
           at: manifest.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(#"{"name": "p"}"#.utf8).write(to: manifest)
       }
+      let initialized = try await LiveProcessRunner().run(
+        ProcessInvocation(
+          executable: "/usr/bin/git", arguments: ["init", "-q"], workingDirectory: root.path,
+          timeout: .seconds(30)))
+      #expect(initialized.status.isSuccess)
     }
 
     func remove() { try? FileManager.default.removeItem(at: root) }
 
-    /// A captured report re-rooted at this scenario, as the validator prints absolute paths.
+    /// A captured report re-rooted here, as the validator prints absolute paths.
     func json(_ report: String) -> String {
       report.replacingOccurrences(of: "\"/r/", with: "\"\(root.path)/")
     }
+
+    func check(_ tier: CheckTier, _ runner: ScriptedClaude) async throws -> [Finding] {
+      let parts = try await CheckRun.run(
+        root: root, tier: tier, base: "origin/main",
+        context: GateRun.Context(runID: "r", directory: root.appending(path: ".harness/runs/r")),
+        dependencies: CheckRun.Dependencies(
+          root: root, swiftPM: FakeSwiftPM(serving: []),
+          git: FakeGit(changed: [], mergeBase: "base"), formatter: FakeSwiftFormatter(),
+          simulator: .fake, runner: runner))
+      return parts.findings.filter { $0.ruleID.hasPrefix("plugin-validate.") }
+    }
   }
 
-  static func answering(_ status: Int32, _ stdout: String) -> FakeProcessRunner {
-    FakeProcessRunner { _ in ProcessOutput(status: .exited(status), stdout: stdout) }
+  static func answering(_ status: Int32, _ stdout: String) -> ScriptedClaude {
+    ScriptedClaude { _ in ProcessOutput(status: .exited(status), stdout: stdout) }
   }
 
   @Test(
-    "a clean plugin passes with a non-gating summary, validated strictly as JSON — catches warnings the runtime tolerates slipping past the gate"
+    "ready validates a clean plugin strictly as JSON and reports a non-gating pass, and push never runs it — catches warnings the runtime tolerates slipping past ready, or the step leaking into push"
   )
   func cleanPluginPasses() async throws {
-    let scenario = try Scenario()
+    let scenario = try await Scenario()
     defer { scenario.remove() }
-    let runner = Self.answering(0, scenario.json(Self.passed))
+    let ready = Self.answering(0, scenario.json(Self.passed))
+    let push = Self.answering(0, scenario.json(Self.passed))
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: runner, path: scenario.bin.path)
+    let readyFindings = try await scenario.check(.ready, ready)
+    let pushFindings = try await scenario.check(.push, push)
 
-    #expect(findings.map(\.ruleID) == [PluginValidateCheck.summaryRuleID])
-    #expect(findings.allSatisfy { !$0.severity.failsGate })
-    let invocation = try #require(runner.invocations.first)
-    #expect(invocation.executable == "claude")
+    #expect(readyFindings.map(\.ruleID) == ["plugin-validate.summary"])
+    #expect(readyFindings.allSatisfy { !$0.severity.failsGate })
+    let invocation = try #require(ready.claudeCalls.first)
     #expect(invocation.arguments == ["plugin", "validate", "--strict", "--json", "plugin"])
     #expect(invocation.workingDirectory == scenario.root.path)
+    #expect(pushFindings.isEmpty)
+    #expect(push.claudeCalls.isEmpty)
   }
 
   @Test(
-    "a warning such as a CLAUDE.md in the plugin fails the gate naming the file and the message — catches a root CLAUDE.md shipping to consumers"
+    "a warning such as a CLAUDE.md in the plugin fails ready naming the file and the message — catches a root CLAUDE.md shipping to consumers"
   )
   func warningFailsTheGate() async throws {
-    let scenario = try Scenario()
+    let scenario = try await Scenario()
     defer { scenario.remove() }
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: Self.answering(1, scenario.json(Self.warnedAboutClaudeMD)),
-      path: scenario.bin.path)
+    let findings = try await scenario.check(
+      .ready, Self.answering(1, scenario.json(Self.warnedAboutClaudeMD)))
 
-    let failed = try #require(findings.first { $0.ruleID == PluginValidateCheck.failedRuleID })
+    let failed = try #require(findings.first { $0.ruleID == "plugin-validate.failed" })
     #expect(failed.severity.failsGate)
     #expect(failed.file == "plugin/CLAUDE.md")
     #expect(failed.message.contains("CLAUDE.md at the plugin root is not loaded"))
   }
 
   @Test(
-    "a manifest error fails the gate on the manifest — catches an invalid plugin.json reaching the marketplace"
+    "a manifest error fails ready on the manifest — catches an invalid plugin.json reaching the marketplace"
   )
   func manifestErrorFailsTheGate() async throws {
-    let scenario = try Scenario()
+    let scenario = try await Scenario()
     defer { scenario.remove() }
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: Self.answering(1, scenario.json(Self.manifestError)),
-      path: scenario.bin.path)
+    let findings = try await scenario.check(
+      .ready, Self.answering(1, scenario.json(Self.manifestError)))
 
-    let failed = try #require(findings.first { $0.ruleID == PluginValidateCheck.failedRuleID })
+    let failed = try #require(findings.first { $0.ruleID == "plugin-validate.failed" })
     #expect(failed.severity.failsGate)
     #expect(failed.file == Self.manifest)
     #expect(failed.message.contains("name: Required"))
   }
 
   @Test(
-    "output that isn't the validator's JSON fails the gate with what it printed — catches an unparseable answer counted as a pass"
+    "output that isn't the validator's JSON fails ready with what it printed — catches an unparseable answer counted as a pass"
   )
   func unreadableOutputFails() async throws {
-    let scenario = try Scenario()
+    let scenario = try await Scenario()
     defer { scenario.remove() }
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: Self.answering(0, "✔ Validation passed"),
-      path: scenario.bin.path)
+    let findings = try await scenario.check(.ready, Self.answering(0, "✔ Validation passed"))
 
-    let failed = try #require(findings.first { $0.ruleID == PluginValidateCheck.failedRuleID })
+    let failed = try #require(findings.first { $0.ruleID == "plugin-validate.failed" })
     #expect(failed.severity.failsGate)
     #expect(failed.message.contains("Validation passed"))
   }
 
   @Test(
-    "without claude on PATH the step is skipped with a note and never runs — catches the ready gate going BLOCKED on a machine without Claude Code"
-  )
-  func noClaudeIsANote() async throws {
-    let scenario = try Scenario()
+    "without claude on PATH, or when it times out, ready notes the skip and never blocks — catches the ready gate going BLOCKED on a machine without Claude Code",
+    arguments: [
+      ProcessRunnerError.launchFailed(executable: "claude", reason: "not found on PATH /usr/bin"),
+      .timedOut(
+        executable: "claude", after: .seconds(120), stdout: CapturedStream(),
+        stderr: CapturedStream()),
+    ])
+  func unrunnableClaudeIsANote(error: ProcessRunnerError) async throws {
+    let scenario = try await Scenario()
     defer { scenario.remove() }
-    let runner = Self.answering(0, scenario.json(Self.passed))
+    let runner = ScriptedClaude { _ throws(ProcessRunnerError) in throw error }
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: runner, path: "/nonexistent-bin")
+    let findings = try await scenario.check(.ready, runner)
 
-    #expect(runner.invocations.isEmpty)
-    #expect(findings.map(\.ruleID) == [PluginValidateCheck.notRunRuleID])
+    #expect(findings.map(\.ruleID) == ["plugin-validate.not-run"])
     #expect(findings.first?.severity == .nit)
-    #expect(findings.first?.message.contains("claude is not on PATH") == true)
-  }
-
-  @Test(
-    "a claude that can't be launched or times out is a note naming why — catches a runner error surfacing as BLOCKED or passing silently"
-  )
-  func runnerErrorIsANote() async throws {
-    let scenario = try Scenario()
-    defer { scenario.remove() }
-    let runner = FakeProcessRunner { _ throws(ProcessRunnerError) in
-      throw .launchFailed(executable: "claude", reason: "permission denied")
-    }
-
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: runner, path: scenario.bin.path)
-
-    #expect(findings.map(\.ruleID) == [PluginValidateCheck.notRunRuleID])
-    #expect(findings.first?.message.contains("permission denied") == true)
+    let message = findings.first?.message ?? ""
+    #expect(message.contains("not on PATH") || message.contains("timed out"), "\(message)")
   }
 
   @Test(
     "a repository with no plugin/ has nothing to validate and says nothing — catches consumer app repos paying for a plugin check"
   )
   func noPluginDirectoryIsSilent() async throws {
-    let scenario = try Scenario(withPlugin: false)
+    let scenario = try await Scenario(withPlugin: false)
     defer { scenario.remove() }
     let runner = Self.answering(0, scenario.json(Self.passed))
 
-    let findings = try await PluginValidateCheck.run(
-      root: scenario.root, runner: runner, path: scenario.bin.path)
+    let findings = try await scenario.check(.ready, runner)
+    let control = try await Scenario()
+    defer { control.remove() }
+    let controlRunner = Self.answering(0, control.json(Self.passed))
+    let controlFindings = try await control.check(.ready, controlRunner)
 
     #expect(findings.isEmpty)
-    #expect(runner.invocations.isEmpty)
-  }
-
-  static func check(
-    _ tier: CheckTier, _ scenario: Scenario, path: String, runner: FakeProcessRunner
-  )
-    async throws -> RunReport
-  {
-    let initialized = try await LiveProcessRunner().run(
-      ProcessInvocation(
-        executable: "/usr/bin/git", arguments: ["init", "-q"],
-        workingDirectory: scenario.root.path, timeout: .seconds(30)))
-    #expect(initialized.status.isSuccess)
-    let parts = try await CheckRun.run(
-      root: scenario.root, tier: tier, base: "origin/main",
-      context: GateRun.Context(
-        runID: "r", directory: scenario.root.appending(path: ".harness/runs/r")),
-      dependencies: CheckRun.Dependencies(
-        root: scenario.root, swiftPM: FakeSwiftPM(serving: []),
-        git: FakeGit(changed: [], mergeBase: "base"),
-        formatter: FakeSwiftFormatter(), simulator: .fake, runner: LiveProcessRunner(),
-        pluginValidation: PluginValidateCheck.Environment(runner: runner, path: path)))
-    return try RunReport(
-      runID: "r", durationMilliseconds: 0, tiers: parts.tiers, findings: parts.findings,
-      allowances: parts.allowances)
-  }
-
-  @Test(
-    "the ready tier runs the validator and push doesn't; without claude, ready notes it and stays unblocked — catches the step missing from ready or leaking into push"
-  )
-  func readyTierWiring() async throws {
-    let scenario = try Scenario()
-    defer { scenario.remove() }
-
-    let readyRunner = Self.answering(1, scenario.json(Self.warnedAboutClaudeMD))
-    let ready = try await Self.check(.ready, scenario, path: scenario.bin.path, runner: readyRunner)
-    let pushRunner = Self.answering(1, scenario.json(Self.warnedAboutClaudeMD))
-    let push = try await Self.check(.push, scenario, path: scenario.bin.path, runner: pushRunner)
-    let bare = try await Self.check(
-      .ready, scenario, path: "/nonexistent-bin",
-      runner: Self.answering(0, scenario.json(Self.passed)))
-
-    #expect(readyRunner.invocations.count == 1)
-    #expect(ready.findings.contains { $0.ruleID == PluginValidateCheck.failedRuleID })
-    #expect(ready.verdict == .red)
-    #expect(pushRunner.invocations.isEmpty)
-    #expect(!push.findings.contains { $0.ruleID.hasPrefix("plugin-validate.") })
-    #expect(bare.verdict != .blocked)
-    #expect(bare.findings.contains { $0.ruleID == PluginValidateCheck.notRunRuleID })
+    #expect(runner.claudeCalls.isEmpty)
+    #expect(controlFindings.map(\.ruleID) == ["plugin-validate.summary"])
   }
 }

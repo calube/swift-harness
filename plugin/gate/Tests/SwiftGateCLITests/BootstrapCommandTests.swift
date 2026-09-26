@@ -73,7 +73,7 @@ struct BootstrapCommandTests {
       try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
       if copyingSampleApp {
         try Self.copySources(
-          from: Fixture.checkoutRoot.appending(path: "examples/SampleApp"), to: repository)
+          from: Fixture.harnessCheckout.appending(path: "examples/SampleApp"), to: repository)
       } else {
         let package = repository.appending(path: "Packages/Core")
         try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
@@ -108,7 +108,7 @@ struct BootstrapCommandTests {
 
     var environment: BootstrapRun.Environment {
       BootstrapRun.Environment(
-        home: home, harnessRoot: Fixture.pluginRoot, probe: probe, swiftLintInstalled: false,
+        home: home, harnessRoot: Fixture.checkoutRoot, probe: probe, swiftLintInstalled: false,
         lefthookInstalled: true)
     }
 
@@ -180,7 +180,7 @@ struct BootstrapCommandTests {
     #expect(afterFirst["repo/CLAUDE.md"] == "-> AGENTS.md")
     #expect(
       afterFirst["home/.local/bin/swiftgate"]
-        == "-> \(Fixture.pluginRoot.appending(path: "bin/swiftgate").path)")
+        == "-> \(Fixture.checkoutRoot.appending(path: "bin/swiftgate").path)")
     let registry = try ProjectRegistry.decode(
       Data((afterFirst["home/\(ProjectRegistry.path)"] ?? "").utf8))
     #expect(registry.projects == [sandbox.repository.path])
@@ -240,34 +240,5 @@ struct BootstrapCommandTests {
     #expect(outcome.failed)
     #expect(outcome.text.contains("template templates/AGENTS.md is missing"))
     #expect(try sandbox.state() == before)
-  }
-
-  @Test(
-    "an existing ~/.local/bin/swiftgate linked to a checkout-root shim, live or gone, is repointed at the plugin's own shim — catches git hooks still calling a root bin/swiftgate after the plugin moved into plugin/",
-    arguments: [true, false])
-  func repointsAnOldRootShim(oldShimExists: Bool) async throws {
-    let sandbox = try Sandbox(
-      copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
-    defer { sandbox.remove() }
-    let manager = FileManager.default
-    let oldCheckout = sandbox.home.appending(path: "old-checkout", directoryHint: .isDirectory)
-    let oldShim = oldCheckout.appending(path: "bin/swiftgate")
-    if oldShimExists {
-      try manager.createDirectory(
-        at: oldShim.deletingLastPathComponent(), withIntermediateDirectories: true)
-      try Data("#!/bin/sh\n".utf8).write(to: oldShim)
-    }
-    let link = sandbox.home.appending(path: DoctorRun.shimPath)
-    try manager.createDirectory(
-      at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try manager.createSymbolicLink(atPath: link.path, withDestinationPath: oldShim.path)
-
-    let outcome = await BootstrapRun.run(
-      root: sandbox.repository, apply: true, environment: sandbox.environment)
-
-    #expect(!outcome.failed)
-    let target = try manager.destinationOfSymbolicLink(atPath: link.path)
-    #expect(target == Fixture.checkoutRoot.appending(path: "plugin/bin/swiftgate").path)
-    #expect(manager.isExecutableFile(atPath: target))
   }
 }

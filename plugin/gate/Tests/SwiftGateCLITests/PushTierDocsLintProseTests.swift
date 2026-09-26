@@ -109,7 +109,7 @@ struct PushTierDocsLintProseTests {
   @Test("this repository's docs pass docs-lint — catches a doc change landing red on push")
   func repositoryDocsPassDocsLint() async throws {
     let outcome = await DocsLintCheck.run(
-      root: Fixture.checkoutRoot,
+      root: Fixture.harnessCheckout,
       runner: LiveProcessRunner(baseEnvironment: DocsRepo.environment))
     guard case .checked(let result) = outcome else {
       Issue.record("docs-lint did not check the repository: \(outcome)")

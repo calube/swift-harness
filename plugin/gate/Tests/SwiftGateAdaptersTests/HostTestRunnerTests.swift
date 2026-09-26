@@ -47,7 +47,7 @@ struct HostTestRunnerTests {
     defer { try? FileManager.default.removeItem(at: output) }
     let swiftPM = replaying("fail")
 
-    _ = await HostTestRunner(swiftPM: swiftPM, root: Fixture.pluginRoot)
+    _ = await HostTestRunner(swiftPM: swiftPM, root: Fixture.checkoutRoot)
       .run([Self.selection], outputDirectory: output, readCoverage: false)
 
     let request = try #require(swiftPM.testRequests.first)
@@ -64,7 +64,7 @@ struct HostTestRunnerTests {
     let output = try scratch()
     defer { try? FileManager.default.removeItem(at: output) }
 
-    let results = await HostTestRunner(swiftPM: replaying("fail"), root: Fixture.pluginRoot)
+    let results = await HostTestRunner(swiftPM: replaying("fail"), root: Fixture.checkoutRoot)
       .run([Self.selection], outputDirectory: output, readCoverage: false)
 
     guard case .ran(let evidence, _) = try #require(results.first) else {
@@ -90,7 +90,7 @@ struct HostTestRunnerTests {
     try Fixture.data("SwiftTest/pass.xml").write(to: stale)
 
     let results = await HostTestRunner(
-      swiftPM: replaying("build-error"), root: Fixture.pluginRoot
+      swiftPM: replaying("build-error"), root: Fixture.checkoutRoot
     )
     .run([Self.selection], outputDirectory: output, readCoverage: false)
 
@@ -111,7 +111,7 @@ struct HostTestRunnerTests {
       throw .process(.launchFailed(executable: "swift", reason: "gone"))
     }
 
-    let results = await HostTestRunner(swiftPM: swiftPM, root: Fixture.pluginRoot)
+    let results = await HostTestRunner(swiftPM: swiftPM, root: Fixture.checkoutRoot)
       .run([Self.selection], outputDirectory: output, readCoverage: true)
 
     #expect(
@@ -129,11 +129,11 @@ struct HostTestRunnerTests {
     defer { try? FileManager.default.removeItem(at: output) }
     let swiftPM = LiveSwiftPM(
       runner: LiveProcessRunner(),
-      repositoryRoot: Fixture.pluginRoot.resolvingSymlinksInPath().path)
+      repositoryRoot: Fixture.checkoutRoot.resolvingSymlinksInPath().path)
     let selection = HostTestSelection(
       packagePath: Self.package, targets: [Self.selection.targets[0]])
 
-    let results = await HostTestRunner(swiftPM: swiftPM, root: Fixture.pluginRoot)
+    let results = await HostTestRunner(swiftPM: swiftPM, root: Fixture.checkoutRoot)
       .run([selection], outputDirectory: output, readCoverage: true)
 
     guard case .ran(let evidence, _) = try #require(results.first) else {

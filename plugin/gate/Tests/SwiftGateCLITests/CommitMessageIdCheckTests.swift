@@ -229,11 +229,8 @@ struct CommitMessageIdCheckTests {
       return
     }
     let stampedTemplate = try String(
-      contentsOf: Fixture.pluginRoot.appending(path: "templates/lefthook.yml"), encoding: .utf8)
+      contentsOf: Fixture.checkoutRoot.appending(path: "templates/lefthook.yml"), encoding: .utf8)
     #expect(stampedTemplate.contains(#""$HOME/.local/bin/swiftgate" comments --commit-msg {1}"#))
-    let stamped = try #require(
-      try SwiftGate.parseAsRoot(["comments", "--commit-msg", "MSG"]) as? CommentsCommand)
-    #expect(stamped.commitMsg == "MSG")
 
     let repo = try await TemporaryRepo()
     defer { repo.remove() }

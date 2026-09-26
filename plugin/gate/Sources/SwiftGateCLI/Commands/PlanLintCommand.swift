@@ -17,7 +17,11 @@ enum PlanLintRun {
     let notes: [String]
   }
 
-  static func run(slug: String, root: URL, git: any Git, swiftPM: any SwiftPM) async -> Result {
+  /// - Parameter harnessRoot: the plugin whose `docs/standards.md` worker packs fall back to
+  ///   when the repository has none of its own.
+  static func run(
+    slug: String, root: URL, git: any Git, swiftPM: any SwiftPM, harnessRoot: URL? = nil
+  ) async -> Result {
     let store: PlanStateStore
     let plan: PlanFile
     let ledger: Ledger
@@ -62,7 +66,8 @@ enum PlanLintRun {
       return blocked("can't load the module graph: \(error)")
     }
 
-    let sources = WorkerPackSources.gather(designPath: plan.design, root: root)
+    let sources = WorkerPackSources.gather(
+      designPath: plan.design, root: root, harnessRoot: harnessRoot)
     var workerPacks: [String: ContextPack] = [:]
     var packFailures: [String: String] = [:]
     for task in ledger.tasks {
@@ -109,7 +114,8 @@ enum PlanLintRun {
 /// design's `claims.jsonl` (every claim, since the ledger records no per-task citations), the
 /// standards doc plus playbook, and the standards anchors for the kinds of the modules a task
 /// touches (spec §5.10). Claims and standards come from the working tree, as `context-pack` reads
-/// them; only the design is pinned to designSha.
+/// them; only the design is pinned to designSha. The standards are the repository's own
+/// `docs/standards.md` when it has one, else the harness plugin's, as the skills read them.
 struct WorkerPackSources: Sendable {
   static let standardsPath = "docs/standards.md"
   static let playbookPath = "docs/testing-playbook.md"
@@ -122,7 +128,7 @@ struct WorkerPackSources: Sendable {
   let standards: Swift.Result<ContextSource?, Failure>
   let notes: [String]
 
-  static func gather(designPath: String, root: URL) -> WorkerPackSources {
+  static func gather(designPath: String, root: URL, harnessRoot: URL? = nil) -> WorkerPackSources {
     var notes: [String] = []
     let claimsPath = EvidenceLayout(designDocPath: designPath).claimsFile
     let claims: Swift.Result<(source: ContextSource, ids: [String]), Failure>
@@ -144,11 +150,19 @@ struct WorkerPackSources: Sendable {
     }
 
     let standards: Swift.Result<ContextSource?, Failure>
-    if !exists(standardsPath, root: root) {
-      notes.append("no `\(standardsPath)`: worker packs carry no standards anchors")
-      standards = .success(nil)
+    if exists(standardsPath, root: root) {
+      standards = readStandards(root: root, labelPrefix: "")
+    } else if let harnessRoot, exists(standardsPath, root: harnessRoot) {
+      standards = readStandards(root: harnessRoot, labelPrefix: "harness ")
     } else {
-      standards = readStandards(root: root)
+      let harness =
+        harnessRoot.map { "`\($0.appending(path: standardsPath).path)`" }
+        ?? "the harness plugin's (no harness root: run through the plugin's bin/swiftgate, "
+        + "which sets SWIFTGATE_HARNESS_ROOT)"
+      standards = .failure(
+        Failure(
+          message: "no standards doc for worker packs: neither this repository's "
+            + "`\(standardsPath)` nor \(harness) exists"))
     }
     return WorkerPackSources(claims: claims, standards: standards, notes: notes)
   }
@@ -185,9 +199,13 @@ struct WorkerPackSources: Sendable {
 
   /// The standards doc with the playbook appended when there is one, labelled as `context-pack`
   /// labels `--standards` plus `--playbook`.
-  private static func readStandards(root: URL) -> Swift.Result<ContextSource?, Failure> {
+  private static func readStandards(root: URL, labelPrefix: String)
+    -> Swift.Result<ContextSource?, Failure>
+  {
     let standards: ContextSource
-    switch ContextPackFiles.read(label: standardsPath, path: standardsPath, root: root) {
+    switch ContextPackFiles.read(
+      label: labelPrefix + standardsPath, path: standardsPath, root: root)
+    {
     case .failure(.unreadable(let path)): return .failure(Failure(message: "can't read `\(path)`"))
     case .success(let source): standards = source
     }
@@ -197,7 +215,7 @@ struct WorkerPackSources: Sendable {
     case .success(let playbook):
       return .success(
         ContextSource(
-          label: "\(standardsPath) + \(playbookPath)",
+          label: "\(labelPrefix)\(standardsPath) + \(playbookPath)",
           rawText: standards.rawText + "\n" + playbook.rawText))
     }
   }
@@ -224,7 +242,11 @@ struct PlanLintCommand: AsyncParsableCommand {
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
     try await StaticCheckRun.execute(root: root, format: output.format) {
-      let result = await PlanLintRun.run(slug: slug, root: root, git: git, swiftPM: swiftPM)
+      let result = await PlanLintRun.run(
+        slug: slug, root: root, git: git, swiftPM: swiftPM,
+        harnessRoot: ProcessInfo.processInfo.environment[SelfTestCommand.harnessRootVariable].map {
+          URL(filePath: $0, directoryHint: .isDirectory)
+        })
       for note in result.notes {
         FileHandle.standardError.write(Data("swiftgate plan-lint: \(note)\n".utf8))
       }

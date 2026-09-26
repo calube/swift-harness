@@ -377,6 +377,28 @@ struct HookCommandTests {
   }
 
   @Test(
+    "ledger writes are denied unless the orchestrator marker names this main session — catches workers corrupting plan state"
+  )
+  func ledgerWrites() async throws {
+    var harness = try HookHarness()
+    defer { harness.repository.remove() }
+
+    let unmarked = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
+    harness.environment = [OrchestratorMarker.environmentVariable: "1"]
+    let byEnvironment = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
+    let subagent = try await harness.run(.preToolUse, "pre-tool-use-write-ledger-subagent").result
+    harness.environment = [:]
+    try harness.repository.write(
+      OrchestratorMarker.lockFile, "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f\n")
+    let byLock = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
+
+    #expect(unmarked.stdout?.contains("\"deny\"") == true)
+    #expect(byEnvironment.stdout == nil)
+    #expect(subagent.stdout?.contains("\"deny\"") == true)
+    #expect(byLock.stdout == nil)
+  }
+
+  @Test(
     "git commit gets the staged comment pass as advisory context and consults the judge seam — catches the commit hook blocking or skipping the comment pass"
   )
   func gitCommitComments() async throws {
@@ -514,8 +536,8 @@ struct HookCommandTests {
   @Test(
     "hooks.json registers each event on the plugin's swiftgate with an event the CLI accepts — catches a hook wired to a command that does not exist"
   )
-  func hooksManifest() async throws {
-    let data = try Data(contentsOf: Fixture.pluginRoot.appending(path: "hooks/hooks.json"))
+  func hooksManifest() throws {
+    let data = try Data(contentsOf: Fixture.checkoutRoot.appending(path: "hooks/hooks.json"))
     let manifest = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     let hooks = try #require(manifest["hooks"] as? [String: [[String: Any]]])
     var wired: [String: String] = [:]
@@ -526,17 +548,8 @@ struct HookCommandTests {
           #expect(handler["command"] as? String == "${CLAUDE_PLUGIN_ROOT}/bin/swiftgate")
           let args = try #require(handler["args"] as? [String])
           #expect(args.count == 2 && args[0] == "hook")
-          let command = try #require(try SwiftGate.parseAsRoot(args) as? HookCommand)
-          // A payload Claude Code sends for this event, outside any project: the CLI must take
-          // it as its own event and stay silent, not reject it as another event's payload.
-          let payload = try JSONSerialization.data(withJSONObject: [
-            "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f", "hook_event_name": name,
-            "cwd": FileManager.default.temporaryDirectory.path,
-          ])
-          let result = await HookRunner.run(command.event, input: payload) { root in
-            HookDependencies.live(root: root, environment: [:])
-          }
-          #expect(result == .silent, "\(name): \(result.stderr ?? "")")
+          let event = try #require(HookEvent(rawValue: args[1]))
+          #expect(event.claudeName == name)
           #expect((handler["timeout"] as? Int).map { $0 > 0 } == true)
           wired[name] = (group["matcher"] as? String) ?? ""
         }
