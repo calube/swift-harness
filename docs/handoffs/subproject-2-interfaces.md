@@ -937,3 +937,27 @@ against that subcommand's help. A later skill that names a missing command or fl
 - The claim checker refutes many claims whose text says more than their quote (35 of 124 in the reframe).
 - `calibrate design` flakes on `design-standards-conformance/uikit-in-core-module` (D2 vs A2 at p≈0.55).
 - Prove can't revert non-Swift inputs (templates), so template tests always show `prove.not-proven`.
+
+## Review fix wave 1
+
+- **design-lint:** `req-`/`test-` ids are unique across every committed design (`DesignLintSections.check` takes
+  `otherDesignSources: [String: String]`). New rule `design-lint.claim-id-duplicate` (major), which picks no winner.
+  `DesignDiff.Trigger.changelog` (`"changelog"`): an edited or removed Changelog line is an amend, and a pure
+  append stays a clarify. A `req-` bullet moved out of Requirements is an amend. A trailing `[UNVERIFIED].` matches
+  its Risks line. With no `docs/index.md`, `docs-lint.unreachable-doc` flags every doc under `docs/`, and its
+  message says "docs/index.md doesn't exist".
+- **plan-lint:** `plan-lint.design-moved` (major) compares `git show HEAD:<doc>` (never the working tree) with
+  `designSha`, and accepts the end of a verified clarify chain. The gate strength reads `covers` plus `tests`;
+  `plan-lint.unknown-test` and `plan-lint.duplicate-task-id` are major. `ScheduleError.duplicateTaskID(ids:)`:
+  plan-schedule exits 2 with the JSON key `duplicateTaskIDs`. Stats JSON has `overheadShare: Double?` (omitted when
+  nil) and `nonDraftWallShare`.
+- **evidence check:** `evidence-check.{duplicateClaimID,probeVerdictUnbound,probeSourceMissing,probeSourceMismatch}`.
+  `locPath` rejects `parent-reference`, `build-output` and `symlink`. Probe verdicts carry `snippetSha256` and
+  `sourceSha256` (lowercase hex), and a mismatch with disk fails. Ranges past EOF fail in evidence check and
+  context-pack alike. A nested project's checkout pins against `<project>/Package.resolved`.
+- **Lockfile:** every `swift build`/`test` runs with `--only-use-versions-from-resolved-file`, and every xcodebuild with
+  `-onlyUsePackageVersionsFromResolvedFile`. `swiftgate.resolved-file-rewritten` (major) is a before/after hash
+  backstop in `GateRun.execute`. `swiftgate.resolved-file-stale` (major) names `swift package resolve` when the
+  committed pins don't cover the manifest. A missing `origin/main` names `pass --base <ref>`.
+- **Known:** mutate's unmutated baseline fails `LiveProcessRunnerTests` even on a quiet machine, so every ready
+  run is BLOCKED (0 gating findings) until that's fixed. The shim runs the hooks as no-ops while it rebuilds.
