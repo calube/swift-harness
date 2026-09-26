@@ -185,12 +185,12 @@ Code, and are covered by the bootstrap section above).
   use literals, not new constants. The `tdd` skill should say both.
 - Cold-build T1 (119–166s) is over its 60s budget. The budget finding is a non-gating `minor`.
 
-## Rehearsal (unattended, 2026-09-26): a nonexistent API is refuted
+## Rehearsal (unattended, 2026-09-26): a probe refutes a nonexistent API
 
 This is a rehearsal, not the attended acceptance run. The user was away and approved running it
-unattended. The orchestrator answered the frame questions in the user's place; those answers are
-labelled "orchestrator-answered rehearsal" below. No one clicked Approve, and the design branch
-was never merged. The design is throwaway.
+unattended. The orchestrator answered the frame questions in the user's place, and this section
+labels those answers "orchestrator-answered rehearsal". No one clicked Approve, and no one merged
+the design branch. The design is throwaway.
 
 Set-up: `examples/SampleApp` copied to a scratch directory outside this repository, `git init`,
 the bootstrap `.gitignore` template added, and `swift package resolve` run in
@@ -215,3 +215,68 @@ exit=1
 Every grep printed no match. As a control, the same tree does contain the real macros:
 `grep -rln 'macro Presents\|macro ObservableState' .build/checkouts/swift-composable-architecture/Sources`
 finds `Sources/ComposableArchitecture/Macros.swift`.
+
+### Runs
+
+Every run used `claude -p --plugin-dir <worktree>/plugin --model opus --setting-sources project,local
+--max-budget-usd <cap> --output-format json` from the temp copy (Claude Code 2.1.282,
+`claude-opus-5-5`), with `SWIFTGATE_CACHE_DIR` pointed at a scratch cache. The first 2 runs used
+`--permission-mode bypassPermissions` inside the temp copy. Every resume used `--permission-mode
+acceptEdits --allowedTools "Bash,Read,Write,Edit,Glob,Grep,Workflow,Task,Agent,ToolSearch,Skill,SendMessage"`.
+
+| Run | Session | Result | Cost |
+|---|---|---|---|
+| 1 | `cd44873c…` | the main session grepped for the macro and stopped before the frame; asked in plain text | $0.18 |
+| 2 (skill fixed) | `7ee8373b…` | frame questions returned as text, premise left to verify | $0.17 |
+| 3 (`--resume`, frame answers) | same | claimed at `quick`; research lane `not-researched` (context-pack pin bug) | cumulative $1.38 |
+| 4 (`--resume`, rerun lane) | same | probe refuted the macro; drafted; stopped on `docs-lint.dangling-id` (bug) | cumulative $3.83 |
+| 5 (`--resume`) | same | lint GREEN, review `ready`, committed `proposed` on `design/persist-counter-count`, rendered; stopped at publish | cumulative $4.22 |
+
+Two 4-question checks cost $0.25 more, so the rehearsal spent about $4.64 as `claude -p` reports it.
+Wall time was 27 minutes, 12:26Z to 12:53Z, including the harness fixes.
+
+Resume across asks works: `claude -p --resume <session id> … "<answers>"` from the same directory.
+
+### Frame answers (orchestrator-answered rehearsal)
+
+Area: a new area, counter. Touched: CounterCore only. New modules: none. New dependencies: none.
+Constraints: no new dependency and no persistence client. Tier: `design-scope` recommended
+`quick`, and the session took it. When research returned `incomplete`, the worker chose to rerun
+the lane after fixing the pin bug. That was a worker-answered rehearsal choice, not the user's.
+
+### Tests
+
+- **The claim ends `refuted` and never appears in Decision: PASS.** The probe reported
+  `unknown attribute 'PersistedState'` with `"verdict" : "fail"`. `evidence-check-final.json` has
+  `{'id': 'ev-persisted-state-macro-probe', 'status': 'refuted'}`. The doc's Decision cites only
+  supported claims: `- Choose Option 1 [ev-shared-appstorage-probe].` The refuted id appears
+  nowhere in the doc. As a control, putting it in Decision made `design-lint` RED:
+
+  ```
+  design-lint.citation-not-supported: Decision cites "ev-persisted-state-macro-probe", which is refuted, not supported.
+  ```
+
+- **The report holds the absence grep from before the run: PASS.** It's the section above, committed
+  before run 1.
+
+### Harness defects
+
+| Defect | Status |
+|---|---|
+| The design skill had no way to ask in headless mode, and the main session checked a named API itself | fixed in the skill: headless asks, and "a premise is a claim" |
+| Headless asks put 5 questions in 1 prompt, over the cap of 4 | fixed in the skill; a rerun asked 4 |
+| `context-pack --role research-lane` read every pin as `<pkg>@<version>`, so the codebase (commit) and apple-docs (SDK) pins exited 2; each lane's pack overwrote `research-lane.md` | fixed test-first |
+| `docs-lint` passed no claims to reference integrity, so every `ev-` tag in a design was `dangling-id` | fixed test-first |
+| `design-lint.unverified-uncovered` can't match `… [UNVERIFIED].`, because the stripped text keeps a space before the period | open |
+| the bootstrap `.gitignore` template doesn't ignore `.harness/design-render/` | open |
+| `docs-lint` reported neither `unreachable-doc` nor `requirement-uncited` on the new doc | open, not traced |
+
+The claim checker refuted the 6 frame claims worded "The user …", because an orchestrator gave
+those answers. The session re-recorded them as orchestrator claims.
+
+### Needs the attended run
+
+Publish, approval and merge need `Artifact`, `ArtifactData` and `AskUserQuestion`, and headless
+has none of them. Also untested: the 4-lane `standard` path, the reviewers, and the Workflow tool
+with a `scriptPath` outside the working directory, which it refused (the session used the plugin's
+workflow skill instead).
