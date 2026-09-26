@@ -3,7 +3,8 @@
 // Regressions caught: a design agent pinned to a relay or proxy agent type or a non-native model
 // name; a read-only agent quietly granted a write tool; an agent prompt that drops the read-only
 // agent rules or the JSON keys its workflow parses; a research lane citing the web instead of
-// pinned checkouts, or relying on an API without a probe.
+// pinned checkouts, or relying on an API without a probe; a design reviewer whose promised output
+// drifts from the schema workflows/design-review.js validates, or that claims to self-verify.
 //
 // `checkAgentsDir(dir)` is exported so the checks run against a temp directory as well as the
 // repo. A later design agent registers its output contract in CONTRACTS; an agents/design-*.md
@@ -35,6 +36,79 @@ export const AGENT_RULES = [
   { rule: 'return once', pattern: /return once/i },
 ]
 
+// The reviewer schema is read from the workflow itself by running it at deep tier against a stub
+// agent that records the options of every call, so a schema change there reaches these checks
+// without a copy here to update.
+const workflowSource = readFileSync(join(root, 'workflows/design-review.js'), 'utf8').replace(
+  /^export const meta/m,
+  'const meta',
+)
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+
+/** `{agentType: schema}` for every reviewer agent design-review.js invokes. */
+export async function reviewerSchemas(source = workflowSource) {
+  const script = new AsyncFunction('args', 'agent', 'log', 'phase', source)
+  const reviewers = ['evidence-auditor', 'standards-reviewer', 'challenger', 'pre-mortem']
+  const schemas = {}
+  const agent = async (_prompt, opts) => {
+    schemas[opts.agentType] = opts.schema
+    return { findings: [] }
+  }
+  await script(
+    { tier: 'deep', packs: reviewers.map(reviewer => ({ reviewer, packPath: `${reviewer}.md` })) },
+    agent,
+    () => {},
+    () => {},
+  )
+  return schemas
+}
+
+/** Every property name a JSON schema declares, at any depth. */
+export function schemaKeys(schema) {
+  const keys = new Set()
+  const walk = node => {
+    if (!node || typeof node !== 'object') return
+    for (const [key, child] of Object.entries(node.properties ?? {})) {
+      keys.add(key)
+      walk(child)
+    }
+    walk(node.items)
+  }
+  walk(schema)
+  return [...keys].sort()
+}
+
+/** Every object key in a parsed JSON value, at any depth. */
+export function jsonKeys(value) {
+  const keys = new Set()
+  const walk = node => {
+    if (Array.isArray(node)) node.forEach(walk)
+    else if (node && typeof node === 'object') {
+      for (const [key, child] of Object.entries(node)) {
+        keys.add(key)
+        walk(child)
+      }
+    }
+  }
+  walk(value)
+  return [...keys].sort()
+}
+
+const PLUGIN_AGENT_PREFIX = 'swift-harness:'
+const schemasByType = await reviewerSchemas()
+export const REVIEWER_AGENTS = Object.keys(schemasByType)
+  .map(type => type.slice(PLUGIN_AGENT_PREFIX.length))
+  .sort()
+const reviewSchema = schemasByType[`${PLUGIN_AGENT_PREFIX}design-challenger`]
+export const REVIEWER_KEYS = schemaKeys(reviewSchema)
+
+/** The required-section anchors `DesignDocument.RequiredSection.anchor` returns. */
+export function sectionAnchors(swiftSource) {
+  const block = /public var anchor: String \{([\s\S]*?)\n    \}/.exec(swiftSource)
+  if (!block) throw new Error('RequiredSection.anchor not found')
+  return [...block[1].matchAll(/case \.\w+: "([^"]+)"/g)].map(m => m[1])
+}
+
 // Output contract per agent-name prefix: the JSON keys (quoted as `"key"`) and the fixed strings
 // the prompt must contain. First matching prefix wins.
 export const CONTRACTS = [
@@ -56,7 +130,65 @@ export const CONTRACTS = [
       'a probe snippet for every API',
     ],
   },
+  { prefix: 'design-evidence-auditor', keys: REVIEWER_KEYS, strings: ['[UNVERIFIED]', 'refuted', 'perf--scale'] },
+  {
+    prefix: 'design-standards-conformance',
+    keys: REVIEWER_KEYS,
+    strings: ['"standards-violation"', 'module-kinds', 'test-plan-by-tier'],
+  },
+  {
+    prefix: 'design-challenger',
+    keys: REVIEWER_KEYS,
+    strings: ['best end-to-end design, not merely a complete one', 'biggest blind spot'],
+  },
+  { prefix: 'design-pre-mortem', keys: REVIEWER_KEYS, strings: ['shipped and failed', 'perf--scale'] },
 ]
+
+/** The JSON object under a reviewer prompt's `## Output contract` heading. Throws when absent. */
+export function outputExample(body) {
+  const section = /^## Output contract\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(body)
+  if (!section) throw new Error('no `## Output contract` section')
+  const fence = /```json\n([\s\S]*?)\n```/.exec(section[1])
+  if (!fence) throw new Error('no ```json example in the output contract')
+  return JSON.parse(fence[1])
+}
+
+/**
+ * Problems with one reviewer prompt's output example against the workflow's reviewer schema: its
+ * keys must be exactly the schema's, no key may claim verification, and every finding must be
+ * located by a design section anchor.
+ */
+export function checkReviewerExample(fileName, body, { keys, required, anchors }) {
+  const problems = []
+  const say = message => problems.push(`${fileName}: ${message}`)
+  let example
+  try {
+    example = outputExample(body)
+  } catch (error) {
+    say(error.message)
+    return problems
+  }
+  const promised = jsonKeys(example)
+  const missing = keys.filter(k => !promised.includes(k))
+  const extra = promised.filter(k => !keys.includes(k))
+  if (missing.length) say(`output example lacks schema keys ${missing.join(', ')}`)
+  if (extra.length) say(`output example has keys the reviewer schema does not: ${extra.join(', ')}`)
+  const findings = Array.isArray(example.findings) ? example.findings : []
+  if (findings.length === 0) say('output example has no findings')
+  for (const [index, finding] of findings.entries()) {
+    for (const key of required) if (!(key in finding)) say(`example finding ${index + 1} lacks \`${key}\``)
+    const anchor = finding.location?.anchor
+    if (!anchors.includes(anchor)) say(`example finding ${index + 1} anchor ${JSON.stringify(anchor)} is not a design section anchor`)
+  }
+  return problems
+}
+
+/** The numbered questions under a prompt's `## Questions` heading. */
+export function challengerQuestions(body) {
+  const section = /^## Questions\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(body)
+  if (!section) return []
+  return [...section[1].matchAll(/^\d+\.\s+(.+)$/gm)].map(m => m[1])
+}
 
 /** Parses `---`-fenced frontmatter of `key: value` lines. Throws on a missing or unterminated fence. */
 export function parseFrontmatter(text) {
@@ -184,7 +316,101 @@ const failsWith = (text, fragment) =>
     )
   })
 
+const agentsDir = join(root, 'agents')
+const anchors = sectionAnchors(
+  readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Design/DesignDocument.swift'), 'utf8'),
+)
+const reviewContract = () => ({ keys: REVIEWER_KEYS, required: reviewSchema.properties.findings.items.required, anchors })
+const reviewerBody = name => parseFrontmatter(readFileSync(join(agentsDir, `${name}.md`), 'utf8')).body
+
+// A reviewer prompt that satisfies every example check, for the negative cases below.
+const validReviewerBody = findings => `## Output contract
+
+\`\`\`json
+${JSON.stringify({ findings }, null, 2)}
+\`\`\`
+
+## Next
+`
+const exampleFinding = {
+  location: { anchor: 'decision' },
+  severity: 'major',
+  category: 'unsupported-decision',
+  title: 't',
+  failure_scenario: 's',
+  evidence: 'e',
+  fix: 'f',
+  kind: 'standards-violation',
+  rule: 'A1',
+}
+
 const tests = {
+  'the workflow invokes exactly the four design reviewer agents, each an opus agent file — catches a renamed agent the workflow can no longer launch'() {
+    assert.deepEqual(REVIEWER_AGENTS, [
+      'design-challenger',
+      'design-evidence-auditor',
+      'design-pre-mortem',
+      'design-standards-conformance',
+    ])
+    for (const name of REVIEWER_AGENTS) {
+      const { fields } = parseFrontmatter(readFileSync(join(agentsDir, `${name}.md`), 'utf8'))
+      assert.equal(fields.name, name)
+      assert.equal(fields.model, 'opus', name)
+    }
+  },
+
+  'the reviewer schema is read from the workflow and has no verified key — catches this test checking a stale copy, or a reviewer schema that lets agents self-verify'() {
+    const schemas = Object.values(schemasByType)
+    assert.equal(schemas.length, 4)
+    for (const schema of schemas) assert.deepEqual(schemaKeys(schema), REVIEWER_KEYS)
+    assert.ok(REVIEWER_KEYS.includes('anchor') && REVIEWER_KEYS.includes('failure_scenario'), REVIEWER_KEYS.join(','))
+    assert.ok(!REVIEWER_KEYS.includes('verified'))
+    const edited = workflowSource.replace("title: { type: 'string' },", "title: { type: 'string' },\n  confidence: { type: 'number' },")
+    assert.notEqual(edited, workflowSource)
+    return reviewerSchemas(edited).then(changed => {
+      assert.ok(schemaKeys(Object.values(changed)[0]).includes('confidence'))
+    })
+  },
+
+  'each reviewer promises exactly the workflow schema keys, located by a section anchor — catches a reviewer output the workflow marks not-reviewed'() {
+    const problems = REVIEWER_AGENTS.flatMap(name => checkReviewerExample(`${name}.md`, reviewerBody(name), reviewContract()))
+    assert.deepEqual(problems, [])
+    for (const name of REVIEWER_AGENTS) {
+      assert.ok(!/"verified"/.test(reviewerBody(name)), `${name} quotes a "verified" key`)
+    }
+  },
+
+  'a reviewer example with an extra, missing or file:line key, or a bad anchor, fails — catches the example check passing anything'() {
+    const check = findings => checkReviewerExample('x.md', validReviewerBody(findings), reviewContract()).join('\n')
+    assert.equal(check([exampleFinding]), '')
+    assert.match(check([{ ...exampleFinding, verified: true }]), /keys the reviewer schema does not: verified/)
+    assert.match(check([{ ...exampleFinding, file: 'a.swift', line: 3 }]), /does not: file, line/)
+    const { rule, ...noRule } = exampleFinding
+    assert.match(check([noRule]), /lacks schema keys rule/)
+    const { fix, ...noFix } = exampleFinding
+    assert.match(check([noFix, exampleFinding]), /finding 1 lacks `fix`/)
+    assert.match(check([{ ...exampleFinding, location: { anchor: '#decision' } }]), /not a design section anchor/)
+    assert.match(check([{ ...exampleFinding, location: { anchor: 'Sources/A.swift:12' } }]), /not a design section anchor/)
+    assert.match(checkReviewerExample('x.md', '## Other\n', reviewContract()).join('\n'), /no `## Output contract`/)
+  },
+
+  'the challenger asks 5 to 7 questions, including the end-to-end and blind-spot questions — catches a question set trimmed or bloated'() {
+    const questions = challengerQuestions(reviewerBody('design-challenger'))
+    assert.ok(questions.length >= 5 && questions.length <= 7, `${questions.length} questions:\n${questions.join('\n')}`)
+    assert.ok(questions.some(q => q.includes('best end-to-end design, not merely a complete one')))
+    assert.ok(questions.some(q => q.includes('biggest blind spot')))
+    assert.equal(challengerQuestions('## Questions\n\n1. a\n2. b\n\n## Output contract\n3. c\n').length, 2)
+  },
+
+  'the verifier has a design findings section that verifies against the anchor and the pack — catches design findings verified by code-only rules'() {
+    const text = readFileSync(join(agentsDir, 'verifier.md'), 'utf8')
+    const section = /^## Design findings\n([\s\S]*?)(?=^## |(?![\s\S]))/m.exec(text)
+    assert.ok(section, 'agents/verifier.md has no `## Design findings` section')
+    for (const phrase of ['location.anchor', 'context pack', '`defect`', '`standards-violation`', 'downgrade_reason', 'verification_note']) {
+      assert.ok(section[1].includes(phrase), `design findings section lacks ${phrase}`)
+    }
+  },
+
   'every agents/design-*.md passes the design agent checks — catches a design agent drifting from D2 or its output contract'() {
     const { files, problems } = checkAgentsDir(join(root, 'agents'))
     assert.ok(files.length > 0, 'no agents/design-*.md found')
