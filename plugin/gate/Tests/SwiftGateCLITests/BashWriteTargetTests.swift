@@ -88,6 +88,10 @@ struct BashWriteTargetTests {
         "cat > notes.md <<'EOF'\necho {} > @R\nrm -rf __Snapshots__\nEOF"
       ),
       ("cat <<-EOF > @R\n\tx\n\tEOF", "cat <<-EOF > out.txt\n\techo > @R\n\tEOF"),
+      (
+        "cat <<-EOF > out.txt\n\tx\n\tEOF\necho {} > @R",
+        "cat <<EOF > out.txt\n\tEOF\necho {} > @R\nEOF"
+      ),
     ])
   func lookAlikesPass(denied: String, allowed: String) async throws {
     let scenario = try ResolvedWrite()
