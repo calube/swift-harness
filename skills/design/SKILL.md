@@ -1,13 +1,26 @@
 ---
 name: design
-description: This skill should be used to design a change in a swift-harness repository before any code or plan exists. It frames the goal with the user through multiple-choice questions, claims the plan, lets `swiftgate design-scope` pick a depth tier, runs the research lanes, verifies every claim (evidence check, probe, claim checker), and has an opus drafter write the design doc until `design-lint` and `docs-lint` pass. Use when the user says "design this", "write a design doc", "/swift-harness:design", "plan the architecture for", "how should we build", or asks for a design before a plan.
+description: This skill should be used to design a change in a swift-harness repository before any code or plan exists, and to take that design through review, approval and later amendment. It frames the goal with the user through multiple-choice questions, claims the plan, lets `swiftgate design-scope` pick a depth tier, runs the research lanes, verifies every claim, has an opus drafter write the design doc until `design-lint` and `docs-lint` pass, runs the design reviewers, publishes the rendered page as an Artifact, reads the approval back and merges. Use when the user says "design this", "write a design doc", "/swift-harness:design", "plan the architecture for", "how should we build", asks for a design before a plan, or passes --revise, --amend or --supersede.
 ---
 
 # Design
 
 Invoking this skill is the user's opt-in to run the design pipeline. It spends agents at every tier
 except the frame: 1 research lane, the claim checker and the drafter at `quick`; 4 lanes, the
-checker and the drafter at `standard` and `deep`. Review and publish come after the draft.
+checker, the drafter and 3 reviewers at `standard`; the same plus a pre-mortem at `deep`.
+
+## Modes
+
+| Invocation | Starts at |
+|---|---|
+| `/swift-harness:design <goal>` | 1. Frame |
+| `… --supersede <old-slug>` | 1. Frame; acts on the old design at the approved commit |
+| `… --revise` | [Revise from comments](references/review-publish-amend.md#revise-from-comments) |
+| `… --amend <slug>` | [Amend and clarify](references/review-publish-amend.md#amend-and-clarify) |
+| a plan whose index status is `in-review` | [Read the approval](references/review-publish-amend.md#read-the-approval) |
+
+When the frame finds that `<doc>` exists and this plan didn't write it, offer `--amend` instead
+of stopping.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the repository root, the
 directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-relative.
@@ -91,6 +104,43 @@ The draft phase ends with:
 - `<ev>/claims.jsonl`, `answers.jsonl` and `probes/` holding every claim with its final status;
 - this session holding `<plan>`, and the index entry at `designing`.
 
-Review, publish, approval and amend pick up from this state. Until this skill documents them, stop
-here: report the doc path, the tier, the claim counts by status, and any lane marked
-`NOT RESEARCHED`.
+## 5. Review
+
+Follow [the review steps](references/review-publish-amend.md#review). Build 1 pack per reviewer
+with `"$SG" context-pack --role evidence-auditor`, `--role standards-reviewer` and
+`--role challenger`; the pre-mortem gets the challenger's pack. Run
+`workflows/design-review.js`, write each `reviews` entry to its own file, then run
+`"$SG" review-synth --run-directory <run>/review-<r> --design <doc> --tier <tier> --json` with
+those files. `quick` runs no reviewer. On `revise`, run 1 revise round (2 at `deep`): redraft,
+then relaunch with `reviewers` set to the report's `rerun` and `previous` set to the last return.
+On `rethink`, halt and ask. Append every finding's disposition to `<ev>/review-log.jsonl`.
+
+## 6. Publish
+
+Follow [the publish steps](references/review-publish-amend.md#publish):
+
+1. Add the area router row, and at `standard` and `deep` the ADR. Run `"$SG" docs-lint`: from
+   here on it no longer tolerates `docs-lint.unreachable-doc` on `<doc>`.
+2. Commit on `design/<slug>`; this 1st commit is status `proposed`. Run
+   `"$SG" index set <plan> in-review "<note>"`.
+3. Run `"$SG" design-render <doc> --json` and publish its `output` with the `Artifact` tool,
+   `capabilities: {"comments": {}, "db": {}}`.
+4. Read the approval with `ArtifactData` `get`, collection `approval`, doc id = the designSha.
+   Without `db`, ask with `AskUserQuestion` and record an `answer` claim bound to the designSha.
+5. Check the designSha with `"$SG" design-diff HEAD:<doc> <doc> --json`, set status `approved`,
+   merge, record the approval in `plan.json`, and run `"$SG" index set <plan> approved "<note>"`.
+
+## 7. Revise, supersede, amend
+
+- `--revise` reads the page's threads with `ArtifactComments`, answers questions, redrafts for
+  change requests, reviews again and republishes to the same URL.
+- `--supersede <old-slug>` claims the old plan and sets the old design to
+  `superseded-by: <slug>` in the approved commit.
+- `--amend` classifies the change with `"$SG" design-diff`. A clarify writes a clarify record
+  and extends the plan's clarify chain. An amend writes an amendment record after a 2-agent delta
+  review and a new approval, and marks the affected ledger tasks `needs-replan`. A `stale` claim
+  from `"$SG" evidence check --at HEAD` spawns a one-claim `reresearch` lane first.
+
+[Status rules](references/review-publish-amend.md#status-rules) lists the only status changes the
+skill makes. End every run by reporting the doc path, the tier, the verdict, the page URL, and the
+plan's index status.
