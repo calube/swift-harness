@@ -470,7 +470,7 @@ flowchart LR
 ### `calibration-seeds-labelled-by-construction`
 - Deps: calibrate-design-command, push-tier-runs-doc-gates, design-review-agents, design-single-step-agents, design-research-workflow, design-review-workflow · Gate: push · estLines: 320
 - Writes: `gate/Fixtures/calibrate-design/` (new), `C/Commands/CheckCommand.swift`, `TC/CalibrationFreshnessTests.swift`
-- Does: also cover `DesignCalibrationRunner`\'s uncovered branches (a recurring minor coverage finding since it merged); §12 layer 2 seeds: claim checker (overstated claim vs genuine quote), evidence auditor (decision contradicting evidence), standards conformance (UIKit in a Core module), challenger and auditor (option on a probe-refuted API). Runs `calibrate design` live and commits `last-pass.json`. In the same task, wires §6.2's pre-push rule: in the plugin repo, push is red when the `CalibrationRecord` hash differs from `last-pass.json`.
+- Does: also cover `DesignCalibrationRunner`'s uncovered branches (a recurring minor coverage finding since it merged); §12 layer 2 seeds: claim checker (overstated claim vs genuine quote), evidence auditor (decision contradicting evidence), standards conformance (UIKit in a Core module), challenger and auditor (option on a probe-refuted API). Runs `calibrate design` live and commits `last-pass.json`. In the same task, wires §6.2's pre-push rule: in the plugin repo, push is red when the `CalibrationRecord` hash differs from `last-pass.json`.
 - Tests: `swiftgate calibrate design` passes · changed design prompt without a new pass → push red — catches uncalibrated prompts shipping · no `agents/design-*.md` → check skipped · push green on the committed record.
 
 ### `plugin-docs-pass-docs-lint-and-prose`
