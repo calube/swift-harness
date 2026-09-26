@@ -154,6 +154,18 @@ struct DesignCalibrationTests {
   }
 
   @Test(
+    "only direct design-* children of the plugin's agents and workflows are hashed — catches a path outside them, such as a root agents/ left from before the move, forcing a recalibration",
+    arguments: [
+      ("plugin/agents/design-drafter.md", true), ("plugin/workflows/design-review.js", true),
+      ("agents/design-drafter.md", false), ("workflows/design-review.js", false),
+      ("docs/plugin/agents/design-drafter.md", false), ("plugin/agents/drafter.md", false),
+      ("plugin/agents/sub/design-drafter.md", false), ("plugin/workflows/design-review.md", false),
+    ])
+  func hashedPaths(path: String, hashed: Bool) {
+    #expect(DesignCalibrationHash.isHashed(path) == hashed)
+  }
+
+  @Test(
     "calibration freshness hashes every plugin/agents/design-*.md and plugin/workflows/design-*.js in this checkout — catches a freshness check that silently hashes nothing after the plugin moved"
   )
   func hashesThePluginsDesignPrompts() throws {
