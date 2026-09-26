@@ -369,6 +369,11 @@ private enum SeedFamily: String, Sendable {
   case probe
   case designLint = "design-lint"
   case designDiff = "design-diff"
+  case planLint = "plan-lint"
+  case docsLint = "docs-lint"
+  case prose
+  case comments
+  case testlint
 
   func run(caseDirectory: URL, harnessRoot: URL) async -> SeedRunOutcome {
     switch self {
@@ -376,7 +381,81 @@ private enum SeedFamily: String, Sendable {
     case .probe: await SeedRunners.probe(caseDirectory: caseDirectory, harnessRoot: harnessRoot)
     case .designLint: await SeedRunners.designLint(caseDirectory: caseDirectory)
     case .designDiff: await SeedRunners.designDiff(caseDirectory: caseDirectory)
+    case .planLint: await SeedRunners.planLint(caseDirectory: caseDirectory)
+    case .docsLint: await SeedRunners.docsLint(caseDirectory: caseDirectory)
+    case .prose: await SeedRunners.prose(caseDirectory: caseDirectory)
+    case .comments: await SeedRunners.comments(caseDirectory: caseDirectory)
+    case .testlint: await SeedRunners.testlint(caseDirectory: caseDirectory)
     }
+  }
+}
+
+/// A throwaway git repository under the system temp directory, for a seed whose command needs
+/// real git plumbing (a common dir, `diff --cached`, `ls-files`) — never this checkout's, which
+/// every sibling worktree shares.
+private struct SeedRepo {
+  let root: URL
+  let runner: LiveProcessRunner
+
+  static func make(label: String) -> SeedRepo {
+    // `CanonicalPath`, never `resolvingSymlinksInPath()`: `swift package describe` reports
+    // `realpath(3)`-style paths (`/private/var/...`), and Foundation's own resolver maps those
+    // right back to `/var/...`, which would make every reported path read as outside the repo.
+    let root = CanonicalPath.url(
+      FileManager.default.temporaryDirectory.appending(
+        path: "swiftgate-self-test-\(label)-\(UUID().uuidString)", directoryHint: .isDirectory))
+    let environment: [String: String] = [
+      "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME": root.path,
+      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+      "GIT_AUTHOR_NAME": "swiftgate-self-test", "GIT_AUTHOR_EMAIL": "self-test@example.com",
+      "GIT_COMMITTER_NAME": "swiftgate-self-test", "GIT_COMMITTER_EMAIL": "self-test@example.com",
+    ]
+    return SeedRepo(root: root, runner: LiveProcessRunner(baseEnvironment: environment))
+  }
+
+  func remove() { try? FileManager.default.removeItem(at: root) }
+
+  @discardableResult
+  func git(_ arguments: String...) async -> Bool {
+    (try? await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: arguments, workingDirectory: root.path,
+        timeout: .seconds(30))))?.status.isSuccess ?? false
+  }
+
+  /// Writes `relative` under the repo root, creating intermediate directories.
+  func write(_ relative: String, _ content: String) -> Bool {
+    let url = root.appending(path: relative)
+    do {
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(content.utf8).write(to: url)
+      return true
+    } catch { return false }
+  }
+
+  var git2: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
+  var swiftPM: LiveSwiftPM { LiveSwiftPM(runner: runner, repositoryRoot: root.path) }
+
+  /// Writes a one-task `ledger.json` naming `id` under this repo's own common dir, the way
+  /// `plan claim`/the orchestrator would — never this checkout's shared plan state — so
+  /// `KnownIdSources` (spec §5.1) picks it up as a known ledger task id.
+  func seedKnownID(_ id: String, slug: String) async -> Bool {
+    do {
+      let common = try await git2.commonDirectory()
+      let plan = try PlanStateLayout(commonDirectory: common).plan(slug)
+      try FileManager.default.createDirectory(
+        atPath: plan.directory, withIntermediateDirectories: true)
+      let ledger = Ledger(
+        schemaVersion: 1, resume: "self-test", maxParallel: 1,
+        tasks: [
+          LedgerTask(
+            id: id, deps: [], writeSet: [], gate: .fast, tests: [], covers: [], estLines: 40,
+            status: .pending, worktree: "../\(slug)")
+        ], waves: [[id]])
+      try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+      return true
+    } catch { return false }
   }
 }
 
@@ -574,6 +653,246 @@ private enum SeedRunners {
       return .ruleIDs(["design-diff.\(problem.rawValue)"])
     default:
       return .blocked(report.message)
+    }
+  }
+
+  // MARK: plan-lint
+
+  /// A package with one library module, real enough for `swift package describe` to answer —
+  /// every case shares it, so `PlanLintRun.run`'s module graph always resolves the same way and
+  /// only the case's own `design.md`/`ledger.json` decide which rule fires.
+  private static let planLintPackageManifest = """
+    // swift-tools-version: 6.2
+    import PackageDescription
+
+    let package = Package(
+      name: "Sample",
+      targets: [
+        .target(name: "Core", path: "Sources/Core")
+      ]
+    )
+
+    """
+
+  private static let planLintConfig = """
+    schema = 1
+    xcode = "26.2"
+    app_scheme = "Sample"
+    packages = ["Sample"]
+
+    [simulator]
+    device = "iPhone 17"
+    os = "26.2"
+
+    """
+
+  /// `design.md` and `ledger.json` (hand-authored plan-state data, never captured tool output) plus
+  /// an optional `bounds.toml` fragment appended under `[plan]`, staged into a throwaway repo with
+  /// the shared package above and a `plan.json`/`ledger.json` written where `plan claim` would —
+  /// under the repo's own common dir, resolved through real git — then handed to `plan-lint`'s own
+  /// run function, never a re-implementation of its checks.
+  static func planLint(caseDirectory: URL) async -> SeedRunOutcome {
+    guard
+      let design = try? String(
+        contentsOf: caseDirectory.appending(path: "design.md"), encoding: .utf8),
+      let ledgerData = FileManager.default.contents(
+        atPath: caseDirectory.appending(path: "ledger.json").path)
+    else { return .blocked("design.md and ledger.json are both required") }
+    let ledger: Ledger
+    do {
+      ledger = try LedgerJSON.decode(ledgerData)
+    } catch {
+      return .blocked("ledger.json: \(error)")
+    }
+    let bounds =
+      (try? String(contentsOf: caseDirectory.appending(path: "bounds.toml"), encoding: .utf8))
+      ?? ""
+
+    let designPath = "docs/example/designs/seed.md"
+    let slug = "self-test-plan-lint"
+    let repo = SeedRepo.make(label: "plan-lint")
+    defer { repo.remove() }
+
+    guard
+      repo.write(ConfigLoader.fileName, planLintConfig + bounds),
+      repo.write("Sample/Package.swift", planLintPackageManifest),
+      repo.write("Sample/Sources/Core/Core.swift", "public enum Core {}\n"),
+      repo.write(designPath, design),
+      await repo.git("init", "-q", "-b", "main"),
+      await repo.git("config", "commit.gpgsign", "false"),
+      await repo.git("add", "-A"), await repo.git("commit", "-q", "-m", "seed")
+    else { return .blocked("could not build the temp repo") }
+
+    do {
+      let commonDirectory = try await repo.git2.commonDirectory()
+      let layout = try PlanStateLayout(commonDirectory: commonDirectory)
+      let plan = try layout.plan(slug)
+      try FileManager.default.createDirectory(
+        atPath: plan.directory, withIntermediateDirectories: true)
+      let designSha = DesignSha.of(design)
+      let file = PlanFile(
+        schemaVersion: 1, slug: slug, design: designPath, designSha: designSha,
+        approval: .init(
+          decision: .approve, designSha: designSha, at: Date(timeIntervalSince1970: 0)),
+        clarifyChain: [], tier: nil, resume: "self-test")
+      try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
+      try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+    } catch {
+      return .blocked("could not write plan state: \(error)")
+    }
+
+    let result = await PlanLintRun.run(
+      slug: slug, root: repo.root, git: repo.git2, swiftPM: repo.swiftPM)
+    switch result.outcome {
+    case .blocked(let reason): return .blocked(reason)
+    case .invalid(let reason, _): return .blocked("invalid: \(reason)")
+    case .checked(let checked):
+      return .ruleIDs(Set(checked.findings.filter(\.severity.failsGate).map(\.ruleID)))
+    }
+  }
+
+  // MARK: docs-lint
+
+  private static let docsLintBaseConfig = """
+    schema = 1
+    xcode = "26.2"
+    app_scheme = "Sample"
+    packages = ["Sample"]
+
+    [simulator]
+    device = "iPhone 17"
+    os = "26.2"
+
+    """
+
+  /// The case's `docs/` subtree (and an optional root `AGENTS.md`), staged into a throwaway repo —
+  /// `docs-lint` needs `git ls-files` for its tracked-file set, even with nothing committed — plus
+  /// an optional `config.toml` fragment for the `[docs]` table a case needs.
+  static func docsLint(caseDirectory: URL) async -> SeedRunOutcome {
+    let docsSource = caseDirectory.appending(path: "docs", directoryHint: .isDirectory)
+    guard FileManager.default.fileExists(atPath: docsSource.path) else {
+      return .blocked("no docs/ in this case")
+    }
+    let fragment =
+      (try? String(contentsOf: caseDirectory.appending(path: "config.toml"), encoding: .utf8)) ?? ""
+
+    let repo = SeedRepo.make(label: "docs-lint")
+    defer { repo.remove() }
+    do {
+      try FileManager.default.createDirectory(at: repo.root, withIntermediateDirectories: true)
+      try FileManager.default.copyItem(at: docsSource, to: repo.root.appending(path: "docs"))
+    } catch {
+      return .blocked("could not stage docs/: \(error)")
+    }
+    if !fragment.isEmpty, !repo.write(ConfigLoader.fileName, docsLintBaseConfig + fragment) {
+      return .blocked("could not write \(ConfigLoader.fileName)")
+    }
+    let agents = caseDirectory.appending(path: "AGENTS.md")
+    if FileManager.default.fileExists(atPath: agents.path),
+      let text = try? String(contentsOf: agents, encoding: .utf8), !repo.write("AGENTS.md", text)
+    {
+      return .blocked("could not stage AGENTS.md")
+    }
+
+    guard await repo.git("init", "-q", "-b", "main"), await repo.git("add", "-A")
+    else { return .blocked("could not init a temp git repo") }
+
+    switch await DocsLintCheck.run(root: repo.root, runner: repo.runner) {
+    case .blocked(let reason): return .blocked(reason)
+    case .invalid(let reason, _): return .blocked("invalid: \(reason)")
+    case .checked(let result):
+      return .ruleIDs(Set(result.findings.filter(\.severity.failsGate).map(\.ruleID)))
+    }
+  }
+
+  // MARK: prose
+
+  /// `prose` reads files off disk directly, with no git and, without a `.swiftgate.toml`, no
+  /// config — the case's `doc.md` is checked in place, never copied into a throwaway repo.
+  static func prose(caseDirectory: URL) async -> SeedRunOutcome {
+    let fileName = "doc.md"
+    guard FileManager.default.fileExists(atPath: caseDirectory.appending(path: fileName).path)
+    else { return .blocked("no \(fileName) in this case") }
+    switch ProseCheck.run(root: caseDirectory, files: [fileName]) {
+    case .blocked(let reason): return .blocked(reason)
+    case .invalid(let reason, _): return .blocked("invalid: \(reason)")
+    case .checked(let result):
+      return .ruleIDs(Set(result.findings.filter(\.severity.failsGate).map(\.ruleID)))
+    }
+  }
+
+  // MARK: comments
+
+  /// `Seed.swift` staged (never committed — `comments` reads the index) into a throwaway repo. An
+  /// optional `known-id.txt` names a ledger task id to seed under the repo's own common dir, so
+  /// `comments.leaked-id`'s known-id half can fire without touching this checkout's shared plan
+  /// state.
+  static func comments(caseDirectory: URL) async -> SeedRunOutcome {
+    guard
+      let source = try? String(
+        contentsOf: caseDirectory.appending(path: "Seed.swift"), encoding: .utf8)
+    else { return .blocked("no Seed.swift in this case") }
+    let knownID =
+      (try? String(
+        contentsOf: caseDirectory.appending(path: "known-id.txt"), encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let repo = SeedRepo.make(label: "comments")
+    defer { repo.remove() }
+    guard repo.write("Seed.swift", source), await repo.git("init", "-q", "-b", "main"),
+      await repo.git("add", "-A")
+    else { return .blocked("could not build the temp repo") }
+
+    if let knownID, !knownID.isEmpty,
+      await !repo.seedKnownID(knownID, slug: "self-test-comments")
+    {
+      return .blocked("could not seed the known-id feed")
+    }
+
+    switch await CommentsCheck.run(root: repo.root, git: repo.git2, swiftPM: repo.swiftPM) {
+    case .blocked(let reason): return .blocked(reason)
+    case .invalid(let reason, _): return .blocked("invalid: \(reason)")
+    case .checked(let result):
+      return .ruleIDs(Set(result.findings.filter(\.severity.failsGate).map(\.ruleID)))
+    }
+  }
+
+  // MARK: testlint
+
+  /// `Tests/SeedTests/Seed.swift`, so ``PathConventionModuleScopes`` (no `.swiftgate.toml` here)
+  /// classifies it as a test file — `test.leaked-id` and the rest of `testlint` only run over
+  /// ``RuleScope/testFiles``. An optional `known-id.txt` names a ledger task id to seed under the
+  /// repo's own common dir, mirroring `comments`' known-id case.
+  static func testlint(caseDirectory: URL) async -> SeedRunOutcome {
+    guard
+      let source = try? String(
+        contentsOf: caseDirectory.appending(path: "Seed.swift"), encoding: .utf8)
+    else { return .blocked("no Seed.swift in this case") }
+    let knownID =
+      (try? String(
+        contentsOf: caseDirectory.appending(path: "known-id.txt"), encoding: .utf8))?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    let repo = SeedRepo.make(label: "testlint")
+    defer { repo.remove() }
+    let relative = "Tests/SeedTests/Seed.swift"
+    guard repo.write(relative, source), await repo.git("init", "-q", "-b", "main"),
+      await repo.git("add", "-A")
+    else { return .blocked("could not build the temp repo") }
+
+    if let knownID, !knownID.isEmpty,
+      await !repo.seedKnownID(knownID, slug: "self-test-testlint")
+    {
+      return .blocked("could not seed the known-id feed")
+    }
+
+    switch await TestlintCheck.run(
+      root: repo.root, paths: [relative], swiftPM: repo.swiftPM, git: repo.git2)
+    {
+    case .blocked(let reason): return .blocked(reason)
+    case .invalid(let reason, _): return .blocked("invalid: \(reason)")
+    case .checked(let result):
+      return .ruleIDs(Set(result.findings.filter(\.severity.failsGate).map(\.ruleID)))
     }
   }
 }
