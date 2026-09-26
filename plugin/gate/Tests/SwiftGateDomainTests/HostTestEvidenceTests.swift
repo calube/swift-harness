@@ -141,6 +141,36 @@ struct HostTestEvidenceTests {
   }
 
   @Test(
+    "a missing Package.resolved under --only-use-versions-from-resolved-file is RED naming the fix — catches a stale lockfile reported as a generic no-evidence BLOCKED"
+  )
+  func resolvedFileMissing() throws {
+    let outcome = HostTestEvidenceRules.evaluate(try evidence("resolved-file-missing"))
+
+    #expect(outcome.verdict == .red)
+    #expect(outcome.findings.map(\.ruleID) == ["swiftgate.resolved-file-stale"])
+    #expect(outcome.findings.first?.message.contains("a resolved file is required") == true)
+    #expect(
+      outcome.findings.first?.message.contains(
+        "run `swift package resolve` in \(Self.package) and commit Package.resolved") == true)
+  }
+
+  @Test(
+    "an out-of-date Package.resolved under --only-use-versions-from-resolved-file is RED naming the fix — catches the same stale-lockfile message going unrecognized"
+  )
+  func resolvedFileStale() throws {
+    let outcome = HostTestEvidenceRules.evaluate(try evidence("resolved-file-stale"))
+
+    #expect(outcome.verdict == .red)
+    #expect(outcome.findings.map(\.ruleID) == ["swiftgate.resolved-file-stale"])
+    #expect(
+      outcome.findings.first?.message.contains("an out-of-date resolved file was detected")
+        == true)
+    #expect(
+      outcome.findings.first?.message.contains(
+        "run `swift package resolve` in \(Self.package) and commit Package.resolved") == true)
+  }
+
+  @Test(
     "a failing exit with all-passing reports is BLOCKED — catches exit codes and evidence disagreeing silently"
   )
   func unexplainedExit() throws {

@@ -20,9 +20,10 @@ enum GateRun {
   }
 
   static func execute(
-    root: URL, format: OutputFormat, command: String,
+    root: URL, format: OutputFormat, command: String, git: (any Git)? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
+    let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let clock = ContinuousClock()
     let startedAt = Date()
     let start = clock.now
@@ -36,7 +37,17 @@ enum GateRun {
       directory = FileManager.default.temporaryDirectory.appending(
         path: "swiftgate-\(runID)", directoryHint: .isDirectory)
     }
-    let parts = try await body(Context(runID: runID, directory: directory))
+    // Belt and braces beside every invocation's own --only-use-versions-from-resolved-file /
+    // -onlyUsePackageVersionsFromResolvedFile: whatever `body` runs must never rewrite a committed
+    // Package.resolved, on any path those flags missed.
+    let resolvedFilesBefore = await ResolvedFileGuard.snapshot(root: root, git: git)
+    var parts = try await body(Context(runID: runID, directory: directory))
+    let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
+    if let finding = try ResolvedFileGuard.finding(
+      before: resolvedFilesBefore, after: resolvedFilesAfter)
+    {
+      parts.findings.append(finding)
+    }
     let report = try RunReport(
       runID: runID, durationMilliseconds: milliseconds(clock.now - start), tiers: parts.tiers,
       findings: parts.findings, allowances: parts.allowances)

@@ -553,8 +553,11 @@ public struct ProbeBuilder: Sendable {
     switch target.platform {
     case .host:
       return ProcessInvocation(
-        executable: "swift", arguments: ["build"], workingDirectory: scratch.package.path,
-        timeout: buildTimeout)
+        executable: "swift",
+        // The scratch package is pinned to the target's own Package.resolved (spec §6.2); an
+        // unresolvable pin must fail the build, never resolve to something else silently.
+        arguments: ["build", "--only-use-versions-from-resolved-file"],
+        workingDirectory: scratch.package.path, timeout: buildTimeout)
     case .iOSSimulator:
       return ProcessInvocation(
         executable: "/usr/bin/xcrun",
@@ -565,6 +568,7 @@ public struct ProbeBuilder: Sendable {
           // Headless builds otherwise fail on "Macro … must be enabled"; macro packages are
           // pinned, so the trust decision was made at pin time (spec §6.2).
           "-skipMacroValidation",
+          "-onlyUsePackageVersionsFromResolvedFile",
         ],
         workingDirectory: scratch.package.path, timeout: buildTimeout)
     }

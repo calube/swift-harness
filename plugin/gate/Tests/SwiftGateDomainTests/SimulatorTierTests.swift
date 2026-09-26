@@ -23,7 +23,8 @@ struct XcodebuildTestRequestTests {
       arguments == [
         "test", "-quiet", "-scheme", "CounterFeature-Package", "-destination", "id=CLONE",
         "-derivedDataPath", "/w/.harness/derived-data/pkg", "-resultBundlePath",
-        "/w/run/t2.xcresult", "-skipMacroValidation", "-only-testing:CounterUISnapshotTests",
+        "/w/run/t2.xcresult", "-skipMacroValidation", "-onlyUsePackageVersionsFromResolvedFile",
+        "-only-testing:CounterUISnapshotTests",
       ])
     #expect(Set(arguments).isDisjoint(with: XcodebuildTestRequest.refusedFlags))
     #expect(request().workingDirectory == "/w/Packages/CounterFeature")

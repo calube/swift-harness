@@ -220,10 +220,21 @@ enum CheckRun {
   static func changedSinceMergeBase(git: any Git, base: String) async
     -> Result<[String], BlockedReason>
   {
+    let mergeBase: String
+    // Isolated from the diff below: any failure here is about resolving `base` itself (an
+    // unrelated history, or, since `base` defaults to `origin/main`, a ref that doesn't exist at
+    // all), so it always gets the same fix named, not a raw git error.
     do throws(GitError) {
-      guard let mergeBase = try await git.mergeBase("HEAD", base) else {
+      guard let found = try await git.mergeBase("HEAD", base) else {
         return .failure(BlockedReason("HEAD and \(base) share no history; pass --base <ref>"))
       }
+      mergeBase = found
+    } catch {
+      return .failure(
+        BlockedReason("can't find the merge base of HEAD and \(base) (\(error)); pass --base <ref>")
+      )
+    }
+    do throws(GitError) {
       return .success(try await ChangedPaths.since(mergeBase, git: git))
     } catch {
       return .failure(BlockedReason("git: \(error)"))

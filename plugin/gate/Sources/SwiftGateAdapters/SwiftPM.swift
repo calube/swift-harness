@@ -125,7 +125,10 @@ public struct LiveSwiftPM: SwiftPM {
   }
 
   public func test(_ request: SwiftTestRequest) async throws(SwiftPMError) -> SwiftTestRun {
-    var arguments = ["test"]
+    // The committed pins are the only ones a gate run may trust; without this, an unresolvable
+    // pin (a revision missing from the remote) resolves silently to something else and rewrites
+    // `Package.resolved`, which a hook denies an agent to do by hand.
+    var arguments = ["test", "--only-use-versions-from-resolved-file"]
     arguments.append(request.parallel ? "--parallel" : "--no-parallel")
     if request.codeCoverage { arguments.append("--enable-code-coverage") }
     arguments += ["--xunit-output", request.xunitOutputPath]

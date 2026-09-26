@@ -91,8 +91,8 @@ struct LiveSwiftPMTests {
     let invocation = try #require(runner.invocations.first)
     #expect(
       invocation.arguments == [
-        "test", "--parallel", "--enable-code-coverage", "--xunit-output",
-        "/runs/abc/GameEngine.xml", "--filter", "GameEngineTests\\.",
+        "test", "--only-use-versions-from-resolved-file", "--parallel", "--enable-code-coverage",
+        "--xunit-output", "/runs/abc/GameEngine.xml", "--filter", "GameEngineTests\\.",
       ])
     #expect(invocation.workingDirectory == "\(root)/\(gameEngine)")
     #expect(invocation.environmentOverlay["SNAPSHOT_TESTING_RECORD"] == .some("never"))

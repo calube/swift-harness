@@ -78,6 +78,9 @@ public struct XcodebuildTestRequest: Sendable, Equatable {
       // Headless builds otherwise fail on "Macro … must be enabled"; macro packages are pinned,
       // so the trust decision was made at pin time (spec §6.2).
       "-skipMacroValidation",
+      // The committed pins are the only ones a gate run may trust; without this, an unresolvable
+      // pin resolves silently to something else and rewrites `Package.resolved`.
+      "-onlyUsePackageVersionsFromResolvedFile",
     ]
     arguments += onlyTesting.map { "-only-testing:\($0)" }
     return arguments
