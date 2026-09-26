@@ -174,7 +174,10 @@ struct ProbeBuilderTests {
         contentsOf: sandbox.evidenceRoot.appending(
           path: ProbeVerdictRecord.path(forClaimID: "ev-wrong-signature")))
       let object = try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])
-      #expect(Set(object.keys) == ["claimId", "verdict", "diagnostics", "pins", "sdk"])
+      #expect(
+        Set(object.keys) == [
+          "claimId", "verdict", "diagnostics", "pins", "sdk", "snippetSha256", "sourceSha256",
+        ])
 
       let failing = try sandbox.record("ev-wrong-signature")
       #expect(failing.verdict == .fail)
@@ -186,6 +189,10 @@ struct ProbeBuilderTests {
             file: "probes/Probe_ev_wrong_signature.swift", line: 3, column: 21, level: .error,
             message: "cannot convert value of type 'Int' to expected argument type 'String'")
         ])
+      let snippetBytes = try Data(
+        contentsOf: sandbox.probesDirectory.appending(path: "ev-wrong-signature.snippet.swift"))
+      #expect(object["snippetSha256"] as? String == CaptureDigest.sha256Hex(snippetBytes))
+      #expect(object["sourceSha256"] as? String == CaptureDigest.sha256Hex(Data(wrapper.utf8)))
       #expect(try sandbox.record("ev-fabricated-symbol").verdict == .fail)
       #expect(try sandbox.record("ev-good-effect-cancel").verdict == .pass)
       let warns = try sandbox.record("ev-warns-but-compiles")

@@ -464,7 +464,7 @@ public enum ProbeOutcome: Sendable, Equatable {
 /// Builds a design's probe snippets in the worktree's scratch package and writes one wrapper and
 /// one verdict file per snippet (spec §6.2). Build only: no test action, no simulator boot.
 public struct ProbeBuilder: Sendable {
-  static let snippetSuffix = ".snippet.swift"
+  static let snippetSuffix = ProbeVerdictRecord.snippetSuffix
 
   private let runner: any ProcessRunner
   private let cache: EvidenceCacheStore
@@ -487,7 +487,7 @@ public struct ProbeBuilder: Sendable {
   public func run(evidenceRoot: URL, target: ProbeTarget) async -> ProbeOutcome {
     let probes = evidenceRoot.appending(path: "probes", directoryHint: .isDirectory)
     var notes: [String] = []
-    let snippets: [(id: String, source: String)]
+    let snippets: [Snippet]
     do {
       snippets = try readSnippets(in: probes)
     } catch {
@@ -519,9 +519,13 @@ public struct ProbeBuilder: Sendable {
     for snippet in snippets {
       let id = snippet.id
       let diagnostics = cached[id]?.diagnostics ?? built[id] ?? []
+      // Binds the verdict to the exact bytes it judged, so evidence check can refuse it once
+      // either file changes or when no probe ever wrote it.
       let record = ProbeVerdictRecord(
         claimId: id, verdict: diagnostics.contains { $0.level == .error } ? .fail : .pass,
-        diagnostics: diagnostics, pins: target.pins, sdk: target.sdkVersion)
+        diagnostics: diagnostics, pins: target.pins, sdk: target.sdkVersion,
+        snippetSha256: CaptureDigest.sha256Hex(snippet.bytes),
+        sourceSha256: CaptureDigest.sha256Hex(Data((wrappers[id] ?? "").utf8)))
       results.append(ProbeResult(record: record, cached: cached[id] != nil))
     }
 
@@ -580,7 +584,13 @@ public struct ProbeBuilder: Sendable {
     let message: String
   }
 
-  private func readSnippets(in directory: URL) throws(ReadError) -> [(id: String, source: String)] {
+  private struct Snippet {
+    let id: String
+    let bytes: Data
+    let source: String
+  }
+
+  private func readSnippets(in directory: URL) throws(ReadError) -> [Snippet] {
     let names: [String]
     do {
       names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
@@ -589,19 +599,23 @@ public struct ProbeBuilder: Sendable {
     } catch {
       throw ReadError(message: "can't list \(directory.path): \(error.localizedDescription)")
     }
-    var snippets: [(id: String, source: String)] = []
+    var snippets: [Snippet] = []
     for name in names.sorted() where name.hasSuffix(Self.snippetSuffix) {
       let id = String(name.dropLast(Self.snippetSuffix.count))
       guard Self.isProbeID(id) else {
         throw ReadError(
           message: "`\(name)` is not named `ev-<lowercase letters, digits and hyphens>`")
       }
+      let bytes: Data
       do {
-        let source = try String(contentsOf: directory.appending(path: name), encoding: .utf8)
-        snippets.append((id, source))
+        bytes = try Data(contentsOf: directory.appending(path: name))
       } catch {
         throw ReadError(message: "can't read `\(name)`: \(error.localizedDescription)")
       }
+      guard let source = String(data: bytes, encoding: .utf8) else {
+        throw ReadError(message: "can't read `\(name)`: not UTF-8")
+      }
+      snippets.append(Snippet(id: id, bytes: bytes, source: source))
     }
     return snippets
   }

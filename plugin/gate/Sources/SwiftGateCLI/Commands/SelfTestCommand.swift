@@ -537,6 +537,10 @@ private enum SeedRunners {
     case .answersFileMalformed: "answersFileMalformed"
     case .answerNotFound: "answerNotFound"
     case .answerQuestionMismatch: "answerQuestionMismatch"
+    case .duplicateClaimID: "duplicateClaimID"
+    case .probeVerdictUnbound: "probeVerdictUnbound"
+    case .probeSourceMissing: "probeSourceMissing"
+    case .probeSourceMismatch: "probeSourceMismatch"
     }
   }
 

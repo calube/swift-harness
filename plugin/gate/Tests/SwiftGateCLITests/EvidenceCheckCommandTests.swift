@@ -77,10 +77,28 @@ private struct EvidenceRepo {
     try write(Self.layout.claimsFile, data)
   }
 
+  /// Writes the verdict with a snippet and wrapper beside it, bound by their hashes the way
+  /// `probe` writes them.
   func writeVerdict(_ record: ProbeVerdictRecord) throws {
+    let snippet = Data("static func run() {}\n".utf8)
+    let wrapper = Data(
+      ProbeWrapper.source(
+        claimID: record.claimId, snippet: String(decoding: snippet, as: UTF8.self)
+      )
+      .utf8)
+    try write(Self.layout.probesDirectory + "/\(record.claimId).snippet.swift", snippet)
+    try write(
+      Self.layout.probesDirectory + "/" + ProbeIdentifier.fileName(forClaimID: record.claimId),
+      wrapper)
+    guard
+      var bound = try JSONSerialization.jsonObject(with: try ProbeVerdictRecord.encode(record))
+        as? [String: Any]
+    else { throw CocoaError(.coderReadCorrupt) }
+    bound["snippetSha256"] = CaptureDigest.sha256Hex(snippet)
+    bound["sourceSha256"] = CaptureDigest.sha256Hex(wrapper)
     try write(
       Self.layout.root + "/" + ProbeVerdictRecord.path(forClaimID: record.claimId),
-      try ProbeVerdictRecord.encode(record))
+      try JSONSerialization.data(withJSONObject: bound, options: [.sortedKeys]))
   }
 
   /// A verbatim `Package.resolved` from a real SwiftPM resolve (see `Tests/Fixtures/README.md`),
@@ -325,6 +343,256 @@ struct EvidenceCheckCommandTests {
       ])
     #expect(EvidenceCheckRun.exitCode(outcome) == 1)
     #expect(EvidenceCheckRun.render(outcome, format: .human).contains("packageResolvedMissing"))
+  }
+
+  static let tcaCheckout = ".build/checkouts/swift-composable-architecture/Sources/Effect.swift"
+  static let tcaLine = "public func cancellable(id: some Hashable) -> Self\n"
+
+  static func packageClaim(
+    _ loc: String, pin: String = "swift-composable-architecture@1.26.2",
+    id: String = "ev-tca-effect-is-cancellable"
+  ) -> Claim {
+    EvidenceRepo.fileClaim(id: id, loc: loc, pin: pin, quote: "public func cancellable")
+  }
+
+  @Test(
+    "a checkout loc respelled with other letter case or a .. is still pin-checked or rejected on a real file system — catches a pin bypass by spelling"
+  )
+  func respelledCheckoutRejected() async throws {
+    let repo = try await EvidenceRepo()
+    defer { repo.remove() }
+    try repo.writeRealPackageResolved()
+    try repo.write(Self.tcaCheckout, Self.tcaLine)
+    let respellings = [
+      (".BUILD/checkouts/swift-composable-architecture/Sources/Effect.swift", "pinVersionMismatch"),
+      (".build/CHECKOUTS/swift-composable-architecture/Sources/Effect.swift", "pinVersionMismatch"),
+      ("Sources/../\(Self.tcaCheckout)", "parentReference"),
+      (
+        "./.build/checkouts/../checkouts/swift-composable-architecture/Sources/Effect.swift",
+        "parentReference"
+      ),
+    ]
+    for (loc, failure) in respellings {
+      try repo.writeClaims([
+        Self.packageClaim("\(loc):L1", pin: "swift-composable-architecture@1.0.0")
+      ])
+      let outcome = await repo.check()
+      #expect(
+        try jsonLines(outcome) == [
+          StrictLine(id: "ev-tca-effect-is-cancellable", status: .quoteFail, loc: nil)
+        ], "\(loc)")
+      #expect(EvidenceCheckRun.render(outcome, format: .human).contains(failure), "\(loc)")
+      #expect(EvidenceCheckRun.exitCode(outcome) == 1, "\(loc)")
+    }
+  }
+
+  @Test(
+    "a loc through a symbolic link fails, whether the link hides a checkout or leaves the repo — catches unpinned or outside text read as codebase evidence"
+  )
+  func symlinkedLocRejected() async throws {
+    let repo = try await EvidenceRepo()
+    defer { repo.remove() }
+    try repo.writeRealPackageResolved()
+    try repo.write(Self.tcaCheckout, Self.tcaLine)
+    try repo.write("outside/Outside.swift", Self.tcaLine)
+    let manager = FileManager.default
+    try manager.createDirectory(
+      at: repo.root.appending(path: "Vendor"), withIntermediateDirectories: true)
+    try manager.createSymbolicLink(
+      atPath: repo.root.appending(path: "Vendor/tca").path,
+      withDestinationPath: "../.build/checkouts/swift-composable-architecture")
+    try manager.createDirectory(
+      at: repo.root.appending(path: "Sources"), withIntermediateDirectories: true)
+    try manager.createSymbolicLink(
+      atPath: repo.root.appending(path: "Sources/Outside.swift").path,
+      withDestinationPath: repo.root.appending(path: "outside/Outside.swift").path)
+
+    for loc in ["Vendor/tca/Sources/Effect.swift:L1", "Sources/Outside.swift:L1"] {
+      try repo.writeClaims([Self.packageClaim(loc, pin: "HEAD")])
+      let outcome = await repo.check()
+      #expect(
+        try jsonLines(outcome) == [
+          StrictLine(id: "ev-tca-effect-is-cancellable", status: .quoteFail, loc: nil)
+        ], "\(loc)")
+      #expect(EvidenceCheckRun.render(outcome, format: .human).contains("symlink"), "\(loc)")
+    }
+  }
+
+  @Test(
+    "a stored snapshot reached through a symbolic link fails, whether the file or its directory is the link — catches evidence-root text read from outside the design's record"
+  )
+  func symlinkedEvidenceFileRejected() async throws {
+    let manager = FileManager.default
+    let snapshots = EvidenceRepo.layout.snapshotsDirectory
+    let claim = Claim(
+      id: "ev-list-supports-swipe-actions", lane: "apple-docs", text: "List swipes.",
+      citation: Citation(
+        kind: .snapshot, loc: "snapshots/list.md", pin: "26.2", quote: "swipeActions"),
+      status: .new)
+    for linkDirectory in [false, true] {
+      let repo = try await EvidenceRepo()
+      defer { repo.remove() }
+      try repo.write("outside/list.md", "List supports swipeActions.\n")
+      try repo.writeClaims([claim])
+      if linkDirectory {
+        try manager.createDirectory(
+          at: repo.root.appending(path: EvidenceRepo.layout.root), withIntermediateDirectories: true
+        )
+        try manager.createSymbolicLink(
+          atPath: repo.root.appending(path: snapshots).path,
+          withDestinationPath: repo.root.appending(path: "outside").path)
+      } else {
+        try manager.createDirectory(
+          at: repo.root.appending(path: snapshots), withIntermediateDirectories: true)
+        try manager.createSymbolicLink(
+          atPath: repo.root.appending(path: "\(snapshots)/list.md").path,
+          withDestinationPath: repo.root.appending(path: "outside/list.md").path)
+      }
+      let outcome = await repo.check(sdk: "26.2")
+      #expect(
+        try jsonLines(outcome) == [
+          StrictLine(id: "ev-list-supports-swipe-actions", status: .quoteFail, loc: nil)
+        ], "link directory: \(linkDirectory)")
+      #expect(
+        EvidenceCheckRun.render(outcome, format: .human).contains("symlink"),
+        "link directory: \(linkDirectory)")
+    }
+  }
+
+  @Test(
+    "a checkout in a nested project resolves against that project's Package.resolved, at the working tree and at a ref — catches checkouts read only at the repo root"
+  )
+  func nestedProjectCheckout() async throws {
+    let repo = try await EvidenceRepo()
+    defer { repo.remove() }
+    let project = "examples/App"
+    let checkout = "\(project)/\(Self.tcaCheckout)"
+    try repo.write(".gitignore", ".build/\n")
+    try repo.write(
+      "\(project)/Package.resolved",
+      try Fixture.data("Doctor/Package.resolved-CounterFeature.json"))
+    try repo.write(checkout, Self.tcaLine)
+    try repo.writeClaims([
+      Self.packageClaim("\(checkout):L1"),
+      Self.packageClaim(
+        "\(checkout):L1", pin: "swift-composable-architecture@1.0.0",
+        id: "ev-tca-effect-cancellable-old"),
+    ])
+    try await repo.commitAll("nested project")
+
+    // At a ref a pin that no longer matches is drift, not a forgery: stale rather than failed.
+    let cases: [(String?, Claim.Status, String)] = [
+      (nil, .quoteFail, "pinVersionMismatch"), ("HEAD", .stale, "pinChanged"),
+    ]
+    for (ref, oldStatus, detail) in cases {
+      let outcome = await repo.check(at: ref)
+      #expect(
+        try jsonLines(outcome) == [
+          StrictLine(id: "ev-tca-effect-is-cancellable", status: .quoteOk, loc: nil),
+          StrictLine(id: "ev-tca-effect-cancellable-old", status: oldStatus, loc: nil),
+        ], "\(ref ?? "working tree")")
+      let human = EvidenceCheckRun.render(outcome, format: .human)
+      #expect(human.contains(detail), "\(human)")
+    }
+  }
+
+  @Test(
+    "two claims.jsonl lines with one id both fail — catches a later supported line masking an earlier refuted one"
+  )
+  func duplicateClaimIDFails() async throws {
+    let repo = try await EvidenceRepo()
+    defer { repo.remove() }
+    try repo.write(EvidenceRepo.source, EvidenceRepo.original)
+    try repo.writeClaims([
+      EvidenceRepo.fileClaim(quote: "public func dequeue()"), EvidenceRepo.fileClaim(),
+    ])
+    let outcome = await repo.check()
+    #expect(
+      try jsonLines(outcome) == [
+        StrictLine(id: "ev-queue-enqueue-is-async", status: .quoteFail, loc: nil),
+        StrictLine(id: "ev-queue-enqueue-is-async", status: .quoteFail, loc: nil),
+      ])
+    #expect(EvidenceCheckRun.render(outcome, format: .human).contains("duplicateClaimID"))
+    #expect(EvidenceCheckRun.exitCode(outcome) == 1)
+  }
+
+  @Test(
+    "a verdict from a real probe run passes, and fails once its snippet or wrapper is edited, deleted or its hashes stripped — catches a hand-written or reused probe verdict"
+  )
+  func realProbeVerdictIsBoundToItsSources() async throws {
+    let repo = try await EvidenceRepo()
+    defer { repo.remove() }
+    let id = "ev-string-has-prefix-exists"
+    let probes = EvidenceRepo.layout.probesDirectory
+    let fixtures = Fixture.gateDirectory.appending(
+      path: "Fixtures/probe", directoryHint: .isDirectory)
+    try repo.write(
+      "\(probes)/\(id).snippet.swift",
+      try Data(contentsOf: fixtures.appending(path: "host-snippets/\(id).snippet.swift")))
+    let report = await ProbeCommandRun.run(
+      options: .init(
+        design: EvidenceRepo.design, package: fixtures.appending(path: "HostTarget").path,
+        target: "HostTarget", sdk: nil, cacheHome: repo.root.appending(path: "home")),
+      root: repo.root, runner: LiveProcessRunner())
+    #expect(report.verdict == .green, "\(report.message)")
+    let sdk = try #require(report.sdk)
+
+    let claim = Claim(
+      id: id, lane: "apple-docs", text: "String has hasPrefix.",
+      citation: Citation(kind: .probe, loc: "probes/" + ProbeIdentifier.fileName(forClaimID: id)),
+      status: .new)
+    try repo.writeClaims([claim])
+    let verdictPath = EvidenceRepo.layout.root + "/" + ProbeVerdictRecord.path(forClaimID: id)
+    let snippetPath = "\(probes)/\(id).snippet.swift"
+    let wrapperPath = "\(probes)/\(ProbeIdentifier.fileName(forClaimID: id))"
+    let pristine = try [verdictPath, snippetPath, wrapperPath].map {
+      ($0, try Data(contentsOf: repo.root.appending(path: $0)))
+    }
+    func restore() throws { for (path, data) in pristine { try repo.write(path, data) } }
+
+    let verdictKeys = try #require(
+      try JSONSerialization.jsonObject(with: pristine[0].1) as? [String: Any]
+    ).keys
+    #expect(Set(verdictKeys).isSuperset(of: ["snippetSha256", "sourceSha256"]))
+    let genuine = await repo.check(sdk: sdk)
+    #expect(try jsonLines(genuine) == [StrictLine(id: id, status: .supported, loc: nil)])
+    #expect(EvidenceCheckRun.exitCode(genuine) == 0)
+
+    var stripped = try #require(
+      try JSONSerialization.jsonObject(with: pristine[0].1) as? [String: Any])
+    stripped["snippetSha256"] = nil
+    stripped["sourceSha256"] = nil
+    let tampers: [(String, () throws -> Void)] = [
+      (
+        "probeSourceMismatch",
+        { try repo.write(snippetPath, "static func run() -> Bool { false }\n") }
+      ),
+      (
+        "probeSourceMismatch",
+        { try repo.write(wrapperPath, "enum Probe_ev_string_has_prefix_exists {}\n") }
+      ),
+      (
+        "probeSourceMissing",
+        { try FileManager.default.removeItem(at: repo.root.appending(path: snippetPath)) }
+      ),
+      (
+        "probeSourceMissing",
+        { try FileManager.default.removeItem(at: repo.root.appending(path: wrapperPath)) }
+      ),
+      (
+        "probeVerdictUnbound",
+        {
+          try repo.write(verdictPath, try JSONSerialization.data(withJSONObject: stripped))
+        }
+      ),
+    ]
+    for (failure, tamper) in tampers {
+      try restore()
+      try tamper()
+      let outcome = await repo.check(sdk: sdk)
+      #expect(EvidenceCheckRun.exitCode(outcome) == 1, "\(failure)")
+      #expect(EvidenceCheckRun.render(outcome, format: .human).contains(failure), "\(failure)")
+    }
   }
 
   @Test("a missing claims.jsonl exits 2 naming the file — catches an empty check passing")

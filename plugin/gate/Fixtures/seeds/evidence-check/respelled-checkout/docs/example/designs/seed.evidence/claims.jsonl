@@ -1,0 +1,1 @@
+{"citation":{"kind":"file","loc":".BUILD/Checkouts/samplepkg/Source.swift:L1","pin":"samplepkg@1.0.0","quote":"let value = 1"},"id":"ev-samplepkg-value-is-one","lane":"packages","status":"new","text":"samplepkg sets value to 1."}

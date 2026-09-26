@@ -1,0 +1,7 @@
+{
+  "claimId": "ev-string-has-prefix-exists",
+  "diagnostics": [],
+  "pins": {},
+  "sdk": "26.2",
+  "verdict": "pass"
+}

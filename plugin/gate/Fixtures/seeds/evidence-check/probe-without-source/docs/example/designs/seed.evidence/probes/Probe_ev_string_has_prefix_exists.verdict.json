@@ -1,0 +1,13 @@
+{
+  "claimId" : "ev-string-has-prefix-exists",
+  "diagnostics" : [
+
+  ],
+  "pins" : {
+
+  },
+  "sdk" : "26.2",
+  "snippetSha256" : "8babee81d0c2dc696e29eb5611c5d30dd1d8a12248e19135b7e0efef171585a2",
+  "sourceSha256" : "187d4abe37f6b15867e4b2a0c8f409a79f607c92b8e6d7bcc636f3655af7463b",
+  "verdict" : "pass"
+}

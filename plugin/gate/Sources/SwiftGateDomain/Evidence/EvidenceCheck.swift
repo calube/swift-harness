@@ -14,6 +14,11 @@ public protocol EvidenceSources {
   var packageResolved: Data? { get }
   /// The SDK version now in effect; `nil` when it couldn't be determined.
   var sdkVersion: String? { get }
+  /// The first prefix of the repo-relative `path` that is a symbolic link on disk; `nil` when
+  /// none is. A link can hide a package checkout, or a file outside the repo, behind a plain path.
+  func repoSymlink(_ path: String) -> String?
+  /// Like ``repoSymlink(_:)``, for a path relative to the design's evidence root.
+  func evidenceSymlink(_ path: String) -> String?
 }
 
 /// A value-typed ``EvidenceSources`` whose contents were read up front.
@@ -33,6 +38,10 @@ public struct InMemoryEvidenceSources: EvidenceSources, Sendable, Equatable {
     self.sdkVersion = sdkVersion
   }
 
+  /// Files held by value are never links.
+  public func repoSymlink(_ path: String) -> String? { nil }
+  public func evidenceSymlink(_ path: String) -> String? { nil }
+
   public func repoFile(_ path: String) -> String? { repoFiles[path] }
   public func evidenceFile(_ path: String) -> Data? { evidenceFiles[path] }
 }
@@ -51,6 +60,13 @@ public enum LocPathProblem: String, Sendable, Equatable, CaseIterable {
   case homeRelative = "home-relative"
   case homeVariable = "home-variable"
   case escapesRepoRoot = "escapes-repo-root"
+  /// A `..` anywhere, even one that stays inside the root: a loc names its file one way only, so
+  /// no respelling can move it out of the class (checkout or not) its rules depend on.
+  case parentReference = "parent-reference"
+  /// Under a `.build` directory but not a file of `.build/checkouts/<pkg>/`: a bare clone or a
+  /// build product carries no pin to check.
+  case buildOutput = "build-output"
+  case symlink
 }
 
 public enum RepoRelativePath {
@@ -62,6 +78,7 @@ public enum RepoRelativePath {
     if path.hasPrefix("/") { return .absolute }
     if path.hasPrefix("~") { return .homeRelative }
     var depth = 0
+    var climbs = false
     for component in path.split(separator: "/") {
       switch component {
       case "$HOME", "${HOME}":
@@ -71,11 +88,25 @@ public enum RepoRelativePath {
       case "..":
         if depth == 0 { return .escapesRepoRoot }
         depth -= 1
+        climbs = true
       default:
         depth += 1
       }
     }
-    return nil
+    return climbs ? .parentReference : nil
+  }
+}
+
+public enum PathPrefixes {
+  /// `a`, `a/b`, `a/b/c` for `a/./b//c`: every directory a lookup of the path walks through.
+  public static func of(_ path: String) -> [String] {
+    var prefixes: [String] = []
+    var current = ""
+    for component in path.split(separator: "/") where component != "." {
+      current = current.isEmpty ? String(component) : current + "/" + component
+      prefixes.append(current)
+    }
+    return prefixes
   }
 }
 
@@ -113,10 +144,19 @@ public enum EvidenceCheckFailure: Sendable, Equatable {
   case probeVerdictMalformed(detail: String)
   case probeVerdictForOtherClaim(claimId: String)
   case probeFailed
+  /// The verdict records no hash of the snippet and wrapper it judged, so nothing ties it to a
+  /// probe that was built.
+  case probeVerdictUnbound
+  /// `path` is evidence-root relative: the snippet or the wrapper the verdict hashed.
+  case probeSourceMissing(path: String)
+  case probeSourceMismatch(path: String)
   case answersFileMissing
   case answersFileMalformed(line: Int)
   case answerNotFound(runId: String, ordinal: Int)
   case answerQuestionMismatch
+  /// Another claim in the same file has this id; none of them is judged, so a later line can't
+  /// mask an earlier one.
+  case duplicateClaimID
 }
 
 /// Why a claim no longer reflects the source it was checked against (spec §8.5).
@@ -201,16 +241,30 @@ public struct ProbeVerdictRecord: Sendable, Equatable, Codable {
   /// Package identity → resolved version the probe was built against.
   public let pins: [String: String]
   public let sdk: String
+  /// Lowercase hex SHA-256 of the `<id>.snippet.swift` bytes the probe built. Optional only so a
+  /// verdict without it still decodes and fails `probeVerdictUnbound` by name.
+  public let snippetSha256: String?
+  /// Lowercase hex SHA-256 of the generated `Probe_<id>.swift`, the file a probe claim cites.
+  public let sourceSha256: String?
 
   public init(
     claimId: String, verdict: Outcome, diagnostics: [Diagnostic], pins: [String: String],
-    sdk: String
+    sdk: String, snippetSha256: String? = nil, sourceSha256: String? = nil
   ) {
     self.claimId = claimId
     self.verdict = verdict
     self.diagnostics = diagnostics
     self.pins = pins
     self.sdk = sdk
+    self.snippetSha256 = snippetSha256
+    self.sourceSha256 = sourceSha256
+  }
+
+  public static let snippetSuffix = ".snippet.swift"
+
+  /// `probes/<id>.snippet.swift`, relative to the evidence root: the probe's input.
+  public static func snippetPath(forClaimID claimID: String) -> String {
+    "probes/" + claimID + snippetSuffix
   }
 
   /// `probes/Probe_<id>.verdict.json`, relative to the evidence root.
@@ -295,9 +349,12 @@ public enum EvidenceCheck {
     _ claims: [Claim], sources: some EvidenceSources, mode: EvidenceCheckMode
   ) -> [EvidenceCheckResult] {
     var checker = Checker(sources: sources, mode: mode)
+    let counts = Dictionary(claims.map { ($0.id, 1) }, uniquingKeysWith: +)
     return claims.map { claim in
-      EvidenceCheckResult(
-        claimID: claim.id, kind: claim.citation.kind, outcome: checker.outcome(for: claim))
+      let outcome: EvidenceCheckResult.Outcome =
+        counts[claim.id, default: 0] > 1
+        ? .failed(.duplicateClaimID) : checker.outcome(for: claim)
+      return EvidenceCheckResult(claimID: claim.id, kind: claim.citation.kind, outcome: outcome)
     }
   }
 }
@@ -313,7 +370,8 @@ private struct Checker<Sources: EvidenceSources> {
 
   let sources: Sources
   let mode: EvidenceCheckMode
-  private var resolvedCache: ResolvedPinsState?
+  /// By project directory, `""` for the repo root.
+  private var resolvedCache: [String: ResolvedPinsState] = [:]
 
   init(sources: Sources, mode: EvidenceCheckMode) {
     self.sources = sources
@@ -331,10 +389,16 @@ private struct Checker<Sources: EvidenceSources> {
     }
   }
 
-  private mutating func resolvedPins() -> ResolvedPinsState {
-    if let resolvedCache { return resolvedCache }
+  /// The root's pins come from the `Package.resolved` the caller names; a nested project's from
+  /// the one beside its `.build`, since that's the file its checkouts were resolved from.
+  private mutating func resolvedPins(project: String = "") -> ResolvedPinsState {
+    if let cached = resolvedCache[project] { return cached }
     let state: ResolvedPinsState
-    if let data = sources.packageResolved {
+    let data =
+      project.isEmpty
+      ? sources.packageResolved
+      : sources.repoFile(project + "/Package.resolved").map { Data($0.utf8) }
+    if let data {
       if let pins = try? ResolvedPins.parse(data) {
         state = .pins(pins)
       } else {
@@ -343,7 +407,7 @@ private struct Checker<Sources: EvidenceSources> {
     } else {
       state = .missing
     }
-    resolvedCache = state
+    resolvedCache[project] = state
     return state
   }
 
@@ -351,13 +415,18 @@ private struct Checker<Sources: EvidenceSources> {
 
   private mutating func fileOutcome(_ citation: Citation) -> Outcome {
     let parsed = FileLoc.parse(citation.loc)
-    if let problem = RepoRelativePath.problem(parsed?.path ?? citation.loc) {
+    if let problem = RepoRelativePath.problem(parsed?.rawPath ?? citation.loc) {
       return .failed(.locPath(problem))
     }
     guard let loc = parsed else { return .failed(.locMalformed(expected: .fileLineRange)) }
+    if sources.repoSymlink(loc.path) != nil { return .failed(.locPath(.symlink)) }
+    let checkout = loc.checkout
+    if checkout == .buildOutput { return .failed(.locPath(.buildOutput)) }
     guard let quote = citation.quote, !quote.isEmpty else { return .failed(.quoteMissing) }
-    if let package = loc.checkoutPackage {
-      if let outcome = packagePinOutcome(citation.pin, package: package) { return outcome }
+    if case .package(let package, let project) = checkout {
+      if let outcome = packagePinOutcome(citation.pin, package: package, project: project) {
+        return outcome
+      }
     }
     guard let text = sources.repoFile(loc.path) else {
       return mode == .atRef ? .stale(.citedFileGone) : .failed(.citedFileMissing)
@@ -377,7 +446,9 @@ private struct Checker<Sources: EvidenceSources> {
     return .relocated(loc: FileLoc(path: loc.path, start: span.start, end: span.end).rendered)
   }
 
-  private mutating func packagePinOutcome(_ pin: String?, package: String) -> Outcome? {
+  private mutating func packagePinOutcome(_ pin: String?, package: String, project: String)
+    -> Outcome?
+  {
     guard let pin else { return .failed(.pinMissing) }
     guard let at = pin.lastIndex(of: "@"), at != pin.startIndex,
       pin.index(after: at) != pin.endIndex
@@ -387,7 +458,7 @@ private struct Checker<Sources: EvidenceSources> {
     guard pinnedPackage.lowercased() == package.lowercased() else {
       return .failed(.pinPackageMismatch(pinned: pinnedPackage, cited: package))
     }
-    switch resolvedPins() {
+    switch resolvedPins(project: project) {
     case .missing: return .failed(.packageResolvedMissing)
     case .malformed: return .failed(.packageResolvedMalformed)
     case .pins(let pins):
@@ -411,6 +482,7 @@ private struct Checker<Sources: EvidenceSources> {
     guard Self.isStoredFile(citation.loc, under: "snapshots/") else {
       return .failed(.locMalformed(expected: .snapshot))
     }
+    if sources.evidenceSymlink(citation.loc) != nil { return .failed(.locPath(.symlink)) }
     guard let pin = citation.pin, !pin.isEmpty else { return .failed(.pinMissing) }
     guard let quote = citation.quote, !quote.isEmpty else { return .failed(.quoteMissing) }
     guard let data = sources.evidenceFile(citation.loc) else {
@@ -442,6 +514,7 @@ private struct Checker<Sources: EvidenceSources> {
     guard pin.hasPrefix(pinPrefix), Self.isSHA256Hex(String(pin.dropFirst(pinPrefix.count)))
     else { return .failed(.pinMalformed) }
     guard pinPrefix + nameHash == pin else { return .failed(.captureNameMismatch) }
+    if sources.evidenceSymlink(citation.loc) != nil { return .failed(.locPath(.symlink)) }
     guard let data = sources.evidenceFile(citation.loc) else {
       return .failed(.storedFileMissing)
     }
@@ -472,6 +545,21 @@ private struct Checker<Sources: EvidenceSources> {
     }
     guard record.claimId == claim.id else {
       return .failed(.probeVerdictForOtherClaim(claimId: record.claimId))
+    }
+    guard let snippetHash = record.snippetSha256, let sourceHash = record.sourceSha256 else {
+      return .failed(.probeVerdictUnbound)
+    }
+    let bound = [
+      (ProbeVerdictRecord.snippetPath(forClaimID: claim.id), snippetHash), (loc, sourceHash),
+    ]
+    for (path, hash) in bound {
+      if sources.evidenceSymlink(path) != nil { return .failed(.locPath(.symlink)) }
+      guard let data = sources.evidenceFile(path) else {
+        return .failed(.probeSourceMissing(path: path))
+      }
+      guard CaptureDigest.sha256Hex(data) == hash else {
+        return .failed(.probeSourceMismatch(path: path))
+      }
     }
     if !record.pins.isEmpty {
       switch resolvedPins() {
@@ -506,6 +594,7 @@ private struct Checker<Sources: EvidenceSources> {
     guard let hash, file == "answers.jsonl" else {
       return .failed(.locMalformed(expected: .answer))
     }
+    if sources.evidenceSymlink(file) != nil { return .failed(.locPath(.symlink)) }
     let reference = loc[loc.index(after: hash)...]
     guard let slash = reference.lastIndex(of: "/"),
       slash != reference.startIndex,
@@ -548,23 +637,28 @@ private struct Checker<Sources: EvidenceSources> {
 
 /// A `file` citation's `loc`: `<path>:L<start>` or `<path>:L<start>-L<end>`, 1-based, inclusive.
 private struct FileLoc {
+  let rawPath: String
   let path: String
   let start: Int
   let end: Int
 
+  /// `path` comes back without `.` or empty components; `..` is the path rule's to reject, on
+  /// `rawPath`.
   static func parse(_ loc: String) -> FileLoc? {
     guard let marker = loc.range(of: ":L", options: .backwards) else { return nil }
-    let path = String(loc[..<marker.lowerBound])
+    let rawPath = String(loc[..<marker.lowerBound])
+    let path = PathPrefixes.of(rawPath).last ?? ""
     let parts = loc[marker.upperBound...].components(separatedBy: "-L")
     guard !path.isEmpty, parts.count <= 2, let start = Int(parts[0]), start >= 1 else {
       return nil
     }
     let end = parts.count == 2 ? Int(parts[1]) : start
     guard let end, end >= start else { return nil }
-    return FileLoc(path: path, start: start, end: end)
+    return FileLoc(path: path, start: start, end: end, rawPath: rawPath)
   }
 
-  init(path: String, start: Int, end: Int) {
+  init(path: String, start: Int, end: Int, rawPath: String? = nil) {
+    self.rawPath = rawPath ?? path
     self.path = path
     self.start = start
     self.end = end
@@ -574,21 +668,36 @@ private struct FileLoc {
     start == end ? "\(path):L\(start)" : "\(path):L\(start)-L\(end)"
   }
 
-  /// `<pkg>` for a `.build/checkouts/<pkg>/…` path, whose pin must match `Package.resolved`.
-  var checkoutPackage: String? {
-    let components = path.split(separator: "/").filter { $0 != "." }
-    guard components.count > 3, components[0] == ".build", components[1] == "checkouts" else {
+  enum Checkout: Equatable {
+    /// A file of `<project>/.build/checkouts/<package>/`; `project` is `""` at the repo root.
+    case package(String, project: String)
+    case buildOutput
+  }
+
+  /// `.build` and `checkouts` compare case-insensitively: a case-insensitive file system reads
+  /// `.BUILD/checkouts/…` from the same checkout, so it must meet the same pin.
+  var checkout: Checkout? {
+    let components = path.split(separator: "/")
+    guard let build = components.firstIndex(where: { $0.lowercased() == ".build" }) else {
       return nil
     }
-    return String(components[2])
+    guard components.count > build + 3, components[build + 1].lowercased() == "checkouts" else {
+      return .buildOutput
+    }
+    return .package(
+      String(components[build + 2]), project: components[..<build].joined(separator: "/"))
   }
 }
 
 private enum TextLines {
-  /// Lines without their terminators; a CRLF file splits like an LF one.
+  /// Lines without their terminators; a CRLF file splits like an LF one. A final terminator
+  /// ends the last line rather than starting an empty one, as context-pack counts lines.
   static func split(_ text: String) -> [String] {
     // `\r\n` is one `Character`, so it has to be named as a separator of its own.
-    text.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" }.map(String.init)
+    var lines = text.split(omittingEmptySubsequences: false) { $0 == "\n" || $0 == "\r\n" }
+      .map(String.init)
+    if lines.last == "" { lines.removeLast() }
+    return lines
   }
 
   /// The line span of the occurrence of `quote` closest to line `near`.
