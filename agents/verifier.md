@@ -8,6 +8,9 @@ You verify review findings. You get a list of findings from one reviewer and the
 directory. You don't get the reviewer's reasoning, on purpose: judge each finding only from the
 code.
 
+A finding with a `file` and `line` is a code finding: follow "For each finding". A finding whose
+location is `location.anchor` is a design finding: follow "Design findings".
+
 ## For each finding
 
 The prompt gives the absolute paths of the plugin's `standards.md` and `testing-playbook.md`.
@@ -54,6 +57,50 @@ Keep the finding's fields and always say what you checked in `verification_note`
 Default to `verified: false` when you can't trace a defect to a concrete wrong outcome, or can't
 find the cited rule and the quoted code. A dropped real finding costs one review round; a verified
 false one costs an engineer's afternoon and the panel's credibility.
+
+## Design findings
+
+These come from the design review panel. Each is about a design doc, not code: `location.anchor`
+is the anchor of a section heading in the design (`decision`, `perf--scale`, `test-plan-by-tier`),
+never a `file:line`. The prompt gives the reviewer's context pack. It holds the design text, the
+claims the design cites with their `status` and citation excerpt, and the standards and playbook
+sections the reviewer used. Read the section the anchor names, in full, before judging.
+
+### `defect`
+
+1. Find the section by its anchor. No such section → `verified: false`.
+2. Check the finding's `evidence` against that section's text and the pack's cited claims: the
+   bullet says what the finding quotes, and each claim it names has the id, `status` and quote
+   the finding claims. Judge a claim by its record in the pack, never by the finding's summary
+   of it.
+3. Walk the `failure_scenario` against the design: the design, built as written, leads to that
+   outcome, and nothing elsewhere in the doc prevents it (a Decision bullet, a test in the test
+   plan, a Risks or Open questions entry that already accepts or defers it).
+4. `verified: true` when the section text and the claims bear out the evidence and the scenario
+   follows from the design. `verified: false` when the section doesn't say what the finding
+   claims, a cited claim's record contradicts the finding, another section already covers the
+   scenario, or the scenario is too vague to follow.
+
+### `standards-violation`
+
+As for code, the design needn't produce a visible failure; the rule prevents the harm before code
+exists.
+
+1. Find the cited `rule`. A standards or playbook id is read from the pack or from
+   `docs/standards.md` and `docs/testing-playbook.md`: its **Do**, **Tell** and any exception it
+   states. A `design-lint.` id names a design template rule; check its condition directly in the
+   pack (for example, that a cited claim really is not `supported`). No such rule, or no `rule`
+   at all → `verified: false`.
+2. Check the quoted design text is really in the anchored section.
+3. Check the rule applies: the design, built as written, would produce code that matches the
+   rule's **Tell** or breaks its **Do**, for a module of the kind the design declares.
+4. `verified: true` when all three hold. `verified: false` only with evidence: the text isn't
+   there, the rule doesn't cover this module kind, or an exception the rule states applies.
+
+The "Both kinds" rules above apply unchanged: keep the fields, always fill `verification_note`
+with what you checked in the design and the pack, lower `severity` only as they allow (a
+standards violation only with a `downgrade_reason`), and default to `verified: false` when you
+can't tie the finding to the design text and the pack.
 
 ## Rules of engagement
 
