@@ -6,12 +6,13 @@ set -euo pipefail
 workspace="$PWD"
 # Cases link to this script from inside their own directory, since the runner refuses a
 # scaffold path outside the case; walk up from the case to the plugin manifest.
-plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-while [ ! -f "$plugin_root/plugin/.claude-plugin/plugin.json" ]; do
-  [ "$plugin_root" = "/" ] && { echo "scaffold: no plugin root above the case" >&2; exit 1; }
-  plugin_root="$(dirname "$plugin_root")"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+while [ ! -f "$repo_root/plugin/.claude-plugin/plugin.json" ]; do
+  [ "$repo_root" = "/" ] && { echo "scaffold: no plugin root above the case" >&2; exit 1; }
+  repo_root="$(dirname "$repo_root")"
 done
-plugin_root="$plugin_root/plugin"
+# The plugin ships from plugin/; the sample app and the ignore rules stay at the repo root.
+plugin_root="$repo_root/plugin"
 
 # The eval runner doesn't document the scaffold's environment; this record answers that for the
 # runner spike and names variables only, never their values.
@@ -40,9 +41,9 @@ cp -R "$real_cache/bin/$gate_hash" "$HOME/.cache/swift-harness/bin/"
 printf '%s' "$gate_hash" >"$HOME/.cache/swift-harness/stamps/$stamp_key"
 echo "gate_hash=$gate_hash" >>"$workspace/.eval/scaffold-env.txt"
 
-cp -R "$plugin_root/examples/SampleApp/." "$workspace/"
+cp -R "$repo_root/examples/SampleApp/." "$workspace/"
 # In this repo the root .gitignore covers SampleApp; the copy needs its own.
-{ cat "$plugin_root/.gitignore"; echo ".eval/"; } >"$workspace/.gitignore"
+{ cat "$repo_root/.gitignore"; echo ".eval/"; } >"$workspace/.gitignore"
 git -C "$workspace" init -q -b main
 git -C "$workspace" add -A
 git -C "$workspace" -c user.name=eval -c user.email=eval@example.invalid commit -qm baseline

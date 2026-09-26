@@ -5,12 +5,12 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-plugin_root="$here"
-while [ ! -f "$plugin_root/.claude-plugin/plugin.json" ]; do
-  [ "$plugin_root" = "/" ] && { echo "scaffold: no plugin root above the case" >&2; exit 1; }
-  plugin_root="$(dirname "$plugin_root")"
+repo_root="$here"
+while [ ! -f "$repo_root/plugin/.claude-plugin/plugin.json" ]; do
+  [ "$repo_root" = "/" ] && { echo "scaffold: no plugin root above the case" >&2; exit 1; }
+  repo_root="$(dirname "$repo_root")"
 done
-bash "$plugin_root/evals/scaffold/sampleapp.sh"
+bash "$repo_root/evals/scaffold/sampleapp.sh"
 
 core=Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
 tests=Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
