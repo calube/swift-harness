@@ -1,3 +1,5 @@
+import Foundation
+
 /// A repository's `.swiftgate.toml`, validated. Every instance satisfies the cross-field rules in
 /// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:exclude:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
@@ -214,6 +216,23 @@ public struct Config: Sendable, Equatable {
           .outOfRange(path: "docs.budgets.sections.\(name)", value: "\(value)", allowed: ">= 1"))
       }
     }
+    for file in docs.budgets.files.keys.sorted() {
+      let value = docs.budgets.files[file]!
+      requireRepoRelativePath(
+        file, "docs.budgets.files.\(file)", allowed: "a repository-relative path")
+      if value < 1 {
+        issues.append(
+          .outOfRange(path: "docs.budgets.files.\(file)", value: "\(value)", allowed: ">= 1"))
+      }
+    }
+    for (index, glob) in docs.proseExclude.enumerated() {
+      if glob.isBlank {
+        issues.append(.emptyValue(path: "docs.prose_exclude[\(index)]"))
+      } else {
+        requireRepoRelativePath(
+          glob, "docs.prose_exclude[\(index)]", allowed: "a repository-relative glob")
+      }
+    }
 
     if plan.maxParallel < 1 {
       issues.append(
@@ -394,19 +413,43 @@ public struct DocsConfig: Sendable, Equatable {
   /// Words per sentence before `prose` flags it; an estimate, tuned like the other prose budgets.
   public let sentenceCeiling: Int
   public let budgets: DocsBudgets
+  /// Repository-relative globs that `prose` and the word budgets skip. Links, ids and router
+  /// reachability still cover them. `**` spans any number of directories; `*` and `?` stay
+  /// within one. Empty by default, so a consumer repo's docs are all covered.
+  public let proseExclude: [String]
 
   public init(
     managedFiles: [String] = [],
     bannedPhrases: [BannedPhrase] = [],
     anchors: [String] = [],
     sentenceCeiling: Int = Self.defaultSentenceCeiling,
-    budgets: DocsBudgets = DocsBudgets()
+    budgets: DocsBudgets = DocsBudgets(),
+    proseExclude: [String] = []
   ) {
     self.managedFiles = managedFiles
     self.bannedPhrases = bannedPhrases
     self.anchors = anchors
     self.sentenceCeiling = sentenceCeiling
     self.budgets = budgets
+    self.proseExclude = proseExclude
+  }
+
+  public func isProseExcluded(_ repoRelativePath: String) -> Bool {
+    let path = repoRelativePath.split(separator: "/").map(String.init)
+    return proseExclude.contains { glob in
+      Self.matches(glob.split(separator: "/").map(String.init)[...], path[...])
+    }
+  }
+
+  private static func matches(_ pattern: ArraySlice<String>, _ path: ArraySlice<String>) -> Bool {
+    guard let head = pattern.first else { return path.isEmpty }
+    if head == "**" {
+      let rest = pattern.dropFirst()
+      return path.indices.contains { matches(rest, path[$0...]) }
+        || matches(rest, path[path.endIndex...])
+    }
+    guard let segment = path.first, fnmatch(head, segment, 0) == 0 else { return false }
+    return matches(pattern.dropFirst(), path.dropFirst())
   }
 }
 
@@ -445,14 +488,19 @@ public struct DocsBudgets: Sendable, Equatable {
   /// Per design-section-anchor word budget. A section absent here is bounded only by the
   /// whole-document `design` budget, not individually.
   public let sections: [String: Int]
+  /// Per-file word budgets keyed by repository-relative path. Each replaces the router or topic
+  /// budget for that one file. Empty by default.
+  public let files: [String: Int]
 
   public init(
     router: Int = Self.defaultRouterWords,
     topic: Int = Self.defaultTopicWords,
     design: Int = Self.defaultDesignWords,
     agentsMdLines: Int = Self.defaultAgentsMdLines,
-    sections: [String: Int] = Self.defaultSectionWords
+    sections: [String: Int] = Self.defaultSectionWords,
+    files: [String: Int] = [:]
   ) {
+    self.files = files
     self.router = router
     self.topic = topic
     self.design = design

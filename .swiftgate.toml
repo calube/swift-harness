@@ -32,6 +32,9 @@ reason = "test doubles shared by the gate's own tests"
 
 [docs]
 managed_files = ["docs/index.md", "AGENTS.md"]
+# Plans, handoffs, agent prompts and skills are working files for agents, not reader docs: prose
+# and word budgets skip them, while links, ids and router reachability still cover them.
+prose_exclude = ["docs/plans/**", "docs/handoffs/**", "agents/**", "skills/**"]
 
 [[docs.banned_phrases]]
 phrase = "leverage"
@@ -40,3 +43,12 @@ reason = "vague business jargon; say what changed"
 [[docs.banned_phrases]]
 phrase = "utilize"
 reason = "plain word is \"use\""
+
+# Long reference docs keep a budget near their current size, so they can't keep growing unnoticed.
+[docs.budgets.files]
+"docs/standards.md" = 5600
+"docs/testing-playbook.md" = 7100
+"docs/e2e-report.md" = 1900
+"docs/hooks.md" = 1050
+"docs/adrs/0001-review-severity-for-standards-violations.md" = 1750
+"docs/adrs/0002-consumer-plugin-in-plugin-dir.md" = 1050

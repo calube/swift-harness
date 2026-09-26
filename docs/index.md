@@ -1,7 +1,7 @@
 # swift-harness docs
 
-The one routing surface for this repo's docs. Every doc is reachable from here, directly or through
-one of the two area indexes below.
+The one routing surface for this repo's docs. Every doc is reachable from here, by a link on this
+page or through an area index below.
 
 ## If you're… → Read
 
@@ -21,23 +21,20 @@ one of the two area indexes below.
 
 ## The framework in 30 seconds
 
-- **Target:** SwiftUI, iOS 18+, Swift 6 language mode (complete concurrency checking). Xcode 26.2 /
-  Swift 6.2.3, pinned; `swiftgate doctor` blocks on a mismatch.
-- **Shape:** a thin app target plus local Swift packages. Core packages are platform-neutral,
-  host-testable (`swift test` on the Mac), import no UI framework, and treat every source of
-  nondeterminism (clock, RNG, UUID, network, persistence) as a `@Dependency`.
-- **TCA is the default architecture** (~99% of Core modules): `@Reducer` + `@ObservableState` +
-  `TestStore`, 1.x shape only (TCA 2.0 is a subscriber-only beta — do not use it).
-- **Every service is a `FooClient`/`FooClientLive` pair.** IO and vendor SDKs live only in
-  `*Live` modules, imported only by the app target. No singletons.
-- **`swiftgate` is the single enforcement point.** No hook, skill, or git hook re-implements a
-  check; a hook that does is a defect.
-- **Escape hatches carry a reason.** `@unchecked Sendable`, `try!`, `as!`, `fatalError`, and any
-  suppression need a same-line `swiftgate:allow <rule> — <reason>`; a bare allow is itself a
-  finding.
-- **Log and trace through `LogClient`/`TracingClient` only** — structured, privacy-tagged
-  attributes; no direct `Logger`/`OSSignposter`/`print`/vendor SDK outside their `*Live` modules.
-- **Comments carry only what the code can't give back** — no restated code, no diff/history
-  narration, no local paths, no codenames, no line-number references.
-- Status (as of the Foundation build): review findings carry `kind` (`defect` |
-  `standards-violation`), refined in [ADR 0001](adrs/0001-review-severity-for-standards-violations.md).
+- **Target:** SwiftUI, iOS 18+, Swift 6 language mode. Xcode 26.2 / Swift 6.2.3, pinned;
+  `swiftgate doctor` blocks on a mismatch.
+- **Shape:** a thin app target plus local Swift packages. Core packages import no UI framework, run
+  under `swift test` on the Mac, and reach every source of nondeterminism through `@Dependency`.
+- **TCA 1.x is the default architecture:** `@Reducer`, `@ObservableState` and `TestStore`. TCA 2.0
+  is a subscriber-only beta; don't use it.
+- **Every service is a `FooClient`/`FooClientLive` pair.** IO and vendor SDKs live only in `*Live`
+  modules, and only the app target imports those. No singletons.
+- **`swiftgate` is the single enforcement point.** A hook, skill or git hook that re-implements a
+  check is a defect.
+- **Escape hatches carry a reason:** `@unchecked Sendable`, `try!`, `as!`, `fatalError` and any
+  suppression need a same-line `swiftgate:allow <rule> — <reason>`.
+- **Log and trace through `LogClient`/`TracingClient` only**, with privacy-tagged attributes.
+- **Comments carry only what the code can't give back:** no restated code, history, local paths,
+  codenames or line numbers.
+- Review findings carry `kind` (`defect` | `standards-violation`), set out in
+  [ADR 0001](adrs/0001-review-severity-for-standards-violations.md).
