@@ -49,7 +49,7 @@ on the rates.
 | Check | Result |
 |---|---|
 | Graders tell good from bad | `corpus_test.mjs` fails under 4 planted runner bugs: an unlabelled finding passing a case, a recalled rule counted as a false positive, a missed rule counted as recalled, a near-miss with expected findings loading |
-| Failures trace to real causes | the first run had 12 mismatches. 5 traced to the cases (a planted `two` in a jargon seed, a test-plan bullet not in the canonical form, a dependency cycle, an undeclared vendor package, an undeclared test-support module). After the fixes, every remaining mismatch traces to the gate |
+| Failures trace to real causes | the first run had 17 mismatches. 6 traced to the cases: a planted `two` in a jargon seed, a test-plan bullet not in the canonical form, a dependency cycle, 2 undeclared vendor packages, an undeclared test-support module. After the fixes, every remaining mismatch traces to the gate |
 | Evals catch a broken harness | `--drop-rule` on `det.date-init`, `arch.live-dependency` and `prose.passive-voice` each dropped that rule's recall to 0 and made `--check` exit 1 |
 | Results hold still | 3 full runs gave the same verdict per case. The corpora are deterministic |
 | Coverage | the 5 `det.*` rules, 10 `arch.*` rules and 7 prose rules each have at least 1 positive and 1 near-miss. `docs-lint`, `design-lint`, `plan-lint`, `evidence check`, `comments`, `testlint` and the other lint families have no corpus yet |
