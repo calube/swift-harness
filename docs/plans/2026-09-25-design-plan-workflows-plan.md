@@ -1,7 +1,7 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–24 merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1439 tests). origin/main is at wave 21. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–24 merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1439 tests). Pushed to origin/main. Backups at origin backup/subproject-2-wave-<N>.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
 Next action: wave 25 — consumer-steering-channels (opus), contributor-agents-md-for-harness-developers (sonnet). Then STOP: waves 26–28 are attended acceptance runs. Follow the runbook's wave loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
