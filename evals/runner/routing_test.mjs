@@ -33,8 +33,8 @@ test('score counts a wrong extra load as a false positive and first load in the 
   assert.equal(s.passAllK, 0)
 })
 
-test('seeds: 120 cases, paraphrases share a split, near-misses never expect their own skill', () => {
-  const all = expand()
+test('seeds: 120 round-1 cases, paraphrases share a split, near-misses never expect their own skill', () => {
+  const all = expand().filter((c) => c.round === 1)
   assert.equal(all.length, 120)
   const splits = {}
   for (const c of all) (splits[`${c.skill}/${c.slug}`] ??= new Set()).add(c.split)
@@ -45,4 +45,13 @@ test('seeds: 120 cases, paraphrases share a split, near-misses never expect thei
     assert.equal(mine.length, 20, skill)
     assert.equal(mine.filter((c) => c.split === 40).length, 8, skill)
   }
+})
+
+test('seeds: round 2 adds only tdd and test-gate cases, with unique names', () => {
+  const all = expand()
+  const r2 = all.filter((c) => c.round === 2)
+  assert.ok(r2.length > 0)
+  assert.deepEqual([...new Set(r2.map((c) => c.skill))].sort(), ['tdd', 'test-gate'])
+  const names = all.map((c) => `${c.skill}/${c.slug}-${c.variant}`)
+  assert.equal(new Set(names).size, names.length)
 })

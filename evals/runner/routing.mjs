@@ -2,7 +2,7 @@
 // kept trace (run the eval with --keep-temp) and records every swift-harness Skill call in order,
 // then reports per-skill precision and recall, a confusion table and pass^k.
 //
-// Run: node evals/runner/routing.mjs <result.json>... [--split 40] [--out <dir>]
+// Run: node evals/runner/routing.mjs <result.json>... [--split 40] [--round 2] [--out <dir>]
 //
 // The case's tags carry the label: `load-<skill>` or `load-none`, `split-60` or `split-40`,
 // `for-<skill>`. Precision and recall count trials, not cases. A trial that loads a skill it
@@ -86,7 +86,7 @@ export function score(trials) {
   return { perSkill, confusion, cases, passAllK: passAll, casesTotal: cases.length, flaky }
 }
 
-export function collect(resultPaths, split) {
+export function collect(resultPaths, split, round) {
   const trials = []
   let costUsd = 0
   let durationSeconds = 0
@@ -99,6 +99,7 @@ export function collect(resultPaths, split) {
       const tags = tagsOf(readFileSync(join(result.suite.root, c.dir, 'case.yaml'), 'utf8'))
       const caseSplit = tagValue(tags, 'split-')
       if (split && caseSplit !== String(split)) continue
+      if (round && tagValue(tags, 'round-') !== String(round)) continue
       for (const run of c.arms.with ?? []) {
         let loaded = []
         if (run.tracePath && existsSync(run.tracePath)) {
@@ -148,8 +149,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     return i < 0 ? undefined : args.splice(i, 2)[1]
   }
   const split = flag('--split')
+  const round = flag('--round')
   const out = flag('--out')
-  const { trials, costUsd, durationSeconds, missingTraces } = collect(args, split)
+  const { trials, costUsd, durationSeconds, missingTraces } = collect(args, split, round)
   const summary = { split: split ?? 'all', trials: trials.length, costUsd, durationSeconds, missingTraces, ...score(trials), trialLog: trials }
   if (out) {
     mkdirSync(out, { recursive: true })

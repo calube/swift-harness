@@ -5,7 +5,7 @@
 // that should load instead (`none` when no harness skill fits), its split and 2 paraphrases. A
 // paraphrase becomes 1 case. Both paraphrases of a request share a split, so wording never leaks
 // from the tuning set into the held-out set. Source: suites.md, skill-routing.
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -295,6 +295,64 @@ const requests = {
   },
 }
 
+// Round 2 adds tuning requests in the shapes round 1's held-out set found and its tuning set
+// lacked: fixing a failing or flaky test for tdd, judging whether tests are real for test-gate.
+const round2 = {
+  tdd: {
+    should: [
+      ['red-after-refactor', 60, 'a test went red after a refactor', [
+        'I refactored the HTTPClient retry code and now a test is red. Get it passing again.',
+        'After my cleanup in HTTPClient, one of its tests fails. Make it pass.',
+      ]],
+      ['flaky-counter-test', 60, 'an intermittent test failure', [
+        'CounterFeatureTests fails maybe one run in five. Make it reliable.',
+        'There\'s a flaky test in the counter tests. Stop it failing at random.',
+      ]],
+      ['broken-snapshot-test', 60, 'a snapshot test broke after a UI change', [
+        'The counter snapshot test broke after I changed the button colour. Fix it.',
+        'CounterView\'s snapshot test has been failing since the colour change. Sort it out.',
+      ]],
+    ],
+    near: [
+      ['where-is-decrement-tested', 'none', 60, 'shares "tests"; asks where a test lives', [
+        'Which tests cover the decrement action? Just point me to them.',
+        'Show me where decrement is tested.',
+      ]],
+      ['would-tests-catch-anything', 'test-gate', 60, 'shares "tests"; asks whether tests are real', [
+        'Do the tests on this branch actually catch anything, or would they pass no matter what?',
+        'Tell me if any test in my change is fake.',
+      ]],
+    ],
+  },
+  'test-gate': {
+    should: [
+      ['tests-pulling-weight', 60, 'asks whether the change\'s tests are real', [
+        'Would the tests in my change fail if the code were wrong?',
+        'Are the new tests in this change pulling their weight, or are they padding?',
+      ]],
+      ['flip-to-ready', 60, 'about to mark the PR ready', [
+        'I\'m about to flip the PR to ready. Check the tests hold up first.',
+        'The PR goes to ready in a minute. Make sure the test side is solid.',
+      ]],
+    ],
+    near: [
+      ['make-red-test-green', 'tdd', 60, 'shares "test" and "branch"; asks to fix one', [
+        'One test on my branch is red. Fix it so it passes.',
+        'My branch has a failing test. Make it green.',
+      ]],
+      ['impact-wants-a-test', 'tdd', 60, 'shares the gate\'s words; asks to write the test', [
+        'The impact check says CounterCore changed without a test. Add the test.',
+        'swiftgate impact wants a test for my CounterCore change. Write it.',
+      ]],
+    ],
+  },
+}
+
+// Round 2's held-out requests. An independent agent wrote them before the description fix, from
+// the skill descriptions and the app alone, so the person tuning the skills didn't write them.
+const heldOutPath = join(dirname(fileURLToPath(import.meta.url)), 'routing_heldout_r2.json')
+const heldOut2 = existsSync(heldOutPath) ? JSON.parse(readFileSync(heldOutPath, 'utf8')) : {}
+
 const PROMPT_FRONTMATTER = `---
 runs: 3
 max_turns: 1
@@ -307,15 +365,31 @@ const skillMatch = (skill) => `"\\"skill\\":\\"swift-harness:${skill}\\""`
 const grader = (fields, body = '') =>
   `---\n${Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join('\n')}\n---\n${body}`
 
+// The held-out file omits the split, since every request in it is held out.
+const withSplit = (table, split) => Object.fromEntries(Object.entries(table).map(([skill, { should, near }]) => [skill, {
+  should: should.map(([slug, why, p]) => [slug, split, why, p]),
+  near: near.map(([slug, expect, why, p]) => [slug, expect, split, why, p]),
+}]))
+
 export function expand() {
   const out = []
-  for (const [skill, { should, near }] of Object.entries(requests)) {
-    for (const [slug, split, why, phrasings] of should) {
-      phrasings.forEach((prompt, i) => out.push({ skill, slug, kind: 'should-trigger', expect: skill, split, why, prompt, variant: 'ab'[i] }))
-    }
-    for (const [slug, expect, split, why, phrasings] of near) {
-      if (expect === skill) throw new Error(`${skill}/${slug}: a near-miss can't expect its own skill`)
-      phrasings.forEach((prompt, i) => out.push({ skill, slug, kind: 'near-miss', expect, split, why, prompt, variant: 'ab'[i] }))
+  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2]]
+  const seen = new Set()
+  for (const [table, round] of tables) {
+    for (const [skill, { should, near }] of Object.entries(table)) {
+      const add = (c) => {
+        const key = `${skill}/${c.slug}`
+        if (c.variant === 'a' && seen.has(key)) throw new Error(`${key}: duplicate slug`)
+        seen.add(key)
+        out.push({ skill, round, ...c })
+      }
+      for (const [slug, split, why, phrasings] of should) {
+        phrasings.forEach((prompt, i) => add({ slug, kind: 'should-trigger', expect: skill, split, why, prompt, variant: 'ab'[i] }))
+      }
+      for (const [slug, expect, split, why, phrasings] of near) {
+        if (expect === skill) throw new Error(`${skill}/${slug}: a near-miss can't expect its own skill`)
+        phrasings.forEach((prompt, i) => add({ slug, kind: 'near-miss', expect, split, why, prompt, variant: 'ab'[i] }))
+      }
     }
   }
   return out
@@ -352,7 +426,7 @@ function write(c) {
     'description: >',
     `  ${role}. It tests routing on a request that ${c.why}. Paraphrase ${c.variant} of`,
     `  ${c.slug}. Source: suites.md skill-routing. Generated by evals/runner/seed_routing.mjs.`,
-    `tags: [routing, ${SUITE_TAG}, for-${c.skill}, ${c.kind}, split-${c.split}, load-${c.expect}]`,
+    `tags: [routing, ${SUITE_TAG}, for-${c.skill}, ${c.kind}, split-${c.split}, load-${c.expect}, round-${c.round}]`,
     `expected_outcome: ${c.expect === 'none' ? 'No swift-harness skill loads.' : `The Skill tool loads swift-harness:${c.expect}.`}`,
     'context:',
     '  scaffold_script: scaffold.sh',
