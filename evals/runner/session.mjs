@@ -243,7 +243,7 @@ async function runTrial(c, arm, trial, opts) {
     if (c.scaffold) execFileSync('bash', [c.scaffold], { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'] })
     const args = ['-p', c.prompt, '--output-format', 'stream-json', '--verbose', '--setting-sources', 'project,local', '--no-session-persistence', '--max-turns', String(c.maxTurns), '--max-budget-usd', String(opts.sessionCost)]
     if (c.allowedTools.length > 0) args.push('--allowedTools', c.allowedTools.join(','))
-    if (arm === 'with') args.push('--plugin-dir', root)
+    if (arm === 'with') args.push('--plugin-dir', join(root, 'plugin'))
     if (opts.model) args.push('--model', opts.model)
     const session = await runClaude(args, { cwd: workspace, env, timeoutMs: c.timeoutSeconds * 1000 })
     writeFileSync(join(dir, 'trace.jsonl'), session.stdout)

@@ -1,4 +1,4 @@
-// Orchestration cases for workflows/review.js from evals/components.md, against stand-in agents.
+// Orchestration cases for plugin/workflows/review.js from evals/components.md, against stand-in agents.
 // Run: node tests/review_orchestration_test.mjs
 // The stubs follow the workflow runtime: a dead agent returns null, and a pipeline stage that
 // throws turns that item into null without failing its siblings. review_workflow_test.mjs stubs
@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const source = readFileSync(join(root, 'workflows/review.js'), 'utf8').replace(/^export const meta/m, 'const meta')
+const source = readFileSync(join(root, 'plugin/workflows/review.js'), 'utf8').replace(/^export const meta/m, 'const meta')
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 const script = new AsyncFunction('args', 'agent', 'pipeline', 'log', source)
 
@@ -25,8 +25,8 @@ const BUNDLE = '/work/app/.harness/runs/r1/review-input'
 const CORE = ['concurrency', 'architecture', 'test-quality', 'api-errors']
 // Under the gate's `swift test` the debug build exists; the shim would start a nested gate build
 // whenever its cache is cold. A plain `node` run falls back to the shim.
-const debugBuild = join(root, 'gate/.build/debug/swiftgate')
-const swiftgate = existsSync(debugBuild) ? debugBuild : join(root, 'bin/swiftgate')
+const debugBuild = join(root, 'plugin/gate/.build/debug/swiftgate')
+const swiftgate = existsSync(debugBuild) ? debugBuild : join(root, 'plugin/bin/swiftgate')
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 async function pipeline(items, ...stages) {

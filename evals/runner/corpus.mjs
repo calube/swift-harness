@@ -10,7 +10,7 @@
 // The runner never parses Swift or markdown itself; it only compares rule ids.
 //
 // `--drop-rule` removes a rule's findings before scoring. It plants a gate break for the
-// "evals catch a broken harness" check without touching gate/.
+// "evals catch a broken harness" check without touching plugin/gate/.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,7 +21,7 @@ export const KINDS = ['positive', 'evasion', 'near-miss', 'clean']
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 // SWIFTGATE points the corpora at another checkout's shim, to score a fix branch before it merges.
-const swiftgate = process.env.SWIFTGATE ?? join(root, 'bin/swiftgate')
+const swiftgate = process.env.SWIFTGATE ?? join(root, 'plugin/bin/swiftgate')
 
 export function loadCases(corpusDir) {
   const gate = basename(corpusDir)

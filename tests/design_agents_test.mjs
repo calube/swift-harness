@@ -15,7 +15,8 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// The plugin directory: every path this test reads is relative to it.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 
 export const NATIVE_MODELS = ['sonnet', 'opus', 'haiku', 'fable']
 export const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob']

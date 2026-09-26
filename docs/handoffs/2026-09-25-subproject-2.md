@@ -1,8 +1,8 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-25): IN PROGRESS. Waves 1–23 merged on local main, push tier GREEN (1420 tests); origin/main is at wave 21.
-Next action: wave 24; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
+State (2026-09-26): IN PROGRESS. Waves 1–24 merged on local main, push tier GREEN (1439 tests); Pushed to origin/main.
+Next action: wave 25, then waves 26–28 with the user present; if resuming in a FRESH orchestrator session, paste the kickoff prompt from
   docs/handoffs/subproject-2-orchestrator-runbook.md ("Kickoff prompt").
 Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook → the last section of
 docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved;
@@ -17,7 +17,7 @@ Needs the user: waves 26–28 (acceptance) are attended runs.
 | Sub-project 2 spec | [`designs/2026-09-25-design-plan-workflows-design.md`](../designs/2026-09-25-design-plan-workflows-design.md) |
 | Decision log (D1–D24) | [`2026-09-25-subproject-2-brainstorm-decisions.md`](2026-09-25-subproject-2-brainstorm-decisions.md) |
 | Foundation spec / plan | [`designs/2026-09-24-swift-harness-foundation-design.md`](../designs/2026-09-24-swift-harness-foundation-design.md) · [`plans/2026-09-24-foundation-plan.md`](../plans/2026-09-24-foundation-plan.md) (complete) |
-| Standards / playbook / ADRs | [`standards.md`](../standards.md) · [`testing-playbook.md`](../testing-playbook.md) · [`adrs/`](../adrs/README.md) |
+| Standards / playbook / ADRs | [`standards.md`](../../plugin/docs/standards.md) · [`testing-playbook.md`](../../plugin/docs/testing-playbook.md) · [`adrs/`](../adrs/README.md) |
 | End-to-end evidence | [`e2e-report.md`](../e2e-report.md) |
 | Worker brief | [`worker-brief.md`](worker-brief.md): reuse it for sub-project 2 workers |
 | Throwaway e2e repo | not kept between sessions; the acceptance waves recreate `../swift-harness-e2e` as [`e2e-report.md`](../e2e-report.md) describes |

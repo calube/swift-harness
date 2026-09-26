@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+// The plugin directory: every path this test reads is relative to it.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const rawSource = readFileSync(join(root, 'workflows/design-review.js'), 'utf8')
 const source = rawSource.replace(/^export const meta/m, 'const meta')
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor

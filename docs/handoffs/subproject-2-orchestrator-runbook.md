@@ -31,8 +31,8 @@ fresh laptop:
 2. Match the toolchain the waves ran on: Swift 6.2.3 (Xcode 26.2), node 24, `lefthook` on `PATH` (its install test
    skips without it), plus stock `rsync`, `python3` and `perl`. A different Swift minor version can change the toolchain facts in the plan's "How to work this plan"
    section. Re-check them before wave 1 on that machine, and record any change here.
-3. Build once so worktrees have a `.build` to clone: `swift build --package-path gate`, then
-   `bin/swiftgate check --tier push`. The first build compiles SwiftSyntax and takes minutes. The shim's own
+3. Build once so worktrees have a `.build` to clone: `swift build --package-path plugin/gate`, then
+   `plugin/bin/swiftgate check --tier push`. The first build compiles SwiftSyntax and takes minutes. The shim's own
    cache, `~/.cache/swift-harness/`, fills itself.
 4. Claude Code only needs the built-in `general-purpose` agent, the `sonnet` and `opus` models, and
    `SendMessage` for fix rounds. The build uses no user-level plugin or skill.
@@ -50,7 +50,7 @@ fresh laptop:
 2. Read the last section of the [interfaces note](subproject-2-interfaces.md) to see what the latest wave built.
 3. Run `git worktree list` and `git log --oneline -15` in the repo. A leftover `../swift-harness-<task-id>`
    worktree means a wave was cut off mid-flight. Its branch holds the worker's commits. Check them, and merge or redo.
-4. Confirm `main` is green before starting anything: `bin/swiftgate check --tier push`.
+4. Confirm `main` is green before starting anything: `plugin/bin/swiftgate check --tier push`.
 
 ## The wave loop
 
@@ -76,8 +76,8 @@ From the repo root, for each task in the wave:
 
 ```sh
 git worktree add -q ../swift-harness-<task-id> -b <task-id> main
-cp -cR gate/.build ../swift-harness-<task-id>/gate/.build
-/usr/bin/find ../swift-harness-<task-id>/gate/.build -type d -name ModuleCache -prune -exec rm -rf {} +
+cp -cR plugin/gate/.build ../swift-harness-<task-id>/plugin/gate/.build
+/usr/bin/find ../swift-harness-<task-id>/plugin/gate/.build -type d -name ModuleCache -prune -exec rm -rf {} +
 ```
 
 The APFS clone saves a cold SwiftSyntax build. The cloned `ModuleCache` has headers that point at the old path and
@@ -108,7 +108,7 @@ memory pressure.
   > - Test-first. Stay inside your write set; if you must go outside it, stop and report why.
   > - Run every build, test and gate in the FOREGROUND: no Monitor, no run_in_background, and a Bash timeout of up
   >   to 600000. Ending your turn is your return value.
-  > - Done means `bin/swiftgate check --tier <gate>` is GREEN, plus the brief's self-gate. Main is green, so any
+  > - Done means `plugin/bin/swiftgate check --tier <gate>` is GREEN, plus the brief's self-gate. Main is green, so any
   >   red finding is yours.
   > - Commit messages describe behaviour, never contain task ids or wave numbers, and end with the repo's
   >   Co-Authored-By trailer.
@@ -151,7 +151,7 @@ needed, start a fresh worker with a fresh prompt.
 
 ```sh
 git merge --no-ff -q -m "Merge: <the branch's last commit subject>" <task-id>   # each branch, in id order
-bin/swiftgate check --tier push                                                # must be GREEN on merged main
+plugin/bin/swiftgate check --tier push                                                # must be GREEN on merged main
 ```
 
 Then, in one commit:
@@ -189,9 +189,11 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 
 - Latency-budget tests assert the fastest of several runs (cold hooks, cached shim, hook commands). A flake there
   now means a real regression or a new single-shot timing assert: check which before retrying.
-- The review workflow reads a contributor ADR at runtime until the packaging wave moves the contract into
-  `plugin/docs/` ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md), steering).
-- From the packaging wave on, the root `bin/swiftgate` is gone. Run `plugin/bin/swiftgate`, and seed worktrees by
-  cloning `plugin/gate/.build` instead of `gate/.build`.
+- A worktree cut from a commit before the packaging wave still has `gate/`: seed it from `gate/.build` and run
+  `bin/swiftgate`. After moving an existing `.build` under `plugin/gate/`, delete its `ModuleCache` too.
+- Another session may merge to local `main` while a wave runs, so re-check `git log` before merging. A wave that
+  moves paths needs a sweep of whatever landed meanwhile: new tests, `evals/` runners and scaffolds.
+- Ready-tier prove measures from `origin/main` unless you pass `--base main`. While origin lags, a wave's own ready
+  run needs `--base main`, or earlier waves' tests show up as `prove.compile-only`.
 - The acceptance waves are attended. The user answers the frame questions, clicks Approve, and approves the merge
   and push, so schedule them when the user is present.

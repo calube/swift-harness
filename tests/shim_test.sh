@@ -12,14 +12,20 @@ trap '
   rm -rf "$work"
 ' EXIT
 
-mkdir -p "$work/repo"
-cp -R "$repo_src/bin" "$work/repo/"
+mkdir -p "$work/repo/plugin"
+cp -R "$repo_src/plugin/bin" "$repo_src/plugin/templates" "$work/repo/plugin/"
 # .build can run into the hundreds of MB; rsync leaves it behind instead of copying it and
 # throwing it away.
-rsync -a --exclude .build "$repo_src/gate/" "$work/repo/gate/"
-export SWIFTGATE_CACHE_DIR="$work/cache"
+rsync -a --exclude .build "$repo_src/plugin/gate/" "$work/repo/plugin/gate/"
+# An installed plugin's hooks get CLAUDE_PLUGIN_DATA, which outlives the per-version install
+# directory, so the build lands there. The user cache is where a contributor checkout builds, and
+# it must stay untouched while the data directory is set.
+unset SWIFTGATE_CACHE_DIR
+export CLAUDE_PLUGIN_DATA="$work/plugin-data"
+export XDG_CACHE_HOME="$work/user-cache"
 export SWIFTGATE_BUILD_CONFIG=debug
-shim="$work/repo/bin/swiftgate"
+cache="$CLAUDE_PLUGIN_DATA"
+shim="$work/repo/plugin/bin/swiftgate"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -29,7 +35,7 @@ touch "$work/project/.swiftgate.toml"
 
 wait_for_background_build() {
   for _ in $(seq 1 600); do
-    ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1 || return 0
+    ls "$cache"/building-* >/dev/null 2>&1 || return 0
     sleep 1
   done
   return 1
@@ -37,10 +43,10 @@ wait_for_background_build() {
 
 # Kills this run's background build (and every child it spawned) so a killed sample never leaves
 # a build running, or contending for CPU, into the next sample. `--package-path` and every source
-# file the build touches sit under $work/repo/gate, so this pattern reaches the swift build
+# file the build touches sit under $work/repo/plugin/gate, so this pattern reaches the swift build
 # driver and its compiler children without reaching anything outside this test.
 kill_background_build() {
-  local pattern="$work/repo/gate"
+  local pattern="$work/repo/plugin/gate"
   local waited
   for signal in "" "-9"; do
     pkill $signal -f "$pattern" >/dev/null 2>&1 || true
@@ -53,7 +59,7 @@ kill_background_build() {
 }
 
 # A hook on a cold cache must answer at once and build in the background. Each sample resets
-# $SWIFTGATE_CACHE_DIR to empty so every repeat measures the same cold state, not the warm path
+# the data directory to empty so every repeat measures the same cold state, not the warm path
 # after sample 1. Letting every cold sample's real background build run to completion would pay
 # for 3 debug builds instead of 1 — tripling this test's own contribution to machine load, the
 # very thing the other budgets in this file are being made robust to — so samples before the last
@@ -62,7 +68,7 @@ kill_background_build() {
 cold_samples=()
 cold_note=""
 for i in 1 2 3; do
-  rm -rf "$SWIFTGATE_CACHE_DIR"
+  rm -rf "$cache"
   hook_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
   hook_out="$(cd "$work/project" && echo '{}' | "$shim" hook stop)" ||
     fail "cold hook $i exited non-zero"
@@ -101,7 +107,7 @@ hook_ms="$(printf '%s\n' "${cold_samples[@]}" | sort -n | head -1)"
   fail "cold hooks took ${cold_samples[*]}ms, fastest ${hook_ms}ms, budget 2000ms${cold_note}"
 
 out1="$("$shim" --version 2>"$work/err1")"
-[ "$out1" = "0.1.0" ] || fail "first run printed '$out1': $(cat "$SWIFTGATE_CACHE_DIR"/build-*.log)"
+[ "$out1" = "0.1.0" ] || fail "first run printed '$out1': $(cat "$cache"/build-*.log)"
 [ ! -s "$work/err1" ] || fail "the background build did not populate the cache: $(cat "$work/err1")"
 
 # The cached path is idempotent (no rebuild, no state change) once warm, so load can only ever
@@ -119,6 +125,11 @@ done
 elapsed="$(printf '%s\n' "${samples[@]}" | sort -n | head -1)"
 [ "$elapsed" -lt 1000 ] || fail "cached runs took ${samples[*]}ms, fastest ${elapsed}ms, budget 1000ms"
 
+built=("$cache"/bin/*/swiftgate)
+[ -x "${built[0]}" ] || fail "no swiftgate binary under the plugin data directory $cache/bin"
+[ ! -e "$XDG_CACHE_HOME/swift-harness" ] ||
+  fail "the shim wrote to the user cache while CLAUDE_PLUGIN_DATA was set"
+
 ln -s "$shim" "$work/linked-swiftgate"
 "$work/linked-swiftgate" --version >/dev/null 2>"$work/err3" || fail "symlinked shim failed"
 [ ! -s "$work/err3" ] || fail "symlinked shim rebuilt"
@@ -127,26 +138,66 @@ ln -s "$shim" "$work/linked-swiftgate"
 # must still hash to the cached binary, or every hook goes quiet for a cold rebuild. Deleting the
 # stamp forces a rehash. A hook on a miss builds in the background without writing a stamp, so a
 # missing stamp or a build lock is the miss.
-cached_hash="$(ls "$SWIFTGATE_CACHE_DIR/bin")"
+cached_hash="$(ls "$cache/bin")"
 [ "$(printf '%s\n' "$cached_hash" | wc -l | tr -d ' ')" = 1 ] ||
   fail "expected one cached binary, found: $cached_hash"
 for locale in C en_US.UTF-8; do
-  rm -f "$SWIFTGATE_CACHE_DIR"/stamps/*
+  rm -f "$cache"/stamps/*
   payload="{\"session_id\":\"shim-test\",\"cwd\":\"$work/elsewhere\",\"hook_event_name\":\"Stop\"}"
   (cd "$work/elsewhere" && echo "$payload" | LC_ALL="$locale" "$shim" hook stop >/dev/null) ||
     fail "hook under LC_ALL=$locale exited non-zero"
-  if ls "$SWIFTGATE_CACHE_DIR"/building-* >/dev/null 2>&1; then
+  if ls "$cache"/building-* >/dev/null 2>&1; then
     kill_background_build || true
     fail "LC_ALL=$locale missed the cached binary $cached_hash and started a rebuild"
   fi
-  stamped="$(cat "$SWIFTGATE_CACHE_DIR"/stamps/* 2>/dev/null || true)"
+  stamped="$(cat "$cache"/stamps/* 2>/dev/null || true)"
   [ "$stamped" = "$cached_hash" ] ||
     fail "LC_ALL=$locale hashed the same sources to '$stamped', cached binary is $cached_hash"
 done
 
-echo "// changed" >> "$work/repo/gate/Sources/SwiftGateDomain/SwiftGateDomain.swift"
+# Bootstrap links ~/.local/bin/swiftgate, which git hooks call, to the shim it ran through: the
+# plugin's own. A link left at a checkout-root bin/swiftgate from before the plugin moved into
+# plugin/ is repointed, whether its old target still exists or not.
+for old_exists in yes no; do
+  app="$work/app-$old_exists"
+  home="$work/home-$old_exists"
+  mkdir -p "$app/Packages/Core" "$home/.local/bin" "$work/old-checkout/bin"
+  echo '// swift-tools-version: 6.2' >"$app/Packages/Core/Package.swift"
+  git -C "$app" init -q
+  if [ "$old_exists" = yes ]; then
+    printf '#!/bin/sh\n' >"$work/old-checkout/bin/swiftgate"
+    chmod +x "$work/old-checkout/bin/swiftgate"
+  else
+    rm -f "$work/old-checkout/bin/swiftgate"
+  fi
+  ln -sf "$work/old-checkout/bin/swiftgate" "$home/.local/bin/swiftgate"
+  (cd "$app" && HOME="$home" "$shim" bootstrap --apply >"$work/bootstrap-$old_exists.log" 2>&1) ||
+    fail "bootstrap --apply failed (old shim exists: $old_exists): $(cat "$work/bootstrap-$old_exists.log")"
+  linked="$(readlink "$home/.local/bin/swiftgate")"
+  expected="$(cd "$work/repo/plugin/bin" && pwd -P)/swiftgate"
+  [ "$linked" = "$expected" ] ||
+    fail "~/.local/bin/swiftgate points at '$linked', not the plugin shim '$expected' (old shim exists: $old_exists)"
+done
+
+echo "// changed" >> "$work/repo/plugin/gate/Sources/SwiftGateDomain/SwiftGateDomain.swift"
 "$shim" --version >/dev/null 2>"$work/err4"
 grep -q "building swiftgate" "$work/err4" || fail "source change did not trigger rebuild"
+
+# Without a plugin data directory (a contributor checkout, or the ~/.local/bin link from a
+# terminal) the shim falls back to the user cache. A cold hook only starts the build, so this
+# costs no compile: the build it started is killed once its lock shows where it went.
+(cd "$work/project" && echo '{}' | env -u CLAUDE_PLUGIN_DATA "$shim" hook stop) ||
+  fail "cold hook without CLAUDE_PLUGIN_DATA exited non-zero"
+# The lock is taken before the hook returns; the log only once the detached build starts.
+ls -d "$XDG_CACHE_HOME"/swift-harness/building-* >/dev/null 2>&1 ||
+  fail "without CLAUDE_PLUGIN_DATA the shim did not build into the user cache"
+# The hook detached a subshell that runs the shim, which may not have reached `swift build` yet,
+# so the subshell itself is killed too: every process of it names this run's plugin copy.
+for _ in $(seq 1 25); do
+  pkill -9 -f "$work/repo/plugin/" >/dev/null 2>&1 || true
+  sleep 0.2
+  pgrep -f "$work/repo/plugin/" >/dev/null 2>&1 || break
+done
 
 # Every background build this test started was either killed and reaped, or let finish — none
 # should still be running.
