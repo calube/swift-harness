@@ -25,12 +25,13 @@ os = {{OS}}
 # [clients]
 # vendor_modules = ["FirebaseAnalytics"]
 
-# docs-lint and prose are opt-in: repo-specific anchors, banned phrases (each needs a reason),
-# and per-file word budgets. Router and topic default to 400 / 800 words; AGENTS.md defaults to
-# 60 lines; a whole design doc defaults to ~1,200 words.
-# [docs]
-# managed_files = ["docs/index.md"]
-#
+# docs-lint and prose: the routers bootstrap stamps are managed files. Repo-specific anchors,
+# banned phrases (each needs a reason) and per-file word budgets are opt-in. Router and topic
+# default to 400 / 800 words; AGENTS.md defaults to 60 lines; a whole design doc defaults to
+# ~1,200 words.
+[docs]
+managed_files = ["docs/index.md", "AGENTS.md"]
+
 # [[docs.banned_phrases]]
 # phrase = "leverage"
 # reason = "vague business jargon; say what changed"

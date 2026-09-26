@@ -1,6 +1,6 @@
 ## swift-harness
 
-This repository is gated by the swift-harness plugin. `swiftgate` is the only gate: skills, Claude
+The swift-harness plugin gates this repository. `swiftgate` is the only gate: skills, Claude
 Code hooks and git hooks all call it, and none of them re-implement a check.
 
 **Verdicts.** `GREEN` means the code is good. `RED` means the code is wrong: fix the code. `BLOCKED`
@@ -24,7 +24,7 @@ by their `index.md`:
 - `testing-playbook.md`: tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
 
 **This repository's own docs.** [`docs/index.md`](docs/index.md) routes every doc this repository
-has — designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.
+has: designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.
 
 **Skills.** `/swift-harness:architecture` (design a module, pick its kind),
 `/swift-harness:tdd` (test-first), `/swift-harness:test-gate` (pre-ready sequence),
@@ -33,11 +33,11 @@ has — designs, plans, ADRs, handoffs. Add a row there whenever you add a new o
 
 **Hard rules.**
 
-- Never run `xcodebuild` directly, erase simulators, or pass snapshot record flags: go through
+- Never run raw `xcodebuild`, erase simulators, or pass snapshot record flags: go through
   `swiftgate` (`swiftgate test --tier t2|t3`, `swiftgate snapshots record`).
 - Never hand-edit snapshot references, `Package.resolved`, `.xcresult` bundles, or plan/ledger
   state.
 - Waive a rule only on the offending line: `// swiftgate:allow <rule-id> — <reason>`. A bare allow
   is itself RED.
-- Project settings live in `.swiftgate.toml`; this block is managed by `swiftgate bootstrap`, so
+- Project settings live in `.swiftgate.toml`; `swiftgate bootstrap` manages this block, so
   edit outside the markers.
