@@ -127,6 +127,56 @@ After each run:
 A case whose failures all trace to the case or the grader isn't a result. Fix it and rerun
 before you report a number.
 
+## Lessons from the routing rounds
+
+Each rule below cost a rerun or a wrong number once. The results summaries under
+`evals/results/2026-09-26-routing-*` hold the evidence.
+
+**Measuring**
+
+- Price a round from the mean cost of a real batch, not from 1 run. The first routing estimate
+  was 0.067 USD per run; the batch averaged 0.107, and the cost cap cut it at 162 of 216 runs.
+- Routing runs use `max_turns: 1`. Every skill load in 300 trials came in the first turn. With 2
+  turns, the agent spends turn 2 spawning a shell subagent, at up to 0.48 USD.
+- `allowed_tools` doesn't stop `Agent` or `ToolSearch`. Only the turn cap keeps a run small.
+- `--max-cost-usd` ends the run with exit 0. Read `partial` and `partialReason` in the JSON.
+- `--case` takes 1 glob with no brace sets. To run a hand-picked set, add a temporary tag to
+  those `case.yaml` files, run `--tag`, then `git checkout -- evals/cases`.
+- `--tag round-N` matches every split. Select a split by tag before a tuning run, or the run
+  spends money on held-out cases you then can't read.
+- In zsh an unquoted `$FLAGS` stays 1 argument. Write the flags out, or use an array.
+- Keep traces with `--keep-temp`, score them with `node evals/runner/routing.mjs`, then delete
+  only the `e-*` directories that the result JSON names.
+- Plug the laptop in for a long batch. The machine hibernated mid-run at 1% battery; the grades
+  held, but that batch's wall time didn't.
+
+**Designing cases**
+
+- A prompt that says "my change", "my branch" or "staged" needs a scaffold with a change in it
+  (`sampleapp-with-change.sh`). On a clean tree the agent answers, with reason, that there's nothing to
+  review, and the case fails for the wrong reason.
+- Tune on the 60 and report the 40. Once you have read a held-out prompt, it's no longer held
+  out. Have a separate agent write each new held-out set from the skill descriptions and the
+  app alone, before the change it checks. The independent sets found 2 shapes that the tuner's
+  own cases missed.
+- Run new cases red first: on the unchanged harness they must fail for the reason the change
+  targets.
+- A near-miss fails only on a wrong load, so a bait sentence in a description ("use it for every
+  request that mentions a test") showed nothing: 0 wrong loads in 16. Prove precision with a
+  description that claims its neighbours' jobs. That one caused 6 wrong loads in 8.
+- Deciding to keep trials that ran by accident is fair only if you decide before you read them.
+
+**Harness and repo**
+
+- The plugin ships from `plugin/`, while `examples/`, `evals/` and `.gitignore` stay at the repo
+  root. A scaffold needs both roots. The move broke every scaffold until they kept the 2 roots
+  apart.
+- `tests/skill_commands_test.mjs` needs a built `swiftgate`. It finds
+  `plugin/gate/.build/debug/swiftgate`. In a fresh worktree, point `SWIFTGATE_BIN` at a built
+  binary for the same `gate/` sources.
+- Another session merges plan waves into `main`. Before you merge, run `git log main` and
+  `git worktree list`, and message that session.
+
 ## Commit
 
 1 commit per coherent step on the eval branch, message `test(evals): …` for cases and runners,
