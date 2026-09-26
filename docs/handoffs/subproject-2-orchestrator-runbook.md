@@ -36,7 +36,12 @@ fresh laptop:
    cache, `~/.cache/swift-harness`, fills itself.
 4. Claude Code only needs the built-in `general-purpose` agent, the `sonnet` and `opus` models, and
    `SendMessage` for fix rounds. The build uses no user-level plugin or skill.
-5. The sibling e2e repo `../swift-harness-e2e` isn't kept. The acceptance waves recreate it as
+5. Node tests run under node 24 without changing the global default: `mise exec node@24 -- node tests/<x>_test.mjs`.
+6. `plugin-dev:plugin-validator` and `plugin-dev:skill-reviewer` may be absent. Workers substitute
+   `claude plugin validate --strict` on a temp plugin-shaped copy (`.claude-plugin/plugin.json` plus the component
+   dirs; at the repo root it only checks the marketplace manifest) and, for skills, a review against the
+   `anthropic-skills:skill-creator` skill.
+7. The sibling e2e repo `../swift-harness-e2e` isn't kept. The acceptance waves recreate it as
    `docs/e2e-report.md` describes.
 
 ## Resume from cold
@@ -168,6 +173,19 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - Fix rounds through `SendMessage` cost about 10–40k tokens each. They're far cheaper than re-running a worker.
 
 ## Known issues to watch
+
+- Every command task adds its subcommand to `NewSubcommandRegistrationTests.implemented` on its own line at the end
+  of the array, so parallel command tasks conflict there. Resolve by keeping both lines. Agent tasks conflict the
+  same way in `tests/design_agents_test.mjs` `CONTRACTS`; keep both blocks.
+- If a registration invocation lacks a required argument, update that test tuple. Never make the argument optional
+  to satisfy it (a placeholder default is pitfall 2).
+- `rm`/`cp` are aliased interactive in the user's shell; tell every worker to use `/bin/rm -f`/`/bin/cp -f`.
+- A test that runs a real `swiftgate` binary sets `cwd` and `LLVM_PROFILE_FILE` to a temp dir, or the push tier's
+  coverage build leaves `default.profraw` in the checkout. Check `git status` after each merged push run.
+- Before overriding a worker's choice that cites a skill (e.g. Artifact behaviour), check the skill text. The
+  artifact skills say Artifacts render `<pre class="mermaid">` natively; a fix round that assumed otherwise had to
+  be reverted.
+- Coverage findings diff against `origin/main`, so they reset after each push to origin.
 
 - Latency-budget tests assert the fastest of several runs (cold hooks, cached shim, hook commands). A flake there
   now means a real regression or a new single-shot timing assert: check which before retrying.
