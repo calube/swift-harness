@@ -255,7 +255,7 @@ struct ProbeBuilderTests {
           "xcodebuild", "build", "-quiet", "-scheme", "ProbeScratch",
           "-destination", "generic/platform=iOS Simulator",
           "-derivedDataPath", sandbox.root.appending(path: ".harness/probe/DerivedData").path,
-          "-skipMacroValidation",
+          "-skipMacroValidation", "-onlyUsePackageVersionsFromResolvedFile",
         ])
       #expect(
         build.workingDirectory
@@ -274,7 +274,7 @@ struct ProbeBuilderTests {
         evidenceRoot: sandbox.evidenceRoot, target: Self.hostTarget())
       let build = try #require(runner.invocations.first(where: Self.isBuild))
       #expect(build.executable == "swift")
-      #expect(build.arguments == ["build"])
+      #expect(build.arguments == ["build", "--only-use-versions-from-resolved-file"])
       #expect(
         build.workingDirectory
           == sandbox.root.appending(path: ".harness/probe/ProbeScratch").path)

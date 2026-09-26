@@ -50,6 +50,7 @@ struct RuleIndexTests {
     let harness = [
       FormatCheck.parseRuleID, RuleEngine.allowMissingReasonRuleID, BudgetCheck.ruleID,
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,
+      ResolvedFileGuard.rewrittenRuleID,
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
       JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
       PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,

@@ -47,7 +47,10 @@ public struct LiveMutationToolchain: MutationToolchain {
     do {
       output = try await runner.run(
         ProcessInvocation(
-          executable: executable, arguments: ["build", "--build-tests"],
+          executable: executable,
+          // The committed pins are the only ones this scratch tree may trust; an unresolvable
+          // pin must fail the build, never resolve to something else and rewrite the lockfile.
+          arguments: ["build", "--build-tests", "--only-use-versions-from-resolved-file"],
           workingDirectory: Self.directory(root, packageDirectory), timeout: buildTimeout))
     } catch {
       return .unavailable("swift build: \(error)")

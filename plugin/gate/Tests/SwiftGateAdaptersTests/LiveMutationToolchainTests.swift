@@ -110,7 +110,8 @@ struct LiveMutationToolchainTests {
     }
     #expect(log.contains("error:"))
     let invocation = try #require(rejecting.invocations.first)
-    #expect(invocation.arguments == ["build", "--build-tests"])
+    #expect(
+      invocation.arguments == ["build", "--build-tests", "--only-use-versions-from-resolved-file"])
     #expect(invocation.workingDirectory == "/scratch/tree/Packages/Probe")
 
     let missing = FakeProcessRunner { invocation throws(ProcessRunnerError) in
