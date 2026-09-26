@@ -237,3 +237,92 @@ Needs the attended run: the fixed `status` skill end to end. It reads the user's
 `projects.json`, and registering the scratch copy would have written to the real home directory.
 
 Cost: 3 sessions, $0.38 (7 s, 44 s, 97 s); about 9 minutes in all with the cold build.
+
+## Rehearsal (unattended, 2026-09-26): SampleApp standard design
+
+A rehearsal, not the attended acceptance run. The user was away and approved running it unattended.
+The orchestrator answered every question, and the session recorded each answer as
+"orchestrator-answered rehearsal", never as the user's. Nobody approved the design, and nobody
+published, merged or pushed anything.
+
+Setup: a scratch copy of `examples/SampleApp` (`git init`, local bare `origin`), bootstrapped with
+`HOME` pointed at a scratch directory. A git-ignored `lefthook-local.yml` pointed the git hooks at
+that scratch shim. One `claude -p` session (Claude Code 2.1.282, opus main session) ran
+`/swift-harness:design CounterFeature history that survives relaunch` with `--plugin-dir`,
+`--setting-sources project,local`, `--permission-mode acceptEdits` and an `--allowedTools` list,
+never bypass. Each question ended a turn, and each answer came back through `--resume`.
+
+| Test | Result |
+|---|---|
+| Standard design approved through the Artifact | Needs the attended run: see the headless Artifact finding below |
+| Design PR merged | Needs the attended run |
+| Ledger passes `plan-lint` | Needs the attended run: `/swift-harness:plan` needs an approval; `plan-lint` on the claimed plan is BLOCKED (no designSha yet) |
+| `swiftgate self-test` | GREEN, 20.6 s |
+| `swiftgate calibrate design` | RED once, then GREEN twice (23 cases, 11 agents, about 147 s): see the flake below |
+| §11 estimates against measurements | Below |
+
+Run, in order:
+
+1. Frame: 6 questions (3 frame prompts in all). The first `design-scope` said `quick`; the
+   orchestrator overrode it to `standard`.
+2. Standard design: 4 lanes and 64 claims. Review round 1 came back `rethink`. The standards
+   reviewer found file IO in CounterCore (D2/D3), a conflict the orchestrator's own frame answer
+   ("no new modules") created, and the verifier confirmed it. It also had 1 major and 3 minor
+   findings: an unversioned file, the debounce cost, a flaky relaunch test and a missing
+   `[[flows]]` entry.
+3. Reframe with a `CounterHistoryClient` pair: `design-scope` said `deep`. 4 lanes, 124 claims (85
+   supported) and 1 failed probe. Review rounds found 10, then 3, then 1 major finding, and 1
+   extra round the orchestrator allowed still ended `revise` (a load retry with no trigger). It
+   stopped there without dismissing anything, so publish never ran.
+
+`design-render` on the draft (run by the worker as evidence, not publish) was GREEN at designSha
+`7cb04856`; the page stays in the worker's scratch folder.
+
+Harness defects fixed test-first:
+
+- The stamped `AGENTS.md` and `docs/index.md` failed prose, and `.swiftgate.toml` left them out of
+  `managed_files`, so a new repository's first push was RED.
+- A markdown section's own body ran to its next sibling heading, so `design-lint` counted a
+  design about twice. All 59 design fixtures lint the same before and after, and `calibrate
+  design` stayed GREEN. `docs-lint` shares the count, so this repository's file budgets now sit
+  on the corrected counts, and the 400/800 router and topic defaults allow about twice as much.
+- Claim packs rejected probe citations; a probe now brings its snippet and verdict. A quote
+  holding `"` now matches `answers.jsonl`.
+- The stamped `.gitignore` missed `.harness/design-render/`.
+- A headless resume now names `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`: without it `claude -p`
+  ended the deep research workflow after 600 s and still reported success.
+
+Findings, open:
+
+- A `claude -p` session has no `Artifact` tool, with an API key or the claude.ai login, so
+  publish and Approve need an interactive session.
+- No command changes a claimed plan's tier. `plan.json` kept `quick` through standard and deep,
+  and `resume` stayed `framing`.
+- The prior-decisions lane once returned a claim with an empty `citation.pin`; a rerun fixed it.
+- `context-pack` infers the pin kind from its shape: a short commit SHA reads as an SDK pin, and
+  nothing checks `--key` against the lane names.
+- The review workflow's `previous` input (about 41 KB) is too big for headless tool input, so the
+  session edited a copy of the workflow script. The first design's rethink took `review-1/`, and
+  the reframe began at `review-2/`; `review-synth` and `stats` don't read round numbers.
+- The claim checker's pack ignores `--key`. `evidence check` has no checkouts-path option, so the
+  session symlinked `.build/checkouts`. It accepts L1-L24 on a 23-line file, which `context-pack`
+  rejects.
+- A bare option label in `answers.jsonl` can't support a claim about what the option meant.
+  `prose` flags an adverb inside a claim id.
+- `prove` restores only Swift production source, so a test that guards a template can't be
+  proven. The 2 template tests here failed before their fixes, but the ready gate reports them
+  `prove.not-proven`.
+- `calibrate design` flakes on `uikit-in-core-module`: it answered D2 instead of A2 at p=0.55.
+- The design skill once put 6 questions in 1 prompt; the other worker's change caps it at 4.
+- The worker killed a resume seconds after launch to lower its cap, so its message may repeat in
+  the transcript. It also sent a labelled operator note to relaunch the killed workflow.
+
+§11 against measured: agents logged 2.0M tokens in `phases.jsonl` for 2 designs (a standard design
+to `rethink`, then a deep design through 5 review rounds), against 0.6–1M per standard design. Wall
+time was 78 minutes over 10 turns, about 30 of them for the standard design, against a p99 of
+10–15 minutes. Research lanes (26 minutes) and redrafts dominated; no probe build was cold. Cost:
+$28.35 for the session and 3 `calibrate design` runs.
+
+For the attended run: use an interactive session so publish has the `Artifact` tool. Answer the frame
+with a client module up front, since D2 forces one for persistence. Expect `plan.json`'s tier to
+stay at the first claim.
