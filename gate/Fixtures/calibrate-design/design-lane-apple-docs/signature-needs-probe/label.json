@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "citation-kind",
+      "text": "What citation kind backs your claim that URLSession.data(for:) exists with that signature?",
+      "options": [
+        "snapshot",
+        "probe",
+        "file"
+      ],
+      "expected": "probe"
+    }
+  ]
+}

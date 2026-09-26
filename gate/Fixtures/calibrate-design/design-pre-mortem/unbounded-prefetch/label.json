@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "questions": [
+    {
+      "id": "unbounded-downloads-finding",
+      "text": "Do you report a blocker or major finding whose failure story is the number of simultaneous thumbnail downloads growing with album size?",
+      "options": [
+        "no",
+        "yes"
+      ],
+      "expected": "yes"
+    }
+  ]
+}
