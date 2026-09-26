@@ -1,10 +1,8 @@
 # Handoff: first eval round, the parts that are stable today
 
 <!-- RESUME
-State (2026-09-25): NOT STARTED. Planning docs merged on main under evals/. Worktree ../swift-harness-evals on branch evals-foundation.
-Next action: in the worktree, follow "First steps" below, in order.
-Read first: evals/runbook.md (operator role and rules), then evals/components.md and evals/suites.md for the cases in scope.
-Needs the user: approval before any run above the budget; a person to label the comment-audit and verifier sets.
+State (2026-09-26): DONE, merged on main at 53644b5. Runner spike, rule corpora, thin runner and review.js orchestration tests landed; results under evals/results/2026-09-25-*.
+Next action: the routing round in docs/handoffs/2026-09-26-evals-routing-foundation.md.
 -->
 
 ## Scope
