@@ -348,10 +348,49 @@ const round2 = {
   },
 }
 
-// Round 2's held-out requests. An independent agent wrote them before the description fix, from
-// the skill descriptions and the app alone, so the person tuning the skills didn't write them.
-const heldOutPath = join(dirname(fileURLToPath(import.meta.url)), 'routing_heldout_r2.json')
-const heldOut2 = existsSync(heldOutPath) ? JSON.parse(readFileSync(heldOutPath, 'utf8')) : {}
+// Round 3 tunes test-gate on requests that ask only for a judgment of the tests: no PR, no gate,
+// nothing to run. Round 2's independent held-out set found that shape, and no tuning set had it.
+const round3 = {
+  'test-gate': {
+    should: [
+      ['r3t-wrong-state-still-passes', 60, 'asks which tests pass on a wrong reducer', [
+        'Go through the tests I added and tell me which would still pass if the reducer returned the wrong state.',
+        'Do my new tests assert anything that matters? Read them and tell me.',
+      ]],
+      ['r3t-grade-the-tests', 60, 'asks for a grade of the change\'s tests', [
+        'Rate the tests in my change: real coverage or decoration?',
+        'Give the tests on this branch an honest grade. Are they worth keeping?',
+      ]],
+      ['r3t-test-smells', 60, 'asks for test smells the tools miss', [
+        'Look for test smells in what I added: over-mocking, testing internals, that kind of thing.',
+        'Check my new tests for coupling to implementation details or too many stubs.',
+      ]],
+    ],
+    near: [
+      ['r3t-add-missing-assertion', 'tdd', 60, 'shares "assert"; asks to change a test', [
+        'My dismiss test doesn\'t check that the fact is gone. Add that assertion.',
+        'Make the dismiss test assert that the fact becomes nil.',
+      ]],
+      ['r3t-hollow-test-meaning', 'none', 60, 'shares "hollow"; asks a general question', [
+        'What makes a unit test hollow? A general answer, not about this repo.',
+        'Explain what people mean by tests that only pad coverage.',
+      ]],
+      ['r3t-summarise-tests-for-pr', 'validate', 60, 'shares "tests"; asks for PR text', [
+        'Summarise what the tests on this branch cover, for the PR description.',
+        'Write up the tests I added as the testing notes in my pull request.',
+      ]],
+    ],
+  },
+}
+
+// Held-out and extra request sets that independent agents wrote from the skill descriptions and
+// the app alone, so the person tuning the skills didn't write them. A file without splits is
+// held out whole.
+const here = dirname(fileURLToPath(import.meta.url))
+const external = (file) => (existsSync(join(here, file)) ? JSON.parse(readFileSync(join(here, file), 'utf8')) : {})
+const heldOut2 = external('routing_heldout_r2.json')
+const heldOut3 = external('routing_heldout_r3.json')
+const fiveSkills = external('routing_five_skills.json')
 
 const PROMPT_FRONTMATTER = `---
 runs: 3
@@ -373,7 +412,7 @@ const withSplit = (table, split) => Object.fromEntries(Object.entries(table).map
 
 export function expand() {
   const out = []
-  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2]]
+  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2], [round3, 3], [withSplit(heldOut3, 40), 3], [fiveSkills, 4]]
   const seen = new Set()
   for (const [table, round] of tables) {
     for (const [skill, { should, near }] of Object.entries(table)) {

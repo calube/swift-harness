@@ -47,9 +47,9 @@ test('seeds: 120 round-1 cases, paraphrases share a split, near-misses never exp
   }
 })
 
-test('seeds: round 2 adds only tdd and test-gate cases, with unique names', () => {
+test('seeds: rounds 2 and 3 add only tdd and test-gate cases, and every name is unique', () => {
   const all = expand()
-  const r2 = all.filter((c) => c.round === 2)
+  const r2 = all.filter((c) => c.round === 2 || c.round === 3)
   assert.ok(r2.length > 0)
   assert.deepEqual([...new Set(r2.map((c) => c.skill))].sort(), ['tdd', 'test-gate'])
   const names = all.map((c) => `${c.skill}/${c.slug}-${c.variant}`)
