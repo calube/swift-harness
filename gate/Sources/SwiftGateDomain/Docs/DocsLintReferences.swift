@@ -385,8 +385,8 @@ public enum DocsLintReferences {
     let linksPerLine: [[LineLink]]
     /// Every `req-`/`test-` id this file defines via a `- <id>: ` bullet.
     let definedIDs: Set<String>
-    /// Every `req-`/`test-`/`ev-`-shaped token mentioned anywhere in this file (definitions
-    /// included).
+    /// Every valid, standalone `req-`/`test-`/`ev-` id mentioned anywhere in this file
+    /// (definitions included).
     let mentionedIDs: Set<String>
     /// 1-based line of each mentioned id's first occurrence.
     let firstMentionLine: [String: Int]
@@ -423,6 +423,7 @@ public enum DocsLintReferences {
         }
         for match in line.matches(of: mentionPattern) {
           let id = String(line[match.range])
+          guard DocScan.isStandaloneID(id, at: match.range.lowerBound, in: line) else { continue }
           mentioned.insert(id)
           if firstMention[id] == nil { firstMention[id] = index + 1 }
         }
@@ -431,6 +432,18 @@ public enum DocsLintReferences {
       self.mentionedIDs = mentioned
       self.firstMentionLine = firstMention
       self.definedIDLine = definedLine
+    }
+
+    /// A mention counts only when ``IdPolicy`` accepts it (so `test-first` is a word, not an id)
+    /// and it starts its own token: `self-test-runs-…` is a task id, not a `test-` id.
+    static func isStandaloneID(_ id: String, at start: String.Index, in line: String) -> Bool {
+      if start > line.startIndex {
+        let previous = line[line.index(before: start)]
+        if previous == "-" || previous == "_" || previous.isLetter || previous.isNumber {
+          return false
+        }
+      }
+      return IdKind.allCases.contains { id.hasPrefix($0.prefix) && IdPolicy.isValid(id, kind: $0) }
     }
 
     /// Blanks fenced code blocks (opening/closing fence lines and everything between) to empty

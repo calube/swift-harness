@@ -88,6 +88,32 @@ struct DocsLintReferencesTests {
     #expect(findings.filter { $0.ruleID == "docs-lint.dangling-id" } == [])
   }
 
+  @Test(
+    "hyphenated English words shorter than a valid id are not ids — catches test-first read as a dangling test id",
+    arguments: ["test-first", "test-quality", "req-line", "ev-only-two"])
+  func shortHyphenatedWordIsNotAnID(word: String) throws {
+    let doc = Self.file("docs/notes.md", "We work \(word) here.\n")
+    #expect(try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" } == [])
+  }
+
+  @Test(
+    "the tail of a longer hyphenated token is not an id — catches self-test-runs-evidence-seeds read as test-runs-evidence-seeds"
+  )
+  func tailOfHyphenatedTokenIsNotAnID() throws {
+    let doc = Self.file(
+      "docs/notes.md",
+      "Task self-test-runs-evidence-and-design-seeds and pre-req-drains-the-queue.\n")
+    #expect(try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" } == [])
+  }
+
+  @Test("a valid dangling test id is still flagged — catches the matcher dropping real ids")
+  func validDanglingTestIDIsStillFlagged() throws {
+    let doc = Self.file("docs/notes.md", "See test-foo-bar-baz for the case.\n")
+    let dangling = try Self.check([doc]).filter { $0.ruleID == "docs-lint.dangling-id" }
+    #expect(dangling.map(\.message).contains { $0.contains("\"test-foo-bar-baz\"") })
+    #expect(dangling.count == 1)
+  }
+
   // MARK: - Reference integrity: bare ADR mentions
 
   @Test("a bare ADR NNNN mention is flagged — catches an ADR referenced without a link")
