@@ -171,6 +171,8 @@ private final class RequestedPaths: EvidenceSources {
   func evidenceFile(_ path: String) -> Data? { base.evidenceFile(path) }
   var packageResolved: Data? { base.packageResolved }
   var sdkVersion: String? { base.sdkVersion }
-  func repoSymlink(_ path: String) -> String? { base.repoSymlink(path) }
+  /// No link stops a rule before it asks for the file, so every path a claim could need at the
+  /// ref is recorded; the real check still judges links.
+  func repoSymlink(_ path: String) -> String? { nil }
   func evidenceSymlink(_ path: String) -> String? { base.evidenceSymlink(path) }
 }
