@@ -113,13 +113,36 @@ enum SessionStartHook {
     } catch {
       return .failure(BlockedReason(error.description))
     }
-    let entries = SessionContext.moduleEntries(of: graph)
+    let entries = moduleEntries(of: graph)
     if let data = try? JSONEncoder().encode(
       CachedModuleMap(key: key, modules: entries.map(CachedModuleMap.Entry.init)))
     {
       try? store.cache(data, as: moduleMapCache)
     }
     return .success(entries)
+  }
+
+  /// The module map's entries for `graph`. Test targets are left out: the map says where logic
+  /// lives, and tests follow `<Module>Tests`.
+  static func moduleEntries(of graph: ModuleGraph) -> [SessionContext.ModuleEntry] {
+    graph.modules.compactMap { module in
+      guard let role = roleName(module.role) else { return nil }
+      return SessionContext.ModuleEntry(
+        package: module.packageName ?? "app", name: module.name, role: role,
+        kind: module.kind.rawValue)
+    }
+  }
+
+  private static func roleName(_ role: ModuleRole) -> String? {
+    switch role {
+    case .core: "core"
+    case .ui: "ui"
+    case .client: "client"
+    case .clientLive: "client-live"
+    case .app: "app"
+    case .testSupport: "test-support"
+    case .tests: nil
+    }
   }
 
   private static func cacheKey(root: URL, config: Config) throws(ModuleGraphLoadError) -> String {

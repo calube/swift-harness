@@ -242,9 +242,10 @@ const tests = {
 
       // The module graph the decomposer's pack reads comes from the skill's own command.
       const graphCommand = the(section(planSkill(), '### The decomposer'), 'module-graph', 'the decomposer step')
-      const graph = skill(graphCommand, {})
+      const graph = skill(graphCommand, { slug: SLUG })
       assert.equal(graph.status, 0, graph.text)
-      assert.match(graph.stdout, /^OrderQueueCore -> OrderQueueClient$/m)
+      const graphFile = readFileSync(join(dir, '.harness/plan-draft', SLUG, 'module-graph.txt'), 'utf8')
+      assert.match(graphFile, /^OrderQueueCore -> OrderQueueClient$/m)
 
       // The decomposer's reply: a replacement for queue-ui, and a fix task for the done queue-core.
       const reply = [

@@ -158,8 +158,8 @@ tasks. You never edit a `<fixed>` task, so a `done` task reaches the new ledger 
 
 Build the decomposer's context pack. It needs a module graph and the task-sizing bounds as files:
 
-- Module graph: the stdout of `"$SG" module-graph`, written to
-  `.harness/plan-draft/<slug>/module-graph.txt`. Exit 2 names what it couldn't read; halt.
+- Module graph: `"$SG" module-graph --output .harness/plan-draft/<slug>/module-graph.txt`. Exit 2
+  names what it couldn't read, and writes no file; halt.
 - Bounds: `.swiftgate.toml` itself. Its `[plan]` table and `[[modules]]` kinds are the bounds;
   when `[plan]` is absent, the agent applies its defaults.
 

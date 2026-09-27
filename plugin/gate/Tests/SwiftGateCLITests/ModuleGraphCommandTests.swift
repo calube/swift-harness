@@ -1,3 +1,4 @@
+import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
@@ -43,10 +44,24 @@ struct ModuleGraphCommandTests {
     return root
   }
 
-  /// Checks the command tree accepts `module-graph` in process, then runs the built binary in
-  /// `root`, whose repository it describes.
+  /// Parses and runs `module-graph` in process on `root`, writing its dump to `output`. Returns
+  /// the exit code.
+  private static func moduleGraph(root: URL, output: URL) async throws -> Int32 {
+    let parsed = try await SwiftGate.asyncParseAsRoot([
+      "module-graph", "--repo", root.path, "--output", output.path,
+    ])
+    var command = try #require(parsed as? any AsyncParsableCommand)
+    do {
+      try await command.run()
+      return 0
+    } catch let exit as ExitCode {
+      return exit.rawValue
+    }
+  }
+
+  /// Runs the built binary in `root`, as a skill does from the repository toplevel, with the dump
+  /// on stdout and the failure message on stderr.
   private static func moduleGraph(in root: URL) async throws -> Result {
-    _ = try await SwiftGate.asyncParseAsRoot(["module-graph"])
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
     let output = try await LiveProcessRunner().run(
       ProcessInvocation(
@@ -65,8 +80,11 @@ struct ModuleGraphCommandTests {
     let root = try Self.copyOfFixture()
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let result = try await Self.moduleGraph(in: root)
+    let dump = root.appending(path: ".harness/plan-draft/x/module-graph.txt")
 
+    #expect(try await Self.moduleGraph(root: root, output: dump) == 0)
+    #expect(try String(contentsOf: dump, encoding: .utf8) == Self.golden)
+    let result = try await Self.moduleGraph(in: root)
     #expect(result.status == .exited(0), "\(result.stderr)")
     #expect(result.stdout == Self.golden)
   }
@@ -92,10 +110,12 @@ struct ModuleGraphCommandTests {
       SessionContext.Inputs(
         projectName: "fixture", modules: entries, xcode: nil, plans: .none, notes: []))
 
-    let result = try await Self.moduleGraph(in: root)
+    let dump = root.appending(path: "module-graph.txt")
+    #expect(try await Self.moduleGraph(root: root, output: dump) == 0)
 
-    let mapLines = result.stdout.split(separator: "\n").filter { !$0.contains(" -> ") }
-    #expect(mapLines.count == 3, "\(result.stdout)\(result.stderr)")
+    let text = try String(contentsOf: dump, encoding: .utf8)
+    let mapLines = text.split(separator: "\n").filter { !$0.contains(" -> ") }
+    #expect(mapLines.count == 3, "\(text)")
     for line in mapLines {
       #expect(session.contains(line), "\(line)")
     }
@@ -108,7 +128,10 @@ struct ModuleGraphCommandTests {
     let root = try Self.copyOfFixture()
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.removeItem(at: root.appending(path: ".swiftgate.toml"))
+    let dump = root.appending(path: "module-graph.txt")
 
+    #expect(try await Self.moduleGraph(root: root, output: dump) == 2)
+    #expect(!FileManager.default.fileExists(atPath: dump.path))
     let result = try await Self.moduleGraph(in: root)
 
     #expect(result.status == .exited(2))
@@ -124,7 +147,10 @@ struct ModuleGraphCommandTests {
     defer { try? FileManager.default.removeItem(at: root) }
     try Data("this is not a manifest\n".utf8).write(
       to: root.appending(path: "Packages/Logging/Package.swift"))
+    let dump = root.appending(path: "module-graph.txt")
 
+    #expect(try await Self.moduleGraph(root: root, output: dump) == 2)
+    #expect(!FileManager.default.fileExists(atPath: dump.path))
     let result = try await Self.moduleGraph(in: root)
 
     #expect(result.status == .exited(2))

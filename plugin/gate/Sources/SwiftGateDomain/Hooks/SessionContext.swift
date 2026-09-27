@@ -147,42 +147,6 @@ public enum SessionContext {
     }
   }
 
-  /// The module map entries for `graph`. Test targets are left out: the map says where logic
-  /// lives, and tests follow `<Module>Tests`.
-  public static func moduleEntries(of graph: ModuleGraph) -> [ModuleEntry] {
-    graph.modules.compactMap { module in
-      guard let role = roleName(module.role) else { return nil }
-      return ModuleEntry(
-        package: module.packageName ?? "app", name: module.name, role: role,
-        kind: module.kind.rawValue)
-    }
-  }
-
-  private static func roleName(_ role: ModuleRole) -> String? {
-    switch role {
-    case .core: "core"
-    case .ui: "ui"
-    case .client: "client"
-    case .clientLive: "client-live"
-    case .app: "app"
-    case .testSupport: "test-support"
-    case .tests: nil
-    }
-  }
-
-  /// The `Modules by package (role, kind):` heading and one line per package, sorted by package;
-  /// empty when there are no modules. `module-graph` prints the same lines.
-  public static func moduleMapLines(_ modules: [ModuleEntry]) -> [String] {
-    guard !modules.isEmpty else { return [] }
-    var lines = ["Modules by package (role, kind):"]
-    let packages = Dictionary(grouping: modules, by: \.package)
-    for package in packages.keys.sorted() {
-      let entries = (packages[package] ?? []).map { "\($0.name) (\($0.role), \($0.kind))" }
-      lines.append("- \(package): \(entries.joined(separator: ", "))")
-    }
-    return lines
-  }
-
   public static func render(_ inputs: Inputs) -> String {
     var lines = [
       "swift-harness is active in \(inputs.projectName) (.swiftgate.toml). Gate commands go "
@@ -210,7 +174,14 @@ public enum SessionContext {
     case nil:
       break
     }
-    lines += moduleMapLines(inputs.modules)
+    if !inputs.modules.isEmpty {
+      lines.append("Modules by package (role, kind):")
+      let packages = Dictionary(grouping: inputs.modules, by: \.package)
+      for package in packages.keys.sorted() {
+        let modules = (packages[package] ?? []).map { "\($0.name) (\($0.role), \($0.kind))" }
+        lines.append("- \(package): \(modules.joined(separator: ", "))")
+      }
+    }
     switch inputs.xcode {
     case .selected(let pinned, let version, let directory):
       if XcodePin.matches(pinned: pinned, selected: version) {
