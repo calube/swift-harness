@@ -1,0 +1,360 @@
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+import SwiftGateTestSupport
+import Testing
+
+@testable import SwiftGateCLI
+
+/// A throwaway repository with a claimed plan, one build run, and the task's real worktree on
+/// branch `<plan>/<task>` holding one commit. `main` carries a second branch, `elsewhere`, whose
+/// commit never reaches the task branch.
+private struct ReturnScenario {
+  static let plan = "2026-09-26-queue"
+  static let task = "queue-core"
+  static let finishedAt = Date(timeIntervalSince1970: 1_790_000_000)
+
+  let base: URL
+  let git: LiveGit
+  let worktree: URL
+  let taskCommit: String
+  let elsewhereCommit: String
+
+  static func environment(home: URL) -> [String: String] {
+    [
+      "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME": home.path,
+      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+      "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+      "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+    ]
+  }
+
+  /// - Parameters:
+  ///   - ledgerGate: the task's planned gate in `ledger.json`.
+  ///   - presetGate: the build run's task gate, which defers to the ledger when `.ledger`.
+  init(ledgerGate: CheckTier = .push, presetGate: BuildPreset.TaskGate = .ledger) async throws {
+    base = FileManager.default.temporaryDirectory
+      .appending(path: "check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let main = base.appending(path: "app", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: main, withIntermediateDirectories: true)
+    let runner = LiveProcessRunner(baseEnvironment: Self.environment(home: base))
+    @discardableResult
+    func run(_ arguments: [String], in directory: URL) async throws -> String {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: directory.path,
+          timeout: .seconds(60)))
+      try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+      return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    try await run(["init", "-q", "-b", "main"], in: main)
+    try await run(["config", "commit.gpgsign", "false"], in: main)
+    try await run(["commit", "-q", "--allow-empty", "-m", "init"], in: main)
+    try await run(["checkout", "-q", "-b", "elsewhere"], in: main)
+    try await run(["commit", "-q", "--allow-empty", "-m", "unrelated work"], in: main)
+    elsewhereCommit = try await run(["rev-parse", "HEAD"], in: main)
+    try await run(["checkout", "-q", "main"], in: main)
+
+    git = LiveGit(runner: runner, repositoryRoot: main.path)
+    let common = try await git.commonDirectory()
+    let names = try TaskWorktree(commonDirectory: common, plan: Self.plan, task: Self.task)
+    try await run(["worktree", "add", "-q", "-b", names.branch, names.path, "main"], in: main)
+    worktree = URL(filePath: names.path, directoryHint: .isDirectory)
+    try await run(["commit", "-q", "--allow-empty", "-m", "task work"], in: worktree)
+    taskCommit = try await run(["rev-parse", "HEAD"], in: worktree)
+
+    let plan = try PlanStateLayout(commonDirectory: common).plan(Self.plan)
+    try FileManager.default.createDirectory(
+      atPath: plan.directory, withIntermediateDirectories: true)
+    let task = LedgerTask(
+      id: Self.task, deps: [], writeSet: ["Sources/Queue/"], gate: ledgerGate, tests: [],
+      covers: ["D1"], estLines: 40, status: .inProgress, worktree: names.path, model: .sonnet,
+      branch: names.branch)
+    try LedgerJSON.encode(
+      Ledger(
+        schemaVersion: 1, resume: "building", maxParallel: 3, tasks: [task], waves: [[Self.task]])
+    ).write(to: URL(filePath: plan.ledgerFile))
+    let preset = BuildPreset(
+      designTier: .standard, maxParallel: 3, review: .gate, taskGate: presetGate,
+      mergeGate: .ready, workerModel: .tagged, timeBudgetMin: 90, stopStartsBeforeMin: 15,
+      onDesignConflict: .block)
+    try await BuildRunStore.create(
+      plan: Self.plan, presetName: "default", preset: preset, startedAt: Self.finishedAt,
+      git: git, suffix: 1)
+  }
+
+  /// Records a gate run in the task worktree's run store through the writer `check` uses.
+  func recordGateRun(tier: CheckTier, verdict: Verdict, suffix: UInt32) throws -> String {
+    let runID = RunID.make(startedAt: Self.finishedAt, suffix: suffix)
+    let report = try RunReport(
+      runID: runID, durationMilliseconds: 1200,
+      tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1200, testCounts: nil)],
+      findings: [])
+    try RunStore(worktreeRoot: worktree).record(
+      report, finishedAt: Self.finishedAt, command: "check \(tier.rawValue)")
+    return runID
+  }
+
+  func returnValue(
+    outcome: TaskReturn.Outcome = .readyToMerge, commits: [String]? = nil,
+    gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil
+  ) -> TaskReturn {
+    TaskReturn(
+      task: Self.task, outcome: outcome, commits: commits ?? [taskCommit], gate: gate,
+      review: .init(mode: .gate, findings: []), testsAdded: ["test-queue-drains"],
+      notes: "Queue.drain() returns [Item]", designConflict: designConflict)
+  }
+
+  func write(_ data: Data) throws -> String {
+    let file = base.appending(path: "return-\(UUID().uuidString).json")
+    try data.write(to: file)
+    return file.path
+  }
+
+  func check(_ taskReturn: TaskReturn) async throws -> BuildCheckReturnReport {
+    await check(file: try write(try TaskReturnJSON.encode(taskReturn)))
+  }
+
+  func check(file: String) async -> BuildCheckReturnReport {
+    await BuildCheckReturnRun.run(file: file, plan: Self.plan, git: git)
+  }
+
+  func remove() { try? FileManager.default.removeItem(at: base) }
+}
+
+@Suite("build check-return")
+struct BuildCheckReturnTests {
+  @Test(
+    "a return whose commit is on the task branch and whose GREEN push run is in the worktree's run store passes with exit 0 — catches the check refusing an honest return"
+  )
+  func honestReturnPasses() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+
+    let report = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings == [])
+    #expect(report.verdict == .green)
+    #expect(report.verdict.exitCode == 0)
+  }
+
+  @Test(
+    "a commit that exists only on another branch is a commit-off-branch finding with exit 1 — catches a worker citing work that isn't on its task branch"
+  )
+  func commitOnAnotherBranchFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, scenario.elsewhereCommit],
+        gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings.map(\.rule) == [.commitOffBranch])
+    #expect(report.findings.first?.message.contains(scenario.elsewhereCommit) == true)
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a gate run id the worktree's run store doesn't hold is a gate-run-missing finding — catches a worker citing a run that never happened"
+  )
+  func unknownRunIDFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    _ = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let invented = RunID.make(startedAt: ReturnScenario.finishedAt, suffix: 0xdead)
+
+    let report = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: invented)))
+
+    #expect(report.findings.map(\.rule) == [.gateRunMissing])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a RED run claimed as GREEN is a verdict-mismatch and not-green finding — catches a worker overstating its gate"
+  )
+  func redRunClaimedGreenFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .red, suffix: 1)
+
+    let report = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings.map(\.rule) == [.gateVerdictMismatch, .gateNotGreen])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a GREEN fast run for a push-gated task is a below-task-gate finding, from the ledger's gate or the preset's fixed tier — catches a worker passing a cheaper tier than its task demands"
+  )
+  func lowerTierThanTaskGateFails() async throws {
+    let ledgerGated = try await ReturnScenario(ledgerGate: .push, presetGate: .ledger)
+    defer { ledgerGated.remove() }
+    let fastRun = try ledgerGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
+    let report = try await ledgerGated.check(
+      ledgerGated.returnValue(gate: .init(tier: .fast, verdict: .green, runID: fastRun)))
+    #expect(report.findings.map(\.rule) == [.gateBelowTaskGate])
+    #expect(report.verdict.exitCode == 1)
+
+    let presetGated = try await ReturnScenario(ledgerGate: .fast, presetGate: .tier(.push))
+    defer { presetGated.remove() }
+    let presetRun = try presetGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
+    let presetReport = try await presetGated.check(
+      presetGated.returnValue(gate: .init(tier: .fast, verdict: .green, runID: presetRun)))
+    #expect(presetReport.findings.map(\.rule) == [.gateBelowTaskGate])
+  }
+
+  @Test(
+    "a design-conflict outcome with no task-status.json in the worktree is a design-conflict-unrecorded finding — catches a conflict the orchestrator can't check against the worker's own report"
+  )
+  func designConflictWithoutTaskStatusFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let conflict = TaskStatusReport.Report(
+      kind: "design-conflict", section: "decision", ids: ["req-queue-drains-on-reconnect"],
+      claim: "the endpoint caps batches at 20", evidence: [])
+
+    let report = try await scenario.check(
+      scenario.returnValue(outcome: .designConflict, gate: nil, designConflict: conflict))
+    #expect(report.findings.map(\.rule) == [.designConflictUnrecorded])
+    #expect(report.verdict.exitCode == 1)
+
+    let statusFile = scenario.worktree.appending(path: ".harness/task-status.json")
+    try FileManager.default.createDirectory(
+      at: statusFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try TaskStatusReportJSON.encode(
+      TaskStatusReport(task: ReturnScenario.task, state: "blocked", report: conflict)
+    ).write(to: statusFile)
+    let recorded = try await scenario.check(
+      scenario.returnValue(outcome: .designConflict, gate: nil, designConflict: conflict))
+    #expect(recorded.findings == [])
+  }
+
+  @Test(
+    "an unknown outcome or a missing key fails decoding and exits 2 naming it — catches a return the check would otherwise read as something it isn't"
+  )
+  func unknownOutcomeFailsDecoding() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let valid = try TaskReturnJSON.encode(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
+    var object = try #require(try JSONSerialization.jsonObject(with: valid) as? [String: Any])
+
+    object["outcome"] = "merged"
+    let unknownOutcome = try JSONSerialization.data(withJSONObject: object)
+    #expect(throws: DecodingError.self) { try TaskReturnJSON.decode(unknownOutcome) }
+    let report = await scenario.check(file: try scenario.write(unknownOutcome))
+    #expect(report.verdict.exitCode == 2)
+    #expect(report.message.contains("merged"), "\(report.message)")
+
+    object["outcome"] = "ready-to-merge"
+    object.removeValue(forKey: "designConflict")
+    let missingKey = try JSONSerialization.data(withJSONObject: object)
+    #expect(throws: TaskReturnDecodingError.missingKey("designConflict")) {
+      try TaskReturnJSON.decode(missingKey)
+    }
+    let missingReport = await scenario.check(file: try scenario.write(missingKey))
+    #expect(missingReport.verdict.exitCode == 2)
+    #expect(missingReport.message.contains("designConflict"), "\(missingReport.message)")
+  }
+
+  @Test(
+    "each claim the evidence contradicts names its own rule: no commits, a missing branch or commit, no gate or review, a mistiered or GREEN gate-red run, and a design conflict the outcome, return or task-status.json disagree on — catches a check that lets one kind of overstatement through"
+  )
+  func eachContradictionNamesItsRule() {
+    let conflict = TaskStatusReport.Report(
+      kind: "design-conflict", section: "decision", ids: ["req-a"], claim: "caps at 20",
+      evidence: [])
+    let push = TaskReturn.Gate(tier: .push, verdict: .green, runID: "r1")
+    func taskReturn(
+      _ outcome: TaskReturn.Outcome, commits: [String] = ["abc1"], gate: TaskReturn.Gate? = push,
+      review: TaskReturn.Review? = .init(mode: .full, findings: []),
+      designConflict: TaskStatusReport.Report? = nil
+    ) -> TaskReturn {
+      TaskReturn(
+        task: "t", outcome: outcome, commits: commits, gate: gate, review: review, testsAdded: [],
+        notes: "", designConflict: designConflict)
+    }
+    func evidence(
+      branchExists: Bool = true, commit: TaskReturnEvidence.CommitState = .onBranch,
+      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green),
+      status: TaskStatusReport? = nil
+    ) -> TaskReturnEvidence {
+      TaskReturnEvidence(
+        branch: "p/t", branchExists: branchExists, commits: ["abc1": commit], gateRun: run,
+        taskGate: .push, taskStatus: status)
+    }
+    func rules(_ r: TaskReturn, _ e: TaskReturnEvidence) -> [TaskReturnFinding.Rule] {
+      TaskReturnCheck.findings(r, evidence: e).map(\.rule)
+    }
+    let otherConflict = TaskStatusReport.Report(
+      kind: "design-conflict", section: "decision", ids: ["req-b"], claim: "caps at 50",
+      evidence: [])
+
+    #expect(rules(taskReturn(.readyToMerge), evidence()) == [])
+    #expect(rules(taskReturn(.readyToMerge, commits: []), evidence()) == [.noCommits])
+    #expect(rules(taskReturn(.readyToMerge), evidence(branchExists: false)) == [.branchMissing])
+    #expect(rules(taskReturn(.readyToMerge), evidence(commit: .missing)) == [.commitMissing])
+    #expect(rules(taskReturn(.reviewBlocked, gate: nil), evidence()) == [.gateMissing])
+    #expect(rules(taskReturn(.readyToMerge, review: nil), evidence()) == [.reviewMissing])
+    #expect(
+      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green)))
+        == [.gateTierMismatch, .gateBelowTaskGate])
+    #expect(
+      rules(
+        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .green, runID: "r1"), review: nil),
+        evidence()) == [.gateRedOutcomeIsGreen])
+    #expect(
+      rules(
+        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .red, runID: "r1"), review: nil),
+        evidence(run: .init(tier: .push, verdict: .red))) == [])
+    #expect(rules(taskReturn(.designConflict, gate: nil), evidence()) == [.designConflictOutcome])
+    #expect(
+      rules(taskReturn(.readyToMerge, designConflict: conflict), evidence())
+        == [.designConflictOutcome, .designConflictUnrecorded])
+    #expect(
+      rules(
+        taskReturn(.readyToMerge),
+        evidence(status: .init(task: "t", state: "blocked", report: conflict)))
+        == [.designConflictUnreturned])
+    #expect(
+      rules(
+        taskReturn(.designConflict, gate: nil, designConflict: conflict),
+        evidence(status: .init(task: "t", state: "blocked", report: otherConflict)))
+        == [.designConflictMismatch])
+  }
+
+  @Test(
+    "a return whose review carries a captured review-contract finding decodes and round-trips, and one missing a contract key fails decoding — catches review findings the orchestrator can't read back as the contract"
+  )
+  func reviewFindingsUseTheReviewContract() throws {
+    let captured = try FocusReviewJSON.decode(Fixture.data("Review/d7-api-errors.json"))
+    let finding = try #require(captured.findings.first)
+    let original = TaskReturn(
+      task: "t", outcome: .reviewBlocked, commits: ["abc1"],
+      gate: .init(tier: .push, verdict: .green, runID: "r1"),
+      review: .init(mode: .full, findings: [finding]), testsAdded: [], notes: "",
+      designConflict: nil)
+
+    let decoded = try TaskReturnJSON.decode(try TaskReturnJSON.encode(original))
+    #expect(decoded == original)
+    #expect(decoded.review?.findings.first?.rule == "D7")
+
+    var object = try #require(
+      try JSONSerialization.jsonObject(with: try TaskReturnJSON.encode(original))
+        as? [String: Any])
+    var review = try #require(object["review"] as? [String: Any])
+    var findings = try #require(review["findings"] as? [[String: Any]])
+    findings[0].removeValue(forKey: "severity")
+    review["findings"] = findings
+    object["review"] = review
+    let missingSeverity = try JSONSerialization.data(withJSONObject: object)
+    #expect(throws: DecodingError.self) { try TaskReturnJSON.decode(missingSeverity) }
+  }
+}

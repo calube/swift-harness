@@ -33,15 +33,22 @@ enum BuildNextRun {
       } catch {
         return .blocked(command, slug, "invalid plan name `\(slug)`: \(error)")
       }
-      guard let runID = try latestRunID(plan) else {
-        return .blocked(
-          command, slug,
-          "plan `\(slug)` has no build run under \(plan.buildDirectory); run "
-            + "`swiftgate build start \(slug) --preset <name> --session <id>` first")
-      }
+      let run: BuildRunStore
       let record: BuildRunRecord
+      do throws(BuildRunStoreError) {
+        guard let latest = try await BuildRunStore.latest(plan: slug, git: git) else {
+          return .blocked(
+            command, slug,
+            "plan `\(slug)` has no build run under \(plan.buildDirectory); run "
+              + "`swiftgate build start \(slug) --preset <name> --session <id>` first")
+        }
+        run = latest
+      } catch {
+        return .blocked(command, slug, "listing \(plan.buildDirectory): \(error)")
+      }
+      let runID = run.runID
       do {
-        record = try await BuildRunStore.open(plan: slug, runID: runID, git: git).record()
+        record = try run.record()
       } catch {
         return .blocked(command, slug, "reading build run \(runID): \(error)")
       }
@@ -61,21 +68,6 @@ enum BuildNextRun {
     } catch {
       return .blocked(command, slug, error.message)
     }
-  }
-
-  /// Run ids start with their UTC start time at a fixed width, so the newest sorts last.
-  private static func latestRunID(_ plan: PlanStateLayout.Plan) throws(BuildLoopError)
-    -> String?
-  {
-    let names: [String]
-    do {
-      names = try FileManager.default.contentsOfDirectory(atPath: plan.buildDirectory)
-    } catch CocoaError.fileReadNoSuchFile {
-      return nil
-    } catch {
-      throw BuildLoopError("listing \(plan.buildDirectory): \(error)")
-    }
-    return names.filter { (try? plan.buildRun($0)) != nil }.max()
   }
 
   private static func reason(_ reason: BuildScheduler.RefusalReason) -> String {

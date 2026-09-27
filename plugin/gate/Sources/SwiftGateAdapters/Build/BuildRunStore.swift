@@ -86,8 +86,44 @@ public struct BuildRunStore: Sendable {
     BuildRunStore(layout: try await locate(plan: plan, runID: runID, git: git))
   }
 
+  /// The plan's newest run: run ids start with their UTC start time at a fixed width, so the
+  /// greatest sorts last. Entries under `build/` that aren't directories named by a valid run id
+  /// are skipped. `nil` when no run has started.
+  public static func latest(plan: String, git: any Git) async throws(BuildRunStoreError)
+    -> BuildRunStore?
+  {
+    let planLayout = try await locate(plan: plan, git: git)
+    let buildDirectory = planLayout.buildDirectory
+    let names: [String]
+    do {
+      names = try FileManager.default.contentsOfDirectory(atPath: buildDirectory)
+    } catch CocoaError.fileReadNoSuchFile {
+      return nil
+    } catch {
+      throw .io(operation: "list", path: buildDirectory, reason: error.localizedDescription)
+    }
+    let runs = names.compactMap { name -> BuildRunLayout? in
+      guard let run = try? planLayout.buildRun(name) else { return nil }
+      var isDirectory: ObjCBool = false
+      let exists = FileManager.default.fileExists(atPath: run.directory, isDirectory: &isDirectory)
+      return exists && isDirectory.boolValue ? run : nil
+    }
+    return runs.max { $0.runID < $1.runID }.map { BuildRunStore(layout: $0) }
+  }
+
   private static func locate(plan: String, runID: String, git: any Git)
     async throws(BuildRunStoreError) -> BuildRunLayout
+  {
+    let planLayout = try await locate(plan: plan, git: git)
+    do {
+      return try planLayout.buildRun(runID)
+    } catch {
+      throw .invalidRunID(runID)
+    }
+  }
+
+  private static func locate(plan: String, git: any Git)
+    async throws(BuildRunStoreError) -> PlanStateLayout.Plan
   {
     let common: String
     do {
@@ -95,16 +131,10 @@ public struct BuildRunStore: Sendable {
     } catch {
       throw .commonDirectory("\(error)")
     }
-    let planLayout: PlanStateLayout.Plan
     do {
-      planLayout = try PlanStateLayout(commonDirectory: common).plan(plan)
+      return try PlanStateLayout(commonDirectory: common).plan(plan)
     } catch {
       throw .invalidPlanName(plan)
-    }
-    do {
-      return try planLayout.buildRun(runID)
-    } catch {
-      throw .invalidRunID(runID)
     }
   }
 

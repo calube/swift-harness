@@ -93,6 +93,10 @@ public enum ContextPackError: Error, Sendable, Equatable {
   /// `ContextPack.build(role:inputs:)` was called with a `role` that doesn't match the role its
   /// `inputs` case carries.
   case roleMismatch(expected: ContextPackRole, actual: ContextPackRole)
+  /// A worker pack's dependency-notes section (spec §5.3) needs `task`'s task return, but it
+  /// couldn't be read or decoded under the given build run — never rendered as a thin pack that
+  /// silently drops one dependency's notes.
+  case missingDependencyReturn(task: String)
 }
 
 /// A labelled raw text a pack can slice from — a frame-answers transcript, a lane brief, a
@@ -457,9 +461,23 @@ public struct DecomposerInputs: Sendable {
   }
 }
 
+/// One dependency's task-return notes for a worker pack's dependency-notes section (spec §5.3), or
+/// its absence. `notes` is `nil` only when the caller couldn't read or decode that dependency's
+/// task return — never an empty string standing in for "not available" (worker-brief pitfall 2).
+public struct DependencyReturnNotes: Sendable, Equatable {
+  public let taskID: String
+  public let notes: String?
+
+  public init(taskID: String, notes: String?) {
+    self.taskID = taskID
+    self.notes = notes
+  }
+}
+
 /// spec §5.10 worker row: its ledger task entry; design sections covering its `covers` ids,
 /// verbatim by anchor; cited claims; standards anchors for its modules' kinds; gate tier (carried
-/// inside the encoded ledger entry — every `LedgerTask` has one).
+/// inside the encoded ledger entry — every `LedgerTask` has one); spec §5.3: the task-return notes
+/// of every task this one depends on, already in the ledger's dependency order.
 public struct WorkerInputs: Sendable {
   public let task: LedgerTask
   public let design: DesignDocument
@@ -468,10 +486,14 @@ public struct WorkerInputs: Sendable {
   public let citedClaimIDs: [String]
   public let standards: ContextSource
   public let moduleKindAnchors: [String]
+  /// Empty when the pack was built without `--build-run`, or the task has no `deps` — the pack
+  /// then carries no dependency-notes section, byte-identical to before this field existed.
+  public let dependencyNotes: [DependencyReturnNotes]
 
   public init(
     task: LedgerTask, design: DesignDocument, designSource: ContextSource, claims: ContextSource,
-    citedClaimIDs: [String], standards: ContextSource, moduleKindAnchors: [String]
+    citedClaimIDs: [String], standards: ContextSource, moduleKindAnchors: [String],
+    dependencyNotes: [DependencyReturnNotes] = []
   ) {
     self.task = task
     self.design = design
@@ -480,6 +502,7 @@ public struct WorkerInputs: Sendable {
     self.citedClaimIDs = citedClaimIDs
     self.standards = standards
     self.moduleKindAnchors = moduleKindAnchors
+    self.dependencyNotes = dependencyNotes
   }
 }
 
@@ -575,7 +598,37 @@ extension ContextPack {
       contentsOf: try MarkdownAnchorSlicer.slice(
         anchors: inputs.moduleKindAnchors, from: inputs.standards))
 
+    if !inputs.dependencyNotes.isEmpty {
+      var noteLines: [String] = []
+      for dependency in inputs.dependencyNotes {
+        guard let notes = dependency.notes else {
+          throw ContextPackError.missingDependencyReturn(task: dependency.taskID)
+        }
+        noteLines.append(dependency.taskID)
+        noteLines.append(contentsOf: MarkdownAnchorSlicer.rawLines(notes))
+      }
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: "Notes from the tasks this one depends on", anchor: nil, lines: noteLines))
+    }
+
     return ContextPack(role: .worker, slices: slices)
+  }
+
+  /// The order a worker pack's dependency-notes section lists a task's `deps` in (spec §5.3): the
+  /// same order `ledger`'s own wave schedule (``Ledger/waves``) already puts them in, since that's
+  /// the ledger's canonical dependency order — earlier wave first, id-ascending within a wave. A
+  /// dependency `ledger.waves` doesn't name (an unscheduled or stale ledger) sorts after every
+  /// named one, then by id, so the ordering stays total and deterministic either way.
+  public static func dependencyOrder(of deps: [String], in ledger: Ledger) -> [String] {
+    var position: [String: Int] = [:]
+    for id in ledger.waves.flatMap({ $0 }) where position[id] == nil {
+      position[id] = position.count
+    }
+    return deps.sorted { lhs, rhs in
+      let (left, right) = (position[lhs] ?? Int.max, position[rhs] ?? Int.max)
+      return left != right ? left < right : lhs < rhs
+    }
   }
 
   private static func encodeTaskEntry(_ task: LedgerTask) throws -> String {

@@ -86,7 +86,7 @@ enum WorktreeRun {
       return report.blocked("\(error); \(undone)")
     }
     // Checked again: the lock may have changed hands while the clone ran.
-    switch context.recordBranch() {
+    switch await context.recordBranch() {
     case .success: break
     case .failure(let refusal):
       let undone = await report.undo(workspace: workspace)
@@ -299,32 +299,22 @@ private struct HeldTask {
     }
   }
 
-  /// Sets this task's `branch` and nothing else, rewriting `ledger.json` whole.
-  func recordBranch() -> Result<Void, Refusal> {
+  /// Sets this task's `branch` and nothing else, under the ledger's lock.
+  func recordBranch() async -> Result<Void, Refusal> {
     if let refusal = checkHolder() { return .failure(refusal) }
-    let current: Ledger
-    switch ledger() {
-    case .success(let read): current = read
-    case .failure(let refusal): return .failure(refusal)
-    }
-    let tasks = current.tasks.map { entry in
-      guard entry.id == task else { return entry }
-      return LedgerTask(
-        id: entry.id, deps: entry.deps, writeSet: entry.writeSet, gate: entry.gate,
-        tests: entry.tests, covers: entry.covers, estLines: entry.estLines,
-        status: entry.status, worktree: entry.worktree, actualLines: entry.actualLines,
-        model: entry.model, branch: names.branch)
-    }
-    let updated = Ledger(
-      schemaVersion: current.schemaVersion, resume: current.resume,
-      maxParallel: current.maxParallel, tasks: tasks, waves: current.waves)
-    do {
-      // Written beside the old file and renamed over it: a reader sees one whole file or the other.
-      try LedgerJSON.encode(updated).write(
-        to: URL(filePath: store.plan.ledgerFile), options: .atomic)
+    do throws(LedgerWriterError) {
+      try await LedgerWriter(plan: store.plan).update(task: task, .branch(names.branch))
     } catch {
-      return .failure(
-        Refusal(report: report.blocked("writing \(store.plan.ledgerFile): \(error)")))
+      switch error {
+      case .ledger(let read):
+        return .failure(Refusal(report: report.blocked("reading the ledger: \(read)")))
+      case .unknownTask:
+        return .failure(
+          Refusal(report: report.refused("task `\(task)` isn't in plan `\(slug)`'s ledger")))
+      case .refusedTransition, .lock, .io:
+        return .failure(
+          Refusal(report: report.blocked("writing \(store.plan.ledgerFile): \(error)")))
+      }
     }
     return .success(())
   }

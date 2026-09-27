@@ -75,6 +75,11 @@ struct ContextPackOptions: ParsableArguments {
   var ledger: String?
   @Option(help: "The ledger task id to pack.")
   var taskID: String?
+  @Option(
+    help:
+      "A build run id (worker): includes a dependency-notes section with each dep's task-return notes, verbatim (spec §5.3)."
+  )
+  var buildRun: String?
 
   var gatherInputs: ContextPackGatherInputs {
     ContextPackGatherInputs(
@@ -83,7 +88,7 @@ struct ContextPackOptions: ParsableArguments {
       frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, standards: standards,
       playbook: playbook, moduleKind: moduleKind, standardsAnchor: standardsAnchor, claims: claims,
       claimID: claimID, questionSet: questionSet, moduleGraph: moduleGraph,
-      taskSizingBounds: taskSizingBounds, ledger: ledger, taskID: taskID)
+      taskSizingBounds: taskSizingBounds, ledger: ledger, taskID: taskID, buildRun: buildRun)
   }
 }
 
@@ -112,6 +117,7 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var taskSizingBounds: String?
   var ledger: String?
   var taskID: String?
+  var buildRun: String?
 }
 
 /// The deterministic body of `context-pack`: gathers a role's inputs from disk, builds the pack
@@ -651,13 +657,14 @@ enum ContextPackRun {
     }
     let design = DesignDocument(markdown: .parse(designSource.rawText))
 
-    let task: LedgerTask
-    switch ContextPackLedger.task(id: taskID, ledgerPath: ledgerPath, root: root) {
-    case .success(let t): task = t
+    let ledgerData: Ledger
+    switch ContextPackLedger.load(ledgerPath: ledgerPath, root: root) {
+    case .success(let l): ledgerData = l
     case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
     case .failure(.malformed(let p)): return .failure(GatherFailure("`\(p)` is not a valid ledger"))
-    case .failure(.taskNotFound(let id, let p)):
-      return .failure(GatherFailure("task `\(id)` not found in `\(p)`"))
+    }
+    guard let task = ledgerData.tasks.first(where: { $0.id == taskID }) else {
+      return .failure(GatherFailure("task `\(taskID)` not found in `\(ledgerPath)`"))
     }
 
     var notes: [String] = []
@@ -665,6 +672,21 @@ enum ContextPackRun {
     switch optionalClaims(o.claims, root: root, notes: &notes) {
     case .success(let s): claims = s
     case .failure(let message): return .failure(message)
+    }
+
+    var dependencyNotes: [DependencyReturnNotes] = []
+    if let runID = o.buildRun {
+      guard RunID.isValid(runID) else {
+        return .failure(GatherFailure("--build-run `\(runID)` is not a valid run id"))
+      }
+      dependencyNotes = ContextPack.dependencyOrder(of: task.deps, in: ledgerData).map { dep in
+        switch ContextPackTaskReturn.notes(
+          forTask: dep, buildRun: runID, ledgerPath: ledgerPath, root: root)
+        {
+        case .success(let text): return DependencyReturnNotes(taskID: dep, notes: text)
+        case .failure: return DependencyReturnNotes(taskID: dep, notes: nil)
+        }
+      }
     }
 
     switch moduleKindAnchors(o.moduleKind) {
@@ -691,7 +713,8 @@ enum ContextPackRun {
           .worker(
             WorkerInputs(
               task: task, design: design, designSource: designSource, claims: claims,
-              citedClaimIDs: o.claimID, standards: standards, moduleKindAnchors: anchors)),
+              citedClaimIDs: o.claimID, standards: standards, moduleKindAnchors: anchors,
+              dependencyNotes: dependencyNotes)),
           notes, o.key ?? taskID
         ))
     }
@@ -841,6 +864,8 @@ enum ContextPackRun {
       return "quote `\(quote)` not found in `\(source)`"
     case .roleMismatch(let expected, let actual):
       return "role mismatch: expected \(expected.rawValue), got \(actual.rawValue)"
+    case .missingDependencyReturn(let task):
+      return "no task return for dependency `\(task)`: run `swiftgate build check-return` first"
     }
   }
 
@@ -892,7 +917,7 @@ struct ContextPackCommand: AsyncParsableCommand {
       + "--claim-id (evidence auditor), --design/--standards/--playbook/--standards-anchor "
       + "(standards reviewer), --design/--doc-anchor/--question-set (challenger), --design/"
       + "--module-graph/--task-sizing-bounds (decomposer), --design/--ledger/--task-id/--claims/"
-      + "--module-kind/--standards (worker) apply.")
+      + "--module-kind/--standards/--build-run (worker) apply.")
 
   @OptionGroup var packOptions: ContextPackOptions
   @OptionGroup var output: OutputOptions
