@@ -282,3 +282,7 @@ From the evals session's first review-accuracy and failure-modes runs (evals-rou
   against the 50 ms budget and go RED under load (131–1149 ms seen), which also reddens the Stop hook's fast tier.
   Measure the hook child's CPU time (rusage user + sys) against the budget, so a real regression still fails and
   machine load doesn't. `LiveProcessRunnerTests` belongs to the mutate-baseline task.
+- **Check in `repo-and-consumer-setup-gates-hold`:** 12 `swiftpm-testing-helper` processes from mutate runs were
+  orphaned (ppid 1) for 4–6 hours, three of them spinning at ~200% CPU each (likely infinite-loop mutants), after
+  their runs were killed. Prove, with a real mutant that loops forever, that a mutate test timeout and a killed
+  mutate run both take `swiftpm-testing-helper` down (process group, not just the direct child).

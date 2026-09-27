@@ -147,6 +147,46 @@ const tests = {
     assert.equal(findings(raised.result, 'concurrency')[0].severity, 'minor')
   },
 
+  async 'reviewer and verifier prompts point at the numbered diff and the new-file line rule — catches findings citing diff.patch lines'() {
+    const { calls } = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [defect] } },
+      verify: () => ({ findings: [{ ...defect, verified: true, verification_note: 'n' }] }),
+    })
+    assert.equal(calls.length, 3)
+    for (const { prompt, opts } of calls) {
+      assert.ok(prompt.includes(`${BUNDLE}/diff-numbered.txt`), `${opts.label}: no numbered diff`)
+      assert.match(prompt, /`line` is the line in the new file, never a line of diff\.patch/, opts.label)
+    }
+  },
+
+  async 'a finding the verifier re-lines keeps its verification at the verifier line — catches a patch-line citation dropping a real finding'() {
+    const cited = { ...defect, file: 'Tests/CounterFeatureTests.swift', line: 36, title: 'reset test never covers an in-flight fact' }
+    const { result } = await run({
+      args: baseArgs,
+      reviews: { 'concurrency': { findings: [cited] } },
+      verify: () => ({ findings: [{ ...cited, line: 73, verified: true, verification_note: 'traced at 73' }] }),
+    })
+    const [finding] = findings(result, 'concurrency')
+    assert.equal(finding.verified, true)
+    assert.equal(finding.line, 73)
+    assert.equal(finding.unmatched, undefined)
+    assert.match(finding.verification_note, /line 36\b.*line 73/)
+  },
+
+  async 'a finding the verifier returns nothing for is kept and marked unmatched — catches a silent drop at synthesis'() {
+    const { result } = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [defect] } },
+      verify: () => ({ findings: [] }),
+    })
+    const [finding] = findings(result, 'concurrency')
+    assert.equal(finding.verified, false)
+    assert.equal(finding.unmatched, true)
+    assert.equal(finding.severity, defect.severity)
+    assert.match(finding.verification_note, /no verifier entry matched/)
+  },
+
   async 'a finding with no kind is a defect — catches older reviewer output bypassing the defect path'() {
     const { kind, ...legacy } = defect
     const { result } = await run({

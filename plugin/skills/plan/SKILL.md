@@ -130,8 +130,8 @@ common dir, even when you run from a linked worktree. Keep the agent's id for th
 **Log** a `decompose` line with the tokens and duration the Agent tool reports.
 
 The reply must be a single JSON object, `{tasks, unresolved}`, in the agent's contract. Check that every
-task has the ledger task fields and `status` `pending`, with no `actualLines`. A reply that isn't
-in that shape halts.
+task has the ledger task fields, `status` `pending` and `model` set, with no `actualLines`. A reply
+that isn't in that shape halts.
 
 ## 5. Schedule, write the ledger, lint
 

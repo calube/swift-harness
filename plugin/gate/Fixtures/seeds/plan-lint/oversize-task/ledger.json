@@ -12,7 +12,8 @@
       "covers": [],
       "estLines": 401,
       "status": "pending",
-      "worktree": "../only-task"
+      "worktree": "../only-task",
+      "model": "sonnet"
     }
   ],
   "waves": [["only-task"]]

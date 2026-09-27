@@ -18,3 +18,6 @@ made from `design.md`. The design at HEAD then no longer hashes to the plan's de
 `covered-test-untested` covers a T3 test but leaves it out of `tests`. The gate is still read from
 `covers`, so `fast` is too weak. `unknown-test` misspells its `tests` id. `duplicate-task-id`
 repeats a task id, which is a finding rather than a trap.
+
+Every case's task carries `"model": "sonnet"` except `missing-model`, which omits the field to
+prove the rule fires on an untagged task.

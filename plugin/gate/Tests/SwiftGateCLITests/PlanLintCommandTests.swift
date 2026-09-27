@@ -71,12 +71,13 @@ private struct PlanLintRepo {
 
   static func task(
     id: String = "queue-core", deps: [String] = [],
-    covers: [String] = ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"]
+    covers: [String] = ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"],
+    model: TaskModel? = .sonnet
   ) -> LedgerTask {
     LedgerTask(
       id: id, deps: deps, writeSet: ["Sample/Sources/Core/"], gate: .fast,
       tests: ["test-queued-order-survives-relaunch"], covers: covers, estLines: 120,
-      status: .pending, worktree: "../app-\(slug)-\(id)")
+      status: .pending, worktree: "../app-\(slug)-\(id)", model: model)
   }
 
   static func ledger(tasks: [LedgerTask] = [task()], waves: [[String]] = [["queue-core"]])

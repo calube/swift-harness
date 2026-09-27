@@ -1,0 +1,58 @@
+// Checks the code-review agents against the review contract. Run: node tests/review_agents_test.mjs
+// Regressions caught: a reviewer or verifier citing a `diff.patch` line instead of the line in the
+// new file, which lets the workflow mismatch a real finding with its verification; a reviewer that
+// never reads the numbered diff that carries the new-file line numbers; the concurrency reviewer
+// rating a race users hit below the contract's blocker rule.
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
+// Prose wraps anywhere, so phrases are matched with whitespace collapsed.
+const read = path => readFileSync(join(root, path), 'utf8').replace(/\s+/g, ' ')
+
+const REVIEWERS = ['concurrency', 'architecture', 'test-quality', 'api-errors', 'swiftui']
+const CODE_AGENTS = [...REVIEWERS, 'verifier']
+
+// The contract's defect-severity sentence, read from the contract so the two can't drift.
+const contract = read('docs/review-contract.md')
+const DEFECT_BLOCKER_RULE = /A defect is a `blocker` when users or callers hit it/.exec(contract)?.[0]
+
+const tests = {
+  'every code-review agent says line is the new-file line, never a patch line — catches findings citing diff.patch lines that reconcile cannot line up'() {
+    for (const name of CODE_AGENTS) {
+      const body = read(`agents/${name}.md`)
+      assert.match(body, /`line` is the 1-based line in the new file/, `${name}: no new-file line rule`)
+      assert.match(body, /never a line number in `diff\.patch`/, `${name}: does not forbid patch lines`)
+    }
+  },
+
+  'every code-review agent reads the numbered diff — catches reviewers left to count patch lines by hand'() {
+    for (const name of CODE_AGENTS) {
+      assert.match(read(`agents/${name}.md`), /`diff-numbered\.txt`/, `${name}: never names diff-numbered.txt`)
+    }
+  },
+
+  'the concurrency reviewer quotes the contract blocker rule with a race users hit — catches a user-visible race rated minor'() {
+    assert.ok(DEFECT_BLOCKER_RULE, 'review-contract.md lost its defect blocker rule')
+    const body = read('agents/concurrency.md')
+    assert.ok(body.includes(DEFECT_BLOCKER_RULE), 'concurrency.md does not quote the contract rule')
+    assert.match(body, /race a user can trigger[^.]*is a `blocker`/i, 'no race example rated blocker')
+  },
+}
+
+let failed = 0
+for (const [name, test] of Object.entries(tests)) {
+  try {
+    await test()
+    console.log(`ok   ${name}`)
+  } catch (error) {
+    failed++
+    console.log(`FAIL ${name}\n     ${error.message.split('\n').join('\n     ')}`)
+  }
+}
+if (failed) {
+  console.log(`${failed} failed`)
+  process.exit(1)
+}

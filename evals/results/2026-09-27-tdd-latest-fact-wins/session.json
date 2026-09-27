@@ -1,0 +1,278 @@
+{
+  "pins": {
+    "claudeVersion": "2.1.282 (Claude Code)",
+    "harnessCommit": "1b9b816",
+    "xcode": "Xcode 26.2",
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001"
+  },
+  "partial": null,
+  "costUsd": 1.136954,
+  "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw",
+  "cases": [
+    {
+      "name": "skills-tdd-latest-fact-wins",
+      "arms": {
+        "with": {
+          "runs": 3,
+          "passed": 3,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.674183
+        },
+        "without": {
+          "runs": 3,
+          "passed": 3,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.462771
+        }
+      }
+    }
+  ],
+  "results": [
+    {
+      "name": "skills-tdd-latest-fact-wins",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 12,
+            "costUsd": 0.2143224,
+            "judgeCostUsd": 0,
+            "durationSeconds": 567,
+            "hookRecords": 11,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/with-1",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: {\"command\":\"test t1\",\"durationMilliseconds\":39252,\"findingCount\":1,\"finishedAt\":\"2026-09-27T04:19:09Z\",\"runID\":\"20260927T041830Z-2f269de4\",\"schemaVersion\":1,\"tiers\":[{\"durationMilliseconds\":38965,\"testCounts\":{\"failed\":1,\"passed\":4,\"skipped\":0},\"tier\":\"T1\",\"verdict\":\"RED\"}],\"verdict\":\"RED\"}"
+              }
+            ]
+          },
+          {
+            "arm": "with",
+            "trial": 2,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 14,
+            "costUsd": 0.24521379999999998,
+            "judgeCostUsd": 0,
+            "durationSeconds": 771,
+            "hookRecords": 14,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/with-2",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: {\"command\":\"test t1\",\"durationMilliseconds\":38309,\"findingCount\":1,\"finishedAt\":\"2026-09-27T04:33:37Z\",\"runID\":\"20260927T043258Z-51bd471b\",\"schemaVersion\":1,\"tiers\":[{\"durationMilliseconds\":38138,\"testCounts\":{\"failed\":1,\"passed\":4,\"skipped\":0},\"tier\":\"T1\",\"verdict\":\"RED\"}],\"verdict\":\"RED\"} | {\"command\":\"check fast\",\"durationMilliseconds\":4440,\"findingCount\":1,\"finishedAt\":\"2026-09-27T04:34:55Z\",\""
+              }
+            ]
+          },
+          {
+            "arm": "with",
+            "trial": 3,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 12,
+            "costUsd": 0.2146468,
+            "judgeCostUsd": 0,
+            "durationSeconds": 507,
+            "hookRecords": 11,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/with-3",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: {\"command\":\"test t1\",\"durationMilliseconds\":43209,\"findingCount\":1,\"finishedAt\":\"2026-09-27T05:03:45Z\",\"runID\":\"20260927T050302Z-5b3ec8c5\",\"schemaVersion\":1,\"tiers\":[{\"durationMilliseconds\":42796,\"testCounts\":{\"failed\":1,\"passed\":4,\"skipped\":0},\"tier\":\"T1\",\"verdict\":\"RED\"}],\"verdict\":\"RED\"}"
+              }
+            ]
+          }
+        ],
+        "without": [
+          {
+            "arm": "without",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 10,
+            "costUsd": 0.14962579999999998,
+            "judgeCostUsd": 0,
+            "durationSeconds": 448,
+            "hookRecords": 0,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/without-1",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": false,
+                "passed": false,
+                "explanation": "exit 1: "
+              }
+            ]
+          },
+          {
+            "arm": "without",
+            "trial": 2,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 9,
+            "costUsd": 0.1745896,
+            "judgeCostUsd": 0,
+            "durationSeconds": 936,
+            "hookRecords": 0,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/without-2",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": false,
+                "passed": false,
+                "explanation": "exit 1: "
+              }
+            ]
+          },
+          {
+            "arm": "without",
+            "trial": 3,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 10,
+            "costUsd": 0.1385556,
+            "judgeCostUsd": 0,
+            "durationSeconds": 360,
+            "hookRecords": 0,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/tdd2/raw/skills-tdd-latest-fact-wins/without-3",
+            "graders": [
+              {
+                "name": "agent-test-red-on-baseline",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: the agent's tests fail on the unfixed source"
+              },
+              {
+                "name": "hidden-race-test",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0:       \"verdict\" : \"GREEN\" |     } |   ], |   \"verdict\" : \"GREEN\" | }"
+              },
+              {
+                "name": "swiftgate-red-seen",
+                "type": "command",
+                "weight": 1,
+                "scored": false,
+                "passed": false,
+                "explanation": "exit 1: "
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

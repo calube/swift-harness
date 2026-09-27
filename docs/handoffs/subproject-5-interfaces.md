@@ -159,3 +159,19 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Merge reason.** `build merge --json` gains a closed `reason` key: `main-moved`, `dirty-checkout`, `not-on-main`,
   `not-held`, `conflicted`, `undo-refused`, `branch-missing` or `already-merged`. It's omitted when the merge succeeds.
 - **Gate.** The push tier is GREEN on merged main (run 20260927T065928Z-fd0f5501, 1670 tests).
+
+## Wave 6 (rest) and wave 8 (spec corrections)
+
+- **Calibration.** `swiftgate calibrate build` runs `build-worker` and `build-fixer` against labelled seeds in
+  `plugin/gate/Fixtures/calibrate-build/`. Worker seeds hold `base/`, `accept/`, `solution/`, `context.md`,
+  `input.md` and `label.json`; fixer seeds add `main/` and `task/`. Label keys are `schemaVersion`, `outcome`, `gate`,
+  `writeSet` and `tests` (`"<classname>/<name>"`), and unknown keys are rejected. The pass record is
+  `calibrate-build/last-pass.json`, keyed by the content hash of both agent files. The push tier requires a fresh
+  pass when either agent changes (`calibration-freshness.*`, one summary for both suites). Shared calibration code
+  lives in `A/Calibration/CalibrationSeeds.swift` and `CalibrationRecord.swift`. Rules: `calibrate-build.{passed,
+  label-missed,seed-defect,usage,invalid-label,missing-*,unknown-agent,uncalibrated-agent}`. One real run took 114 s
+  and cost $0.15.
+- **Spec corrections.** The Foundation map row 5, the sub-project 2 spec's §5.7 status row and its §8.1 tiers now
+  point at this spec (commit f54e3cd).
+- **Gate.** The push tier is GREEN on merged main (run 20260927T075754Z-5ea8766d, 1681 tests). Main also has
+  sub-project 2's latency fix: hook budgets now measure the hook's own CPU time, so timing flakes should be rare.

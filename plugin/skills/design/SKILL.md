@@ -1,19 +1,21 @@
 ---
 name: design
-description: This skill should be used to design a change in a swift-harness repository before any code or plan exists, and to take that design through review, approval and later amendment. It frames the goal with the user through multiple-choice questions, claims the plan, lets `swiftgate design-scope` pick a depth tier, runs the research lanes, verifies every claim, has an opus drafter write the design doc until `design-lint` and `docs-lint` pass, runs the design reviewers, publishes the rendered page as an Artifact, reads the approval back and merges. Use when the user says "design this", "write a design doc", "/swift-harness:design", "plan the architecture for", "how should we build", asks for a design before a plan, or passes --revise, --amend or --supersede.
+description: This skill should be used to design a change in a swift-harness repository before any code or plan exists, and to take that design through review, approval and later amendment. It frames the goal with the user through multiple-choice questions, claims the plan, lets `swiftgate design-scope` pick a depth tier, runs the research lanes, verifies every claim, has an opus drafter write the design doc until `design-lint` and `docs-lint` pass, runs the design reviewers, publishes the rendered page as an Artifact, reads the approval back and merges. Use when the user says "design this", "write a design doc", "/swift-harness:design", "plan the architecture for", "how should we build", asks for a design before a plan, or passes --revise, --amend, --supersede or --tier, such as --tier sketch for a spec that already states what to build.
 ---
 
 # Design
 
 Invoking this skill is the user's opt-in to run the design pipeline. It spends agents at every tier
 except the frame: 1 research lane, the claim checker and the drafter at `quick`; 4 lanes, the
-checker, the drafter and 3 reviewers at `standard`; the same plus a pre-mortem at `deep`.
+checker, the drafter and 3 reviewers at `standard`; the same plus a pre-mortem at `deep`. At
+`sketch` it spends the drafter alone.
 
 ## Modes
 
 | Invocation | Starts at |
 |---|---|
 | `/swift-harness:design <goal>` | 1. Frame |
+| `… --tier <tier>` | 1. Frame, claimed at `<tier>` with no tier question; `sketch` takes [the sketch path](#sketch) |
 | `… --supersede <old-slug>` | 1. Frame; acts on the old design at the approved commit |
 | `… --revise` | [Revise from comments](references/review-publish-amend.md#revise-from-comments), after a claim |
 | `… --amend <slug>` | [Amend and clarify](references/review-publish-amend.md#amend-and-clarify), after a claim |
@@ -37,7 +39,7 @@ directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-rel
   denies any subagent.
 - **The gate decides.** Never hand-check what a `swiftgate` command checks, and never edit a
   status the gate or an agent returned. When a command exits 2, report its message and stop.
-- **A premise is a claim.** An API, type or behaviour the request names isn't checked before
+- **A premise is a claim.** Don't check an API, type or behaviour the request names before
   research, even when a grep would settle it. The frame carries it into the lane briefs, and
   verify's probe decides it. Never stop the frame or rewrite the goal over a premise.
 - **Claim on entry, release on exit.** Every entry point claims the plan before it writes anything:
@@ -64,6 +66,15 @@ directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-rel
 The SessionStart hook prints `Session id: <id> (pass as --session to swiftgate plan claim/plan
 release).` A skill can't read hook payloads, so this line is the only source. If it's absent, stop
 and tell the user the hook didn't run; never invent an id.
+
+## Sketch
+
+`--tier sketch` replaces phases 2 to 6 with [the sketch path](references/review-publish-amend.md#sketch).
+The frame questions carry the user's clarifying questions about the spec. No research lane, probe,
+claim checker or reviewer runs. The drafter writes the doc with `tier: sketch` in its status
+frontmatter, and `design-lint` and `docs-lint` still run. The user approves with 1
+`AskUserQuestion`, recorded as an `answer` claim bound to the designSha. An `--amend` of a sketch
+design runs no delta review, as at `quick`.
 
 ## 1. Frame
 

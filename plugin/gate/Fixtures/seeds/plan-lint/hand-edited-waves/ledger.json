@@ -12,7 +12,8 @@
       "covers": [],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../a"
+      "worktree": "../a",
+      "model": "sonnet"
     },
     {
       "id": "b",
@@ -23,7 +24,8 @@
       "covers": [],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../b"
+      "worktree": "../b",
+      "model": "sonnet"
     }
   ],
   "waves": [["a", "b"]]
