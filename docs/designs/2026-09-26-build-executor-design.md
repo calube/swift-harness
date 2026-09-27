@@ -3,7 +3,7 @@
 <!-- RESUME
 Status: APPROVED 2026-09-26 by the user, after review of the published page. Source of truth for every decision:
 docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md (D1–D14; D5 amends D1).
-Next action: write the implementation plan.
+Next action: build per docs/plans/2026-09-26-build-executor-plan.md.
 Read first: this header → §2 (decision map) → the section you need. Grep; don't read the whole file.
 Corrects Foundation spec §2 (sub-project map row 5) and sub-project 2 spec §5.7 (ledger states and fields). See §15.
 Open: whether a workflow agent can take a SendMessage fix round (§14).

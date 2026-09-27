@@ -2,7 +2,7 @@
 
 <!-- RESUME
 State (2026-09-26): brainstorm started with the user. Brainstorm COMPLETE: D1–D14 locked (D1 amended by D5). Spec drafted at
-docs/designs/2026-09-26-build-executor-design.md and APPROVED by the user on 2026-09-26. Next: the implementation plan.
+docs/designs/2026-09-26-build-executor-design.md and APPROVED by the user on 2026-09-26. Plan: docs/plans/2026-09-26-build-executor-plan.md (24 tasks, 11 waves).
 Motivation: a 45-minute AI coding interview. A README goes in; design → plan → parallel build → validation
 comes out. The general executor comes first, and the interview entry point and presets sit on top of it.
 -->
