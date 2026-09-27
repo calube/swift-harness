@@ -261,6 +261,51 @@ const tests = {
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
   },
 
+  'the ship skill runs its preflight, hands the preset to each step and reports the build — catches a preflight check or the build hand-off dropped'() {
+    const shipDir = join(root, 'skills/ship')
+    assert.ok(existsSync(shipDir), 'no ship skill')
+    const files = Object.fromEntries(
+      markdownFiles(shipDir).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
+    )
+    assert.deepEqual(requiredCallProblems(files), [])
+    const { problems, resolved } = scanSkills(shipDir, help, root)
+    assert.deepEqual(problems, [])
+    const has = (path, flag) => resolved.some(r => r.path === path && (!flag || r.flags.includes(flag)))
+    for (const [path, flag] of [
+      ['doctor', null], ['worktree warm-check', '--json'], ['design-render', '--ledger'],
+      ['stats', '--build'], ['stats', '--plan'],
+    ]) assert.ok(has(path, flag), `the ship skill never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
+    const all = Object.values(files).join('\n')
+    for (const step of [
+      /\/swift-harness:design <spec-file> --tier <design_tier>/,
+      /\/swift-harness:plan <plan>/,
+      /\/swift-harness:build <plan> --preset <preset>/,
+    ]) assert.ok(step.test(all), `the ship skill never runs ${step.source}`)
+    const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
+    assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
+  },
+
+  'the design skill\'s sketch path lints, synthesizes no review and records the approval — catches the sketch branch skipping a gate'() {
+    const { problems, resolved } = scanSkills(join(root, 'skills/design'), help, root)
+    assert.deepEqual(problems, [])
+    const text = readFileSync(join(root, 'skills/design/references/review-publish-amend.md'), 'utf8')
+    const at = text.indexOf('\n## Sketch\n')
+    assert.ok(at >= 0, 'no Sketch section in review-publish-amend.md')
+    const sketch = text.slice(at + 1).split(/\n## /)[0]
+    const firstLine = text.slice(0, at + 1).split('\n').length
+    const lastLine = firstLine + sketch.split('\n').length - 1
+    const inSketch = (path, flag) => resolved.some(r =>
+      r.file === 'skills/design/references/review-publish-amend.md' && r.line >= firstLine && r.line <= lastLine
+      && r.path === path && (!flag || r.flags.includes(flag)))
+    for (const [path, flag] of [
+      ['design-lint', null], ['docs-lint', '--json'], ['review-synth', '--tier'], ['design-diff', '--json'],
+      ['evidence check', '--design'], ['index set', '--session'], ['plan release', '--session'],
+    ]) assert.ok(inSketch(path, flag), `the sketch path never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
+    assert.ok(/--tier sketch/.test(sketch), 'the sketch review-synth is not run at --tier sketch')
+    assert.ok(/AskUserQuestion/.test(sketch) && /"kind":"answer"/.test(sketch), 'the sketch approval is not an answer claim')
+    assert.ok(/tier: sketch/.test(sketch), 'the sketch doc does not record tier: sketch')
+  },
+
   'the design skill passes every flag and arg its callees require — catches a skill call a stricter CLI or workflow now refuses'() {
     const files = designSkillFiles()
     assert.deepEqual(requiredCallProblems(files), [])
