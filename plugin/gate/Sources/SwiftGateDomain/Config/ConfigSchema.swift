@@ -15,7 +15,7 @@ public enum ConfigSchema {
       in: root, at: "",
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
-        "budgets", "clients", "modules", "judge", "docs", "plan", "exclude",
+        "budgets", "clients", "modules", "judge", "docs", "plan", "build", "exclude",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -38,6 +38,7 @@ public enum ConfigSchema {
     let judge = readJudge(&reader, root)
     let docs = readDocs(&reader, root)
     let plan = readPlan(&reader, root)
+    let buildPresets = readBuild(&reader, root)
 
     // A key that failed to read was replaced by a placeholder; rule violations on that placeholder
     // (or anything under it) would only restate the read issue.
@@ -50,7 +51,8 @@ public enum ConfigSchema {
     let invariantIssues = Config.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude
+      modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
+      exclude: exclude
     ).filter { !restatesReadIssue($0) }
     let issues = reader.issues + invariantIssues
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
@@ -58,7 +60,8 @@ public enum ConfigSchema {
     return try Config(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude)
+      modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
+      exclude: exclude)
   }
 
   private static func readSimulator(_ reader: inout Reader, _ root: [String: ConfigValue])
@@ -257,6 +260,87 @@ public enum ConfigSchema {
         ?? defaults.maxTestsPerTask,
       workerPackTokenBudget: reader.integer(table, "worker_pack_token_budget", at: path)
         ?? defaults.workerPackTokenBudget)
+  }
+
+  private static func readBuild(_ reader: inout Reader, _ root: [String: ConfigValue])
+    -> [String: BuildPreset]
+  {
+    let path = "build"
+    guard let table = reader.table(root, path, at: "") else { return [:] }
+    reader.rejectUnknownKeys(in: table, at: path, allowed: ["presets"])
+    guard let presetsTable = reader.table(table, "presets", at: path, required: true) else {
+      return [:]
+    }
+    let presetsPath = Reader.join(path, "presets")
+    var presets: [String: BuildPreset] = [:]
+    for name in presetsTable.keys.sorted() {
+      let entryPath = Reader.join(presetsPath, name)
+      guard case .table(let presetTable) = presetsTable[name]! else {
+        reader.issues.append(
+          .wrongType(
+            path: entryPath, expected: "table", found: presetsTable[name]!.typeName))
+        continue
+      }
+      presets[name] = readPreset(&reader, presetTable, at: entryPath)
+    }
+    return presets
+  }
+
+  private static func readPreset(
+    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String
+  ) -> BuildPreset {
+    reader.rejectUnknownKeys(
+      in: table, at: path,
+      allowed: [
+        "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
+        "time_budget_min", "stop_starts_before_min", "on_design_conflict",
+      ])
+    let designTier: BuildPreset.DesignTier =
+      readEnum(&reader, table, "design_tier", at: path) ?? .standard
+    let review: BuildPreset.Review = readEnum(&reader, table, "review", at: path) ?? .full
+    let taskGate = readTaskGate(&reader, table, at: path)
+    let mergeGate: CheckTier = readEnum(&reader, table, "merge_gate", at: path) ?? .push
+    let workerModel: BuildPreset.WorkerModel =
+      readEnum(&reader, table, "worker_model", at: path) ?? .tagged
+    let onDesignConflict: BuildPreset.OnDesignConflict =
+      readEnum(&reader, table, "on_design_conflict", at: path) ?? .amend
+    return BuildPreset(
+      designTier: designTier,
+      maxParallel: reader.integer(table, "max_parallel", at: path, required: true) ?? 0,
+      review: review, taskGate: taskGate, mergeGate: mergeGate, workerModel: workerModel,
+      timeBudgetMin: reader.integer(table, "time_budget_min", at: path, required: true) ?? 0,
+      stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
+        ?? 0,
+      onDesignConflict: onDesignConflict)
+  }
+
+  /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both
+  /// legal, so it can't share ``readEnum``'s `CaseIterable` constraint.
+  private static func readTaskGate(
+    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String
+  ) -> BuildPreset.TaskGate {
+    guard let raw = reader.string(table, "task_gate", at: path, required: true) else {
+      return .ledger
+    }
+    if let value = BuildPreset.TaskGate(rawValue: raw) { return value }
+    reader.issues.append(
+      .unknownEnumValue(
+        path: Reader.join(path, "task_gate"), value: raw,
+        allowed: BuildPreset.TaskGate.allowedRawValues))
+    return .ledger
+  }
+
+  /// Reads a required string key as a closed enum. A value none of `Value`'s cases recognize is
+  /// an `.unknownEnumValue` issue, not a silent fallback.
+  private static func readEnum<Value>(
+    _ reader: inout Reader, _ table: [String: ConfigValue], _ key: String, at path: String
+  ) -> Value? where Value: RawRepresentable, Value: CaseIterable, Value.RawValue == String {
+    guard let raw = reader.string(table, key, at: path, required: true) else { return nil }
+    if let value = Value(rawValue: raw) { return value }
+    reader.issues.append(
+      .unknownEnumValue(
+        path: Reader.join(path, key), value: raw, allowed: Value.allCases.map(\.rawValue)))
+    return nil
   }
 }
 
