@@ -254,17 +254,26 @@ private struct Judgement {
   }
 
   private mutating func judgeMissingReports() {
-    let located = log.compilerErrors.compactMap { error -> (String, TestConsoleLog.Location)? in
+    let located = log.compilerErrors.compactMap { error -> (String, Int?, String)? in
       guard let path = relative(error.file), !path.contains(".build/") else { return nil }
-      return (path, error)
+      return (path, error.line, error.message)
     }
-    guard located.isEmpty else {
+    // A macro expansion (for example `#expect(try …)` in a non-throwing test) is a compile error
+    // in the repository's own code, never an environment problem, even when the compiler's note
+    // can't name a real file: it must never read as no-evidence, which would let the Stop hook
+    // release on a test that doesn't compile.
+    let macroLocated = log.macroExpansionErrors.map { error -> (String, Int?, String) in
+      let path = error.file.flatMap(relative).flatMap { $0.contains(".build/") ? nil : $0 }
+      return (path ?? evidence.packagePath, path != nil ? error.line : nil, error.message)
+    }
+    let compileErrors = located + macroLocated
+    guard compileErrors.isEmpty else {
       var seen = Set<String>()
-      for (path, error) in located
-      where seen.insert("\(path):\(error.line):\(error.message)").inserted {
+      for (path, line, message) in compileErrors
+      where seen.insert("\(path):\(line ?? -1):\(message)").inserted {
         gate(
-          HostTestEvidenceRules.buildFailedRuleID, file: path, line: error.line,
-          "does not compile: \(error.message)")
+          HostTestEvidenceRules.buildFailedRuleID, file: path, line: line,
+          "does not compile: \(message)")
       }
       return
     }

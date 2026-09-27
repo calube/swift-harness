@@ -1,0 +1,26 @@
+Building for debugging...
+[0/8] /REPO/gate/Fixtures/swifttest/XUnitProbe/.build/arm64-apple-macosx/debug/XUnitProbePackageTests.derived/runner.swift
+[1/8] Write sources
+[5/8] Write swift-version--58304C5D6DBC2206.txt
+[7/10] Emitting module Probe
+[8/10] Compiling Probe Probe.swift
+[9/18] Compiling EmptyTests Empty.swift
+[10/18] Emitting module EmptyTests
+[11/18] Compiling ProbeTests PassTests.swift
+macro expansion #expect:1:22: error: errors thrown from here are not handled
+`- /REPO/gate/Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/PassTests.swift:20:55: note: expanded code originates here
+18 | 
+19 | @Test("try inside expect in a non-throwing test")
+20 | func tryInsideExpect() { #expect(try throwsInt() == 1) }
+   |                          `- note: in expansion of macro 'expect' here
+   +--- macro expansion #expect ----------------------------------------
+   |1 | Testing.__checkValue(try throwsInt() == 1,expression: .__fromSyntaxNode("try throwsInt() == 1"),comments: [],isRequired: false,sourceLocation: Testing.SourceLocation.__here()).__expected()
+   |  |                      `- error: errors thrown from here are not handled
+   +--------------------------------------------------------------------
+21 | 
+[12/18] Emitting module ProbeTests
+[13/18] Compiling ProbeTests SharedFirstLineTests.swift
+[14/18] Compiling ProbeTests CrashTests.swift
+[15/18] Compiling ProbeTests FailTests.swift
+[16/18] Compiling ProbeTests SkipTests.swift
+error: fatalError

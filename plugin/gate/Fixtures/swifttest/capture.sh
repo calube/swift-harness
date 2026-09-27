@@ -47,6 +47,19 @@ rsync -a --exclude .build "$probe/" "$broken/"
 sed -i '' 's/value \* 2/value * "2"/' "$broken/Sources/Probe/Probe.swift"
 capture build-error "$(cd "$broken" && pwd -P)" "$probe_path" 'ProbeTests\.Pass'
 
+# A compile error inside a #expect macro expansion: `try` in a non-throwing test's #expect call.
+macro="$work/macro"
+mkdir -p "$macro"
+rsync -a --exclude .build "$probe/" "$macro/"
+cat >>"$macro/Tests/ProbeTests/PassTests.swift" <<'SWIFT'
+
+func throwsInt() throws -> Int { 1 }
+
+@Test("try inside expect in a non-throwing test")
+func tryInsideExpect() { #expect(try throwsInt() == 1) }
+SWIFT
+capture macro-compile-error "$(cd "$macro" && pwd -P)" "$probe_path" 'ProbeTests\.Pass'
+
 # Proof scenarios: the passing tests run against the code under test with its change reverted.
 # `reverted`: the source still compiles but computes the old (wrong) result.
 reverted="$work/reverted"
