@@ -1,0 +1,12 @@
+# Contributor hooks for this repository. Unlike the consumer template `plugin/templates/lefthook.yml`
+# stamps (which calls the installed `~/.local/bin/swiftgate` symlink), these call `plugin/bin/swiftgate`
+# directly: this checkout has no separate install step, so the shim in this repo is the one to run.
+pre-push:
+  commands:
+    swiftgate-push:
+      run: '"plugin/bin/swiftgate" check --tier push'
+
+commit-msg:
+  commands:
+    swiftgate-commit-msg:
+      run: '"plugin/bin/swiftgate" comments --commit-msg {1}'

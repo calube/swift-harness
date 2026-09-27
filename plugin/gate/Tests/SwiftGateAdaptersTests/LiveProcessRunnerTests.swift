@@ -1,6 +1,8 @@
+import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import Synchronization
 import Testing
 
 @Suite("LiveProcessRunner")
@@ -119,57 +121,180 @@ struct LiveProcessRunnerTests {
     }
   }
 
-  @Test("timeout kills the child and throws a BLOCKED error — catches a hung tool wedging the gate")
-  func timeoutKillsChild() async throws {
-    let clock = ContinuousClock()
-    let start = clock.now
-    let error = await #expect(throws: ProcessRunnerError.self) {
-      _ = try await runner.run(
-        ProcessInvocation(
-          executable: "/bin/sh", arguments: ["-c", "echo started; exec sleep 30"],
-          timeout: .milliseconds(300)))
+  /// How long every process in a ``tree(_:)`` sleeps. A run whose whole tree is gone in under
+  /// half of it was killed rather than left to finish, and a process the runner fails to kill
+  /// still ends the test, on a failed assertion, once it runs out.
+  private static let treeLifetime = 120
+  private static let killedWell = Duration.seconds(treeLifetime / 2)
+
+  static let hasPython = FileManager.default.isExecutableFile(atPath: "/usr/bin/python3")
+
+  /// One process the runner's direct child forks before it reports ready.
+  private struct Grandchild {
+    /// Moves into a process group of its own, as `swift test`'s `xctest` /
+    /// `swiftpm-testing-helper` does, out of reach of a signal to the child's group.
+    var ownGroup = false
+    var ignoresTerm = false
+  }
+
+  /// A direct child (python, since the shell can't `setpgid`) that forks `grandchildren`, prints
+  /// `started` when `started` is set, then sleeps. Every process in the tree, the child included,
+  /// opens `$READY` for writing, writes one line (`held <pid>` for a grandchild, `ready` for the
+  /// child) and holds it open for life, so the pipe reaches end-of-file only once the whole tree
+  /// is gone.
+  private static func tree(_ grandchildren: [Grandchild], started: Bool = false) -> [String] {
+    let specs = grandchildren.map {
+      "(\($0.ownGroup ? "True" : "False"), \($0.ignoresTerm ? "True" : "False"))"
     }
-    #expect(clock.now - start < .seconds(10))
-    guard case .timedOut(_, let after, let stdout, _) = error else {
-      Issue.record("expected timedOut, got \(String(describing: error))")
-      return
+    let script = """
+      import os, signal, sys, time
+      ready = os.environ["READY"]
+      for own_group, ignores_term in [\(specs.joined(separator: ", "))]:
+          if os.fork() == 0:
+              if own_group:
+                  os.setpgid(0, 0)
+              if ignores_term:
+                  signal.signal(signal.SIGTERM, signal.SIG_IGN)
+              fd = os.open(ready, os.O_WRONLY)
+              os.write(fd, ("held %d\\n" % os.getpid()).encode())
+              time.sleep(\(treeLifetime))
+              os._exit(0)
+      if \(started ? "True" : "False"):
+          print("started", flush=True)
+      fd = os.open(ready, os.O_WRONLY)
+      os.write(fd, b"ready\\n")
+      time.sleep(\(treeLifetime))
+      """
+    return ["-c", script]
+  }
+
+  /// Reads one line per process in the tree, so nothing is signalled before every process holds
+  /// the pipe, and returns the grandchildren's pids for cleanup.
+  private static func awaitTree(
+    _ lines: inout AsyncStream<String>.Iterator, grandchildren: Int
+  ) async throws -> [pid_t] {
+    var pids: [pid_t] = []
+    var sawReady = false
+    for _ in 0...grandchildren {
+      let line = try #require(await lines.next())
+      if line == "ready" {
+        sawReady = true
+      } else {
+        pids.append(try #require(pid_t(line.dropFirst("held ".count))))
+      }
     }
-    #expect(after == .milliseconds(300))
-    #expect(stdout.text == "started\n")
-    #expect(error?.verdict == .blocked)
+    #expect(sawReady)
+    #expect(pids.count == grandchildren)
+    return pids
   }
 
   @Test(
-    "timeout kills grandchildren holding the pipes — catches a hang after killing only the child")
-  func timeoutKillsProcessGroup() async {
-    let patient = LiveProcessRunner(
-      baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .seconds(1),
-      postExitDrainLimit: .seconds(60))
-    let clock = ContinuousClock()
-    let start = clock.now
-    await #expect(throws: ProcessRunnerError.self) {
-      _ = try await patient.run(
+    "timeout kills the child and every process it started, even one in a process group of its own, and throws a BLOCKED error — catches a hung tool wedging the gate or an orphaned xctest spinning after a mutate timeout",
+    .enabled(if: hasPython, "/usr/bin/python3 is missing"))
+  func timeoutKillsChild() async throws {
+    let held = try HeldPipe()
+    defer { held.remove() }
+    var lines = held.lines().makeAsyncIterator()
+    let clock = ShiftableClock()
+    let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"], now: clock.now)
+    let timeout = Duration.seconds(3600)
+    let start = ContinuousClock.now
+    let run = Task {
+      await Self.outcome(
+        runner,
         ProcessInvocation(
-          executable: "/bin/sh", arguments: ["-c", "sleep 30 & sleep 30; wait"],
-          timeout: .milliseconds(300)))
+          executable: "/usr/bin/python3",
+          arguments: Self.tree([Grandchild(ownGroup: true)], started: true),
+          environmentOverlay: ["READY": held.path], timeout: timeout))
     }
-    #expect(clock.now - start < .seconds(10))
+    let grandchildren = try await Self.awaitTree(&lines, grandchildren: 1)
+    defer { for pid in grandchildren { kill(pid, SIGKILL) } }
+    clock.advance(by: timeout)
+
+    let result = await run.value
+    #expect(await lines.next() == nil, "a process in the child's tree outlived the timeout")
+    #expect(ContinuousClock.now - start < Self.killedWell)
+    guard case .failure(let error) = result,
+      case .timedOut(_, let after, let stdout, _) = error
+    else {
+      Issue.record("expected timedOut, got \(result)")
+      return
+    }
+    #expect(after == timeout)
+    #expect(stdout.text == "started\n")
+    #expect(error.verdict == .blocked)
   }
 
-  @Test("task cancellation kills the child — catches orphaned tools after a hook is interrupted")
-  func cancellationKillsChild() async {
-    let clock = ContinuousClock()
-    let start = clock.now
+  @Test(
+    "timeout's SIGKILL reaches grandchildren that ignore SIGTERM and hold the pipes, in the child's group or their own, after the child itself has died — catches a hang, or a leaked process, after killing only the child",
+    .enabled(if: hasPython, "/usr/bin/python3 is missing"))
+  func timeoutKillsProcessGroup() async throws {
+    let held = try HeldPipe()
+    defer { held.remove() }
+    var lines = held.lines().makeAsyncIterator()
+    let clock = ShiftableClock()
+    let patient = LiveProcessRunner(
+      baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .seconds(1),
+      postExitDrainLimit: .seconds(3600), now: clock.now)
+    let timeout = Duration.seconds(3600)
+    let start = ContinuousClock.now
+    let stubborn = [
+      Grandchild(ownGroup: false, ignoresTerm: true), Grandchild(ownGroup: true, ignoresTerm: true),
+    ]
+    let run = Task {
+      await Self.outcome(
+        patient,
+        ProcessInvocation(
+          executable: "/usr/bin/python3", arguments: Self.tree(stubborn),
+          environmentOverlay: ["READY": held.path], timeout: timeout))
+    }
+    let grandchildren = try await Self.awaitTree(&lines, grandchildren: stubborn.count)
+    defer { for pid in grandchildren { kill(pid, SIGKILL) } }
+    clock.advance(by: timeout)
+
+    let result = await run.value
+    #expect(await lines.next() == nil, "a grandchild outlived the timeout's SIGKILL")
+    #expect(ContinuousClock.now - start < Self.killedWell)
+    guard case .failure(.timedOut) = result else {
+      Issue.record("expected timedOut, got \(result)")
+      return
+    }
+  }
+
+  @Test(
+    "task cancellation kills the child and every process it started, even one in a process group of its own — catches orphaned tools after a hook is interrupted",
+    .enabled(if: hasPython, "/usr/bin/python3 is missing"))
+  func cancellationKillsChild() async throws {
+    let held = try HeldPipe()
+    defer { held.remove() }
+    var lines = held.lines().makeAsyncIterator()
+    let start = ContinuousClock.now
     let task = Task {
       try await runner.run(
-        ProcessInvocation(executable: "/bin/sleep", arguments: ["30"], timeout: .seconds(60)))
+        ProcessInvocation(
+          executable: "/usr/bin/python3", arguments: Self.tree([Grandchild(ownGroup: true)]),
+          environmentOverlay: ["READY": held.path], timeout: .seconds(3600)))
     }
+    let grandchildren = try await Self.awaitTree(&lines, grandchildren: 1)
+    defer { for pid in grandchildren { kill(pid, SIGKILL) } }
     task.cancel()
+
     let result = await task.result
-    #expect(clock.now - start < .seconds(10))
+    #expect(await lines.next() == nil, "a process in the child's tree outlived the cancellation")
+    #expect(ContinuousClock.now - start < Self.killedWell)
     guard case .failure(let error) = result, case .cancelled = error as? ProcessRunnerError else {
       Issue.record("expected cancelled, got \(result)")
       return
+    }
+  }
+
+  private static func outcome(_ runner: LiveProcessRunner, _ invocation: ProcessInvocation) async
+    -> Result<ProcessOutput, ProcessRunnerError>
+  {
+    do {
+      return .success(try await runner.run(invocation))
+    } catch {
+      return .failure(error)
     }
   }
 
@@ -193,5 +318,75 @@ struct LiveProcessRunnerTests {
     )
     #expect(output.status == .signaled(9))
     #expect(!output.status.isSuccess)
+  }
+}
+
+/// A clock that runs with the real one until a test moves it forward, so a timeout fires exactly
+/// when the test says the child is ready, never because the machine was slow. Kept in this file
+/// (not test support) so `prove` reverting production source can never make a test that uses it
+/// stop compiling: the merge base doesn't need to have known about it.
+private final class ShiftableClock: Sendable {
+  private let offsetNanoseconds = Atomic<Int64>(0)
+
+  var now: @Sendable () -> ContinuousClock.Instant {
+    { [self] in
+      ContinuousClock.now.advanced(by: .nanoseconds(offsetNanoseconds.load(ordering: .acquiring)))
+    }
+  }
+
+  func advance(by duration: Duration) {
+    let (seconds, attoseconds) = duration.components
+    let nanoseconds = seconds * 1_000_000_000 + attoseconds / 1_000_000_000
+    offsetNanoseconds.add(nanoseconds, ordering: .releasing)
+  }
+}
+
+/// A named pipe every process in a test's tree writes one line to once it is running and then
+/// holds open for life, so a test can move a ``ShiftableClock`` past a timeout only once there is
+/// something to time out, and can tell afterwards whether any of the tree survived. Kept in this
+/// file for the same reason as ``ShiftableClock``.
+private struct HeldPipe {
+  let path: String
+  private let directory: URL
+
+  init() throws {
+    directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-held-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    path = directory.appending(path: "held").path
+    guard mkfifo(path, 0o600) == 0 else {
+      throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+    }
+  }
+
+  func remove() { try? FileManager.default.removeItem(at: directory) }
+
+  /// The lines written, finishing once every writer has closed the pipe: for a tree that holds it
+  /// for life, once the whole tree is gone. Reads on a dedicated thread: opening the pipe for
+  /// reading blocks until a writer opens it, so this can't run on a cooperative-pool thread.
+  func lines() -> AsyncStream<String> {
+    AsyncStream { continuation in
+      Thread { [path] in
+        let fd = open(path, O_RDONLY)
+        guard fd >= 0 else {
+          continuation.finish()
+          return
+        }
+        defer { close(fd) }
+        var pending: [UInt8] = []
+        var buffer = [UInt8](repeating: 0, count: 256)
+        while true {
+          let count = read(fd, &buffer, buffer.count)
+          if count < 0, errno == EINTR { continue }
+          if count <= 0 { break }
+          pending += buffer[0..<count]
+          while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
+            continuation.yield(String(decoding: pending[..<newline], as: UTF8.self))
+            pending.removeSubrange(...newline)
+          }
+        }
+        continuation.finish()
+      }.start()
+    }
   }
 }

@@ -349,7 +349,7 @@ public enum BootstrapPlanner {
     case .absent:
       return .create(inputs.inferred.render(template: inputs.templates.config))
     case .loaded(let config):
-      let drift = inputs.inferred.drift(from: config)
+      let drift = inputs.inferred.drift(from: config) + missingManagedFiles(config)
       return drift.isEmpty
         ? .unchanged
         : .untouched(
@@ -358,6 +358,17 @@ public enum BootstrapPlanner {
     case .invalid(let reason):
       return .untouched(advice: "never rewritten by bootstrap, and it does not load: \(reason)")
     }
+  }
+
+  /// `docs-lint` fails `managed-file-unlisted` the moment `AGENTS.md` and the docs router exist
+  /// without being named — which is true for every bootstrapped repository — so an upgraded
+  /// config missing the key leaves docs-lint (and so pre-push) red with no visible cause. Bootstrap
+  /// never edits `[docs]` (it may be deliberately pruned), so this only names the gap.
+  private static func missingManagedFiles(_ config: Config) -> [String] {
+    let required = [Paths.docsIndex, Paths.agents]
+    let missing = required.filter { !config.docs.managedFiles.contains($0) }
+    guard !missing.isEmpty else { return [] }
+    return ["[docs] managed_files is missing \(missing.joined(separator: ", "))"]
   }
 
   /// A file the harness owns outright: created, or upgraded to the template in place.

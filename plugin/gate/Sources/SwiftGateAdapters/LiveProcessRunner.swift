@@ -137,10 +137,10 @@ private final class ChildProcessGroups: Sendable {
     }
   }
 
-  /// Signals every child group, waiting out a spawn in progress so a child started this instant
-  /// is signalled too, then ends this process as `number` would have.
+  /// Signals every child's whole descendant tree, waiting out a spawn in progress so a child
+  /// started this instant is signalled too, then ends this process as `number` would have.
   private func terminate(on number: Int32) {
-    for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
+    for root in groups.withLock({ $0 }) { ProcessTree.terminate(root: root, signal: SIGTERM) }
     signal(number, SIG_DFL)
     kill(getpid(), number)
   }
@@ -229,6 +229,7 @@ private struct SpawnRequest: Sendable {
     var exitedAt: ContinuousClock.Instant?
     var termination = Termination.none
     var terminateSentAt: ContinuousClock.Instant?
+    var terminatedGroups: Set<pid_t> = []
     var killSent = false
 
     while true {
@@ -240,11 +241,11 @@ private struct SpawnRequest: Sendable {
           termination = .timedOut
         }
         if termination != .none {
-          kill(-pid, SIGTERM)
+          terminatedGroups = ProcessTree.terminate(root: pid, signal: SIGTERM)
           terminateSentAt = now
         }
       } else if !killSent, let sent = terminateSentAt, now - sent >= terminationGracePeriod {
-        kill(-pid, SIGKILL)
+        ProcessTree.terminate(root: pid, signal: SIGKILL, alongside: terminatedGroups)
         killSent = true
       }
 
@@ -455,5 +456,59 @@ private struct CStringArray {
 
   func free() {
     for pointer in pointers { Darwin.free(pointer) }
+  }
+}
+
+/// Kills a spawned process's whole descendant tree, one process group at a time — not just the
+/// group it was born into. `swift test` puts its own test-runner helper (`xctest` /
+/// `swiftpm-testing-helper`) in a new process group, so a plain `kill(-pid, …)` on the spawned
+/// child's original group leaves that helper behind, reparented to init, still spinning on an
+/// infinite-loop mutant. The machine-wide process table (the same `sysctl` `ps` reads, not
+/// `proc_listchildpids`, which this process cannot always resolve for pids outside its own tree)
+/// finds it regardless of which group it put itself in.
+private enum ProcessTree {
+  /// Sends `signal` to `root`'s own group, the group of every process descended from it, and
+  /// `groups`, then returns every group it signalled. `root` leads its own group, so `-root` still
+  /// reaches the members after `root` itself is reaped; a descendant in a group of its own is
+  /// reparented once `root` dies and can no longer be found by walking parents, so a later signal
+  /// passes the groups an earlier one returned. A group already gone is not an error: `kill` on
+  /// an empty group is a no-op.
+  @discardableResult
+  static func terminate(root: pid_t, signal: Int32, alongside groups: Set<pid_t> = [])
+    -> Set<pid_t>
+  {
+    let all = groups.union([root]).union(descendantGroups(of: root))
+    for group in all { kill(-group, signal) }
+    return all
+  }
+
+  /// The process group of every process descended from `root`, from one snapshot of the table.
+  private static func descendantGroups(of root: pid_t) -> Set<pid_t> {
+    var childrenByParent: [pid_t: [kinfo_proc]] = [:]
+    for process in processTable() {
+      childrenByParent[process.kp_eproc.e_ppid, default: []].append(process)
+    }
+    var groups = Set<pid_t>()
+    var frontier = [root]
+    while !frontier.isEmpty {
+      let next = frontier.flatMap { childrenByParent[$0] ?? [] }
+      groups.formUnion(next.map(\.kp_eproc.e_pgid))
+      frontier = next.map(\.kp_proc.p_pid)
+    }
+    return groups
+  }
+
+  /// Every process on the machine. An unreadable table leaves only the groups the caller already
+  /// knows (`root`'s own among them) to signal: this runs on a kill path, with nowhere to report.
+  private static func processTable() -> [kinfo_proc] {
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL]
+    var size = 0
+    guard sysctl(&mib, UInt32(mib.count), nil, &size, nil, 0) == 0 else { return [] }
+    // Processes started between the size query and the read would otherwise fail it with ENOMEM.
+    size += size / 4
+    var table = [kinfo_proc](
+      repeating: kinfo_proc(), count: size / MemoryLayout<kinfo_proc>.stride)
+    guard sysctl(&mib, UInt32(mib.count), &table, &size, nil, 0) == 0 else { return [] }
+    return Array(table.prefix(size / MemoryLayout<kinfo_proc>.stride))
   }
 }

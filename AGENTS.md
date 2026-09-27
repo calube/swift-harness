@@ -8,6 +8,9 @@ source in `plugin/gate/`, and the reference docs skills read at runtime
 ([ADR 0002](docs/adrs/0002-consumer-plugin-in-plugin-dir.md)). Nothing under `plugin/` may
 reference a path above it, and `plugin/bin/swiftgate` is the only shim.
 
+Run `lefthook install` once, after installing lefthook, so this repo's `lefthook.yml` wires
+pre-push to `plugin/bin/swiftgate check --tier push` and commit-msg to the comments check.
+
 ## Invariants you could violate without realizing
 
 - **Never re-implement a check.** Every enforcement point (hook, skill, git hook, future CI) calls
