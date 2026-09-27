@@ -112,6 +112,27 @@ public enum PlanLintCoverage {
     return findings
   }
 
+  // MARK: - Model tag (spec §5.2: the decomposer tags every task sonnet or opus)
+
+  public static let missingModelRuleID = "plan-lint.missing-model"
+
+  /// One `major` finding when a task carries no `model`: the decomposer must tag every task
+  /// `sonnet` or `opus` (spec §5.2), and an untagged task would otherwise fall through to
+  /// `build next`'s preset default silently, on work the decomposer never sized for that model.
+  public static func missingModelFindings(task: LedgerTask) throws(ReportContractViolation)
+    -> [Finding]
+  {
+    guard task.model == nil else { return [] }
+    return [
+      try Finding(
+        ruleID: missingModelRuleID, severity: .major, file: task.id, line: nil,
+        message: "task \(task.id) has no model; the decomposer must tag every task sonnet or opus",
+        failureScenario:
+          "an untagged task silently falls through to the preset's default worker model instead "
+          + "of the one its work needs")
+    ]
+  }
+
   // MARK: - Task sizing (spec §9.3)
 
   public static let estLinesHighRuleID = "plan-lint.est-lines-high"

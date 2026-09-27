@@ -8,12 +8,11 @@
       "deps": [],
       "writeSet": ["Sample/Sources/Core/"],
       "gate": "fast",
-      "tests": ["test-alpah"],
+      "tests": ["test-alpha"],
       "covers": ["req-alpha", "test-alpha"],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../only-task",
-      "model": "sonnet"
+      "worktree": "../only-task"
     }
   ],
   "waves": [["only-task"]]
