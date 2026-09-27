@@ -19,7 +19,7 @@ Each finding's `kind` says how to verify it (a finding with no `kind` is a `defe
 ### `defect`
 
 1. Open `file` at `line` and enough surrounding code (callers, callees, the diff hunk in
-   `diff.patch`) to trace the `failure_scenario` yourself.
+   `diff-numbered.txt`) to trace the `failure_scenario` yourself.
 2. Walk the scenario step by step: the input or state it names, the code path it takes, the wrong
    outcome it claims. Check every claim against the code you read, not against the finding's text.
 3. `verified: true` when you reproduced the wrong outcome by tracing the code and the defect is in
@@ -44,6 +44,11 @@ harm before it happens. Don't refute one because you can't reproduce a runtime f
    `swiftgate:allow` with a reason, or the module's `.swiftgate.toml` entry) grants applies.
 
 ### Both kinds
+
+`line` is the 1-based line in the new file, as `diff-numbered.txt` numbers it; never a line
+number in `diff.patch`. When a finding's `line` doesn't hold the code it describes but the code is
+elsewhere in that file, verify it there and return that line; keep its `file` and `title`
+unchanged, so the workflow can pair your entry with the finding.
 
 Keep the finding's fields and always say what you checked in `verification_note`. You may sharpen
 `failure_scenario` and `evidence` with what you traced. You may lower `severity`, never raise it:
