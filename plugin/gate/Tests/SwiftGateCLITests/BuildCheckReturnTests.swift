@@ -107,11 +107,12 @@ private struct ReturnScenario {
   func returnValue(
     outcome: TaskReturn.Outcome = .readyToMerge, commits: [String]? = nil,
     gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil,
-    notes: String = "Queue.drain() returns [Item]", surfaceCommit: String? = nil
+    notes: String = "Queue.drain() returns [Item]", surfaceCommit: String? = nil,
+    review: TaskReturn.Review? = .init(mode: .gate, findings: [])
   ) -> TaskReturn {
     TaskReturn(
       task: Self.task, outcome: outcome, commits: commits ?? [taskCommit], gate: gate,
-      review: .init(mode: .gate, findings: []), testsAdded: ["test-queue-drains"],
+      review: review, testsAdded: ["test-queue-drains"],
       notes: notes, designConflict: designConflict, surfaceCommit: surfaceCommit)
   }
 
@@ -211,6 +212,32 @@ struct BuildCheckReturnTests {
     #expect(withFix.verdict == .green)
     #expect(withoutFix.findings.map(\.rule).contains(.commitOffBranch))
     #expect(withoutFix.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a fixer's ready-to-merge return with review null passes --fix, and a worker's with review null still fails — catches the fix path rejecting every fixer, or a worker skipping review"
+  )
+  func fixReturnNeedsNoReview() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let (fix, commit) = try await scenario.cutFixWorktree()
+    let fixRun = try scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
+    let workerRun = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+
+    let fixer = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: fixRun),
+        review: nil),
+      fix: true)
+    let worker = try await scenario.check(
+      scenario.returnValue(
+        gate: .init(tier: .push, verdict: .green, runID: workerRun), review: nil))
+
+    #expect(fixer.findings == [], "\(fixer.findings)")
+    #expect(fixer.verdict.exitCode == 0)
+    #expect(worker.findings.map(\.rule) == [.reviewMissing])
+    #expect(worker.verdict.exitCode == 1)
   }
 
   @Test(
