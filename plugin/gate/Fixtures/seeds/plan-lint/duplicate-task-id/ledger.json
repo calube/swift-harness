@@ -12,7 +12,8 @@
       "covers": ["req-alpha", "test-alpha"],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../only-task"
+      "worktree": "../only-task",
+      "model": "sonnet"
     },
     {
       "id": "only-task",
@@ -23,7 +24,8 @@
       "covers": ["test-alpha"],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../only-task-again"
+      "worktree": "../only-task-again",
+      "model": "sonnet"
     }
   ],
   "waves": [["only-task"]]

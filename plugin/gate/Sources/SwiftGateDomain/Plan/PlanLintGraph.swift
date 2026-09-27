@@ -289,8 +289,8 @@ public enum PlanLintGraph {
 
   // MARK: - Entry point
 
-  /// Runs every `plan-lint` rule family in one pass: ``PlanLintCoverage``'s coverage, gate-strength
-  /// and sizing checks, plus this type's DAG, waves, hot-file and chain checks. Nothing here
+  /// Runs every `plan-lint` rule family in one pass: ``PlanLintCoverage``'s coverage, gate-strength,
+  /// model-tag and sizing checks, plus this type's DAG, waves, hot-file and chain checks. Nothing here
   /// re-implements a rule — each family's own function is the sole source of its findings; this
   /// function's job is resolving what those functions need (a task's touched modules from `graph`,
   /// its worker pack from `workerPacks`) and concatenating the results, so `plan-lint`'s command
@@ -310,6 +310,7 @@ public enum PlanLintGraph {
     for task in ledger.tasks.sorted(by: { $0.id < $1.id }) {
       findings += try PlanLintCoverage.gateFindings(task: task, testTiers: testTiers)
       findings += try PlanLintCoverage.unknownTestFindings(task: task, design: design)
+      findings += try PlanLintCoverage.missingModelFindings(task: task)
       findings += try PlanLintCoverage.sizeFindings(
         task: task, modulesTouched: modulesTouched(writeSet: task.writeSet, graph: graph),
         workerPack: workerPacks[task.id], bounds: bounds)

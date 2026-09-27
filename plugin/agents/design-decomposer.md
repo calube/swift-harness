@@ -77,6 +77,10 @@ Return tasks in the `ledger.json` task shape:
 - `"status"`: always `"pending"`.
 - `"worktree"`: `../<repo>-<plan>-<task>`, the repo directory name, plan slug and task id from the
   prompt. It's a name only; no one creates it yet.
+- `"model"`: `"sonnet"` or `"opus"`, the worker model this task runs on. Use `opus` for
+  concurrency, locks, cross-worktree or shared state, cross-module interfaces, security-relevant
+  code, guards, workflows, agent prompts and skills; `sonnet` for data models, commands, lints,
+  views and fixtures.
 
 Never set `actualLines`. It's the real line count of a built task, written later by the worker's
 report; a value from you would be a guess posing as a measurement.
@@ -100,7 +104,8 @@ Return exactly one JSON object:
       "covers": ["req-offline-queue-rejects-invalid-orders", "test-queue-client-rejects-empty-order"],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../myapp-offline-order-queue-offline-queue-client-interface"
+      "worktree": "../myapp-offline-order-queue-offline-queue-client-interface",
+      "model": "opus"
     },
     {
       "id": "offline-queue-core-reducer",
@@ -111,7 +116,8 @@ Return exactly one JSON object:
       "covers": ["req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order"],
       "estLines": 180,
       "status": "pending",
-      "worktree": "../myapp-offline-order-queue-offline-queue-core-reducer"
+      "worktree": "../myapp-offline-order-queue-offline-queue-core-reducer",
+      "model": "sonnet"
     }
   ],
   "unresolved": [
@@ -148,6 +154,7 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
   `tests` or covers in `covers`.
 - `plan-lint.unknown-test`: spell the `tests` id exactly as the design's test plan does.
 - `plan-lint.duplicate-task-id`: give each task its own id.
+- `plan-lint.missing-model`: tag the task `sonnet` or `opus` by the rule above.
 - `plan-lint.design-moved`: the design changed after approval, and no task edit fixes that. List
   it in `"unresolved"`.
 - `plan-lint.est-lines-high`: split the task along its tests.
