@@ -275,6 +275,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let explainedEditsAllowed: Bool
   /// A worker's green gate must prove and mutate its change; a fixer's merge gate need not.
   public let proofRequired: Bool
+  /// A worker's green return must carry its review; a fixer's never does, since no review stage
+  /// runs on the fix path.
+  public let reviewRequired: Bool
   /// Where the return's `surfaceCommit` is, when it names one.
   public let surfaceCommit: CommitState?
 
@@ -282,7 +285,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
-    surfaceCommit: CommitState? = nil
+    surfaceCommit: CommitState? = nil, reviewRequired: Bool = true
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -293,6 +296,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.filesOutsideWriteSet = filesOutsideWriteSet
     self.explainedEditsAllowed = explainedEditsAllowed
     self.proofRequired = proofRequired
+    self.reviewRequired = reviewRequired
     self.surfaceCommit = surfaceCommit
   }
 }
@@ -311,12 +315,13 @@ public enum TaskReturnCheck {
     -> [TaskReturnFinding]
   {
     commitFindings(taskReturn, evidence) + gateFindings(taskReturn, evidence)
-      + reviewFindings(taskReturn) + designConflictFindings(taskReturn, evidence)
+      + reviewFindings(taskReturn, evidence) + designConflictFindings(taskReturn, evidence)
       + writeSetFindings(taskReturn, evidence) + surfaceFindings(taskReturn, evidence)
   }
 
-  /// A surface commit must be on the task branch and be one of the gate's proof bases, or the
-  /// proof it stands for never ran.
+  /// A surface commit must be on the task branch and, when the gate had to prove the change, be
+  /// one of its proof bases, or the proof it stands for never ran. A gate that needn't prove has
+  /// no proof base to check.
   private static func surfaceFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)
     -> [TaskReturnFinding]
   {
@@ -328,7 +333,9 @@ public enum TaskReturnCheck {
           message: "surface commit \(surface) isn't on branch \(evidence.branch)")
       ]
     }
-    guard let run = evidence.gateRun, let gate = taskReturn.gate else { return [] }
+    guard evidence.proofRequired, let run = evidence.gateRun, let gate = taskReturn.gate else {
+      return []
+    }
     let isProofBase = run.proofBases.contains { $0.hasPrefix(surface) || surface.hasPrefix($0) }
     guard !isProofBase else { return [] }
     return [
@@ -465,8 +472,11 @@ public enum TaskReturnCheck {
     return findings
   }
 
-  private static func reviewFindings(_ taskReturn: TaskReturn) -> [TaskReturnFinding] {
-    guard taskReturn.outcome.claimsGreenGate, taskReturn.review == nil else { return [] }
+  private static func reviewFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)
+    -> [TaskReturnFinding]
+  {
+    guard evidence.reviewRequired, taskReturn.outcome.claimsGreenGate, taskReturn.review == nil
+    else { return [] }
     return [
       .init(
         rule: .reviewMissing,

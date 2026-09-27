@@ -143,6 +143,7 @@ worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
 time_budget_min = 0        # 0: no budget
 stop_starts_before_min = 0
 on_design_conflict = "amend"   # amend: full --amend flow; block: D14
+task_proof = "per-task"    # per-task: each task gate proves and mutates; final: only the final gate does
 
 [build.presets.interview]
 design_tier = "sketch"
@@ -154,11 +155,18 @@ worker_model = "tagged"
 time_budget_min = 38
 stop_starts_before_min = 8
 on_design_conflict = "block"
+task_proof = "final"
 ```
 
 A preset table must set every key, so a typo fails `swiftgate doctor` rather than falling back to a
 default without warning. `max_parallel` here overrides `[plan] max_parallel` for scheduling only; waves in
 the ledger stay as planned.
+
+`task_proof` says which gate proves and mutates each task's change. Under `per-task` the worker's task
+gate is `check --tier <task_gate> --base main --prove --mutate`, and `build check-return` fails a
+worker's green gate that skipped either. Under `final` the task gate drops `--prove --mutate`,
+`check-return` stops requiring them of a worker, and they run once, in the build's final `ready` gate
+over every merged task's surface commit. A fixer's merge gate never needs them.
 
 ### 5.2 Ledger changes
 

@@ -60,6 +60,7 @@ worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
 time_budget_min = 0        # 0: no budget
 stop_starts_before_min = 0
 on_design_conflict = "amend"   # amend: full --amend flow; block: D14
+task_proof = "per-task"    # per-task: each task gate runs --prove --mutate; final: only the final ready gate does
 
 [build.presets.interview]
 design_tier = "sketch"
@@ -71,3 +72,4 @@ worker_model = "tagged"
 time_budget_min = 38
 stop_starts_before_min = 8
 on_design_conflict = "block"
+task_proof = "final"

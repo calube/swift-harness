@@ -474,7 +474,6 @@ struct HookCommandTests {
   func stopThreeStrikes() async throws {
     let harness = try HookHarness(scenario: "fail", git: Self.git(changing: Self.probeSource))
     defer { harness.repository.remove() }
-    try harness.repository.write(Self.probeSource, "public let probe = 1\n")
 
     var outputs: [[String: Any]] = []
     for fixture in ["stop", "stop-reentry", "stop-reentry", "stop-reentry"] {

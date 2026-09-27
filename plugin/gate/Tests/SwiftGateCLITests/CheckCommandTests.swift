@@ -127,28 +127,50 @@ struct CheckCommandTests {
   }
 
   @Test(
-    "ready runs prove, stress and reach on the host tests instead of listing them as not run — catches ready claiming proofs it never ran"
+    "ready runs reach, stress and prove on a GREEN T1, and on a RED T1 skips prove by name — catches ready claiming proofs it never ran"
   )
   func readyRunsChangedTestChecks() async throws {
+    // The probe's deliberately empty target makes T1 RED on every run.
+    let green = try await Self.ready(withEmptyTarget: false)
+    let red = try await Self.ready(withEmptyTarget: true)
+
+    let summary = { (parts: GateRunParts) in
+      parts.findings.filter { $0.ruleID == ChangedTestChecks.summaryRuleID }
+        .map(\.message).map { $0.prefix(6) }
+    }
+    let notRun = { (parts: GateRunParts) in
+      parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }.map(\.message)
+    }
+    #expect(summary(green) == ["reach:", "stress", "prove:", "mutate"])
+    #expect(!notRun(green).contains { $0.hasPrefix("prove") || $0.hasPrefix("stress") })
+    #expect(summary(red) == ["reach:", "stress"])
+    #expect(notRun(red).contains("prove not run: T1 is RED"))
+  }
+
+  private static func ready(withEmptyTarget: Bool) async throws -> GateRunParts {
     let repository = try ProbeRepository()
     defer { repository.remove() }
-    let swiftPM = try ProbeRepository.swiftPM(replaying: "pass")
+    let probe = try ProbeRepository.manifest()
+    let swiftPM = try ProbeRepository.swiftPM(
+      replaying: "pass",
+      manifest: PackageManifest(
+        name: probe.name, path: probe.path, localDependencyPaths: probe.localDependencyPaths,
+        remoteDependencies: probe.remoteDependencies, products: probe.products,
+        targets: probe.targets.filter { withEmptyTarget || $0.name != "EmptyTests" }))
     let git = FakeGit(changed: [], mergeBase: "base")
     let scratch = FakeScratchWorktrees(root: repository.root)
 
-    let parts = try await CheckRun.run(
+    return try await CheckRun.run(
       root: repository.root, tier: .ready, base: "origin/main", context: repository.context(),
       dependencies: CheckRun.Dependencies(
         root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
         simulator: .fake,
         changedTests: ChangedTestChecks.Environment(
           root: repository.root, git: git, swiftPM: swiftPM, scratch: scratch,
-          scratchSwiftPM: { _ in swiftPM })))
-
-    let notes = parts.findings.filter { $0.ruleID == ChangedTestChecks.summaryRuleID }
-    #expect(notes.map(\.message).map { $0.prefix(6) } == ["reach:", "stress", "prove:"])
-    let notRun = parts.findings.filter { $0.ruleID == CheckRun.notRunRuleID }.map(\.message)
-    #expect(!notRun.contains { $0.hasPrefix("prove") || $0.hasPrefix("stress") })
+          scratchSwiftPM: { _ in swiftPM }),
+        mutation: MutateCheck.Environment(
+          root: repository.root, git: git, scratch: scratch, toolchain: FakeMutationToolchain(),
+          workers: 1, timeout: MutantTimeout())))
   }
 
   @Test(

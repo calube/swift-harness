@@ -4,7 +4,8 @@
 // pass reusing the first worker instead of a fresh one; a design conflict reviewed or "fixed"
 // instead of going straight back to the orchestrator; a return whose keys drift from `TaskReturn`,
 // so `build check-return` rejects it; a `review: null` return, which check-return fails as
-// `build-return.review-missing`.
+// `build-return.review-missing`; a `final` task-proof preset still paying for per-task prove and
+// mutate, or a `per-task` one silently skipping them.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -42,6 +43,7 @@ const baseArgs = (extra = {}) => ({
   contextPack: '/work/app/.harness/context-pack/worker-catalog-list-reducer.md',
   model: 'sonnet',
   review: 'full',
+  taskProof: 'per-task',
   ...extra,
 })
 
@@ -149,6 +151,26 @@ const tests = {
     const gate = 'swiftgate check --tier fast --base main --prove --mutate'
     for (const needle of [a.task, a.plan, a.worktree, a.branch, a.contextPack, ...a.writeSet, ...a.tests, gate]) {
       assert.ok(prompt.includes(needle), `worker prompt lacks ${needle}`)
+    }
+  },
+
+  async 'under final task proof no worker prompt asks for --prove or --mutate, and under per-task every one does — catches a final preset still proving per task, or a per-task one skipping proof'() {
+    const behaviours = [{ workers: [workerReturn()] }, { workers: [red(), workerReturn()] }]
+    for (const behave of behaviours) {
+      const final = await run(baseArgs({ review: 'gate', taskProof: 'final' }), behave)
+      assert.equal(final.workerCalls.length, behave.workers.length)
+      for (const { prompt } of final.workerCalls) {
+        assert.ok(!prompt.includes('--prove'), `a final worker prompt asks for --prove:\n${prompt}`)
+        assert.ok(!prompt.includes('--mutate'), `a final worker prompt asks for --mutate:\n${prompt}`)
+        assert.ok(prompt.includes('swiftgate check --tier fast --base main'), 'a final worker prompt lacks its task gate')
+        assert.ok(prompt.includes('Task proof: final'), 'a final worker prompt does not name its proof mode')
+      }
+      const perTask = await run(baseArgs({ review: 'gate', taskProof: 'per-task' }), behave)
+      assert.equal(perTask.workerCalls.length, behave.workers.length)
+      for (const { prompt } of perTask.workerCalls) {
+        assert.ok(prompt.includes('swiftgate check --tier fast --base main --prove --mutate'), 'a per-task worker prompt skips proof')
+        assert.ok(prompt.includes('Task proof: per-task'), 'a per-task worker prompt does not name its proof mode')
+      }
     }
   },
 
@@ -326,6 +348,8 @@ const tests = {
       baseArgs({ reviewers: ['architecture'] }),
       baseArgs({ reviewers: [] }),
       baseArgs({ review: 'gate', reviewers: ['verifier'] }),
+      baseArgs({ taskProof: 'sometimes' }),
+      baseArgs({ taskProof: undefined }),
     ]
     for (const args of cases) {
       const calls = []

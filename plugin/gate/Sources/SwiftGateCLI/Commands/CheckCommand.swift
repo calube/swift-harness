@@ -90,12 +90,16 @@ enum CheckRun {
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
+    // Every later stage builds the code T0 just failed, so a RED T0 ends the run there: the
+    // build and tests would spend minutes on a change that is already RED.
+    let t0Red = t0.tier.verdict == .red
+
     // A mismatched, unselected or unreadable pinned Xcode fails every `swift build`/`test` and
     // `xcodebuild` a tier would run, so T1 and the simulator tiers stop here with one named
     // reason instead of failing as if the code under test were wrong. T0 parses source with
     // SwiftSyntax and never touches the toolchain, so it already ran above unaffected.
     var pinBlockedFinding: Finding?
-    if let config,
+    if !t0Red, let config,
       let text = await XcodePinCheck.message(
         pin: config.xcode, xcodebuild: dependencies.simulator.xcodebuild)
     {
@@ -103,7 +107,13 @@ enum CheckRun {
     }
 
     if let config, let graph = scopes.graph {
-      if let pinBlockedFinding {
+      if t0Red {
+        for stage in stagesAfterT0(
+          tier: tier, extraSteps: extraSteps, judges: dependencies.judge != nil)
+        {
+          parts.findings.append(try note("\(stage) not run: T0 is RED"))
+        }
+      } else if let pinBlockedFinding {
         parts.tiers.append(try XcodePinCheck.blockedTier(.t1))
         parts.findings.append(pinBlockedFinding)
       } else {
@@ -113,15 +123,24 @@ enum CheckRun {
         var t1Tier = t1.tier
         parts.findings += t1.findings
         let environment = dependencies.changedTests
+        // Reach first (each test alone), then stress, then prove, whose scratch tree builds
+        // from cold.
         if tier == .ready {
-          let changed = await ChangedTestChecks.ready(
-            environment, graph: graph, base: base, proofBases: proofBases, context: context)
-          t1Tier = try t1Tier.merging(changed.verdict)
-          parts.findings += changed.findings
-        } else if extraSteps.contains(.prove) {
-          let proven = await ChangedTestChecks.prove(
-            environment, graph: graph, base: base, proofBases: proofBases, context: context)
-          t1Tier = try t1Tier.merging(proven.verdict)
+          let reached = await ChangedTestChecks.reach(
+            environment, graph: graph, base: base, context: context)
+          let stressed = await ChangedTestChecks.stress(
+            environment, graph: graph, base: base,
+            iterations: ChangedTestChecks.readyStressIterations, context: context)
+          let checked = reached.merged(with: stressed)
+          t1Tier = try t1Tier.merging(checked.verdict)
+          parts.findings += checked.findings
+        }
+        if tier == .ready || extraSteps.contains(.prove) {
+          let proven = try await afterT1("prove", t1Tier) {
+            await ChangedTestChecks.prove(
+              environment, graph: graph, base: base, proofBases: proofBases, context: context)
+          }
+          t1Tier = proven.tier
           parts.findings += proven.findings
         }
         if tier == .ready || extraSteps.contains(.mutate) {
@@ -147,7 +166,7 @@ enum CheckRun {
       parts.findings.append(
         try note("T1 not run: \(ConfigLoader.fileName) is needed to find the packages to test"))
     }
-    if let config, let graph = scopes.graph {
+    if !t0Red, let config, let graph = scopes.graph {
       if pinBlockedFinding != nil {
         if tier.runsT2 { parts.tiers.append(try XcodePinCheck.blockedTier(.t2)) }
         if tier.runsT3 { parts.tiers.append(try XcodePinCheck.blockedTier(.t3)) }
@@ -184,9 +203,34 @@ enum CheckRun {
   static func mutate(
     after t1: TierResult, _ run: () async -> ChangedTestJudgement
   ) async throws -> (tier: TierResult, findings: [Finding]) {
-    guard t1.verdict != .red else { return (t1, [try note("mutate not run: T1 is RED")]) }
+    try await afterT1("mutate", t1, run)
+  }
+
+  /// Runs `stage` unless T1 is already RED, when the verdict is settled and the stage's scratch
+  /// builds would only repeat the failure.
+  private static func afterT1(
+    _ stage: String, _ t1: TierResult, _ run: () async -> ChangedTestJudgement
+  ) async throws -> (tier: TierResult, findings: [Finding]) {
+    guard t1.verdict != .red else { return (t1, [try note("\(stage) not run: T1 is RED")]) }
     let judgement = await run()
     return (try t1.merging(judgement.verdict), judgement.findings)
+  }
+
+  /// The stages a RED T0 skips, in the order a run would reach them.
+  private static func stagesAfterT0(
+    tier: CheckTier, extraSteps: Set<ExtraStep>, judges: Bool
+  ) -> [String] {
+    var stages = ["T1"]
+    if tier == .ready {
+      stages += ["reach", "stress", "prove"]
+    } else if extraSteps.contains(.prove) {
+      stages.append("prove")
+    }
+    if tier == .ready || extraSteps.contains(.mutate) { stages.append("mutate") }
+    if tier == .ready && judges { stages.append("judge") }
+    if tier.runsT2 { stages.append("T2") }
+    if tier.runsT3 { stages.append("T3") }
+    return stages
   }
 
   private struct T0Result {

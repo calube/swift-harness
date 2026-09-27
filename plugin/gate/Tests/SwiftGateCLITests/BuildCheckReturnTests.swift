@@ -34,7 +34,11 @@ private struct ReturnScenario {
   /// - Parameters:
   ///   - ledgerGate: the task's planned gate in `ledger.json`.
   ///   - presetGate: the build run's task gate, which defers to the ledger when `.ledger`.
-  init(ledgerGate: CheckTier = .push, presetGate: BuildPreset.TaskGate = .ledger) async throws {
+  ///   - taskProof: where the build run's preset proves and mutates each task's change.
+  init(
+    ledgerGate: CheckTier = .push, presetGate: BuildPreset.TaskGate = .ledger,
+    taskProof: BuildPreset.TaskProof = .perTask
+  ) async throws {
     base = FileManager.default.temporaryDirectory
       .appending(path: "check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
     let main = base.appending(path: "app", directoryHint: .isDirectory)
@@ -81,7 +85,7 @@ private struct ReturnScenario {
     let preset = BuildPreset(
       designTier: .standard, maxParallel: 3, review: .gate, taskGate: presetGate,
       mergeGate: .ready, workerModel: .tagged, timeBudgetMin: 90, stopStartsBeforeMin: 15,
-      onDesignConflict: .block)
+      onDesignConflict: .block, taskProof: taskProof)
     try await BuildRunStore.create(
       plan: Self.plan, presetName: "default", preset: preset, startedAt: Self.finishedAt,
       git: git, suffix: 1)
@@ -107,11 +111,12 @@ private struct ReturnScenario {
   func returnValue(
     outcome: TaskReturn.Outcome = .readyToMerge, commits: [String]? = nil,
     gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil,
-    notes: String = "Queue.drain() returns [Item]", surfaceCommit: String? = nil
+    notes: String = "Queue.drain() returns [Item]", surfaceCommit: String? = nil,
+    review: TaskReturn.Review? = .init(mode: .gate, findings: [])
   ) -> TaskReturn {
     TaskReturn(
       task: Self.task, outcome: outcome, commits: commits ?? [taskCommit], gate: gate,
-      review: .init(mode: .gate, findings: []), testsAdded: ["test-queue-drains"],
+      review: review, testsAdded: ["test-queue-drains"],
       notes: notes, designConflict: designConflict, surfaceCommit: surfaceCommit)
   }
 
@@ -211,6 +216,32 @@ struct BuildCheckReturnTests {
     #expect(withFix.verdict == .green)
     #expect(withoutFix.findings.map(\.rule).contains(.commitOffBranch))
     #expect(withoutFix.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a fixer's ready-to-merge return with review null passes --fix, and a worker's with review null still fails — catches the fix path rejecting every fixer, or a worker skipping review"
+  )
+  func fixReturnNeedsNoReview() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let (fix, commit) = try await scenario.cutFixWorktree()
+    let fixRun = try scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
+    let workerRun = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+
+    let fixer = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: fixRun),
+        review: nil),
+      fix: true)
+    let worker = try await scenario.check(
+      scenario.returnValue(
+        gate: .init(tier: .push, verdict: .green, runID: workerRun), review: nil))
+
+    #expect(fixer.findings == [], "\(fixer.findings)")
+    #expect(fixer.verdict.exitCode == 0)
+    #expect(worker.findings.map(\.rule) == [.reviewMissing])
+    #expect(worker.verdict.exitCode == 1)
   }
 
   @Test(
@@ -321,6 +352,27 @@ struct BuildCheckReturnTests {
 
     #expect(report.findings.map(\.rule) == [.gateMissingProof])
     #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "an unproved GREEN worker gate fails under a per-task preset and passes under a final one — catches a preset that silently skips proof"
+  )
+  func proofRequirementFollowsThePresetsTaskProof() async throws {
+    let perTask = try await ReturnScenario(taskProof: .perTask)
+    defer { perTask.remove() }
+    let perTaskRun = try perTask.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+    let perTaskReport = try await perTask.check(
+      perTask.returnValue(gate: .init(tier: .push, verdict: .green, runID: perTaskRun)))
+
+    let final = try await ReturnScenario(taskProof: .final)
+    defer { final.remove() }
+    let finalRun = try final.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+    let finalReport = try await final.check(
+      final.returnValue(gate: .init(tier: .push, verdict: .green, runID: finalRun)))
+
+    #expect(perTaskReport.findings.map(\.rule) == [.gateMissingProof])
+    #expect(finalReport.findings == [])
+    #expect(finalReport.verdict == .green)
   }
 
   @Test(

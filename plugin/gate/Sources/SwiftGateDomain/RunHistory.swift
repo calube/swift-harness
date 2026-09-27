@@ -44,10 +44,13 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   public let steps: [String]?
   /// The refs `prove` retried compile-only tests at, oldest first. Absent when none.
   public let proofBases: [String]?
+  /// The commit `HEAD` was at when the run started. Absent in records written before it existed,
+  /// or when the checkout had no commit to name.
+  public let headCommit: String?
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
-    proofBases: [String]? = nil
+    proofBases: [String]? = nil, headCommit: String? = nil
   ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
@@ -59,6 +62,50 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.findingCount = report.findings.count
     self.steps = steps
     self.proofBases = proofBases
+    self.headCommit = headCommit
+  }
+}
+
+/// A run's `report.json`: the ``RunReport`` exactly as `--json` prints it, plus the commit the run
+/// started at. A reader that decodes only ``RunReport`` ignores the extra key.
+public struct RecordedRunReport: Sendable, Equatable {
+  public let report: RunReport
+  /// `nil` when the checkout had no commit to name, or the report predates the key.
+  public let headCommit: String?
+
+  public init(report: RunReport, headCommit: String?) {
+    self.report = report
+    self.headCommit = headCommit
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case headCommit
+  }
+
+  /// The same byte-stable formatting as ``RunReportJSON``.
+  public static func encode(_ recorded: RecordedRunReport) throws -> Data {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    return try encoder.encode(recorded)
+  }
+
+  public static func decode(_ data: Data) throws -> RecordedRunReport {
+    try JSONDecoder().decode(RecordedRunReport.self, from: data)
+  }
+}
+
+extension RecordedRunReport: Codable {
+  public init(from decoder: any Decoder) throws {
+    report = try RunReport(from: decoder)
+    headCommit = try decoder.container(keyedBy: CodingKeys.self)
+      .decodeIfPresent(String.self, forKey: .headCommit)
+  }
+
+  /// Both write into the one top-level object, so the report's own keys stay where they were.
+  public func encode(to encoder: any Encoder) throws {
+    try report.encode(to: encoder)
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encodeIfPresent(headCommit, forKey: .headCommit)
   }
 }
 

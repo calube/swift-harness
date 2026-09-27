@@ -293,7 +293,7 @@ public enum ConfigSchema {
       in: table, at: path,
       allowed: [
         "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
-        "time_budget_min", "stop_starts_before_min", "on_design_conflict",
+        "time_budget_min", "stop_starts_before_min", "on_design_conflict", "task_proof",
       ])
     let designTier: DesignTier =
       readEnum(&reader, table, "design_tier", at: path) ?? .standard
@@ -304,6 +304,8 @@ public enum ConfigSchema {
       readEnum(&reader, table, "worker_model", at: path) ?? .tagged
     let onDesignConflict: BuildPreset.OnDesignConflict =
       readEnum(&reader, table, "on_design_conflict", at: path) ?? .amend
+    let taskProof: BuildPreset.TaskProof =
+      readEnum(&reader, table, "task_proof", at: path) ?? .perTask
     return BuildPreset(
       designTier: designTier,
       maxParallel: reader.integer(table, "max_parallel", at: path, required: true) ?? 0,
@@ -311,7 +313,7 @@ public enum ConfigSchema {
       timeBudgetMin: reader.integer(table, "time_budget_min", at: path, required: true) ?? 0,
       stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
         ?? 0,
-      onDesignConflict: onDesignConflict)
+      onDesignConflict: onDesignConflict, taskProof: taskProof)
   }
 
   /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both
