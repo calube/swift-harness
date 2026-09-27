@@ -33,13 +33,15 @@ public struct HookPayload: Sendable, Equatable {
   public let stopHookActive: Bool
   /// Present only when the hook fires inside a subagent.
   public let agentID: String?
+  /// What a Write, Edit or MultiEdit leaves in the file; `nil` for every other tool.
+  public let fileWrite: FileWrite?
   /// SessionStart: `startup`, `resume`, `clear`, `compact` or `fork`.
   public let source: String?
 
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
-    agentID: String? = nil, source: String? = nil
+    agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -50,6 +52,7 @@ public struct HookPayload: Sendable, Equatable {
     self.stopHookActive = stopHookActive
     self.agentID = agentID
     self.source = source
+    self.fileWrite = fileWrite
   }
 
   public static func decode(_ data: Data) throws(HookPayloadError) -> HookPayload {
@@ -63,19 +66,56 @@ public struct HookPayload: Sendable, Equatable {
       sessionID: wire.sessionID, cwd: wire.cwd, hookEventName: wire.hookEventName,
       toolName: wire.toolName, command: wire.toolInput?.command,
       filePath: wire.toolInput?.filePath ?? wire.toolInput?.notebookPath,
-      stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source)
+      stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
+      fileWrite: wire.toolInput?.fileWrite)
   }
 
   private struct Wire: Decodable {
     struct ToolInput: Decodable {
+      struct Edit: Decodable {
+        let oldString: String
+        let newString: String
+        let replaceAll: Bool?
+
+        enum CodingKeys: String, CodingKey {
+          case oldString = "old_string"
+          case newString = "new_string"
+          case replaceAll = "replace_all"
+        }
+
+        var replacement: FileWrite.Replacement {
+          FileWrite.Replacement(
+            oldString: oldString, newString: newString, replaceAll: replaceAll ?? false)
+        }
+      }
+
       let command: String?
       let filePath: String?
       let notebookPath: String?
+      let content: String?
+      let oldString: String?
+      let newString: String?
+      let replaceAll: Bool?
+      let edits: [Edit]?
 
       enum CodingKeys: String, CodingKey {
         case command
         case filePath = "file_path"
         case notebookPath = "notebook_path"
+        case content
+        case oldString = "old_string"
+        case newString = "new_string"
+        case replaceAll = "replace_all"
+        case edits
+      }
+
+      var fileWrite: FileWrite? {
+        if let content { return .content(content) }
+        if let oldString, let newString {
+          let edit = Edit(oldString: oldString, newString: newString, replaceAll: replaceAll)
+          return .replacements([edit.replacement])
+        }
+        return edits.map { .replacements($0.map(\.replacement)) }
       }
     }
 
@@ -97,6 +137,50 @@ public struct HookPayload: Sendable, Equatable {
       case stopHookActive = "stop_hook_active"
       case agentID = "agent_id"
       case source
+    }
+  }
+}
+
+/// The text a file tool writes: the whole file, or replacements made in order in what is there.
+public enum FileWrite: Sendable, Equatable {
+  public struct Replacement: Sendable, Equatable {
+    public let oldString: String
+    public let newString: String
+    public let replaceAll: Bool
+
+    public init(oldString: String, newString: String, replaceAll: Bool) {
+      self.oldString = oldString
+      self.newString = newString
+      self.replaceAll = replaceAll
+    }
+  }
+
+  case content(String)
+  case replacements([Replacement])
+
+  /// The file's text after the write, given its text before (`nil` when it doesn't exist or can't
+  /// be read). An empty `oldString` creates an empty or missing file. A replacement whose text
+  /// isn't there fails the tool, which then writes nothing, so the result is `current`.
+  public func result(over current: String?) -> String? {
+    switch self {
+    case .content(let content):
+      return content
+    case .replacements(let replacements):
+      var text = current
+      for replacement in replacements {
+        if replacement.oldString.isEmpty, text?.isEmpty ?? true {
+          text = replacement.newString
+          continue
+        }
+        guard let before = text, !replacement.oldString.isEmpty,
+          let range = before.range(of: replacement.oldString)
+        else { return current }
+        text =
+          replacement.replaceAll
+          ? before.replacingOccurrences(of: replacement.oldString, with: replacement.newString)
+          : before.replacingCharacters(in: range, with: replacement.newString)
+      }
+      return text
     }
   }
 }

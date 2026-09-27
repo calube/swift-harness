@@ -56,6 +56,8 @@ struct BashWriteTargetTests {
       "ls; echo > /tmp/a && echo x > @R", "false || tee @R", "cat /tmp/x | tee /tmp/y | tee @R",
       "(rm @R)", "echo $(echo > @R)", "echo `touch @R`", "bash -c 'echo > @R'", "sudo cp /tmp/x @R",
       "cd Packages && echo {} > Feed/Package.resolved",
+      "git checkout -- @R", "git checkout HEAD @R", "git restore --source HEAD @R", "git rm -q @R",
+      "git mv @R /tmp/x", "git -C Packages/Feed restore Package.resolved",
     ])
   func writesDenied(command: String) async throws {
     let scenario = try ResolvedWrite()
@@ -82,6 +84,9 @@ struct BashWriteTargetTests {
       ("swift build 2>&1 | tee @R", "swift build 2>&1 | tee build.log"),
       ("echo hi > @R", "echo hi > /tmp/x"),
       ("rm @R", "cat @R"),
+      ("git checkout -- @R", "git checkout main"),
+      ("git restore @R", "git diff -- @R"),
+      ("git rm @R", "git rm -r --cached Sources"),
       ("echo {} > @R", "cat <<< '> @R'"),
       (
         "cat > @R <<'EOF'\nx\nEOF",
