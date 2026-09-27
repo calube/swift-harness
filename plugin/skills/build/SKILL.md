@@ -83,9 +83,10 @@ Handle notices one at a time: merges run in completion order.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
 4. `"$SG" build merge <slug> <task> --session <session> --json`, then
-   `"$SG" check --tier <mergeGate>` on main. A conflict or a red gate goes to
-   [the fixer](references/event-loop.md#conflict-or-red-main). A gate whose gating findings are
-   exactly the step 1 baseline counts as GREEN.
+   `"$SG" check --tier <mergeGate>` on main, then record it for the ledger page:
+   `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
+   A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
+   gate whose gating findings are exactly the step 1 baseline counts as GREEN.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
@@ -98,8 +99,11 @@ Go back to step 2.
 
 When `build next` reports nothing to start and nothing running, or at the cutoff:
 
-1. Wait for the machine's other `ready` runs, then `"$SG" check --tier ready`
-   ([final gate](references/event-loop.md#final-gate)). Not GREEN: halt.
+1. Wait for the machine's other `ready` runs, then run `"$SG" build proof-bases <slug>` and
+   `"$SG" check --tier ready` with the `--proof-base` arguments it prints
+   ([final gate](references/event-loop.md#final-gate)). Record it with
+   `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`
+   and republish the ledger page. Not GREEN: halt.
 2. The `validate` stage: print `validate: not configured` and go on.
 3. `"$SG" build finish <slug> --session <session> --json`.
 4. `"$SG" stats --build <run> --plan <slug>` for the wall time.

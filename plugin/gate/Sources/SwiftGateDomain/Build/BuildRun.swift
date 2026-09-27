@@ -139,6 +139,7 @@ public enum BuildEvent: Sendable, Equatable {
   case transition(Transition)
   case merge(Merge)
   case undo(Undo)
+  case gate(Gate)
 
   public struct Transition: Sendable, Equatable {
     public let task: String
@@ -186,8 +187,31 @@ public enum BuildEvent: Sendable, Equatable {
     }
   }
 
+  /// A `swiftgate check` the orchestrator ran on `main`: the merge gate after a task's merge, or
+  /// the final gate. `build record-gate` reads its tier and verdict from the run's own report.
+  public struct Gate: Sendable, Equatable {
+    public enum Stage: Sendable, Equatable {
+      case merge(task: String)
+      case final
+    }
+
+    public let stage: Stage
+    public let tier: CheckTier
+    public let verdict: Verdict
+    public let runID: String
+    public let at: Date
+
+    public init(stage: Stage, tier: CheckTier, verdict: Verdict, runID: String, at: Date) {
+      self.stage = stage
+      self.tier = tier
+      self.verdict = verdict
+      self.runID = runID
+      self.at = at
+    }
+  }
+
   public enum Kind: String, Sendable, Codable, CaseIterable {
-    case transition, merge, undo
+    case transition, merge, undo, gate
   }
 
   public var kind: Kind {
@@ -195,43 +219,66 @@ public enum BuildEvent: Sendable, Equatable {
     case .transition: .transition
     case .merge: .merge
     case .undo: .undo
+    case .gate: .gate
     }
   }
 
-  public var task: String {
+  /// `nil` for the final gate, which belongs to no task.
+  public var task: String? {
     switch self {
     case .transition(let transition): transition.task
     case .merge(let merge): merge.task
     case .undo(let undo): undo.task
+    case .gate(let gate):
+      switch gate.stage {
+      case .merge(let task): task
+      case .final: nil
+      }
     }
   }
 }
 
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
-    case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at
+    case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
+    case runID = "runId"
+  }
+
+  private enum GateStage: String, Codable {
+    case merge, final
   }
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    let task = try container.decode(String.self, forKey: .task)
     let at = try container.decode(Date.self, forKey: .at)
+    func task() throws -> String { try container.decode(String.self, forKey: .task) }
     switch try container.decode(Kind.self, forKey: .kind) {
     case .transition:
       self = .transition(
         Transition(
-          task: task, from: try container.decode(TaskStatus.self, forKey: .from),
+          task: try task(), from: try container.decode(TaskStatus.self, forKey: .from),
           to: try container.decode(TaskStatus.self, forKey: .to), at: at))
     case .merge:
       self = .merge(
         Merge(
-          task: task, preCommit: try container.decode(String.self, forKey: .preCommit),
+          task: try task(), preCommit: try container.decode(String.self, forKey: .preCommit),
           postCommit: try container.decode(String.self, forKey: .postCommit), at: at))
     case .undo:
       self = .undo(
         Undo(
-          task: task, fromCommit: try container.decode(String.self, forKey: .fromCommit),
+          task: try task(), fromCommit: try container.decode(String.self, forKey: .fromCommit),
           toCommit: try container.decode(String.self, forKey: .toCommit), at: at))
+    case .gate:
+      let stage: Gate.Stage =
+        switch try container.decode(GateStage.self, forKey: .gate) {
+        case .merge: .merge(task: try task())
+        case .final: .final
+        }
+      self = .gate(
+        Gate(
+          stage: stage, tier: try container.decode(CheckTier.self, forKey: .tier),
+          verdict: try container.decode(Verdict.self, forKey: .verdict),
+          runID: try container.decode(String.self, forKey: .runID), at: at))
     }
   }
 
@@ -254,6 +301,18 @@ extension BuildEvent: Codable {
       try container.encode(undo.fromCommit, forKey: .fromCommit)
       try container.encode(undo.toCommit, forKey: .toCommit)
       try container.encode(undo.at, forKey: .at)
+    case .gate(let gate):
+      switch gate.stage {
+      case .merge(let task):
+        try container.encode(GateStage.merge, forKey: .gate)
+        try container.encode(task, forKey: .task)
+      case .final:
+        try container.encode(GateStage.final, forKey: .gate)
+      }
+      try container.encode(gate.tier, forKey: .tier)
+      try container.encode(gate.verdict, forKey: .verdict)
+      try container.encode(gate.runID, forKey: .runID)
+      try container.encode(gate.at, forKey: .at)
     }
   }
 }
@@ -283,10 +342,26 @@ public struct BuildEventLog: Sendable, Equatable {
       switch event {
       case .merge(let merge): return merge.postCommit
       case .undo(let undo): return undo.toCommit
-      case .transition: continue
+      case .transition, .gate: continue
       }
     }
     return nil
+  }
+
+  /// The tasks on `main`, in the order they reached it: an undo takes its task back off, and a
+  /// later merge of the same task puts it back at the end.
+  public var mergedTasks: [String] {
+    var tasks: [String] = []
+    for event in events {
+      switch event {
+      case .merge(let merge):
+        tasks.removeAll { $0 == merge.task }
+        tasks.append(merge.task)
+      case .undo(let undo): tasks.removeAll { $0 == undo.task }
+      case .transition, .gate: continue
+      }
+    }
+    return tasks
   }
 }
 

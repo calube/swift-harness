@@ -34,22 +34,34 @@ struct ProveCommand: AsyncParsableCommand {
       Runs the host tests added or edited since the merge base on the change, then in a scratch \
       git worktree where production source is restored to the merge base (tests, manifests and \
       resources keep the change). Each test must pass on the change and fail on an assertion \
-      when reverted; failing only to compile is reported as not proven (compile-only).
+      when reverted; failing only to compile is reported as not proven (compile-only). A test \
+      that only fails to compile is tried again at each --proof-base, an ancestor of HEAD where \
+      the API it calls exists without its behavior, and is proven if it fails there on an \
+      assertion.
       """)
 
   @Option(help: "Changes are measured from the merge base of HEAD and this ref.")
   var base = "origin/main"
+
+  @Option(
+    name: .customLong("proof-base"),
+    help: "An ancestor of HEAD to retry compile-only tests at. Repeatable, oldest first.")
+  var proofBases: [String] = []
 
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let environment = ChangedTestChecks.Environment.live(root: root)
-    try await GateRun.execute(root: root, format: output.format, command: "prove") { context in
+    try await GateRun.execute(
+      root: root, format: output.format, command: "prove",
+      proofBases: proofBases.isEmpty ? nil : proofBases
+    ) { context in
       try await ChangedTestChecks.command(
         root: root, environment: environment, name: "prove", context: context
       ) { graph in
-        await ChangedTestChecks.prove(environment, graph: graph, base: base, context: context)
+        await ChangedTestChecks.prove(
+          environment, graph: graph, base: base, proofBases: proofBases, context: context)
       }
     }
   }

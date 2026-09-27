@@ -71,8 +71,8 @@ public enum ProofRules {
           compileOnlyRuleID, test,
           own != nil
             ? "not proven: compile-only. With the source change reverted \(test.id) does not "
-              + "compile\(cause); it must fail on an assertion. Land the API it calls in an "
-              + "earlier change, then prove the behavior change"
+              + "compile\(cause); it must fail on an assertion. Commit the API it calls first "
+              + "with bodies that do nothing yet, and pass that commit as --proof-base"
             : "not proven: with the source change reverted another test in the build does not "
               + "compile\(cause), so \(test.id) could not run")
       }
@@ -103,6 +103,60 @@ public enum ProofRules {
       }
     }
     return (builder.judgement, proven)
+  }
+
+  /// One reverted run: the ref production source was reverted to, the tests it ran, and how
+  /// ``judgeReverted(_:run:testDirectories:)`` judged them.
+  public struct RevertedAttempt: Sendable, Equatable {
+    public let base: String
+    public let tests: [ChangedTest]
+    public let judgement: ChangedTestJudgement
+    public let proven: [ChangedTest]
+
+    public init(
+      base: String, tests: [ChangedTest], judgement: ChangedTestJudgement, proven: [ChangedTest]
+    ) {
+      self.base = base
+      self.tests = tests
+      self.judgement = judgement
+      self.proven = proven
+    }
+  }
+
+  /// The tests a run judged compile-only: the ones a later proof base may still prove.
+  public static func compileOnly(_ tests: [ChangedTest], in judgement: ChangedTestJudgement)
+    -> [ChangedTest]
+  {
+    tests.filter { test in
+      judgement.findings.contains { $0.ruleID == compileOnlyRuleID && isAbout(test, $0) }
+    }
+  }
+
+  /// Folds reverted runs, the merge base first and then each proof base. A test's verdict is the
+  /// one from the last run that ran it, so a later run's proof replaces an earlier compile-only.
+  /// A proof base is an ancestor of the change where the API a test calls already exists without
+  /// its behavior, so a test that fails there on an assertion checks that behavior.
+  public static func combine(_ attempts: [RevertedAttempt])
+    -> (judgement: ChangedTestJudgement, proven: [ChangedTest], provenAtProofBase: Int)
+  {
+    var findings: [Finding] = []
+    var proven: [ChangedTest] = []
+    var provenAtProofBase = 0
+    for (index, attempt) in attempts.enumerated() {
+      let retried = Set(attempts.dropFirst(index + 1).flatMap(\.tests))
+      findings += attempt.judgement.findings.filter { finding in
+        !retried.contains { isAbout($0, finding) }
+      }
+      let kept = attempt.proven.filter { !retried.contains($0) }
+      proven += kept
+      if index > 0 { provenAtProofBase += kept.count }
+    }
+    let blocked = attempts.contains { $0.judgement.verdict == .blocked }
+    return (ChangedTestJudgement(findings: findings, blocked: blocked), proven, provenAtProofBase)
+  }
+
+  private static func isAbout(_ test: ChangedTest, _ finding: Finding) -> Bool {
+    finding.file == test.file && finding.line == test.line
   }
 
   static func missing(_ test: ChangedTest) -> String {

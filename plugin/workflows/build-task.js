@@ -25,7 +25,9 @@ const ARGS =
 
 // `TaskReturn`'s JSON keys (the gate's D/Build/TaskReturn.swift). check-return rejects a missing or
 // extra key, so the return is rebuilt from exactly these.
-const TASK_RETURN_KEYS = ['task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict']
+const TASK_RETURN_KEYS = [
+  'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
+]
 // A worker never returns review-blocked: only this workflow's review stage decides it.
 const WORKER_OUTCOMES = ['ready-to-merge', 'gate-red', 'design-conflict']
 const TIERS = ['fast', 'push', 'ready']
@@ -128,6 +130,10 @@ const TASK_RETURN_SCHEMA = {
     testsAdded: { type: 'array', items: { type: 'string' } },
     notes: { type: 'string' },
     designConflict: DESIGN_CONFLICT_SCHEMA,
+    surfaceCommit: {
+      type: ['string', 'null'],
+      description: 'the sha of your API-surface commit, the proof base your gate named; null when the task adds no API',
+    },
   },
 }
 
@@ -171,6 +177,7 @@ function workerDefect(r) {
   if (!Array.isArray(r.commits) || !r.commits.every(nonEmptyString)) return 'commits is not an array of shas'
   if (!Array.isArray(r.testsAdded) || !r.testsAdded.every(nonEmptyString)) return 'testsAdded is not an array of ids'
   if (typeof r.notes !== 'string') return 'notes is not a string'
+  if (r.surfaceCommit !== null && !nonEmptyString(r.surfaceCommit)) return 'surfaceCommit is neither a sha nor null'
   if (r.gate !== null) {
     const g = r.gate
     if (!g || typeof g !== 'object' || !TIERS.includes(g.tier) || !VERDICTS.includes(g.verdict) || !nonEmptyString(g.runId)) {
@@ -226,7 +233,8 @@ const brief = () =>
     `Task: ${A.task} (plan ${A.plan}).`,
     `Worktree: ${A.worktree}, branch ${A.branch}, already checked out.`,
     `Write set: ${A.writeSet.join(', ')}.`,
-    `Task gate: swiftgate check --tier ${A.taskGate}.`,
+    `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate, ` +
+      'plus --proof-base <surface commit> when the task adds API.',
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')
@@ -323,6 +331,8 @@ function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, ext
     testsAdded: union(earlierTests, worker.testsAdded),
     notes: extraNote ? [worker.notes, extraNote].filter(Boolean).join('\n') : worker.notes,
     designConflict: outcome === 'design-conflict' ? worker.designConflict : null,
+    // A fix pass works on the same branch, so the first attempt's surface commit still stands.
+    surfaceCommit: worker.surfaceCommit ?? (first.value ? first.value.surfaceCommit : null),
   }
   return Object.fromEntries(TASK_RETURN_KEYS.map(k => [k, out[k]]))
 }

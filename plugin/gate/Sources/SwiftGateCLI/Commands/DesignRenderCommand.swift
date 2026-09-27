@@ -256,8 +256,12 @@ enum LedgerRenderRun {
     }
 
     let design = DesignDocument(markdown: .parse(found.text))
+    var notes: [String] = []
+    let build = await buildView(slug: slug, ledger: ledger, git: git, notes: &notes)
     let page = LedgerRender.page(
-      .init(slug: slug, ledger: ledger, design: design, designSha: designSha))
+      .init(
+        slug: slug, ledger: ledger, design: design, designSha: designSha,
+        buildMetrics: build?.metrics, build: build?.view))
     let path = outputPath(for: slug)
     let outputURL = root.appending(path: path, directoryHint: .notDirectory)
     do {
@@ -268,7 +272,42 @@ enum LedgerRenderRun {
       return .blocked("can't write \(path): \(error.localizedDescription)")
     }
     return .written(
-      path: path, designSha: designSha, capabilities: page.capabilityDeclaration, notes: [])
+      path: path, designSha: designSha, capabilities: page.capabilityDeclaration, notes: notes)
+  }
+
+  /// The plan's newest build run, as the page shows it: `nil` before any run. A run that can't be
+  /// read renders the page without it and says why in `notes`, since the plan itself still is.
+  private static func buildView(
+    slug: String, ledger: Ledger, git: any Git, notes: inout [String]
+  ) async -> (view: LedgerRender.BuildView, metrics: BuildMetrics.Report)? {
+    let store: BuildRunStore
+    let record: BuildRunRecord
+    let log: BuildEventLog
+    do throws(BuildRunStoreError) {
+      guard let latest = try await BuildRunStore.latest(plan: slug, git: git) else { return nil }
+      store = latest
+      record = try store.record()
+      log = try store.events()
+    } catch {
+      notes.append("build run not shown: \(error)")
+      return nil
+    }
+    var taskGates: [String: TaskReturn.Gate] = [:]
+    for task in ledger.tasks {
+      let file = URL(filePath: store.layout.directory + "/returns/\(task.id).json")
+      guard FileManager.default.fileExists(atPath: file.path) else { continue }
+      do {
+        taskGates[task.id] = try TaskReturnJSON.decode(Data(contentsOf: file)).gate
+      } catch {
+        notes.append("task `\(task.id)`'s stored return is unreadable: \(error)")
+      }
+    }
+    let metrics = BuildMetrics.compute(record: record, log: log)
+    let view = LedgerRender.BuildView(
+      runID: record.runID, presetName: record.presetName,
+      timeBudgetMin: record.preset.timeBudgetMin,
+      totalWallMilliseconds: metrics.totalWallMilliseconds, taskGates: taskGates, log: log)
+    return (view, metrics)
   }
 
   private static func describe(_ error: PlanStateStoreError) -> String {

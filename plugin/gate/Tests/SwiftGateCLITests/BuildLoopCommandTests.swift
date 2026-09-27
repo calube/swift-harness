@@ -275,6 +275,135 @@ struct BuildLoopCommandTests {
     #expect(try scenario.index()?.status == "done")
   }
 
+  /// Starts a run and records `events` in it, with a stored return per task naming its surface
+  /// commit, or none.
+  private func mergedRun(
+    _ scenario: BuildScenario, events: [BuildEvent], surfaces: [String: String?]
+  ) async throws {
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger(surfaces.keys.sorted().map { ($0, .done) })
+    let runID = try #require(await scenario.start().report?.runId)
+    let store = try await BuildRunStore.open(
+      plan: BuildScenario.plan, runID: runID, git: scenario.git)
+    for event in events { try await store.append(event) }
+    for (task, surface) in surfaces {
+      let taskReturn = TaskReturn(
+        task: task, outcome: .readyToMerge, commits: ["1"], gate: nil, review: nil,
+        testsAdded: [], notes: "", designConflict: nil, surfaceCommit: surface)
+      try scenario.write(
+        try scenario.layout().buildDirectory + "/\(runID)/returns/\(task).json",
+        try TaskReturnJSON.encode(taskReturn))
+    }
+  }
+
+  private static func merge(_ task: String, _ post: String) -> BuildEvent {
+    .merge(
+      .init(task: task, preCommit: "pre-\(post)", postCommit: post, at: BuildScenario.startedAt))
+  }
+
+  @Test(
+    "proof bases are the merged tasks' surface commits in the order they reached main, after undos, skipping a task with none — catches a final gate proving against a merge that was undone"
+  )
+  func proofBasesFollowMainsHistory() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(
+      scenario,
+      events: [
+        Self.merge("a", "m1"), Self.merge("b", "m2"),
+        .undo(.init(task: "b", fromCommit: "m2", toCommit: "m1", at: BuildScenario.startedAt)),
+        Self.merge("c", "m3"), Self.merge("d", "m4"), Self.merge("b", "m5"), Self.merge("e", "m6"),
+        .undo(.init(task: "e", fromCommit: "m6", toCommit: "m5", at: BuildScenario.startedAt)),
+      ],
+      surfaces: ["a": "aaa", "b": "bbb", "c": "ccc", "d": nil, "e": "eee"])
+
+    let result = await BuildProofBasesRun.run(slug: BuildScenario.plan, git: scenario.git)
+
+    #expect(result.verdict == .green)
+    #expect(result.report?.proofBases == ["aaa", "ccc", "bbb"])
+    #expect(result.report?.arguments == "--proof-base aaa --proof-base ccc --proof-base bbb")
+  }
+
+  @Test(
+    "a merged task with no stored return is BLOCKED by name — catches a proof base silently missing from the final gate"
+  )
+  func proofBasesNeedEveryReturn() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [Self.merge("a", "m1")], surfaces: [:])
+    try scenario.writeLedger([("a", .done)])
+
+    let result = await BuildProofBasesRun.run(slug: BuildScenario.plan, git: scenario.git)
+
+    #expect(result.verdict == .blocked)
+    #expect(result.message.contains("`a`"))
+  }
+
+  /// A checkout holding one recorded run, as `check` or another command writes it.
+  private func checkout(runID: String, command: String, verdict: Verdict) throws -> URL {
+    let root = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-record-gate-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let report = try RunReport(
+      runID: runID, durationMilliseconds: 1000,
+      tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1000, testCounts: nil)],
+      findings: [])
+    try RunStore(worktreeRoot: root).record(
+      report, finishedAt: BuildScenario.startedAt, command: command)
+    return root
+  }
+
+  @Test(
+    "record-gate appends the gate with the tier and verdict its own run recorded — catches a gate verdict the orchestrator could misreport"
+  )
+  func recordGateReadsTheRun() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [Self.merge("a", "m1")], surfaces: ["a": nil])
+    let runID = "20260927T190000Z-0000beef"
+    let root = try checkout(runID: runID, command: "check push", verdict: .red)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let result = await BuildRecordGateRun.run(
+      slug: BuildScenario.plan, stage: .merge(task: "a"), runID: runID,
+      session: BuildScenario.alice, root: root, git: scenario.git,
+      clock: FixedClock(date: BuildScenario.startedAt))
+
+    #expect(result.verdict == .green)
+    let store = try #require(
+      try await BuildRunStore.latest(plan: BuildScenario.plan, git: scenario.git))
+    #expect(
+      try store.events().events.last
+        == .gate(
+          .init(
+            stage: .merge(task: "a"), tier: .push, verdict: .red, runID: runID,
+            at: BuildScenario.startedAt)))
+  }
+
+  @Test(
+    "record-gate is BLOCKED for a run the checkout never recorded, or one that wasn't a check — catches a ledger page citing a gate that never ran"
+  )
+  func recordGateNeedsACheckRun() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [], surfaces: ["a": nil])
+    let root = try checkout(runID: "20260927T190000Z-00000001", command: "lint", verdict: .green)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let missing = await BuildRecordGateRun.run(
+      slug: BuildScenario.plan, stage: .final, runID: "20260927T190000Z-0000dead",
+      session: BuildScenario.alice, root: root, git: scenario.git,
+      clock: FixedClock(date: BuildScenario.startedAt))
+    let notACheck = await BuildRecordGateRun.run(
+      slug: BuildScenario.plan, stage: .final, runID: "20260927T190000Z-00000001",
+      session: BuildScenario.alice, root: root, git: scenario.git,
+      clock: FixedClock(date: BuildScenario.startedAt))
+
+    #expect(missing.verdict == .blocked)
+    #expect(missing.message.contains("0000dead"))
+    #expect(notACheck.verdict == .blocked)
+  }
+
   enum Command: String, CaseIterable, Sendable {
     case start, next, finish
   }

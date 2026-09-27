@@ -52,9 +52,18 @@ enum CheckRun {
     }
   }
 
+  /// A `ready` step a lower tier can add: a build task's gate proves and mutates its own change.
+  enum ExtraStep: String, Sendable, CaseIterable {
+    case prove
+    case mutate
+  }
+
+  /// - Parameters:
+  ///   - extraSteps: `ready` steps to run at a lower tier; `ready` runs them anyway.
+  ///   - proofBases: ancestors of HEAD, oldest first, where `prove` retries a compile-only test.
   static func run(
-    root: URL, tier: CheckTier, base: String, context: GateRun.Context,
-    dependencies: Dependencies
+    root: URL, tier: CheckTier, base: String, extraSteps: Set<ExtraStep> = [],
+    proofBases: [String] = [], context: GateRun.Context, dependencies: Dependencies
   ) async throws -> GateRunParts {
     let swiftPM = dependencies.swiftPM
     let git = dependencies.git
@@ -103,18 +112,27 @@ enum CheckRun {
           graph: graph, changed: changed, context: context)
         var t1Tier = t1.tier
         parts.findings += t1.findings
+        let environment = dependencies.changedTests
         if tier == .ready {
-          let environment = dependencies.changedTests
           let changed = await ChangedTestChecks.ready(
-            environment, graph: graph, base: base, context: context)
+            environment, graph: graph, base: base, proofBases: proofBases, context: context)
           t1Tier = try t1Tier.merging(changed.verdict)
           parts.findings += changed.findings
+        } else if extraSteps.contains(.prove) {
+          let proven = await ChangedTestChecks.prove(
+            environment, graph: graph, base: base, proofBases: proofBases, context: context)
+          t1Tier = try t1Tier.merging(proven.verdict)
+          parts.findings += proven.findings
+        }
+        if tier == .ready || extraSteps.contains(.mutate) {
           let mutated = try await mutate(after: t1Tier) {
             await MutateCheck.run(
               dependencies.mutation, graph: graph, config: config, base: base, context: context)
           }
           t1Tier = mutated.tier
           parts.findings += mutated.findings
+        }
+        if tier == .ready {
           if let judge = dependencies.judge {
             let judged = await TestJudgeCheck.run(
               environment, graph: graph, config: config, base: base, atReadyTier: true,
@@ -632,16 +650,35 @@ struct CheckCommand: AsyncParsableCommand {
   @Option(help: "Changes are measured from the merge base of HEAD and this ref.")
   var base = "origin/main"
 
+  @Flag(help: "Also run prove below the ready tier, which runs it anyway.")
+  var prove = false
+
+  @Flag(help: "Also run mutate below the ready tier, which runs it anyway.")
+  var mutate = false
+
+  @Option(
+    name: .customLong("proof-base"),
+    help: ArgumentHelp(
+      "An ancestor of HEAD where prove retries a test that only fails to compile at the merge "
+        + "base. Repeatable, oldest first."))
+  var proofBases: [String] = []
+
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    // `ready` runs both anyway, so they are extra only below it.
+    var steps: [CheckRun.ExtraStep] = []
+    if prove, tier != .ready { steps.append(.prove) }
+    if mutate, tier != .ready { steps.append(.mutate) }
     try await GateRun.execute(
-      root: root, format: output.format, command: "check \(tier.rawValue)"
+      root: root, format: output.format, command: "check \(tier.rawValue)",
+      steps: steps.isEmpty ? nil : steps.map(\.rawValue),
+      proofBases: proofBases.isEmpty ? nil : proofBases
     ) { context in
       try await CheckRun.run(
-        root: root, tier: tier, base: base, context: context,
-        dependencies: .live(root: root, judge: true))
+        root: root, tier: tier, base: base, extraSteps: Set(steps), proofBases: proofBases,
+        context: context, dependencies: .live(root: root, judge: true))
     }
   }
 }

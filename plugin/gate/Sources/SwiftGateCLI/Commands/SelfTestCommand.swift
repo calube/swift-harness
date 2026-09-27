@@ -1147,7 +1147,7 @@ private enum BuildSeedRunners {
   // MARK: build check-return
 
   /// A repository whose task worktree sits on `<plan>/<task>` with one commit and one GREEN
-  /// `check push` run in its run store, and whose `elsewhere` branch holds a commit the task branch
+  /// `check push --prove --mutate` run in its run store, and whose `elsewhere` branch holds a commit the task branch
   /// never reaches. `return.json`'s `{{taskCommit}}`, `{{offBranchCommit}}` and `{{gateRunId}}`
   /// become those at run time, so the case never hand-copies a sha.
   static func checkReturn(caseDirectory: URL, checks: BuildSeedChecks) async -> SeedRunOutcome {
@@ -1209,7 +1209,8 @@ private enum BuildSeedRunners {
         ],
         findings: [])
       try RunStore(worktreeRoot: worktree).record(
-        report, finishedAt: startedAt, command: "check \(CheckTier.push.rawValue)")
+        report, finishedAt: startedAt, command: "check \(CheckTier.push.rawValue)",
+        steps: ["prove", "mutate"])
     } catch {
       return .blocked("could not stage plan state: \(error)")
     }

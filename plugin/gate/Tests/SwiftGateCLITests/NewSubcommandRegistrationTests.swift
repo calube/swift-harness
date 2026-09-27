@@ -93,6 +93,15 @@ struct NewSubcommandRegistrationTests {
       "check-return"
     ),
     ("build finish", ["build", "finish", "example-plan", "--session", "session-123"], "finish"),
+    ("build proof-bases", ["build", "proof-bases", "example-plan"], "proof-bases"),
+    (
+      "build record-gate",
+      [
+        "build", "record-gate", "example-plan", "--kind", "final", "--run-id", "r1", "--session",
+        "session-123",
+      ],
+      "record-gate"
+    ),
     (
       "ledger set",
       ["ledger", "set", "example-plan", "example-task", "done", "--session", "session-123"],
@@ -135,7 +144,9 @@ struct NewSubcommandRegistrationTests {
     "plan-lint",
     "design-render",
     "calibrate design",
-    "build start", "build next", "build finish", "build check-return", "build merge",
+    "build start", "build next", "build finish", "build check-return", "build proof-bases",
+    "build record-gate",
+    "build merge",
     "build merge --undo", "build merge --fix",
     "ledger set",
     "worktree create", "worktree warm-check", "worktree remove",

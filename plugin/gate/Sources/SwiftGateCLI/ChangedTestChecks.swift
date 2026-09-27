@@ -44,6 +44,14 @@ enum ChangedTestChecks {
         packagePath: packagePath, targets: targets, filter: ChangedTest.filter(selecting: tests))
     }
 
+    /// The same package with only `tests`, and only the targets they're in.
+    func narrowed(to tests: [ChangedTest]) -> PackageTests {
+      let names = Set(tests.map(\.target))
+      return PackageTests(
+        packagePath: packagePath, tests: tests, targets: targets.filter { names.contains($0.name) },
+        testDirectories: testDirectories)
+    }
+
     func selection(of test: ChangedTest) -> HostTestSelection {
       HostTestSelection(
         packagePath: packagePath, targets: targets.filter { $0.name == test.target },
@@ -114,33 +122,52 @@ enum ChangedTestChecks {
   /// The `ready` tier's host-test steps: reach first (each test alone), then stress, then prove,
   /// whose scratch tree builds from cold.
   static func ready(
-    _ environment: Environment, graph: ModuleGraph, base: String, context: GateRun.Context
+    _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
+    context: GateRun.Context
   ) async -> ChangedTestJudgement {
     let reached = await reach(environment, graph: graph, base: base, context: context)
     let stressed = await stress(
       environment, graph: graph, base: base, iterations: readyStressIterations, context: context)
-    let proven = await prove(environment, graph: graph, base: base, context: context)
+    let proven = await prove(
+      environment, graph: graph, base: base, proofBases: proofBases, context: context)
     return reached.merged(with: stressed).merged(with: proven)
   }
 
   // MARK: - prove
 
+  /// - Parameter proofBases: ancestors of HEAD, oldest first, where a test that only fails to
+  ///   compile at the merge base is tried again.
   static func prove(
-    _ environment: Environment, graph: ModuleGraph, base: String, context: GateRun.Context
+    _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
+    context: GateRun.Context
   ) async -> ChangedTestJudgement {
     let (result, milliseconds) = await GateRun.timed {
-      await proveUntimed(environment, graph: graph, base: base, context: context)
+      await proveUntimed(
+        environment, graph: graph, base: base, proofBases: proofBases, context: context)
     }
     return result.withSummary(result.summary.map { "prove: \($0) (\(duration(milliseconds)))" })
   }
 
   private static func proveUntimed(
-    _ environment: Environment, graph: ModuleGraph, base: String, context: GateRun.Context
+    _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String],
+    context: GateRun.Context
   ) async -> SummarizedJudgement {
     let selection: Selection
     switch await select(environment, graph: graph, base: base) {
     case .failure(let reason): return .blocked(ProofRules.noEvidenceRuleID, reason.text)
     case .success(let found): selection = found
+    }
+    for proofBase in proofBases {
+      do throws(GitError) {
+        guard try await environment.git.isAncestor(proofBase, of: "HEAD") else {
+          return .blocked(
+            ProofRules.noEvidenceRuleID,
+            "proof base \(proofBase) is not an ancestor of HEAD, so the change never went through it"
+          )
+        }
+      } catch {
+        return .blocked(ProofRules.noEvidenceRuleID, "git: \(error)")
+      }
     }
     guard !selection.packages.isEmpty else {
       return .note("prove: no new or changed host tests since \(base)")
@@ -181,41 +208,65 @@ enum ChangedTestChecks {
       judgement = judgement.merged(with: ProofRules.judgeChange(package.tests, run: run.run))
     }
 
-    let request = ScratchTreeRequest(
-      revision: "HEAD", revertTo: selection.mergeBase, copiedPaths: copied,
-      revertedPaths: reverted)
-    let revertedResult: (ChangedTestJudgement, Int)
-    do throws(ScratchWorktreeError) {
-      revertedResult = try await environment.scratch.withScratchTree(request) { toplevel in
-        let root = prefix.isEmpty ? toplevel : toplevel.appending(path: prefix)
-        let swiftPM = environment.scratchSwiftPM(root)
-        var judgement = ChangedTestJudgement.empty
-        var proven = 0
-        for package in selection.packages {
-          let run = await runOnce(
-            package, swiftPM: swiftPM, root: root, output: output.appending(path: "reverted"),
-            coverage: false)
-          let result = ProofRules.judgeReverted(
-            package.tests, run: run.run, testDirectories: package.testDirectories)
-          judgement = judgement.merged(with: result.judgement)
-          proven += result.proven.count
+    var attempts: [String: [ProofRules.RevertedAttempt]] = [:]
+    var pending = selection.packages
+    let revertTargets = [selection.mergeBase] + proofBases
+    for (index, revertTo) in revertTargets.enumerated() where !pending.isEmpty {
+      let request = ScratchTreeRequest(
+        revision: "HEAD", revertTo: revertTo, copiedPaths: copied, revertedPaths: reverted)
+      let tried: [(PackageTests, ProofRules.RevertedAttempt)]
+      do throws(ScratchWorktreeError) {
+        tried = try await environment.scratch.withScratchTree(request) { toplevel in
+          let root = prefix.isEmpty ? toplevel : toplevel.appending(path: prefix)
+          let swiftPM = environment.scratchSwiftPM(root)
+          var tried: [(PackageTests, ProofRules.RevertedAttempt)] = []
+          for package in pending {
+            let run = await runOnce(
+              package, swiftPM: swiftPM, root: root,
+              output: output.appending(path: index == 0 ? "reverted" : "reverted-\(index)"),
+              coverage: false)
+            let result = ProofRules.judgeReverted(
+              package.tests, run: run.run, testDirectories: package.testDirectories)
+            tried.append(
+              (
+                package,
+                ProofRules.RevertedAttempt(
+                  base: revertTo, tests: package.tests, judgement: result.judgement,
+                  proven: result.proven)
+              ))
+          }
+          return tried
         }
-        return (judgement, proven)
+      } catch {
+        return SummarizedJudgement(
+          judgement: judgement.merged(
+            with: SummarizedJudgement.blocked(
+              ProofRules.noEvidenceRuleID, "scratch worktree: \(error)"
+            ).judgement),
+          summary: nil)
       }
-    } catch {
-      return SummarizedJudgement(
-        judgement: judgement.merged(
-          with: SummarizedJudgement.blocked(
-            ProofRules.noEvidenceRuleID, "scratch worktree: \(error)"
-          ).judgement),
-        summary: nil)
+      pending = []
+      for (package, attempt) in tried {
+        attempts[package.packagePath, default: []].append(attempt)
+        let retry = ProofRules.compileOnly(package.tests, in: attempt.judgement)
+        if !retry.isEmpty { pending.append(package.narrowed(to: retry)) }
+      }
+    }
+    var proven = 0
+    var provenAtProofBase = 0
+    for package in selection.packages {
+      let combined = ProofRules.combine(attempts[package.packagePath] ?? [])
+      judgement = judgement.merged(with: combined.judgement)
+      proven += combined.proven.count
+      provenAtProofBase += combined.provenAtProofBase
     }
     let total = selection.tests.count
     return SummarizedJudgement(
-      judgement: judgement.merged(with: revertedResult.0),
+      judgement: judgement,
       summary:
-        "\(revertedResult.1) of \(total) new or changed host tests fail on an assertion with "
-        + "the source change reverted")
+        "\(proven) of \(total) new or changed host tests fail on an assertion with "
+        + "the source change reverted"
+        + (provenAtProofBase > 0 ? ", \(provenAtProofBase) of them at a proof base" : ""))
   }
 
   private static func isTestModule(_ module: Module) -> Bool {

@@ -29,7 +29,8 @@ private struct ReturnsScenario {
     {"task": "\(task)", "outcome": "ready-to-merge", "commits": ["3f2a91c"],
      "gate": {"tier": "push", "verdict": "GREEN", "runId": "20260927T085900Z-00aa11bb"},
      "review": {"mode": "gate", "findings": []}, "testsAdded": ["test-fetch-loads"],
-     "notes": "Fetcher.load() returns [Item]", "designConflict": null\(extra)}
+     "notes": "Fetcher.load() returns [Item]", "designConflict": null,
+     "surfaceCommit": null\(extra)}
     """
   }
 }

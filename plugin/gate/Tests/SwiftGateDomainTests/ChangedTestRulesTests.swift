@@ -102,6 +102,66 @@ struct ChangedTestRulesTests {
     #expect(judgement.findings.first?.message.contains("cannot find 'double' in scope") == true)
   }
 
+  private func attempt(_ base: String, _ scenario: String, _ tests: [ChangedTest]) throws
+    -> ProofRules.RevertedAttempt
+  {
+    let (judgement, proven) = ProofRules.judgeReverted(
+      tests, run: try observe(scenario, tests), testDirectories: [ProbeRun.testDirectory])
+    return ProofRules.RevertedAttempt(
+      base: base, tests: tests, judgement: judgement, proven: proven)
+  }
+
+  @Test(
+    "tests compile-only at the merge base that fail on an assertion at a proof base are proven and GREEN — catches a new-API test that can never be proven"
+  )
+  func compileOnlyThenProvenAtProofBase() throws {
+    let atMergeBase = try attempt("mergebase", "compile-only", tests)
+
+    let combined = ProofRules.combine([
+      atMergeBase,
+      try attempt("surface", "reverted", ProofRules.compileOnly(tests, in: atMergeBase.judgement)),
+    ])
+
+    #expect(combined.judgement.verdict == .green)
+    #expect(combined.judgement.findings.isEmpty)
+    #expect(combined.proven == tests)
+    #expect(combined.provenAtProofBase == 2)
+  }
+
+  @Test(
+    "a test compile-only at the merge base that passes at the proof base is not-proven, with no compile-only left — catches a proof base hiding a test that checks nothing"
+  )
+  func compileOnlyThenPassesAtProofBase() throws {
+    let atMergeBase = try attempt("mergebase", "compile-only", tests)
+
+    let combined = ProofRules.combine([
+      atMergeBase,
+      try attempt("surface", "pass", ProofRules.compileOnly(tests, in: atMergeBase.judgement)),
+    ])
+
+    #expect(combined.judgement.verdict == .red)
+    #expect(combined.proven.isEmpty)
+    #expect(
+      combined.judgement.findings.map(\.ruleID)
+        == Array(repeating: ProofRules.notProvenRuleID, count: 2))
+  }
+
+  @Test(
+    "a compile-only test no proof base retried keeps its merge-base finding — catches a retry of one test clearing another's"
+  )
+  func unretriedTestKeepsItsFinding() throws {
+    let atMergeBase = try attempt("mergebase", "compile-only", tests)
+
+    let combined = ProofRules.combine([
+      atMergeBase, try attempt("surface", "reverted", [tests[0]]),
+    ])
+
+    #expect(combined.judgement.verdict == .red)
+    #expect(combined.proven == [tests[0]])
+    #expect(combined.judgement.findings.map(\.ruleID) == [ProofRules.compileOnlyRuleID])
+    #expect(combined.judgement.findings.map(\.line) == [tests[1].line])
+  }
+
   @Test(
     "a test whose own declaration compiles, blocked by another test's compile error, is not proven with that cause named — catches one new-API test blamed on every test"
   )

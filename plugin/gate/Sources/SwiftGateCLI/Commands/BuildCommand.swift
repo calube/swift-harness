@@ -8,6 +8,7 @@ struct BuildCommand: ParsableCommand {
       + "ones onto main, and finish the run.",
     subcommands: [
       BuildStartCommand.self, BuildNextCommand.self, BuildMergeCommand.self,
-      BuildCheckReturnCommand.self, BuildFinishCommand.self,
+      BuildCheckReturnCommand.self, BuildProofBasesCommand.self,
+      BuildRecordGateCommand.self, BuildFinishCommand.self,
     ])
 }

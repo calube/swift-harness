@@ -99,7 +99,8 @@ public struct BuildCalibrationRunner: Sendable {
       answer(
         "return", "matches",
         try await repository.returnFindings(
-          decoded, taskID: seed.name, branch: setup.branch, tip: tip, gate: seed.label.gate))
+          decoded, taskID: seed.name, branch: setup.branch, tip: tip, gate: seed.label.gate,
+          proofRequired: role == .worker))
     case .failure(let problem):
       answer("outcome", seed.label.outcome.rawValue, "no return: \(problem.reason)")
       answer("return", "matches", "no return")
@@ -376,18 +377,20 @@ struct Sandbox {
   /// The return's claims against git and the sandbox's run store, as `build check-return`
   /// checks them. A worker's `review` is always `null` until the workflow fills it, so its
   /// absence isn't a finding here.
+  /// - Parameter proofRequired: a worker's green gate must prove and mutate its change, as
+  ///   `build check-return` requires of a task; a fixer's need not.
   func returnFindings(
-    _ taskReturn: TaskReturn, taskID: String, branch: String, tip: String?, gate: CheckTier
+    _ taskReturn: TaskReturn, taskID: String, branch: String, tip: String?, gate: CheckTier,
+    proofRequired: Bool
   ) async throws(CalibrationCaseError) -> String {
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
+    var surface: TaskReturnEvidence.CommitState?
     if let tip {
       for commit in taskReturn.commits {
-        guard let full = try await revision(commit), commit.allSatisfy(\.isHexDigit) else {
-          commits[commit] = .missing
-          continue
-        }
-        let onBranch = try await run(["merge-base", "--is-ancestor", full, tip]).status.isSuccess
-        commits[commit] = onBranch ? .onBranch : .offBranch
+        commits[commit] = try await state(of: commit, onBranchAt: tip)
+      }
+      if let surfaceCommit = taskReturn.surfaceCommit {
+        surface = try await state(of: surfaceCommit, onBranchAt: tip)
       }
     }
     var gateRun: TaskReturnEvidence.GateRun?
@@ -401,18 +404,29 @@ struct Sandbox {
       if let record = history.records.last(where: { $0.runID == runID }) {
         gateRun = .init(
           tier: TaskReturnEvidence.GateRun.tier(ofCommand: record.command),
-          verdict: record.verdict)
+          verdict: record.verdict, steps: record.steps ?? [],
+          proofBases: record.proofBases ?? [])
       }
     }
     let evidence = TaskReturnEvidence(
       branch: branch, branchExists: tip != nil, commits: commits, gateRun: gateRun,
-      taskGate: gate, taskStatus: nil)
+      taskGate: gate, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: surface)
     var problems = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       .filter { $0.rule != .reviewMissing }.map { "\($0.rule.rawValue): \($0.message)" }
     if taskReturn.task != taskID {
       problems.insert("task is `\(taskReturn.task)`, not `\(taskID)`", at: 0)
     }
     return problems.isEmpty ? "matches" : problems.joined(separator: "; ")
+  }
+
+  private func state(of commit: String, onBranchAt tip: String)
+    async throws(CalibrationCaseError) -> TaskReturnEvidence.CommitState
+  {
+    guard let full = try await revision(commit), commit.allSatisfy(\.isHexDigit) else {
+      return .missing
+    }
+    let onBranch = try await run(["merge-base", "--is-ancestor", full, tip]).status.isSuccess
+    return onBranch ? .onBranch : .offBranch
   }
 
   /// `passed`, or the labelled tests that failed or never ran, after the seed's `accept/` tests

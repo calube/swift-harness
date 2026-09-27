@@ -195,4 +195,42 @@ struct LedgerRenderCommandTests {
     #expect(html.contains("Requirement × task coverage"))
     #expect(html.contains("Predicted overhead share"))
   }
+
+  @Test(
+    "with a build run the page shows its task gate from the stored return, its merge gate and the final gate — catches the page built without the run's gates"
+  )
+  func pageShowsTheBuildRunsGates() async throws {
+    let repo = try await LedgerRenderRepo()
+    defer { repo.remove() }
+    try await repo.writePlanState(
+      designSha: DesignSha.of(LedgerRenderRepo.approvedText), ledger: LedgerRenderRepo.ledger())
+    let startedAt = Date(timeIntervalSince1970: 1_790_000_000)
+    let preset = BuildPreset(
+      designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
+      workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
+    let store = try await BuildRunStore.create(
+      plan: LedgerRenderRepo.slug, presetName: "interview", preset: preset, startedAt: startedAt,
+      git: repo.git, suffix: 7)
+    for (stage, tier, run) in [
+      (BuildEvent.Gate.Stage.merge(task: "queue-core"), CheckTier.push, "run-merge"),
+      (.final, .ready, "run-final"),
+    ] {
+      try await store.append(
+        .gate(.init(stage: stage, tier: tier, verdict: .green, runID: run, at: startedAt)))
+    }
+    let taskReturn = TaskReturn(
+      task: "queue-core", outcome: .readyToMerge, commits: ["1"],
+      gate: .init(tier: .fast, verdict: .green, runID: "run-task"), review: nil, testsAdded: [],
+      notes: "", designConflict: nil)
+    let returns = URL(filePath: store.layout.directory).appending(path: "returns")
+    try FileManager.default.createDirectory(at: returns, withIntermediateDirectories: true)
+    try TaskReturnJSON.encode(taskReturn).write(to: returns.appending(path: "queue-core.json"))
+
+    _ = await repo.renderLedger()
+
+    let html = try String(contentsOf: repo.outputURL, encoding: .utf8)
+    for text in ["run-task", "run-merge", "run-final", store.runID, "interview"] {
+      #expect(html.contains(text), "page lacks \(text)")
+    }
+  }
 }

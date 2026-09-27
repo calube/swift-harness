@@ -6,5 +6,6 @@
   "review": {"mode": "gate", "findings": []},
   "testsAdded": ["test-queue-drains"],
   "notes": "Queue.drain() returns [Item]",
-  "designConflict": null
+  "designConflict": null,
+  "surfaceCommit": null
 }

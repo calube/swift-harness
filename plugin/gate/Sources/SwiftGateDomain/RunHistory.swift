@@ -40,8 +40,15 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   public let durationMilliseconds: Int
   public let tiers: [TierResult]
   public let findingCount: Int
+  /// `ready` steps a lower `check` tier added, such as `prove` and `mutate`. Absent when none.
+  public let steps: [String]?
+  /// The refs `prove` retried compile-only tests at, oldest first. Absent when none.
+  public let proofBases: [String]?
 
-  public init(report: RunReport, finishedAt: Date, command: String? = nil) {
+  public init(
+    report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
+    proofBases: [String]? = nil
+  ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
     self.command = command
@@ -50,6 +57,8 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.durationMilliseconds = report.durationMilliseconds
     self.tiers = report.tiers
     self.findingCount = report.findings.count
+    self.steps = steps
+    self.proofBases = proofBases
   }
 }
 

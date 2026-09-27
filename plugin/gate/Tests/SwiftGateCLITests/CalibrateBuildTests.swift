@@ -89,10 +89,12 @@ struct CalibrateBuildTests {
   }
 
   /// What the fake agent does beyond the known correct diff.
-  enum Misstep: Sendable {
+  enum Misstep: Sendable, Equatable {
     case none
     /// Commits the diff to `main` too, as a fixer that merged its own branch would.
     case commitToMain
+    /// Cites a gate that ran neither prove nor mutate, as a worker on the old contract would.
+    case gateWithoutProof
   }
 
   /// The real envelope from `Judge/claude-result.json` with `result` replaced.
@@ -155,7 +157,8 @@ struct CalibrateBuildTests {
       tiers: [try TierResult(tier: .t0, verdict: .green, durationMilliseconds: 5, testCounts: nil)],
       findings: [])
     try RunStore(worktreeRoot: URL(filePath: worktree)).record(
-      report, finishedAt: passedAt, command: "check fast")
+      report, finishedAt: passedAt, command: "check fast",
+      steps: fixer || misstep == .gateWithoutProof ? nil : ["prove", "mutate"])
 
     let task = String(branch.split(separator: "/").last ?? "")
     let taskReturn = TaskReturn(
@@ -274,6 +277,21 @@ struct CalibrateBuildTests {
       Self.findings(outcome).contains {
         $0.ruleID == "calibrate-build.usage" && $0.message.contains("is kept at")
       })
+  }
+
+  @Test(
+    "a worker whose gate ran neither prove nor mutate misses the return label — catches calibration passing a worker check-return would refuse"
+  )
+  func workerWithoutProofFails() async throws {
+    let repository = try Repository(agents: ["build-worker"])
+    defer { repository.remove() }
+
+    let outcome = await Self.run(
+      repository, agent: Self.agent(repository, misstep: .gateWithoutProof))
+
+    #expect(try Self.exitCode(outcome) == 1)
+    #expect(
+      Self.missed(outcome, question: "return")?.message.contains("gate-missing-proof") == true)
   }
 
   @Test(

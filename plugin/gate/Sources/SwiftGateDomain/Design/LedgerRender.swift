@@ -14,16 +14,54 @@ public enum LedgerRender {
     /// This plan's build run metrics, when one exists; `nil` renders the wave timeline exactly as
     /// it did before durations existed.
     public let buildMetrics: BuildMetrics.Report?
+    /// The newest build run's gates, when one exists; `nil` renders no gate at all.
+    public let build: BuildView?
 
     public init(
       slug: String, ledger: Ledger, design: DesignDocument, designSha: String,
-      buildMetrics: BuildMetrics.Report? = nil
+      buildMetrics: BuildMetrics.Report? = nil, build: BuildView? = nil
     ) {
       self.slug = slug
       self.ledger = ledger
       self.design = design
       self.designSha = designSha
       self.buildMetrics = buildMetrics
+      self.build = build
+    }
+  }
+
+  /// What a build run's gates said: each task's own gate from its stored return, the newest
+  /// merge gate per task and the final gate from the run's event log.
+  public struct BuildView: Sendable, Equatable {
+    public let runID: String
+    public let presetName: String
+    /// 0 when the preset sets no budget.
+    public let timeBudgetMin: Int
+    /// `nil` before the run's first event.
+    public let totalWallMilliseconds: Int?
+    public let taskGates: [String: TaskReturn.Gate]
+    public let mergeGates: [String: BuildEvent.Gate]
+    public let finalGate: BuildEvent.Gate?
+
+    public init(
+      runID: String, presetName: String, timeBudgetMin: Int, totalWallMilliseconds: Int?,
+      taskGates: [String: TaskReturn.Gate], log: BuildEventLog
+    ) {
+      self.runID = runID
+      self.presetName = presetName
+      self.timeBudgetMin = timeBudgetMin
+      self.totalWallMilliseconds = totalWallMilliseconds
+      self.taskGates = taskGates
+      var mergeGates: [String: BuildEvent.Gate] = [:]
+      var finalGate: BuildEvent.Gate?
+      for case .gate(let gate) in log.events {
+        switch gate.stage {
+        case .merge(let task): mergeGates[task] = gate
+        case .final: finalGate = gate
+        }
+      }
+      self.mergeGates = mergeGates
+      self.finalGate = finalGate
     }
   }
 
@@ -35,13 +73,16 @@ public enum LedgerRender {
     let tasks = input.ledger.tasks
     let schedule = PlanSchedule.schedule(tasks: tasks, maxParallel: input.ledger.maxParallel)
 
-    let body: [HTMLFragment] = [
-      header(slug: input.slug, designSha: input.designSha),
-      dagSection(tasks: tasks),
-      waveSection(ledger: input.ledger, schedule: schedule, buildMetrics: input.buildMetrics),
-      matrixSection(design: input.design, tasks: tasks),
-      overheadSection(tasks: tasks, schedule: schedule),
-    ]
+    let body: [HTMLFragment] =
+      [header(slug: input.slug, designSha: input.designSha)]
+      + (input.build.map { [buildSection($0)] } ?? []) + [
+        dagSection(tasks: tasks),
+        waveSection(
+          ledger: input.ledger, schedule: schedule, buildMetrics: input.buildMetrics,
+          build: input.build),
+        matrixSection(design: input.design, tasks: tasks),
+        overheadSection(tasks: tasks, schedule: schedule),
+      ]
 
     return ArtifactPageShell(
       title: "Ledger: \(input.slug)", body: .joined(body), capabilities: capabilities)
@@ -59,6 +100,47 @@ public enum LedgerRender {
         .element("h1", text: "Ledger: \(slug)"),
         .element("div", attributes: ["class": "meta"], [chip]),
       ])
+  }
+
+  // MARK: - Build
+
+  static func buildSection(_ build: BuildView) -> HTMLFragment {
+    let wall = build.totalWallMilliseconds.map(minutesAndSeconds) ?? "not started"
+    let budget = build.timeBudgetMin > 0 ? " of a \(build.timeBudgetMin) min budget" : ""
+    let final: HTMLFragment =
+      build.finalGate.map {
+        gateChip("Final gate", tier: $0.tier, verdict: $0.verdict, runID: $0.runID)
+      }
+      ?? .element("span", attributes: ["class": "gate"], text: "Final gate: not run yet")
+    return section(
+      "Build",
+      [
+        .element(
+          "p",
+          text:
+            "Build run \(build.runID), preset \(build.presetName). Wall time \(wall)\(budget)."),
+        .element("p", [final]),
+      ])
+  }
+
+  /// A gate's name and tier, its verdict as a badge whose text says it (not colour alone), and
+  /// its run id as code, outside the badge so its case survives.
+  static func gateChip(_ name: String, tier: CheckTier, verdict: Verdict, runID: String)
+    -> HTMLFragment
+  {
+    .element(
+      "span", attributes: ["class": "gate"],
+      [
+        .element("span", text: "\(name) \(tier.rawValue)"),
+        .element(
+          "span", attributes: ["class": "badge", "data-verdict": verdict.rawValue],
+          text: verdict.rawValue),
+        .element("code", text: runID),
+      ])
+  }
+
+  static func minutesAndSeconds(_ milliseconds: Int) -> String {
+    "\(milliseconds / 60_000)m \(milliseconds % 60_000 / 1000)s"
   }
 
   // MARK: - Task DAG
@@ -106,7 +188,7 @@ public enum LedgerRender {
   /// hasn't re-checked since a hand edit.
   static func waveSection(
     ledger: Ledger, schedule: Result<[[String]], PlanSchedule.ScheduleError>,
-    buildMetrics: BuildMetrics.Report? = nil
+    buildMetrics: BuildMetrics.Report? = nil, build: BuildView? = nil
   ) -> HTMLFragment {
     switch schedule {
     case .failure(let error):
@@ -144,7 +226,8 @@ public enum LedgerRender {
                   "ul",
                   wave.map {
                     taskListItem(
-                      id: $0, status: statusByID[$0], wallMilliseconds: durationByID[$0])
+                      id: $0, status: statusByID[$0], wallMilliseconds: durationByID[$0],
+                      taskGate: build?.taskGates[$0], mergeGate: build?.mergeGates[$0])
                   })
               ]),
           ])
@@ -174,9 +257,10 @@ public enum LedgerRender {
   /// is `nil` for a task id the wave names but the ledger's `tasks` list doesn't (only reachable
   /// from a hand-edited ledger; the id still renders, with no badge). `wallMilliseconds` renders a
   /// duration chip only when given, so a page built without build metrics is unchanged.
-  static func taskListItem(id: String, status: TaskStatus?, wallMilliseconds: Int? = nil)
-    -> HTMLFragment
-  {
+  static func taskListItem(
+    id: String, status: TaskStatus?, wallMilliseconds: Int? = nil,
+    taskGate: TaskReturn.Gate? = nil, mergeGate: BuildEvent.Gate? = nil
+  ) -> HTMLFragment {
     let statusValue = status?.rawValue ?? "unknown"
     var children: [HTMLFragment] = [.element("span", attributes: ["class": "task-id"], text: id)]
     if let status {
@@ -190,6 +274,16 @@ public enum LedgerRender {
         .element(
           "span", attributes: ["class": "task-duration"],
           text: ReportRenderer.duration(wallMilliseconds)))
+    }
+    if let taskGate {
+      children.append(
+        gateChip(
+          "Task gate", tier: taskGate.tier, verdict: taskGate.verdict, runID: taskGate.runID))
+    }
+    if let mergeGate {
+      children.append(
+        gateChip(
+          "Merge gate", tier: mergeGate.tier, verdict: mergeGate.verdict, runID: mergeGate.runID))
     }
     return .element("li", attributes: ["data-status": statusValue], children)
   }

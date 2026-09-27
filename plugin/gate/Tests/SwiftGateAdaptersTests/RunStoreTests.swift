@@ -47,6 +47,23 @@ struct RunStoreTests {
   }
 
   @Test(
+    "a run's extra steps and proof bases reach its history line, and a line without them still decodes — catches a build unable to see what a task gate ran"
+  )
+  func recordsStepsAndProofBases() throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try store.record(
+      try Self.report("run-a"), finishedAt: Date(), command: "check fast",
+      steps: ["prove", "mutate"], proofBases: ["3f2a91c"])
+    try store.record(try Self.report("run-b"), finishedAt: Date(), command: "check fast")
+
+    let history = try store.readHistory()
+
+    #expect(history.invalidLines == 0)
+    #expect(history.records.map(\.steps) == [["prove", "mutate"], nil])
+    #expect(history.records.map(\.proofBases) == [["3f2a91c"], nil])
+  }
+
+  @Test(
     "concurrent appends never interleave lines — catches corrupt history from parallel sessions")
   func concurrentAppends() async throws {
     defer { try? FileManager.default.removeItem(at: root) }

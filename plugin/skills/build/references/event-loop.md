@@ -54,6 +54,9 @@ Workflow({
 ```
 
 - `taskGate`: the preset's `taskGate` when it names a tier; under `ledger`, the task's own `gate`.
+  The workflow tells the worker to run it as `check --tier <taskGate> --base main --prove --mutate`,
+  with `--proof-base <surface commit>` when the task adds API, so every task proves and mutates its
+  own change whatever the preset. `build check-return` fails a green gate that skipped either.
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
@@ -114,7 +117,8 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 
 - The check passes and `outcome` is `ready-to-merge`:
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, then the merge gate on
-  `main` again. GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
+  `main` again, recorded with `build record-gate --kind merge --task <task>` like the first.
+  GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
   `worktree remove`, remove the fix worktree and branch too:
   `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
@@ -199,12 +203,19 @@ When the timer fires, or any `build next` reports `phase` `cutoff`:
 
 ## Final gate
 
-Only 1 `ready` tier runs at a time on this machine. Wait for the others in the foreground first:
+Only 1 `ready` tier runs at a time on this machine. Wait for the others in the foreground first.
+Then pass every merged task's surface commit as a proof base, so a test of API that `main` lacked
+before the build is proven where that API first existed without its behavior:
 
 ```bash
 until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done
-"$SG" check --tier ready
+"$SG" build proof-bases <slug>
+"$SG" check --tier ready <the --proof-base arguments it printed>
 ```
+
+`build proof-bases` exits 2 when a merged task has no stored return: halt, since the final gate
+can't prove that task's tests. Record the final gate whatever its verdict, so the ledger page
+shows it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
 
 Keep its verdict and run id for the report. Not GREEN: halt, and quote its findings. Options:
 **finish anyway** (Recommended when every finding is outside this plan's write sets), or **stop**,

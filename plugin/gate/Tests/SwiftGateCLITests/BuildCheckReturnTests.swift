@@ -87,9 +87,11 @@ private struct ReturnScenario {
       git: git, suffix: 1)
   }
 
-  /// Records a gate run in the task worktree's run store through the writer `check` uses.
+  /// Records a gate run in the task worktree's run store through the writer `check` uses. A
+  /// worker's gate runs `prove` and `mutate` by default, as the worker contract asks.
   func recordGateRun(
-    tier: CheckTier, verdict: Verdict, suffix: UInt32, in checkout: URL? = nil
+    tier: CheckTier, verdict: Verdict, suffix: UInt32, in checkout: URL? = nil,
+    steps: [String]? = ["prove", "mutate"], proofBases: [String]? = nil
   ) throws -> String {
     let runID = RunID.make(startedAt: Self.finishedAt, suffix: suffix)
     let report = try RunReport(
@@ -97,19 +99,20 @@ private struct ReturnScenario {
       tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1200, testCounts: nil)],
       findings: [])
     try RunStore(worktreeRoot: checkout ?? worktree).record(
-      report, finishedAt: Self.finishedAt, command: "check \(tier.rawValue)")
+      report, finishedAt: Self.finishedAt, command: "check \(tier.rawValue)", steps: steps,
+      proofBases: proofBases)
     return runID
   }
 
   func returnValue(
     outcome: TaskReturn.Outcome = .readyToMerge, commits: [String]? = nil,
     gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil,
-    notes: String = "Queue.drain() returns [Item]"
+    notes: String = "Queue.drain() returns [Item]", surfaceCommit: String? = nil
   ) -> TaskReturn {
     TaskReturn(
       task: Self.task, outcome: outcome, commits: commits ?? [taskCommit], gate: gate,
       review: .init(mode: .gate, findings: []), testsAdded: ["test-queue-drains"],
-      notes: notes, designConflict: designConflict)
+      notes: notes, designConflict: designConflict, surfaceCommit: surfaceCommit)
   }
 
   /// Commits `paths` on the task branch and returns the commit.
@@ -150,19 +153,31 @@ private struct ReturnScenario {
   }
 
   /// Cuts the fix worktree `build merge` makes, on `<plan>/fix-<task>` from `main`, and commits
-  /// the fixer's work there.
+  /// the fixer's work there: `files`, or an empty commit when there are none.
   /// - Returns: the fix worktree and the fixer's commit.
-  func cutFixWorktree() async throws -> (worktree: URL, commit: String) {
+  func cutFixWorktree(files: [String] = []) async throws -> (worktree: URL, commit: String) {
     let names = try TaskWorktree(
       commonDirectory: try await git.commonDirectory(), plan: Self.plan, task: "fix-\(Self.task)")
     let fix = URL(filePath: names.path, directoryHint: .isDirectory)
-    for (arguments, directory) in [
-      (["worktree", "add", "-q", "-b", names.branch, names.path, "main"], main),
-      (["commit", "-q", "--allow-empty", "-m", "fix conflict"], fix),
-    ] {
+    let add = try await runner.run(
+      ProcessInvocation(
+        executable: "git",
+        arguments: ["worktree", "add", "-q", "-b", names.branch, names.path, "main"],
+        workingDirectory: main.path, timeout: .seconds(60)))
+    try #require(add.status.isSuccess, "git worktree add: \(add.stderr.text)")
+    for path in files {
+      let file = fix.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data("// \(path)\n".utf8).write(to: file)
+    }
+    let steps =
+      (files.isEmpty ? [] : [["add", "--"] + files])
+      + [["commit", "-q", "--allow-empty", "-m", "fix conflict"]]
+    for arguments in steps {
       let output = try await runner.run(
         ProcessInvocation(
-          executable: "git", arguments: arguments, workingDirectory: directory.path,
+          executable: "git", arguments: arguments, workingDirectory: fix.path,
           timeout: .seconds(60)))
       try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
     }
@@ -184,7 +199,8 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let (fix, commit) = try await scenario.cutFixWorktree()
-    let runID = try scenario.recordGateRun(tier: .ready, verdict: .green, suffix: 2, in: fix)
+    let runID = try scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
     let fixReturn = scenario.returnValue(
       commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: runID))
 
@@ -245,15 +261,15 @@ struct BuildCheckReturnTests {
         commits: [scenario.taskCommit, commit],
         gate: .init(tier: .push, verdict: .green, runID: runID)))
 
-    #expect(report.findings.map(\.rule) == [.outsideWriteSetUnexplained])
+    #expect(report.findings.map(\.rule) == [.outsideWriteSet])
     #expect(report.findings.first?.message.contains("App/AppView.swift") == true)
     #expect(report.verdict.exitCode == 1)
   }
 
   @Test(
-    "an edit outside the write set that the notes name passes with a warning naming the file — catches the check hiding an explained edit, or failing one the worker prompt allows"
+    "a worker's edit outside the write set fails even when the notes explain it — catches an explained edit slipping past the write set into main"
   )
-  func explainedEditOutsideWriteSetWarns() async throws {
+  func explainedEditOutsideWriteSetFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
@@ -265,9 +281,87 @@ struct BuildCheckReturnTests {
         gate: .init(tier: .push, verdict: .green, runID: runID),
         notes: "Edited App/AppView.swift, 4 lines, so the UI target keeps compiling."))
 
-    #expect(report.findings == [])
-    #expect(report.warnings.contains { $0.contains("App/AppView.swift") })
-    #expect(report.verdict.exitCode == 0)
+    #expect(report.findings.map(\.rule) == [.outsideWriteSet])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a fixer's edit outside the task's write set that its notes name passes with a warning, and one they never name fails — catches a fix blocked for resolving the other task's file, or spreading in silence"
+  )
+  func fixEditOutsideWriteSetNeedsANote() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let (fix, commit) = try await scenario.cutFixWorktree(files: ["App/AppView.swift"])
+    let runID = try scenario.recordGateRun(tier: .ready, verdict: .green, suffix: 2, in: fix)
+    let gate = TaskReturn.Gate(tier: .ready, verdict: .green, runID: runID)
+
+    let explained = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: gate,
+        notes: "Resolved App/AppView.swift, which both tasks edited."),
+      fix: true)
+    let unexplained = try await scenario.check(
+      scenario.returnValue(commits: [commit], gate: gate), fix: true)
+
+    #expect(explained.findings == [])
+    #expect(explained.warnings.contains { $0.contains("App/AppView.swift") })
+    #expect(unexplained.findings.map(\.rule) == [.outsideWriteSetUnexplained])
+  }
+
+  @Test(
+    "a GREEN task gate below ready that ran no prove or mutate is a finding — catches a task merged without its red/green proof"
+  )
+  func greenGateWithoutProofFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+
+    let report = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings.map(\.rule) == [.gateMissingProof])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a surface commit on the task branch that the gate run proved at passes; one the gate never used as a proof base fails — catches a surface commit claimed but not proven against"
+  )
+  func surfaceCommitMustBeAProofBase() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let surface = try await scenario.commitFiles(["Sources/Queue/Queue.swift"])
+    let proven = try scenario.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, proofBases: [surface])
+    let unproven = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+
+    let withProof = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, surface],
+        gate: .init(tier: .push, verdict: .green, runID: proven), surfaceCommit: surface))
+    let withoutProof = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, surface],
+        gate: .init(tier: .push, verdict: .green, runID: unproven), surfaceCommit: surface))
+
+    #expect(withProof.findings == [])
+    #expect(withoutProof.findings.map(\.rule) == [.surfaceCommitNotProofBase])
+  }
+
+  @Test(
+    "a surface commit that isn't on the task branch is a finding — catches a proof base borrowed from another branch"
+  )
+  func surfaceCommitOffBranchFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, proofBases: ["0123456789abcdef"])
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        gate: .init(tier: .push, verdict: .green, runID: runID),
+        surfaceCommit: "0123456789abcdef"))
+
+    #expect(report.findings.map(\.rule) == [.surfaceCommitOffBranch])
   }
 
   @Test(

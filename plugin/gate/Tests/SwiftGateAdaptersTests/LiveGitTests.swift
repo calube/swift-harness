@@ -283,6 +283,27 @@ struct LiveGitTests {
   }
 
   @Test(
+    "is-ancestor holds for a commit and its descendant, fails across branches, and throws for an unknown ref — catches a proof base off HEAD's history accepted"
+  )
+  func isAncestor() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("A.swift", "a\n")
+    let fork = try await repo.commitAll("fork")
+    try await repo.git("switch", "-q", "-c", "feature")
+    try repo.write("B.swift", "b\n")
+    let feature = try await repo.commitAll("feature work")
+    try await repo.git("switch", "-q", "main")
+
+    #expect(try await repo.adapter.isAncestor(fork, of: "feature"))
+    #expect(try await repo.adapter.isAncestor(fork, of: fork))
+    #expect(try await !repo.adapter.isAncestor(feature, of: "main"))
+    await #expect(throws: GitError.self) {
+      _ = try await repo.adapter.isAncestor("no-such-ref", of: "main")
+    }
+  }
+
+  @Test(
     "a root inside the worktree reports its prefix — catches toplevel-relative paths matched against a nested project"
   )
   func workingDirectoryPrefix() async throws {

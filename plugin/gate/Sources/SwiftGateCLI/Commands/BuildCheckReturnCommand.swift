@@ -111,9 +111,13 @@ enum BuildCheckReturnRun {
     }
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
     var outside: [String] = []
+    var surface: TaskReturnEvidence.CommitState?
     if let branchTip {
       for commit in taskReturn.commits {
         commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
+      }
+      if let surfaceCommit = taskReturn.surfaceCommit {
+        surface = try await state(of: surfaceCommit, onBranchAt: branchTip, git: git)
       }
       outside = WriteSet.outside(
         try await branchChanges(tip: branchTip, git: git), writeSet: task.writeSet)
@@ -126,7 +130,8 @@ enum BuildCheckReturnRun {
     return TaskReturnEvidence(
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
-      taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside)
+      taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
+      explainedEditsAllowed: fix, proofRequired: !fix, surfaceCommit: surface)
   }
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
@@ -206,7 +211,8 @@ enum BuildCheckReturnRun {
       return nil
     }
     return TaskReturnEvidence.GateRun(
-      tier: TaskReturnEvidence.GateRun.tier(ofCommand: record.command), verdict: record.verdict)
+      tier: TaskReturnEvidence.GateRun.tier(ofCommand: record.command), verdict: record.verdict,
+      steps: record.steps ?? [], proofBases: record.proofBases ?? [])
   }
 
   private static func taskStatus(in worktree: URL) throws(Blocked) -> TaskStatusReport? {

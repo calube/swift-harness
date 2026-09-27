@@ -83,7 +83,8 @@ extra key.
   "review": null,
   "testsAdded": [],
   "notes": "Kept both: `SyncFeature` drains through `OrderQueueClient.submit(_:)` from one task and retries on `SubmitError.rateLimited` from the other.",
-  "designConflict": null
+  "designConflict": null,
+  "surfaceCommit": null
 }
 ```
 
@@ -101,3 +102,5 @@ extra key.
   the exact new type names, signatures, formats and exit codes. For `gate-red`, the finding that stays
   red and why both intents can't hold.
 - `"designConflict"`: always `null`, written `"designConflict": null`.
+- `"surfaceCommit"`: always `null`, written `"surfaceCommit": null`. The tasks you merge already
+  proved their tests at their own surface commits.

@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -18,7 +19,7 @@ struct ChangedTestChecksTests {
     let repository: ProbeRepository
     let git: FakeGit
 
-    init(sourceChanged: Bool = true) throws {
+    init(sourceChanged: Bool = true, ancestors: Set<String> = []) throws {
       repository = try ProbeRepository()
       try repository.write(
         ChangedTestChecksTests.testFile,
@@ -30,7 +31,8 @@ struct ChangedTestChecksTests {
         changed: [ChangedTestChecksTests.testFile]
           + (sourceChanged ? [ChangedTestChecksTests.sourceFile] : []),
         mergeBase: "base",
-        addedSince: [AddedLines(path: ChangedTestChecksTests.testFile, ranges: [1...15])])
+        addedSince: [AddedLines(path: ChangedTestChecksTests.testFile, ranges: [1...15])],
+        ancestors: ancestors)
     }
 
     func environment(
@@ -132,6 +134,63 @@ struct ChangedTestChecksTests {
 
     #expect(judgement.verdict == .red)
     #expect(judgement.findings.filter { $0.ruleID == ProofRules.compileOnlyRuleID }.count == 2)
+  }
+
+  @Test(
+    "tests compile-only at the merge base are retried at a proof base, where failing on an assertion proves them — catches a test of new API that no build can prove"
+  )
+  func compileOnlyProvenAtProofBase() async throws {
+    let setup = try Setup(ancestors: ["surface"])
+    defer { setup.remove() }
+    let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+    let trees = [
+      try ProbeRepository.swiftPM(replaying: "compile-only"),
+      try ProbeRepository.swiftPM(replaying: "reverted"),
+    ]
+    let made = Mutex(0)
+    let environment = ChangedTestChecks.Environment(
+      root: setup.repository.root, git: setup.git,
+      swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), scratch: scratch,
+      scratchSwiftPM: { _ in
+        made.withLock { count in
+          defer { count += 1 }
+          return trees[min(count, trees.count - 1)]
+        }
+      })
+
+    let judgement = await ChangedTestChecks.prove(
+      environment, graph: try setup.graph(), base: "origin/main", proofBases: ["surface"],
+      context: setup.repository.context())
+
+    #expect(judgement.verdict == .green)
+    #expect(scratch.requests.map(\.revertTo) == ["base", "surface"])
+    #expect(
+      judgement.findings.map(\.message).contains {
+        $0.hasPrefix(
+          "prove: 2 of 2 new or changed host tests fail on an assertion with the source change "
+            + "reverted, 2 of them at a proof base")
+      })
+  }
+
+  @Test(
+    "a proof base that isn't an ancestor of HEAD is BLOCKED and builds nothing — catches a proof against code the change never went through"
+  )
+  func proofBaseMustBeAnAncestor() async throws {
+    let setup = try Setup(ancestors: [])
+    defer { setup.remove() }
+    let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+
+    let judgement = await ChangedTestChecks.prove(
+      setup.environment(main: try ProbeRepository.swiftPM(replaying: "pass"), scratch: scratch),
+      graph: try setup.graph(), base: "origin/main", proofBases: ["elsewhere"],
+      context: setup.repository.context())
+
+    #expect(judgement.verdict == .blocked)
+    #expect(scratch.requests.isEmpty)
+    #expect(
+      judgement.findings.contains {
+        $0.ruleID == ProofRules.noEvidenceRuleID && $0.message.contains("elsewhere")
+      })
   }
 
   @Test(

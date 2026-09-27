@@ -19,8 +19,12 @@ enum GateRun {
     let directory: URL
   }
 
+  /// - Parameters:
+  ///   - steps: `ready` steps a lower `check` tier added, recorded in the run's history line.
+  ///   - proofBases: the refs `prove` retried at, recorded in the run's history line.
   static func execute(
-    root: URL, format: OutputFormat, command: String, git: (any Git)? = nil,
+    root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
+    proofBases: [String]? = nil, git: (any Git)? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
@@ -52,7 +56,8 @@ enum GateRun {
       runID: runID, durationMilliseconds: milliseconds(clock.now - start), tiers: parts.tiers,
       findings: parts.findings, allowances: parts.allowances)
     do {
-      try store.record(report, finishedAt: Date(), command: command)
+      try store.record(
+        report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases)
     } catch {
       FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
     }

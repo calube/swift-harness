@@ -49,6 +49,69 @@ struct LedgerRenderTests {
     LedgerRender.page(.init(slug: slug, ledger: ledger, design: design, designSha: designSha)).html
   }
 
+  // MARK: - Build gates
+
+  static let startedAt = Date(timeIntervalSince1970: 1_790_000_000)
+
+  static func mergeGate(_ task: String, _ verdict: Verdict, run: String, minutes: Double)
+    -> BuildEvent
+  {
+    .gate(
+      .init(
+        stage: .merge(task: task), tier: .push, verdict: verdict, runID: run,
+        at: startedAt.addingTimeInterval(minutes * 60)))
+  }
+
+  static func buildView() -> LedgerRender.BuildView {
+    LedgerRender.BuildView(
+      runID: "20260927T183225Z-b36f002c", presetName: "interview", timeBudgetMin: 38,
+      totalWallMilliseconds: 1_415_000,
+      taskGates: ["task-a": TaskReturn.Gate(tier: .fast, verdict: .green, runID: "run-task-a")],
+      log: BuildEventLog(
+        events: [
+          mergeGate("task-a", .red, run: "run-merge-a1", minutes: 5),
+          mergeGate("task-a", .green, run: "run-merge-a2", minutes: 9),
+          .gate(
+            .init(
+              stage: .final, tier: .ready, verdict: .red, runID: "run-final",
+              at: startedAt.addingTimeInterval(20 * 60))),
+        ],
+        damage: []))
+  }
+
+  @Test(
+    "with a build run the page shows each task's task gate and newest merge gate, and the final gate, each with verdict and run id — catches a ledger page that hides what the gates said"
+  )
+  func buildGatesAreShown() throws {
+    let ledger = Self.ledger(tasks: [Self.task(id: "task-a")], waves: [["task-a"]])
+    let html = LedgerRender.page(
+      .init(
+        slug: "sample-plan", ledger: ledger, design: Self.design(requirements: []),
+        designSha: "deadbeef00112233", build: Self.buildView())
+    ).html
+
+    for text in [
+      "run-task-a", "run-merge-a2", "run-final", "20260927T183225Z-b36f002c", "interview",
+      "23m 35s", "38 min",
+    ] {
+      #expect(html.contains(text), "page lacks \(text)")
+    }
+    #expect(!html.contains("run-merge-a1"))
+    #expect(html.contains(#"data-verdict="RED""#))
+    #expect(html.contains(#"data-verdict="GREEN""#))
+  }
+
+  @Test(
+    "without a build run the page has no gate section or gate badges — catches a planned ledger showing gates that never ran"
+  )
+  func noBuildNoGates() throws {
+    let ledger = Self.ledger(tasks: [Self.task(id: "task-a")], waves: [["task-a"]])
+    let html = Self.page(ledger: ledger, design: Self.design(requirements: []))
+
+    #expect(!html.contains(#"class="gate""#))
+    #expect(!html.contains("Final gate"))
+  }
+
   // MARK: - Requirement × task coverage matrix
 
   @Test(

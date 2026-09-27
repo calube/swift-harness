@@ -254,6 +254,10 @@ public struct ArtifactPageShell: Sendable, Equatable {
     .badge[data-status="stale"], .badge[data-status="unverified"] {
       background: var(--warn-soft); color: var(--warn);
     }
+    .badge[data-verdict="GREEN"] { background: var(--good-soft); color: var(--good); }
+    .badge[data-verdict="RED"] { background: var(--bad-soft); color: var(--bad); }
+    .badge[data-verdict="BLOCKED"] { background: var(--warn-soft); color: var(--warn); }
+    .gate { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; margin-left: 10px; font-size: 0.8rem; color: var(--muted); }
     .approval {
       position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--rule);
       padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));

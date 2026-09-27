@@ -68,7 +68,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P2. A new test fails red before it passes green.**
 - **Do:** write the test first and watch it fail on an **assertion**, not on a compile error or a missing import. Then write the code.
 - **Tell:** a test that passes with the source change reverted.
-- **Enforced by:** `swiftgate prove` (also in `check --tier ready`): runs each new or changed host test on the change, then in a scratch git worktree where production source is restored to the merge base while tests, manifests and resources keep the change. Rules `prove.not-proven` (passes with the source reverted), `prove.compile-only` (only stops compiling), `prove.crashed`, `prove.fails-at-head` (fails on the change itself). Simulator tests aren't proven yet · **Source:** incident: none yet.
+- **Enforced by:** `swiftgate prove` (also in `check --tier ready`): runs each new or changed host test on the change, then in a scratch git worktree that restores production source to the merge base while tests, manifests and resources keep the change. It retries a test that only stops compiling at each `--proof-base` ancestor, such as a surface commit (`build proof-bases`). Rules `prove.not-proven` (passes with the source reverted), `prove.compile-only` (only stops compiling), `prove.crashed`, `prove.fails-at-head` (fails on the change itself). Simulator tests aren't proven yet · **Source:** incident: interview trial run 2.
 
 **P3. Verdicts come from evidence, not exit codes.**
 - **Do:** trust the gate's reading of the test results: more than 0 tests executed, no unaccounted skips. Never pass `-retry-tests-on-failure`.

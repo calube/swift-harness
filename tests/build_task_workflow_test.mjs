@@ -19,7 +19,9 @@ const script = new AsyncFunction('args', 'agent', 'log', source)
 // `TaskReturn`'s JSON keys, from the CodingKeys in D/Build/TaskReturn.swift
 // (plugin/gate/Sources/SwiftGateDomain/Build/TaskReturn.swift). Hard-coded on purpose: a change
 // there must be made here too, by hand.
-const TASK_RETURN_KEYS = ['task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict']
+const TASK_RETURN_KEYS = [
+  'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
+]
 // `ReviewFinding`'s JSON keys (D/Review/ReviewSynthesis.swift), which `review.findings` decodes.
 const REVIEW_FINDING_KEYS = [
   'severity', 'category', 'file', 'line', 'title', 'failure_scenario', 'evidence', 'fix', 'verified', 'kind', 'rule',
@@ -54,6 +56,7 @@ const workerReturn = (overrides = {}) => ({
   testsAdded: ['test-catalog-list-loads-first-page'],
   notes: 'CatalogClient.fetchPage(_:) returns [Product]; page size is 20',
   designConflict: null,
+  surfaceCommit: null,
   ...overrides,
 })
 const red = (overrides = {}) =>
@@ -143,7 +146,8 @@ const tests = {
     assert.equal(opts.agentType, WORKER)
     assert.equal(opts.model, 'opus')
     const a = baseArgs()
-    for (const needle of [a.task, a.plan, a.worktree, a.branch, a.contextPack, ...a.writeSet, ...a.tests, '--tier fast']) {
+    const gate = 'swiftgate check --tier fast --base main --prove --mutate'
+    for (const needle of [a.task, a.plan, a.worktree, a.branch, a.contextPack, ...a.writeSet, ...a.tests, gate]) {
       assert.ok(prompt.includes(needle), `worker prompt lacks ${needle}`)
     }
   },
@@ -197,6 +201,17 @@ const tests = {
     assert.equal(result.outcome, 'ready-to-merge')
     assert.deepEqual(result.commits, ['3f2a91c', '77aa001'], 'both attempts land on the branch')
     assert.equal(result.gate.runId, 'g2')
+  },
+
+  async 'a fix pass that names no surface commit keeps the first attempt\'s — catches a proof base lost between attempts'() {
+    const kept = await run(baseArgs({ review: 'gate' }), {
+      workers: [red({ surfaceCommit: '1a2b3c4' }), workerReturn({ commits: ['77aa001'] })],
+    })
+    const replaced = await run(baseArgs({ review: 'gate' }), {
+      workers: [red({ surfaceCommit: '1a2b3c4' }), workerReturn({ commits: ['77aa001'], surfaceCommit: '99ff000' })],
+    })
+    assert.equal(kept.result.surfaceCommit, '1a2b3c4')
+    assert.equal(replaced.result.surfaceCommit, '99ff000')
   },
 
   async 'a blocking review finding gets one fix pass and a re-review — catches review findings never reaching a worker'() {

@@ -43,6 +43,9 @@ public protocol Git: Sendable {
   /// The best common ancestor of two commits, or `nil` if their histories are unrelated.
   func mergeBase(_ first: String, _ second: String) async throws(GitError) -> String?
 
+  /// Whether `ref` is `other` or one of its ancestors.
+  func isAncestor(_ ref: String, of other: String) async throws(GitError) -> Bool
+
   /// The git common directory (`git rev-parse --git-common-dir`) as an absolute, canonical
   /// (``CanonicalPath``) path. Every linked worktree of one repository answers the same path, so
   /// state kept there is shared across worktrees without being committed.

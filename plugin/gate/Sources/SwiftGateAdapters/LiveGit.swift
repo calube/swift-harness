@@ -159,6 +159,17 @@ public struct LiveGit: Git, DiffReading {
     return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  public func isAncestor(_ ref: String, of other: String) async throws(GitError) -> Bool {
+    try Self.validate(ref: ref)
+    try Self.validate(ref: other)
+    let arguments = ["merge-base", "--is-ancestor", ref, other]
+    let output = try await execute(arguments)
+    // Exit 1 with no diagnostics is git's answer "not an ancestor"; bad refs exit 128.
+    if output.status == .exited(1), output.stderr.bytes.isEmpty { return false }
+    guard output.status.isSuccess else { throw Self.failure(arguments, output) }
+    return true
+  }
+
   public func commonDirectory() async throws(GitError) -> String {
     let output = try await run(["rev-parse", "--git-common-dir"])
       .trimmingCharacters(in: .newlines)

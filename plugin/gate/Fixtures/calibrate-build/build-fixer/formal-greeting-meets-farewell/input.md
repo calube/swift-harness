@@ -18,7 +18,8 @@ The return of `{{task}}`, the task being merged:
   "review": {"mode": "gate", "findings": []},
   "testsAdded": ["test-formal-greeting", "test-informal-greeting"],
   "notes": "Greeter: `public static func greet(_ name: String, formal: Bool) -> String`. `formal: true` returns `Good day, <name>.`; `formal: false` returns exactly `greet(_:)`, `Hello, <name>`.",
-  "designConflict": null
+  "designConflict": null,
+  "surfaceCommit": null
 }
 ```
 
@@ -33,6 +34,7 @@ The return of `farewell`, the task already on `main`:
   "review": {"mode": "gate", "findings": []},
   "testsAdded": ["test-farewell-by-name"],
   "notes": "Greeter: `public static func farewell(_ name: String) -> String` returns `Goodbye, <name>`.",
-  "designConflict": null
+  "designConflict": null,
+  "surfaceCommit": null
 }
 ```

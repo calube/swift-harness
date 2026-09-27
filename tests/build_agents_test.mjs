@@ -125,6 +125,8 @@ export const BUILD_CONTRACTS = {
       'write set',
       'context pack',
       'notes',
+      'surface commit',
+      '--base main --prove --mutate',
     ],
   },
   'build-fixer': {
@@ -221,7 +223,9 @@ const failsWith = (fileName, text, fragment) => {
 
 const tests = {
   'the key lists are read from the Swift types — catches this test checking a stale copy of the return shape'() {
-    assert.deepEqual(RETURN_KEYS, ['task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict'])
+    assert.deepEqual(RETURN_KEYS, [
+      'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
+    ])
     assert.deepEqual(GATE_KEYS, ['tier', 'verdict', 'runId'])
     assert.deepEqual(REVIEW_KEYS, ['mode', 'findings'])
     assert.deepEqual(OUTCOMES, ['ready-to-merge', 'gate-red', 'review-blocked', 'design-conflict'])

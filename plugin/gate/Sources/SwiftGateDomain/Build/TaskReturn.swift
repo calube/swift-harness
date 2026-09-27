@@ -49,10 +49,15 @@ public struct TaskReturn: Sendable, Equatable {
   public let testsAdded: [String]
   public let notes: String
   public let designConflict: TaskStatusReport.Report?
+  /// The task's first commit when it adds API: declarations with unimplemented bodies and no
+  /// tests, the ancestor its gate's `prove` retries compile-only tests at. `nil` when the task
+  /// adds no API another test calls.
+  public let surfaceCommit: String?
 
   public init(
     task: String, outcome: Outcome, commits: [String], gate: Gate?, review: Review?,
-    testsAdded: [String], notes: String, designConflict: TaskStatusReport.Report?
+    testsAdded: [String], notes: String, designConflict: TaskStatusReport.Report?,
+    surfaceCommit: String? = nil
   ) {
     self.task = task
     self.outcome = outcome
@@ -62,6 +67,7 @@ public struct TaskReturn: Sendable, Equatable {
     self.testsAdded = testsAdded
     self.notes = notes
     self.designConflict = designConflict
+    self.surfaceCommit = surfaceCommit
   }
 }
 
@@ -132,7 +138,7 @@ extension TaskReturn.Review: Codable {
 
 extension TaskReturn: Codable {
   private enum CodingKeys: String, CodingKey, CaseIterable {
-    case task, outcome, commits, gate, review, testsAdded, notes, designConflict
+    case task, outcome, commits, gate, review, testsAdded, notes, designConflict, surfaceCommit
   }
 
   public init(from decoder: any Decoder) throws {
@@ -146,7 +152,8 @@ extension TaskReturn: Codable {
       review: try c.decodeIfPresent(Review.self, forKey: .review),
       testsAdded: try c.decode([String].self, forKey: .testsAdded),
       notes: try c.decode(String.self, forKey: .notes),
-      designConflict: try c.decodeIfPresent(TaskStatusReport.Report.self, forKey: .designConflict))
+      designConflict: try c.decodeIfPresent(TaskStatusReport.Report.self, forKey: .designConflict),
+      surfaceCommit: try c.decodeIfPresent(String.self, forKey: .surfaceCommit))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -159,6 +166,7 @@ extension TaskReturn: Codable {
     try c.encode(testsAdded, forKey: .testsAdded)
     try c.encode(notes, forKey: .notes)
     try c.encode(designConflict, forKey: .designConflict)
+    try c.encode(surfaceCommit, forKey: .surfaceCommit)
   }
 }
 
@@ -193,6 +201,10 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case designConflictUnrecorded = "build-return.design-conflict-unrecorded"
     case designConflictUnreturned = "build-return.design-conflict-unreturned"
     case designConflictMismatch = "build-return.design-conflict-mismatch"
+    case outsideWriteSet = "build-return.outside-write-set"
+    case gateMissingProof = "build-return.gate-missing-proof"
+    case surfaceCommitOffBranch = "build-return.surface-commit-off-branch"
+    case surfaceCommitNotProofBase = "build-return.surface-commit-not-proof-base"
     case outsideWriteSetUnexplained = "build-return.outside-write-set-unexplained"
   }
 
@@ -219,10 +231,24 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     /// `nil` when the run wasn't a `swiftgate check --tier` run.
     public let tier: CheckTier?
     public let verdict: Verdict
+    /// `ready` steps the run added below `ready`, such as `prove` and `mutate`.
+    public let steps: [String]
+    /// The refs its `prove` retried compile-only tests at.
+    public let proofBases: [String]
 
-    public init(tier: CheckTier?, verdict: Verdict) {
+    public init(
+      tier: CheckTier?, verdict: Verdict, steps: [String] = [], proofBases: [String] = []
+    ) {
       self.tier = tier
       self.verdict = verdict
+      self.steps = steps
+      self.proofBases = proofBases
+    }
+
+    /// Whether the run proved and mutated the change: `ready` always does, a lower tier only
+    /// when asked.
+    public var provedAndMutated: Bool {
+      tier == .ready || Set(steps).isSuperset(of: ["prove", "mutate"])
     }
 
     /// The tier of a run history `command` such as `check push`; `nil` for any other command.
@@ -244,10 +270,19 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let taskStatus: TaskStatusReport?
   /// Files the task branch changed since it left `main` that no write-set entry covers.
   public let filesOutsideWriteSet: [String]
+  /// A fixer resolves a collision with another task's files, so a file its notes name is allowed;
+  /// a worker gets no such allowance.
+  public let explainedEditsAllowed: Bool
+  /// A worker's green gate must prove and mutate its change; a fixer's merge gate need not.
+  public let proofRequired: Bool
+  /// Where the return's `surfaceCommit` is, when it names one.
+  public let surfaceCommit: CommitState?
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
-    taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = []
+    taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
+    explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
+    surfaceCommit: CommitState? = nil
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -256,6 +291,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.taskGate = taskGate
     self.taskStatus = taskStatus
     self.filesOutsideWriteSet = filesOutsideWriteSet
+    self.explainedEditsAllowed = explainedEditsAllowed
+    self.proofRequired = proofRequired
+    self.surfaceCommit = surfaceCommit
   }
 }
 
@@ -274,14 +312,49 @@ public enum TaskReturnCheck {
   {
     commitFindings(taskReturn, evidence) + gateFindings(taskReturn, evidence)
       + reviewFindings(taskReturn) + designConflictFindings(taskReturn, evidence)
-      + writeSetFindings(taskReturn, evidence)
+      + writeSetFindings(taskReturn, evidence) + surfaceFindings(taskReturn, evidence)
   }
 
-  /// The worker may make a small edit outside its write set when it names the file in `notes`
-  /// (the build-worker contract). An edit the notes never name is a finding.
+  /// A surface commit must be on the task branch and be one of the gate's proof bases, or the
+  /// proof it stands for never ran.
+  private static func surfaceFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)
+    -> [TaskReturnFinding]
+  {
+    guard let surface = taskReturn.surfaceCommit else { return [] }
+    guard evidence.surfaceCommit == .onBranch else {
+      return [
+        .init(
+          rule: .surfaceCommitOffBranch,
+          message: "surface commit \(surface) isn't on branch \(evidence.branch)")
+      ]
+    }
+    guard let run = evidence.gateRun, let gate = taskReturn.gate else { return [] }
+    let isProofBase = run.proofBases.contains { $0.hasPrefix(surface) || surface.hasPrefix($0) }
+    guard !isProofBase else { return [] }
+    return [
+      .init(
+        rule: .surfaceCommitNotProofBase,
+        message:
+          "gate run \(gate.runID) never proved at surface commit \(surface); run "
+          + "`swiftgate check --proof-base \(surface)`")
+    ]
+  }
+
+  /// A worker's edit outside its write set is a finding: a task that needs one is a design
+  /// conflict. A fixer's edit passes when its notes name the file.
   private static func writeSetFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)
     -> [TaskReturnFinding]
   {
+    guard evidence.explainedEditsAllowed else {
+      guard !evidence.filesOutsideWriteSet.isEmpty else { return [] }
+      return [
+        .init(
+          rule: .outsideWriteSet,
+          message:
+            "the task branch changed \(evidence.filesOutsideWriteSet.joined(separator: ", ")) "
+            + "outside its write set; a task that needs that edit returns a design conflict")
+      ]
+    }
     let unexplained = evidence.filesOutsideWriteSet.filter { !taskReturn.notes.contains($0) }
     guard !unexplained.isEmpty else { return [] }
     return [
@@ -366,6 +439,14 @@ public enum TaskReturnCheck {
             message:
               "a \(taskReturn.outcome.rawValue) return needs a GREEN gate; run \(gate.runID) is "
               + run.verdict.rawValue))
+      }
+      if evidence.proofRequired, !run.provedAndMutated {
+        findings.append(
+          .init(
+            rule: .gateMissingProof,
+            message:
+              "gate run \(gate.runID) ran neither prove nor mutate over the change; a task gate "
+              + "runs `swiftgate check --tier <task gate> --base main --prove --mutate`"))
       }
       if !(run.tier.map { covers($0, evidence.taskGate) } ?? false) {
         findings.append(

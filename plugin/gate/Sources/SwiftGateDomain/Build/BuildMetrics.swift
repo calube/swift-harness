@@ -118,6 +118,8 @@ public enum BuildMetrics {
             postCommit: merge.postCommit))
       case .undo(let undo):
         lastEventAt = later(lastEventAt, undo.at)
+      case .gate(let gate):
+        lastEventAt = later(lastEventAt, gate.at)
       }
     }
 
