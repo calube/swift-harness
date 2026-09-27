@@ -26,6 +26,12 @@ fixtures; review.json `telemetry` set on every run; dedupe merging a rule-less d
 interview trial run 2 (build and ship side): check-return --fix rejects every fixer return with
 build-return.review-missing (the fixer contract says review is null); running sessions cache agent prompts, so merged
 prompt edits don't reach them; worktree remove deletes the task gate's run report.
+Ship speed research is done; the user holds the report (ask them for it). Only 27–40% of a trial run is model coding. Its ranked changes: (1) task_proof = "final"
+preset key (per-task prove and mutate cost 13.7 min of 32.8 on run 2's critical path); (2) fail-fast gates; (3) the standards
+excerpt in the worker pack; (4) impact + coverage and an app compile in the task gate; (5) a design = "none" path;
+(6) a sprint skill; (7) surface commits + swiftgate surface-check; (8) HEAD sha on gate runs, and gate reports kept on
+worktree remove; (9) check-return --fix accepts review: null; (10) never cut the task that makes the app compile. These
+outrank the queued hardening above unless the user says otherwise.
 Next session's first job (the user's ask): work out how to write ADRs (docs/adrs/, see its README), design docs
 (docs/designs/), plans (docs/plans/), and how to kick off workers (docs/handoffs/worker-brief.md and the runbook's wave
 loop), then use that to drive the queued fixes.
