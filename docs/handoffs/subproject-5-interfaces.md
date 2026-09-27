@@ -175,3 +175,33 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   point at this spec (commit f54e3cd).
 - **Gate.** The push tier is GREEN on merged main (run 20260927T075754Z-5ea8766d, 1681 tests). Main also has
   sub-project 2's latency fix: hook budgets now measure the hook's own CPU time, so timing flakes should be rare.
+
+## Waves 7–9
+
+- **`/swift-harness:build`** (`plugin/skills/build/SKILL.md` + `references/event-loop.md`) runs the §3.2 loop.
+  Returns are written with the Write tool to `<plans>/<slug>/build/<run>/returns/<task>.json`, only after
+  `check-return` passes; the guard lets the plan's lock holder write in the plan directory, so there's no `--store`
+  flag. A design conflict runs `ledger set … blocked` on every matching or dependent pending task (`LedgerTransition`
+  now allows `pending → blocked`). After `build merge --fix` it runs `worktree remove <plan> <task> --fix`. The
+  cutoff timer is a background `/bin/sleep`. A build resumes through `build next` while the index says `building`.
+  `build merge` is in `PlanCommandGuard.sessionCommands`, and the `--undo` test cites spec §8.3. Context-pack
+  dependency notes decode the full `TaskReturn`. `build-task.js` has no field for a retry note, so to retry you
+  edit the design or plan first.
+- **`/swift-harness:ship <spec-file> --preset <name>`** (`plugin/skills/ship/SKILL.md`). Preflight halts on: an unknown
+  preset, a red `doctor`, not being on `main` or a dirty tree, or a cold `warm-check` (it then says to run
+  `swift build --package-path <dir>` once in the main checkout). Then design at the preset tier, plan, build, and a
+  report with the ledger link and `stats --build`. At any halt it names the remaining commands to resume with.
+- **Sketch design path** (`plugin/skills/design/references/review-publish-amend.md`, "Sketch approval"). It asks
+  `Approve design <slug> at designSha <sha>?` with `AskUserQuestion`; a headless session uses the headless shape
+  and records only the user's answer. The answer and its `answer` claim are checked by `evidence check`. A sketch
+  merges locally with no PR question. The design skill's `description:` now names `--tier sketch`. The evals
+  session re-ran routing: design and plan held-out 1.00, tdd 1.00, and no wrong loads into ship or build. Recall
+  for ship and build themselves is unmeasured.
+- **Decomposer tag.** The decomposer tags every task `model: sonnet|opus`, the plan skill requires it, and
+  `plan-lint.missing-model` (major) flags a task without it.
+- **Rehearsal fixture.** The app is `evals/apps/interview-starter/`: SwiftUI iOS 18, TCA 1.26.2 with SampleApp's pins,
+  an `AppFeature` and an `APIClient`/`APIClientLive` pair (`APIError`: `offline`, `badStatus(Int)`, `undecodable`),
+  and its own `.swiftgate.toml`. Its push tier is 19 s warm and 79 s cold; the simulator build and launch flow takes
+  95 s. The README has the warm-up steps. The specs are `specs/{1-list-detail,2-favorites-search,3-offline-sync}.md`.
+  The root `.swiftgate.toml` excludes `evals/apps`, so root gates skip the starter.
+- **Gate.** The push tier is GREEN on main with every task through wave 9 merged (run 20260927T084051Z-60569a67, 1696 tests).

@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Merged on local main by 2026-09-27: waves 1–4, wave 6, spec-corrections-and-routers, and every wave-5 task but decomposer-model-tag. Push tier GREEN (1681 tests). The user asked for every wave to run.
+Status: IN PROGRESS. Waves 1–9 merged on local main 2026-09-27 (push tier GREEN, 1696 tests). Only the attended rehearsal waves 10–11 remain. The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: merge build-skill and decomposer-model-tag (both in flight), then ship-skill-and-sketch-design-flow.
+Next action: wave 10, interview-rehearsal-runs. The user must be present: they answer the frame questions and approve the sketch design. Every `ready` run first waits for other sessions' mutate runs with the shared-machine loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
@@ -245,9 +245,9 @@ flowchart LR
 ## Rehearsal and acceptance
 
 ### `rehearsal-fixture-and-practice-specs`
-- Deps: ship-skill-and-sketch-design-flow · Gate: push · estLines: 400
-- Writes: `evals/apps/interview-starter/`, `evals/cases/interview/`
-- Does: §13: a pre-built TCA starter app and 3 practice READMEs of rising size. Before starting, the orchestrator agrees the paths and tags with the evals session: `claude plugin eval` scans `evals/cases/` through the staged copy, so the practice specs need tags that keep routing runs from picking them up, or a path outside `evals/cases/`.
+- Deps: — (the evals session agreed the paths on 2026-09-27) · Gate: push · estLines: 400
+- Writes: `evals/apps/interview-starter/` (the app, with its own `.swiftgate.toml`), `evals/apps/interview-starter/specs/{1-list-detail,2-favorites-search,3-offline-sync}.md`, 1 row in `evals/apps.md`
+- Does: §13: a pre-built TCA starter app and 3 practice READMEs of rising size. Before starting, the orchestrator agrees the paths and tags with the evals session: `claude plugin eval` scans `evals/cases/` through the staged copy, so the practice specs need tags that keep routing runs from picking them up, or a path outside `evals/cases/`. Agreed: nothing under `evals/cases/`; no file under `evals/apps/` named `prompt.md` or `case.yaml`; the `evals/apps.md` row calls it a rehearsal fixture for timed `ship` runs, not a suite app with hidden tests; `plugin/bin/swiftgate prose` is clean on `evals/apps.md` and on every spec README.
 - Tests: the starter app passes `swiftgate check --tier push` · each README names features that decompose into ≥ 2 independent tasks.
 
 ### `interview-rehearsal-runs`
