@@ -7,6 +7,7 @@ Next action: wave 10, interview-rehearsal-runs. The user must be present: they a
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
+Speed milestone (2026-09-27, the user's pick): the "Speed" section's tasks run before waves 10–11; the sub-project 2 orchestrator drives them.
 Open items: the rehearsal fixture under evals/ needs the evals session's agreement; the acceptance runs need the user; every `ready` run is BLOCKED until sub-project 2 fixes mutate's baseline (interfaces note, "Review fix wave 1"), which gates waves 10–11.
 Shared checkout: the sub-project 2 orchestrator and the evals session also merge into local main. Message them before merging, and run the push tier before every commit.
 Progress: git log. Update this header at every wave merge.
@@ -261,3 +262,26 @@ flowchart LR
 - Writes: `docs/e2e-report.md`
 - Does: §13: attended. The `default` preset on `examples/SampleApp` merges a planned feature with `full` review.
 - Tests: the run merges with `main` GREEN at the push tier.
+
+## Speed
+
+Ranked changes from the ship speed research (2026-09-27), after interview trial run 2
+(`docs/handoffs/2026-09-27-interview-trial-run-2.md`). They run before the queued sub-project 2 hardening. The paused
+ready-lock branch also edits `check`, `prove` and the run history, so it waits and rebases onto this milestone. Merge
+gate: push + `prove --base main` on one integration worktree, then `mutate` once on `main`.
+
+Merge points: both tasks edit the `TaskReturnEvidence` call in `C/Commands/BuildCheckReturnCommand.swift`; the
+orchestrator keeps both sides. `speed-task-proof-final` alone edits the presets, the template, `P/workflows/build-task.js`
+and `P/agents/build-worker.md`.
+
+### `speed-task-proof-final`
+- Deps: — · Gate: push · Model: opus · estLines: 260
+- Writes: `D/Build/BuildPreset.swift`, `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `P/templates/swiftgate.toml`, `C/Commands/BuildCheckReturnCommand.swift` (the `proofRequired` argument only), `P/workflows/build-task.js`, `P/agents/build-worker.md`, `P/skills/build/references/event-loop.md`, `docs/designs/2026-09-26-build-executor-design.md` (§5.1 only), their tests, and the calibration record `calibrate` writes
+- Does: a required preset key `task_proof` = `per-task` | `final` (a closed enum). `per-task` keeps today's task gate, `check --tier <taskGate> --base main --prove --mutate`. `final` drops `--prove --mutate` from the task gate: the workflow passes `taskProof` to the worker, and `check-return` stops requiring a proved-and-mutated gate run from a worker, so prove and mutate run once, in the build's final `ready` gate. The template stamps `default` = `per-task` and `interview` = `final`. §5.1 gains the key. The calibration inputs change, so re-run `calibrate` and commit its record.
+- Tests: a preset missing `task_proof` is a config issue naming the key · an unknown value is an issue · `build-task.js` under `final` never tells the worker `--prove` or `--mutate`, and under `per-task` always does · `check-return` fails a worker's unproved green gate under `per-task` and passes it under `final` — catches a preset that silently skips proof · the stamped template parses to `per-task` / `final`.
+
+### `speed-fixer-return-and-gate-provenance`
+- Deps: — · Gate: push · Model: sonnet · estLines: 220
+- Writes: `D/Build/TaskReturn.swift`, `C/Commands/BuildCheckReturnCommand.swift`, `D/RunHistory.swift`, `D/RunLayout.swift`, `A/RunStore.swift`, `C/Commands/WorktreeCommand.swift`, `A/Build/GitWorkspace.swift`, their tests
+- Does: 3 fixes from trial run 2. (a) `check-return --fix` accepts `review: null`, as the fixer contract says; a worker's green return still needs its review. (b) Every gate run records the HEAD commit it ran at, in its report and its run-history row (optional when decoding, so older history still loads). (c) `worktree remove` keeps the worktree's gate reports: before removing, it copies the worktree's `.harness/runs/<id>/` into the main checkout's `.harness/runs/`, and names any report it couldn't copy.
+- Tests: a fixer return with `review: null` passes `check-return --fix` and a worker return with `review: null` still fails — catches the fix path rejecting every fixer · a gate run's report and history row carry HEAD's sha, and a history row without one still decodes · after `worktree remove`, the task gate's report is readable from the main checkout — catches deleted evidence · a report that can't be copied is named, never dropped silently.
