@@ -64,10 +64,15 @@ Return findings only; the workflow enforces the JSON shape. Each finding has:
     standards violation is never below `major` unless the rule itself says it is advisory.
   - `minor`: worth fixing, no concrete harm yet. `nit`: taste.
 - `category`: short kebab-case defect class (examples in the rubric). Findings with the same
-  file, line and category merge across reviewers, so pick the most specific class.
+  file and category merge across reviewers when their lines are within 3 of each other, so pick
+  the most specific class.
 - `file`, `line`: repo-relative path and the line of the defect. `line` is the 1-based line in the new
   file: the number `diff-numbered.txt` prints beside the code, or the line you read in the file
   itself; never a line number in `diff.patch` or `diff-numbered.txt`. The verifier looks there.
+  Cite the line of the code that is wrong, with `end_line` when it spans several lines. When the
+  diff adds a call site that reaches baseline code the way existing call sites already do, the
+  wrong code is the baseline line: cite it there, and synthesis reports it as pre-existing,
+  outside the verdict.
 - `title`: one line.
 - `failure_scenario`: for a defect, the concrete input or state and the wrong outcome: "two
   `refreshTapped` actions within 50ms → both responses land and the list shows duplicates". For a

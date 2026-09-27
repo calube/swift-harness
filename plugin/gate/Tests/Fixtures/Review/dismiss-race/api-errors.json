@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "focus": "api-errors",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "category": "missing-cancellation",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "Dismiss clears isLoadingFact but leaves the in-flight fact request running, so the dismissed fact reappears",
+      "fix": "Mark the fact effect `.cancellable(id: CancelID.fact, cancelInFlight: true)` and have `.factDismissButtonTapped` return `.cancel(id: CancelID.fact)`. Add a TestStore test that sends .factButtonTapped with a suspended apiClient, then .factDismissButtonTapped, and asserts no .factResponse is received.",
+      "line": 69,
+      "severity": "major",
+      "failure_scenario": "Send .factButtonTapped (isLoadingFact = true, the .run effect calls apiClient.randomFact(), which has no cancel ID), then send .factDismissButtonTapped while the request is still running. Now fact = nil and isLoadingFact = false. When randomFact() returns, the effect sends .factResponse(text), and lines 58-61 set fact = text and isLoadingFact = false with no check. The fact the user just dismissed comes back.",
+      "evidence": "CounterFeature.swift:47-56: the `.factButtonTapped` case returns `.run { ... await send(.factResponse(try await apiClient.randomFact().text)) ... }` with no `.cancellable(id:)`. CounterFeature.swift:67-70 (added by the diff): `case .factDismissButtonTapped: state.fact = nil; state.isLoadingFact = false; return .none` cancels nothing. CounterFeature.swift:58-61: `.factResponse` sets `state.fact = fact` with no check. The only new test (CounterFeatureTests.swift:72-77) dismisses from idle state `State(fact: \"shown\")`, so it never covers dismiss during a load.",
+      "verified": true,
+      "verification_note": "I read the full CounterFeature.swift. The .run effect for .factButtonTapped has no cancel ID. The new .factDismissButtonTapped handler at lines 67-70 sets isLoadingFact = false, so it expects to be sent during a load, but it returns .none. The .factResponse handler writes fact with no check. A TestStore run of factButtonTapped -> factDismissButtonTapped -> (response) ends with fact set again, so I reproduced the bug at the reducer level. It lives in code the diff adds. One thing to note: CounterView.swift does not send .factDismissButtonTapped yet. It also shows a ProgressView instead of the fact while isLoadingFact is true. So today no in-app button can trigger this path. It stays reachable through the reducer's public action, and it will surface once the dismiss control is wired. I kept severity at major because the reducer is the unit under review and the handler's own isLoadingFact reset shows the load case is intended."
+    }
+  ]
+}

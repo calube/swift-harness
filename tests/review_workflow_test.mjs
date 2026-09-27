@@ -14,12 +14,12 @@ const source = readFileSync(join(root, 'workflows/review.js'), 'utf8').replace(
   'const meta',
 )
 const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
-const script = new AsyncFunction('args', 'agent', 'pipeline', 'log', source)
+const script = new AsyncFunction('args', 'agent', 'pipeline', 'log', 'budget', source)
 
 const PLUGIN = '/opt/plugins/swift-harness'
 const BUNDLE = '/work/app/.harness/runs/r1/review-input'
 
-async function run({ args, reviews = {}, verify = () => null }) {
+async function run({ args, reviews = {}, verify = () => null, budget }) {
   const calls = []
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
@@ -35,9 +35,12 @@ async function run({ args, reviews = {}, verify = () => null }) {
         return value
       }),
     )
-  const result = await script(args, agent, pipeline, () => {})
+  const result = await script(args, agent, pipeline, () => {}, budget)
   return { result, calls }
 }
+
+const contract = readFileSync(join(root, 'docs/review-contract.md'), 'utf8')
+const SEVERITY_RULES = ['defect-users-hit', 'defect-narrow-trigger', 'structural-fix', 'do-violation', 'no-harm-yet', 'taste']
 
 const findings = (result, focus) => result.reviews.find(r => r.focus === focus).findings
 
@@ -195,6 +198,63 @@ const tests = {
       verify: () => ({ findings: [{ ...legacy, verified: true, verification_note: 'n' }] }),
     })
     assert.equal(findings(result, 'concurrency')[0].kind, 'defect')
+  },
+
+  async 'the verifier schema requires one of the contract severity rules and the rule reaches the focus file — catches a severity judgement no test can check'() {
+    const { calls, result } = await run({
+      args: baseArgs,
+      reviews: { concurrency: { findings: [{ ...defect, severity: 'major' }] } },
+      verify: () => ({
+        findings: [{ ...defect, severity: 'major', severity_rule: 'defect-users-hit', verified: true, verification_note: 'n' }],
+      }),
+    })
+    const verifier = calls.find(c => c.opts.label === 'verify:concurrency')
+    const item = verifier.opts.schema.properties.findings.items
+    assert.ok(item.required.includes('severity_rule'), 'severity_rule is not required')
+    assert.deepEqual(item.properties.severity_rule.enum, SEVERITY_RULES)
+    for (const rule of SEVERITY_RULES) assert.ok(contract.includes(`\`${rule}\``), `review-contract.md never defines ${rule}`)
+    assert.match(verifier.prompt, /severity_rule/)
+    assert.equal(findings(result, 'concurrency')[0].severity_rule, 'defect-users-hit')
+  },
+
+  async 'a severity rule the contract gives the other kind is dropped with a note — catches review-synth refusing the whole review over one verifier slip'() {
+    const { result } = await run({
+      args: baseArgs,
+      reviews: { architecture: { findings: [violation] } },
+      verify: () => ({
+        findings: [{ ...violation, severity_rule: 'defect-users-hit', verified: true, verification_note: 'n' }],
+      }),
+    })
+    const [finding] = findings(result, 'architecture')
+    assert.equal(finding.severity_rule, undefined)
+    assert.match(finding.verification_note, /severity rule defect-users-hit does not apply to a standards-violation/)
+  },
+
+  async 'the return reports the output tokens the budget counted across the run and every agent call — catches review cost left unrecorded or invented'() {
+    let spent = 1000
+    const budget = { total: null, spent: () => spent, remaining: () => Infinity }
+    const { result } = await run({
+      args: baseArgs,
+      budget,
+      reviews: { concurrency: { findings: [defect] } },
+      verify: () => {
+        spent = 6000
+        return null
+      },
+    })
+    assert.equal(result.telemetry.outputTokens, 5000)
+    assert.deepEqual(result.telemetry.agents, [
+      { label: 'review:concurrency', returned: true },
+      { label: 'verify:concurrency', returned: false },
+      { label: 'review:architecture', returned: true },
+    ])
+    assert.ok(result.telemetry.unavailable.some(u => /per-agent tokens/.test(u)))
+  },
+
+  async 'with no budget in the runtime the token count is null and says why — catches a zero standing in for an unknown cost'() {
+    const { result } = await run({ args: baseArgs })
+    assert.equal(result.telemetry.outputTokens, null)
+    assert.ok(result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
   },
 }
 

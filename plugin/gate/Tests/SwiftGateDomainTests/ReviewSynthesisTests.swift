@@ -309,7 +309,7 @@ struct ReviewSynthesisTests {
     "the summary is at most 30 lines with the verdict first and top 10 findings — catches the caller drowning in a long report"
   )
   func summaryIsCapped() throws {
-    let many = (1...25).map { Self.finding(.major, line: $0) }
+    let many = (1...25).map { (n: Int) in Self.finding(.major, category: "c\(n)", line: n) }
     let report = try ReviewSynthesis.synthesize(
       Self.inputs(
         Self.reviewed(.apiErrors, many).merging([
@@ -321,6 +321,7 @@ struct ReviewSynthesisTests {
     #expect(lines.count <= 30)
     #expect(lines.first?.hasPrefix("review: fix-then-merge") == true)
     #expect(lines.contains { $0.contains("NOT REVIEWED: swiftui") })
+    #expect(lines.contains { $0.hasPrefix("pre-existing check unavailable: ") })
     #expect(lines.filter { $0.hasPrefix("[major]") || $0.contains(". [major]") }.count == 10)
     #expect(lines.last?.contains("15 more") == true)
   }

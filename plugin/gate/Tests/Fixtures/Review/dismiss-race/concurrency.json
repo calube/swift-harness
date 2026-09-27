@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "focus": "concurrency",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "rule": "C3",
+      "category": "effect-lifetime",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "Dismiss does not cancel the in-flight fact request, so the fact reappears after dismissal",
+      "fix": "Add `enum CancelID { case fact }` and change the effect to `.run { ... }.cancellable(id: CancelID.fact, cancelInFlight: true)`. In `.factDismissButtonTapped`, return `.cancel(id: CancelID.fact)`. Add a TestStore test that sends .factButtonTapped, then .factDismissButtonTapped, and checks that no .factResponse arrives.",
+      "line": 70,
+      "severity": "major",
+      "failure_scenario": "State has isLoadingFact = true after .factButtonTapped, and the .run effect at line 49 is waiting on apiClient.randomFact(). .factDismissButtonTapped arrives: lines 68-70 set fact = nil and isLoadingFact = false and return .none, so nothing cancels the effect. When the request finishes, the effect sends .factResponse(text), and lines 58-61 set state.fact = text with no check. The dismissed fact comes back. Because dismiss also sets isLoadingFact = false, the 'Cat fact' button (CounterView.swift:31, .disabled(store.isLoadingFact)) is enabled again, so a second request can start while the first is still running, and the two responses can arrive in either order. If the request fails, .factFailed logs an error for a request the user abandoned.",
+      "evidence": "CounterFeature.swift:49-56: `return .run { [count = state.count, apiClient, log] send in ... await send(.factResponse(...)) }` has no `.cancellable(id:)`. CounterFeature.swift:67-70: `case .factDismissButtonTapped: state.fact = nil; state.isLoadingFact = false; return .none` returns no `.cancel(id:)`. Resetting isLoadingFact there shows the action is meant to run mid-load. CounterFeature.swift:58-61: `.factResponse` sets `state.fact = fact` unconditionally. The new test (CounterFeatureTests.swift:72-77) starts with State(fact: \"shown\") and no request in flight, so it does not cover this interleaving.",
+      "verified": true,
+      "verification_note": "Read CounterFeature.swift in full. The trace holds in the reducer: the .run effect has no cancel id, the new dismiss case returns .none, and .factResponse writes state.fact with no guard. So a dismiss sent while a request is pending is undone when the response arrives. The diff adds this case and makes the bug reachable. I lowered severity from blocker to major because CounterView.swift has no dismiss button and nothing sends .factDismissButtonTapped yet, so today the bug shows only through the public action (tests, or a parent or view added later), not through a user tap. It will hit users as soon as a dismiss button is wired up, and the reducer clearly expects dismiss during loading because it resets isLoadingFact. Separately, the diff adds no view control for dismiss, so the feature as shipped has no way for a user to trigger it."
+    }
+  ]
+}

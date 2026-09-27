@@ -60,7 +60,8 @@ absolute docs paths, never the reviewer's reasoning. Give every prompt the absol
 `${CLAUDE_PLUGIN_ROOT}/docs/standards.md`, `${CLAUDE_PLUGIN_ROOT}/docs/testing-playbook.md` and
 `${CLAUDE_PLUGIN_ROOT}/docs/review-contract.md`. Build the
 per-focus objects exactly as `reconcile()` in `workflows/review.js` does: keep the reviewer's
-`kind`, `rule`, category and location; keep the verifier's `verification_note`; accept a lower
+`kind`, `rule`, category and location; keep the verifier's `verification_note` and a
+`severity_rule` stated for the finding's kind; accept a lower
 severity for a `standards-violation` only when the verifier gave a `downgrade_reason`; unverified
 findings keep `verified: false`, a finding the verifier returned no entry for gets
 `verified: false, unmatched: true`, a failed agent gives `not-reviewed`, and an absent `swiftui`
@@ -70,20 +71,32 @@ focus gives `not-applicable`.
 
 Write each returned review object verbatim as JSON to
 `.harness/runs/<runID>/review-findings/<focus>.json` (the files are the audit trail; don't edit
-findings). Then run:
+findings), and the whole workflow return value verbatim to
+`.harness/runs/<runID>/review-workflow.json`: its `telemetry` holds the token count the runtime
+reported. Then run:
 
 ```
-"$SG" review-synth --run-directory .harness/runs/<runID> .harness/runs/<runID>/review-findings/*.json
+"$SG" review-synth --run-directory .harness/runs/<runID> --workflow-result .harness/runs/<runID>/review-workflow.json .harness/runs/<runID>/review-findings/*.json
 ```
+
+Leave out `--workflow-result` only when the panel ran through the Agent tool fallback; the
+telemetry file then says the tokens are unavailable.
 
 It drops findings without a failure scenario, standards violations that cite no rule, and
-findings the verifier refuted, lists `unmatched` findings (which keep the verdict off `merge`), dedupes by file, line and category, applies the verdict rule, writes `review.json`, and prints at most 30 lines. Exit 2 means
-an input broke the contract: fix the file you wrote, don't hand-edit the verdict.
+findings the verifier refuted, and lists `unmatched` findings (which keep the verdict off
+`merge`). It raises a finding to the severity its `severity_rule` states. It merges same-kind
+findings in a file whose lines are within 3 of each other. It files findings on code the diff
+didn't add or change (read from `review-input/diff-numbered.txt`) as pre-existing, outside the
+verdict. It then applies the verdict rule, writes `review.json` and `review-telemetry.json` (wall
+time since `review-input` started, and the workflow's reported output tokens and agent calls),
+and prints at most 30 lines. Exit 2 means an input broke the contract: fix the file you wrote,
+don't hand-edit the verdict.
 
 ## 4. Report
 
 Relay the summary as printed: the verdict first (`merge`, `fix-then-merge` or `refactor-needed`),
-any `NOT REVIEWED` focus and `UNMATCHED AT VERIFY` finding, then the top findings with `file:line`, scenario and fix. Don't add
+any `NOT REVIEWED` focus and `UNMATCHED AT VERIFY` finding, then the top findings with `file:line`, scenario and fix.
+Then relay the `PRE-EXISTING` line (reported, never part of the verdict) and the `telemetry:` path. Don't add
 findings the panel didn't verify and don't soften the verdict.
 
 - `refactor-needed`: a verified architecture blocker, usually a `standards-violation` whose fix
