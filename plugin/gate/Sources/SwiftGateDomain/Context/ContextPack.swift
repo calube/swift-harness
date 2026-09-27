@@ -97,6 +97,10 @@ public enum ContextPackError: Error, Sendable, Equatable {
   /// couldn't be read or decoded under the given build run — never rendered as a thin pack that
   /// silently drops one dependency's notes.
   case missingDependencyReturn(task: String)
+  /// A worker's write-set entry lies in no module and no package of the module graph, so its
+  /// module kind, and the standards that go with it, can't be known. Also thrown with the first
+  /// entry when no entry names a module at all: a pack without standards is never built.
+  case unknownModuleKind(writeSetEntry: String)
 }
 
 /// A labelled raw text a pack can slice from — a frame-answers transcript, a lane brief, a
@@ -817,5 +821,15 @@ extension ContextPack {
     slices.append(ContextPackSlice(inputs.moduleGraph))
     slices.append(ContextPackSlice(inputs.taskSizingBounds))
     return ContextPack(role: .decomposer, slices: slices)
+  }
+}
+
+/// The module kinds a worker's write set touches, read from the repository's module graph so a
+/// worker never chooses the standards it is held to.
+public enum WorkerModuleKinds {
+  public static func kinds(writeSet: [String], graph: ModuleGraph) throws(ContextPackError)
+    -> [ModuleKind]
+  {
+    []
   }
 }

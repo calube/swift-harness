@@ -124,6 +124,9 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var ledger: String?
   var taskID: String?
   var buildRun: String?
+  /// The harness plugin directory whose `docs/standards.md` a worker pack falls back to when the
+  /// repository has none. Set from the environment by the command, never a flag.
+  var harnessRoot: URL?
 }
 
 /// The deterministic body of `context-pack`: gathers a role's inputs from disk, builds the pack
@@ -890,6 +893,9 @@ enum ContextPackRun {
       return "role mismatch: expected \(expected.rawValue), got \(actual.rawValue)"
     case .missingDependencyReturn(let task):
       return "no task return for dependency `\(task)`: run `swiftgate build check-return` first"
+    case .unknownModuleKind(let entry):
+      return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in no module of "
+        + "the module graph, so its standards can't be packed"
     }
   }
 
