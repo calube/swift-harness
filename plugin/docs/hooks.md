@@ -59,13 +59,13 @@ The guard only reads locks; it never claims a plan. A held lock counts until
 `swiftgate plan release` removes it. If git can't name the common dir, no design lock can be
 found, so only the override allows a design write. The same holds when no plan names the doc,
 or when the holder's `plan.json` is missing or corrupt: claim the plan with a `plan.json` that
-names the doc first. A relative `design` is resolved against the project root (the directory
-holding `.swiftgate.toml`), as `plan claim` and `evidence check` read it, and compared as a
-canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
+names the doc first. The guard resolves a relative `design` against the project root (the
+directory holding `.swiftgate.toml`), as `plan claim` and `evidence check` read it, and compares
+canonical paths, so a sibling worktree's copy of the doc isn't the plan's doc.
 
 No tool call may run `swiftgate plan release --force`: taking over a lock is the user's call.
-`swiftgate plan claim|release|set` and `index set` are denied to a subagent, and to a main session
-whose `--session` names another id or isn't a literal.
+The guard denies `swiftgate plan claim|release|set` and `index set` to a subagent, and to a main
+session whose `--session` names another id or isn't a literal.
 
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.
@@ -95,7 +95,7 @@ package manifests. Deleting the directory is always safe; it only costs re-runs.
 ## First run
 
 The plugin's `bin/swiftgate` builds the gate on first use and again after its sources change. A
-hook that finds no binary for the current sources starts the build in the background and runs the
-last binary this gate built meanwhile (or, with no record of it, the newest one in the cache), so
+hook that finds no binary for the current sources starts the build in the background. Meanwhile it
+runs the last binary this gate built, or with no record of it the newest one in the cache, so
 older rules keep enforcing during a rebuild. Only a cache with no binary at all leaves the hooks
 inactive until the build finishes, and SessionStart says so.
