@@ -84,8 +84,8 @@ telemetry file then says the tokens are unavailable.
 
 It drops findings without a failure scenario, standards violations that cite no rule, and
 findings the verifier refuted, and lists `unmatched` findings (which keep the verdict off
-`merge`). It raises a finding to the severity its `severity_rule` states, merges same-kind
-findings in one file whose lines are within 3 of each other, and files findings on code the diff
+`merge`). It raises a finding to the severity its `severity_rule` states. It merges same-kind
+findings in a file whose lines are within 3 of each other. It files findings on code the diff
 didn't add or change (read from `review-input/diff-numbered.txt`) as pre-existing, outside the
 verdict. It then applies the verdict rule, writes `review.json` and `review-telemetry.json` (wall
 time since `review-input` started, and the workflow's reported output tokens and agent calls),
@@ -95,8 +95,8 @@ don't hand-edit the verdict.
 ## 4. Report
 
 Relay the summary as printed: the verdict first (`merge`, `fix-then-merge` or `refactor-needed`),
-any `NOT REVIEWED` focus and `UNMATCHED AT VERIFY` finding, then the top findings with `file:line`, scenario and fix,
-then the `PRE-EXISTING` line (reported, never part of the verdict) and the `telemetry:` path. Don't add
+any `NOT REVIEWED` focus and `UNMATCHED AT VERIFY` finding, then the top findings with `file:line`, scenario and fix.
+Then relay the `PRE-EXISTING` line (reported, never part of the verdict) and the `telemetry:` path. Don't add
 findings the panel didn't verify and don't soften the verdict.
 
 - `refactor-needed`: a verified architecture blocker, usually a `standards-violation` whose fix

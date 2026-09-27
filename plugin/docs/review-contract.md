@@ -13,8 +13,8 @@ A finding has these fields:
     user sees a wrong outcome today.
 - `rule`: the cited rule id, such as `D7`. Synthesis drops a standards violation without one.
 - `severity`: `blocker`, `major`, `minor` or `nit`.
-- `category`: a kebab-case class. Use `effect-lifetime` for an effect or task that isn't
-  cancelled when the state or screen it serves goes away; synthesis reads `missing-cancellation`
+- `category`: a kebab-case class. Use `effect-lifetime` for an effect or task that nothing
+  cancels when the state or screen it serves goes away; synthesis reads `missing-cancellation`
   and `missing-effect-cancellation` as `effect-lifetime`.
 - `file` and `line`: the repo-relative path and 1-based line in the new code. Cite the line of the
   code that is wrong, not a new call site that reaches it. `end_line` is the last line when the
@@ -40,7 +40,8 @@ Each rule has an id. The verifier records the one it applied as `severity_rule`,
 - `no-harm-yet`: `minor`, no concrete harm yet. `taste`: `nit`.
 
 The two `defect-` rules apply only to defects, and `do-violation` and `structural-fix` only to
-standards violations. `review-synth` rejects a finding whose rule is stated for the other kind.
+standards violations. `review-synth` rejects a finding whose rule the contract states for the
+other kind.
 
 ## Verification
 
@@ -61,7 +62,7 @@ The verifier gets the findings and the code, never the reviewer's reasoning.
 
 Synthesis merges findings of the same kind in the same file: defects with the same category,
 standards violations with the same rule. They merge when their line ranges overlap or lie within 3
-lines of each other. The window comes from a real run in which one race came back from three
+lines of each other. The window comes from a real run in which one race came back from 3
 reviewers at lines 67, 69 and 70. The merged finding keeps the most severe copy, every focus that
 reported it, every cited line, and each distinct `evidence` once.
 
@@ -69,11 +70,11 @@ reported it, every cited line, and each distinct `evidence` once.
 
 A verified finding on code the diff didn't add or change is pre-existing. `review-synth` reports
 it in a separate pre-existing section with its severity, and it never counts toward the verdict.
-The code the diff changed is read from the bundle's `diff-numbered.txt` (manifest
+`review-synth` reads the code the diff changed from the bundle's `diff-numbered.txt` (manifest
 `artifacts.numberedDiff`), never from an agent's opinion: its added lines, and the lines on
 either side of a removal. A finding counts when any line from `line` to `end_line` is one of them.
 A finding in a file the diff doesn't touch is pre-existing. A finding with no line counts. When
-the numbered diff can't be read, every finding counts and the summary says why.
+`review-synth` can't read the numbered diff, every finding counts and the summary says why.
 
 ## Verdicts
 

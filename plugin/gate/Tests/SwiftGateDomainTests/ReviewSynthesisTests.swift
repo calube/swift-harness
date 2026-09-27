@@ -321,6 +321,7 @@ struct ReviewSynthesisTests {
     #expect(lines.count <= 30)
     #expect(lines.first?.hasPrefix("review: fix-then-merge") == true)
     #expect(lines.contains { $0.contains("NOT REVIEWED: swiftui") })
+    #expect(lines.contains { $0.hasPrefix("pre-existing check unavailable: ") })
     #expect(lines.filter { $0.hasPrefix("[major]") || $0.contains(". [major]") }.count == 10)
     #expect(lines.last?.contains("15 more") == true)
   }

@@ -4,14 +4,10 @@ import Testing
 
 @testable import SwiftGateDomain
 
-@Suite("review-synth: nearby-line dedupe, severity rules and pre-existing defects")
+/// Findings are built from focus-file JSON and the report is read back as JSON, the way
+/// review-synth's callers see both, so each check runs against any synthesis build.
+@Suite("review-synth: nearby-line dedupe and severity rules")
 struct ReviewDedupeBaselineTests {
-  static let counter = "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift"
-
-  static func baseline(_ patch: String) throws -> ReviewBaseline {
-    .diff(ChangedLines.parse(numberedDiff: try NumberedDiff.render(Fixture.text(patch))))
-  }
-
   static func dismissRace() throws -> [FocusReview] {
     let captured = try ["api-errors", "architecture", "concurrency", "test-quality"].map {
       try FocusReviewJSON.decode(Fixture.data("Review/dismiss-race/\($0).json"))
@@ -23,17 +19,19 @@ struct ReviewDedupeBaselineTests {
       }
   }
 
-  static func defect(
-    _ severity: Severity, category: String = "data-race", file: String = "Sources/Core/A.swift",
-    line: Int?, endLine: Int? = nil, evidence: String = "A.swift:10 mutates `count` off-actor",
-    severityRule: SeverityRule? = nil, kind: ReviewFinding.Kind? = nil, rule: String? = nil,
-    verified: Bool = true, unmatched: Bool? = nil
-  ) -> ReviewFinding {
-    ReviewFinding(
-      severity: severity, category: category, file: file, line: line, title: "t\(line ?? 0)",
-      failureScenario: "two sends race and one update is lost", evidence: evidence, fix: "f",
-      verified: verified, kind: kind, rule: rule, unmatched: unmatched, endLine: endLine,
-      severityRule: severityRule)
+  /// A verified finding as a reviewer and verifier write it; `extra` adds or overrides keys.
+  static func finding(
+    _ severity: String, category: String = "data-race", line: Int, evidence: String = "trace",
+    _ extra: [String: Any] = [:]
+  ) throws -> ReviewFinding {
+    var object: [String: Any] = [
+      "severity": severity, "category": category, "file": "Sources/Core/A.swift", "line": line,
+      "title": "t\(line)", "failure_scenario": "two sends race and one update is lost",
+      "evidence": evidence, "fix": "f", "verified": true,
+    ]
+    object.merge(extra) { $1 }
+    return try JSONDecoder().decode(
+      ReviewFinding.self, from: JSONSerialization.data(withJSONObject: object))
   }
 
   static func only(_ focus: ReviewFocus, _ findings: [ReviewFinding]) -> [FocusReview] {
@@ -43,56 +41,76 @@ struct ReviewDedupeBaselineTests {
     }
   }
 
+  /// `review.json`'s `findings` array.
+  static func merged(_ report: ReviewReport) throws -> [[String: Any]] {
+    let object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(report))
+    return try #require((object as? [String: Any])?["findings"] as? [[String: Any]])
+  }
+
+  static func field(_ merged: [String: Any], _ key: String) -> Any? {
+    (merged["finding"] as? [String: Any])?[key]
+  }
+
   @Test(
     "the dismiss race three reviewers reported at lines 67, 69 and 70 merges into one finding with every focus and all their evidence — catches one race listed once per reviewer"
   )
   func capturedDismissRaceMerges() throws {
-    let report = try ReviewSynthesis.synthesize(
-      Self.dismissRace(), baseline: Self.baseline("Review/dismiss-without-cancel.patch"))
+    let findings = try Self.merged(ReviewSynthesis.synthesize(Self.dismissRace()))
 
-    let race = report.findings.filter { $0.finding.category == "effect-lifetime" }
+    let race = findings.filter { Self.field($0, "category") as? String == "effect-lifetime" }
     #expect(race.count == 1)
     let merged = try #require(race.first)
-    #expect(merged.focuses == [.concurrency, .architecture, .apiErrors])
-    #expect(merged.lines == [67, 69, 70])
-    #expect(merged.finding.evidence.contains("returns no `.cancel(id:)"))
-    #expect(merged.finding.evidence.contains("CounterFeature.swift:67-70 (added)"))
-    #expect(merged.finding.evidence.contains("(added by the diff)"))
+    #expect(merged["focuses"] as? [String] == ["concurrency", "architecture", "api-errors"])
+    #expect(merged["lines"] as? [Int] == [67, 69, 70])
+    let evidence = try #require(Self.field(merged, "evidence") as? String)
+    #expect(evidence.contains("returns no `.cancel(id:)"))
+    #expect(evidence.contains("CounterFeature.swift:67-70 (added)"))
+    #expect(evidence.contains("(added by the diff)"))
     // The test gap on the same line is a different class of defect and stays listed.
     #expect(
-      report.findings.map(\.finding.category).sorted() == [
+      findings.compactMap { Self.field($0, "category") as? String }.sorted() == [
         "effect-lifetime", "missing-edge-case", "would-not-fail",
       ])
-    #expect(report.preExisting.isEmpty)
   }
 
   @Test(
     "same-category defects 3 lines apart merge and 4 lines apart stay separate — catches the window growing until distinct defects collapse"
   )
   func windowBoundary() throws {
-    let near = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [Self.defect(.major, line: 10), Self.defect(.minor, line: 13)]))
-    #expect(near.findings.count == 1)
-    #expect(near.findings.first?.finding.severity == .major)
-    #expect(near.findings.first?.lines == [10, 13])
+    let near = try Self.merged(
+      ReviewSynthesis.synthesize(
+        Self.only(
+          .concurrency,
+          [try Self.finding("major", line: 10), try Self.finding("minor", line: 13)])))
+    #expect(near.count == 1)
+    #expect(near.first.flatMap { Self.field($0, "severity") } as? String == "major")
+    #expect(near.first?["lines"] as? [Int] == [10, 13])
 
     let far = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [Self.defect(.major, line: 10), Self.defect(.minor, line: 14)]))
+      Self.only(
+        .concurrency, [try Self.finding("major", line: 10), try Self.finding("minor", line: 14)]
+      ))
     #expect(far.findings.count == 2)
   }
 
   @Test(
-    "two distinct defects on neighbouring lines stay two findings — catches a swallowed error absorbed into a nearby data race"
+    "a distinct defect between two copies of a race stays its own finding while the copies merge — catches a swallowed error absorbed into a nearby data race"
   )
   func distinctNearbyDefectsStaySeparate() throws {
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(
-        .apiErrors,
-        [
-          Self.defect(.major, category: "data-race", line: 51),
-          Self.defect(.blocker, category: "swallowed-error", line: 52),
-        ]))
-    #expect(report.findings.map(\.finding.category) == ["swallowed-error", "data-race"])
+    let findings = try Self.merged(
+      ReviewSynthesis.synthesize(
+        Self.only(
+          .apiErrors,
+          [
+            try Self.finding("major", category: "data-race", line: 51),
+            try Self.finding("blocker", category: "swallowed-error", line: 52),
+            try Self.finding("major", category: "data-race", line: 53),
+          ])))
+    #expect(
+      findings.compactMap { Self.field($0, "category") as? String } == [
+        "swallowed-error", "data-race",
+      ])
+    #expect(findings.map { $0["lines"] as? [Int] } == [[52], [51, 53]])
   }
 
   @Test(
@@ -102,7 +120,10 @@ struct ReviewDedupeBaselineTests {
     let report = try ReviewSynthesis.synthesize(
       Self.only(
         .concurrency,
-        [Self.defect(.major, line: 10, endLine: 30), Self.defect(.major, line: 26)]))
+        [
+          try Self.finding("major", line: 10, ["end_line": 30]),
+          try Self.finding("major", line: 26),
+        ]))
     #expect(report.findings.count == 1)
   }
 
@@ -114,9 +135,9 @@ struct ReviewDedupeBaselineTests {
       Self.only(
         .concurrency,
         [
-          Self.defect(.minor, line: 10, evidence: "first trace"),
-          Self.defect(.blocker, line: 11, evidence: "second trace"),
-          Self.defect(.major, line: 12, evidence: "first trace"),
+          try Self.finding("minor", line: 10, evidence: "first trace"),
+          try Self.finding("blocker", line: 11, evidence: "second trace"),
+          try Self.finding("major", line: 12, evidence: "first trace"),
         ]))
     let merged = try #require(report.findings.first)
     #expect(report.findings.count == 1)
@@ -131,10 +152,14 @@ struct ReviewDedupeBaselineTests {
     let report = try ReviewSynthesis.synthesize(
       Self.only(
         .concurrency,
-        [Self.defect(.major, category: "effect-lifetime", line: 67, severityRule: .defectUsersHit)])
-    )
+        [
+          try Self.finding(
+            "major", category: "effect-lifetime", line: 67,
+            ["severity_rule": "defect-users-hit"])
+        ]))
     #expect(report.findings.first?.finding.severity == .blocker)
-    #expect(report.findings.first?.finding.severityRule == .defectUsersHit)
+    let merged = try #require(try Self.merged(report).first)
+    #expect(Self.field(merged, "severity_rule") as? String == "defect-users-hit")
   }
 
   @Test(
@@ -142,121 +167,33 @@ struct ReviewDedupeBaselineTests {
   )
   func severityRuleNeverLowers() throws {
     let report = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [Self.defect(.blocker, line: 5, severityRule: .noHarmYet)]))
+      Self.only(
+        .concurrency, [try Self.finding("blocker", line: 5, ["severity_rule": "no-harm-yet"])]))
     #expect(report.findings.first?.finding.severity == .blocker)
+    let merged = try #require(try Self.merged(report).first)
+    #expect(Self.field(merged, "severity_rule") as? String == "no-harm-yet")
   }
 
   @Test(
     "a defect rule on a standards violation is a contract violation — catches a verifier citing a rule the contract doesn't give that kind"
   )
-  func severityRuleMustFitKind() {
-    #expect(throws: ReviewContractViolation.severityRuleKind(.defectUsersHit, .standardsViolation))
-    {
-      try ReviewSynthesis.synthesize(
-        Self.only(
-          .architecture,
-          [
-            Self.defect(
-              .major, line: 3, severityRule: .defectUsersHit, kind: .standardsViolation,
-              rule: "D7")
-          ]))
+  func severityRuleMustFitKind() throws {
+    let violation = try Self.finding(
+      "major", line: 3,
+      ["severity_rule": "defect-users-hit", "kind": "standards-violation", "rule": "D7"])
+    let error = #expect(throws: ReviewContractViolation.self) {
+      try ReviewSynthesis.synthesize(Self.only(.architecture, [violation]))
     }
+    #expect(String(describing: error).contains("severityRuleKind"))
   }
 
   @Test(
-    "clean-reset's baseline fact effect with no cancellation id is reported as pre-existing and leaves the verdict at merge — catches a defect the diff didn't add turning a clean change into fix-then-merge"
+    "a severity rule the contract doesn't define fails decoding and names itself — catches a misspelt rule silently enforcing nothing"
   )
-  func baselineEffectIsPreExisting() throws {
-    let effect = Self.defect(
-      .major, category: "effect-lifetime", file: Self.counter, line: 49,
-      evidence: "CounterFeature.swift:49 `return .run { ... }` has no `.cancellable(id:)`",
-      severityRule: .defectUsersHit)
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [effect]), baseline: Self.baseline("Review/clean-reset.patch"))
-    #expect(report.verdict == .merge)
-    #expect(report.findings.isEmpty)
-    #expect(report.preExisting.count == 1)
-    #expect(report.preExisting.first?.finding.severity == .blocker)
-
-    let summary = ReviewSummary.render(report, reportPath: "review.json")
-    #expect(summary.hasPrefix("review: merge"))
-    #expect(summary.contains("PRE-EXISTING (not counted toward the verdict): 1"))
-    #expect(summary.contains("\(Self.counter):49"))
-  }
-
-  @Test(
-    "a finding on a line the diff added counts toward the verdict — catches every finding being filed as pre-existing"
-  )
-  func addedLineCounts() throws {
-    let reset = Self.defect(.major, category: "effect-lifetime", file: Self.counter, line: 67)
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [reset]), baseline: Self.baseline("Review/clean-reset.patch"))
-    #expect(report.verdict == .fixThenMerge)
-    #expect(report.preExisting.isEmpty)
-  }
-
-  @Test(
-    "a finding in a file the diff never touches is pre-existing — catches baseline debt elsewhere blocking the change"
-  )
-  func untouchedFileIsPreExisting() throws {
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(
-        .apiErrors, [Self.defect(.blocker, file: "Packages/APIClient/Sources/X.swift", line: 3)]),
-      baseline: Self.baseline("Review/clean-reset.patch"))
-    #expect(report.verdict == .merge)
-    #expect(report.preExisting.count == 1)
-  }
-
-  @Test(
-    "an unmatched finding on baseline code doesn't hold the verdict off merge — catches pre-existing debt blocking through the unmatched path"
-  )
-  func unmatchedPreExistingDoesNotBlock() throws {
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(
-        .concurrency,
-        [Self.defect(.major, file: Self.counter, line: 49, verified: false, unmatched: true)]),
-      baseline: Self.baseline("Review/clean-reset.patch"))
-    #expect(report.verdict == .merge)
-    #expect(report.unmatched.map(\.preExisting) == [true])
-  }
-
-  @Test(
-    "with no numbered diff every finding counts and the report says why — catches a missing diff silently filing blockers as pre-existing"
-  )
-  func baselineUnavailableCountsEverything() throws {
-    let report = try ReviewSynthesis.synthesize(
-      Self.only(.concurrency, [Self.defect(.major, file: Self.counter, line: 49)]),
-      baseline: .unavailable(reason: "review-input/manifest.json is missing"))
-    #expect(report.verdict == .fixThenMerge)
-    #expect(report.baselineUnavailable == "review-input/manifest.json is missing")
-    let summary = ReviewSummary.render(report, reportPath: "review.json")
-    #expect(
-      summary.contains("pre-existing check unavailable: review-input/manifest.json is missing"))
-  }
-
-  @Test(
-    "added lines and the lines around a removal count as changed, context lines don't — catches a deleted guard filing its defect as pre-existing"
-  )
-  func changedLinesParse() throws {
-    let numbered = try NumberedDiff.render(
-      """
-      diff --git a/S.swift b/S.swift
-      --- a/S.swift
-      +++ b/S.swift
-      @@ -10,6 +10,6 @@ struct S {
-         let a = 1
-         let b = 2
-      -  guard ok else { return }
-         let c = 3
-      +  let d = 4
-         let e = 5
-         let f = 6
-      """)
-    let changed = ChangedLines.parse(numberedDiff: numbered)
-    #expect(changed.byFile["S.swift"] == [11, 12, 13])
-    #expect(changed.introduces(file: "S.swift", lines: 10...10) == false)
-    #expect(changed.introduces(file: "S.swift", lines: 12...12))
-    #expect(changed.introduces(file: "S.swift", lines: 14...20) == false)
-    #expect(changed.introduces(file: "Other.swift", lines: 12...12) == false)
+  func unknownSeverityRuleRejected() {
+    let error = #expect(throws: DecodingError.self) {
+      try Self.finding("major", line: 3, ["severity_rule": "user-visible"])
+    }
+    #expect(String(describing: error).contains("user-visible"))
   }
 }

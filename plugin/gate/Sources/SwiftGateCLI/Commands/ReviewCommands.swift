@@ -284,7 +284,7 @@ enum ReviewSynthRun {
   /// Reads every focus file, files findings against the bundle's numbered diff, writes
   /// `review.json` and `review-telemetry.json` into `runDirectory`, and returns the report.
   static func run(
-    files: [URL], runDirectory: URL, workflowResult: URL? = nil, now: Date = Date()
+    files: [URL], runDirectory: URL, workflowResult: URL? = nil
   ) throws -> ReviewReport {
     var inputs: [FocusReview] = []
     for file in files {
@@ -304,7 +304,7 @@ enum ReviewSynthRun {
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
     let telemetry = ReviewTelemetry.make(
-      runID: runDirectory.lastPathComponent, finishedAt: now,
+      runID: runDirectory.lastPathComponent, finishedAt: Date(),
       workflow: workflowTelemetry(workflowResult))
     let telemetryURL = runDirectory.appending(path: ReviewTelemetry.fileName)
     try encoder.encode(telemetry).write(to: telemetryURL, options: .atomic)
