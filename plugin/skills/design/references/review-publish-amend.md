@@ -71,15 +71,23 @@ the standards anchors for the kinds in scope, and the playbook's tier section:
 | `client` | `3-dependencies-and-clients` |
 | `render` | `6-swiftui-performance` |
 
-Challenger, and at `deep` the pre-mortem too: no `pre-mortem` pack role exists, so the pre-mortem
-reads the challenger's pack.
+Challenger:
 
 ```bash
 "$SG" context-pack --role challenger --design <doc> --question-set <run>/challenger-questions.md \
   --doc-anchor problem --doc-anchor decision
 ```
 
-Pass the same `--doc-anchor` list as the evidence auditor's. Each command prints the pack path
+Pass the same `--doc-anchor` list as the evidence auditor's.
+
+Pre-mortem, at `deep` only: no `pre-mortem` pack role exists, so build an evidence-auditor pack
+under its own key, with the same flags as the evidence auditor's:
+
+```bash
+"$SG" context-pack --role evidence-auditor --key pre-mortem --design <doc> \
+  --claims <ev>/claims.jsonl --doc-anchor <anchor> --claim-id <id>
+```
+ Each command prints the pack path
 under `.harness/context-pack/`. Exit 1 or 2 names the missing input: fix it and rerun.
 
 ### Run
@@ -93,7 +101,7 @@ Workflow({
       { reviewer: "evidence-auditor", packPath: "<absolute path>" },
       { reviewer: "standards-reviewer", packPath: "<absolute path>" },
       { reviewer: "challenger", packPath: "<absolute path of the challenger pack>" },
-      { reviewer: "pre-mortem", packPath: "<absolute path of the challenger pack>" }
+      { reviewer: "pre-mortem", packPath: "<absolute path of evidence-auditor-pre-mortem.md>" }
     ]
   }
 })
@@ -394,7 +402,9 @@ Workflow({
     tier: "<tier>",
     mode: "reresearch",
     claimIds: ["<id>"],
-    lanes: [{ name: "<the claim's lane>", packPath: "<absolute path>" }],
+    design: "<doc>",
+    commit: "<git rev-parse HEAD>",
+    lanes: [{ name: "<the claim's lane>", packPath: "<absolute path>", pin: "<the lane's --pin>" }],
     answers: []
   }
 })

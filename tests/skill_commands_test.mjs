@@ -2,7 +2,8 @@
 // binary's `--help` for that subcommand path.
 // Run: node tests/skill_commands_test.mjs
 // Regressions caught: a skill naming a subcommand or flag the CLI doesn't have (instructions
-// drifting from the CLI), and an extractor that silently stops finding invocations.
+// drifting from the CLI), an extractor that silently stops finding invocations, and a skill call
+// that leaves out a flag or workflow arg the callee requires.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -70,7 +71,7 @@ export function extractInvocations(text) {
         const start = match.index + match[0].length
         const tail = commandTail(segment.text.slice(start), segment.isCode)
         const words = tail.split(/\s+/).filter(Boolean)
-        if (words.length) found.push({ line: startLine, words, isCode: segment.isCode })
+        if (words.length) found.push({ line: startLine, words, isCode: segment.isCode, fenced: inFence })
       }
     }
   }
@@ -142,6 +143,43 @@ export function scanSkills(skillsDir, help, labelRoot = skillsDir) {
   return checkInvocations(invocations, help)
 }
 
+// What a call must carry because the callee refuses it otherwise. `context-pack --role
+// research-lane` exits 2 without these flags; design-research.js throws without these args.
+const REQUIRED_PACK_FLAGS = { 'research-lane': ['--key', '--design', '--pin'] }
+const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
+
+/**
+ * Problems with the calls written in `files` ({relative path: markdown}): a fenced `context-pack`
+ * command missing a flag its role requires, a design-research Workflow call missing a required
+ * arg, and a pre-mortem reading a pack without the claims it cites.
+ */
+export function requiredCallProblems(files) {
+  const problems = []
+  for (const [file, text] of Object.entries(files)) {
+    for (const { line, words, fenced } of extractInvocations(text)) {
+      if (!fenced || words[0] !== 'context-pack') continue
+      const role = words[words.indexOf('--role') + 1]
+      for (const flag of REQUIRED_PACK_FLAGS[role] ?? []) {
+        if (!words.includes(flag)) problems.push(`${file}:${line}: context-pack --role ${role} lacks ${flag}`)
+      }
+    }
+    for (const match of text.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)) {
+      const call = match[0]
+      const line = text.slice(0, match.index).split('\n').length
+      if (call.includes('design-research.js')) {
+        for (const arg of REQUIRED_RESEARCH_ARGS) {
+          if (!call.includes(arg)) problems.push(`${file}:${line}: design-research Workflow call lacks ${arg.slice(0, -1)}`)
+        }
+      }
+      const preMortem = /reviewer: "pre-mortem", packPath: "([^"]*)"/.exec(call)
+      if (preMortem && !preMortem[1].includes('evidence-auditor-pre-mortem')) {
+        problems.push(`${file}:${line}: the pre-mortem reads ${JSON.stringify(preMortem[1])}, not its evidence-auditor-pre-mortem pack`)
+      }
+    }
+  }
+  return problems
+}
+
 function realHelp() {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
@@ -178,7 +216,49 @@ function withTempSkill(files, body) {
 
 const help = realHelp()
 
+const designSkillFiles = () =>
+  Object.fromEntries(
+    markdownFiles(join(root, 'skills/design')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
+  )
+
 const tests = {
+  'the design skill passes every flag and arg its callees require — catches a skill call a stricter CLI or workflow now refuses'() {
+    const files = designSkillFiles()
+    assert.deepEqual(requiredCallProblems(files), [])
+    const all = Object.values(files).join('\n')
+    assert.ok(/context-pack --role evidence-auditor --key pre-mortem/.test(all), 'no pre-mortem pack is built')
+    const researchCalls = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].filter(m => m[0].includes('design-research.js'))
+    assert.ok(researchCalls.length >= 2, `only ${researchCalls.length} design-research calls found`)
+  },
+
+  'a call missing a required flag or arg fails and names it — catches the required-call check passing anything'() {
+    const problems = requiredCallProblems({
+      'x.md': [
+        '```bash',
+        '"$SG" context-pack --role research-lane --key codebase --pin abc1234 \\',
+        '  --brief b.md',
+        '```',
+        'Prose mentions `"$SG" context-pack --role research-lane` without flags.',
+        '```',
+        'Workflow({',
+        '  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/design-research.js",',
+        '  args: { design: "d.md", lanes: [{ name: "codebase", packPath: "p", pin: "abc1234" }] }',
+        '})',
+        '```',
+        '```',
+        'Workflow({',
+        '  args: { packs: [{ reviewer: "pre-mortem", packPath: "<absolute path of the challenger pack>" }] }',
+        '})',
+        '```',
+      ].join('\n'),
+    })
+    assert.deepEqual(problems, [
+      'x.md:2: context-pack --role research-lane lacks --design',
+      'x.md:7: design-research Workflow call lacks commit',
+      'x.md:13: the pre-mortem reads "<absolute path of the challenger pack>", not its evidence-auditor-pre-mortem pack',
+    ])
+  },
+
   'every swiftgate subcommand and flag any skill names exists in the real CLI — catches skill instructions drifting from the CLI'() {
     const { problems, resolved } = scanSkills(join(root, 'skills'), help, root)
     assert.deepEqual(problems, [])

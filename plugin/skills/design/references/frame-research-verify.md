@@ -164,9 +164,9 @@ Take a `docs-lint` baseline so the draft step can tell its own findings from old
   `apple-docs` takes `iphonesimulator<version>` from `xcrun --sdk iphonesimulator --show-sdk-version`.
 
 ```bash
-"$SG" context-pack --role research-lane --key <lane> --frame-answers <run>/frame-answers.json \
-  --area <area> --module-graph <run>/module-graph.txt --brief <run>/briefs/<lane>.md \
-  --pin <pin> --claims <ev>/claims.jsonl
+"$SG" context-pack --role research-lane --key <lane> --design <doc> \
+  --frame-answers <run>/frame-answers.json --area <area> --module-graph <run>/module-graph.txt \
+  --brief <run>/briefs/<lane>.md --pin <pin> --claims <ev>/claims.jsonl
 ```
 
 It writes `.harness/context-pack/research-lane-<lane>.md`. Exit 1 or 2 names the missing input:
@@ -182,7 +182,9 @@ Workflow({
   args: {
     tier: "<tier>",
     mode: "research",
-    lanes: [{ name: "codebase", packPath: "<absolute path of the lane's pack>" }],
+    design: "<doc>",
+    commit: "<git rev-parse HEAD>",
+    lanes: [{ name: "codebase", packPath: "<absolute path of the lane's pack>", pin: "<the lane's --pin>" }],
     answers: []
   }
 })
@@ -224,6 +226,11 @@ For each researched lane:
 - Append each claim to `<ev>/claims.jsonl` as returned, status `new`. When its id already exists
   with other content, keep the recorded claim and list the clash for the user.
 - Write each probe's `swift` text to `<ev>/probes/<claimId>.snippet.swift`, byte for byte.
+- `dropped` lists claims the script removed for having no pin. Write none of them, and tell the
+  user their ids and the lane.
+- `snapshotRequests` (apple-docs only) lists doc pages the lane needed but found no stored snapshot
+  for. Tell the user the pages: those points stay unclaimed until the pages are stored under
+  `<ev>/snapshots/` and the lane reruns.
 
 ## Verify
 
