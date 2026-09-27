@@ -277,3 +277,8 @@ From the evals session's first review-accuracy and failure-modes runs (evals-rou
   review input so a finding's `line` is the source line, and make reconcile fail loudly rather than silently drop a
   finding. Also check the concurrency reviewer's severity guidance: a user-visible race is a blocker under
   `review-contract.md`.
+- **`latency-tests-hold-under-load`** (sonnet): hook latency tests (`HookCommandTests.denyArtifactEdits`,
+  `allowsOrdinaryWork`, `PreToolUseGuardTests.ordinaryAndFast`, `BashWriteGuardTests.fast`) assert wall-clock time
+  against the 50 ms budget and go RED under load (131–1149 ms seen), which also reddens the Stop hook's fast tier.
+  Measure the hook child's CPU time (rusage user + sys) against the budget, so a real regression still fails and
+  machine load doesn't. `LiveProcessRunnerTests` belongs to the mutate-baseline task.
