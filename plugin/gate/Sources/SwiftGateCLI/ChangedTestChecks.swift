@@ -155,8 +155,9 @@ enum ChangedTestChecks {
     }
     // Production source is reverted; tests, manifests, resources and config keep the change. A
     // path outside the module graph (no Package.swift target claims it) is production input too
-    // when it's one of the harness's own stamped resources — a template a test can guard — so it
-    // reverts alongside the Swift sources instead of silently keeping the change under test.
+    // when it's data the harness ships and its own commands read — a stamped template, a
+    // self-test seed — so it reverts alongside the Swift sources instead of silently keeping the
+    // change under test.
     var reverted: [String] = []
     var copied: [String] = []
     for path in changed {
@@ -223,9 +224,12 @@ enum ChangedTestChecks {
   }
 
   /// Non-Swift files outside the module graph that still count as production input a changed
-  /// test can guard. Explicit and short on purpose: anything else outside the graph (docs,
-  /// fixtures, a test's own resources) keeps the change, as it always has.
-  private static let productionResourcePrefixes = ["plugin/templates/"]
+  /// test can guard: bootstrap stamps the templates, and `self-test` reads the seeds as its
+  /// answer key. Explicit and short on purpose: anything else outside the graph (docs, captured
+  /// tool-output fixtures, a test's own resources) keeps the change, as it always has.
+  private static let productionResourcePrefixes = [
+    "plugin/templates/", "plugin/gate/Fixtures/seeds/",
+  ]
 
   private static func isProductionResource(_ path: String) -> Bool {
     Self.productionResourcePrefixes.contains { path.hasPrefix($0) }

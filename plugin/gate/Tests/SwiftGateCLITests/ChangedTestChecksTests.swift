@@ -152,26 +152,33 @@ struct ChangedTestChecksTests {
   }
 
   @Test(
-    "a changed template outside the module graph is reverted like production source, not kept like the test — catches a template-guarding test permanently not-proven"
+    "a changed template or self-test seed outside the module graph is reverted like production source, not kept like the test, while other files outside it keep the change — catches a template- or seed-guarding test permanently not-proven"
   )
   func templateInputIsReverted() async throws {
     let setup = try Setup()
     defer { setup.remove() }
     let templatePath = "plugin/templates/AGENTS.md"
+    let seedPath = "plugin/gate/Fixtures/seeds/docs-lint/local-path/docs/example.md"
+    let docPath = "docs/index.md"
     let git = FakeGit(
-      changed: [Self.testFile, Self.sourceFile, templatePath], mergeBase: "base",
+      changed: [Self.testFile, Self.sourceFile, templatePath, seedPath, docPath], mergeBase: "base",
       addedSince: [AddedLines(path: Self.testFile, ranges: [1...15])])
     let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+    let revertedSwiftPM = try ProbeRepository.swiftPM(replaying: "reverted")
     let environment = ChangedTestChecks.Environment(
       root: setup.repository.root, git: git,
       swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), scratch: scratch,
-      scratchSwiftPM: { _ in try! ProbeRepository.swiftPM(replaying: "reverted") })
+      scratchSwiftPM: { _ in revertedSwiftPM })
 
     _ = try await prove(setup, environment)
 
     let request = try #require(scratch.requests.first)
     #expect(request.revertedPaths.contains(templatePath))
     #expect(!request.copiedPaths.contains(templatePath))
+    #expect(request.revertedPaths.contains(seedPath))
+    #expect(!request.copiedPaths.contains(seedPath))
+    #expect(request.copiedPaths.contains(docPath))
+    #expect(!request.revertedPaths.contains(docPath))
   }
 
   @Test(

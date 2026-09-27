@@ -196,21 +196,26 @@ struct DesignSeedsSelfTestTests {
   // MARK: - docs-lint seeds one violation per family (spec §6.2)
 
   @Test(
-    "docs-lint seeds at least one violation for every family the spec's docs-lint table names — catches a family shipping with no seed of its own"
+    "docs-lint seeds, run through self-test's own seed runner, fire at least one rule id for every family the spec's docs-lint table names — catches a family shipping with no seed of its own"
   )
-  func everyDocsLintFamilyHasASeed() throws {
+  func everyDocsLintFamilyHasASeed() async throws {
+    let root = Self.tempRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
     let seedsRoot = Fixture.checkoutRoot.appending(
       path: "gate/Fixtures/seeds/docs-lint", directoryHint: .isDirectory)
-    let directories = try FileManager.default.contentsOfDirectory(
-      at: seedsRoot, includingPropertiesForKeys: nil)
+    let cases = try FileManager.default.contentsOfDirectory(
+      at: seedsRoot, includingPropertiesForKeys: [.isDirectoryKey]
+    ).filter { try $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true }
     struct Expected: Decodable { let ruleIDs: [String] }
     var ruleIDs: Set<String> = []
-    for directory in directories {
-      guard let data = try? Data(contentsOf: directory.appending(path: "expected.json")),
-        let expected = try? JSONDecoder().decode(Expected.self, from: data)
-      else { continue }
-      ruleIDs.formUnion(expected.ruleIDs)
+    for directory in cases {
+      try Self.stagedCase("docs-lint/\(directory.lastPathComponent)", in: root)
+      let data = try Data(contentsOf: directory.appending(path: "expected.json"))
+      ruleIDs.formUnion(try JSONDecoder().decode(Expected.self, from: data).ruleIDs)
     }
+    // Each case's expected.json only counts once the real runner shows the case fires exactly it.
+    let outcome = await SelfTest.run(harnessRoot: root)
+    #expect(Self.seedFailures(outcome) == [])
     // Spec §6.2's docs-lint family table, one row per family; a family with two rule ids (either
     // proves it) lists both.
     let families: [String: Set<String>] = [
