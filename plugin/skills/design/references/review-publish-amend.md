@@ -605,7 +605,7 @@ recommends `sketch`; only `--tier sketch`, or a preset through `/swift-harness:s
 
 ### Sketch frame
 
-Follow [the frame](frame-research-verify.md#frame), with 3 changes:
+Follow [the frame](frame-research-verify.md#frame), with 4 changes:
 
 1. **Clarifying questions.** The goal is the spec's text. After the 4 frame questions, ask what the
    spec leaves open, such as a behaviour it names but doesn't define, in the constraints prompt.
@@ -618,7 +618,13 @@ Follow [the frame](frame-research-verify.md#frame), with 3 changes:
    ```
 
    On `already-held` at another tier, re-scope with `plan set` and `--tier sketch`.
-3. **Resume notes** name the draft as next:
+3. **Check the answers.** After [Branch and record](frame-research-verify.md#branch-and-record),
+   run `"$SG" evidence check --design <doc> --json`. It needs only the doc's path, not the doc.
+   Set each answer claim's `status` from its entry, as [verify](frame-research-verify.md#verify)
+   rewrites `claims.jsonl`: change nothing else, and keep the line order. A `quote-ok` answer is
+   what a sketch Decision may cite. A `quote-fail` means the record and its claim disagree: fix
+   the claim's quote or its `loc`, and run the check again.
+4. **Resume notes** name the draft as next:
 
    ```bash
    "$SG" index set <plan> designing "framed at sketch; next: draft" --session <id>
@@ -628,12 +634,14 @@ Skip research and verify, then draft.
 
 ### Sketch draft
 
-Follow [the draft](frame-research-verify.md#draft), without `--probe-verdicts`. The drafter's pack
-carries only `supported` claims, and a sketch has none, so the drafter tags each point
-`[UNVERIFIED]`. Tell it in the prompt:
+Follow [the draft](frame-research-verify.md#draft), without `--probe-verdicts` and with
+`--tier sketch`. A sketch has no `supported` claims. At `--tier sketch` the pack carries the
+user's frame answers that `evidence check` marked `quote-ok`, and a Decision may cite them. Tell
+the drafter in the prompt:
 
 - the tier is `sketch`, so the status frontmatter says `tier: sketch`;
-- a Decision bullet may stay `[UNVERIFIED]` with no Risks entry;
+- a Decision may cite the user's answer claims, and any other point is `[UNVERIFIED]`;
+- a Decision or Perf & scale bullet may stay `[UNVERIFIED]` with no Risks entry;
 - every other `[UNVERIFIED]` bullet still reappears in Risks or Open questions.
 
 Lint as the draft does, with its 2 rounds and its 2 tolerated `docs-lint` findings:

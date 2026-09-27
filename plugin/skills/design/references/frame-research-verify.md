@@ -376,11 +376,12 @@ or stop. When `evidence check` marks claims `stale`, rerun the workflow with `mo
 "$SG" context-pack --role drafter --template <run>/design-doc-template.md \
   --frame-answers <run>/frame-answers.json --claims <ev>/claims.jsonl \
   --probe-verdicts <run>/probe.json --standards <standards> --playbook <playbook> \
-  --module-kind <kind> --module-kind <kind>
+  --module-kind <kind> --module-kind <kind> --tier <tier>
 ```
 
 Pass 1 `--module-kind` per kind among the touched and new modules. Leave out `--probe-verdicts`
-when no probe ran.
+when no probe ran. `--tier` is the tier the plan is claimed at. The pack also states the
+`design-lint` word budgets, read from `.swiftgate.toml`.
 
 ### Drafter
 

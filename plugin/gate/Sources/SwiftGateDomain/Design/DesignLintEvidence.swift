@@ -50,10 +50,13 @@ public enum DesignLintEvidence {
   ) throws(ReportContractViolation) -> [Finding] {
     let claimsByID = Dictionary(grouping: claims, by: \.id)
     let (tier, tierFinding) = try parsedTier(document.tier, docPath: docPath)
-    // Spec §9: at `sketch`, no research lane checked the doc's claims, so a Decision bullet may
-    // stay `[UNVERIFIED]` and skip the Risks/Open-questions mirror. Every other tagging and
-    // citation rule — including a Decision citing a claim that isn't `supported` — is unchanged.
+    // Spec §9: at `sketch`, no research lane or claim checker ran, so a Decision bullet may stay
+    // `[UNVERIFIED]`, and neither Decision nor Perf & scale mirrors its `[UNVERIFIED]` bullets in
+    // Risks. A Decision may also cite the user's own frame answer once `evidence check` found its
+    // quote: the answer is the user's choice, and nothing else at sketch could judge it. Every
+    // other citation must still be `supported`.
     let sketchRelaxesDecision = tier == .sketch
+    let sketchUnmirrored: Set<String> = sketchRelaxesDecision ? ["Decision", "Perf & scale"] : []
     let taggedSections:
       [(
         name: String, section: MarkdownDocument.Section?, requireSupported: Bool,
@@ -71,13 +74,13 @@ public enum DesignLintEvidence {
         contentsOf: taggingFindings(
           section: entry.section, sectionName: entry.name, docPath: docPath,
           claimsByID: claimsByID, requireSupported: entry.requireSupported,
-          forbidUnverified: entry.forbidUnverified))
+          forbidUnverified: entry.forbidUnverified, acceptsCheckedAnswers: sketchRelaxesDecision))
     }
     try findings.append(
       contentsOf: unverifiedCoverageFindings(
         sections:
           taggedSections
-          .filter { !(sketchRelaxesDecision && $0.name == "Decision") }
+          .filter { !sketchUnmirrored.contains($0.name) }
           .map { (name: $0.name, section: $0.section) },
         risks: document.risks, openQuestions: document.openQuestions, docPath: docPath))
     try findings.append(
@@ -108,7 +111,8 @@ public enum DesignLintEvidence {
 
   private static func taggingFindings(
     section: MarkdownDocument.Section?, sectionName: String, docPath: String,
-    claimsByID: [String: [Claim]], requireSupported: Bool, forbidUnverified: Bool
+    claimsByID: [String: [Claim]], requireSupported: Bool, forbidUnverified: Bool,
+    acceptsCheckedAnswers: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     guard let section else { return [] }
     var findings: [Finding] = []
@@ -146,7 +150,11 @@ public enum DesignLintEvidence {
         }
         // Every record of a repeated id must be supported: trusting whichever line came last
         // would let an appended `supported` record hide a `refuted` one.
-        let unsupported = recorded.map(\.status).filter { $0 != .supported }
+        let unsupported = recorded.filter { claim in
+          claim.status != .supported
+            && !(acceptsCheckedAnswers && claim.citation.kind == .answer
+              && claim.status == .quoteOk)
+        }.map(\.status)
         guard requireSupported, let status = unsupported.first else { continue }
         findings.append(
           try Finding(

@@ -3,8 +3,8 @@ import SwiftGateDomain
 import Testing
 
 /// Spec §9's `sketch` design tier: a spec that already states what to build, so no research lane
-/// checks its claims. `design-scope` never recommends it, and `design-lint` lifts exactly one rule
-/// for a doc whose frontmatter names it.
+/// checks its claims. `design-scope` never recommends it, and `design-lint` relaxes Decision and
+/// Perf & scale for a doc whose frontmatter names it.
 @Suite("sketch design tier")
 struct SketchTierTests {
   // MARK: - DesignTier gains sketch, closed and reviewer-free
@@ -61,7 +61,7 @@ struct SketchTierTests {
     #expect(DesignScope.recommend(facts).tier != .sketch)
   }
 
-  // MARK: - design-lint: sketch relaxes exactly one rule, only in Decision
+  // MARK: - design-lint: what sketch relaxes, and only at sketch
 
   private static func doc(tier: String?, decision: String, extraSections: String = "")
     -> DesignDocument
@@ -138,6 +138,80 @@ struct SketchTierTests {
           status: .refuted)
       ])
     #expect(findings.contains { $0.ruleID == "design-lint.citation-not-supported" })
+  }
+
+  private static func claim(_ id: String, kind: Citation.Kind, status: Claim.Status) -> Claim {
+    Claim(
+      id: id, lane: "prior-decisions", text: "a claim used in tests",
+      citation: kind == .answer
+        ? Citation(kind: .answer, loc: "answers.jsonl#design-run/1", quote: "Which area?")
+        : Citation(kind: kind, loc: "docs/example.md#L1-L2", pin: "abc123", quote: "x"),
+      status: status)
+  }
+
+  private static func decisionCiting(_ claim: Claim, tier: String?) throws -> [Finding] {
+    try DesignLintEvidence.check(
+      document: Self.doc(tier: tier, decision: "- Load both sections at once [\(claim.id)]"),
+      docPath: "docs/example/designs/x.md", claims: [claim]
+    ).filter { $0.ruleID == "design-lint.citation-not-supported" }
+  }
+
+  @Test(
+    "at sketch a Decision may cite the user's own frame answer once evidence check found its quote — catches the user's choices being unciteable because sketch runs no claim checker"
+  )
+  func quoteOkAnswerClaimBacksDecisionAtSketch() throws {
+    let answer = Self.claim("ev-user-picks-both", kind: .answer, status: .quoteOk)
+    #expect(try Self.decisionCiting(answer, tier: "sketch") == [])
+  }
+
+  @Test(
+    "outside sketch a quote-ok answer claim still needs the claim checker — catches the sketch rule leaking to tiers that run a checker",
+    arguments: [nil, "quick", "standard", "deep"])
+  func quoteOkAnswerClaimStillFailsOutsideSketch(tier: String?) throws {
+    let answer = Self.claim("ev-user-picks-both", kind: .answer, status: .quoteOk)
+    #expect(try Self.decisionCiting(answer, tier: tier).count == 1)
+  }
+
+  @Test(
+    "at sketch only a checked answer counts: a new answer claim, or a quote-ok claim of any other kind, still fails — catches sketch trusting research no one verified",
+    arguments: [
+      (Citation.Kind.answer, Claim.Status.new), (.file, .quoteOk), (.snapshot, .quoteOk),
+      (.capture, .quoteOk),
+    ])
+  func onlyQuoteOkAnswerClaimsRelaxAtSketch(kind: Citation.Kind, status: Claim.Status) throws {
+    #expect(
+      try Self.decisionCiting(Self.claim("ev-other", kind: kind, status: status), tier: "sketch")
+        .count == 1)
+  }
+
+  private static func perfDoc(tier: String?) -> DesignDocument {
+    Self.doc(
+      tier: tier, decision: "- Use the queue-backed approach [UNVERIFIED]",
+      extraSections: """
+
+        ## Perf & scale
+
+        - throughput: 1 request per open [UNVERIFIED]
+        """)
+  }
+
+  @Test(
+    "at sketch an [UNVERIFIED] Perf & scale bullet needs no Risks mirror — catches every perf bullet being copied into Risks, since sketch has nothing to cite"
+  )
+  func unverifiedPerfBulletPassesAtSketch() throws {
+    let findings = try Self.check(Self.perfDoc(tier: "sketch"))
+    #expect(findings.filter { $0.ruleID == "design-lint.unverified-uncovered" } == [])
+  }
+
+  @Test(
+    "outside sketch an [UNVERIFIED] Perf & scale bullet still needs its Risks mirror — catches the relaxation leaking",
+    arguments: [nil, "quick", "standard", "deep"])
+  func unverifiedPerfBulletFailsOutsideSketch(tier: String?) throws {
+    let findings = try Self.check(Self.perfDoc(tier: tier))
+    #expect(
+      findings.contains {
+        $0.ruleID == "design-lint.unverified-uncovered" && $0.message.contains("throughput")
+      })
   }
 
   @Test(

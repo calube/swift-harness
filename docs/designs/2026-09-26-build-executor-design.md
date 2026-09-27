@@ -302,7 +302,7 @@ checks on merged `main`.
 |---|---|---|
 | Frame | yes | yes; the questions go to the user |
 | Research lane, probes, claim checker | 1 lane | none |
-| Drafter + `design-lint` | yes | yes; Decision bullets may be `[UNVERIFIED]` without a matching Risks entry |
+| Drafter + `design-lint` | yes | yes; Decision and Perf & scale bullets may be `[UNVERIFIED]` without a matching Risks entry, and a Decision may cite a `quote-ok` answer claim |
 | Reviewers | none | none |
 | Approval | Artifact | `AskUserQuestion`, recorded as an `answer` claim bound to the designSha |
 

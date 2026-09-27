@@ -41,10 +41,14 @@ Read the pack and the prose skill before writing.
 
 ## Evidence you may cite
 
-Cite only claims whose status is `supported`: they're the only ones the pack carries, and
-`design-lint` rejects a Decision bullet that cites anything else. Never invent an `ev-…` id and
-never cite one from memory. A point with no supported claim behind it is tagged `[UNVERIFIED]`,
-and its text goes into a Risks or Open questions bullet as well (see Risks below).
+Cite only the claims the pack carries: `supported` claims and, at `sketch`, the user's own frame
+answers with status `quote-ok`. `design-lint` rejects a Decision bullet that cites anything else.
+Never invent an `ev-…` id and never cite one from memory. A point with no citable claim behind it
+is tagged `[UNVERIFIED]`, and its text goes into a Risks or Open questions bullet as well (see
+Risks below). At `sketch`, that mirror isn't needed for a Decision or Perf & scale bullet.
+
+The pack also states the `design-lint` word budgets for the whole doc and each capped section.
+Write to them.
 
 Probe verdicts show whether an API exists with the signature the design calls. Don't state an API
 exists or takes a given argument unless a supported `probe` claim says so.
@@ -140,7 +144,7 @@ Seven bullets, each named and tagged: `throughput`, `tail latency`, `fan-out`, `
 ## Risks
 
 Bullets. Every `[UNVERIFIED]` bullet anywhere else in the doc must reappear here or in Open
-questions: its text, tags removed, has to be contained in one of these bullets (case, runs of
+questions (at `sketch`, not a Decision or Perf & scale bullet): its text, tags removed, has to be contained in one of these bullets (case, runs of
 spaces and a trailing period are ignored). Copy the text across, then add the risk.
 
 ## Open questions
@@ -157,8 +161,9 @@ given and add none; the design skill appends amend and clarify entries.
 Changelog is the last section of the doc; this checklist is not part of it.
 
 - Every template section is present, once, in order, and non-empty.
-- Every Evidence, Decision and Perf & scale bullet has a tag, and every cited id is a `supported`
-  claim from the pack.
-- Every `[UNVERIFIED]` text reappears in Risks or Open questions.
+- Every Evidence, Decision and Perf & scale bullet has a tag, and every cited id is a claim the
+  pack carries.
+- Every `[UNVERIFIED]` text reappears in Risks or Open questions, except a Decision or Perf &
+  scale bullet at `sketch`.
 - Every `req-` item has a `test-` item, and every `test-` bullet ends in ` — tier T<n>`.
 - The reply is the full design doc text and nothing else.
