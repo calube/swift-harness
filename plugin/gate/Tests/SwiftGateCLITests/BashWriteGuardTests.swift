@@ -371,6 +371,62 @@ struct BashWriteGuardTests {
     }
     #expect(try await scenario.decision("echo '{}' > \(scenario.layout.indexFile)") == nil)
   }
+
+  @Test(
+    "the holder's shell write or delete of the ledger and events lock files is denied, a same-named file outside the plans root passes — catches a lock holder breaking the lock that serialises ledger writes or event appends"
+  )
+  func ledgerAndEventsLockFilesShellDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let plan = try scenario.layout.plan(PlanStateScenario.planA)
+    let run = try plan.buildRun(RunID.make(startedAt: Date(timeIntervalSince1970: 0), suffix: 1))
+    for lock in [plan.directory + "/ledger.lock.0", run.directory + "/events.lock.0"] {
+      try scenario.write(lock, "")
+    }
+
+    for command in [
+      "rm -f \(plan.directory)/ledger.lock.0", "echo 1 > \(plan.directory)/ledger.lock.guard",
+      "rm \(run.directory)/events.lock.0", "echo 1 > \(run.directory)/events.lock.guard",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+    let outside = scenario.worktree.path + "/scratch"
+    for command in [
+      "rm -f \(outside)/ledger.lock.0", "echo 1 > \(outside)/ledger.lock.guard",
+      "rm -f \(outside)/events.lock.0", "echo 1 > \(outside)/events.lock.guard",
+    ] {
+      #expect(try await scenario.decision(command) == nil, "\(command)")
+    }
+  }
+
+  @Test(
+    "the holder's Write and Edit of the ledger and events lock files are denied, a same-named file outside the plans root passes — catches a hand edit forging the lock that serialises ledger writes or event appends"
+  )
+  func ledgerAndEventsLockFilesToolDenied() async throws {
+    var scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    scenario.harness.environment = [OrchestratorMarker.environmentVariable: "1"]
+    let plan = try scenario.layout.plan(PlanStateScenario.planA)
+    let run = try plan.buildRun(RunID.make(startedAt: Date(timeIntervalSince1970: 0), suffix: 1))
+    let locks = [plan.directory + "/ledger.lock.0", run.directory + "/events.lock.0"]
+    let outside = ["ledger.lock.0", "events.lock.0"].map { scenario.root.path + "/scratch/" + $0 }
+    for path in locks + outside { try scenario.write(path, "1\n") }
+
+    for path in locks {
+      #expect(try await scenario.toolDecision(path, writing: "") == "deny", "Write \(path)")
+      #expect(
+        try await scenario.toolDecision(path, edit: (old: "1", new: "2", all: false)) == "deny",
+        "Edit \(path)")
+    }
+    for path in outside {
+      #expect(try await scenario.toolDecision(path, writing: "") == nil, "Write \(path)")
+      #expect(
+        try await scenario.toolDecision(path, edit: (old: "1", new: "2", all: false)) == nil,
+        "Edit \(path)")
+    }
+  }
 }
 
 @Suite("PreToolUse plan and index commands act only as the calling session")
