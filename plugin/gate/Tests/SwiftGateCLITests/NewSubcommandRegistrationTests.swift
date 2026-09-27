@@ -79,7 +79,14 @@ struct NewSubcommandRegistrationTests {
       ["build", "merge", "--undo", "example-plan", "example-task", "--session", "session-123"],
       "merge"
     ),
-    ("build check-return", ["build", "check-return", "return.json"], "check-return"),
+    (
+      "build check-return",
+      [
+        "build", "check-return", "return.json", "--plan", "example-plan", "--session",
+        "session-123",
+      ],
+      "check-return"
+    ),
     ("build finish", ["build", "finish", "example-plan", "--session", "session-123"], "finish"),
     (
       "ledger set",
@@ -101,7 +108,7 @@ struct NewSubcommandRegistrationTests {
   /// under the git common dir; `design-scope` instead exits 2 for a real reason (no
   /// `--frame-answers` given) that the generic "not implemented" check can't tell apart from a
   /// stub. Either way their behaviour is covered by their own suites (`PlanClaimCommandTests`,
-  /// `IndexSetCommandTests`, `PlanStateAuthorityTests`, `LedgerSetCommandTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`). Listed by
+  /// `IndexSetCommandTests`, `PlanStateAuthorityTests`, `LedgerSetCommandTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`, `BuildCheckReturnTests`). Listed by
   /// exact invocation name so a still-stubbed sibling never drops out of the stub check by
   /// sharing a prefix.
   static let implemented: Set<String> = [
@@ -118,7 +125,7 @@ struct NewSubcommandRegistrationTests {
     "plan-lint",
     "design-render",
     "calibrate design",
-    "build start", "build next", "build finish",
+    "build start", "build next", "build finish", "build check-return",
     "ledger set",
     "worktree create", "worktree warm-check", "worktree remove",
   ]
