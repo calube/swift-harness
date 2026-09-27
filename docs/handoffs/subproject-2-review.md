@@ -214,18 +214,18 @@ Within this wave the three tasks write disjoint files.
    - (a) Calibrate each agent on its frontmatter model, always.
    - (b) Use opus only on the push tier or before a release, and sonnet for day-to-day runs.
    - (c) Keep sonnet and document that opus agents are calibrated as a proxy.
-3. **Hook budget (known 12).** A Bash or Write guard on a design doc costs about 100 ms against the <50 ms budget. Options:
+3. **Hook budget (known 12). DECIDED 2026-09-27: the user chose (a), optimise the guard (cache PlanLocks per session); the 50 ms budget stands.** A Bash or Write guard on a design doc costs about 100 ms against the <50 ms budget. Options:
    - (a) Optimise the guard (cache PlanLocks per session).
    - (b) Raise the budget for design-path writes to 150 ms in the spec.
    - (c) Both.
 4. **Review fan-out (review-fanout-over-cap).** Options:
    - (a) Cap review at 3 agents in flight (the plan above assumes this).
    - (b) Amend §11 to allow 4 at deep tier, with the reason.
-5. **Publish and Approve need an interactive session (known 18).** Options:
+5. **Publish and Approve need an interactive session (known 18). DECIDED 2026-09-27: the user chose (a); headless runs stop at `in-review` with the resume command, and publish and Approve stay interactive.** Options:
    - (a) Document that publish and Approve need an interactive session, and make headless runs stop at `in-review`.
    - (b) Add a headless approval path (the AskUserQuestion or file-based approval fallback) as a first-class route.
    - (c) Ask for the Artifact tool in headless mode.
-6. **§11 cost and latency figures (known 19).** Measured: 2.0M tokens and 78 minutes for two designs, about 1M per design, dominated by research lanes and redrafts, not the cold probe build. Options:
+6. **§11 cost and latency figures (known 19). DECIDED 2026-09-27: rewrite §11 to the measured figures (option a), and have design runs save local session logs and evidence (per-phase tokens, wall time, agent transcripts; never committed) so cost can be analysed for optimisations.** Measured: 2.0M tokens and 78 minutes for two designs, about 1M per design, dominated by research lanes and redrafts, not the cold probe build. Options:
    - (a) Rewrite §11 to about 1–1.5M tokens and 30–45 minutes for standard tier, name the real latency drivers, and close the §14 "unmeasured" row.
    - (b) Keep the targets and open a cost-reduction task (the reuse cache, fewer redraft rounds) before sign-off.
 7. **Plan-lint drift versus the plan's working-tree test.** The plan pins working-tree independence, but §5.4 says to compare the current doc's hash. Confirm that §5.4 wins, which the plan above assumes. If it doesn't, record a "Decisions made while planning" entry that drops the comparison and move plan-lint-ignores-current-design-drift out of Wave 1.
