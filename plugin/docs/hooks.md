@@ -78,9 +78,6 @@ Plan-state commands check the same authority, and exit 1 on refusal:
 
 A refusal names the holder. Taking over a lock whose session has ended is the user's decision.
 
-The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
-still applies to repositories that have those files.
-
 ## Bash writes
 
 The guard judges each path a Bash command writes as it judges a Write to that path, with the same

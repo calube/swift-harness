@@ -377,25 +377,22 @@ struct HookCommandTests {
   }
 
   @Test(
-    "ledger writes are denied unless the orchestrator marker names this main session — catches workers corrupting plan state"
+    "a per-worktree .harness/plans ledger or index is an ordinary file, for a session with no claim — catches the retired worktree-relative plan rule still denying writes that no plan state lives in"
   )
-  func ledgerWrites() async throws {
-    var harness = try HookHarness()
+  func worktreePlansDirectoryUnguarded() async throws {
+    let harness = try HookHarness()
     defer { harness.repository.remove() }
 
-    let unmarked = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
-    harness.environment = [OrchestratorMarker.environmentVariable: "1"]
-    let byEnvironment = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
-    let subagent = try await harness.run(.preToolUse, "pre-tool-use-write-ledger-subagent").result
-    harness.environment = [:]
-    try harness.repository.write(
-      OrchestratorMarker.lockFile, "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f\n")
-    let byLock = try await harness.run(.preToolUse, "pre-tool-use-write-ledger").result
-
-    #expect(unmarked.stdout?.contains("\"deny\"") == true)
-    #expect(byEnvironment.stdout == nil)
-    #expect(subagent.stdout?.contains("\"deny\"") == true)
-    #expect(byLock.stdout == nil)
+    for path in [
+      "/REPO/.harness/plans/2026-09-24-counter/ledger.json", "/REPO/.harness/plans/index.json",
+    ] {
+      let replaced = "\"\(path.replacingOccurrences(of: "/REPO", with: harness.root.path))\""
+      let result = try await harness.run(
+        .preToolUse, "pre-tool-use-write-ledger",
+        replacing: [PlanStateScenario.recordedPath: replaced]
+      ).result
+      #expect(result.stdout == nil, "\(path): \(result.stdout ?? "")")
+    }
   }
 
   @Test(
