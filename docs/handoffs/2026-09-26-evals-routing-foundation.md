@@ -1,10 +1,11 @@
 # Handoff: skill routing for the 6 foundation skills
 
 <!-- RESUME
-State (2026-09-26): rounds 1 to 4 are done; results on branch evals-round-4 (not merged yet): evals/results/2026-09-26-test-gate-round-3 (test-gate v2 held out 1.00/0.97, tdd 1.00/1.00; live session pair: test-gate 1.00 with plugin vs 0.50 without, tdd passes both arms) and evals/results/2026-09-26-routing-round-4 (bootstrap, design, plan, prose, status all 1.00/1.00 held out).
-Run evals from a stage: evals/runner/stage_plugin.sh <dir>, then `claude plugin eval .` from <dir>/plugin (see the runbook).
-Open, in order: (1) merge evals-round-4 after checking git log main and messaging the orchestrator session. (2) A planted precision break for 1 round-4 skill, about 0.5 USD. (3) review recall on "would you approve this" and "merge verdict, ignore the tests"; validate misses "summarise the tests for the PR description". (4) A harder tdd session case where the plugin-off agent skips red, then 3 trials per arm; the new history-based report-seen graders still need a real run. (5) 8 status tuning cases never ran (cost cap), about 1.8 USD, only if status changes.
-Budget: the batch (about 30 USD plus about 7 added for round 4) is spent; ask before any new run.
+State (2026-09-27): routing rounds 1 to 5 and a round-6 red-first are done; every skill but ship and build is 1.00 precision held out, review recall 0.93. First runs of failure-modes (evals/faults, 15 cases, 0 false greens on main), guard-conformance (evals/corpora/hooks.json, 93 cases, all denies and controls right; 9 live session cases), review-accuracy (evals/sessions/review, 5 cases) and 2 tdd session cases. Results under evals/results/2026-09-2[67]-*. Lessons in evals/runbook.md.
+Run evals from a stage: evals/runner/stage_plugin.sh <dir> [tag split newtag]..., then `claude plugin eval .` from <dir>/plugin. Session cases: node evals/runner/session.mjs. No-model suites: faults.mjs, hooks.mjs, corpus.mjs, review_accuracy.mjs.
+Open, in order: (1) score the review-accuracy re-run against the source-line fix (a11a0aa): raw at the old session's scratchpad review5/raw (see the evals-in-flight memory), `node evals/runner/review_accuracy.mjs <raw>`; expect clean-reset to cite line 73 and the dismiss race as blocker; write the results. (2) ship/build routing: red-first on 16 tuning cases gave ship recall 0.75 (1 miss: formal "interview preset ... how long it took"), build 1.00; the 40-case independent held-out set (round-6, split-40) hasn't run: about 12 USD at 3 trials at 0.10 USD a run, so ask the user for budget. (3) ship output quality: score the build executor's wave 10-11 rehearsal artifacts with code graders when swift-harness-df sends the paths; a paid ship run is 5-20 USD, capped. (4) review round 6 for the narrowed-review shape; a Stop-hook case that starts RED.
+Budget: batch 2 approved about 38 USD; about 25.6 reported spent before the review re-run, not counting Workflow agents.
+Peers: swift-harness-fe (sub-project 2 orchestrator) and swift-harness-df (build executor, sub-project 5) own plugin/; send findings by SendMessage and re-run when they ping.
 -->
 
 ## Scope
