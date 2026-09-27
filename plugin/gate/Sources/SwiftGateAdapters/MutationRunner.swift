@@ -166,9 +166,14 @@ public struct MutationRunResult: Sendable, Equatable {
 }
 
 /// Runs mutants in parallel scratch worktrees, one worker per tree, so builds never share a
-/// build directory. Each worker builds and runs each package's tests unmutated once (the
-/// baseline its timeouts scale from), then takes mutants as ``MutantSchedule`` hands them out:
-/// write the mutant, build, run the affected tests, restore the file.
+/// build directory. Each worker builds each package unmutated in its tree, then takes mutants as
+/// ``MutantSchedule`` hands them out: write the mutant, build, run the affected tests, restore
+/// the file.
+///
+/// A package's unmutated tests (the baseline every timeout scales from) run once, in the first
+/// tree to build it, while the other workers wait: every tree holds the same change, and the
+/// whole suite run once per worker at the same time fails timing-sensitive tests for want of
+/// headroom, which leaves every mutant unjudged.
 public struct MutationRunner: Sendable {
   private let scratch: any ScratchWorktrees
   private let toolchain: any MutationToolchain
@@ -201,13 +206,15 @@ public struct MutationRunner: Sendable {
     let workerCount = min(workers, pending.count)
     var scratchFailure: String?
     if workerCount > 0 {
+      let baselines = BaselineRuns()
       let queue = MutantQueue(
         pending, packages: pending.map { Set(jobs[$0].selections.map(\.packagePath)) })
       let finished = await withTaskGroup(of: WorkerOutput.self) { group in
         for worker in 1...workerCount {
           group.addTask {
             await work(
-              worker, jobs: jobs, queue: queue, tree: tree, projectPrefix: projectPrefix,
+              worker, jobs: jobs, queue: queue, baselines: baselines, tree: tree,
+              projectPrefix: projectPrefix,
               reportDirectory: reportDirectory.appending(path: "worker-\(worker)"))
           }
         }
@@ -233,14 +240,9 @@ public struct MutationRunner: Sendable {
     var failure: String?
   }
 
-  private enum Baseline {
-    case ready(Duration)
-    case broken(String)
-  }
-
   private func work(
-    _ worker: Int, jobs: [MutantJob], queue: MutantQueue, tree: ScratchTreeRequest,
-    projectPrefix: String, reportDirectory: URL
+    _ worker: Int, jobs: [MutantJob], queue: MutantQueue, baselines shared: BaselineRuns,
+    tree: ScratchTreeRequest, projectPrefix: String, reportDirectory: URL
   ) async -> WorkerOutput {
     do throws(ScratchWorktreeError) {
       return try await scratch.withScratchTree(tree) { toplevel in
@@ -258,7 +260,7 @@ public struct MutationRunner: Sendable {
           let job = jobs[index]
           for selection in job.selections where baselines[selection.packagePath] == nil {
             baselines[selection.packagePath] = await baseline(
-              selection, root: root, reportPath: reportPath(selection))
+              selection, root: root, reportPath: reportPath(selection), shared: shared)
           }
           let outcome = await run(
             job, root: root, baselines: baselines, reportPath: reportPath)
@@ -276,17 +278,26 @@ public struct MutationRunner: Sendable {
     }
   }
 
-  private func baseline(_ selection: HostTestSelection, root: URL, reportPath: String) async
-    -> Baseline
-  {
+  private func baseline(
+    _ selection: HostTestSelection, root: URL, reportPath: String, shared: BaselineRuns
+  ) async -> Baseline {
     switch await toolchain.buildTests(root: root, packageDirectory: selection.packagePath) {
     case .failed(let log):
       return .broken("\(selection.packagePath) does not build unmutated: \(log)")
     case .unavailable(let reason): return .broken(reason)
     case .built: break
     }
-    let (result, elapsed) = await toolchain.test(
-      root: root, selection: selection, timeout: baselineTimeout, reportPath: reportPath)
+    let (toolchain, timeout) = (toolchain, baselineTimeout)
+    return await shared.baseline(for: selection.packagePath) {
+      let (result, elapsed) = await toolchain.test(
+        root: root, selection: selection, timeout: timeout, reportPath: reportPath)
+      return Self.baseline(selection, result: result, elapsed: elapsed)
+    }
+  }
+
+  private static func baseline(
+    _ selection: HostTestSelection, result: MutantTestResult, elapsed: Duration
+  ) -> Baseline {
     switch result {
     case .passed: return .ready(elapsed)
     case .failed(let tests):
@@ -356,6 +367,25 @@ public struct MutationRunner: Sendable {
       }
     }
     return executed == 0 ? .noTests : .survived(testsRun: executed)
+  }
+}
+
+private enum Baseline: Sendable {
+  case ready(Duration)
+  case broken(String)
+}
+
+/// Each package's unmutated test run, started by the first worker to ask and awaited by the rest.
+private actor BaselineRuns {
+  private var runs: [String: Task<Baseline, Never>] = [:]
+
+  func baseline(for package: String, _ make: @escaping @Sendable () async -> Baseline) async
+    -> Baseline
+  {
+    if let run = runs[package] { return await run.value }
+    let run = Task { await make() }
+    runs[package] = run
+    return await run.value
   }
 }
 

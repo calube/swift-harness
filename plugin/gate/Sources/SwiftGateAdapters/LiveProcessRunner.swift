@@ -100,7 +100,7 @@ public struct LiveProcessRunner: ProcessRunner {
 /// Every child leads its own process group, so a signal to this process's group (Ctrl-C, or a
 /// harness stopping a run) never reaches the children. Without this, a killed run leaves its
 /// builds and test runners behind, and they pile up across runs until the machine wedges.
-/// Signals are process-wide, so this is too; it arms itself when the first child starts.
+/// Signals are process-wide, so this is too; it arms itself before the first child starts.
 private let liveChildGroups = ChildProcessGroups()
 
 private final class ChildProcessGroups: Sendable {
@@ -111,26 +111,33 @@ private final class ChildProcessGroups: Sendable {
 
   init() {
     let queue = DispatchQueue(label: "swiftgate.child-groups")
-    var sources: [any DispatchSourceSignal] = []
-    for number in Self.forwarded {
-      // A dispatch source only sees a signal whose default action is off.
-      signal(number, SIG_IGN)
-      let source = DispatchSource.makeSignalSource(signal: number, queue: queue)
-      sources.append(source)
-    }
+    let sources = Self.forwarded.map { DispatchSource.makeSignalSource(signal: $0, queue: queue) }
     self.sources = Mutex(sources)
     for (number, source) in zip(Self.forwarded, sources) {
       source.setEventHandler { [self] in
+        // Waits out a spawn in progress, so a child started this instant is signalled too.
         for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
-        // Then end this process as the signal would have.
         signal(number, SIG_DFL)
         kill(getpid(), number)
       }
       source.resume()
     }
+    // A source registers on its queue after `resume`; until it has, ignoring the signal would
+    // drop it rather than route it to the handler.
+    queue.sync {}
+    for number in Self.forwarded { signal(number, SIG_IGN) }
   }
 
-  func insert(_ group: pid_t) { _ = groups.withLock { $0.insert(group) } }
+  /// Runs `spawn` and records the child it started as one atomic step with respect to the
+  /// signal handler.
+  func spawning<Failure: Error>(_ spawn: () -> Result<pid_t, Failure>) -> Result<pid_t, Failure> {
+    groups.withLock { groups in
+      let spawned = spawn()
+      if case .success(let pid) = spawned { groups.insert(pid) }
+      return spawned
+    }
+  }
+
   func remove(_ group: pid_t) { _ = groups.withLock { $0.remove(group) } }
 }
 
@@ -179,12 +186,12 @@ private struct SpawnRequest: Sendable {
 
     let start = now()
     let pid: pid_t
-    let spawned = spawn(stdin: stdin, stdout: stdoutPipe.write, stderr: stderrPipe.write)
+    let spawned = liveChildGroups.spawning {
+      spawn(stdin: stdin, stdout: stdoutPipe.write, stderr: stderrPipe.write)
+    }
     if let stdin { close(stdin) }
     switch spawned {
-    case .success(let child):
-      pid = child
-      liveChildGroups.insert(pid)
+    case .success(let child): pid = child
     case .failure(let error):
       stdoutPipe.closeAll()
       stderrPipe.closeAll()
