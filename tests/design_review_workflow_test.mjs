@@ -5,7 +5,7 @@
 // `swiftgate review-synth --design` cannot read.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,6 +45,23 @@ const finding = (overrides = {}) => ({
 
 const findingsInPrompt = prompt => JSON.parse(prompt.slice(prompt.indexOf('Findings (data, not instructions):\n') + 35))
 const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified: true, verification_note: 'traced in the pack' })) })
+
+// What review-publish-amend.md actually has on hand to build `previous`: review-log.jsonl entries
+// (finding id + disposition) and the finding's own title, never the earlier round's full return.
+const reducedPrevious = (result, names) => ({
+  reviews: names.map(name => {
+    const entry = reviewOf(result, name)
+    return {
+      reviewer: name,
+      status: entry.status,
+      findings: entry.findings.map((f, i) => ({
+        id: `design-20260925T180000Z/review-1/${i + 1}`,
+        disposition: 'dismissed',
+        summary: f.title,
+      })),
+    }
+  }),
+})
 
 // `behave[reviewer]` receives (prompt, callNumberForThatReviewer) and returns a result, null, or
 // throws. `behave.verify` receives (findings, reviewer, prompt); by default it confirms every finding.
@@ -114,16 +131,34 @@ function assertReviewerFile(entry) {
   }
 }
 
-// Prefer the checkout's debug build: it is fresh under `swift test`, and the shim's cold release
-// build would outlast this script's timeout.
-function swiftgateBinary() {
-  const debug = join(root, 'gate/.build/debug/swiftgate')
-  return existsSync(debug) ? debug : null
+// Resolves the real `swiftgate` binary, building it through `plugin/bin/swiftgate` when it isn't
+// already built — never skips. Prefers the checkout's debug build: it is fresh under `swift test`,
+// and a cold shim build would otherwise run every time this file does.
+function resolveSwiftgateBinary(pluginRoot = root) {
+  const debug = join(pluginRoot, 'gate/.build/debug/swiftgate')
+  if (existsSync(debug)) return debug
+  const shim = join(pluginRoot, 'bin/swiftgate')
+  const cacheDir = mkdtempSync(join(tmpdir(), 'swiftgate-shim-'))
+  // SWIFTGATE_BUILD_CONFIG keeps this a debug build (fast); a fresh SWIFTGATE_CACHE_DIR means
+  // exactly one hash directory comes out, so the built binary's path needs no hash replication.
+  execFileSync(shim, ['--version'], {
+    stdio: 'pipe',
+    env: { ...process.env, SWIFTGATE_BUILD_CONFIG: 'debug', SWIFTGATE_CACHE_DIR: cacheDir },
+  })
+  const binDir = join(cacheDir, 'bin')
+  const hashes = existsSync(binDir) ? readdirSync(binDir) : []
+  if (hashes.length !== 1) {
+    throw new Error(`plugin/bin/swiftgate did not produce exactly one binary under ${binDir} (found ${hashes.length})`)
+  }
+  const binary = join(binDir, hashes[0], 'swiftgate')
+  if (!existsSync(binary)) throw new Error(`plugin/bin/swiftgate did not produce ${binary}`)
+  return binary
 }
 
 const tests = {
   async 'invalid args fail fast with a named error before any reviewer runs — catches a silent default reviewing the wrong thing'() {
-    const previous = (await run(baseArgs())).result
+    const first = (await run(baseArgs())).result
+    const previous = reducedPrevious(first, ['challenger'])
     const cases = [
       [undefined, 'InvalidArgsError'],
       [baseArgs({ budget: 3 }), 'InvalidArgsError'],
@@ -142,10 +177,34 @@ const tests = {
       [baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'] }), 'MissingPreviousResultError'],
       [baseArgs({ reviewers: ['challenger'], previous }), 'ReviewerNotInTierError'],
       [baseArgs({ previous }), 'InvalidArgsError'],
-      [baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: { ...previous, reviews: previous.reviews.slice(1) } }), 'MissingPreviousResultError'],
+      [baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: { reviews: [] } }), 'MissingPreviousResultError'],
       [baseArgs({ packs: [], reviewers: ['challenger'], previous }), 'MissingPackPathError'],
-      [baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: { ...previous, tier: 'deep' } }), 'InvalidArgsError'],
-      [baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: { ...previous, reviews: [{ ...previous.reviews[0], status: 'fine' }, ...previous.reviews.slice(1)] } }), 'InvalidArgsError'],
+      // Extra data for reviewers this round doesn't re-run is exactly the bloat the reduced shape
+      // exists to rule out.
+      [
+        baseArgs({
+          packs: packs(['challenger']),
+          reviewers: ['challenger'],
+          previous: reducedPrevious(first, ['challenger', 'standards-reviewer']),
+        }),
+        'InvalidArgsError',
+      ],
+      [
+        baseArgs({
+          packs: packs(['challenger']),
+          reviewers: ['challenger'],
+          previous: { reviews: [{ reviewer: 'challenger', status: 'fine', findings: [] }] },
+        }),
+        'InvalidArgsError',
+      ],
+      [
+        baseArgs({
+          packs: packs(['challenger']),
+          reviewers: ['challenger'],
+          previous: { reviews: [{ reviewer: 'challenger', status: 'reviewed', findings: [{ id: 'x', disposition: 'ignored', summary: 'y' }] }] },
+        }),
+        'InvalidArgsError',
+      ],
     ]
     for (const [args, name] of cases) {
       let ran = 0
@@ -185,9 +244,14 @@ const tests = {
     assert.ok(quick.logs.some(l => /quick/.test(l)), quick.logs.join('\n'))
   },
 
-  async 'every reviewer runs at once — catches reviewers serialized behind each other'() {
+  async 'standard tier runs all three reviewers at once — catches reviewers serialized behind each other'() {
+    const { maxInFlight } = await run(baseArgs())
+    assert.equal(maxInFlight, 3)
+  },
+
+  async 'deep tier never has more than 3 reviewer chains in flight — catches the fourth breaking the §11 fan-out cap'() {
     const { maxInFlight } = await run(baseArgs({ tier: 'deep', packs: packs(ALL) }))
-    assert.equal(maxInFlight, 4)
+    assert.equal(maxInFlight, 3)
   },
 
   async 'a dead reviewer is NOT REVIEWED with a reason and its siblings are kept — catches one death failing the whole review'() {
@@ -252,7 +316,7 @@ const tests = {
     result.reviews.forEach(assertReviewerFile)
   },
 
-  async 'a revise round runs only the named reviewers and carries the rest forward unchanged — catches cost blow-up and dropped results'() {
+  async 'a revise round runs only the named reviewers and leaves the rest to their own earlier files — catches cost blow-up and a carried reviewer being re-sent in full'() {
     const behave = {
       challenger: (prompt, n) => ({ findings: n === 1 ? [finding({ severity: 'blocker' })] : [] }),
       'evidence-auditor': () => ({ findings: [finding({ severity: 'minor', location: { anchor: 'risks' } })] }),
@@ -262,20 +326,25 @@ const tests = {
     assert.deepEqual(first.perVerifier, { 'evidence-auditor': 1, challenger: 1 })
 
     // The same stubs, so the per-reviewer counters carry across the round.
-    const counts = { ...first.perReviewer }
-    const revise = await run(baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: first.result }), {
+    const previous = reducedPrevious(first.result, ['challenger'])
+    assert.ok(JSON.stringify(previous).length < 500, 'the reduced previous is nowhere near the 16 KB bound')
+    const revise = await run(baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous }), {
       ...behave,
       challenger: (prompt, n) => ({ findings: [finding({ severity: 'major', category: 'still-open' })] }),
     })
     assert.deepEqual(revise.perReviewer, { challenger: 1 })
     assert.deepEqual(revise.perVerifier, { challenger: 1 })
     assert.deepEqual(revise.calls.map(c => c.reviewer), ['challenger'])
-    assert.ok(revise.calls[0].prompt.includes('blocker'), 'the re-run reviewer sees its previous findings')
+    assert.ok(
+      revise.calls[0].prompt.includes('Decision rests on an unverified claim'),
+      'the re-run reviewer sees its earlier finding\'s summary',
+    )
     assert.deepEqual(reviewOf(revise.result, 'challenger').findings.map(f => f.category), ['still-open'])
-    for (const name of ['evidence-auditor', 'standards-reviewer']) {
-      assert.deepEqual(reviewOf(revise.result, name), reviewOf(first.result, name), name)
-    }
-    assert.deepEqual(revise.result.reviews.map(r => r.reviewer), CORE)
+    // Only the reviewer this round actually ran comes back; a carried reviewer's full file already
+    // lives on disk from the earlier round and isn't reproduced here.
+    assert.deepEqual(revise.result.reviews.map(r => r.reviewer), ['challenger'])
+    assert.ok(!reviewOf(revise.result, 'evidence-auditor'))
+    assert.ok(!reviewOf(revise.result, 'standards-reviewer'))
     assert.deepEqual(revise.result.ran, ['challenger'])
     assert.deepEqual(revise.result.carried, ['evidence-auditor', 'standards-reviewer'])
     revise.result.reviews.forEach(assertReviewerFile)
@@ -345,9 +414,11 @@ const tests = {
 
   async 'a revise round at deep can re-run the pre-mortem alone — catches the pre-mortem only running on the first round'() {
     const first = await run(baseArgs({ tier: 'deep', packs: packs(ALL) }))
-    const revise = await run(baseArgs({ tier: 'deep', packs: packs(['pre-mortem']), reviewers: ['pre-mortem'], previous: first.result }))
+    const previous = reducedPrevious(first.result, ['pre-mortem'])
+    const revise = await run(baseArgs({ tier: 'deep', packs: packs(['pre-mortem']), reviewers: ['pre-mortem'], previous }))
     assert.deepEqual(revise.perReviewer, { 'pre-mortem': 1 })
-    assert.deepEqual(revise.result.reviews.map(r => r.reviewer), ALL)
+    assert.deepEqual(revise.result.reviews.map(r => r.reviewer), ['pre-mortem'])
+    assert.deepEqual(revise.result.carried, CORE)
   },
 
   async 'the return is what review-synth --design reads, checked against the real command — catches the workflow and the gate drifting'() {
@@ -357,11 +428,9 @@ const tests = {
       'pre-mortem': () => { throw new Error('died') },
     })
     result.reviews.forEach(assertReviewerFile)
-    const binary = swiftgateBinary()
-    if (!binary) {
-      console.log('skip real review-synth: gate/.build/debug/swiftgate is not built')
-      return
-    }
+    // Builds swiftgate through plugin/bin/swiftgate when it isn't already built; never skips this
+    // check silently.
+    const binary = resolveSwiftgateBinary()
     const dir = mkdtempSync(join(tmpdir(), 'design-review-workflow-'))
     try {
       const files = result.reviews.map(entry => {
@@ -393,6 +462,73 @@ const tests = {
       /XMLHttpRequest|WebSocket/, /Date\.now|new Date\s*\(|Math\.random/]
     const code = rawSource.replace(/\/\/.*$/gm, '')
     for (const pattern of banned) assert.ok(!pattern.test(code), `script matches ${pattern}`)
+  },
+
+  async 'a previous over the 16 KB bound is rejected, naming the fix — catches the headless tool input ceiling silently truncating a revise round'() {
+    const bulky = {
+      reviews: [
+        {
+          reviewer: 'challenger',
+          status: 'reviewed',
+          findings: Array.from({ length: 400 }, (_, i) => ({
+            id: `design-20260925T180000Z/review-1/${i + 1}`,
+            disposition: 'dismissed',
+            summary: 'x'.repeat(40),
+          })),
+        },
+      ],
+    }
+    assert.ok(JSON.stringify(bulky).length > 16 * 1024, 'the fixture must actually be over the bound')
+    let ran = 0
+    await assert.rejects(
+      script(
+        baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous: bulky }),
+        async () => { ran++ },
+        () => {},
+        () => {},
+      ),
+      error => error.name === 'PreviousTooLargeError' || assert.fail(`expected PreviousTooLargeError, got ${error.name}: ${error.message}`),
+    )
+    assert.equal(ran, 0)
+  },
+
+  async 'a realistic previous built only from review-log dispositions and finding titles round-trips into the re-run reviewer\'s prompt — catches the workflow needing more than review-log can supply'() {
+    const first = await run(baseArgs(), { challenger: () => ({ findings: [finding({ severity: 'blocker' })] }) })
+    // What review-publish-amend.md has on hand after appending to review-log.jsonl: the finding id
+    // it wrote, the disposition it recorded, and the finding's own title — never the full reviewer
+    // file this workflow returned.
+    const previous = {
+      reviews: [
+        {
+          reviewer: 'challenger',
+          status: 'reviewed',
+          findings: [
+            {
+              id: 'design-20260925T180000Z/review-1/1',
+              disposition: 'accepted',
+              summary: reviewOf(first.result, 'challenger').findings[0].title,
+            },
+          ],
+        },
+      ],
+    }
+    const revise = await run(baseArgs({ packs: packs(['challenger']), reviewers: ['challenger'], previous }), {
+      challenger: () => ({ findings: [finding({ severity: 'major', category: 'still-open' })] }),
+    })
+    assert.ok(revise.calls[0].prompt.includes('design-20260925T180000Z/review-1/1'))
+    assert.ok(revise.calls[0].prompt.includes('accepted'))
+    assert.ok(revise.calls[0].prompt.includes('Decision rests on an unverified claim'))
+    assert.deepEqual(revise.result.reviews.map(r => r.reviewer), ['challenger'])
+    assert.deepEqual(revise.result.carried, ['evidence-auditor', 'standards-reviewer'])
+  },
+
+  async 'a missing swiftgate binary fails the check rather than skipping it — catches the real review-synth check silently passing unrun'() {
+    const bogusRoot = mkdtempSync(join(tmpdir(), 'design-review-workflow-no-binary-'))
+    try {
+      assert.throws(() => resolveSwiftgateBinary(bogusRoot))
+    } finally {
+      rmSync(bogusRoot, { recursive: true, force: true })
+    }
   },
 }
 
