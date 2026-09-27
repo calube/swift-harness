@@ -49,34 +49,66 @@ public enum DesignLintEvidence {
     document: DesignDocument, docPath: String, claims: [Claim]
   ) throws(ReportContractViolation) -> [Finding] {
     let claimsByID = Dictionary(grouping: claims, by: \.id)
+    let (tier, tierFinding) = try parsedTier(document.tier, docPath: docPath)
+    // Spec §9: at `sketch`, no research lane checked the doc's claims, so a Decision bullet may
+    // stay `[UNVERIFIED]` and skip the Risks/Open-questions mirror. Every other tagging and
+    // citation rule — including a Decision citing a claim that isn't `supported` — is unchanged.
+    let sketchRelaxesDecision = tier == .sketch
     let taggedSections:
-      [(name: String, section: MarkdownDocument.Section?, requireSupported: Bool)] = [
-        ("Evidence", document.markdown.section(anchor: "evidence"), false),
-        ("Decision", document.decision, true),
-        ("Perf & scale", document.perfAndScale, false),
+      [(
+        name: String, section: MarkdownDocument.Section?, requireSupported: Bool,
+        forbidUnverified: Bool
+      )] = [
+        ("Evidence", document.markdown.section(anchor: "evidence"), false, false),
+        ("Decision", document.decision, true, !sketchRelaxesDecision),
+        ("Perf & scale", document.perfAndScale, false, false),
       ]
 
     var findings = try duplicateClaimFindings(claimsByID: claimsByID, docPath: docPath)
+    if let tierFinding { findings.append(tierFinding) }
     for entry in taggedSections {
       try findings.append(
         contentsOf: taggingFindings(
           section: entry.section, sectionName: entry.name, docPath: docPath,
-          claimsByID: claimsByID, requireSupported: entry.requireSupported))
+          claimsByID: claimsByID, requireSupported: entry.requireSupported,
+          forbidUnverified: entry.forbidUnverified))
     }
     try findings.append(
       contentsOf: unverifiedCoverageFindings(
-        sections: taggedSections.map { (name: $0.name, section: $0.section) },
+        sections:
+          taggedSections
+          .filter { !(sketchRelaxesDecision && $0.name == "Decision") }
+          .map { (name: $0.name, section: $0.section) },
         risks: document.risks, openQuestions: document.openQuestions, docPath: docPath))
     try findings.append(
       contentsOf: perfDimensionFindings(section: document.perfAndScale, docPath: docPath))
     return findings
   }
 
+  /// The frontmatter `tier` string, closed against ``DesignTier``. A value the doc names that
+  /// isn't one of the tier's known raw values is a finding, not a crash or a silent no-tier read —
+  /// an unrecognised tier must never be mistaken for `sketch`'s relaxed rules.
+  private static func parsedTier(
+    _ raw: String?, docPath: String
+  ) throws(ReportContractViolation) -> (DesignTier?, Finding?) {
+    guard let raw else { return (nil, nil) }
+    guard let tier = DesignTier(rawValue: raw) else {
+      let finding = try Finding(
+        ruleID: "design-lint.unknown-tier", severity: .major, file: docPath, line: nil,
+        message:
+          "frontmatter tier \"\(raw)\" is not a known design tier ("
+          + DesignTier.allCases.map(\.rawValue).joined(separator: ", ") + ").",
+        failureScenario: nil)
+      return (nil, finding)
+    }
+    return (tier, nil)
+  }
+
   // MARK: - Tagging and citation checks (Evidence, Decision, Perf & scale)
 
   private static func taggingFindings(
     section: MarkdownDocument.Section?, sectionName: String, docPath: String,
-    claimsByID: [String: [Claim]], requireSupported: Bool
+    claimsByID: [String: [Claim]], requireSupported: Bool, forbidUnverified: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     guard let section else { return [] }
     var findings: [Finding] = []
@@ -92,8 +124,8 @@ public enum DesignLintEvidence {
       }
       // Spec §11: a claim that can't be pinned down ends `refuted` or `[UNVERIFIED]`, "never in
       // Decision" — so Decision forbids the tag outright rather than treating it as satisfying
-      // "each tagged."
-      if requireSupported, tags.contains("UNVERIFIED") {
+      // "each tagged." (Spec §9: `sketch` lifts this one rule for Decision.)
+      if forbidUnverified, tags.contains("UNVERIFIED") {
         findings.append(
           try Finding(
             ruleID: "design-lint.unverified-in-decision", severity: .major, file: docPath,

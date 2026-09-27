@@ -289,6 +289,30 @@ struct PlanClaimCommandTests {
     #expect(try scenario.planFile() == seed)
   }
 
+  @Test("claiming with --tier sketch succeeds for the lock holder and seeds it into plan.json")
+  func claimAcceptsSketchTier() async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+
+    let report = await scenario.claim(LockScenario.alice, tier: "sketch")
+    #expect(report.status == .claimed)
+    #expect(try scenario.planFile()?.tier == .sketch)
+  }
+
+  @Test(
+    "an unknown --tier names all four accepted tiers — catches sketch missing from the documented and accepted list"
+  )
+  func unknownTierMessageListsAllFourTiers() async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+
+    let report = await scenario.claim(LockScenario.alice, tier: "huge")
+    #expect(report.verdict == .blocked)
+    for tier in ["quick", "standard", "deep", "sketch"] {
+      #expect(report.message.contains(tier), "\(report.message)")
+    }
+  }
+
   @Test(
     "a new plan claimed without --design exits 2 and writes nothing; an existing plan needs none — catches a plan the guard can never tie to a doc"
   )

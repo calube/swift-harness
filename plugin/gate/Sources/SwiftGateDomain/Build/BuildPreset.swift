@@ -38,10 +38,6 @@ public struct BuildPreset: Sendable, Equatable {
     self.onDesignConflict = onDesignConflict
   }
 
-  public enum DesignTier: String, Sendable, Equatable, CaseIterable {
-    case quick, standard, deep, sketch
-  }
-
   /// `full`: verifier + test-quality per task. `gate`: the task gate only.
   public enum Review: String, Sendable, Equatable, CaseIterable {
     case full, gate
