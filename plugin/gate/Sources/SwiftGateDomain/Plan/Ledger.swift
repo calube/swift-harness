@@ -10,6 +10,18 @@ public enum TaskStatus: String, Sendable, Equatable, Codable, CaseIterable {
   case inProgress = "in-progress"
   case done
   case needsReplan = "needs-replan"
+  /// A `design-conflict` covers the task (spec §5.9, §8.4); leaves only through `ledger set`
+  /// after the user decides.
+  case blocked
+  /// Cut off by the build's time budget; the branch and worktree are kept.
+  case abandoned
+}
+
+/// A task's `model` field (spec §5.2): the decomposer's per-task override of the preset's default.
+/// `opus` for concurrency, locks, cross-module interfaces and security work; `sonnet` otherwise.
+public enum TaskModel: String, Sendable, Equatable, Codable, CaseIterable {
+  case sonnet
+  case opus
 }
 
 /// One `ledger.json` task entry (spec §5.7).
@@ -27,11 +39,17 @@ public struct LedgerTask: Sendable, Equatable {
   /// The task's real line count, once sub-project 5's worker report writes it. `nil` until then —
   /// never a placeholder `0` (`stats`' estimate error, spec §9.3, excludes a task without one).
   public let actualLines: Int?
+  /// Set by the decomposer (spec §5.2). `nil` on a ledger written before this field existed, or a
+  /// preset may force a model regardless — either way `plan-lint` decides what to require, not
+  /// this type.
+  public let model: TaskModel?
+  /// `<plan>/<task>`, set by `worktree create` (spec §5.2). `nil` until the worktree exists.
+  public let branch: String?
 
   public init(
     id: String, deps: [String], writeSet: [String], gate: CheckTier, tests: [String],
     covers: [String], estLines: Int, status: TaskStatus, worktree: String,
-    actualLines: Int? = nil
+    actualLines: Int? = nil, model: TaskModel? = nil, branch: String? = nil
   ) {
     self.id = id
     self.deps = deps
@@ -43,12 +61,15 @@ public struct LedgerTask: Sendable, Equatable {
     self.status = status
     self.worktree = worktree
     self.actualLines = actualLines
+    self.model = model
+    self.branch = branch
   }
 }
 
 extension LedgerTask: Codable {
   private enum CodingKeys: String, CodingKey {
-    case id, deps, writeSet, gate, tests, covers, estLines, status, worktree, actualLines
+    case id, deps, writeSet, gate, tests, covers, estLines, status, worktree, actualLines, model,
+      branch
   }
 
   public init(from decoder: any Decoder) throws {
@@ -68,11 +89,13 @@ extension LedgerTask: Codable {
       covers: try c.decode([String].self, forKey: .covers),
       estLines: try c.decode(Int.self, forKey: .estLines),
       status: try c.decode(TaskStatus.self, forKey: .status),
-      worktree: try c.decode(String.self, forKey: .worktree), actualLines: actualLines)
+      worktree: try c.decode(String.self, forKey: .worktree), actualLines: actualLines,
+      model: try c.decodeIfPresent(TaskModel.self, forKey: .model),
+      branch: try c.decodeIfPresent(String.self, forKey: .branch))
   }
 
-  /// `actualLines` is omitted entirely when `nil`, so an existing ledger with no notion of it
-  /// round-trips byte-stable.
+  /// `actualLines`, `model` and `branch` are each omitted entirely when `nil`, so a ledger written
+  /// before any of them existed round-trips byte-stable.
   public func encode(to encoder: any Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(id, forKey: .id)
@@ -85,6 +108,8 @@ extension LedgerTask: Codable {
     try c.encode(status, forKey: .status)
     try c.encode(worktree, forKey: .worktree)
     try c.encodeIfPresent(actualLines, forKey: .actualLines)
+    try c.encodeIfPresent(model, forKey: .model)
+    try c.encodeIfPresent(branch, forKey: .branch)
   }
 }
 

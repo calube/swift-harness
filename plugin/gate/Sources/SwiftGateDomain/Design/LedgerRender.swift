@@ -119,12 +119,15 @@ public enum LedgerRender {
               "Warning: ledger.json's stored wave order doesn't match plan-schedule's recomputed "
               + "output; showing the recomputed order below."))
       }
+      let statusByID = Dictionary(
+        ledger.tasks.map { ($0.id, $0.status) }, uniquingKeysWith: { first, _ in first })
       let rows = waves.enumerated().map { index, wave in
         HTMLFragment.element(
           "tr", attributes: ["data-wave": String(index)],
           [
             .element("th", attributes: ["scope": "row"], text: "Wave \(index + 1)"),
-            .element("td", [.element("ul", wave.map { .element("li", text: $0) })]),
+            .element(
+              "td", [.element("ul", wave.map { taskListItem(id: $0, status: statusByID[$0]) })]),
           ])
       }
       content.append(
@@ -144,6 +147,33 @@ public enum LedgerRender {
               ])
           ]))
       return section("Wave timeline", content)
+    }
+  }
+
+  /// A wave list entry: the task id, plus a status badge whose visible text (not colour alone)
+  /// distinguishes every state — `blocked` and `abandoned` included, and from each other. `status`
+  /// is `nil` for a task id the wave names but the ledger's `tasks` list doesn't (only reachable
+  /// from a hand-edited ledger; the id still renders, with no badge).
+  static func taskListItem(id: String, status: TaskStatus?) -> HTMLFragment {
+    let statusValue = status?.rawValue ?? "unknown"
+    var children: [HTMLFragment] = [.element("span", attributes: ["class": "task-id"], text: id)]
+    if let status {
+      children.append(
+        .element(
+          "span", attributes: ["class": "status-badge", "data-status": statusValue],
+          text: statusLabel(status)))
+    }
+    return .element("li", attributes: ["data-status": statusValue], children)
+  }
+
+  public static func statusLabel(_ status: TaskStatus) -> String {
+    switch status {
+    case .pending: "Pending"
+    case .inProgress: "In progress"
+    case .done: "Done"
+    case .needsReplan: "Needs replan"
+    case .blocked: "Blocked"
+    case .abandoned: "Abandoned"
     }
   }
 
