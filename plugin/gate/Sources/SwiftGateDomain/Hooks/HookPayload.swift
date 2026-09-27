@@ -33,6 +33,8 @@ public struct HookPayload: Sendable, Equatable {
   public let stopHookActive: Bool
   /// Present only when the hook fires inside a subagent.
   public let agentID: String?
+  /// The subagent's type, such as `swift-harness:build-worker`; `nil` outside a subagent.
+  public let agentType: String?
   /// What a Write, Edit or MultiEdit leaves in the file; `nil` for every other tool.
   public let fileWrite: FileWrite?
   /// SessionStart: `startup`, `resume`, `clear`, `compact` or `fork`.
@@ -41,7 +43,8 @@ public struct HookPayload: Sendable, Equatable {
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
-    agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil
+    agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil,
+    agentType: String? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -51,6 +54,7 @@ public struct HookPayload: Sendable, Equatable {
     self.filePath = filePath
     self.stopHookActive = stopHookActive
     self.agentID = agentID
+    self.agentType = agentType
     self.source = source
     self.fileWrite = fileWrite
   }
@@ -67,7 +71,7 @@ public struct HookPayload: Sendable, Equatable {
       toolName: wire.toolName, command: wire.toolInput?.command,
       filePath: wire.toolInput?.filePath ?? wire.toolInput?.notebookPath,
       stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
-      fileWrite: wire.toolInput?.fileWrite)
+      fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType)
   }
 
   private struct Wire: Decodable {
@@ -126,6 +130,7 @@ public struct HookPayload: Sendable, Equatable {
     let toolInput: ToolInput?
     let stopHookActive: Bool?
     let agentID: String?
+    let agentType: String?
     let source: String?
 
     enum CodingKeys: String, CodingKey {
@@ -136,6 +141,7 @@ public struct HookPayload: Sendable, Equatable {
       case toolInput = "tool_input"
       case stopHookActive = "stop_hook_active"
       case agentID = "agent_id"
+      case agentType = "agent_type"
       case source
     }
   }

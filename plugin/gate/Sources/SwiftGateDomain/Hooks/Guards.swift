@@ -495,3 +495,73 @@ public enum PlanStateGuard {
     return "/" + components.joined(separator: "/")
   }
 }
+
+/// A background subagent can't answer a permission prompt: a tool call that raises one never runs,
+/// and the agent waits until someone stops it. So the PreToolUse hook decides every call a
+/// subagent makes, and never leaves one to the prompt. A write outside this repository's
+/// checkouts is denied with a reason the agent can act on; a build worker's or fixer's write to
+/// the main checkout is denied too, since each owns only its task worktree. Every other call is
+/// allowed.
+public enum SubagentScopeGuard {
+  public static let outsideCheckoutsRuleID = "guard.subagent-outside-checkouts"
+  public static let buildAgentMainCheckoutRuleID = "guard.build-agent-main-checkout"
+  public static let protectedPathRuleID = "guard.subagent-protected-path"
+  /// Directories Claude Code prompts for whatever a hook decides, so a subagent's write there
+  /// would still hang.
+  public static let protectedDirectories: Set<String> = [".git", ".claude", ".vscode", ".idea"]
+  /// The agents that build in a task worktree and must never write the main checkout.
+  public static let buildAgentTypes: Set<String> = [
+    "swift-harness:build-worker", "swift-harness:build-fixer",
+  ]
+
+  /// The repository's checkouts, as canonical absolute paths.
+  public struct Checkouts: Sendable, Equatable {
+    public let main: String
+    public let linkedWorktrees: Set<String>
+
+    public init(main: String, linkedWorktrees: Set<String>) {
+      self.main = main
+      self.linkedWorktrees = linkedWorktrees
+    }
+  }
+
+  /// The first write that breaks the scope, or `nil` when every write is inside it.
+  /// - Parameter writes: canonical absolute paths the call writes.
+  public static func evaluate(writes: [String], agentType: String?, checkouts: Checkouts)
+    -> GuardViolation?
+  {
+    let isBuildAgent = agentType.map(buildAgentTypes.contains) ?? false
+    for path in writes {
+      if path.split(separator: "/").contains(where: { protectedDirectories.contains(String($0)) }) {
+        return GuardViolation(
+          ruleID: protectedPathRuleID,
+          reason:
+            "`\(path)` is in a directory Claude Code always asks about, and a background agent "
+            + "can't answer. Change git state with git commands, never by writing its files.")
+      }
+      // `/dev/null` and the other device files take output; they write no file.
+      if path.hasPrefix("/dev/") { continue }
+      if checkouts.linkedWorktrees.contains(where: { contains($0, path) }) { continue }
+      if contains(checkouts.main, path) {
+        guard isBuildAgent else { continue }
+        return GuardViolation(
+          ruleID: buildAgentMainCheckoutRuleID,
+          reason:
+            "`\(path)` is in the main checkout. A build agent writes only inside its task "
+            + "worktree; the orchestrator merges to main.")
+      }
+      return GuardViolation(
+        ruleID: outsideCheckoutsRuleID,
+        reason:
+          "`\(path)` is outside this repository's checkouts. A background agent can't answer a "
+          + "permission prompt, so writes stay inside your worktree. For a scratch file, use "
+          + "`.harness/tmp/` there; to prove a test guards the code, break the file with Edit and "
+          + "put it back with `git restore <file>`.")
+    }
+    return nil
+  }
+
+  private static func contains(_ root: String, _ path: String) -> Bool {
+    path == root || path.hasPrefix(root + "/")
+  }
+}

@@ -72,6 +72,8 @@ struct RuleIndexTests {
       Doctor.upgradeHazardRuleID, BashGuard.rawXcodebuildRuleID, BashGuard.simctlAllRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
+      SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
+      SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID,
     ]
     return Set(

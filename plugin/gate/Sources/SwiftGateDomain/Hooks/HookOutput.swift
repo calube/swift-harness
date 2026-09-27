@@ -20,6 +20,17 @@ public enum HookOutput {
     ])
   }
 
+  /// PreToolUse: allow the tool call without a permission prompt; `reason` is shown to the user,
+  /// and `context`, when given, to Claude next to the tool result.
+  public static func allow(_ reason: String, context: String? = nil) -> String {
+    var output = [
+      "hookEventName": HookEvent.preToolUse.claudeName, "permissionDecision": "allow",
+      "permissionDecisionReason": reason,
+    ]
+    if let context { output["additionalContext"] = context }
+    return encode(["hookSpecificOutput": output])
+  }
+
   /// PostToolUse: put `reason` next to the tool result as a problem to fix. Stop: refuse to stop
   /// and give Claude `reason` as what to do next.
   public static func block(_ reason: String) -> String {

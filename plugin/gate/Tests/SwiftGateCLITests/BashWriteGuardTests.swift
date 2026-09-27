@@ -239,16 +239,19 @@ struct BashWriteGuardTests {
     for command in [
       "git commit -m \"record progress: echo {} > \(ledger)\"",
       "grep '>' \(ledger)",
-      "echo hi > /tmp/x",
       "swift build 2>&1 | tee build.log",
       "cat \(ledger)",
-      "cp \(ledger) /tmp/backup",
       "cp \(ledger) \(scenario.worktree.path)/docs",
       "make > /dev/null 2>&1",
       "echo note >> docs/notes.md",
       "cat > notes.md <<'EOF'\necho {} > \(ledger)\nrm -rf \(BashWriteScenario.snapshots)\nEOF",
     ] {
-      #expect(try await scenario.decision(command, subagent: true) == nil, "\(command)")
+      // A subagent's call always gets a decision; the plan-state guard lets these through.
+      #expect(try await scenario.decision(command, subagent: true) == "allow", "\(command)")
+    }
+    // Writes outside the repository's checkouts are the subagent scope guard's, not plan state's.
+    for command in ["echo hi > /tmp/x", "cp \(ledger) /tmp/backup"] {
+      #expect(try await scenario.decision(command, subagent: true) == "deny", "\(command)")
     }
   }
 
@@ -325,7 +328,7 @@ struct BashWriteGuardTests {
       "git add \(BashWriteScenario.designA)",
       "git commit -m \"git rm \(BashWriteScenario.designA)\"",
     ] {
-      #expect(try await scenario.decision(command, subagent: true) == nil, "\(command)")
+      #expect(try await scenario.decision(command, subagent: true) == "allow", "\(command)")
     }
   }
 

@@ -10,6 +10,7 @@ each one calls the same code as the `swiftgate` command it names.
 | SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). | < 1s |
 | PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. Paths it writes go through the Edit/Write guard ([Bash writes](#bash-writes)). On `git commit`, adds `swiftgate comments --staged` findings as advisory context. | < 50ms |
 | PreToolUse (Edit/Write) | Denies hand edits to `__Snapshots__/`, `Package.resolved`, `.xcresult` bundles, and a plan's `orchestrator.lock`. Plan state and design artifacts are writable only by the orchestrating session (below). | < 50ms |
+| PreToolUse (subagent) | Decides every Bash, Edit, Write, WebFetch and WebSearch call a subagent makes with an explicit allow or deny, never the prompt ([Subagents never prompt](#subagents-never-prompt)). | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | Formats the file in place with `swift format`, then runs `swiftgate lint` on that file alone. A gating finding comes back as a block next to the tool result. | < 1s |
 | Stop | Runs `swiftgate check --tier fast` and blocks the stop when it is RED. | ≤ 90s |
 
@@ -77,6 +78,23 @@ Plan-state commands check the same authority, and exit 1 on refusal:
 | `index set <plan> <status> <resume> --session <id>` | the plan's `index.json` entry | `<id>` isn't the holder |
 
 A refusal names the holder. Taking over a lock whose session has ended is the user's decision.
+
+## Subagents never prompt
+
+A background subagent can't answer a permission prompt, so its call would never run. When a
+PreToolUse call carries `agent_id`, the hook decides it after the guards above:
+
+| The call | Decision |
+|---|---|
+| A write into `.git`, `.claude`, `.vscode` or `.idea`, which Claude Code always asks about | deny (`guard.subagent-protected-path`) |
+| A write outside the repository's checkouts, such as `/tmp` | deny, naming `.harness/tmp/` (`guard.subagent-outside-checkouts`) |
+| A build worker's or fixer's write to the main checkout | deny (`guard.build-agent-main-checkout`) |
+| Anything else | allow |
+
+The checkouts are the main checkout and each sibling `<repo>-…` directory whose `.git` is a file.
+The hook judges the write targets [Bash writes](#bash-writes) can parse. Claude Code ignores a
+plugin agent's `permissionMode`, so the hook is the only lever, and a settings `deny` or `ask`
+rule still wins.
 
 ## Bash writes
 

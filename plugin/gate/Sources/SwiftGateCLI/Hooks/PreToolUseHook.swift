@@ -7,36 +7,61 @@ import SwiftGateDomain
 enum PreToolUseHook {
   static let fileTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
 
-  /// The JSON to print, or `nil` to leave the call to the normal permission flow.
+  /// The JSON to print, or `nil` to leave the call to the normal permission flow. A subagent's
+  /// call is never left to that flow: a background agent can't answer a prompt, so it gets an
+  /// explicit allow or deny.
   static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
     -> String?
   {
+    let home = dependencies.environment["HOME"]
+    var writes: [String] = []
+    var context: String?
     switch payload.toolName {
     case "Bash"?:
-      guard let command = payload.command else { return nil }
+      guard let command = payload.command else { break }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
       if let violation = PlanCommandGuard.evaluate(
         command, sessionID: payload.sessionID, agentID: payload.agentID)
       {
         return deny(violation)
       }
-      for path in writtenPaths(command, payload: payload, home: dependencies.environment["HOME"]) {
+      for path in writtenPaths(command, payload: payload, home: home) {
         if let violation = await writeViolation(
           path, payload: payload, root: root, dependencies: dependencies)
         {
           let reason = "this command writes `\(path)`. " + violation.reason
           return deny(GuardViolation(ruleID: violation.ruleID, reason: reason))
         }
+        writes.append(path)
       }
-      guard BashGuard.isGitCommit(command) else { return nil }
-      return await commitContext(root: root, dependencies: dependencies)
+      if BashGuard.isGitCommit(command) {
+        context = await commitContext(root: root, dependencies: dependencies)
+      }
     case let tool? where fileTools.contains(tool):
-      guard let path = payload.filePath else { return nil }
-      return await writeViolation(path, payload: payload, root: root, dependencies: dependencies)
-        .map(deny)
+      guard let path = payload.filePath else { break }
+      if let violation = await writeViolation(
+        path, payload: payload, root: root, dependencies: dependencies)
+      {
+        return deny(violation)
+      }
+      writes.append(path)
     default:
-      return nil
+      break
     }
+    guard payload.agentID != nil else {
+      return context.map { HookOutput.context(.preToolUse, $0) }
+    }
+    let resolved = writes.flatMap { ToolPath.resolvedAbsolutes($0, cwd: payload.cwd, home: home) }
+    let checkouts = await RepositoryCheckouts.of(
+      root: root, git: dependencies.git, around: resolved)
+    if let violation = SubagentScopeGuard.evaluate(
+      writes: resolved, agentType: payload.agentType, checkouts: checkouts)
+    {
+      return deny(violation)
+    }
+    return HookOutput.allow(
+      "swiftgate: a background agent can't answer a permission prompt, so the hook decides",
+      context: context)
   }
 
   /// The paths a Bash command writes. A copy, move or link into a directory writes each source's
@@ -127,6 +152,7 @@ enum PreToolUseHook {
 
   /// Runs on what is staged when the hook fires, so `git add … && git commit` in one command is
   /// checked by the git pre-commit hook rather than here. Advisory: it never denies the commit.
+  /// The comment check and commit judge's advice on a `git commit`, as plain text.
   private static func commitContext(root: URL, dependencies: HookDependencies) async -> String? {
     var sections: [String] = []
     let outcome = await CommentsCheck.run(
@@ -140,7 +166,38 @@ enum PreToolUseHook {
     }
     if let judged = await dependencies.commitJudge.review(root: root) { sections.append(judged) }
     guard !sections.isEmpty else { return nil }
-    return HookOutput.context(.preToolUse, sections.joined(separator: "\n\n"))
+    return sections.joined(separator: "\n\n")
+  }
+}
+
+/// The repository's checkouts that `paths` could land in: the main checkout holds the git common
+/// dir, and a linked worktree is a sibling `<repo>-…` directory whose `.git` is a file. Only each
+/// path's own candidate sibling is checked, never a directory listing, so the hook stays fast
+/// however full the parent directory is.
+enum RepositoryCheckouts {
+  static func of(root: URL, git: any Git, around paths: [String]) async
+    -> SubagentScopeGuard.Checkouts
+  {
+    let common = (try? await git.commonDirectory()).map { URL(filePath: $0) }
+    let main = common?.deletingLastPathComponent() ?? root
+    let mainPath = ToolPath.canonical(main.path)
+    let parent = URL(filePath: mainPath).deletingLastPathComponent().path
+    let prefix = URL(filePath: mainPath).lastPathComponent + "-"
+    var linked: Set<String> = []
+    for path in paths where path.hasPrefix(parent + "/") {
+      guard let entry = path.dropFirst(parent.count + 1).split(separator: "/").first,
+        entry.hasPrefix(prefix)
+      else { continue }
+      let candidate = parent + "/" + entry
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: candidate + "/.git", isDirectory: &isDirectory),
+        !isDirectory.boolValue
+      else { continue }
+      linked.insert(candidate)
+    }
+    let current = ToolPath.canonical(root.path)
+    if current != mainPath { linked.insert(current) }
+    return SubagentScopeGuard.Checkouts(main: mainPath, linkedWorktrees: linked)
   }
 }
 
