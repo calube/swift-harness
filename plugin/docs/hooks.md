@@ -20,8 +20,8 @@ each one calls the same code as the `swiftgate` command it names.
   GREEN run. Unchanged content that was RED reuses that verdict instead of re-running.
 - A RED stop is blocked at most 3 times in a row. The next stop is released with the message
   `RED — not done`.
-- BLOCKED (git, SwiftPM or the formatter could not run) never blocks and never counts as a strike;
-  the user sees why the gate could not judge.
+- BLOCKED (git, SwiftPM, the formatter, or the Xcode pin) never blocks and never counts as a
+  strike; the user sees why the gate could not judge.
 - Claude Code's `stop_hook_active` flag marks a stop that follows a block. A stop without it starts
   the strike count over.
 
@@ -60,6 +60,17 @@ found, so only the override allows a design write. The same holds when no plan n
 or when the holder's `plan.json` is missing or corrupt: claim the plan with a `plan.json` that
 names the doc first. `design` is resolved against the worktree toplevel and compared as a
 canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
+
+Plan-state commands check the same authority, and exit 1 on refusal:
+
+| Command | Writes | Refused when |
+|---|---|---|
+| `plan claim <plan> --session <id> [--design <doc>] [--tier <tier>]` | the lock; a new plan's `plan.json` | another session holds the plan, or another plan names `<doc>` (canonical path, any case) |
+| `plan release <plan> --session <id>` | removes the lock | another session holds it |
+| `plan set <plan> --session <id> [--tier <tier>] [--resume <text>]` | `plan.json` `tier`, `resume` | `<id>` isn't the holder |
+| `index set <plan> <status> <resume> --session <id>` | the plan's `index.json` entry | `<id>` isn't the holder |
+
+A refusal names the holder. Taking over a lock whose session has ended is the user's decision.
 
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.

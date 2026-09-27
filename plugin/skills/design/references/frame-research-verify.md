@@ -94,6 +94,8 @@ Read the session id from the `Session id: <id>` line of the SessionStart context
   exist.
 - `held-by-other` (exit 1): stop. Tell the user which session holds it. Taking over an abandoned
   lock is the user's call: `"$SG" plan release <plan> --force`.
+- `design-owned` (exit 1): another plan already owns this design doc, and the message names it.
+  Stop, and ask the user whether to continue that plan or name another doc.
 - exit 2: report the message and stop.
 
 If `<doc>` exists and this plan didn't write it, the user wants an amend, which this part of the
@@ -129,7 +131,7 @@ Append 1 line per frame answer to `<ev>/answers.jsonl`:
 Record the plan in the shared index:
 
 ```bash
-"$SG" index set <plan> designing "framed at <tier>; next: research"
+"$SG" index set <plan> designing "framed at <tier>; next: research" --session <id>
 ```
 
 Take a `docs-lint` baseline so the draft step can tell its own findings from older ones:
@@ -345,7 +347,7 @@ the findings listed.
 When the draft passes:
 
 ```bash
-"$SG" index set <plan> designing "draft passes design-lint; next: review"
+"$SG" index set <plan> designing "draft passes design-lint; next: review" --session <id>
 ```
 
 ## Phase log

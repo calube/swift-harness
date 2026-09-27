@@ -922,7 +922,7 @@ against that subcommand's help. A later skill that names a missing command or fl
   repo, and `gitignore` covers `.harness/design-render/`. A repo whose `.swiftgate.toml` predates this still needs
   `[docs] managed_files` added by hand.
 - The merge records 2 `prove.not-proven` findings on template-guarding tests. Prove restores only Swift sources, so
-  it can't revert a template; both tests failed before their fixes. They await the user's acceptance, as in Wave 24.
+  it can't revert a template; both tests failed before their fixes. The user accepted them on 2026-09-26, as in Wave 24.
 
 **Open for the sub-project review** (from waves 26–28)
 - `plan.json` keeps its claimed tier (`quick`) and `resume: framing` after any re-scope; no command updates them.

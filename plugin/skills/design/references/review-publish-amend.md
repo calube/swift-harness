@@ -211,7 +211,7 @@ on `design/<slug>` with a message that describes the design, such as
 the message: the `commit-msg` hook fails it. This 1st commit is the design's `proposed` status.
 
 ```bash
-"$SG" index set <plan> in-review "proposed; next: approval on the design page"
+"$SG" index set <plan> in-review "proposed; next: approval on the design page" --session <id>
 ```
 
 When `origin` is a GitHub remote, ask before any push: push and open a PR (recommended), or keep
@@ -244,7 +244,7 @@ Artifact({
 URL as `<page>`, and store it in the index so a later session finds it:
 
 ```bash
-"$SG" index set <plan> in-review "page <page>; waiting for approval of <sha>"
+"$SG" index set <plan> in-review "page <page>; waiting for approval of <sha>" --session <id>
 ```
 
 Check the `db` wiring once with `ArtifactData({action: "list", url: "<page>", collection: "approval"})`.
@@ -303,7 +303,7 @@ moved after the page went out: render and publish again, and read a new approval
 6. Run `"$SG" docs-lint --json` on `<main>` and report any new finding.
 
 ```bash
-"$SG" index set <plan> approved "approved <sha>; page <page>; next: /swift-harness:plan"
+"$SG" index set <plan> approved "approved <sha>; page <page>; next: /swift-harness:plan" --session <id>
 ```
 
 Keep the plan's claim: `/swift-harness:plan` checks that this session holds it.
@@ -351,7 +351,7 @@ says what changed. Never resolve a thread you didn't act on.
 5. After the merge:
 
    ```bash
-   "$SG" index set <old-plan> superseded "superseded by <plan>"
+   "$SG" index set <old-plan> superseded "superseded by <plan>" --session <id>
    "$SG" plan release <old-plan> --session <id>
    ```
 
@@ -488,7 +488,7 @@ A clarify applies itself: it needs no review and no approval.
    `/swift-harness:plan`. Keep the index status, and name the paused tasks in the note:
 
    ```bash
-   "$SG" index set <plan> <current status> "amended to <newSha>; <n> tasks need replan; next: /swift-harness:plan"
+   "$SG" index set <plan> <current status> "amended to <newSha>; <n> tasks need replan; next: /swift-harness:plan" --session <id>
    ```
 
 ## Status rules

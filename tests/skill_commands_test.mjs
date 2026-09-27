@@ -189,6 +189,10 @@ const tests = {
     assert.ok(has('skills/design/SKILL.md', 'plan claim', '--session'), 'design skill claims the plan with --session')
     assert.ok(has('skills/design/references/frame-research-verify.md', 'evidence check', '--json'), 'reference files are scanned')
     assert.ok(has('skills/design/references/frame-research-verify.md', 'context-pack', '--role'))
+    // `index set` refuses any session that doesn't hold the plan's lock, so every call names one.
+    const indexSets = resolved.filter(r => r.path === 'index set')
+    assert.ok(indexSets.length >= 10, `only ${indexSets.length} index set calls found`)
+    assert.deepEqual(indexSets.filter(r => !r.flags.includes('--session')).map(r => `${r.file}:${r.line}`), [])
   },
 
   'a skill naming a nonexistent flag fails and names it — catches a checker that passes anything'() {

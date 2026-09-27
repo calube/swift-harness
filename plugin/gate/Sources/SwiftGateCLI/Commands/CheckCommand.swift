@@ -81,42 +81,64 @@ enum CheckRun {
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
+    // A mismatched, unselected or unreadable pinned Xcode fails every `swift build`/`test` and
+    // `xcodebuild` a tier would run, so T1 and the simulator tiers stop here with one named
+    // reason instead of failing as if the code under test were wrong. T0 parses source with
+    // SwiftSyntax and never touches the toolchain, so it already ran above unaffected.
+    var pinBlockedFinding: Finding?
+    if let config,
+      let text = await XcodePinCheck.message(
+        pin: config.xcode, xcodebuild: dependencies.simulator.xcodebuild)
+    {
+      pinBlockedFinding = try XcodePinCheck.finding(text)
+    }
+
     if let config, let graph = scopes.graph {
-      let t1 = try await runT1(
-        root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
-        graph: graph, changed: changed, context: context)
-      var t1Tier = t1.tier
-      parts.findings += t1.findings
-      if tier == .ready {
-        let environment = dependencies.changedTests
-        let changed = await ChangedTestChecks.ready(
-          environment, graph: graph, base: base, context: context)
-        t1Tier = try t1Tier.merging(changed.verdict)
-        parts.findings += changed.findings
-        let mutated = try await mutate(after: t1Tier) {
-          await MutateCheck.run(
-            dependencies.mutation, graph: graph, config: config, base: base, context: context)
+      if let pinBlockedFinding {
+        parts.tiers.append(try XcodePinCheck.blockedTier(.t1))
+        parts.findings.append(pinBlockedFinding)
+      } else {
+        let t1 = try await runT1(
+          root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
+          graph: graph, changed: changed, context: context)
+        var t1Tier = t1.tier
+        parts.findings += t1.findings
+        if tier == .ready {
+          let environment = dependencies.changedTests
+          let changed = await ChangedTestChecks.ready(
+            environment, graph: graph, base: base, context: context)
+          t1Tier = try t1Tier.merging(changed.verdict)
+          parts.findings += changed.findings
+          let mutated = try await mutate(after: t1Tier) {
+            await MutateCheck.run(
+              dependencies.mutation, graph: graph, config: config, base: base, context: context)
+          }
+          t1Tier = mutated.tier
+          parts.findings += mutated.findings
+          if let judge = dependencies.judge {
+            let judged = await TestJudgeCheck.run(
+              environment, graph: graph, config: config, base: base, atReadyTier: true,
+              dependencies: judge)
+            if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
+            parts.findings += judged
+          }
         }
-        t1Tier = mutated.tier
-        parts.findings += mutated.findings
-        if let judge = dependencies.judge {
-          let judged = await TestJudgeCheck.run(
-            environment, graph: graph, config: config, base: base, atReadyTier: true,
-            dependencies: judge)
-          if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
-          parts.findings += judged
-        }
+        parts.tiers.append(t1Tier)
       }
-      parts.tiers.append(t1Tier)
     } else {
       parts.findings.append(
         try note("T1 not run: \(ConfigLoader.fileName) is needed to find the packages to test"))
     }
     if let config, let graph = scopes.graph {
-      parts.append(
-        try await runSimulatorTiers(
-          root: root, tier: tier, changed: changed, config: config, graph: graph,
-          context: context, dependencies: dependencies.simulator))
+      if pinBlockedFinding != nil {
+        if tier.runsT2 { parts.tiers.append(try XcodePinCheck.blockedTier(.t2)) }
+        if tier.runsT3 { parts.tiers.append(try XcodePinCheck.blockedTier(.t3)) }
+      } else {
+        parts.append(
+          try await runSimulatorTiers(
+            root: root, tier: tier, changed: changed, config: config, graph: graph,
+            context: context, dependencies: dependencies.simulator))
+      }
     }
     // Design-doc evidence, calibration freshness and the docs gates need no module graph, so they
     // run independent of it.
