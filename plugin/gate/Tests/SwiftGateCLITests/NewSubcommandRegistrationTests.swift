@@ -120,6 +120,7 @@ struct NewSubcommandRegistrationTests {
     "calibrate design",
     "build start", "build next", "build finish",
     "ledger set",
+    "worktree create", "worktree warm-check", "worktree remove",
   ]
 
   @Test(
