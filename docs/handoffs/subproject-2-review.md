@@ -290,3 +290,19 @@ From the evals session's first review-accuracy and failure-modes runs (evals-rou
   module, so a task whose write set includes its `Tests/` gets `too-many-modules`, contradicting the decomposer's
   instruction. Its per-task rules also run on `done` tasks, so an amend that renames a test id or raises a tier a
   done task names can never replan to GREEN.
+
+From the evals session's review-accuracy re-run (2026-09-27, evals-round-7 `222f25e`, 4 of 5 cases): findings now cite
+new-file lines (3/3 matched, 0 unmatched at verify), but severity and dedupe still miss.
+- **`review-severity-dedupe-and-baseline`** (opus):
+  - Enforce the concurrency contract's severity in the verifier, which sees `failure_scenario`: a user-visible race
+    such as dismiss-without-cancel's tap-then-Dismiss is a blocker, whatever the reviewer rated it (it stayed major
+    or minor under the prompt rule).
+  - Dedupe in synthesis across nearby lines or overlapping ranges, not exact file+line+category: the same race
+    survived 4 times at `CounterFeature.swift:67, 69, 69, 70`.
+  - **Pre-existing defects: DECIDED 2026-09-27, the user chose report, never block.** A defect the diff didn't
+    introduce goes in a separate pre-existing section with its severity and never counts toward the verdict, so
+    clean-reset's baseline fact effect without a cancellation id can't turn a clean change into fix-then-merge.
+    Record the rule in the review contract.
+  - Every run records its wall time and token cost locally (the user's standing telemetry preference).
+  - **Re-run: APPROVED 2026-09-27 by the user:** after the merge, the evals session re-runs all 5 review-accuracy
+    cases, 1 trial each, unchecked-sendable-cache included (about 5 USD plus Workflow agents).
