@@ -117,18 +117,18 @@ enum BuildCheckReturnRun {
   private static func taskGate(
     of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, git: any Git
   ) async throws(Blocked) -> CheckTier {
-    let runID: String?
+    let store: BuildRunStore?
     do {
-      runID = try LedgerSetRun.latestRunID(in: plan.buildDirectory)
+      store = try await BuildRunStore.latest(plan: slug, git: git)
     } catch {
       throw Blocked("listing \(plan.buildDirectory): \(error)")
     }
-    guard let runID else { throw Blocked(LedgerSetRun.noBuildRun) }
+    guard let store else { throw Blocked(LedgerSetRun.noBuildRun) }
     let record: BuildRunRecord
     do {
-      record = try await BuildRunStore.open(plan: slug, runID: runID, git: git).record()
+      record = try store.record()
     } catch {
-      throw Blocked("reading build run \(runID): \(error)")
+      throw Blocked("reading build run \(store.runID): \(error)")
     }
     switch record.preset.taskGate {
     case .ledger: return task.gate
