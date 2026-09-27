@@ -333,4 +333,172 @@ struct PlanLintGraphTests {
       #expect(!findings.contains { $0.ruleID == PlanLintGraph.wavesMismatchRuleID })
     }
   }
+
+  // MARK: - A module's test target is that module (spec §9.3's module count)
+
+  /// `Foo` and `Bar` libraries, `FooTests` testing `Foo` by name, `QueueBehaviourTests` testing
+  /// `Foo` under a name that says nothing about it, `BarTests` testing `Bar` through a shared
+  /// `Fixtures` library, and `IntegrationTests` testing both.
+  private static func graphWithTestTargets() throws -> ModuleGraph {
+    try ModuleGraph(packages: [
+      PackageManifest(
+        name: "Pkg", path: "",
+        targets: [
+          PackageTarget(name: "Foo", type: .library, path: "Sources/Foo"),
+          PackageTarget(name: "Bar", type: .library, path: "Sources/Bar"),
+          PackageTarget(name: "Fixtures", type: .library, path: "Sources/Fixtures"),
+          PackageTarget(
+            name: "FooTests", type: .test, path: "Tests/FooTests", targetDependencies: ["Foo"]),
+          PackageTarget(
+            name: "QueueBehaviourTests", type: .test, path: "Tests/QueueBehaviourTests",
+            targetDependencies: ["Foo"]),
+          PackageTarget(
+            name: "BarTests", type: .test, path: "Tests/BarTests",
+            targetDependencies: ["Bar", "Fixtures"]),
+          PackageTarget(
+            name: "IntegrationTests", type: .test, path: "Tests/IntegrationTests",
+            targetDependencies: ["Foo", "Bar"]),
+        ])
+    ])
+  }
+
+  private static func moduleFindings(writeSet: [String]) throws -> [Finding] {
+    let task = Self.task(id: "t", writeSet: writeSet, estLines: 120)
+    return try PlanLintGraph.allFindings(
+      design: Self.design(), designPath: "docs/example/designs/x.md",
+      ledger: Self.ledger(tasks: [task], waves: [["t"]]), ledgerPath: "ledger.json",
+      graph: try graphWithTestTargets(), workerPacks: [:], bounds: PlanConfig()
+    ).filter { $0.ruleID == PlanLintCoverage.tooManyModulesRuleID }
+  }
+
+  @Test(
+    "§9.3: a task writing Sources/Foo and its own Tests/FooTests touches one module, while two real modules still fail — catches a module's test target counted as a second module"
+  )
+  func ownTestTargetIsTheSameModule() throws {
+    #expect(try Self.moduleFindings(writeSet: ["Sources/Foo/", "Tests/FooTests/"]).isEmpty)
+    #expect(try Self.moduleFindings(writeSet: ["Sources/Foo/", "Sources/Bar/"]).count == 1)
+    #expect(
+      PlanLintGraph.modulesTouched(
+        writeSet: ["Sources/Foo/Foo.swift", "Tests/FooTests/FooTests.swift"],
+        graph: try Self.graphWithTestTargets()) == ["Foo"])
+  }
+
+  @Test(
+    "§9.3: a test target maps to the module it depends on, not the one its name suggests, and one testing two modules counts as its own — catches a name-only match"
+  )
+  func testTargetResolvesThroughTheGraph() throws {
+    #expect(
+      try Self.moduleFindings(writeSet: ["Sources/Foo/", "Tests/QueueBehaviourTests/"]).isEmpty)
+    #expect(try Self.moduleFindings(writeSet: ["Sources/Foo/", "Tests/BarTests/"]).count == 1)
+    let graph = try Self.graphWithTestTargets()
+    #expect(PlanLintGraph.modulesTouched(writeSet: ["Tests/BarTests/"], graph: graph) == ["Bar"])
+    #expect(
+      PlanLintGraph.modulesTouched(writeSet: ["Tests/IntegrationTests/"], graph: graph)
+        == ["IntegrationTests"])
+  }
+
+  // MARK: - A done task is history (spec §5.7, §8.4)
+
+  /// The design after an amend renamed `test-queue-drains-old` to `test-queue-drains-in-batches`.
+  private static let renamedDesign = design(
+    requirements: ["req-queue-drains"], testPlan: [("test-queue-drains-in-batches", "T1")])
+
+  /// A task built against the design before the amend: it names the old test id, predates model
+  /// tags and ran over today's size bound.
+  private static func builtBeforeTheAmend(status: TaskStatus) -> LedgerTask {
+    LedgerTask(
+      id: "queue-core", deps: [], writeSet: ["Sources/ModuleA/"], gate: .fast,
+      tests: ["test-queue-drains-old"], covers: ["req-queue-drains", "test-queue-drains-old"],
+      estLines: 900, status: status, worktree: "../worktree-queue-core", actualLines: 880)
+  }
+
+  private static let renameFix = LedgerTask(
+    id: "queue-core-batches", deps: ["queue-core"], writeSet: ["Sources/ModuleA/"], gate: .fast,
+    tests: ["test-queue-drains-in-batches"], covers: ["test-queue-drains-in-batches"],
+    estLines: 120, status: .pending, worktree: "../worktree-queue-core-batches", model: .sonnet)
+
+  private static let smallPack = ContextPack(
+    role: .worker, slices: [ContextPackSlice(sourceLabel: "standards", lines: ["one line"])])
+
+  /// Every finding `plan-lint` reports on `tasks` against `design`, with the stored waves set to
+  /// the schedule, and a worker pack for every task that isn't done.
+  private static func lint(_ tasks: [LedgerTask], design: DesignDocument = renamedDesign) throws
+    -> [Finding]
+  {
+    let waves = try PlanSchedule.schedule(tasks: tasks, maxParallel: 3).get()
+    let packs = Dictionary(
+      uniqueKeysWithValues: tasks.filter { $0.status != .done }.map { ($0.id, smallPack) })
+    return try PlanLintGraph.allFindings(
+      design: design, designPath: "docs/example/designs/x.md",
+      ledger: Self.ledger(tasks: tasks, waves: waves), ledgerPath: "ledger.json",
+      graph: try Self.graph([("ModuleA", "Sources/ModuleA")]), workerPacks: packs,
+      bounds: PlanConfig())
+  }
+
+  @Test(
+    "§8.4: after an amend renames a test id a done task names, the done task plus a fix task is GREEN, while the same rename on a pending task still fails — catches a replan that can never pass"
+  )
+  func doneTaskWithFixTaskIsGreen() throws {
+    let done = try Self.lint([Self.builtBeforeTheAmend(status: .done), Self.renameFix])
+    #expect(done.filter(\.severity.failsGate) == [])
+
+    let pending = try Self.lint([Self.builtBeforeTheAmend(status: .pending), Self.renameFix])
+    #expect(
+      Set(pending.filter { $0.file == "queue-core" }.map(\.ruleID)) == [
+        PlanLintCoverage.unknownTestRuleID, PlanLintCoverage.missingModelRuleID,
+        PlanLintCoverage.estLinesHighRuleID,
+      ])
+  }
+
+  @Test(
+    "§8.4: a renamed test id a done task named, with no fix task, is uncovered — catches the done task's stale covers vouching for the new id"
+  )
+  func doneTaskAloneLeavesTheNewIDUncovered() throws {
+    let findings = try Self.lint([Self.builtBeforeTheAmend(status: .done)])
+    #expect(
+      findings.filter(\.severity.failsGate).map(\.ruleID) == [PlanLintCoverage.uncoveredRuleID])
+    #expect(findings.first?.message.contains("test-queue-drains-in-batches") == true)
+  }
+
+  @Test(
+    "§8.4: a done task whose test's tier rose above its gate no longer covers that test, and a fix task at the new gate does — catches a raised tier going unbuilt"
+  )
+  func raisedTierNeedsAFixTaskAtTheNewGate() throws {
+    let raised = Self.design(
+      requirements: ["req-queue-drains"], testPlan: [("test-queue-drains-old", "T2")])
+    let done = Self.builtBeforeTheAmend(status: .done)
+
+    let alone = try Self.lint([done], design: raised)
+    #expect(alone.filter(\.severity.failsGate).map(\.ruleID) == [PlanLintCoverage.uncoveredRuleID])
+    #expect(alone.first?.message.contains("queue-core") == true)
+
+    let fix = LedgerTask(
+      id: "queue-core-on-simulator", deps: ["queue-core"], writeSet: ["Sources/ModuleA/"],
+      gate: .push, tests: ["test-queue-drains-old"], covers: ["test-queue-drains-old"],
+      estLines: 120, status: .pending, worktree: "../worktree-fix", model: .sonnet)
+    #expect(try Self.lint([done, fix], design: raised).filter(\.severity.failsGate) == [])
+  }
+
+  @Test(
+    "§9.2: a done task is judged only on a unique id and a dependency that exists — catches history held to current-design rules, or exempted from the graph"
+  )
+  func doneTaskCountsOnlyInTheGraph() throws {
+    let built = Self.builtBeforeTheAmend(status: .done)
+    let dangling = LedgerTask(
+      id: built.id, deps: ["ghost"], writeSet: built.writeSet, gate: built.gate,
+      tests: built.tests, covers: built.covers, estLines: built.estLines, status: .done,
+      worktree: built.worktree)
+    func gating(_ tasks: [LedgerTask]) throws -> Set<String> {
+      Set(
+        try PlanLintGraph.allFindings(
+          design: Self.renamedDesign, designPath: "docs/example/designs/x.md",
+          ledger: Self.ledger(tasks: tasks, waves: []), ledgerPath: "ledger.json",
+          graph: try Self.graph([("ModuleA", "Sources/ModuleA")]),
+          workerPacks: [Self.renameFix.id: Self.smallPack], bounds: PlanConfig()
+        ).filter(\.severity.failsGate).map(\.ruleID))
+    }
+    #expect(try gating([dangling, Self.renameFix]) == [PlanLintGraph.missingDependencyRuleID])
+    #expect(
+      try gating([built, built, Self.renameFix]) == [PlanLintGraph.duplicateTaskIDRuleID])
+  }
 }

@@ -78,7 +78,9 @@ enum PlanLintRun {
       designPath: plan.design, root: root, harnessRoot: harnessRoot)
     var workerPacks: [String: ContextPack] = [:]
     var packFailures: [String: String] = [:]
-    for task in ledger.tasks {
+    // A done task is never handed to a worker again, and its covers may name ids an amend has
+    // since renamed, so its pack is neither needed nor buildable.
+    for task in ledger.tasks where task.status != .done {
       switch sources.inputs(task: task, design: design, designSource: designSource, graph: graph) {
       case .failure(let reason): packFailures[task.id] = reason.message
       case .success(let inputs):

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "built-task",
+      "deps": [],
+      "writeSet": ["Sample/Sources/Core/"],
+      "gate": "fast",
+      "tests": ["test-alpha-old"],
+      "covers": ["req-alpha", "test-alpha-old"],
+      "estLines": 120,
+      "status": "done",
+      "worktree": "../built-task",
+      "actualLines": 130
+    },
+    {
+      "id": "fix-task",
+      "deps": ["built-task"],
+      "writeSet": ["Sample/Sources/Core/"],
+      "gate": "fast",
+      "tests": ["test-alpha"],
+      "covers": ["test-alpha"],
+      "estLines": 120,
+      "status": "pending",
+      "worktree": "../fix-task",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [["built-task"], ["fix-task"]]
+}

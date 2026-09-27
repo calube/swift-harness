@@ -5,7 +5,8 @@
 // Run: node tests/plan_replan_test.mjs   (SWIFTGATE_BIN=plugin/bin/swiftgate to use the shim)
 // Regressions caught: /plan halting on a ledger an amend left behind, so needs-replan tasks and
 // fixes for done work have no path; a replan that rewrites a done task; a replanned plan that
-// plan-lint still reads at the old designSha; and a skill step whose command no longer runs.
+// plan-lint still reads at the old designSha; a done task's renamed test id, or a module's own
+// test target, keeping a replan red; and a skill step whose command no longer runs.
 import assert from 'node:assert/strict'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -77,7 +78,7 @@ const DOC = 'docs/designs/order-queue.md'
 const EV = 'docs/designs/order-queue.evidence'
 const SESSION = 'session-plan'
 
-const design = ({ coreText, uiText }) => `---
+const design = ({ coreText, uiText, coreTest = 'test-queue-core-replays-in-order' }) => `---
 status: approved
 ---
 # Order queue
@@ -91,7 +92,7 @@ status: approved
 ## Test plan by tier
 
 - test-queue-client-rejects-empty: an empty order is rejected — tier T1
-- test-queue-core-replays-in-order: queued orders replay in submit order — tier T1
+- ${coreTest}: queued orders replay in submit order — tier T1
 - test-queue-ui-shows-pending: the view lists pending orders — tier T1
 `
 
@@ -263,6 +264,45 @@ const tests = {
       assert.deepEqual(ledger.tasks.slice(0, fixed.length), fixed, 'a kept task changed')
       assert.deepEqual(ledger.tasks.filter(t => t.status === 'done').map(t => t.id), ['queue-client', 'queue-core'])
       assert.equal(readJSON(join(plans, 'plan.json')).designSha, v2)
+    })
+  },
+
+  'after an amend renames a test id a done task names, a fix task takes plan-lint GREEN, and the same rename on a pending task stays RED — catches a replan that can never pass (spec §8.4)'() {
+    withRepo(ctx => {
+      const { run, plans, readJSON, writeJSON, commitDesign } = ctx
+      const text = { coreText: 'queued orders drain on reconnect', uiText: 'the view shows the queue' }
+      const v1 = commitDesign(design(text), 'design')
+      const claimed = run(['plan', 'claim', SLUG, '--session', SESSION, '--design', DOC, '--json'])
+      assert.equal(claimed.status, 0, claimed.text)
+      writeJSON(join(plans, 'plan.json'), {
+        ...readJSON(join(plans, 'plan.json')), designSha: v1,
+        approval: { decision: 'approve', designSha: v1, at: '2026-09-27T10:00:00Z' },
+      })
+      // Each task writes its module and its module's own test target, as the decomposer is told to.
+      const planned = [
+        task('queue-client', { writeSet: ['Packages/Orders/Sources/OrderQueueClient/'], tests: ['test-queue-client-rejects-empty'], covers: ['req-queue-client', 'test-queue-client-rejects-empty'] }),
+        task('queue-core', { deps: ['queue-client'], writeSet: ['Packages/Orders/Sources/OrderQueueCore/', 'Packages/Orders/Tests/OrderQueueCoreTests/'], tests: ['test-queue-core-replays-in-order'], covers: ['req-queue-core', 'test-queue-core-replays-in-order'] }),
+        task('queue-ui', { deps: ['queue-core'], writeSet: ['Packages/Orders/Sources/OrderQueueUI/'], tests: ['test-queue-ui-shows-pending'], covers: ['req-queue-ui', 'test-queue-ui-shows-pending'] }),
+      ]
+      const first = scheduleAndLint(ctx, planned, 'planned')
+      assert.equal(first.status, 0, first.text)
+
+      // queue-core is built, then an amend renames its test id and is re-approved.
+      const renamed = 'test-queue-core-replays-in-submit-order'
+      const v2 = commitDesign(design({ ...text, coreTest: renamed }), 'amend')
+      writeJSON(join(plans, 'plan.json'), {
+        ...readJSON(join(plans, 'plan.json')), designSha: v2,
+        approval: { decision: 'approve', designSha: v2, at: '2026-09-27T12:30:00Z' }, clarifyChain: [],
+      })
+      const fix = task('queue-core-submit-order', { deps: ['queue-core'], writeSet: ['Packages/Orders/Sources/OrderQueueCore/', 'Packages/Orders/Tests/OrderQueueCoreTests/'], tests: [renamed], covers: [renamed] })
+      const withCore = status => planned.map(t => t.id === 'queue-ui' ? t : { ...t, status, ...(status === 'done' ? { actualLines: 130, branch: `${SLUG}/${t.id}` } : {}) })
+
+      const done = scheduleAndLint(ctx, [...withCore('done'), fix], `replanned at ${v2}; 2 of 4 tasks done`)
+      assert.equal(done.status, 0, done.text)
+
+      const pending = scheduleAndLint(ctx, [...withCore('pending'), fix], `replanned at ${v2}`)
+      assert.equal(pending.status, 1, pending.text)
+      assert.ok(pending.json.findings.some(f => f.rule === 'plan-lint.unknown-test' && f.file === 'queue-core'), pending.text)
     })
   },
 }
