@@ -1,28 +1,36 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-SUMMARY (2026-09-27 afternoon, for the user) — PAUSED so the user can build apps with the harness.
-Done: review fix waves 1–4 are merged. Local main 0a99c70 is GREEN (push 1746 tests, prove 46/46), with backup
-backup/subproject-2-fix-wave-4. origin/main is at 7ad8e81 (evals round 7); wave 4 isn't pushed to origin/main yet.
-The user decided (in this session): the hook guard gets a cache (50 ms budget stands); headless runs stop at in-review;
-§11 is rewritten to measured figures and design runs save local telemetry; review reports pre-existing defects and
-never blocks on them; fix branches merge on push + prove, with mutate once on main.
+SUMMARY (2026-09-27 evening, for the user). The orchestrator session was cleared; start the next one from here.
+State: origin/main 3dee52a GREEN (push tier, 1795 tests). Local main 620888a adds one docs commit, the interview
+trial-run 2 evidence (docs/handoffs/2026-09-27-interview-trial-run-2.md); it isn't pushed yet. Merged today: review fix
+wave 4 (repo hooks and bootstrap, whole-process-tree kills, review severity/dedupe/pre-existing, calibration on each
+agent's frontmatter model), the shim cold-start Session id fix, the build recalibration after a build-worker.md edit, and
+the build proof-base and write-set change (24fc934, from the interview session).
+The user decided today: the hook guard gets a cache (the 50 ms budget stands); headless runs stop at in-review; §11 is
+rewritten to measured figures and design runs keep local telemetry; review reports pre-existing defects and never blocks
+on them; fix branches merge on push + prove, with mutate once on main; review-accuracy evals are frozen (5/5).
+The user's verdict: ship is far too slow for a coding interview. A research session on speed is opening; don't
+start speed work before it reports.
 Paused, nothing running:
-  - ready-tier-runs-one-at-a-time-and-cleans-up (opus), ../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up:
-    WIP committed on its branch (its last commit body has the state). Scope: a machine-wide flock for ready, mutate
-    and prove; reaping recorded process groups; check --background plus swiftgate wait; per-phase telemetry; a total
-    mutate concurrency bound; the mutate baseline run alone before mutants. Open question it was chasing: two
-    LiveProcessRunnerTests kills took about 60 s under load; its worker couldn't reproduce this, kills landed in under 1.1 s at load 55–76. WIP 07d00b0. Before resuming, rebase onto build-proof-and-write-sets (24fc934), which also changes check, prove and history.jsonl (--proof-base, --prove/--mutate below ready, steps, proofBases).
-  - Mutate on main hasn't produced a verdict: --jobs 2 took 758 s at peak load 143 (--jobs 8 took load to 353, killed),
-    and it was BLOCKED because its unmutated baseline failed 5 load-sensitive tests. Re-run after the task above lands.
-  - The evals session (swift-harness-96) owes the confirming review-accuracy re-run (approved, 9 USD cap), then freezes review evals.
-Next fix wave (queued, not started): hook guard PlanLocks cache; §11 rewrite plus design-run telemetry; rule-index
-rows for every design-lint.* and design-diff.* rule (none exist; CLAUDE.md requires them); a lint rule for
-unbounded intentional-hang fixtures; review.json `telemetry` set on every run (missing in 2 of 5 eval trials); dedupe
-merging a rule-less duplicate at the same line as a ruled blocker. Shim fix 9184436 (cold-cache SessionStart prints the
-Session id) is on local main. Review-accuracy is frozen: the confirming run was 5/5 verdicts, 5/5 seeded at blocker or major.
+  - ready-tier-runs-one-at-a-time-and-cleans-up (opus), ../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up,
+    WIP 07d00b0: a machine-wide flock for ready, mutate and prove; reaping recorded process groups; check --background
+    plus swiftgate wait; per-phase telemetry; a total mutate concurrency bound; the mutate baseline run alone. Rebase onto
+    24fc934 first, since that also changes check, prove and history.jsonl. The about-60 s LiveProcessRunner kills were
+    not reproduced (kills landed in under 1.1 s at load 55–76).
+  - Mutate on main has no verdict: --jobs 2 took 758 s at peak load 143 and was BLOCKED by 5 load-sensitive baseline
+    tests (--jobs 8 took load to 353, 480 processes).
+Queued fixes, not started: hook guard PlanLocks cache; §11 rewrite plus design-run telemetry; rule-index rows for every
+design-lint.* and design-diff.* rule (none exist, which CLAUDE.md requires); a lint for unbounded intentional-hang
+fixtures; review.json `telemetry` set on every run; dedupe merging a rule-less duplicate of a ruled blocker. From
+interview trial run 2 (build and ship side): check-return --fix rejects every fixer return with
+build-return.review-missing (the fixer contract says review is null); running sessions cache agent prompts, so merged
+prompt edits don't reach them; worktree remove deletes the task gate's run report.
+Next session's first job (the user's ask): work out how to write ADRs (docs/adrs/, see its README), design docs
+(docs/designs/), plans (docs/plans/), and how to kick off workers (docs/handoffs/worker-brief.md and the runbook's wave
+loop), then use that to drive the queued fixes.
 Waiting on the user, in this order:
-  1. Whether to push wave 4 (0a99c70) to origin/main, and when to resume the paused hardening above.
+  1. Push 620888a to origin/main (docs only), and choose which queued fixes run first, given the ship speed research.
   2. The attended acceptance runs 26–28 with the user present, now unblocked (/plan works across sessions). For 28, the
      frame answers must allow a client module, or D2/D3 forces a reframe. Publish and Approve need an interactive session.
   3. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes: qa-profiling-tools.md in
