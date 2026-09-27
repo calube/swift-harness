@@ -26,6 +26,9 @@ public struct Config: Sendable, Equatable {
   public let judge: JudgeConfig
   public let docs: DocsConfig
   public let plan: PlanConfig
+  /// Named `[build.presets.<name>]` tables, keyed by preset name. Empty when a repository
+  /// declares no `build` section.
+  public let buildPresets: [String: BuildPreset]
   /// Repository-relative directories that whole-repository checks skip, such as fixtures that
   /// violate the rules on purpose.
   public let exclude: [String]
@@ -44,12 +47,14 @@ public struct Config: Sendable, Equatable {
     judge: JudgeConfig = .disabled,
     docs: DocsConfig = DocsConfig(),
     plan: PlanConfig = PlanConfig(),
+    buildPresets: [String: BuildPreset] = [:],
     exclude: [String] = []
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
-      modules: modules, judge: judge, docs: docs, plan: plan, exclude: exclude)
+      modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
+      exclude: exclude)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     self.xcode = xcode
     self.appScheme = appScheme
@@ -64,6 +69,7 @@ public struct Config: Sendable, Equatable {
     self.judge = judge
     self.docs = docs
     self.plan = plan
+    self.buildPresets = buildPresets
     self.exclude = exclude
   }
 
@@ -83,7 +89,7 @@ public struct Config: Sendable, Equatable {
     xcode: String, appScheme: String, packages: [String], simulator: SimulatorConfig,
     pyramid: PyramidConfig, flows: [Flow], mutation: MutationConfig, budgets: Budgets,
     clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, docs: DocsConfig,
-    plan: PlanConfig, exclude: [String]
+    plan: PlanConfig, buildPresets: [String: BuildPreset], exclude: [String]
   ) -> [ConfigIssue] {
     var issues: [ConfigIssue] = []
     func requireText(_ value: String, _ path: String) {
@@ -263,6 +269,32 @@ public struct Config: Sendable, Equatable {
         .outOfRange(
           path: "plan.worker_pack_token_budget", value: "\(plan.workerPackTokenBudget)",
           allowed: ">= 1"))
+    }
+
+    for name in buildPresets.keys.sorted() {
+      let preset = buildPresets[name]!
+      let path = "build.presets.\(name)"
+      if preset.maxParallel < 1 {
+        issues.append(
+          .outOfRange(
+            path: "\(path).max_parallel", value: "\(preset.maxParallel)", allowed: ">= 1"))
+      }
+      if preset.timeBudgetMin < 0 {
+        issues.append(
+          .outOfRange(
+            path: "\(path).time_budget_min", value: "\(preset.timeBudgetMin)", allowed: ">= 0"))
+      }
+      if preset.stopStartsBeforeMin < 0 {
+        issues.append(
+          .outOfRange(
+            path: "\(path).stop_starts_before_min", value: "\(preset.stopStartsBeforeMin)",
+            allowed: ">= 0"))
+      } else if preset.stopStartsBeforeMin > preset.timeBudgetMin {
+        issues.append(
+          .outOfRange(
+            path: "\(path).stop_starts_before_min", value: "\(preset.stopStartsBeforeMin)",
+            allowed: "<= \(path).time_budget_min"))
+      }
     }
     return issues
   }

@@ -47,3 +47,27 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
 # [plan]
 # max_parallel = 3
+
+# Named `build` presets (design spec §5.1). Every key is required: a typo fails `swiftgate doctor`
+# rather than falling back to a default without warning.
+[build.presets.default]
+design_tier = "standard"
+max_parallel = 3
+review = "full"            # full: verifier + test-quality per task; gate: the task gate only
+task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready
+merge_gate = "push"
+worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
+time_budget_min = 0        # 0: no budget
+stop_starts_before_min = 0
+on_design_conflict = "amend"   # amend: full --amend flow; block: D14
+
+[build.presets.interview]
+design_tier = "sketch"
+max_parallel = 3
+review = "gate"
+task_gate = "fast"
+merge_gate = "push"
+worker_model = "tagged"
+time_budget_min = 38
+stop_starts_before_min = 8
+on_design_conflict = "block"
