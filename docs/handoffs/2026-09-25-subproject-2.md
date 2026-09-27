@@ -6,8 +6,10 @@ and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interface
 Rehearsals 26 (install passed), 27 (the API was refuted) and 28 (design reached review, stopped at revise, nothing published)
 are merged. Their frame answers are labelled "orchestrator-answered rehearsal". The open items are in the interfaces note, Wave 28.
 Step 3: the review is done, in docs/handoffs/subproject-2-review.md (1 blocker, 12 fix tasks in 4 waves, 7 user decisions).
-Fix wave 1 and the lockfile fix are merged (push tier GREEN, 1499 tests). The ready tier is BLOCKED only because mutate's
-baseline trips LiveProcessRunnerTests; a fix for that and for mutate's build fan-out comes next, then fix waves 2–4.
+Fix waves 1 and 2 are merged (the interfaces note covers each), plus the lockfile, Xcode pin and mutate fixes. In flight: the
+latency fix (latency-tests-hold-under-load). Queued in the review doc's Addendum: macro-compile-errors-go-red and
+review-findings-cite-source-lines. Then fix waves 3–4. The sub-project 5 session (build executor) merges into the same main;
+coordinate merges with it by message.
 DECIDED by the user (2026-09-26): an Xcode pin mismatch ends `test` and `check` tiers BLOCKED with doctor.xcode-pin
 (the evals case xcode-pin-mismatch expects BLOCKED); reuse Doctor.matchesPin (major.minor, so a 26.2 pin accepts 26.2.x). It's queued as a task.
 Then, in order (the user approved this plan on 2026-09-26):
