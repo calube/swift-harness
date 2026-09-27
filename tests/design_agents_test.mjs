@@ -633,14 +633,21 @@ Object.assign(tests, {
     assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'drafter lists the sections out of order')
   },
 
-  'the decomposer emits every LedgerTask key except actualLines — catches a proposed task the ledger cannot decode or a fabricated line count'() {
+  'the decomposer emits every LedgerTask key it owns at decomposition time — catches a proposed task the ledger cannot decode or a fabricated line count'() {
+    // actualLines and model are written later, by a worker report and the decomposer's own model
+    // tag respectively; branch is written by worktree create. None of the three is the
+    // decomposer's to emit yet.
+    const notYetDecomposerOwned = ['actualLines', 'model', 'branch']
     const keys = ledgerTaskKeys(domainSource('Plan/Ledger.swift'))
     assert.ok(keys.includes('actualLines') && keys.includes('estLines'), `LedgerTask keys: ${keys}`)
     const text = agentText('design-decomposer')
-    for (const key of keys.filter(k => k !== 'actualLines')) assert.ok(text.includes(`"${key}"`), `missing "${key}"`)
+    for (const key of keys.filter(k => !notYetDecomposerOwned.includes(k)))
+      assert.ok(text.includes(`"${key}"`), `missing "${key}"`)
     const fences = [...text.matchAll(/```json\n([\s\S]*?)```/g)].map(m => m[1])
     assert.ok(fences.length > 0, 'no json example')
-    for (const fence of fences) assert.ok(!fence.includes('"actualLines"'), 'a json example sets "actualLines"')
+    for (const fence of fences)
+      for (const key of notYetDecomposerOwned)
+        assert.ok(!fence.includes(`"${key}"`), `a json example sets "${key}"`)
   },
 
   'the decomposer names every plan-lint rule id — catches a fix round that ignores an error the gate reports'() {
