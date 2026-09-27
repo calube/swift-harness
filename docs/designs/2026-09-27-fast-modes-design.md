@@ -8,7 +8,10 @@ and plan take 13–14 min before any code; only 27–40% of a run is model codin
 Covers the research's changes 5 (a design-free ship path), 6 (a sprint skill) and 7 (surface commits and
 `swiftgate surface-check`). Changes 1–4, 8–10 are plan tasks in docs/plans/2026-09-26-build-executor-plan.md "Speed".
 Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md), proposed.
-Read first: this header, then §2, then §7 (open questions).
+User decision 2026-09-27: sprint first, built for correctness. Building the harness is not the timed session: every
+harness change here goes through design approval, plan tasks, surface-first workers, the push + prove merge gate and
+mutate on main. Speed is what the shipped mode gives a consumer, never a shortcut in building it.
+Read first: this header, then §2, then §4 and §7 (open questions).
 -->
 
 ## 1. Purpose
@@ -22,6 +25,9 @@ Three changes, in build order:
    subagents or fixers, and 1 `ready` gate at the end.
 3. **Design-free ship.** A preset can replace design and plan with a 1-page spec the user confirms once, then
    build it as parallel slices off 1 surface commit.
+
+Build order, by the user's decision: surface commits, then sprint. Design-free ship waits for sprint's rehearsal
+results.
 
 ### Non-goals
 
@@ -77,15 +83,47 @@ list worker spent 8 commits doing that.
 `/swift-harness:sprint <spec-file> [--preset <name>]`. For a spec that 1 model can build in the time available,
 and for change requests on a build that's already merged.
 
+### 4.1 Flow
+
 1. **Spec page.** The session writes a 1-page spec from the spec file (§5.2 format) and asks the user to confirm
    it once.
-2. **Surface.** It commits the surface (§3), runs `surface-check`, and records the sha.
-3. **Slices.** For each slice in the page's order: a failing test, the code, `check --tier fast` as the inner loop
-   (1–7 s in trial runs), then `check --tier push` at the slice boundary and a commit.
-4. **Final gate.** `check --tier ready --proof-base <surface>` once. RED stops with the findings; the session fixes
-   them in place.
+2. **Branch.** `swiftgate sprint start` creates branch `sprint/<slug>` from a green `main` and records the run.
+3. **Surface.** The session commits the surface (§3); `swiftgate sprint surface` runs `surface-check` on it and
+   records the sha.
+4. **Slices.** For each slice in the page's order: a failing test, the code, `check --tier fast` as the inner loop
+   (1–7 s in trial runs), then `check --tier push` at the slice boundary, a commit, and `swiftgate sprint slice
+   <n> --gate <run id>`.
+5. **Finish.** `check --tier ready --base main --proof-base <surface>` once, then `swiftgate sprint finish --gate
+   <run id>`, which fast-forwards `main` to the branch.
 
 No worktrees, workers, fixers or merge queue. It can't go faster than 1 model's pace.
+
+### 4.2 What makes it correct
+
+The skill is prose, and prose gets skipped under time pressure. So every step that matters is a `swiftgate sprint`
+command that checks it, and the skill can't advance without it.
+
+| Rule | Checked by |
+|---|---|
+| Steps run in order: start, surface, slices in the page's order, finish | a closed state machine in `SwiftGateDomain`; any other transition exits 1 and names the step it expected |
+| A slice's gate ran at that slice's commit | the gate run's `headCommit` equals the branch HEAD the command sees |
+| Every slice passed `push` before the next starts | `sprint slice` refuses a RED, BLOCKED or stale run |
+| The surface has no behaviour | `sprint surface` runs `surface-check` and refuses on any finding |
+| Every new test fails on an assertion without its code | the final `ready` gate's prove at the surface base; `sprint finish` refuses unless it's GREEN at HEAD |
+| `main` only moves to a green sprint | `sprint finish` fast-forwards and refuses when `main` moved since `start` |
+| A crash loses nothing | state lives in the git common dir with the other plan state; `sprint status` names the next step |
+
+A change request after finish is a new sprint on the same spec page: its own branch, surface and slices, proven
+against its own surface.
+
+### 4.3 Testing sprint itself
+
+- The state machine: every legal transition passes, and every illegal 1 fails with the expected step, in domain tests.
+- Each command against a temp repo with real commits: a stale `headCommit`, a RED run, a moved `main` and a surface
+  with behaviour each refuse. Remove each check, confirm its test goes red, and restore it.
+- The skill: a contract test that every `swiftgate` command and flag the skill names exists, as the other skills
+  have.
+- 2 attended rehearsals on different practice prompts before the user relies on it.
 
 ## 5. Design-free ship
 
@@ -122,11 +160,10 @@ No preset, profile or mode may turn these off:
 
 ## 7. Open questions for the user
 
-1. **Order.** Sprint first (cheaper, about 25–30 min on the trial exercise, estimated), or design-free ship with
-   parallel slices first (the only path the research expects to reach 3–4× scope in 45 min)? The research
-   recommends sprint first. Your research doc has the same question open as a comment.
-2. **Ledger in sprint.** Should sprint write a plan and ledger (visible progress, resumable after a crash), or stay
-   ledger-free (faster, less machinery)?
+1. **Order.** Answered 2026-09-27: sprint first, built for correctness.
+2. **Ledger in sprint.** §4.2 proposes a small sprint state file rather than the plan ledger: it resumes after a
+   crash and checks every step, without plan-lint, waves or worker packs. Is that enough, or should sprint also
+   render a ledger page you can watch?
 3. **Stub list.** Is §3.2's allowed-body list right? In particular: may a stub return a fixed sample value (for
    example a preview's data), or does that count as behaviour?
 4. **Profile default.** May a repo's profile make `design_tier = "none"` its default, or must each run ask for it?
