@@ -120,6 +120,11 @@ extension TestCheck {
     case .failed(let outcome): return try parts(failure: outcome, tier: tier)
     case .loaded(let loaded): repository = loaded
     }
+    if let blocked = try await XcodePinCheck.blockedParts(
+      tier: tier, pin: repository.config.xcode, xcodebuild: dependencies.xcodebuild)
+    {
+      return blocked
+    }
     if tier == .t3 {
       return try await SimulatorTestCheck.t3(
         config: repository.config, root: root, dependencies: dependencies, context: context)

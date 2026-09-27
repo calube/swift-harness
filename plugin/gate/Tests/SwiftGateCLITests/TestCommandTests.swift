@@ -77,6 +77,11 @@ struct ProbeRepository {
   func context() -> GateRun.Context {
     GateRun.Context(runID: "r", directory: root.appending(path: ".harness/runs/r"))
   }
+
+  /// A patch of the "26.2" pin every fixture config uses, so `TestCheck.run`'s Xcode pin gate
+  /// never blocks a test that isn't about it.
+  static let matchingXcodebuild = FakeXcodebuild(
+    versionOutput: "Xcode 26.2.1\nBuild version 17C48\n")
 }
 
 @Suite("swiftgate test")
@@ -91,7 +96,7 @@ struct TestCommandTests {
 
     let parts = try await TestCheck.run(
       root: repository.root, swiftPM: swiftPM, git: FakeGit(), affectedSince: nil,
-      context: repository.context())
+      xcodebuild: ProbeRepository.matchingXcodebuild, context: repository.context())
 
     #expect(swiftPM.testRequests.map(\.filters) == [[#"^(EmptyTests|ProbeTests)\."#]])
     #expect(parts.tiers.map(\.tier) == [.t1])
@@ -110,7 +115,7 @@ struct TestCommandTests {
 
     let parts = try await TestCheck.run(
       root: repository.root, swiftPM: swiftPM, git: git, affectedSince: "HEAD",
-      context: repository.context())
+      xcodebuild: ProbeRepository.matchingXcodebuild, context: repository.context())
 
     #expect(swiftPM.testRequests.isEmpty)
     #expect(git.changedSinceRefs == ["HEAD"])
@@ -129,7 +134,7 @@ struct TestCommandTests {
 
     let parts = try await TestCheck.run(
       root: repository.root, swiftPM: swiftPM, git: git, affectedSince: "main",
-      context: repository.context())
+      xcodebuild: ProbeRepository.matchingXcodebuild, context: repository.context())
 
     #expect(swiftPM.testRequests.count == 1)
     #expect(parts.tiers.first?.testCounts?.passed == 2)
@@ -143,7 +148,7 @@ struct TestCommandTests {
     defer { bare.remove() }
     let missing = try await TestCheck.run(
       root: bare.root, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), git: FakeGit(),
-      affectedSince: nil, context: bare.context())
+      affectedSince: nil, xcodebuild: ProbeRepository.matchingXcodebuild, context: bare.context())
     #expect(missing.tiers.first?.verdict == .red)
     #expect(missing.findings.first?.file == ConfigLoader.fileName)
 
@@ -152,8 +157,50 @@ struct TestCommandTests {
     let gitDown = try await TestCheck.run(
       root: repository.root, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
       git: FakeGit(failure: .invalidRef("-x")), affectedSince: "-x",
-      context: repository.context())
+      xcodebuild: ProbeRepository.matchingXcodebuild, context: repository.context())
     #expect(gitDown.tiers.first?.verdict == .blocked)
+  }
+
+  @Test(
+    "an Xcode pin mismatch ends t1 BLOCKED with doctor.xcode-pin, naming the fix — catches a build under the wrong toolchain reported as failing tests"
+  )
+  func xcodePinMismatch() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    let mismatched = FakeXcodebuild(versionOutput: "Xcode 25.0\nBuild version 1A1\n")
+
+    let parts = try await TestCheck.run(
+      root: repository.root, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
+      git: FakeGit(), affectedSince: nil, xcodebuild: mismatched, context: repository.context())
+
+    #expect(parts.tiers.map(\.tier) == [.t1])
+    #expect(parts.tiers.first?.verdict == .blocked)
+    #expect(parts.findings.map(\.ruleID) == [Doctor.xcodePinRuleID])
+    #expect(parts.findings.first?.message.contains("26.2") == true)
+    #expect(parts.findings.first?.message.contains("25.0") == true)
+  }
+
+  @Test(
+    "an Xcode pin mismatch ends t2 and t3 BLOCKED too — catches the pin check gating only the host tier"
+  )
+  func xcodePinMismatchSimulatorTiers() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    let mismatched = FakeXcodebuild(versionOutput: "Xcode 25.0\nBuild version 1A1\n")
+    let dependencies = SimulatorTestCheck.Dependencies(
+      makeDevices: { _ in FakeDevices() }, xcodebuild: mismatched,
+      reader: FakeXcresultReader(scenario: "pass"))
+
+    for tier: Tier in [.t2, .t3] {
+      let parts = try await TestCheck.runSimulator(
+        tier: tier, root: repository.root,
+        swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), git: FakeGit(),
+        affectedSince: nil, dependencies: dependencies, context: repository.context())
+
+      #expect(parts.tiers.map(\.tier) == [tier])
+      #expect(parts.tiers.first?.verdict == .blocked)
+      #expect(parts.findings.map(\.ruleID) == [Doctor.xcodePinRuleID])
+    }
   }
 
   @Test("--affected-since is parsed for t1 — catches the scope flag being dropped")

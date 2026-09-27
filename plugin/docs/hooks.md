@@ -20,8 +20,8 @@ each one calls the same code as the `swiftgate` command it names.
   GREEN run. Unchanged content that was RED reuses that verdict instead of re-running.
 - A RED stop is blocked at most 3 times in a row. The next stop is released with the message
   `RED — not done`.
-- BLOCKED (git, SwiftPM or the formatter could not run) never blocks and never counts as a strike;
-  the user sees why the gate could not judge.
+- BLOCKED (git, SwiftPM, the formatter, or the Xcode pin) never blocks and never counts as a
+  strike; the user sees why the gate could not judge.
 - Claude Code's `stop_hook_active` flag marks a stop that follows a block. A stop without it starts
   the strike count over.
 

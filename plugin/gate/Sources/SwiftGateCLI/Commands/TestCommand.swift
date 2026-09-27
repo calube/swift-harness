@@ -43,12 +43,17 @@ enum TestCheck {
   ///   every T1 target.
   static func run(
     root: URL, swiftPM: any SwiftPM, git: any Git, affectedSince: String?,
-    context: GateRun.Context
+    xcodebuild: any Xcodebuild, context: GateRun.Context
   ) async throws -> GateRunParts {
     let repository: ConfiguredRepository.Loaded
     switch await ConfiguredRepository.load(root: root, swiftPM: swiftPM, command: "test") {
     case .failed(let outcome): return try parts(t1Failure: outcome)
     case .loaded(let loaded): repository = loaded
+    }
+    if let blocked = try await XcodePinCheck.blockedParts(
+      tier: .t1, pin: repository.config.xcode, xcodebuild: xcodebuild)
+    {
+      return blocked
     }
     let plan: TierPlan
     if let affectedSince {
@@ -99,13 +104,15 @@ struct TestCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
+    let xcodebuild = LiveXcodebuild(runner: LiveProcessRunner())
     try await GateRun.execute(
       root: root, format: output.format, command: "test \(tier.rawValue)"
     ) { context in
       switch tier {
       case .t1:
         try await TestCheck.run(
-          root: root, swiftPM: swiftPM, git: git, affectedSince: affectedSince, context: context)
+          root: root, swiftPM: swiftPM, git: git, affectedSince: affectedSince,
+          xcodebuild: xcodebuild, context: context)
       case .t2, .t3:
         try await TestCheck.runSimulator(
           tier: tier == .t2 ? .t2 : .t3, root: root, swiftPM: swiftPM, git: git,
