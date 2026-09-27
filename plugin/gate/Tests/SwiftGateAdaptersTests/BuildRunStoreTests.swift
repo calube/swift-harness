@@ -230,6 +230,40 @@ struct BuildRunStoreTests {
   }
 
   @Test(
+    "an undo after the newest merge makes its toCommit where main should be, and a later merge's post commit wins again — catches every merge after an undo refused as main moved"
+  )
+  func undoMovesTheExpectedMain() async throws {
+    let repo = try await Self.repository()
+    defer { repo.remove() }
+    let store = try await Self.create(repo.adapter)
+    try await store.append(
+      .merge(.init(task: "a", preCommit: "p1", postCommit: "c1", at: Self.startedAt)))
+    try await store.append(
+      .undo(.init(task: "a", fromCommit: "c1", toCommit: "p1", at: Self.startedAt)))
+    #expect(try store.lastMergePostCommit() == "p1")
+
+    try await store.append(
+      .merge(.init(task: "a", preCommit: "p1", postCommit: "c2", at: Self.startedAt)))
+    #expect(try store.lastMergePostCommit() == "c2")
+    #expect(try store.events().events.map(\.kind) == [.merge, .undo, .merge])
+  }
+
+  @Test(
+    "an events log written before the undo kind existed still decodes whole — catches the new kind breaking older runs' logs"
+  )
+  func oldFormatLogDecodes() {
+    let lines = [
+      #"{"at":"2026-09-26T10:00:00Z","from":"pending","kind":"transition","task":"a","to":"in-progress"}"#,
+      #"{"at":"2026-09-26T10:05:00Z","kind":"merge","postCommit":"c1","preCommit":"p1","task":"a"}"#,
+    ]
+    let log = BuildEventJSON.decode(Data((lines.joined(separator: "\n") + "\n").utf8))
+
+    #expect(log.damage == [])
+    #expect(log.events.map(\.kind) == [.transition, .merge])
+    #expect(log.lastMergePostCommit == "c1")
+  }
+
+  @Test(
     "run ids and plan names that aren't one path component are refused — catches a run addressing another plan's files",
     arguments: ["..", "a/b", ".hidden", ""])
   func invalidRunIDRefused(runID: String) async throws {

@@ -157,7 +157,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
 
   /// Whether `main` was checked against the run's last merge.
   public enum MainCheck: String, Sendable, Encodable {
-    /// `main` was at the post commit of the run's newest merge event.
+    /// `main` was where the run's newest merge or undo event left it.
     case atLastMerge = "at-last-merge"
     /// The run has no merge event yet, so there was no recorded commit to compare `main` with.
     case noMergeYet = "no-merge-yet"
@@ -215,17 +215,19 @@ public struct BuildMerge: Sendable {
 
   let plan: String
   let task: String
+  let fix: Bool
   let git: any Git
   let workspace: any GitWorkspace
   let merger: any MergeRunner
   let clock: any BuildClock
 
   public init(
-    plan: String, task: String, git: any Git, workspace: any GitWorkspace,
+    plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
     merger: any MergeRunner, clock: any BuildClock
   ) {
     self.plan = plan
     self.task = task
+    self.fix = fix
     self.git = git
     self.workspace = workspace
     self.merger = merger
@@ -241,6 +243,8 @@ public struct BuildMerge: Sendable {
     let run: BuildRunStore
     let names: TaskWorktree
     let fix: TaskWorktree
+    /// The branch this call merges: the task's, or with `--fix` the fixer's.
+    let branch: String
   }
 
   public func merge() async -> BuildMergeReport {
@@ -256,7 +260,7 @@ public struct BuildMerge: Sendable {
       }
       let pre = try await checkMain(command, context, expected: last)
       let mainCheck: BuildMergeReport.MainCheck = last == nil ? .noMergeYet : .atLastMerge
-      let branch = context.names.branch
+      let branch = context.branch
       let merged = try await step(command, context, "reading \(branch)") {
         () async throws(GitWorkspaceError) in
         try await workspace.isMerged(branch, into: TaskWorktree.base)
@@ -278,21 +282,29 @@ public struct BuildMerge: Sendable {
         } catch {
           throw stop(
             command, context, .blocked,
-            "merged \(context.names.branch) into \(TaskWorktree.base) (\(pre) → \(post)) but "
+            "merged \(branch) into \(TaskWorktree.base) (\(pre) → \(post)) but "
               + "couldn't record the merge event: \(error). `main` is merged; record or reset it "
               + "by hand before the next merge.", pre: pre, post: post)
         }
         return report(
           command, context, .merged, .green, mainCheck: mainCheck, pre: pre, post: post,
-          message: "merged \(context.names.branch) into \(TaskWorktree.base): \(pre) → \(post)"
+          message: "merged \(branch) into \(TaskWorktree.base): \(pre) → \(post)"
             + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : ""))
       case .conflicted(let files):
         try await abort(command, context, pre: pre)
+        if fix {
+          return report(
+            command, context, .conflicted, .red, mainCheck: mainCheck, pre: pre,
+            conflicted: files,
+            message: "\(branch) conflicts with \(TaskWorktree.base) in "
+              + files.joined(separator: ", ") + "; main is untouched at \(pre). Resolve it in "
+              + "\(context.fix.path) and merge again.")
+        }
         let (fixFiles, detail) = try await cutFix(command, context)
         return report(
           command, context, .conflicted, .red, mainCheck: mainCheck, pre: pre,
           conflicted: fixFiles.isEmpty ? files : fixFiles,
-          message: "\(context.names.branch) conflicts with \(TaskWorktree.base) in "
+          message: "\(branch) conflicts with \(TaskWorktree.base) in "
             + files.joined(separator: ", ") + "; main is untouched at \(pre). \(detail)")
       }
     } catch {
@@ -316,17 +328,28 @@ public struct BuildMerge: Sendable {
           "\(context.run.layout.eventsFile) is damaged (\(log.damage)); the lost line could be a "
             + "later merge, so there's no trustworthy merge to undo")
       }
-      let lastMerge = log.events.reversed().lazy.compactMap { event -> BuildEvent.Merge? in
-        if case .merge(let merge) = event { return merge }
-        return nil
-      }.first
-      guard let lastMerge, lastMerge.task == task else {
+      let newest = log.events.last {
+        switch $0 {
+        case .merge, .undo: true
+        case .transition: false
+        }
+      }
+      let lastMerge: BuildEvent.Merge
+      switch newest {
+      case .merge(let merge) where merge.task == task:
+        lastMerge = merge
+      case .merge(let merge):
         throw stop(
           command, context, .refused,
-          lastMerge.map {
-            "the run's newest merge is task `\($0.task)`, not `\(task)`; undoing `\(task)` would "
-              + "also drop it"
-          } ?? "build run \(context.run.runID) has no merge to undo")
+          "the run's newest merge is task `\(merge.task)`, not `\(task)`; undoing `\(task)` "
+            + "would also drop it")
+      case .undo(let undo):
+        throw stop(
+          command, context, .refused,
+          "the run's newest merge, task `\(undo.task)`'s, is already undone")
+      case .transition, nil:
+        throw stop(
+          command, context, .refused, "build run \(context.run.runID) has no merge to undo")
       }
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
       try await checkFixIsFree(command, context)
@@ -335,13 +358,26 @@ public struct BuildMerge: Sendable {
         () async throws(GitWorkspaceError) in
         try await merger.resetHard(to: lastMerge.preCommit, in: main)
       }
+      do throws(BuildRunStoreError) {
+        try await context.run.append(
+          .undo(
+            .init(
+              task: task, fromCommit: lastMerge.postCommit, toCommit: lastMerge.preCommit,
+              at: clock.now())))
+      } catch {
+        throw stop(
+          command, context, .blocked,
+          "reset \(TaskWorktree.base) from \(lastMerge.postCommit) to \(lastMerge.preCommit) but "
+            + "couldn't record the undo event: \(error). Every later merge will be refused as "
+            + "`main` moved until the log says where main is.", pre: lastMerge.preCommit,
+          post: lastMerge.postCommit)
+      }
       let (files, detail) = try await cutFix(command, context)
       return report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
         message: "reset \(TaskWorktree.base) from \(lastMerge.postCommit) to "
-          + "\(lastMerge.preCommit). \(detail) The events log keeps the merge event: its format "
-          + "has no undo kind.")
+          + "\(lastMerge.preCommit). \(detail)")
     } catch {
       return error.report
     }
@@ -372,13 +408,14 @@ public struct BuildMerge: Sendable {
       throw bare(
         command, .blocked, "plan `\(plan)` has no build run; run `swiftgate build start` first")
     }
-    let context = Context(run: run, names: names, fix: fix)
-    let exists = try await step(command, context, "reading \(names.branch)") {
+    let branch = self.fix && command == Self.mergeCommand ? fix.branch : names.branch
+    let context = Context(run: run, names: names, fix: fix, branch: branch)
+    let exists = try await step(command, context, "reading \(branch)") {
       () async throws(GitWorkspaceError) in
-      try await workspace.branchExists(names.branch)
+      try await workspace.branchExists(branch)
     }
     guard exists else {
-      throw stop(command, context, .refused, "branch \(names.branch) doesn't exist")
+      throw stop(command, context, .refused, "branch \(branch) doesn't exist")
     }
     return context
   }
@@ -512,7 +549,7 @@ public struct BuildMerge: Sendable {
     let cut = status == .conflicted || status == .undone
     return BuildMergeReport(
       command: command, plan: plan, task: task, status: status, verdict: verdict,
-      runId: context.run.runID, branch: context.names.branch,
+      runId: context.run.runID, branch: context.branch,
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? context.fix.path : nil,
       fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted, message: message)

@@ -80,6 +80,11 @@ struct NewSubcommandRegistrationTests {
       "merge"
     ),
     (
+      "build merge --fix",
+      ["build", "merge", "--fix", "example-plan", "example-task", "--session", "session-123"],
+      "merge"
+    ),
+    (
       "build check-return",
       [
         "build", "check-return", "return.json", "--plan", "example-plan", "--session",
@@ -126,7 +131,7 @@ struct NewSubcommandRegistrationTests {
     "design-render",
     "calibrate design",
     "build start", "build next", "build finish", "build check-return", "build merge",
-    "build merge --undo",
+    "build merge --undo", "build merge --fix",
     "ledger set",
     "worktree create", "worktree warm-check", "worktree remove",
   ]

@@ -57,17 +57,17 @@ private struct MergeScenario {
 
   func main() async throws -> String { try await repo.git("rev-parse", "main") }
 
-  func merge(_ task: String) async -> BuildMergeReport {
-    await flow(task).merge()
+  func merge(_ task: String, fix: Bool = false) async -> BuildMergeReport {
+    await flow(task, fix: fix).merge()
   }
 
   func undo(_ task: String) async -> BuildMergeReport {
     await flow(task).undo()
   }
 
-  private func flow(_ task: String) -> BuildMerge {
+  private func flow(_ task: String, fix: Bool = false) -> BuildMerge {
     BuildMerge(
-      plan: Self.plan, task: task, git: repo.adapter,
+      plan: Self.plan, task: task, fix: fix, git: repo.adapter,
       workspace: LiveGitWorkspace(runner: repo.runner, repositoryRoot: repo.root.path),
       merger: LiveMergeRunner(runner: repo.runner), clock: FixedClock(date: Self.at))
   }
@@ -77,6 +77,15 @@ private struct MergeScenario {
       if case .merge(let merge) = $0 { return merge }
       return nil
     }
+  }
+
+  /// Commits the fixer's work in the fix worktree `--undo` cut.
+  func commitFix(_ task: String) async throws -> String {
+    let fix = fixPath(task)
+    try Data("fixed\n".utf8).write(to: URL(filePath: fix + "/Fixed.swift"))
+    try await repo.git("-C", fix, "add", "-A")
+    try await repo.git("-C", fix, "commit", "-q", "-m", "fix: \(task) red gate")
+    return try await repo.git("-C", fix, "rev-parse", "HEAD")
   }
 
   func status(in directory: String? = nil) async throws -> String {
@@ -352,5 +361,77 @@ struct BuildMergeTests {
       merger.calls == [
         .merge(branch: "search/t1", message: "Merge: work", checkout: scenario.checkout.path)
       ])
+  }
+
+  @Test(
+    "merge, undo, then merging the fix branch with --fix succeeds and records the merge, the undo and the fix's merge in order — catches the red-gate recovery stuck after its undo"
+  )
+  func undoThenFixMerge() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    let first = await scenario.merge("t1")
+    #expect(await scenario.undo("t1").status == .undone)
+    let fixTip = try await scenario.commitFix("t1")
+
+    let report = await scenario.merge("t1", fix: true)
+
+    #expect(report.status == .merged, "\(report.message)")
+    #expect(report.branch == "search/fix-t1")
+    #expect(report.mainCheck == .atLastMerge)
+    #expect(report.preCommit == pre)
+    let post = try await scenario.main()
+    #expect(report.postCommit == post)
+    #expect(try await scenario.repo.git("rev-parse", "main^2") == fixTip)
+    #expect(
+      try scenario.run.events().events == [
+        .merge(
+          .init(
+            task: "t1", preCommit: pre, postCommit: try #require(first.postCommit),
+            at: MergeScenario.at)),
+        .undo(
+          .init(
+            task: "t1", fromCommit: try #require(first.postCommit), toCommit: pre,
+            at: MergeScenario.at)),
+        .merge(.init(task: "t1", preCommit: pre, postCommit: post, at: MergeScenario.at)),
+      ])
+  }
+
+  @Test(
+    "after an undo, a merge without --fix checks main against the undo's toCommit: at it merges, moved past it refuses — catches the undo's reset read as another session's merge, or not checked at all"
+  )
+  func mergeAfterUndoChecksToCommit() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    try await scenario.taskBranch("t2", "C.swift", "c\n")
+    let pre = try await scenario.main()
+    #expect(await scenario.merge("t1").status == .merged)
+    #expect(await scenario.undo("t1").status == .undone)
+
+    let atUndo = await scenario.merge("t2")
+    #expect(atUndo.status == .merged, "\(atUndo.message)")
+    #expect(atUndo.mainCheck == .atLastMerge)
+    #expect(atUndo.preCommit == pre)
+  }
+
+  @Test(
+    "after an undo, main moved past the undo's toCommit refuses the next merge — catches a concurrent merge slipping in after the reset"
+  )
+  func movedAfterUndoRefused() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    try await scenario.taskBranch("t2", "C.swift", "c\n")
+    #expect(await scenario.merge("t1").status == .merged)
+    #expect(await scenario.undo("t1").status == .undone)
+    try scenario.repo.write("D.swift", "d\n")
+    let moved = try await scenario.repo.commitAll("another session's merge")
+
+    let report = await scenario.merge("t2")
+
+    #expect(report.status == .refused, "\(report.message)")
+    #expect(try await scenario.main() == moved)
   }
 }
