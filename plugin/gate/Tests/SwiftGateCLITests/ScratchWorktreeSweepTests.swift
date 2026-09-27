@@ -66,6 +66,19 @@ struct ScratchWorktreeSweepTests {
       _ = try await Self.git("worktree", "add", "--detach", "--quiet", tree.path, in: root)
     }
     defer { _ = try? FileManager.default.removeItem(at: live) }
+    // Half deleted and holding a directory it may not empty, so neither git nor a plain delete
+    // can remove it.
+    let stuck = base.appending(path: ".app-swiftgate-prove-\(dead)-9c0d")
+    _ = try await Self.git("worktree", "add", "--detach", "--quiet", stuck.path, in: root)
+    try FileManager.default.removeItem(at: stuck.appending(path: ".git"))
+    let locked = stuck.appending(path: "locked", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+    try Data("x".utf8).write(to: locked.appending(path: "file"))
+    try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: locked.path)
+    defer {
+      _ = try? FileManager.default.setAttributes(
+        [.posixPermissions: 0o700], ofItemAtPath: locked.path)
+    }
     for tree in orphans {
       try Data("profile".utf8).write(to: tree.appending(path: "default.profraw"))
     }
@@ -74,6 +87,10 @@ struct ScratchWorktreeSweepTests {
     let note = await HookDependencies.live(root: root, environment: [:]).sweep.sweep()
 
     #expect(note?.contains("Removed 3 scratch worktree") == true, "\(String(describing: note))")
+    let failures = note?.split(separator: "\n").first { $0.hasPrefix("Could not remove") }
+    #expect(failures?.hasPrefix("Could not remove 1 orphaned scratch worktree(s): ") == true)
+    #expect(failures?.contains(stuck.path) == true)
+    #expect(FileManager.default.fileExists(atPath: locked.path))
     let registered = try await Self.git("worktree", "list", "--porcelain", in: root)
     for tree in orphans {
       #expect(!FileManager.default.fileExists(atPath: tree.path))
