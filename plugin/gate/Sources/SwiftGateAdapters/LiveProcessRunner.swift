@@ -229,6 +229,7 @@ private struct SpawnRequest: Sendable {
     var exitedAt: ContinuousClock.Instant?
     var termination = Termination.none
     var terminateSentAt: ContinuousClock.Instant?
+    var terminatedGroups: Set<pid_t> = []
     var killSent = false
 
     while true {
@@ -240,11 +241,11 @@ private struct SpawnRequest: Sendable {
           termination = .timedOut
         }
         if termination != .none {
-          ProcessTree.terminate(root: pid, signal: SIGTERM)
+          terminatedGroups = ProcessTree.terminate(root: pid, signal: SIGTERM)
           terminateSentAt = now
         }
       } else if !killSent, let sent = terminateSentAt, now - sent >= terminationGracePeriod {
-        ProcessTree.terminate(root: pid, signal: SIGKILL)
+        ProcessTree.terminate(root: pid, signal: SIGKILL, alongside: terminatedGroups)
         killSent = true
       }
 
@@ -486,16 +487,23 @@ private enum ProcessTree {
     return all
   }
 
-  /// Every distinct process group among `root` and its descendants, then `signal` to each. A
-  /// group already gone by the time it's signalled is not an error: `kill` on an empty group is a
-  /// no-op.
-  static func terminate(root: pid_t, signal: Int32) {
-    var seen = Set<pid_t>()
+  /// Sends `signal` to `root`'s own group, every distinct group among its descendants, and
+  /// `groups`, then returns every group it signalled. `root` leads its own group, so `-root` still
+  /// reaches the members after `root` itself is reaped; a descendant in a group of its own is
+  /// reparented once `root` dies and can no longer be found by walking parents, so a later signal
+  /// passes the groups an earlier one returned. A group already gone is not an error: `kill` on
+  /// an empty group is a no-op.
+  @discardableResult
+  static func terminate(root: pid_t, signal: Int32, alongside groups: Set<pid_t> = [])
+    -> Set<pid_t>
+  {
+    var all = groups.union([root])
     for pid in descendants(of: root) {
       let group = getpgid(pid)
-      guard group > 0, seen.insert(group).inserted else { continue }
-      kill(-group, signal)
+      if group > 0 { all.insert(group) }
     }
+    for group in all { kill(-group, signal) }
+    return all
   }
 
   /// `pid=,ppid=` for every process on the machine, from a real `ps` run: `popen`/`pclose` are
