@@ -48,18 +48,22 @@ Workflow({
     tests: ["<the task's tests>"],
     contextPack: "<absolute path of .harness/context-pack/worker-<task>.md>",
     model: "<sonnet|opus>",
-    review: "<full|gate>"
+    review: "<full|gate>",
+    taskProof: "<per-task|final>"
   }
 })
 ```
 
 - `taskGate`: the preset's `taskGate` when it names a tier; under `ledger`, the task's own `gate`.
-  The workflow tells the worker to run it as `check --tier <taskGate> --base main --prove --mutate`,
-  with `--proof-base <surface commit>` when the task adds API, so every task proves and mutates its
-  own change whatever the preset. `build check-return` fails a green gate that skipped either.
+  The workflow tells the worker to run it as `check --tier <taskGate> --base main`, with
+  `--proof-base <surface commit>` when the task adds API, and adds `--prove --mutate` under
+  `per-task` proof.
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
+- `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
+  change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
+  no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
 
 Unknown or missing args make the workflow throw `build-task: …` at once: that is a skill bug, so fix
 the args and relaunch, and don't count it as the task's attempt.

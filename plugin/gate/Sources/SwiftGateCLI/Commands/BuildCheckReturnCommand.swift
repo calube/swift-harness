@@ -86,7 +86,7 @@ enum BuildCheckReturnRun {
     guard let task = ledger.tasks.first(where: { $0.id == taskReturn.task }) else {
       throw Blocked("plan `\(slug)` has no task `\(taskReturn.task)`")
     }
-    let taskGate = try await taskGate(
+    let (taskGate, taskProof) = try await taskGate(
       of: task, plan: store.plan, slug: slug, fix: fix, git: git)
     let names: TaskWorktree
     do {
@@ -132,8 +132,8 @@ enum BuildCheckReturnRun {
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
-      explainedEditsAllowed: fix, proofRequired: !fix, surfaceCommit: surface,
-      reviewRequired: !fix)
+      explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
+      surfaceCommit: surface, reviewRequired: !fix)
   }
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
@@ -150,10 +150,11 @@ enum BuildCheckReturnRun {
   }
 
   /// The preset's fixed tier, or the ledger's own when the preset defers to it. A fix is merged
-  /// straight after, so it meets the preset's merge gate instead.
+  /// straight after, so it meets the preset's merge gate instead. Also the run preset's
+  /// `taskProof`, which says whether the task gate had to prove and mutate.
   private static func taskGate(
     of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool, git: any Git
-  ) async throws(Blocked) -> CheckTier {
+  ) async throws(Blocked) -> (CheckTier, BuildPreset.TaskProof) {
     let store: BuildRunStore?
     do {
       store = try await BuildRunStore.latest(plan: slug, git: git)
@@ -167,10 +168,11 @@ enum BuildCheckReturnRun {
     } catch {
       throw Blocked("reading build run \(store.runID): \(error)")
     }
-    if fix { return record.preset.mergeGate }
+    let proof = record.preset.taskProof
+    if fix { return (record.preset.mergeGate, proof) }
     switch record.preset.taskGate {
-    case .ledger: return task.gate
-    case .tier(let tier): return tier
+    case .ledger: return (task.gate, proof)
+    case .tier(let tier): return (tier, proof)
     }
   }
 

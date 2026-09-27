@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) verifier and test-quality in parallel, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate", reviewers?}. Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate", taskProof: "per-task"|"final", reviewers?}. Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review only: verifier and test-quality in parallel' },
@@ -34,13 +34,15 @@ const TIERS = ['fast', 'push', 'ready']
 const VERDICTS = ['GREEN', 'RED', 'BLOCKED']
 const MODELS = ['sonnet', 'opus']
 const REVIEW_MODES = ['full', 'gate']
+// The preset's `task_proof`: per-task gates prove and mutate; final leaves both to the build's final ready gate.
+const TASK_PROOFS = ['per-task', 'final']
 const REVIEWERS = ['verifier', 'test-quality']
 const SEVERITIES = ['blocker', 'major', 'minor', 'nit']
 // Review contract: a blocker or major gives fix-then-merge, so it blocks the merge.
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'reviewers']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers']
 
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
 const stringArray = value => Array.isArray(value) && value.every(nonEmptyString)
@@ -69,6 +71,9 @@ function validateArgs(a) {
   if (!MODELS.includes(a.model)) invalid(`model must be one of ${MODELS.join(', ')}, got ${JSON.stringify(a.model)}`)
   if (!REVIEW_MODES.includes(a.review)) {
     invalid(`review must be one of ${REVIEW_MODES.join(', ')}, got ${JSON.stringify(a.review)}`)
+  }
+  if (!TASK_PROOFS.includes(a.taskProof)) {
+    invalid(`taskProof must be one of ${TASK_PROOFS.join(', ')}, got ${JSON.stringify(a.taskProof)}`)
   }
   let reviewers = a.review === 'full' ? REVIEWERS : []
   if (a.reviewers !== undefined) {
@@ -233,8 +238,12 @@ const brief = () =>
     `Task: ${A.task} (plan ${A.plan}).`,
     `Worktree: ${A.worktree}, branch ${A.branch}, already checked out.`,
     `Write set: ${A.writeSet.join(', ')}.`,
-    `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate, ` +
-      'plus --proof-base <surface commit> when the task adds API.',
+    `Task proof: ${A.taskProof}.`,
+    A.taskProof === 'per-task'
+      ? `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate, ` +
+        'plus --proof-base <surface commit> when the task adds API.'
+      : `Task gate: swiftgate check --tier ${A.taskGate} --base main, ` +
+        "plus --proof-base <surface commit> when the task adds API. The build's final ready gate proves and mutates every task at once.",
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')
