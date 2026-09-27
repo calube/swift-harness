@@ -194,6 +194,7 @@ struct PreToolUseGuardTests {
     let keptDesign = try scenario.planFileText(
       PlanStateScenario.planA, design: PlanStateScenario.designA)
     #expect(try await scenario.toolDecision(planA.planFile, writing: keptDesign) == nil)
+    #expect(try await scenario.decision(planA.planFile) == "deny", "a plan.json that isn't one")
     #expect(
       try await scenario.decision(
         scenario.root.path + "/links/plans/2026-09-24-counter/ledger.json") == nil)

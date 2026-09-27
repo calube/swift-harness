@@ -236,7 +236,7 @@ struct PlanClaimCommandTests {
   }
 
   @Test(
-    "a claim with --design lets the claiming session write that design doc and denies every other session — catches every design-doc write being denied at frame"
+    "a claim with --design lets the claiming session write that design doc, denies every other session, and denies everyone once a second plan names it — catches every design-doc write being denied at frame, or a design co-owned"
   )
   func claimWithDesignOpensTheDesignDoc() async throws {
     let scenario = try PlanStateScenario()
@@ -259,6 +259,9 @@ struct PlanClaimCommandTests {
       tier: "standard", git: git)
     #expect(claim.status == .claimed)
     #expect(try await scenario.decision(document) == nil)
+
+    try scenario.writePlanFile("2026-09-26-frame-copy", design: design)
+    #expect(try await scenario.decision(document) == "deny", "a second plan names it")
   }
 
   @Test(
