@@ -140,7 +140,8 @@ enum WorktreeRun {
   }
 
   static func remove(
-    slug: String, task: String, session: String?, git: any Git, workspace: any GitWorkspace
+    slug: String, task: String, fix: Bool = false, session: String?, git: any Git,
+    workspace: any GitWorkspace
   ) async -> WorktreeReport {
     let command = "worktree remove"
     let context: HeldTask
@@ -148,7 +149,19 @@ enum WorktreeRun {
     case .success(let resolved): context = resolved
     case .failure(let refusal): return refusal.report
     }
-    let names = context.names
+    let names: TaskWorktree
+    if fix {
+      // The fix worktree `build merge` cuts for this task, named the way it names it.
+      do {
+        names = try TaskWorktree(
+          commonDirectory: try await git.commonDirectory(), plan: slug, task: "fix-\(task)")
+      } catch {
+        return Reporter(command: command, slug: slug, task: task, names: nil).blocked(
+          "\(error)")
+      }
+    } else {
+      names = context.names
+    }
     let report = Reporter(command: command, slug: slug, task: task, names: names)
     do throws(GitWorkspaceError) {
       guard try await workspace.branchExists(names.branch) else {
@@ -415,7 +428,7 @@ struct WorktreeWarmCheckCommand: AsyncParsableCommand {
 struct WorktreeRemoveCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "remove",
-    abstract: "Remove a merged task's worktree and branch.",
+    abstract: "Remove a merged task's worktree and branch, or with --fix its fix worktree.",
     discussion:
       "Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
       + "the ledger, or its branch is missing or not merged into main; 2 for a missing flag or a "
@@ -427,6 +440,12 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
   @Argument(help: "The task's id.")
   var task: String
 
+  @Flag(
+    help: ArgumentHelp(
+      "Remove the fix worktree <repo>-<plan>-fix-<task> and branch <plan>/fix-<task> instead, "
+        + "once build merge --fix has merged it."))
+  var fix = false
+
   @Option(help: "The session id holding the plan's lock (from the SessionStart context).")
   var session: String?
 
@@ -436,7 +455,7 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
     let root = FileManager.default.currentDirectoryPath
     let runner = LiveProcessRunner()
     let report = await WorktreeRun.remove(
-      slug: plan, task: task, session: session,
+      slug: plan, task: task, fix: fix, session: session,
       git: LiveGit(runner: runner, repositoryRoot: root),
       workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root))
     Console.write(WorktreeRun.render(report, format: output.format))

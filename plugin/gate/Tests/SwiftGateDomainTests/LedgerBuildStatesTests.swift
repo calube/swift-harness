@@ -133,6 +133,8 @@ struct LedgerBuildStatesTests {
   /// refused below, so the illegal set is never hand-listed.
   static let legalTransitions: Set<[TaskStatus]> = [
     [.pending, .inProgress],
+    // Spec §8.4: a design conflict blocks the pending tasks it touches and their dependents.
+    [.pending, .blocked],
     [.inProgress, .done],
     [.inProgress, .blocked],
     [.inProgress, .abandoned],
