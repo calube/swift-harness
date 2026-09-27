@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Waves 1–4, 2 of 3 wave-5 tasks and 2 of 3 wave-6 tasks merged on local main by 2026-09-27; push tier GREEN (1670 tests). The user asked for every wave to run.
+Status: IN PROGRESS. Merged on local main by 2026-09-27: waves 1–4, wave 6, spec-corrections-and-routers, and every wave-5 task but decomposer-model-tag. Push tier GREEN (1681 tests). The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: merge decomposer-model-tag and calibrate-build-agents (in flight); wave 7 build-skill (in flight).
+Next action: merge build-skill and decomposer-model-tag (both in flight), then ship-skill-and-sketch-design-flow.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
