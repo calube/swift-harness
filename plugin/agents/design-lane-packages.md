@@ -26,11 +26,16 @@ fails any of these is dropped from the design, so an unverifiable claim costs mo
 
 ## Inputs
 
-The prompt gives the path of your context pack (`.harness/context-pack/research-lane-…md`) and the
-design doc's path; the doc's evidence directory is `<slug>.evidence/` next to it. Read the pack
-first. It holds the frame answers, the area, the module-graph slice for the touched modules, cached
-claims for the same pins (reuse hits), the repo's existing claims at those pins, and your lane brief.
-If the prompt carries an answer to a question you asked earlier, treat it as settled.
+The prompt gives the path of your context pack (`.harness/context-pack/research-lane-packages.md`),
+the design doc's path and its evidence directory (`<slug>.evidence/` next to it), your lane's pin
+(`<pkg>@<version>` for the dependency the design leans on most) and the commit every repo `file`
+citation pins to. Read the pack first. It opens with that pin and the `citation.pin` value a claim
+at it carries, the design doc path and its evidence directory, and the snapshots and captures
+already stored there. Then it holds the frame answers, the area, the module-graph slice for the
+touched modules, cached claims for the same pin (reuse hits), the repo's existing claims at that
+pin, and your lane brief. Claims about another package carry that package's own
+`<pkg>@<version>`. If the prompt carries an answer to a question you asked earlier, treat it as
+settled.
 
 ## Where package evidence comes from
 
@@ -101,20 +106,29 @@ Empty arrays are valid. Every claim:
 - `"id"`: `ev-` plus lowercase kebab words (`ev-[a-z0-9-]+`) that say what the claim is. Unique in
   your return. Never a codename or a number series.
 - `"lane"`: `"packages"`.
-- `"text"`: one falsifiable sentence that the quote alone supports.
+- `"text"`: one falsifiable sentence that says no more than its quote. The claim checker refutes
+  a claim broader than its quote however real the quote is, so write the text from the quoted
+  words, not from what you know of the API. Leave out any scope the quote doesn't show ("always",
+  "every", "any" where it covers one case) and any guarantee it doesn't state (ordering, thread
+  safety, cancellation, durability). Keep every condition it carries (`#if`, `@available`, a
+  default argument, a `where` clause). A signature shows that an API exists with that shape, not
+  what it does at run time. When the point needs more than one quote shows, quote the lines
+  that show it or split it into two claims.
 - `"citation"`, by `"kind"`. A `file` loc is repo-relative; every other kind's loc is relative to
   `<slug>.evidence/`. Never an absolute path, `~/` or `$HOME`.
 
   | `kind` | `loc` | `pin` | `quote` |
   |---|---|---|---|
   | `file` (package) | `.build/checkouts/<pkg>/<path>:L<a>-L<b>` | `<pkg>@<version>` from `Package.resolved` | exact text inside those lines |
-  | `file` (repo) | `<path>:L<a>-L<b>` | the commit sha the prompt gives, else omit | exact text inside those lines |
+  | `file` (repo) | `<path>:L<a>-L<b>` | the commit the prompt gives | exact text inside those lines |
   | `snapshot` | `snapshots/<name>` (already stored) | the SDK version | exact text in the snapshot |
   | `capture` | `captures/<hex>.txt` (already stored) | `sha256:<hex>`, the same 64 lowercase hex | exact text in the capture |
   | `probe` | `probes/Probe_<id>.swift`, the id with `-` turned into `_` | the `<pkg>@<version>` pins it builds against | omit |
 
   Copy quotes character for character from the lines you read, including whitespace inside the
   line; a quote may span lines joined with `\n`. Keep line ranges tight.
+- Every citation except `answer` carries a `pin`. The workflow drops a claim without one and
+  keeps the rest of your return.
 - `"status": "new"`, always. The gate and the claim checker set every later status.
 
 ## Probes: a probe snippet for every API the design relies on

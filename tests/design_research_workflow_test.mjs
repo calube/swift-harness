@@ -1,7 +1,8 @@
 // Runs workflows/design-research.js against stubbed lane agents with real async delays.
 // Run: node tests/design_research_workflow_test.mjs
 // Regressions caught: more than three lanes researching at once; one dead or malformed lane taking
-// its siblings down; an answer re-running every lane instead of only the lane that asked it.
+// its siblings down; an answer re-running every lane instead of only the lane that asked it; a lane
+// prompt missing its pin or the design doc; one pinless claim throwing away its whole lane.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -15,8 +16,25 @@ const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
 const script = new AsyncFunction('args', 'agent', 'log', 'phase', source)
 
 const LANES = ['codebase', 'apple-docs', 'packages', 'prior-decisions']
-const lanes = (names = LANES) => names.map(name => ({ name, packPath: `.harness/context-pack/research-lane-${name}.md` }))
-const baseArgs = (extra = {}) => ({ tier: 'standard', mode: 'research', lanes: lanes(), answers: [], ...extra })
+const COMMIT = '6ee32101d306b2fc36641d5001b89f0d1627618c'
+const DESIGN = 'docs/checkout/designs/offline-order-queue.md'
+const PINS = {
+  codebase: COMMIT,
+  'apple-docs': 'iphonesimulator26.2',
+  packages: 'swift-composable-architecture@1.26.2',
+  'prior-decisions': 'swift-dependencies@1.9.0',
+}
+const lanes = (names = LANES) =>
+  names.map(name => ({ name, packPath: `.harness/context-pack/research-lane-${name}.md`, pin: PINS[name] }))
+const baseArgs = (extra = {}) => ({
+  tier: 'standard',
+  mode: 'research',
+  design: DESIGN,
+  commit: COMMIT,
+  lanes: lanes(),
+  answers: [],
+  ...extra,
+})
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -77,12 +95,12 @@ const tests = {
   async 'invalid args fail fast with a named error before any lane runs — catches a silent default researching the wrong thing'() {
     const cases = [
       [baseArgs({ mode: 'deep-dive' }), 'UnknownModeError'],
-      [baseArgs({ lanes: [...lanes(), { name: 'codebase', packPath: 'x.md' }] }), 'TooManyLanesError'],
+      [baseArgs({ lanes: [...lanes(), { name: 'codebase', packPath: 'x.md', pin: COMMIT }] }), 'TooManyLanesError'],
       [baseArgs({ mode: 'reresearch', lanes: lanes(['packages']) }), 'MissingClaimIdsError'],
       [baseArgs({ mode: 'reresearch', lanes: lanes(['packages']), claimIds: [] }), 'MissingClaimIdsError'],
-      [baseArgs({ lanes: [{ name: 'codebase' }] }), 'MissingPackPathError'],
-      [baseArgs({ lanes: [{ name: 'codebase', packPath: '' }] }), 'MissingPackPathError'],
-      [baseArgs({ lanes: [{ name: 'web', packPath: 'x.md' }] }), 'UnknownLaneError'],
+      [baseArgs({ lanes: [{ name: 'codebase', pin: COMMIT }] }), 'MissingPackPathError'],
+      [baseArgs({ lanes: [{ name: 'codebase', packPath: '', pin: COMMIT }] }), 'MissingPackPathError'],
+      [baseArgs({ lanes: [{ name: 'web', packPath: 'x.md', pin: COMMIT }] }), 'UnknownLaneError'],
       [baseArgs({ lanes: [...lanes(['codebase']), ...lanes(['codebase'])] }), 'DuplicateLaneError'],
       [baseArgs({ lanes: [] }), 'InvalidArgsError'],
       [baseArgs({ tier: 'medium' }), 'UnknownTierError'],
@@ -91,6 +109,14 @@ const tests = {
       [baseArgs({ answers: undefined }), 'InvalidArgsError'],
       [baseArgs({ answers: [{ question: 'q' }] }), 'InvalidArgsError'],
       [baseArgs({ budget: 3 }), 'InvalidArgsError'],
+      [baseArgs({ design: undefined }), 'MissingDesignError'],
+      [baseArgs({ design: 'docs/checkout/designs/offline-order-queue' }), 'MissingDesignError'],
+      [baseArgs({ design: '/abs/docs/x.md' }), 'MissingDesignError'],
+      [baseArgs({ commit: undefined }), 'InvalidCommitError'],
+      [baseArgs({ commit: 'HEAD' }), 'InvalidCommitError'],
+      [baseArgs({ commit: '6ee321' }), 'InvalidCommitError'],
+      [baseArgs({ lanes: [{ name: 'codebase', packPath: 'x.md' }] }), 'MissingPinError'],
+      [baseArgs({ lanes: [{ name: 'codebase', packPath: 'x.md', pin: ' ' }] }), 'MissingPinError'],
       [undefined, 'InvalidArgsError'],
     ]
     for (const [args, name] of cases) {
@@ -121,6 +147,75 @@ const tests = {
       for (const other of LANES.filter(l => l !== lane)) assert.ok(!prompt.includes(`research-lane-${other}.md`))
       assert.ok(opts.schema && opts.schema.type === 'object')
     }
+  },
+
+  async 'every lane prompt names its pin, the commit, the design doc and its evidence directory — catches a lane that cannot pin a claim or find stored evidence'() {
+    const { calls } = await run(baseArgs())
+    assert.equal(calls.length, 4)
+    for (const { lane, prompt } of calls) {
+      assert.ok(prompt.includes(PINS[lane]), `${lane} pin`)
+      assert.ok(prompt.includes(COMMIT), `${lane} commit`)
+      assert.ok(prompt.includes(DESIGN), `${lane} design`)
+      assert.ok(prompt.includes('docs/checkout/designs/offline-order-queue.evidence/'), `${lane} evidence directory`)
+      for (const other of LANES.filter(l => l !== lane && PINS[l] !== PINS[lane] && PINS[l] !== COMMIT)) {
+        assert.ok(!prompt.includes(PINS[other]), `${lane} prompt names ${other}'s pin`)
+      }
+    }
+  },
+
+  async 'a pinless claim is dropped with a note and its lane keeps the rest — catches one missing pin throwing away a whole lane'() {
+    const good = laneResult('prior-decisions')
+    const pinless = {
+      id: 'ev-prior-decisions-adr-without-pin',
+      lane: 'prior-decisions',
+      text: 'ADR 0002 keeps the plugin under plugin/.',
+      citation: { kind: 'file', loc: 'docs/adrs/0002.md:L1-L2', pin: '', quote: 'plugin/' },
+      status: 'new',
+    }
+    const pinlessProbe = {
+      id: 'ev-prior-decisions-probe-without-pin',
+      lane: 'prior-decisions',
+      text: 'DependencyValues has a date key.',
+      citation: { kind: 'probe', loc: 'probes/Probe_ev_prior_decisions_probe_without_pin.swift' },
+      status: 'new',
+    }
+    const answer = {
+      id: 'ev-prior-decisions-user-chose-one-client',
+      lane: 'prior-decisions',
+      text: 'The user chose one client.',
+      citation: { kind: 'answer', loc: 'answers.jsonl#design-1/1', quote: 'one client' },
+      status: 'new',
+    }
+    const { result, logs } = await run(baseArgs(), {
+      'prior-decisions': () => ({
+        ...good,
+        claims: [...good.claims, pinless, pinlessProbe, answer],
+        probes: [...good.probes, { claimId: pinlessProbe.id, swift: 'import Dependencies' }],
+      }),
+    })
+    const lane = laneOf(result, 'prior-decisions')
+    assert.equal(lane.status, 'researched')
+    assert.deepEqual(lane.claims.map(c => c.id), [good.claims[0].id, answer.id])
+    assert.deepEqual(lane.probes.map(p => p.claimId), [good.claims[0].id])
+    assert.deepEqual(lane.dropped.map(d => d.id), [pinless.id, pinlessProbe.id])
+    assert.ok(lane.dropped.every(d => /pin/.test(d.reason)))
+    assert.equal(result.status, 'complete')
+    assert.ok(logs.some(l => l.includes(pinless.id) && l.includes('prior-decisions')), logs.join('\n'))
+    assert.deepEqual(laneOf(result, 'codebase').dropped, [])
+  },
+
+  async 'the apple-docs lane\'s snapshot requests come back with its result, and a malformed one is a defect — catches a missing snapshot vanishing silently'() {
+    const request = { page: 'documentation/observation/migrating-from-the-observable-object-protocol', reason: 'Does SwiftUI track only properties the body reads?' }
+    const { result } = await run(baseArgs(), {
+      'apple-docs': () => ({ ...laneResult('apple-docs'), snapshotRequests: [request] }),
+    })
+    assert.deepEqual(laneOf(result, 'apple-docs').snapshotRequests, [request])
+    assert.equal(laneOf(result, 'apple-docs').status, 'researched')
+
+    const bad = await run(baseArgs(), {
+      'apple-docs': () => ({ ...laneResult('apple-docs'), snapshotRequests: [{ page: '' , reason: 'x' }] }),
+    })
+    assert.match(laneOf(bad.result, 'apple-docs').reason, /malformed.*snapshotRequests/)
   },
 
   async 'a dead lane is NOT RESEARCHED with a reason and its siblings are kept — catches one death failing the whole fan-out'() {
