@@ -262,8 +262,9 @@ public enum OrchestratorMarker {
 /// component that does not exist yet keeps whatever case the caller spelled it in.
 public enum PlanStateGuard {
   public enum Target: Sendable, Equatable {
-    /// A plan's claim, or a lock file serialising claims or index writes (`claim.lock.*`,
-    /// `index.lock.*`). Only `swiftgate` writes them, never a tool edit.
+    /// A plan's claim, or a lock file serialising claims, index or ledger writes, or event
+    /// appends (`claim.lock.*`, `index.lock.*`, `ledger.lock.*`, `events.lock.*`). Only
+    /// `swiftgate` writes them, never a tool edit.
     case orchestratorLock
     /// Under a plans root but naming no valid plan; nobody may write it.
     case malformedPlanPath
@@ -464,6 +465,7 @@ public enum PlanStateGuard {
     guard !inside.isEmpty else { return nil }
     if let last = inside.last?.lowercased(),
       last == "orchestrator.lock" || last.hasPrefix("claim.lock") || last.hasPrefix("index.lock")
+        || last.hasPrefix("ledger.lock") || last.hasPrefix("events.lock")
     {
       return .orchestratorLock
     }
