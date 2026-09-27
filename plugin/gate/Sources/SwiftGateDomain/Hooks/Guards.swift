@@ -270,7 +270,8 @@ public enum OrchestratorMarker {
 /// component that does not exist yet keeps whatever case the caller spelled it in.
 public enum PlanStateGuard {
   public enum Target: Sendable, Equatable {
-    /// A plan's claim. Only `swiftgate plan claim|release` write it, never a tool edit.
+    /// A plan's claim, or a lock file serialising claims or index writes (`claim.lock.*`,
+    /// `index.lock.*`). Only `swiftgate` writes them, never a tool edit.
     case orchestratorLock
     /// Under a plans root but naming no valid plan; nobody may write it.
     case malformedPlanPath
@@ -343,8 +344,10 @@ public enum PlanStateGuard {
     switch target {
     case .orchestratorLock:
       return violation(
-        "orchestrator.lock is a plan's claim. Only `swiftgate plan claim <plan> --session <id>` "
-          + "and `swiftgate plan release` write it; a hand edit would forge or steal the claim.")
+        "orchestrator.lock is a plan's claim, and the claim.lock and index.lock files serialise "
+          + "claims and index writes. Only `swiftgate plan claim <plan> --session <id>`, "
+          + "`swiftgate plan release` and `swiftgate index set` write them; a hand edit would forge "
+          + "or steal a claim.")
     case .malformedPlanPath:
       return violation("this path names no valid plan under the shared plan state.")
     case .designArtifact(let document):
@@ -467,7 +470,11 @@ public enum PlanStateGuard {
     else { return nil }
     let inside = components[(index + 2)...]
     guard !inside.isEmpty else { return nil }
-    if inside.last?.lowercased() == "orchestrator.lock" { return .orchestratorLock }
+    if let last = inside.last?.lowercased(),
+      last == "orchestrator.lock" || last.hasPrefix("claim.lock") || last.hasPrefix("index.lock")
+    {
+      return .orchestratorLock
+    }
     let common = "/" + components[..<index].joined(separator: "/")
     guard let layout = try? PlanStateLayout(commonDirectory: common) else {
       return .malformedPlanPath

@@ -48,11 +48,13 @@ struct PlanStateGuardTests {
   }
 
   @Test(
-    "orchestrator.lock is its own target wherever it sits under a plans root — catches a hand-written claim",
+    "orchestrator.lock and the claim and index lock files are lock targets wherever they sit under a plans root — catches a hand-written claim or a lock file a holder deletes to race a claim",
     arguments: [
       "/r/.git/swift-harness/plans/2026-09-24-feed/orchestrator.lock",
       "/r/.git/swift-harness/plans/2026-09-24-feed/Orchestrator.LOCK",
       "/r/.git/swift-harness/plans/orchestrator.lock",
+      "/r/.git/swift-harness/plans/claim.lock.0", "/r/.git/swift-harness/plans/claim.lock.guard",
+      "/r/.git/swift-harness/plans/Index.Lock.0", "/r/.git/swift-harness/plans/index.lock.guard",
     ])
   func lockTarget(path: String) {
     #expect(PlanStateGuard.target(ofResolvedPath: path) == .orchestratorLock)

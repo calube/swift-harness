@@ -353,6 +353,24 @@ struct BashWriteGuardTests {
     }
     #expect(try await scenario.decision("echo '{}' > \(scenario.ledgerA)") == nil)
   }
+
+  @Test(
+    "the holder's shell write or delete of the claim and index lock files is denied, its index write passes — catches a lock holder forging or breaking the lock that serialises claims"
+  )
+  func lockFilesDenied() async throws {
+    let scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let root = scenario.layout.root
+
+    for command in [
+      "echo 1 > \(root)/claim.lock.0", "rm -f \(root)/claim.lock.guard",
+      "touch \(root)/index.lock.0", "rm \(root)/index.lock.guard",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+    #expect(try await scenario.decision("echo '{}' > \(scenario.layout.indexFile)") == nil)
+  }
 }
 
 @Suite("PreToolUse plan and index commands act only as the calling session")
