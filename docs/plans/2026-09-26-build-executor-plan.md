@@ -7,7 +7,7 @@ Next action: wave 10, interview-rehearsal-runs. The user must be present: they a
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
-Speed milestone (2026-09-27, the user's pick): the "Speed" section's tasks run before waves 10–11; the sub-project 2 orchestrator drives them.
+Speed milestone (2026-09-27, the user's pick): the "Speed" section's speed waves 1–3 run before waves 10–11; the sub-project 2 orchestrator drives them. Speed wave 1 is in its merge gate.
 Open items: the rehearsal fixture under evals/ needs the evals session's agreement; the acceptance runs need the user; every `ready` run is BLOCKED until sub-project 2 fixes mutate's baseline (interfaces note, "Review fix wave 1"), which gates waves 10–11.
 Shared checkout: the sub-project 2 orchestrator and the evals session also merge into local main. Message them before merging, and run the push tier before every commit.
 Progress: git log. Update this header at every wave merge.
@@ -291,4 +291,42 @@ and `P/agents/build-worker.md`.
 - Writes: `C/Commands/CheckCommand.swift`, `TC/CheckCommand*Tests.swift` (new or existing check-stage tests)
 - Does: `check` stops at the first failing stage that later stages depend on. A RED T0 (arch, format, lint, impact) skips the T1 build and tests, and so prove, mutate, judge and the simulator tiers. A RED T1 skips prove, as it already skips mutate. Each skipped stage shows up as a non-gating note naming the stage and the red stage that caused the skip, never silently. The verdict stays RED. The push doc gates still run, since they are cheap and independent.
 - Tests: a RED T0 never invokes the host test runner — catches a gate that builds after lint fails · a RED T1 never invokes prove · each skip leaves a note naming the skipped stage · a GREEN T0 still runs T1 — catches a gate that skips on green.
+
+### Speed waves
+
+| Wave | Tasks | Starts when |
+|---|---|---|
+| 1 | `speed-task-proof-final`, `speed-fixer-return-and-gate-provenance`, `speed-fail-fast-gates` | now |
+| 2 | `speed-repo-profile`, `speed-worker-pack-standards`, `speed-task-gate-impact-coverage-app-build` | wave 1 merged and mutated on `main` |
+| 3 | `speed-budget-keeps-app-compiling`; then the design-free path, the sprint skill and surface commits, after a design section the user approves | wave 2 merged |
+
+Speed wave 2 merge points: `speed-task-gate-impact-coverage-app-build` alone edits `P/workflows/build-task.js`,
+`P/agents/build-worker.md` and `C/Commands/CheckCommand.swift`; `speed-worker-pack-standards` alone edits
+`P/skills/build/references/event-loop.md`; `speed-repo-profile` alone edits `D/Config/*`, `P/templates/swiftgate.toml`,
+`P/skills/build/SKILL.md` and `P/skills/ship/SKILL.md`. Every wave 2 worker commits its new API as a behaviour-free surface
+commit first and proves its tests at it with `--proof-base`.
+
+### `speed-repo-profile`
+- Deps: speed wave 1 · Gate: push · Model: opus · estLines: 180
+- Writes: `C/Commands/BootstrapCommand.swift`, `D/Config/ConfigSchema.swift`, `D/Config/Config.swift`, `P/templates/swiftgate.toml`, `C/Commands/DoctorCommand.swift`, `P/skills/bootstrap/SKILL.md`, `P/skills/build/SKILL.md`, `P/skills/ship/SKILL.md`, `docs/designs/2026-09-26-build-executor-design.md` (§5.1 only), their tests
+- Does: a repo says what it is optimised for. `[harness] profile` names one of the file's `[build.presets.*]` tables. `bootstrap --profile <name>` stamps it (default `default`); `swiftgate doctor` reports a profile that names no preset. `/swift-harness:build` and `/swift-harness:ship` use the profile's preset when no `--preset` is given; an explicit `--preset` still wins. A profile only selects a preset: it never changes hooks, test-first rules, escape-hatch rules or the merge gate's GREEN requirement.
+- Tests: `bootstrap --profile interview` stamps `profile = "interview"` · a profile naming no preset is a doctor issue naming both · with no `--preset`, the skills' resolution reads the profile, and `--preset` overrides it — catches a profile silently ignored · a repo with no `[harness]` table keeps `default`.
+
+### `speed-worker-pack-standards`
+- Deps: speed wave 1 · Gate: push · Model: opus · estLines: 160
+- Writes: `D/Context/ContextPack.swift`, `A/Context/ContextPackSources.swift`, `C/Commands/ContextPackCommand.swift`, `P/skills/build/references/event-loop.md`, their tests
+- Does: the worker pack carries the standards excerpt for every module kind the task's write set touches, as `P/agents/build-worker.md` already promises, so a worker never reads the whole standards file. The build skill's pack step passes whatever the command needs; the kinds come from the write set and the repo's module graph, never from the worker.
+- Tests: a task writing into a Core and a Live module gets exactly those kinds' anchors · a write set with an unknown module kind is a named error, never an empty section — catches a silently thin pack · the pack stays under the worker budget on the sample app.
+
+### `speed-task-gate-impact-coverage-app-build`
+- Deps: speed wave 1 · Gate: push · Model: opus · estLines: 240
+- Writes: `D/Check.swift`, `C/Commands/CheckCommand.swift`, `P/workflows/build-task.js`, `P/agents/build-worker.md`, the calibration record, their tests
+- Does: a task gate catches what the merge gate would otherwise catch after a merge: impact and diff coverage over the task's change, and a compile of the app target so a view the host build compiles out still breaks the task. Added as `check` steps a build task gate turns on, like `--prove`, so the `fast` tier's own hook callers keep their speed. The workflow and the worker's gate command pass them.
+- Tests: a task gate over a change with an untested Core line is RED on impact or coverage — catches the trial-run case of a green task gate then a red merge gate · a change that breaks the app target's compile is RED at the task gate · plain `check --tier fast` runs neither step · calibration re-run and fresh.
+
+### `speed-budget-keeps-app-compiling`
+- Deps: speed wave 2 · Gate: push · Model: opus · estLines: 120
+- Writes: `D/Build/BuildScheduler.swift`, `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, their tests
+- Does: the time budget's no-new-starts cutoff never drops a task that the app target needs to compile: such a task counts as required and starts even past the cutoff, and the ledger page says why.
+- Tests: past the cutoff, a required task still starts and an optional one doesn't — catches a RED final gate from a skipped view task · the reason shows on the ledger page.
 
