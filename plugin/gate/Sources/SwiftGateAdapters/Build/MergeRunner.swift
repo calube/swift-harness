@@ -1,0 +1,520 @@
+import Foundation
+import SwiftGateDomain
+
+/// What `git merge` did to a checkout.
+public enum MergeOutcome: Sendable, Equatable {
+  /// A merge commit was made; `commit` is the checkout's new `HEAD`.
+  case merged(commit: String)
+  /// The merge stopped on conflicts and left them in the checkout, sorted.
+  case conflicted(files: [String])
+}
+
+/// The git steps `build merge` takes inside one checkout: reading its branch, cleanliness and
+/// commits, and merging, aborting and resetting. Kept apart from ``GitWorkspace``, which never
+/// touches a checkout's working tree. `checkout` is an absolute path.
+public protocol MergeRunner: Sendable {
+  /// The checked-out branch's short name, or `nil` on a detached `HEAD`.
+  func currentBranch(in checkout: String) async throws(GitWorkspaceError) -> String?
+
+  /// Tracked paths with staged, unstaged or conflicted changes. Untracked files don't count: a
+  /// merge refuses on its own to overwrite one.
+  func dirtyPaths(in checkout: String) async throws(GitWorkspaceError) -> [String]
+
+  /// The commit `ref` names.
+  func commit(of ref: String, in checkout: String) async throws(GitWorkspaceError) -> String
+
+  /// The subject line of the commit `ref` names.
+  func subject(of ref: String, in checkout: String) async throws(GitWorkspaceError) -> String
+
+  /// `git merge --no-ff -m <message> <branch>` into the checked-out branch.
+  /// - Throws: when the merge fails for any reason other than conflicts.
+  func merge(_ branch: String, message: String, in checkout: String)
+    async throws(GitWorkspaceError) -> MergeOutcome
+
+  /// `git merge --abort`.
+  func abortMerge(in checkout: String) async throws(GitWorkspaceError)
+
+  /// `git reset --hard <commit>`.
+  func resetHard(to commit: String, in checkout: String) async throws(GitWorkspaceError)
+}
+
+/// ``MergeRunner`` over `git`.
+public struct LiveMergeRunner: MergeRunner {
+  private let runner: any ProcessRunner
+  private let timeout: Duration
+
+  public init(runner: any ProcessRunner, timeout: Duration = .seconds(600)) {
+    self.runner = runner
+    self.timeout = timeout
+  }
+
+  public func currentBranch(in checkout: String) async throws(GitWorkspaceError) -> String? {
+    let arguments = ["symbolic-ref", "--quiet", "--short", "HEAD"]
+    let output = try await git(arguments, in: checkout)
+    switch output.status {
+    case .exited(0): return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    case .exited(1): return nil
+    default:
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+  }
+
+  public func dirtyPaths(in checkout: String) async throws(GitWorkspaceError) -> [String] {
+    let output = try await succeed(
+      ["status", "--porcelain=v1", "--untracked-files=no"], in: checkout)
+    return output.split(separator: "\n").map { String($0.dropFirst(3)) }.sorted()
+  }
+
+  public func commit(of ref: String, in checkout: String) async throws(GitWorkspaceError)
+    -> String
+  {
+    try Self.checkRef(ref)
+    return try await succeed(["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"], in: checkout)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func subject(of ref: String, in checkout: String) async throws(GitWorkspaceError)
+    -> String
+  {
+    try Self.checkRef(ref)
+    return try await succeed(["log", "-1", "--format=%s", ref, "--"], in: checkout)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func merge(_ branch: String, message: String, in checkout: String)
+    async throws(GitWorkspaceError) -> MergeOutcome
+  {
+    try Self.checkRef(branch)
+    let arguments = ["merge", "--no-ff", "--no-edit", "-m", message, branch]
+    let output = try await git(arguments, in: checkout)
+    if output.status.isSuccess {
+      return .merged(commit: try await commit(of: "HEAD", in: checkout))
+    }
+    let conflicted = try await succeed(
+      ["diff", "--name-only", "--diff-filter=U", "-z"], in: checkout
+    ).split(separator: "\0").map(String.init).sorted()
+    guard !conflicted.isEmpty else {
+      throw .git(
+        .commandFailed(
+          arguments: arguments, status: output.status,
+          stderr: output.stderr.text + output.stdout.text))
+    }
+    return .conflicted(files: conflicted)
+  }
+
+  public func abortMerge(in checkout: String) async throws(GitWorkspaceError) {
+    _ = try await succeed(["merge", "--abort"], in: checkout)
+  }
+
+  public func resetHard(to commit: String, in checkout: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(commit)
+    _ = try await succeed(["reset", "--quiet", "--hard", commit], in: checkout)
+  }
+
+  private static func checkRef(_ ref: String) throws(GitWorkspaceError) {
+    if ref.isEmpty || ref.hasPrefix("-") { throw .git(.invalidRef(ref)) }
+  }
+
+  private func succeed(_ arguments: [String], in checkout: String)
+    async throws(GitWorkspaceError) -> String
+  {
+    let output = try await git(arguments, in: checkout)
+    guard output.status.isSuccess else {
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+    return output.stdout.text
+  }
+
+  private func git(_ arguments: [String], in checkout: String)
+    async throws(GitWorkspaceError) -> ProcessOutput
+  {
+    do {
+      return try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: checkout, timeout: timeout))
+    } catch {
+      throw .git(.process(error))
+    }
+  }
+}
+
+/// What `build merge` or `build merge --undo` did. Optional keys are omitted from JSON, never
+/// `null`.
+public struct BuildMergeReport: Sendable, Equatable, Encodable {
+  public enum Status: String, Sendable, Encodable {
+    case merged
+    case undone
+    /// The merge conflicted: `main` is untouched and the fix worktree holds the conflicts.
+    case conflicted
+    /// `main` isn't where a merge may happen, or there's nothing to undo; nothing changed.
+    case refused
+    /// The lock is free or another session holds it; nothing changed.
+    case notHeld = "not-held"
+    case blocked
+  }
+
+  /// Whether `main` was checked against the run's last merge.
+  public enum MainCheck: String, Sendable, Encodable {
+    /// `main` was at the post commit of the run's newest merge event.
+    case atLastMerge = "at-last-merge"
+    /// The run has no merge event yet, so there was no recorded commit to compare `main` with.
+    case noMergeYet = "no-merge-yet"
+  }
+
+  public let command: String
+  public let plan: String
+  public let task: String
+  public let status: Status
+  public let verdict: Verdict
+  public let holder: String?
+  public let runId: String?
+  public let branch: String?
+  public let mainCheckout: String?
+  public let mainCheck: MainCheck?
+  public let preCommit: String?
+  public let postCommit: String?
+  public let fixWorktree: String?
+  public let fixBranch: String?
+  public let conflictedFiles: [String]?
+  public let message: String
+
+  public init(
+    command: String, plan: String, task: String, status: Status, verdict: Verdict,
+    holder: String? = nil, runId: String? = nil, branch: String? = nil,
+    mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
+    postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
+    conflictedFiles: [String]? = nil, message: String
+  ) {
+    self.command = command
+    self.plan = plan
+    self.task = task
+    self.status = status
+    self.verdict = verdict
+    self.holder = holder
+    self.runId = runId
+    self.branch = branch
+    self.mainCheckout = mainCheckout
+    self.mainCheck = mainCheck
+    self.preCommit = preCommit
+    self.postCommit = postCommit
+    self.fixWorktree = fixWorktree
+    self.fixBranch = fixBranch
+    self.conflictedFiles = conflictedFiles
+    self.message = message
+  }
+}
+
+/// `build merge` after the lock-holder check (spec §8.2, §8.3): merges a task branch onto `main`
+/// in the main checkout only when `main` is where the run's last merge left it, and on a conflict
+/// or an undo cuts the fix worktree `<repo>-<plan>-fix-<task>` on `<plan>/fix-<task>`.
+public struct BuildMerge: Sendable {
+  public static let mergeCommand = "build merge"
+  public static let undoCommand = "build merge --undo"
+
+  let plan: String
+  let task: String
+  let git: any Git
+  let workspace: any GitWorkspace
+  let merger: any MergeRunner
+  let clock: any BuildClock
+
+  public init(
+    plan: String, task: String, git: any Git, workspace: any GitWorkspace,
+    merger: any MergeRunner, clock: any BuildClock
+  ) {
+    self.plan = plan
+    self.task = task
+    self.git = git
+    self.workspace = workspace
+    self.merger = merger
+    self.clock = clock
+  }
+
+  private struct Stop: Error {
+    let report: BuildMergeReport
+  }
+
+  /// Everything both verbs resolve before touching `main`.
+  private struct Context {
+    let run: BuildRunStore
+    let names: TaskWorktree
+    let fix: TaskWorktree
+  }
+
+  public func merge() async -> BuildMergeReport {
+    let command = Self.mergeCommand
+    do throws(Stop) {
+      let context = try await resolve(command)
+      let main = context.names.mainCheckout
+      let last: String?
+      do throws(BuildRunStoreError) {
+        last = try context.run.lastMergePostCommit()
+      } catch {
+        throw stop(command, context, .blocked, "reading \(context.run.layout.eventsFile): \(error)")
+      }
+      let pre = try await checkMain(command, context, expected: last)
+      let mainCheck: BuildMergeReport.MainCheck = last == nil ? .noMergeYet : .atLastMerge
+      let branch = context.names.branch
+      let merged = try await step(command, context, "reading \(branch)") {
+        () async throws(GitWorkspaceError) in
+        try await workspace.isMerged(branch, into: TaskWorktree.base)
+      }
+      if merged {
+        throw stop(
+          command, context, .refused, "\(branch) is already merged into \(TaskWorktree.base)")
+      }
+      let outcome = try await step(command, context, "merging in \(main)") {
+        () async throws(GitWorkspaceError) in
+        let subject = try await merger.subject(of: "refs/heads/\(branch)", in: main)
+        return try await merger.merge(branch, message: "Merge: \(subject)", in: main)
+      }
+      switch outcome {
+      case .merged(let post):
+        do throws(BuildRunStoreError) {
+          try await context.run.append(
+            .merge(.init(task: task, preCommit: pre, postCommit: post, at: clock.now())))
+        } catch {
+          throw stop(
+            command, context, .blocked,
+            "merged \(context.names.branch) into \(TaskWorktree.base) (\(pre) → \(post)) but "
+              + "couldn't record the merge event: \(error). `main` is merged; record or reset it "
+              + "by hand before the next merge.", pre: pre, post: post)
+        }
+        return report(
+          command, context, .merged, .green, mainCheck: mainCheck, pre: pre, post: post,
+          message: "merged \(context.names.branch) into \(TaskWorktree.base): \(pre) → \(post)"
+            + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : ""))
+      case .conflicted(let files):
+        try await abort(command, context, pre: pre)
+        let (fixFiles, detail) = try await cutFix(command, context)
+        return report(
+          command, context, .conflicted, .red, mainCheck: mainCheck, pre: pre,
+          conflicted: fixFiles.isEmpty ? files : fixFiles,
+          message: "\(context.names.branch) conflicts with \(TaskWorktree.base) in "
+            + files.joined(separator: ", ") + "; main is untouched at \(pre). \(detail)")
+      }
+    } catch {
+      return error.report
+    }
+  }
+
+  public func undo() async -> BuildMergeReport {
+    let command = Self.undoCommand
+    do throws(Stop) {
+      let context = try await resolve(command)
+      let log: BuildEventLog
+      do throws(BuildRunStoreError) {
+        log = try context.run.events()
+      } catch {
+        throw stop(command, context, .blocked, "reading \(context.run.layout.eventsFile): \(error)")
+      }
+      guard log.damage.isEmpty else {
+        throw stop(
+          command, context, .blocked,
+          "\(context.run.layout.eventsFile) is damaged (\(log.damage)); the lost line could be a "
+            + "later merge, so there's no trustworthy merge to undo")
+      }
+      let lastMerge = log.events.reversed().lazy.compactMap { event -> BuildEvent.Merge? in
+        if case .merge(let merge) = event { return merge }
+        return nil
+      }.first
+      guard let lastMerge, lastMerge.task == task else {
+        throw stop(
+          command, context, .refused,
+          lastMerge.map {
+            "the run's newest merge is task `\($0.task)`, not `\(task)`; undoing `\(task)` would "
+              + "also drop it"
+          } ?? "build run \(context.run.runID) has no merge to undo")
+      }
+      _ = try await checkMain(command, context, expected: lastMerge.postCommit)
+      try await checkFixIsFree(command, context)
+      let main = context.names.mainCheckout
+      try await step(command, context, "resetting \(main)") {
+        () async throws(GitWorkspaceError) in
+        try await merger.resetHard(to: lastMerge.preCommit, in: main)
+      }
+      let (files, detail) = try await cutFix(command, context)
+      return report(
+        command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
+        post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
+        message: "reset \(TaskWorktree.base) from \(lastMerge.postCommit) to "
+          + "\(lastMerge.preCommit). \(detail) The events log keeps the merge event: its format "
+          + "has no undo kind.")
+    } catch {
+      return error.report
+    }
+  }
+
+  private func resolve(_ command: String) async throws(Stop) -> Context {
+    let common: String
+    do {
+      common = try await git.commonDirectory()
+    } catch {
+      throw bare(command, .blocked, "can't find the git common dir: \(error)")
+    }
+    let names: TaskWorktree
+    let fix: TaskWorktree
+    do throws(GitWorkspaceError) {
+      names = try TaskWorktree(commonDirectory: common, plan: plan, task: task)
+      fix = try TaskWorktree(commonDirectory: common, plan: plan, task: "fix-\(task)")
+    } catch {
+      throw bare(command, .blocked, "\(error)")
+    }
+    let latest: BuildRunStore?
+    do throws(BuildRunStoreError) {
+      latest = try await BuildRunStore.latest(plan: plan, git: git)
+    } catch {
+      throw bare(command, .blocked, "finding plan `\(plan)`'s build run: \(error)")
+    }
+    guard let run = latest else {
+      throw bare(
+        command, .blocked, "plan `\(plan)` has no build run; run `swiftgate build start` first")
+    }
+    let context = Context(run: run, names: names, fix: fix)
+    let exists = try await step(command, context, "reading \(names.branch)") {
+      () async throws(GitWorkspaceError) in
+      try await workspace.branchExists(names.branch)
+    }
+    guard exists else {
+      throw stop(command, context, .refused, "branch \(names.branch) doesn't exist")
+    }
+    return context
+  }
+
+  /// Refuses unless the main checkout is on a clean `main` at `expected` (when there is one).
+  /// - Returns: `main`'s commit.
+  private func checkMain(_ command: String, _ context: Context, expected: String?)
+    async throws(Stop) -> String
+  {
+    let main = context.names.mainCheckout
+    let base = TaskWorktree.base
+    let (branch, dirty, head) = try await step(command, context, "reading \(main)") {
+      () async throws(GitWorkspaceError) in
+      (
+        try await merger.currentBranch(in: main), try await merger.dirtyPaths(in: main),
+        try await merger.commit(of: "refs/heads/\(base)", in: main)
+      )
+    }
+    guard branch == base else {
+      throw stop(
+        command, context, .refused,
+        "\(main) is on \(branch ?? "a detached HEAD"), not \(base); switch it back first")
+    }
+    guard dirty.isEmpty else {
+      throw stop(
+        command, context, .refused,
+        "\(main) has uncommitted changes in \(dirty.joined(separator: ", ")); commit or stash "
+          + "them first")
+    }
+    if let expected, head != expected {
+      throw stop(
+        command, context, .refused,
+        "\(base) moved since the run's last merge: it is at \(head), the last merge left it at "
+          + "\(expected). Another session may have merged; find out who before merging.")
+    }
+    return head
+  }
+
+  /// Aborts a conflicted merge in the main checkout and proves `main` is back where it was.
+  private func abort(_ command: String, _ context: Context, pre: String) async throws(Stop) {
+    let main = context.names.mainCheckout
+    let (head, dirty) = try await step(
+      command, context, "aborting the conflicted merge in \(main) (fix it by hand)", pre: pre
+    ) { () async throws(GitWorkspaceError) in
+      try await merger.abortMerge(in: main)
+      return (try await merger.commit(of: "HEAD", in: main), try await merger.dirtyPaths(in: main))
+    }
+    guard head == pre, dirty.isEmpty else {
+      throw stop(
+        command, context, .blocked,
+        "aborting the conflicted merge left \(main) at \(head) with changes in "
+          + "\(dirty.joined(separator: ", ")), not clean at \(pre); fix it by hand", pre: pre)
+    }
+  }
+
+  private func checkFixIsFree(_ command: String, _ context: Context) async throws(Stop) {
+    if FileManager.default.fileExists(atPath: context.fix.path) {
+      throw stop(
+        command, context, .blocked,
+        "the fix worktree \(context.fix.path) already exists; remove it first")
+    }
+    let exists = try await step(command, context, "reading \(context.fix.branch)") {
+      () async throws(GitWorkspaceError) in
+      try await workspace.branchExists(context.fix.branch)
+    }
+    if exists {
+      throw stop(
+        command, context, .blocked,
+        "the fix branch \(context.fix.branch) already exists; delete it first")
+    }
+  }
+
+  /// Cuts the fix worktree from `main` and merges the task branch into it, leaving any conflict.
+  /// - Returns: the fix worktree's conflicted files, and a sentence for the message.
+  private func cutFix(_ command: String, _ context: Context) async throws(Stop)
+    -> ([String], String)
+  {
+    try await checkFixIsFree(command, context)
+    let fix = context.fix
+    let branch = context.names.branch
+    let outcome = try await step(command, context, "cutting the fix worktree \(fix.path)") {
+      () async throws(GitWorkspaceError) in
+      try await workspace.addWorktree(at: fix.path, branch: fix.branch, from: TaskWorktree.base)
+      let subject = try await merger.subject(of: "refs/heads/\(branch)", in: fix.path)
+      return try await merger.merge(branch, message: "Merge: \(subject)", in: fix.path)
+    }
+    let cut = "Fix worktree \(fix.path) on \(fix.branch) has \(branch) merged in"
+    switch outcome {
+    case .merged: return ([], cut + ".")
+    case .conflicted(let files):
+      return (files, cut + ", conflicted in \(files.joined(separator: ", ")).")
+    }
+  }
+
+  /// Runs one or more git steps, turning a git failure into a blocked report.
+  private func step<T>(
+    _ command: String, _ context: Context, _ what: String, pre: String? = nil,
+    _ body: () async throws(GitWorkspaceError) -> T
+  ) async throws(Stop) -> T {
+    do {
+      return try await body()
+    } catch {
+      throw stop(command, context, .blocked, "\(what): \(error)", pre: pre)
+    }
+  }
+
+  private func stop(
+    _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ message: String,
+    pre: String? = nil, post: String? = nil
+  ) -> Stop {
+    Stop(
+      report: report(
+        command, context, status, status == .blocked ? .blocked : .red, pre: pre, post: post,
+        message: message))
+  }
+
+  private func bare(_ command: String, _ status: BuildMergeReport.Status, _ message: String)
+    -> Stop
+  {
+    Stop(
+      report: BuildMergeReport(
+        command: command, plan: plan, task: task, status: status,
+        verdict: status == .blocked ? .blocked : .red, message: message))
+  }
+
+  private func report(
+    _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ verdict: Verdict,
+    mainCheck: BuildMergeReport.MainCheck? = nil, pre: String? = nil, post: String? = nil,
+    conflicted: [String]? = nil, message: String
+  ) -> BuildMergeReport {
+    let cut = status == .conflicted || status == .undone
+    return BuildMergeReport(
+      command: command, plan: plan, task: task, status: status, verdict: verdict,
+      runId: context.run.runID, branch: context.names.branch,
+      mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
+      postCommit: post, fixWorktree: cut ? context.fix.path : nil,
+      fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted, message: message)
+  }
+}
