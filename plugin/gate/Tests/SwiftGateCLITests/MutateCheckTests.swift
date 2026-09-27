@@ -100,7 +100,7 @@ struct MutateCheckTests {
   }
 
   @Test(
-    "with no --jobs or max_workers the worker count follows the default cap, and each tree is seeded with the mutated packages' builds — catches one cold build per core, or workers never reusing the main build"
+    "with no --jobs or max_workers the worker count follows the default cap, each tree is seeded with the mutated packages' builds, and the workers share the cores — catches one cold build per core, workers never reusing the main build, or every worker compiling full width at once"
   )
   func defaultWorkersAndSeeds() async throws {
     let setup = try Setup()
@@ -120,14 +120,11 @@ struct MutateCheckTests {
     #expect(scratch.requests.count == 2)
     #expect(scratch.requests.allSatisfy { $0.seededBuildDirectories == [Self.package] })
     // 18 cores shared by 2 workers.
-    #expect(!toolchain.buildJobs.isEmpty)
-    #expect(toolchain.buildJobs.allSatisfy { $0 == 9 })
-    #expect(!toolchain.tests.isEmpty)
-    #expect(toolchain.tests.allSatisfy { $0.jobs == 9 })
+    #expect(toolchain.sharedJobs == [9])
   }
 
   @Test(
-    "[mutation] max_workers bounds the workers when --jobs is absent, and build_jobs sets each worker's compile width — catches the configured caps ignored"
+    "[mutation] max_workers bounds the workers when --jobs is absent — catches the configured cap ignored"
   )
   func configuredWorkers() async throws {
     let setup = try Setup()
@@ -137,7 +134,7 @@ struct MutateCheckTests {
     let config = try Config(
       xcode: "26.2", appScheme: "SampleApp", packages: ["examples/SampleApp/Packages/*"],
       simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
-      mutation: MutationConfig(maxMutants: 30, maxWorkers: 1, buildJobs: 5))
+      mutation: MutationConfig(maxMutants: 30, maxWorkers: 1))
 
     let judgement = await MutateCheck.run(
       setup.environment(added, toolchain: toolchain, workers: nil), graph: try Self.graph(),
@@ -146,8 +143,6 @@ struct MutateCheckTests {
     let summary = judgement.findings.first { $0.ruleID == MutationRules.summaryRuleID }
     #expect(summary?.message.contains("1 worker") == true)
     #expect(summary?.message.contains("2 workers") == false)
-    #expect(!toolchain.buildJobs.isEmpty)
-    #expect(toolchain.buildJobs.allSatisfy { $0 == 5 })
   }
 
   @Test(

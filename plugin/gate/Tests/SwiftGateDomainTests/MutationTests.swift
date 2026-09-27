@@ -257,15 +257,4 @@ struct MutationWorkersTests {
     #expect(MutationWorkers.count(configured: 8, cores: 18, mutants: 3) == 3)
     #expect(MutationWorkers.count(configured: 1, cores: 18, mutants: 30) == 1)
   }
-
-  @Test(
-    "each worker's builds and test runs get an equal share of the cores, at least one — catches every worker compiling full width at once, oversubscribing the machine several times over"
-  )
-  func buildJobsShareTheCores() {
-    #expect(MutationWorkers.buildJobs(configured: nil, cores: 16, workers: 4) == 4)
-    #expect(MutationWorkers.buildJobs(configured: nil, cores: 18, workers: 4) == 4)
-    #expect(MutationWorkers.buildJobs(configured: nil, cores: 18, workers: 1) == 18)
-    #expect(MutationWorkers.buildJobs(configured: nil, cores: 2, workers: 4) == 1)
-    #expect(MutationWorkers.buildJobs(configured: 3, cores: 18, workers: 2) == 3)
-  }
 }

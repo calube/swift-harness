@@ -122,10 +122,10 @@ enum MutateCheck {
       configured: environment.workers ?? config.mutation.maxWorkers, cores: environment.cores,
       mutants: jobs.count { !$0.selections.isEmpty })
     let run = await MutationRunner(
-      scratch: environment.scratch, toolchain: environment.toolchain, workers: workers,
-      jobs: MutationWorkers.buildJobs(
-        configured: config.mutation.buildJobs, cores: environment.cores, workers: workers),
-      timeout: environment.timeout
+      scratch: environment.scratch,
+      toolchain: environment.toolchain.sharing(
+        jobs: MutationWorkers.buildJobs(cores: environment.cores, workers: workers)),
+      workers: workers, timeout: environment.timeout
     ).run(
       jobs,
       tree: ScratchTreeRequest(

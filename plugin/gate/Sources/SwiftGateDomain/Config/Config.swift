@@ -138,9 +138,6 @@ public struct Config: Sendable, Equatable {
     if let workers = mutation.maxWorkers, workers < 1 {
       issues.append(.outOfRange(path: "mutation.max_workers", value: "\(workers)", allowed: ">= 1"))
     }
-    if let jobs = mutation.buildJobs, jobs < 1 {
-      issues.append(.outOfRange(path: "mutation.build_jobs", value: "\(jobs)", allowed: ">= 1"))
-    }
 
     let budgetEntries: [(String, Duration?)] = [
       ("t0", budgets.t0), ("t1", budgets.t1), ("t2", budgets.t2), ("t3", budgets.t3),
@@ -313,13 +310,10 @@ public struct MutationConfig: Sendable, Equatable {
   public let maxMutants: Int
   /// Scratch worktrees running mutants at once; `nil` for ``MutationWorkers``' default.
   public let maxWorkers: Int?
-  /// Compile jobs and parallel test processes per worker; `nil` for ``MutationWorkers``' share.
-  public let buildJobs: Int?
 
-  public init(maxMutants: Int = 30, maxWorkers: Int? = nil, buildJobs: Int? = nil) {
+  public init(maxMutants: Int = 30, maxWorkers: Int? = nil) {
     self.maxMutants = maxMutants
     self.maxWorkers = maxWorkers
-    self.buildJobs = buildJobs
   }
 }
 

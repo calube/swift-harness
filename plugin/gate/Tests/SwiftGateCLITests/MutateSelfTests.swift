@@ -72,7 +72,12 @@ struct MutateSelfTests {
       }
     }
 
-    func mutate() async throws -> ChangedTestJudgement {
+    /// - Parameters:
+    ///   - swift: the `swift` the toolchain runs.
+    ///   - cores: the cores mutate believes the machine has.
+    func mutate(
+      swift: String = "swift", cores: Int = ProcessInfo.processInfo.activeProcessorCount
+    ) async throws -> ChangedTestJudgement {
       let gitRunner = LiveProcessRunner(baseEnvironment: Self.gitEnvironment)
       let swiftPM = LiveSwiftPM(runner: runner, repositoryRoot: root.path)
       let graph = try ModuleGraph(packages: [try await swiftPM.describe(packageDirectory: "Scorer")]
@@ -85,8 +90,8 @@ struct MutateSelfTests {
           root: root, git: LiveGit(runner: gitRunner, repositoryRoot: root.path),
           scratch: LiveScratchWorktrees(
             runner: gitRunner, repositoryRoot: root.path, directory: scratch),
-          toolchain: LiveMutationToolchain(runner: runner), workers: 3,
-          timeout: MutantTimeout()),
+          toolchain: LiveMutationToolchain(runner: runner, executable: swift), workers: 3,
+          cores: cores, timeout: MutantTimeout()),
         graph: graph, config: config, base: "main",
         context: GateRun.Context(runID: "r", directory: root.appending(path: ".harness/runs/r")))
     }
@@ -132,6 +137,48 @@ struct MutateSelfTests {
     #expect(summary?.contains("kill rate 100%") == true)
     #expect(
       judgement.findings.filter { $0.ruleID == MutationRules.killedRuleID }.count == 9)
+  }
+}
+
+extension MutateSelfTests {
+  @Test(
+    "mutant builds and test runs ask for no debug information and only their worker's share of the cores, and write no dSYM — catches every worker running dsymutil and compiling full width at once, wedging the machine",
+    .timeLimit(.minutes(5))
+  )
+  func buildsShareTheCoresWithoutDebugSymbols() async throws {
+    let repository = try await Repository(tests: "strong")
+    defer { repository.remove() }
+    let parent = repository.root.deletingLastPathComponent()
+    let calls = parent.appending(path: "swift-calls")
+    let symbols = parent.appending(path: "dsyms")
+    // The real `swift`, behind a script that records each call and any dSYM it leaves behind.
+    let swift = parent.appending(path: "swift")
+    try Data(
+      """
+      #!/bin/sh
+      printf '%s\\n' "$*" >> "\(calls.path)"
+      swift "$@"
+      status=$?
+      find . -name '*.dSYM' >> "\(symbols.path)"
+      exit $status
+
+      """.utf8
+    ).write(to: swift)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: swift.path)
+
+    // 3 workers on 6 cores: 2 jobs each.
+    let judgement = try await repository.mutate(swift: swift.path, cores: 6)
+
+    #expect(judgement.verdict == .green, "\(judgement.findings.map(\.message))")
+    let lines = try String(contentsOf: calls, encoding: .utf8).split(separator: "\n")
+    let builds = lines.filter { $0.hasPrefix("build ") }
+    let tests = lines.filter { $0.hasPrefix("test ") }
+    #expect(!builds.isEmpty)
+    #expect(!tests.isEmpty)
+    #expect(builds.allSatisfy { $0.contains("-debug-info-format none") && $0.contains("--jobs 2") })
+    #expect(tests.allSatisfy { $0.contains("--num-workers 2") })
+    let written = try String(contentsOf: symbols, encoding: .utf8)
+    #expect(written.isEmpty, "\(written)")
   }
 }
 

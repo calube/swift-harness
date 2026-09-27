@@ -4,11 +4,13 @@ import SwiftGateAdapters
 import SwiftGateTestSupport
 import Testing
 
-/// The built `swiftgate`, killed while a child it started is still running.
+/// The built `swiftgate`, killed while a child it started through ``LiveProcessRunner`` is still
+/// running.
 @Suite("a killed swiftgate")
 struct KilledRunChildrenTests {
-  /// The child's own sleep; a child gone in under half of it was killed, not left to finish.
-  private static let childLifetime = 600
+  /// The child's own sleep; a child gone in under half of it was killed, not left to finish. Short
+  /// enough that an orphan still ends the test, long enough to dwarf any scheduling delay.
+  private static let childLifetime = 120
 
   @Test(
     "a terminated swiftgate takes the tools it started down with it — catches builds orphaned by a killed run piling up and wedging the machine",

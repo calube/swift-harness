@@ -104,12 +104,10 @@ public enum ConfigSchema {
     let path = "mutation"
     let defaults = MutationConfig()
     guard let table = reader.table(root, path, at: "") else { return defaults }
-    reader.rejectUnknownKeys(
-      in: table, at: path, allowed: ["max_mutants", "max_workers", "build_jobs"])
+    reader.rejectUnknownKeys(in: table, at: path, allowed: ["max_mutants", "max_workers"])
     return MutationConfig(
       maxMutants: reader.integer(table, "max_mutants", at: path) ?? defaults.maxMutants,
-      maxWorkers: reader.integer(table, "max_workers", at: path),
-      buildJobs: reader.integer(table, "build_jobs", at: path))
+      maxWorkers: reader.integer(table, "max_workers", at: path))
   }
 
   private static func readBudgets(_ reader: inout Reader, _ root: [String: ConfigValue]) -> Budgets

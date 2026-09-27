@@ -37,7 +37,7 @@ struct ScratchWorktreeSweepTests {
   }
 
   @Test(
-    "session start removes and unregisters every prove scratch worktree whose owner died, whatever checkout made it, and keeps a live one — catches a killed ready run's worktree and its profile data left registered with git forever"
+    "session start removes and unregisters every prove scratch worktree whose owner died, whatever checkout made it and even half deleted, and keeps a live one — catches a killed ready run's worktree and its profile data left registered with git forever"
   )
   func sessionStartSweepsDeadScratchWorktrees() async throws {
     let temporary = FileManager.default.temporaryDirectory.appending(
@@ -57,6 +57,8 @@ struct ScratchWorktreeSweepTests {
       base.appending(path: ".app-swiftgate-prove-\(dead)-1a2b"),
       // Made from a linked worktree of the same repository that has since been removed.
       base.appending(path: ".app-feature-swiftgate-prove-\(dead)-3c4d"),
+      // Half deleted, so `git worktree remove` refuses it.
+      base.appending(path: ".app-swiftgate-prove-\(dead)-7a8b"),
     ]
     let live = base.appending(
       path: ".app-swiftgate-prove-\(ProcessInfo.processInfo.processIdentifier)-5e6f")
@@ -67,10 +69,11 @@ struct ScratchWorktreeSweepTests {
     for tree in orphans {
       try Data("profile".utf8).write(to: tree.appending(path: "default.profraw"))
     }
+    try FileManager.default.removeItem(at: orphans[2].appending(path: ".git"))
 
     let note = await HookDependencies.live(root: root, environment: [:]).sweep.sweep()
 
-    #expect(note?.contains("2 scratch worktree") == true, "\(String(describing: note))")
+    #expect(note?.contains("Removed 3 scratch worktree") == true, "\(String(describing: note))")
     let registered = try await Self.git("worktree", "list", "--porcelain", in: root)
     for tree in orphans {
       #expect(!FileManager.default.fileExists(atPath: tree.path))

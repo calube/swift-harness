@@ -16,8 +16,7 @@ public enum MutationWorkers {
   /// Compile jobs and parallel test processes for each worker. Every worker builds at once, and
   /// SwiftPM's own default is one job per core, so without a share the machine runs `workers`
   /// times as many compilers as it has cores.
-  /// - Parameter configured: `[mutation] build_jobs`; replaces the share.
-  public static func buildJobs(configured: Int?, cores: Int, workers: Int) -> Int {
-    max(1, configured ?? cores / max(1, workers))
+  public static func buildJobs(cores: Int, workers: Int) -> Int {
+    max(1, cores / max(1, workers))
   }
 }
