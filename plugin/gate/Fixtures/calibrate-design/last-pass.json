@@ -18,7 +18,7 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.97,
+          "probability" : 0.95,
           "question" : "refuted-api-finding"
         },
         {
@@ -48,7 +48,7 @@
         {
           "answered" : "refuted",
           "expected" : "refuted",
-          "probability" : 0.98,
+          "probability" : 0.97,
           "question" : "verdict"
         }
       ],
@@ -84,7 +84,7 @@
         {
           "answered" : "cite-a-supported-claim",
           "expected" : "cite-a-supported-claim",
-          "probability" : 0.94,
+          "probability" : 0.95,
           "question" : "fifteen-minute-tag"
         }
       ],
@@ -96,13 +96,13 @@
         {
           "answered" : "unverified-tag",
           "expected" : "unverified-tag",
-          "probability" : 0.97,
+          "probability" : 0.95,
           "question" : "fifteen-minute-tag"
         },
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.95,
+          "probability" : 0.9,
           "question" : "fifteen-minute-risk"
         }
       ],
@@ -114,19 +114,19 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.98,
+          "probability" : 0.97,
           "question" : "gating-finding"
         },
         {
           "answered" : "decision",
           "expected" : "decision",
-          "probability" : 0.97,
+          "probability" : 0.95,
           "question" : "anchor"
         },
         {
           "answered" : "blocker",
           "expected" : "blocker",
-          "probability" : 0.9,
+          "probability" : 0.83,
           "question" : "severity"
         }
       ],
@@ -150,19 +150,19 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.95,
+          "probability" : 0.97,
           "question" : "gating-finding"
         },
         {
           "answered" : "decision",
           "expected" : "decision",
-          "probability" : 0.95,
+          "probability" : 0.97,
           "question" : "anchor"
         },
         {
           "answered" : "blocker",
           "expected" : "blocker",
-          "probability" : 0.85,
+          "probability" : 0.97,
           "question" : "severity"
         }
       ],
@@ -198,7 +198,7 @@
         {
           "answered" : "claim",
           "expected" : "claim",
-          "probability" : 0.96,
+          "probability" : 0.97,
           "question" : "cover"
         },
         {
@@ -234,7 +234,7 @@
         {
           "answered" : "swift-composable-architecture@1.26.2",
           "expected" : "swift-composable-architecture@1.26.2",
-          "probability" : 0.93,
+          "probability" : 0.95,
           "question" : "pin"
         }
       ],
@@ -246,7 +246,7 @@
         {
           "answered" : "needs-decision",
           "expected" : "needs-decision",
-          "probability" : 0.95,
+          "probability" : 0.93,
           "question" : "answer"
         }
       ],
@@ -270,7 +270,7 @@
         {
           "answered" : "carry-forward-with-original-id",
           "expected" : "carry-forward-with-original-id",
-          "probability" : 0.9,
+          "probability" : 0.92,
           "question" : "answer"
         },
         {
@@ -312,13 +312,13 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.9,
+          "probability" : 0.95,
           "question" : "ui-framework-finding"
         },
         {
           "answered" : "A2",
           "expected" : "A2",
-          "probability" : 0.55,
+          "probability" : 0.85,
           "question" : "rule"
         }
       ],
@@ -337,7 +337,7 @@
       "case" : "uikit-in-live-module-only"
     }
   ],
-  "contentHash" : "6436d1d9574a5802c223e6f5952e627919b4f8909435336ffee1a5122c995d32",
+  "contentHash" : "256d3dd3384200d95e708b5edfabf8fc6e11ae1c89120be5192196f0632aec85",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -354,6 +354,6 @@
     "plugin/workflows/design-review.js"
   ],
   "model" : "sonnet",
-  "passedAt" : "2026-09-27T08:37:11Z",
+  "passedAt" : "2026-09-27T08:43:39Z",
   "schemaVersion" : 1
 }
