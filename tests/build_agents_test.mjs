@@ -127,6 +127,7 @@ export const BUILD_CONTRACTS = {
       'notes',
       'surface commit',
       '--base main --prove --mutate',
+      'no `--prove` or `--mutate`',
     ],
   },
   'build-fixer': {

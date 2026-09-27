@@ -17,3 +17,4 @@ worker_model = "tagged"
 time_budget_min = 0
 stop_starts_before_min = 0
 on_design_conflict = "amend"
+task_proof = "per-task"

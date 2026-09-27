@@ -1,3 +1,4 @@
+import Foundation
 import SwiftGateDomain
 import Testing
 
@@ -28,11 +29,13 @@ struct BuildPresetConfigTests {
     "time_budget_min": .integer(0),
     "stop_starts_before_min": .integer(0),
     "on_design_conflict": .string("amend"),
+    "task_proof": .string("per-task"),
   ])
 
   private static let defaultPreset = BuildPreset(
     designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger, mergeGate: .push,
-    workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend)
+    workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend,
+    taskProof: .perTask)
 
   private func root(withDefaultPreset overrides: [String: ConfigValue] = [:]) -> ConfigValue {
     guard case .table(var presetFields) = Self.defaultPresetTable else { fatalError() }
@@ -187,6 +190,73 @@ struct BuildPresetConfigTests {
       (error as? ConfigValidationError)?.issues == [
         .wrongType(path: "build.presets.default", expected: "table", found: "integer")
       ]
+    }
+  }
+  @Test(
+    "a preset missing task_proof is a config issue naming the key — catches a preset that silently picks a proof mode"
+  )
+  func missingTaskProofNamesTheKey() {
+    guard case .table(var presetFields) = Self.defaultPresetTable else { fatalError() }
+    presetFields.removeValue(forKey: "task_proof")
+    let input = minimalRoot(
+      merging: [
+        "build": .table(["presets": .table(["default": .table(presetFields)])])
+      ])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .missingKey(path: "build.presets.default.task_proof")
+      ]
+    }
+  }
+
+  @Test(
+    "an unknown task_proof value is a config issue listing per-task|final — catches an unrecognized proof mode passing silently"
+  )
+  func unknownTaskProofValueIsAnIssue() {
+    let input = root(withDefaultPreset: ["task_proof": .string("never")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .unknownEnumValue(
+          path: "build.presets.default.task_proof", value: "never",
+          allowed: ["per-task", "final"])
+      ]
+    }
+  }
+
+  @Test(
+    "task_proof final decodes to the final proof mode — catches the key read but ignored"
+  )
+  func taskProofFinalDecodes() throws {
+    let config = try ConfigSchema.config(
+      from: root(withDefaultPreset: ["task_proof": .string("final")]))
+    #expect(config.buildPresets["default"]?.taskProof == .final)
+  }
+
+  @Test(
+    "run.json keeps a preset's task proof mode, and a run recorded before the key existed reads as per-task — catches a final run checked as per-task, or older runs failing to load"
+  )
+  func taskProofRoundTripsThroughRunJSON() throws {
+    let final = BuildPreset(
+      designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
+      workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block,
+      taskProof: .final)
+    let decoded = try JSONDecoder().decode(BuildPreset.self, from: JSONEncoder().encode(final))
+    #expect(decoded.taskProof == .final)
+
+    let older = Data(
+      #"{"designTier":"standard","maxParallel":3,"review":"full","taskGate":"ledger","mergeGate":"push","workerModel":"tagged","timeBudgetMin":0,"stopStartsBeforeMin":0,"onDesignConflict":"amend"}"#
+        .utf8)
+    #expect(try JSONDecoder().decode(BuildPreset.self, from: older).taskProof == .perTask)
+
+    let unknown = Data(
+      #"{"designTier":"standard","maxParallel":3,"review":"full","taskGate":"ledger","mergeGate":"push","workerModel":"tagged","timeBudgetMin":0,"stopStartsBeforeMin":0,"onDesignConflict":"amend","taskProof":"never"}"#
+        .utf8)
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(BuildPreset.self, from: unknown)
     }
   }
 }

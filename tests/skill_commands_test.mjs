@@ -153,7 +153,7 @@ const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
 // A research launch names the registered workflow, or a copy of its script.
 const isResearchCall = call => call.includes('swift-harness-design-research') || call.includes('design-research.js')
 // build-task.js throws unless each of these is present (`reviewers` is optional).
-const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:']
+const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:']
 // The PreToolUse guard denies these without the caller's own literal `--session`.
 const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'worktree create']
 
