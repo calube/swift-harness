@@ -56,7 +56,7 @@ The [orchestrator runbook](../handoffs/subproject-2-orchestrator-runbook.md) app
 | `D/Context/ContextPack.swift`, `A/Context/ContextPackSources.swift` | `worker-context-pack-dependency-notes` |
 | `C/Commands/SelfTestCommand.swift` | `self-test-build-seeds` |
 | `P/skills/design/SKILL.md` and its references | `ship-skill-and-sketch-design-flow` |
-| `P/skills/plan/SKILL.md`, `P/agents/design-decomposer.md` | `decomposer-model-tag` |
+| `P/skills/plan/SKILL.md`, `P/agents/design-decomposer.md`, `D/Plan/PlanLintCoverage.swift` | `decomposer-model-tag` |
 | `docs/index.md`, `docs/designs/*` | `spec-corrections-and-routers` |
 
 ## Wave map
@@ -111,9 +111,9 @@ flowchart LR
 
 ### `ledger-build-states-and-fields`
 - Deps: — · Gate: push · estLines: 240
-- Writes: `D/Plan/Ledger.swift`, `D/Plan/LedgerTransition.swift`, `D/Plan/PlanLintCoverage.swift`, `D/Design/LedgerRender.swift`, `TD/LedgerBuildStatesTests.swift`
-- Does: §5.2: `TaskStatus` adds `blocked` and `abandoned`; tasks gain optional `model` (`sonnet` | `opus`) and `branch`. `LedgerTransition` holds the §6.2 transition table. `plan-lint` requires `model`. The ledger page renders the new states.
-- Tests: round-trip stays byte-stable with and without the new fields · every legal transition in §6.2 passes and `done → pending` fails — catches a mutable `done` · a task with no `model` is a `plan-lint` error · an unknown `model` value fails decoding.
+- Writes: `D/Plan/Ledger.swift`, `D/Plan/LedgerTransition.swift`, `D/Design/LedgerRender.swift`, `TD/LedgerBuildStatesTests.swift`
+- Does: §5.2: `TaskStatus` adds `blocked` and `abandoned`; tasks gain optional `model` (`sonnet` | `opus`) and `branch`. `LedgerTransition` holds the §6.2 transition table. The ledger page renders the new states. `plan-lint` doesn't require `model` yet: that lands with the decomposer that writes it (`decomposer-model-tag`).
+- Tests: round-trip stays byte-stable with and without the new fields · every legal transition in §6.2 passes and `done → pending` fails — catches a mutable `done` · a ledger with no `model` still decodes · an unknown `model` value fails decoding.
 
 ### `build-schedule-next`
 - Deps: build-presets-config, ledger-build-states-and-fields · Gate: push · estLines: 280
@@ -174,10 +174,10 @@ flowchart LR
 ## Agents and metrics
 
 ### `decomposer-model-tag`
-- Deps: ledger-build-states-and-fields · Gate: fast · estLines: 80
-- Writes: `P/agents/design-decomposer.md`, `P/skills/plan/SKILL.md`, `tests/design_agents_test.mjs`
-- Does: §5.2: the decomposer tags every task `model` by the runbook rule; the plan skill's shape check requires it.
-- Tests: the decomposer contract test requires `model` on every task · `prose` clean.
+- Deps: ledger-build-states-and-fields · Gate: push · estLines: 120
+- Writes: `P/agents/design-decomposer.md`, `P/skills/plan/SKILL.md`, `D/Plan/PlanLintCoverage.swift`, `tests/design_agents_test.mjs`, `TD/PlanLintModelTagTests.swift`
+- Does: §5.2: the decomposer tags every task `model` by the runbook rule; the plan skill's shape check requires it; `plan-lint` requires it on every task (a major finding).
+- Tests: the decomposer contract test requires `model` on every task · a task with no `model` is a `plan-lint` error · `prose` clean.
 
 ### `build-worker-and-fixer-agents`
 - Deps: — · Gate: fast · estLines: 220
