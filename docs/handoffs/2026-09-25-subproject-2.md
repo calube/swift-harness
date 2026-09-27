@@ -15,6 +15,9 @@ In flight (each worker writes its report in its LAST commit body; read it from d
     every agent is calibrated on its frontmatter model (USER DECIDED 2026-09-27), freshness is RED on a model change, the
     judge questions are neutral, flaky seeds are fixed, and there are real calibrate design and build runs.
   Before removing any worktree, check that no process still runs in it (workers keep background gates alive).
+  Pending from the evals session: scores for the review-accuracy re-run after the source-line fix (expect
+  clean-reset to cite CounterFeatureTests.swift:73 and dismiss-without-cancel to be rated blocker). The ship/build routing
+  held-out verdict waits on the user's eval budget (red-first run: ship 0.75, build 1.00).
 Waiting on the user, in this order:
   1. Remaining review decisions (review doc, "Needs the user's decision"): 3 the hook latency budget for design-doc writes
      (about 100 ms against 50 ms), 5 publish and Approve headless, 6 rewriting §11's cost figures (measured about 1M tokens
