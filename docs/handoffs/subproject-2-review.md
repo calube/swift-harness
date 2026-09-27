@@ -286,3 +286,7 @@ From the evals session's first review-accuracy and failure-modes runs (evals-rou
   orphaned (ppid 1) for 4–6 hours, three of them spinning at ~200% CPU each (likely infinite-loop mutants), after
   their runs were killed. Prove, with a real mutant that loops forever, that a mutate test timeout and a killed
   mutate run both take `swiftpm-testing-helper` down (process group, not just the direct child).
+- **`plan-lint-judges-modules-and-done-tasks-right`** (opus): plan-lint counts a module's test target as a second
+  module, so a task whose write set includes its `Tests/` gets `too-many-modules`, contradicting the decomposer's
+  instruction. Its per-task rules also run on `done` tasks, so an amend that renames a test id or raises a tier a
+  done task names can never replan to GREEN.
