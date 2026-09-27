@@ -78,7 +78,8 @@ Handle notices one at a time: merges run in completion order.
    `"$SG" check --tier <mergeGate>` on main. A conflict or a red gate goes to
    [the fixer](references/event-loop.md#conflict-or-red-main).
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
-   `"$SG" worktree remove <slug> <task> --session <session> --json`.
+   `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
+   `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
 6. Republish the ledger page: `"$SG" design-render --ledger <slug> --json`, then the Artifact tool
    with the same file path every time.
 

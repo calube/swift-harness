@@ -20,8 +20,6 @@ Contents:
 Keep these in the conversation; none of them is a file:
 
 - per running task: its Workflow task id, `worktree`, `branch`;
-- the tasks set aside by a halt or a design conflict, which the loop never starts again unless the
-  user says retry;
 - the order tasks merged in, for the fixer's second return;
 - the ledger page's file path, `.harness/design-render/<slug>-ledger.html`.
 
@@ -109,8 +107,9 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 
 - The check passes and `outcome` is `ready-to-merge`:
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, then the merge gate on
-  `main` again. GREEN: go on to `ledger set … done` as for a clean merge. `worktree remove` then
-  removes the task worktree; the fix worktree and branch stay, so name them in the report.
+  `main` again. GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
+  `worktree remove`, remove the fix worktree and branch too:
+  `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
@@ -120,7 +119,8 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 A null or thrown workflow, a return that fails `check-return`, and a `gate-red` or `review-blocked`
 outcome each halt that task alone. The workflow already spent its 1 fix pass.
 
-1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`, and set the task aside.
+1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`. `build next` never lists a
+   `blocked` task, and neither does a resumed build.
 2. Ask. Quote the check's findings, the return's `gate`, or the blocking review findings as
    `severity file: title`. Options:
    - **Go on without it** (Recommended): it stays `blocked`; its dependents never start.
@@ -138,15 +138,16 @@ preset's `onDesignConflict` decides.
 
 1. `ledger set <task> blocked` for the reporting task. For each other `in-progress` task whose
    `covers` intersects `ids`, stop its workflow with `TaskStop` and set it `blocked` too.
-2. Set aside every `pending` task whose `covers` intersects `ids`, and every task that depends on a
-   blocked one. The ledger can't move a `pending` task to `blocked`, so the loop skips them when
-   `build next` lists them.
+2. `ledger set <task> blocked` for every `pending` task whose `covers` intersects `ids`, then for
+   every `pending` task that depends on a blocked one, however far down the chain. The block lives
+   in the ledger, so a resumed build sees it.
 3. Ask once, quoting `section: claim` and the ids. Options: **stop** (Recommended), **drop** the
-   blocked tasks (`ledger set … abandoned`), or **retry** them (`ledger set … pending`, then relaunch
-   into their existing worktrees). The workflow args carry no note, so a retry with a note means the
-   user edits the design or the plan first.
+   blocked tasks (`ledger set … abandoned`), or **retry** them (`ledger set … pending`). A retried
+   task that already had a worktree relaunches into it; the others start through `worktree create`
+   as usual. The workflow args carry no note, so a retry with a note means the user edits the design
+   or the plan first.
 
-`amend`: set the reporting task `blocked`, set aside the tasks step 2 names, and run the amend flow
+`amend`: set the reporting task `blocked`, and run the amend flow
 with the Skill tool: `swift-harness:design` with `--amend <slug>`. It marks the affected tasks
 `needs-replan`. The other tasks keep building; the report names the `needs-replan` tasks, which wait
 for `/swift-harness:plan`.

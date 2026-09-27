@@ -253,7 +253,7 @@ const tests = {
       ['worktree create', '--json'], ['context-pack', '--build-run'], ['ledger set', '--json'],
       ['build check-return', '--plan'], ['build check-return', '--fix'], ['build merge', '--undo'],
       ['build merge', '--fix'], ['check', '--tier'], ['worktree remove', '--session'],
-      ['design-render', '--ledger'], ['build finish', '--session'], ['stats', '--build'],
+      ['worktree remove', '--fix'], ['design-render', '--ledger'], ['build finish', '--session'], ['stats', '--build'],
     ]) assert.ok(has(path, flag), `the build skill never runs \`swiftgate ${path} ${flag}\``)
     const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
