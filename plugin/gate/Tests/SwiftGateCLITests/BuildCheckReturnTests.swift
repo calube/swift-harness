@@ -103,12 +103,36 @@ private struct ReturnScenario {
 
   func returnValue(
     outcome: TaskReturn.Outcome = .readyToMerge, commits: [String]? = nil,
-    gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil
+    gate: TaskReturn.Gate?, designConflict: TaskStatusReport.Report? = nil,
+    notes: String = "Queue.drain() returns [Item]"
   ) -> TaskReturn {
     TaskReturn(
       task: Self.task, outcome: outcome, commits: commits ?? [taskCommit], gate: gate,
       review: .init(mode: .gate, findings: []), testsAdded: ["test-queue-drains"],
-      notes: "Queue.drain() returns [Item]", designConflict: designConflict)
+      notes: notes, designConflict: designConflict)
+  }
+
+  /// Commits `paths` on the task branch and returns the commit.
+  func commitFiles(_ paths: [String]) async throws -> String {
+    for path in paths {
+      let file = worktree.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data("// \(path)\n".utf8).write(to: file)
+    }
+    try await inWorktree(["add", "--"] + paths)
+    try await inWorktree(["commit", "-q", "-m", "task files"])
+    return try await inWorktree(["rev-parse", "HEAD"])
+  }
+
+  @discardableResult
+  private func inWorktree(_ arguments: [String]) async throws -> String {
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: arguments, workingDirectory: worktree.path,
+        timeout: .seconds(60)))
+    try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   func write(_ data: Data) throws -> String {
@@ -205,6 +229,63 @@ struct BuildCheckReturnTests {
     #expect(report.findings == [])
     #expect(report.verdict == .green)
     #expect(report.verdict.exitCode == 0)
+  }
+
+  @Test(
+    "a file the task's commits touch outside its write set, and its notes never name, is a finding with exit 1 — catches a worker spreading past its write set in silence"
+  )
+  func unexplainedEditOutsideWriteSetFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let commit = try await scenario.commitFiles(["Sources/Queue/Queue.swift", "App/AppView.swift"])
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, commit],
+        gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings.map(\.rule) == [.outsideWriteSetUnexplained])
+    #expect(report.findings.first?.message.contains("App/AppView.swift") == true)
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "an edit outside the write set that the notes name passes with a warning naming the file — catches the check hiding an explained edit, or failing one the worker prompt allows"
+  )
+  func explainedEditOutsideWriteSetWarns() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let commit = try await scenario.commitFiles(["App/AppView.swift"])
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, commit],
+        gate: .init(tier: .push, verdict: .green, runID: runID),
+        notes: "Edited App/AppView.swift, 4 lines, so the UI target keeps compiling."))
+
+    #expect(report.findings == [])
+    #expect(report.warnings.contains { $0.contains("App/AppView.swift") })
+    #expect(report.verdict.exitCode == 0)
+  }
+
+  @Test(
+    "commits inside the write set raise no write-set warning — catches the check flagging every task"
+  )
+  func editsInsideWriteSetAreQuiet() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let commit = try await scenario.commitFiles(["Sources/Queue/Queue.swift"])
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [scenario.taskCommit, commit],
+        gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(report.findings == [])
+    #expect(!report.warnings.contains { $0.contains("write set") })
   }
 
   @Test(

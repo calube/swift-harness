@@ -29,6 +29,13 @@ public struct LiveGit: Git, DiffReading {
     return Array(Set(paths)).sorted()
   }
 
+  public func changedFiles(from base: String, to tip: String) async throws(GitError) -> [String] {
+    try Self.validate(ref: base)
+    try Self.validate(ref: tip)
+    let changed = try await run(["diff", "--name-only", "-z", "--no-renames", base, tip, "--"])
+    return Array(Set(Self.nulSeparated(changed))).sorted()
+  }
+
   public func addedLines(since ref: String) async throws(GitError) -> [AddedLines] {
     try Self.validate(ref: ref)
     let diff = try await run([

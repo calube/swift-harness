@@ -80,6 +80,12 @@ public final class FakeGit: Git {
     return changed ?? staged.keys.sorted()
   }
 
+  /// Answers the same files as ``changedFiles(since:)``.
+  public func changedFiles(from base: String, to tip: String) async throws(GitError) -> [String] {
+    if let failure { throw failure }
+    return changed ?? staged.keys.sorted()
+  }
+
   public func addedLines(since ref: String) async throws(GitError) -> [AddedLines] {
     if let failure { throw failure }
     changedSince.withLock { $0.append(ref) }

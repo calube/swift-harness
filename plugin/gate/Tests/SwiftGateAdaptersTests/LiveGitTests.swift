@@ -70,6 +70,26 @@ struct TestGitFailure: Error {
 @Suite("LiveGit")
 struct LiveGitTests {
   @Test(
+    "changed files between 2 commits list committed changes only, never the working tree — catches a write-set check blaming a worker for uncommitted scratch files"
+  )
+  func changedFilesBetweenCommits() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("Keep.swift", "keep\n")
+    try repo.write("Deleted.swift", "a\n")
+    let base = try await repo.commitAll("base")
+
+    try repo.write("Sub/Added ü.swift", "new\n")
+    try repo.delete("Deleted.swift")
+    let tip = try await repo.commitAll("task work")
+    try repo.write("Keep.swift", "uncommitted\n")
+    try repo.write("Scratch.swift", "untracked\n")
+
+    let changed = try await repo.adapter.changedFiles(from: base, to: tip)
+    #expect(changed == ["Deleted.swift", "Sub/Added ü.swift"])
+  }
+
+  @Test(
     "changed files cover committed, staged, unstaged, untracked, deleted — catches skipped tests")
   func changedFiles() async throws {
     let repo = try await TemporaryGitRepository()

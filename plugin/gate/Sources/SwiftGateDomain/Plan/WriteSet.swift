@@ -24,6 +24,12 @@ public enum WriteSet {
     }
   }
 
+  /// The `paths` no entry of `writeSet` covers: an exact entry covers its own path, and a
+  /// `/`-terminated entry covers every path under it.
+  public static func outside(_ paths: [String], writeSet: [String]) -> [String] {
+    paths.filter { path in !writeSet.contains { entriesOverlap($0, path) } }
+  }
+
   /// Whether any entry of `lhs` collides with any entry of `rhs` — the check `plan-lint` runs
   /// pairwise across a wave's tasks.
   public static func overlaps(_ lhs: [String], _ rhs: [String]) -> Bool {

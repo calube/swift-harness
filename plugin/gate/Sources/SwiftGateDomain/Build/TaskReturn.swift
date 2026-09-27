@@ -193,6 +193,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case designConflictUnrecorded = "build-return.design-conflict-unrecorded"
     case designConflictUnreturned = "build-return.design-conflict-unreturned"
     case designConflictMismatch = "build-return.design-conflict-mismatch"
+    case outsideWriteSetUnexplained = "build-return.outside-write-set-unexplained"
   }
 
   public let rule: Rule
@@ -241,10 +242,12 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let taskGate: CheckTier
   /// The worktree's `task-status.json`, when it exists.
   public let taskStatus: TaskStatusReport?
+  /// Files the task branch changed since it left `main` that no write-set entry covers.
+  public let filesOutsideWriteSet: [String]
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
-    taskGate: CheckTier, taskStatus: TaskStatusReport?
+    taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = []
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -252,6 +255,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.gateRun = gateRun
     self.taskGate = taskGate
     self.taskStatus = taskStatus
+    self.filesOutsideWriteSet = filesOutsideWriteSet
   }
 }
 
@@ -270,6 +274,23 @@ public enum TaskReturnCheck {
   {
     commitFindings(taskReturn, evidence) + gateFindings(taskReturn, evidence)
       + reviewFindings(taskReturn) + designConflictFindings(taskReturn, evidence)
+      + writeSetFindings(taskReturn, evidence)
+  }
+
+  /// The worker may make a small edit outside its write set when it names the file in `notes`
+  /// (the build-worker contract). An edit the notes never name is a finding.
+  private static func writeSetFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)
+    -> [TaskReturnFinding]
+  {
+    let unexplained = evidence.filesOutsideWriteSet.filter { !taskReturn.notes.contains($0) }
+    guard !unexplained.isEmpty else { return [] }
+    return [
+      .init(
+        rule: .outsideWriteSetUnexplained,
+        message:
+          "the task branch changed \(unexplained.joined(separator: ", ")) outside its write set, "
+          + "and the return's notes never name it")
+    ]
   }
 
   private static func commitFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)

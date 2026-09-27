@@ -7,6 +7,9 @@ public protocol Git: Sendable {
   /// deletions), plus untracked files that are not ignored. Sorted, unique.
   func changedFiles(since ref: String) async throws(GitError) -> [String]
 
+  /// Files that differ between 2 commits, committed history only. Sorted, unique.
+  func changedFiles(from base: String, to tip: String) async throws(GitError) -> [String]
+
   /// Lines added between `ref` and the working tree (committed, staged or unstaged), per file,
   /// with every line of an untracked, non-ignored file counted as added. Files that add no lines
   /// are omitted. Sorted by path.

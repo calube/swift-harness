@@ -110,15 +110,36 @@ enum BuildCheckReturnRun {
       throw Blocked("reading branch \(names.branch): \(error)")
     }
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
+    var outside: [String] = []
     if let branchTip {
       for commit in taskReturn.commits {
         commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
+      }
+      outside = WriteSet.outside(
+        try await branchChanges(tip: branchTip, git: git), writeSet: task.writeSet)
+      if !outside.isEmpty {
+        warnings.append(
+          "the task branch changed \(outside.count) file(s) outside its write set: "
+            + outside.joined(separator: ", "))
       }
     }
     return TaskReturnEvidence(
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
-      taskGate: taskGate, taskStatus: try taskStatus(in: worktree))
+      taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside)
+  }
+
+  /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
+  /// when the orchestrator runs this.
+  private static func branchChanges(tip: String, git: any Git) async throws(Blocked) -> [String] {
+    do {
+      guard let head = try await git.revision("HEAD"),
+        let base = try await git.mergeBase(tip, head)
+      else { return [] }
+      return try await git.changedFiles(from: base, to: tip)
+    } catch {
+      throw Blocked("listing the task branch's changed files: \(error)")
+    }
   }
 
   /// The preset's fixed tier, or the ledger's own when the preset defers to it. A fix is merged
