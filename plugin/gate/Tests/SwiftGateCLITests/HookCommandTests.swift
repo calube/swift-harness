@@ -47,7 +47,7 @@ struct HookHarness {
   ) async throws -> (result: HookResult, milliseconds: Int) {
     let input = try payload(fixture, cwd: cwd, replacing: replacing)
     let dependencies = self.dependencies
-    let (result, milliseconds) = await GateRun.timed {
+    let (result, milliseconds) = await Latency.cpuMilliseconds {
       await HookRunner.run(event, input: input) { _ in dependencies }
     }
     return (result, milliseconds)
@@ -131,7 +131,7 @@ struct HookCommandTests {
       let input = try harness.payload(fixture, cwd: elsewhere)
       let factoryCalls = Mutex(0)
 
-      let (result, milliseconds) = await GateRun.timed {
+      let (result, milliseconds) = await Latency.cpuMilliseconds {
         await HookRunner.run(event, input: input) { _ in
           factoryCalls.withLock { $0 += 1 }
           return harness.dependencies

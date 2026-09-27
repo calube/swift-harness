@@ -85,7 +85,7 @@ struct MarkdownLocalPathHookTests {
   func thousandLineDocIsFast() async throws {
     let lines = (1...1000).map { "Line \($0) of ordinary prose about the feature.\n" }.joined()
     let samples = await Latency.samples {
-      let (_, milliseconds) = await GateRun.timed {
+      let (_, milliseconds) = await Latency.cpuMilliseconds {
         LocalPathRule.scan(lines, file: "docs/big.md")
       }
       return milliseconds

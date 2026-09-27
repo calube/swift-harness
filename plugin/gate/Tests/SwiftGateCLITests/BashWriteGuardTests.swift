@@ -118,7 +118,7 @@ private struct BashWriteScenario {
       xcode: FixedXcode(version: "26.2"), sweep: PendingOrphanCloneSweep(),
       commitJudge: DisabledCommitCommentJudge(), environment: environment)
     let input = Data(text.utf8)
-    let (result, milliseconds) = await GateRun.timed {
+    let (result, milliseconds) = await Latency.cpuMilliseconds {
       await HookRunner.run(.preToolUse, input: input) { _ in dependencies }
     }
     guard let stdout = result.stdout else { return (nil, milliseconds) }
