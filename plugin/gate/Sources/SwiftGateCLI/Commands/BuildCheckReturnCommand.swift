@@ -30,7 +30,8 @@ enum BuildCheckReturnRun {
   }
 
   /// - Parameter fix: check a fixer's return: its commits are on `<plan>/fix-<task>`, its gate
-  ///   run is in the fix worktree, and the tier to meet is the run preset's merge gate.
+  ///   run is in the fix worktree, the tier to meet is the run preset's merge gate, and its
+  ///   `review` may be `null`.
   static func run(file: String, plan: String?, fix: Bool = false, git: any Git) async
     -> BuildCheckReturnReport
   {
@@ -131,7 +132,8 @@ enum BuildCheckReturnRun {
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
-      explainedEditsAllowed: fix, proofRequired: !fix, surfaceCommit: surface)
+      explainedEditsAllowed: fix, proofRequired: !fix, surfaceCommit: surface,
+      reviewRequired: !fix)
   }
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
@@ -290,7 +292,7 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
   @Flag(
     help: ArgumentHelp(
       "Check a fixer's return: commits on <plan>/fix-<task>, the gate run in the fix worktree, "
-        + "and the run preset's merge gate as the tier to meet."))
+        + "and the run preset's merge gate as the tier to meet; its review may be null."))
   var fix = false
 
   @OptionGroup var output: OutputOptions

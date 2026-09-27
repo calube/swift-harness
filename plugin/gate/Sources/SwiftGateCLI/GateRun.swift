@@ -45,6 +45,7 @@ enum GateRun {
     // -onlyUsePackageVersionsFromResolvedFile: whatever `body` runs must never rewrite a committed
     // Package.resolved, on any path those flags missed.
     let resolvedFilesBefore = await ResolvedFileGuard.snapshot(root: root, git: git)
+    let headCommit = await headCommit(git: git)
     var parts = try await body(Context(runID: runID, directory: directory))
     let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
     if let finding = try ResolvedFileGuard.finding(
@@ -57,13 +58,26 @@ enum GateRun {
       findings: parts.findings, allowances: parts.allowances)
     do {
       try store.record(
-        report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases)
+        report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
+        headCommit: headCommit)
     } catch {
       FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
     }
     Console.write(try ReportRenderer.render(report, format: format))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
+  }
+
+  /// The commit the run starts at, so its report and history line name what it gated. `nil` in a
+  /// checkout with no commit yet; a git failure says so on stderr rather than going unrecorded.
+  private static func headCommit(git: any Git) async -> String? {
+    do {
+      return try await git.revision("HEAD")
+    } catch {
+      FileHandle.standardError.write(
+        Data("swiftgate: could not read HEAD to record with the run: \(error)\n".utf8))
+      return nil
+    }
   }
 
   static func milliseconds(_ duration: Duration) -> Int {

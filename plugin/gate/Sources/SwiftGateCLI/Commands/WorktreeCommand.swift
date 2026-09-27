@@ -172,6 +172,7 @@ enum WorktreeRun {
       names = context.names
     }
     let report = Reporter(command: command, slug: slug, task: task, names: names)
+    var keeping = KeptRuns()
     do throws(GitWorkspaceError) {
       guard try await workspace.branchExists(names.branch) else {
         return report.refused("branch \(names.branch) doesn't exist")
@@ -181,6 +182,7 @@ enum WorktreeRun {
           "branch \(names.branch) isn't merged into \(TaskWorktree.base); merge it first")
       }
       if FileManager.default.fileExists(atPath: names.path) {
+        keeping = keepRuns(of: names)
         try await workspace.removeWorktree(at: names.path, force: false)
       }
       try await workspace.deleteBranch(names.branch)
@@ -190,7 +192,43 @@ enum WorktreeRun {
     return WorktreeReport(
       command: command, plan: slug, task: task, status: .removed, verdict: .green, holder: nil,
       worktree: names.path, branch: names.branch, cloned: nil, missing: nil,
-      message: "removed \(names.path) and branch \(names.branch)")
+      message: "removed \(names.path) and branch \(names.branch)" + keeping.message,
+      keptRuns: keeping.kept, unkeptRuns: keeping.unkept.isEmpty ? nil : keeping.unkept)
+  }
+
+  /// What `remove` copied out of a worktree's `.harness/runs/` before deleting it.
+  private struct KeptRuns {
+    var kept: [String] = []
+    var unkept: [WorktreeReport.UnkeptRun] = []
+    var message = ""
+  }
+
+  /// Copies the worktree's gate reports into the main checkout, so a task gate's evidence
+  /// outlives the worktree. A run it can't copy is named; removal still goes ahead, since the
+  /// branch is merged and a report is diagnostics, not work.
+  private static func keepRuns(of names: TaskWorktree) -> KeptRuns {
+    let main = RunStore(
+      worktreeRoot: URL(filePath: names.mainCheckout, directoryHint: .isDirectory))
+    let into = main.worktreeRoot.appending(path: RunLayout.runsDirectory).path
+    let outcome: RunKeepOutcome
+    do throws(RunStoreError) {
+      outcome = try RunStore(worktreeRoot: URL(filePath: names.path, directoryHint: .isDirectory))
+        .keepRuns(in: main)
+    } catch {
+      return KeptRuns(message: "; kept no gate reports, listing them failed: \(error)")
+    }
+    var result = KeptRuns(
+      kept: outcome.kept,
+      unkept: outcome.unkept.map { .init(runId: $0.runID, reason: $0.reason) })
+    if !outcome.kept.isEmpty {
+      result.message += "; kept \(outcome.kept.count) gate report(s) in \(into)"
+    }
+    if !outcome.unkept.isEmpty {
+      result.message +=
+        "; couldn't keep "
+        + outcome.unkept.map { "\($0.runID) (\($0.reason))" }.joined(separator: ", ")
+    }
+    return result
   }
 
   static func render(_ report: WorktreeReport, format: OutputFormat) -> String {
@@ -439,7 +477,8 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
     commandName: "remove",
     abstract: "Remove a merged task's worktree and branch, or with --fix its fix worktree.",
     discussion:
-      "Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
+      "Before removing, copies each gate run under the worktree's .harness/runs/ into the main "
+      + "checkout's, naming any it couldn't. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
       + "the ledger, or its branch is missing or not merged into main; 2 for a missing flag or a "
       + "failed git step, such as a worktree with uncommitted changes.")
 

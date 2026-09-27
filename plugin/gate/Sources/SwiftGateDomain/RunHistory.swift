@@ -62,7 +62,7 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.findingCount = report.findings.count
     self.steps = steps
     self.proofBases = proofBases
-    self.headCommit = nil
+    self.headCommit = headCommit
   }
 }
 
@@ -78,12 +78,34 @@ public struct RecordedRunReport: Sendable, Equatable {
     self.headCommit = headCommit
   }
 
+  private enum CodingKeys: String, CodingKey {
+    case headCommit
+  }
+
+  /// The same byte-stable formatting as ``RunReportJSON``.
   public static func encode(_ recorded: RecordedRunReport) throws -> Data {
-    try RunReportJSON.encode(recorded.report)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    return try encoder.encode(recorded)
   }
 
   public static func decode(_ data: Data) throws -> RecordedRunReport {
-    RecordedRunReport(report: try RunReportJSON.decode(data), headCommit: nil)
+    try JSONDecoder().decode(RecordedRunReport.self, from: data)
+  }
+}
+
+extension RecordedRunReport: Codable {
+  public init(from decoder: any Decoder) throws {
+    report = try RunReport(from: decoder)
+    headCommit = try decoder.container(keyedBy: CodingKeys.self)
+      .decodeIfPresent(String.self, forKey: .headCommit)
+  }
+
+  /// Both write into the one top-level object, so the report's own keys stay where they were.
+  public func encode(to encoder: any Encoder) throws {
+    try report.encode(to: encoder)
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encodeIfPresent(headCommit, forKey: .headCommit)
   }
 }
 

@@ -318,4 +318,91 @@ struct WorktreeCommandTests {
       ])
     #expect(try scenario.ledger() == WorktreeScenario.ledger)
   }
+
+  @Test(
+    "after remove, the task worktree's gate report is readable from the main checkout, in a real repository with a real linked worktree — catches the task gate's evidence deleted with its worktree"
+  )
+  func removeKeepsGateReports() async throws {
+    let scenario = try WorktreeScenario()
+    defer { scenario.remove() }
+    try scenario.claim(WorktreeScenario.alice)
+    let branch = "\(WorktreeScenario.plan)/cli"
+    let runner = LiveProcessRunner(baseEnvironment: [
+      "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME": scenario.base.path,
+      "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+      "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+      "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+    ])
+    func git(_ arguments: [String], in directory: String) async throws {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: directory,
+          timeout: .seconds(60)))
+      try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    }
+    let main = scenario.main.path
+    try Data(".harness/\n".utf8).write(to: scenario.main.appending(path: ".gitignore"))
+    try await git(["init", "-q", "-b", "main"], in: main)
+    try await git(["config", "commit.gpgsign", "false"], in: main)
+    try await git(["add", ".gitignore"], in: main)
+    try await git(["commit", "-q", "-m", "init"], in: main)
+    try await git(["worktree", "add", "-q", "-b", branch, scenario.taskWorktree, "main"], in: main)
+    try await git(["commit", "-q", "--allow-empty", "-m", "task work"], in: scenario.taskWorktree)
+    try await git(["merge", "-q", "--ff-only", branch], in: main)
+    let runID = RunID.make(startedAt: Date(timeIntervalSince1970: 1_790_000_000), suffix: 7)
+    let gateReport = try RunReport(
+      runID: runID, durationMilliseconds: 1200,
+      tiers: [TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)],
+      findings: [])
+    try RunStore(worktreeRoot: URL(filePath: scenario.taskWorktree)).record(
+      gateReport, finishedAt: Date(), command: "check push", headCommit: "abc1")
+
+    let removed = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", session: WorktreeScenario.alice,
+      git: scenario.git, workspace: LiveGitWorkspace(runner: runner, repositoryRoot: main))
+
+    #expect(removed.status == .removed, "\(removed.message)")
+    #expect(removed.verdict.exitCode == 0)
+    #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree))
+    #expect(removed.keptRuns == [runID])
+    #expect(removed.unkeptRuns == nil)
+    let kept = try RecordedRunReport.decode(
+      Data(contentsOf: scenario.main.appending(path: ".harness/runs/\(runID)/report.json")))
+    #expect(kept.report == gateReport)
+    #expect(kept.headCommit == "abc1")
+  }
+
+  @Test(
+    "a gate report remove can't copy into the main checkout is named in its report and message — catches evidence dropped in silence"
+  )
+  func removeNamesUnkeptReports() async throws {
+    let scenario = try WorktreeScenario()
+    defer { scenario.remove() }
+    try scenario.claim(WorktreeScenario.alice)
+    let branch = "\(WorktreeScenario.plan)/cli"
+    let store = RunStore(worktreeRoot: URL(filePath: scenario.taskWorktree))
+    for suffix: UInt32 in [1, 2] {
+      try store.record(
+        try RunReport(
+          runID: RunID.make(startedAt: Date(timeIntervalSince1970: 1_790_000_000), suffix: suffix),
+          durationMilliseconds: 1, tiers: [], findings: []),
+        finishedAt: Date())
+    }
+    let blockedID = RunID.make(startedAt: Date(timeIntervalSince1970: 1_790_000_000), suffix: 1)
+    let keptID = RunID.make(startedAt: Date(timeIntervalSince1970: 1_790_000_000), suffix: 2)
+    let blocked = scenario.main.appending(path: ".harness/runs/\(blockedID)")
+    try FileManager.default.createDirectory(
+      at: blocked.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("in the way".utf8).write(to: blocked)
+    let workspace = FakeGitWorkspace(branches: [branch], merged: [branch])
+
+    let removed = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", session: WorktreeScenario.alice,
+      git: scenario.git, workspace: workspace)
+
+    #expect(removed.status == .removed, "\(removed.message)")
+    #expect(removed.keptRuns == [keptID])
+    #expect(removed.unkeptRuns?.map(\.runId) == [blockedID])
+    #expect(removed.message.contains(blockedID), "\(removed.message)")
+  }
 }

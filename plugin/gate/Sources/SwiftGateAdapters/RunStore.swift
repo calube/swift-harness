@@ -58,6 +58,7 @@ public struct RunStore: Sendable {
   }
 
   /// Writes the run's `report.json` and appends its summary to `history.jsonl`.
+  /// - Parameter headCommit: the commit `HEAD` was at when the run started, in both.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil
@@ -67,11 +68,12 @@ public struct RunStore: Sendable {
     let reportData: Data
     let line: Data
     do {
-      reportData = try RunReportJSON.encode(report)
+      reportData = try RecordedRunReport.encode(
+        RecordedRunReport(report: report, headCommit: headCommit))
       line = try RunHistoryJSON.encodeLine(
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,
-          proofBases: proofBases))
+          proofBases: proofBases, headCommit: headCommit))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }
@@ -97,9 +99,47 @@ public struct RunStore: Sendable {
     return RunHistoryJSON.decode(data)
   }
 
-  /// Copies every run directory under this store into `destination`'s runs.
+  /// Copies every run directory under this store into `destination`'s runs, so a worktree's gate
+  /// reports outlive it. The history file stays behind: the destination's own history counts only
+  /// its own runs. A run already in `destination` counts as kept, since run ids are unique.
+  /// - Throws: when this store's runs directory exists but can't be listed.
   public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
-    RunKeepOutcome(kept: [], unkept: [])
+    let files = FileManager.default
+    let source = worktreeRoot.appending(path: RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let names: [String]
+    do {
+      names = try files.contentsOfDirectory(atPath: source.path)
+    } catch CocoaError.fileReadNoSuchFile {
+      return RunKeepOutcome(kept: [], unkept: [])
+    } catch {
+      throw .io(operation: "list", path: source.path, reason: error.localizedDescription)
+    }
+    var kept: [String] = []
+    var unkept: [RunKeepOutcome.Unkept] = []
+    for runID in names.sorted() where RunID.isValid(runID) {
+      let from = source.appending(path: runID, directoryHint: .isDirectory)
+      var isDirectory: ObjCBool = false
+      guard files.fileExists(atPath: from.path, isDirectory: &isDirectory), isDirectory.boolValue
+      else { continue }
+      let to = destination.worktreeRoot.appending(
+        path: RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+      var destinationIsDirectory: ObjCBool = false
+      if files.fileExists(atPath: to.path, isDirectory: &destinationIsDirectory),
+        destinationIsDirectory.boolValue
+      {
+        kept.append(runID)
+        continue
+      }
+      do {
+        try files.createDirectory(
+          at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try files.copyItem(at: from, to: to)
+        kept.append(runID)
+      } catch {
+        unkept.append(.init(runID: runID, reason: error.localizedDescription))
+      }
+    }
+    return RunKeepOutcome(kept: kept, unkept: unkept)
   }
 
   /// Several sessions can share a worktree, so each record is one `O_APPEND` write made under an
