@@ -263,4 +263,70 @@ struct BuildCheckReturnTests {
     #expect(missingReport.verdict.exitCode == 2)
     #expect(missingReport.message.contains("designConflict"), "\(missingReport.message)")
   }
+
+  @Test(
+    "each claim the evidence contradicts names its own rule: no commits, a missing branch or commit, no gate or review, a mistiered or GREEN gate-red run, and a design conflict the outcome, return or task-status.json disagree on — catches a check that lets one kind of overstatement through"
+  )
+  func eachContradictionNamesItsRule() {
+    let conflict = TaskStatusReport.Report(
+      kind: "design-conflict", section: "decision", ids: ["req-a"], claim: "caps at 20",
+      evidence: [])
+    let push = TaskReturn.Gate(tier: .push, verdict: .green, runID: "r1")
+    func taskReturn(
+      _ outcome: TaskReturn.Outcome, commits: [String] = ["abc1"], gate: TaskReturn.Gate? = push,
+      review: TaskReturn.Review? = .init(mode: .full, findings: []),
+      designConflict: TaskStatusReport.Report? = nil
+    ) -> TaskReturn {
+      TaskReturn(
+        task: "t", outcome: outcome, commits: commits, gate: gate, review: review, testsAdded: [],
+        notes: "", designConflict: designConflict)
+    }
+    func evidence(
+      branchExists: Bool = true, commit: TaskReturnEvidence.CommitState = .onBranch,
+      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green),
+      status: TaskStatusReport? = nil
+    ) -> TaskReturnEvidence {
+      TaskReturnEvidence(
+        branch: "p/t", branchExists: branchExists, commits: ["abc1": commit], gateRun: run,
+        taskGate: .push, taskStatus: status)
+    }
+    func rules(_ r: TaskReturn, _ e: TaskReturnEvidence) -> [TaskReturnFinding.Rule] {
+      TaskReturnCheck.findings(r, evidence: e).map(\.rule)
+    }
+    let otherConflict = TaskStatusReport.Report(
+      kind: "design-conflict", section: "decision", ids: ["req-b"], claim: "caps at 50",
+      evidence: [])
+
+    #expect(rules(taskReturn(.readyToMerge), evidence()) == [])
+    #expect(rules(taskReturn(.readyToMerge, commits: []), evidence()) == [.noCommits])
+    #expect(rules(taskReturn(.readyToMerge), evidence(branchExists: false)) == [.branchMissing])
+    #expect(rules(taskReturn(.readyToMerge), evidence(commit: .missing)) == [.commitMissing])
+    #expect(rules(taskReturn(.reviewBlocked, gate: nil), evidence()) == [.gateMissing])
+    #expect(rules(taskReturn(.readyToMerge, review: nil), evidence()) == [.reviewMissing])
+    #expect(
+      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green)))
+        == [.gateTierMismatch, .gateBelowTaskGate])
+    #expect(
+      rules(
+        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .green, runID: "r1"), review: nil),
+        evidence()) == [.gateRedOutcomeIsGreen])
+    #expect(
+      rules(
+        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .red, runID: "r1"), review: nil),
+        evidence(run: .init(tier: .push, verdict: .red))) == [])
+    #expect(rules(taskReturn(.designConflict, gate: nil), evidence()) == [.designConflictOutcome])
+    #expect(
+      rules(taskReturn(.readyToMerge, designConflict: conflict), evidence())
+        == [.designConflictOutcome, .designConflictUnrecorded])
+    #expect(
+      rules(
+        taskReturn(.readyToMerge),
+        evidence(status: .init(task: "t", state: "blocked", report: conflict)))
+        == [.designConflictUnreturned])
+    #expect(
+      rules(
+        taskReturn(.designConflict, gate: nil, designConflict: conflict),
+        evidence(status: .init(task: "t", state: "blocked", report: otherConflict)))
+        == [.designConflictMismatch])
+  }
 }
