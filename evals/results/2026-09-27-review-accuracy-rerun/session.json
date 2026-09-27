@@ -1,0 +1,192 @@
+{
+  "pins": {
+    "claudeVersion": "2.1.282 (Claude Code)",
+    "harnessCommit": "2f39ae8",
+    "xcode": "Xcode 26.2",
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001"
+  },
+  "partial": "cost ceiling: 4.10 spent of 8",
+  "costUsd": 4.1021322,
+  "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/review5/raw",
+  "cases": [
+    {
+      "name": "review-clean-reset",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.7655694000000001
+        }
+      }
+    },
+    {
+      "name": "review-dismiss-without-cancel",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 1.1395298
+        }
+      }
+    },
+    {
+      "name": "review-errors-swallowed",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 1.3120394
+        }
+      }
+    },
+    {
+      "name": "review-reset-test-wrong-reason",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.8849935999999999
+        }
+      }
+    },
+    {
+      "name": "review-unchecked-sendable-cache",
+      "arms": {}
+    }
+  ],
+  "results": [
+    {
+      "name": "review-clean-reset",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 4,
+            "costUsd": 0.7655694000000001,
+            "judgeCostUsd": 0,
+            "durationSeconds": 455,
+            "hookRecords": 8,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/review5/raw/review-clean-reset/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-dismiss-without-cancel",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 4,
+            "costUsd": 1.1395298,
+            "judgeCostUsd": 0,
+            "durationSeconds": 391,
+            "hookRecords": 8,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/review5/raw/review-dismiss-without-cancel/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-errors-swallowed",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 4,
+            "costUsd": 1.3120394,
+            "judgeCostUsd": 0,
+            "durationSeconds": 419,
+            "hookRecords": 8,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/review5/raw/review-errors-swallowed/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-reset-test-wrong-reason",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 8,
+            "costUsd": 0.8849935999999999,
+            "judgeCostUsd": 0,
+            "durationSeconds": 391,
+            "hookRecords": 17,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/9fab23bb-71a6-44e9-b519-264865fc2ca7/scratchpad/review5/raw/review-reset-test-wrong-reason/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-unchecked-sendable-cache",
+      "arms": {}
+    }
+  ]
+}

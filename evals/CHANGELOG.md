@@ -1,5 +1,12 @@
 # Eval changelog
 
+## 2026-09-27
+
+- **`review-accuracy` re-run after the source-line fix** (4 of 5 cases, cost cap): every seeded
+  defect matches by file and line, 3 of 3, up from 3 of 4; 0 findings unmatched at verify. The
+  dismiss race is still `major`, not `blocker`, and the clean control flipped to `fix-then-merge`
+  on a race that predates its diff: 3 of 4 verdicts right.
+
 ## 2026-09-26
 
 - **First `failure-modes` run,** no model: `runner/faults.mjs` and 11 cases in `faults/`. 10 of 11

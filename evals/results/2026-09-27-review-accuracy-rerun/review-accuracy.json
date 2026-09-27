@@ -1,0 +1,172 @@
+{
+  "totals": {
+    "trials": 4,
+    "errors": 0,
+    "recallBefore": "3 of 3",
+    "recallAfter": "3 of 3",
+    "recallAfterBlocking": "3 of 3",
+    "verdictsRight": "3 of 4",
+    "findingsBefore": 16,
+    "findingsAfter": 14,
+    "unlabelledAfter": 0,
+    "unmatchedAtVerify": 0
+  },
+  "rows": [
+    {
+      "case": "clean-reset",
+      "trial": "with-1",
+      "verdict": "fix-then-merge",
+      "expectedVerdict": "merge",
+      "verdictOk": false,
+      "dropped": 1,
+      "before": {
+        "count": 2,
+        "seeded": [],
+        "real": 2,
+        "unlabelled": [],
+        "unmatched": 0
+      },
+      "after": {
+        "count": 1,
+        "seeded": [],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      }
+    },
+    {
+      "case": "dismiss-without-cancel",
+      "trial": "with-1",
+      "verdict": "fix-then-merge",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 0,
+      "before": {
+        "count": 5,
+        "seeded": [
+          {
+            "id": "dismiss-leaves-request-running",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major",
+              "major",
+              "major",
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      },
+      "after": {
+        "count": 5,
+        "seeded": [
+          {
+            "id": "dismiss-leaves-request-running",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major",
+              "major",
+              "major",
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      }
+    },
+    {
+      "case": "errors-swallowed",
+      "trial": "with-1",
+      "verdict": "refactor-needed",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 0,
+      "before": {
+        "count": 6,
+        "seeded": [
+          {
+            "id": "failure-becomes-fake-fact",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "blocker",
+              "minor",
+              "blocker",
+              "major",
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      },
+      "after": {
+        "count": 6,
+        "seeded": [
+          {
+            "id": "failure-becomes-fake-fact",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "blocker",
+              "blocker",
+              "major",
+              "minor",
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      }
+    },
+    {
+      "case": "reset-test-wrong-reason",
+      "trial": "with-1",
+      "verdict": "fix-then-merge",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 1,
+      "before": {
+        "count": 3,
+        "seeded": [
+          {
+            "id": "reset-test-starts-at-zero",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major"
+            ]
+          }
+        ],
+        "real": 2,
+        "unlabelled": [],
+        "unmatched": 0
+      },
+      "after": {
+        "count": 2,
+        "seeded": [
+          {
+            "id": "reset-test-starts-at-zero",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": [],
+        "unmatched": 0
+      }
+    }
+  ]
+}
