@@ -280,6 +280,9 @@ struct CalibrateDesignCommandTests {
     ).write(to: claude)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: claude.path)
 
+    // The same argv parses in process first, so a flag the command lacks fails here by name.
+    let parsed = try CalibrateCommand.parseAsRoot(["design", "--model", "haiku"])
+    #expect((parsed as? CalibrateDesignCommand)?.model == "haiku")
     let output = try await LiveProcessRunner().run(
       ProcessInvocation(
         executable: Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path,
