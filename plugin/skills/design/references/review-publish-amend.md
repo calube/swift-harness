@@ -20,6 +20,7 @@ Contents:
 - [Revise from comments](#revise-from-comments): `--revise`
 - [Supersede](#supersede): `--supersede <old-slug>`
 - [Amend and clarify](#amend-and-clarify): `--amend`, stale claims, delta review, `needs-replan`
+- [Sketch](#sketch): `--tier sketch`, from frame to approval with no research and no reviewer
 - [Status rules](#status-rules): which status the skill may set, and when
 - [Phase log](#phase-log): the phases this part adds
 
@@ -577,6 +578,117 @@ A clarify applies itself: it needs no review and no approval.
 
 9. **Release** the plan and tell the user it's released:
    `"$SG" plan release <plan> --session <id> --json`.
+
+## Sketch
+
+`--tier sketch` is for a goal that already states what to build, such as an interview README. It
+runs the frame, the drafter and the lints, and nothing else: no research lane, probe, claim checker
+or reviewer. The user approves through `AskUserQuestion`, not a page. `design-scope` never
+recommends `sketch`; only `--tier sketch`, or a preset through `/swift-harness:ship`, selects it.
+
+### Sketch frame
+
+Follow [the frame](frame-research-verify.md#frame), with 3 changes:
+
+1. **Clarifying questions.** The goal is the spec's text. After the 4 frame questions, ask what the
+   spec leaves open, such as a behaviour it names but doesn't define, in the constraints prompt.
+   Ask at most 4 per prompt, and record each answer as [Branch and record](frame-research-verify.md#branch-and-record) says.
+2. **No tier question.** Run `design-scope` as written, since its exit 2 still names a bad answer,
+   but don't ask the user to confirm a tier. Claim at `sketch`:
+
+   ```bash
+   "$SG" plan claim <plan> --session <id> --design <doc> --tier sketch --json
+   ```
+
+   On `already-held` at another tier, re-scope with `plan set` and `--tier sketch`.
+3. **Resume notes** name the draft as next:
+
+   ```bash
+   "$SG" index set <plan> designing "framed at sketch; next: draft" --session <id>
+   ```
+
+Skip research and verify, then draft.
+
+### Sketch draft
+
+Follow [the draft](frame-research-verify.md#draft), without `--probe-verdicts`. The drafter's pack
+carries only `supported` claims, and a sketch has none, so the drafter tags each point
+`[UNVERIFIED]`. Tell it in the prompt:
+
+- the tier is `sketch`, so the status frontmatter says `tier: sketch`;
+- a Decision bullet may stay `[UNVERIFIED]` with no Risks entry;
+- every other `[UNVERIFIED]` bullet still reappears in Risks or Open questions.
+
+Lint as the draft does, with its 2 rounds and its 2 tolerated `docs-lint` findings:
+
+```bash
+"$SG" design-lint <doc> --json
+"$SG" docs-lint --json
+```
+
+`design-lint` relaxes the Decision rules only because the frontmatter says `tier: sketch`. Never
+edit the tier to pass a lint.
+
+### Sketch verdict
+
+No reviewer runs. Record the empty review, which returns `ready`:
+
+```bash
+"$SG" review-synth --run-directory <run>/review-<r> --design <doc> --tier sketch --json
+```
+
+### Sketch publish
+
+1. **Router.** Add the area router row as [publish](#routers-adr-and-the-docs-lint-check) says. A
+   sketch writes no ADR. Run `"$SG" docs-lint --json`: `unreachable-doc` on `<doc>` now fails, and
+   `requirement-uncited` on `<doc>` stays tolerated, as at `quick`. Name it in the final report.
+2. **Proposed commit**, as [the proposed commit](#the-proposed-commit) says, but ask no push
+   question: a sketch merges on this machine.
+
+   ```bash
+   "$SG" index set <plan> in-review "proposed at sketch; next: approval" --session <id>
+   ```
+
+3. **designSha.** A sketch renders no page. Take the designSha from the commit:
+
+   ```bash
+   "$SG" design-diff HEAD:<doc> <doc> --json
+   ```
+
+   `class` must be `unchanged`. Keep `oldSha` as `<sha>`.
+
+### Sketch approval
+
+Ask with `AskUserQuestion`: question `Approve design <slug> at designSha <sha>?`, options
+`Approve (Recommended)` and `Request changes`. The question's description names `<doc>` and lists
+its Decision bullets, so the user can approve without opening the file. A headless session uses
+[the headless shape](frame-research-verify.md#headless).
+
+Append the answer to `<ev>/answers.jsonl` with `runId` = `<design-run>`, and its `answer` claim to
+`<ev>/claims.jsonl`, as [the no-`db` fallback](#read-the-approval) does:
+
+```json
+{"id":"ev-user-approves-offline-order-queue-3f1c9ab","lane":"prior-decisions","text":"The user approved the design at designSha 3f1c9ab0e2d4c6f8a1b3c5d7e9f0a2b4c6d8e0f1.","citation":{"kind":"answer","loc":"answers.jsonl#design-20260925T180000Z/6","quote":"at designSha 3f1c9ab0e2d4c6f8a1b3c5d7e9f0a2b4c6d8e0f1"},"status":"new"}
+```
+
+Then set the claim's status from its entry in:
+
+```bash
+"$SG" evidence check --design <doc> --json
+```
+
+- **Approve.** The record is `{decision: "approve", designSha: <sha>, at: <the answer's at>}`. Go
+  to [Approved](#approved), and merge without a PR. Its last 2 commands become:
+
+  ```bash
+  "$SG" index set <plan> approved "approved <sha> at sketch; next: /swift-harness:plan" --session <id>
+  "$SG" plan release <plan> --session <id> --json
+  ```
+
+- **Request changes.** Ask for the change in the user's own words. Send it to the drafter as a
+  finding, lint as above, commit on `design/<slug>`, take the new designSha, and ask again.
+
+Log the phases `frame`, `draft` and `publish`, as [the phase log](#phase-log) says.
 
 ## Status rules
 
