@@ -9,7 +9,7 @@ Step 3: the review is done, in docs/handoffs/subproject-2-review.md (1 blocker, 
 Fix wave 1 and the lockfile fix are merged (push tier GREEN, 1499 tests). The ready tier is BLOCKED only because mutate's
 baseline trips LiveProcessRunnerTests; a fix for that and for mutate's build fan-out comes next, then fix waves 2–4.
 DECIDED by the user (2026-09-26): an Xcode pin mismatch ends `test` and `check` tiers BLOCKED with doctor.xcode-pin
-(the evals case xcode-pin-mismatch expects BLOCKED). It's queued as a task after the first fix wave 2 merge.
+(the evals case xcode-pin-mismatch expects BLOCKED); reuse Doctor.matchesPin (major.minor, so a 26.2 pin accepts 26.2.x). It's queued as a task.
 Then, in order (the user approved this plan on 2026-09-26):
   1. DONE: wave 25 merged, gated and backed up.
   2. DONE (rehearsal): acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
