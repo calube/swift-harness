@@ -59,13 +59,9 @@ struct LedgerWriterTests {
         var lost: [String] = []
         for round in 0..<rounds {
           let target: TaskStatus = expected == .pending ? .inProgress : .pending
-          do throws(LedgerWriterError) {
-            let change = try await writer.update(task: "fetch", .status(target))
-            if change.before.status != expected {
-              lost.append("fetch round \(round): read \(change.before.status.rawValue)")
-            }
-          } catch {
-            lost.append("fetch round \(round): \(error)")
+          let change = try await writer.update(task: "fetch", .status(target))
+          if change.before.status != expected {
+            lost.append("fetch round \(round): read \(change.before.status.rawValue)")
           }
           expected = target
         }
