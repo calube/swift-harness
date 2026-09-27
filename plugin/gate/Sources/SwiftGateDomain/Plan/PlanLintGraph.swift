@@ -257,8 +257,8 @@ public enum PlanLintGraph {
     throws(ReportContractViolation) -> [Finding]
   {
     var findings: [Finding] = []
-    for task in ledger.tasks.sorted(by: { $0.id < $1.id })
-    where task.status != .done && workerPacks[task.id] == nil {
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) where workerPacks[task.id] == nil {
+      guard task.status != .done else { continue }
       findings.append(
         try Finding(
           ruleID: packMissingRuleID, severity: .major, file: task.id, line: nil,
@@ -331,11 +331,12 @@ public enum PlanLintGraph {
     findings += try PlanLintCoverage.coverageFindings(
       design: design, tasks: ledger.tasks, designPath: designPath)
 
-    // A done task is immutable history (spec §5.7, §8.4): the rules that judge a task against the
-    // current design, or size it for a worker, can't be met by a task that will never change.
-    // It still counts for the DAG, id uniqueness, waves and coverage.
     let testTiers = PlanLintCoverage.testTiers(design: design)
-    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) where task.status != .done {
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) {
+      // A done task is immutable history (spec §5.7, §8.4): the rules that judge a task against
+      // the current design, or size it for a worker, can't be met by a task that will never
+      // change. It still counts for the DAG, id uniqueness, waves and coverage.
+      guard task.status != .done else { continue }
       findings += try PlanLintCoverage.gateFindings(task: task, testTiers: testTiers)
       findings += try PlanLintCoverage.unknownTestFindings(task: task, design: design)
       findings += try PlanLintCoverage.missingModelFindings(task: task)
