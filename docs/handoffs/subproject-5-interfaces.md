@@ -140,3 +140,22 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Gate note.** After these merges, the push tier on `c21179b` (which includes sub-project 2's mutate fix) was RED
   only on load: 35 `git` 30-second timeouts plus 2 kill-timing tests, at load average 28–38. All 134 tests in the 16
   affected suites pass alone. The full push tier gets re-run when load drops.
+
+## Wave 6 (part)
+
+- **Workflow.** `plugin/workflows/build-task.js` takes `args = {task, plan, worktree (absolute), branch (== "<plan>/<task>"),
+  writeSet (non-empty), taskGate: fast|push|ready, tests, contextPack, model: sonnet|opus, review: "full"|"gate",
+  reviewers?}`. `reviewers` is a non-empty subset of `verifier` and `test-quality`, and is allowed only with `full`.
+  Unknown keys throw `build-task: …`. The pipeline runs the worker, then the reviewers (`full` only), then at most 1
+  fix pass with a fresh worker. It returns exactly the `TaskReturn` keys, and `review` is always `{mode, findings}`.
+  Blocking findings are `blocker` or `major`. `commits` and `testsAdded` combine both attempts; `notes` come from the
+  last worker. A reviewer failure yields `review-blocked` with no fix pass. If the fix-pass worker returns nothing
+  usable, the workflow THROWS, and the build skill must treat a null or failed workflow as a halt for that task.
+  The reviewers have no Bash, so they're given the commits and branch and read the changed files.
+- **Self-test seeds.** These live in `plugin/gate/Fixtures/seeds/{build-next,ledger-set,build-check-return,build-merge,build-presets}/`.
+  `SelfTest.run(harnessRoot:sampleApp:buildChecks:)`, where `BuildSeedChecks` (`.live`) has `schedule`, `setStatus`,
+  `checkReturn`, `merge` and `loadConfig`. Labels: `build-next.unmerged-dependency|write-set-overlap|missing-model|not-started`,
+  `ledger-set.refused-transition`, `build-return.*`, `build-merge.<reason>`, `config.<kind>(<path>)`.
+- **Merge reason.** `build merge --json` gains a closed `reason` key: `main-moved`, `dirty-checkout`, `not-on-main`,
+  `not-held`, `conflicted`, `undo-refused`, `branch-missing` or `already-merged`. It's omitted when the merge succeeds.
+- **Gate.** The push tier is GREEN on merged main (run 20260927T065928Z-fd0f5501, 1670 tests).
