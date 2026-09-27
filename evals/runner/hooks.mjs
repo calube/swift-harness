@@ -10,7 +10,9 @@
 //
 // Each case: { name, kind: deny | control | evasion | limit, expect: deny | allow, tool, input,
 //   session?, agent?, env? }. In `input`, $W is the workspace and $PLAN the demo plan's directory
-// in the git common dir, whose orchestrator.lock the session `orch` holds.
+// in the git common dir, whose orchestrator.lock the session `orch` holds and whose plan.json
+// names docs/counter/designs/fact-cache.md; $PLANS is the plans root, where the plan `other`
+// is held by the session `worker` and has no plan.json.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,6 +37,10 @@ function workspace() {
   mkdirSync(plan, { recursive: true })
   writeFileSync(join(plan, 'orchestrator.lock'), 'orch\n')
   writeFileSync(join(plan, 'ledger.json'), '{}\n')
+  writeFileSync(join(plan, 'plan.json'), JSON.stringify({ schemaVersion: 1, slug: 'demo', design: 'docs/counter/designs/fact-cache.md', clarifyChain: [], resume: 'frame' }) + '\n')
+  const other = join(dirname(plan), 'other')
+  mkdirSync(other, { recursive: true })
+  writeFileSync(join(other, 'orchestrator.lock'), 'worker\n')
   return { dir, ws, plan }
 }
 
@@ -58,12 +64,13 @@ export function runCorpus(cases) {
   try {
     warm(ws)
     return cases.map((c) => {
-      const input = JSON.parse(JSON.stringify(c.input).replaceAll('$W', ws).replaceAll('$PLAN', plan))
+      const input = JSON.parse(JSON.stringify(c.input).replaceAll('$W', ws).replaceAll('$PLANS', dirname(plan)).replaceAll('$PLAN', plan))
       const payload = { session_id: c.session ?? 'worker', hook_event_name: 'PreToolUse', cwd: ws, tool_name: c.tool, tool_input: input }
       if (c.agent) payload.agent_id = c.agent
       const run = spawnSync(swiftgate, ['hook', 'pre-tool-use'], { cwd: ws, input: JSON.stringify(payload), encoding: 'utf8', env: { ...process.env, ...(c.env ?? {}) } })
       const got = decide(run.stdout)
-      return { name: c.name, kind: c.kind, expect: c.expect, got, passed: got === c.expect, exit: run.status }
+      const reason = /"permissionDecisionReason"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(run.stdout)?.[1] ?? null
+      return { name: c.name, kind: c.kind, expect: c.expect, got, passed: got === c.expect, exit: run.status, reason }
     })
   } finally {
     rmSync(dir, { recursive: true, force: true })
@@ -81,7 +88,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     k.cases++
     if (r.passed) k.passed++
   }
-  for (const r of results) if (!r.passed) console.log(`MISS ${r.kind} ${r.name}: expect ${r.expect}, got ${r.got}`)
+  for (const r of results) if (!r.passed) console.log(`MISS ${r.kind} ${r.name}: expect ${r.expect}, got ${r.got}${r.reason ? ` (${r.reason.slice(0, 160)})` : ''}`)
   for (const [k, v] of Object.entries(byKind)) console.log(`${k}: ${v.passed} of ${v.cases} match`)
   if (out) {
     mkdirSync(out, { recursive: true })

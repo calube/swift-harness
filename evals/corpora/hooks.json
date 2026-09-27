@@ -492,5 +492,266 @@
    "command": "echo x >> $W/docs/designs/fact-cache.md"
   },
   "agent": "sub1"
+ },
+ {
+  "name": "git-checkout-resolved",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git checkout -- Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "git-C-checkout-resolved",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git -C $W checkout -- Packages/CounterFeature/Package.resolved"
+  }
+ },
+ {
+  "name": "git-restore-snapshot",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git restore Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__/CounterViewSnapshotTests/counterWithFact.1.png"
+  }
+ },
+ {
+  "name": "subagent-git-rm-design-doc",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git rm docs/counter/designs/fact-cache.md"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "subagent-git-mv-ledger",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git mv $PLAN/ledger.json /tmp/ledger.json"
+  },
+  "agent": "sub1"
+ },
+ {
+  "name": "git-checkout-branch",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "git checkout -b feature/haptics"
+  }
+ },
+ {
+  "name": "git-switch-main",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "git checkout main"
+  }
+ },
+ {
+  "name": "git-rm-unguarded",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "git rm Packages/CounterFeature/Sources/CounterCore/Old.swift"
+  }
+ },
+ {
+  "name": "git-restore-staged-unguarded",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "git restore --staged Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift"
+  }
+ },
+ {
+  "name": "git-checkout-dot",
+  "kind": "limit",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git checkout ."
+  }
+ },
+ {
+  "name": "git-restore-glob-resolved",
+  "kind": "limit",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "git restore ':(glob)**/Package.resolved'"
+  }
+ },
+ {
+  "name": "plan-release-force-by-holder",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan release demo --force --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "subagent-plan-set",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan set demo --session orch --tier deep"
+  },
+  "session": "orch",
+  "agent": "sub1"
+ },
+ {
+  "name": "index-set-other-session-id",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate index set demo designing \"resume\" --session orch"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "plan-claim-nonliteral-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan claim fresh --session \"$(cat .session-id)\""
+  },
+  "session": "worker"
+ },
+ {
+  "name": "plan-set-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan set demo --session orch --resume \"next: task 3\""
+  },
+  "session": "orch"
+ },
+ {
+  "name": "plan-release-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan release demo --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "plan-claim-own-session",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate plan claim fresh --session worker --design docs/haptics/designs/tap.md"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "holder-repoints-design",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/plan.json",
+   "content": "{\"schemaVersion\":1,\"slug\":\"demo\",\"design\":\"docs/other/designs/x.md\",\"clarifyChain\":[],\"resume\":\"frame\"}"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "holder-bash-writes-plan-json",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "echo '{}' > $PLAN/plan.json"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "holder-keeps-design",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLAN/plan.json",
+   "content": "{\"schemaVersion\":1,\"slug\":\"demo\",\"design\":\"docs/counter/designs/fact-cache.md\",\"clarifyChain\":[],\"resume\":\"research\"}"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "second-plan-names-owned-design",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLANS/other/plan.json",
+   "content": "{\"schemaVersion\":1,\"slug\":\"other\",\"design\":\"docs/counter/designs/fact-cache.md\",\"clarifyChain\":[],\"resume\":\"frame\"}"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "second-plan-names-free-design",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLANS/other/plan.json",
+   "content": "{\"schemaVersion\":1,\"slug\":\"other\",\"design\":\"docs/haptics/designs/tap.md\",\"clarifyChain\":[],\"resume\":\"frame\"}"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "write-claim-lock",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLANS/claim.lock.demo",
+   "content": "orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "write-index-lock",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Write",
+  "input": {
+   "file_path": "$PLANS/index.lock.1",
+   "content": "orch"
+  },
+  "session": "orch",
+  "env": {
+   "SWIFT_HARNESS_ORCHESTRATOR": "1"
+  }
+ },
+ {
+  "name": "bash-rm-claim-lock",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "rm -f $PLANS/claim.lock.demo"
+  },
+  "session": "orch"
  }
 ]
