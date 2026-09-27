@@ -1,0 +1,40 @@
+diff --git a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
+index 90cf038..633e6a3 100644
+--- a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
++++ b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
+@@ -23,6 +23,7 @@ public struct CounterFeature {
+     case factButtonTapped
+     case factResponse(String)
+     case factFailed
++    case factDismissButtonTapped
+   }
+ 
+   @Dependency(\.apiClient) var apiClient
+@@ -62,6 +63,11 @@ public struct CounterFeature {
+       case .factFailed:
+         state.isLoadingFact = false
+         return .none
++
++      case .factDismissButtonTapped:
++        state.fact = nil
++        state.isLoadingFact = false
++        return .none
+       }
+     }
+   }
+diff --git a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
+index 5f0db4c..bac69e6 100644
+--- a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
++++ b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
+@@ -68,4 +68,11 @@ struct CounterFeatureTests {
+       ]
+     )
+   }
++
++  @Test("dismissing a shown fact hides it — catches the fact staying on screen")
++  func dismissHidesFact() async {
++    let store = TestStore(initialState: CounterFeature.State(fact: "shown")) { CounterFeature() }
++
++    await store.send(.factDismissButtonTapped) { $0.fact = nil }
++  }
+ }

@@ -1,0 +1,26 @@
+{
+ "focus": "api-errors",
+ "defects": [
+  {
+   "id": "failure-becomes-fake-fact",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "category": "api-errors",
+   "what": "every transport, status and decoding failure returns a placeholder Fact instead of throwing, so the reducer never reaches factFailed, the error is never logged, and the user sees made-up text as a fact",
+   "lines": [
+    51,
+    53
+   ]
+  }
+ ],
+ "known": [
+  {
+   "id": "stale-test-name",
+   "file": "Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift",
+   "lines": [
+    104,
+    110
+   ],
+   "what": "givesUpAfterMaxAttempts still says it surfaces the last error while it now asserts the placeholder"
+  }
+ ]
+}

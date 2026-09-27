@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["RED"],"why":"a compile error inside a #expect expansion is the change's fault, like any test that doesn't compile; BLOCKED would let the Stop hook release the stop, since a BLOCKED stop never blocks"}

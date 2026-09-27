@@ -1,0 +1,69 @@
+diff --git a/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift b/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
+index 3ab85f0..0b977e6 100644
+--- a/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
++++ b/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
+@@ -28,6 +28,17 @@ public struct RetryPolicy: Sendable {
+   }
+ }
+ 
++/// The last fact fetched, served when a later request fails.
++public final class LastFactCache: Sendable {
++  nonisolated(unsafe) var last: Fact?  // swiftgate:allow safety.nonisolated-unsafe — main thread
++
++  public init() {}
++
++  func remember(_ fact: Fact) { last = fact }
++
++  func fallback() -> Fact? { last }
++}
++
+ private struct CatFactResponse: Decodable {
+   var fact: String
+ }
+@@ -38,15 +49,23 @@ extension APIClient {
+   public static func live(
+     http: HTTPClient,
+     clock: any Clock<Duration>,
+-    retry: RetryPolicy = .standard
++    retry: RetryPolicy = .standard,
++    cache: LastFactCache = LastFactCache()
+   ) -> Self {
+     Self(randomFact: {
+       var request = URLRequest(url: baseURL.appending(path: "fact"))
+       request.setValue("application/json", forHTTPHeaderField: "Accept")
+-      let data = try await withRetry(retry, clock: clock) { [request] in
+-        try await http.data(for: request)
++      do {
++        let data = try await withRetry(retry, clock: clock) { [request] in
++          try await http.data(for: request)
++        }
++        let fact = Fact(text: try JSONDecoder().decode(CatFactResponse.self, from: data).fact)
++        cache.remember(fact)
++        return fact
++      } catch {
++        guard let cached = cache.fallback() else { throw error }
++        return cached
+       }
+-      return Fact(text: try JSONDecoder().decode(CatFactResponse.self, from: data).fact)
+     })
+   }
+ 
+diff --git a/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift b/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
+index 7870e23..6d0326f 100644
+--- a/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
++++ b/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
+@@ -122,4 +122,14 @@ struct APIClientLiveTests {
+       #expect(transport.requests.count == 3)
+     }
+   }
++
++  @Test("a failure after a success serves the last fact — catches the offline fallback losing it")
++  func servesLastFactWhenOffline() async throws {
++    let transport = ScriptedTransport([.status(200, try fixture("catfact-fact")), .status(404)])
++    let client = APIClient.live(http: transport.client, clock: TestClock())
++
++    let first = try await client.randomFact()
++    let second = try await client.randomFact()
++    #expect(second == first)
++  }
+ }

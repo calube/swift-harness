@@ -1,0 +1,1 @@
+feat(counter): dismiss a shown fact

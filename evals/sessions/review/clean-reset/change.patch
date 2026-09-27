@@ -1,0 +1,45 @@
+diff --git a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
+index 90cf038..bc8f58f 100644
+--- a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
++++ b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift
+@@ -23,6 +23,7 @@ public struct CounterFeature {
+     case factButtonTapped
+     case factResponse(String)
+     case factFailed
++    case resetButtonTapped
+   }
+ 
+   @Dependency(\.apiClient) var apiClient
+@@ -62,6 +63,11 @@ public struct CounterFeature {
+       case .factFailed:
+         state.isLoadingFact = false
+         return .none
++
++      case .resetButtonTapped:
++        state.count = 0
++        state.fact = nil
++        return .none
+       }
+     }
+   }
+diff --git a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
+index 5f0db4c..25fb3ef 100644
+--- a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
++++ b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift
+@@ -68,4 +68,16 @@ struct CounterFeatureTests {
+       ]
+     )
+   }
++
++  @Test("reset clears the count and any shown fact — catches reset leaving old state behind")
++  func resetClearsCountAndFact() async {
++    let store = TestStore(initialState: CounterFeature.State(count: 5, fact: "old")) {
++      CounterFeature()
++    }
++
++    await store.send(.resetButtonTapped) {
++      $0.count = 0
++      $0.fact = nil
++    }
++  }
+ }

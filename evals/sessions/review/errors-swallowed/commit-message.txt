@@ -1,0 +1,1 @@
+feat(api): show a friendly fact when the request fails

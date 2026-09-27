@@ -57,8 +57,10 @@ export function scoreTrial(labels, runDir) {
     const unlabelled = other.filter((f) => !known.some((k) => matches(f, k)))
     return { count: list.length, seeded, real: real.length, unlabelled }
   }
-  const expected = labels.defects.length ? 'fix-then-merge' : 'merge'
-  return { verdict: report.verdict, expectedVerdict: expected, verdictOk: report.verdict === expected, dropped: (report.dropped ?? []).length, before: judge(pre), after: judge(post) }
+  // A seeded case passes on any verdict that stops the merge; which one depends on whether the
+  // panel reads the fix as local (fix-then-merge) or structural (refactor-needed).
+  const expected = labels.defects.length ? ['fix-then-merge', 'refactor-needed'] : ['merge']
+  return { verdict: report.verdict, expectedVerdict: expected.join(' or '), verdictOk: expected.includes(report.verdict), dropped: (report.dropped ?? []).length, before: judge(pre), after: judge(post) }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -1,0 +1,62 @@
+{
+ "focus": "concurrency",
+ "defects": [
+  {
+   "id": "unsynchronized-cache",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "category": "concurrency",
+   "what": "`last` is read and written from whatever task calls randomFact, with no lock or actor; the allow reason (\"main thread\") is false, so concurrent fact requests race",
+   "lines": [
+    32,
+    39
+   ]
+  }
+ ],
+ "known": [
+  {
+   "id": "fallback-rule-in-live",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "lines": [
+    40,
+    46
+   ],
+   "what": "the offline-fallback rule and its state live in a Live module rather than in Core"
+  },
+  {
+   "id": "production-cache-always-empty",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "lines": [
+    50,
+    56
+   ],
+   "what": "liveValue calls live(...) per request, so each call gets a new LastFactCache and the fallback never serves anything in production; verified in the code"
+  },
+  {
+   "id": "catch-all-swallows-errors",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "lines": [
+    62,
+    68
+   ],
+   "what": "the catch-all turns every failure, cancellation included, into the cached fact"
+  },
+  {
+   "id": "fallback-test-bypasses-livevalue",
+   "file": "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+   "lines": [
+    92,
+    96
+   ],
+   "what": "the fallback test calls live() directly and cannot see that liveValue never serves the fallback"
+  },
+  {
+   "id": "fallback-test-no-network-check",
+   "file": "Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift",
+   "lines": [
+    130,
+    136
+   ],
+   "what": "the fallback test never checks the second call reached the network"
+  }
+ ]
+}

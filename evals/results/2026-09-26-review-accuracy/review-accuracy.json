@@ -1,0 +1,208 @@
+{
+  "totals": {
+    "trials": 5,
+    "errors": 0,
+    "recallBefore": "3 of 4",
+    "recallAfter": "3 of 4",
+    "recallAfterBlocking": "2 of 4",
+    "verdictsRight": "5 of 5",
+    "findingsBefore": 22,
+    "findingsAfter": 20,
+    "unlabelledAfter": 0
+  },
+  "rows": [
+    {
+      "case": "clean-reset",
+      "trial": "with-1",
+      "verdict": "merge",
+      "expectedVerdict": "merge",
+      "verdictOk": true,
+      "dropped": 1,
+      "before": {
+        "count": 2,
+        "seeded": [],
+        "real": 1,
+        "unlabelled": [
+          {
+            "kind": "defect",
+            "rule": "P9",
+            "category": "missing-edge-case",
+            "file": "Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift",
+            "line": 36,
+            "title": "The reset test never covers a reset during an in-flight fact request, where reset does leave old state behind",
+            "fix": "Add a TestStore test that sends .factButtonTapped (with apiClient stubbed to suspend or return a fact), then .resetButtonTapped, and asserts that isLoadingFact becomes false and no .factResponse is received after the reset. To make it pass, give the fact effect a cancellation id and return .cancel(id:) from .resetButtonTapped while setting isLoadingFact = false.",
+            "severity": "major",
+            "failure_scenario": "The user taps Fact at count 5 (isLoadingFact = true, the effect is running), then taps Reset. The reducer sets count = 0 and fact = nil but doesn't cancel the effect or clear isLoadingFact. The spinner keeps showing, and when .factResponse arrives it sets fact to the fact for 5 while count shows 0. That is the 'reset leaving old state behind' symptom the test name says it catches. The test starts from State(count: 5, fact: \"old\") with isLoadingFact false and no running effect, so it passes against this bug.",
+            "evidence": "CounterFeatureTests.swift:36 `TestStore(initialState: CounterFeature.State(count: 5, fact: \"old\"))` never sets isLoadingFact and sends no .factButtonTapped first. CounterFeature.swift:67-70 `case .resetButtonTapped: state.count = 0; state.fact = nil; return .none` leaves isLoadingFact alone and doesn't cancel the effect started at line 49 (`return .run { ... await send(.factResponse(...)) }`, which has no .cancellable id). CounterFeature.swift:58-60 applies any late .factResponse without checking.",
+            "verified": false,
+            "verification_note": "verifier output did not line up with this finding",
+            "focus": "test-quality"
+          }
+        ]
+      },
+      "after": {
+        "count": 1,
+        "seeded": [],
+        "real": 1,
+        "unlabelled": []
+      }
+    },
+    {
+      "case": "dismiss-without-cancel",
+      "trial": "with-1",
+      "verdict": "fix-then-merge",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 0,
+      "before": {
+        "count": 2,
+        "seeded": [
+          {
+            "id": "dismiss-leaves-request-running",
+            "found": true,
+            "blocking": false,
+            "severities": [
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": []
+      },
+      "after": {
+        "count": 2,
+        "seeded": [
+          {
+            "id": "dismiss-leaves-request-running",
+            "found": true,
+            "blocking": false,
+            "severities": [
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": []
+      }
+    },
+    {
+      "case": "errors-swallowed",
+      "trial": "with-1",
+      "verdict": "refactor-needed",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 1,
+      "before": {
+        "count": 6,
+        "seeded": [
+          {
+            "id": "failure-becomes-fake-fact",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "blocker",
+              "blocker",
+              "major",
+              "major",
+              "minor"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": []
+      },
+      "after": {
+        "count": 5,
+        "seeded": [
+          {
+            "id": "failure-becomes-fake-fact",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "blocker",
+              "blocker",
+              "major",
+              "major"
+            ]
+          }
+        ],
+        "real": 1,
+        "unlabelled": []
+      }
+    },
+    {
+      "case": "reset-test-wrong-reason",
+      "trial": "with-1",
+      "verdict": "fix-then-merge",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 0,
+      "before": {
+        "count": 3,
+        "seeded": [
+          {
+            "id": "reset-test-starts-at-zero",
+            "found": false,
+            "blocking": false,
+            "severities": []
+          }
+        ],
+        "real": 3,
+        "unlabelled": []
+      },
+      "after": {
+        "count": 3,
+        "seeded": [
+          {
+            "id": "reset-test-starts-at-zero",
+            "found": false,
+            "blocking": false,
+            "severities": []
+          }
+        ],
+        "real": 3,
+        "unlabelled": []
+      }
+    },
+    {
+      "case": "unchecked-sendable-cache",
+      "trial": "with-1",
+      "verdict": "refactor-needed",
+      "expectedVerdict": "fix-then-merge or refactor-needed",
+      "verdictOk": true,
+      "dropped": 0,
+      "before": {
+        "count": 9,
+        "seeded": [
+          {
+            "id": "unsynchronized-cache",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major",
+              "major"
+            ]
+          }
+        ],
+        "real": 7,
+        "unlabelled": []
+      },
+      "after": {
+        "count": 9,
+        "seeded": [
+          {
+            "id": "unsynchronized-cache",
+            "found": true,
+            "blocking": true,
+            "severities": [
+              "major",
+              "major"
+            ]
+          }
+        ],
+        "real": 7,
+        "unlabelled": []
+      }
+    }
+  ]
+}
