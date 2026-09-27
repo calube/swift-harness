@@ -137,10 +137,10 @@ private final class ChildProcessGroups: Sendable {
     }
   }
 
-  /// Signals every child group, waiting out a spawn in progress so a child started this instant
-  /// is signalled too, then ends this process as `number` would have.
+  /// Signals every child's whole descendant tree, waiting out a spawn in progress so a child
+  /// started this instant is signalled too, then ends this process as `number` would have.
   private func terminate(on number: Int32) {
-    for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
+    for root in groups.withLock({ $0 }) { ProcessTree.terminate(root: root, signal: SIGTERM) }
     signal(number, SIG_DFL)
     kill(getpid(), number)
   }
@@ -240,11 +240,11 @@ private struct SpawnRequest: Sendable {
           termination = .timedOut
         }
         if termination != .none {
-          kill(-pid, SIGTERM)
+          ProcessTree.terminate(root: pid, signal: SIGTERM)
           terminateSentAt = now
         }
       } else if !killSent, let sent = terminateSentAt, now - sent >= terminationGracePeriod {
-        kill(-pid, SIGKILL)
+        ProcessTree.terminate(root: pid, signal: SIGKILL)
         killSent = true
       }
 
@@ -455,5 +455,78 @@ private struct CStringArray {
 
   func free() {
     for pointer in pointers { Darwin.free(pointer) }
+  }
+}
+
+/// Kills a spawned process's whole descendant tree, one process group at a time — not just the
+/// group it was born into. `swift test` puts its own test-runner helper (`xctest` /
+/// `swiftpm-testing-helper`) in a new process group, so a plain `kill(-pid, …)` on the spawned
+/// child's original group leaves that helper behind, reparented to init, still spinning on an
+/// infinite-loop mutant. A process-wide snapshot from `ps` (not `proc_listchildpids`, which this
+/// process cannot always resolve for pids outside its own tree) finds it regardless of which
+/// group it put itself in.
+private enum ProcessTree {
+  /// `root` and every process descended from it, root first, from one `ps` snapshot.
+  static func descendants(of root: pid_t) -> [pid_t] {
+    var childrenByParent: [pid_t: [pid_t]] = [:]
+    for line in snapshot().split(separator: "\n") {
+      let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+      guard fields.count >= 2, let pid = pid_t(fields[0]), let ppid = pid_t(fields[1]) else {
+        continue
+      }
+      childrenByParent[ppid, default: []].append(pid)
+    }
+    var all: [pid_t] = [root]
+    var frontier = [root]
+    while !frontier.isEmpty {
+      let next = frontier.flatMap { childrenByParent[$0] ?? [] }
+      all += next
+      frontier = next
+    }
+    return all
+  }
+
+  /// Every distinct process group among `root` and its descendants, then `signal` to each. A
+  /// group already gone by the time it's signalled is not an error: `kill` on an empty group is a
+  /// no-op.
+  static func terminate(root: pid_t, signal: Int32) {
+    var seen = Set<pid_t>()
+    for pid in descendants(of: root) {
+      let group = getpgid(pid)
+      guard group > 0, seen.insert(group).inserted else { continue }
+      kill(-group, signal)
+    }
+  }
+
+  /// `pid=,ppid=` for every process on the machine, from a real `ps` run: `popen`/`pclose` are
+  /// unavailable on Darwin, so this spawns and reads the pipe directly.
+  private static func snapshot() -> String {
+    var fds: [Int32] = [-1, -1]
+    guard pipe(&fds) == 0 else { return "" }
+    var fileActions: posix_spawn_file_actions_t?
+    posix_spawn_file_actions_init(&fileActions)
+    posix_spawn_file_actions_adddup2(&fileActions, fds[1], 1)
+    posix_spawn_file_actions_addclose(&fileActions, fds[0])
+    defer { posix_spawn_file_actions_destroy(&fileActions) }
+    let argv = CStringArray(["/bin/ps", "-Ao", "pid=,ppid="])
+    defer { argv.free() }
+    var pid: pid_t = 0
+    let launched = posix_spawn(&pid, "/bin/ps", &fileActions, nil, argv.pointers, environ)
+    close(fds[1])
+    guard launched == 0 else {
+      close(fds[0])
+      return ""
+    }
+    var data = [UInt8]()
+    var buffer = [UInt8](repeating: 0, count: 8192)
+    while true {
+      let count = buffer.withUnsafeMutableBytes { read(fds[0], $0.baseAddress, $0.count) }
+      if count <= 0 { break }
+      data.append(contentsOf: buffer[0..<count])
+    }
+    close(fds[0])
+    var status: Int32 = 0
+    waitpid(pid, &status, 0)
+    return String(decoding: data, as: UTF8.self)
   }
 }

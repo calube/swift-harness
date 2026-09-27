@@ -12,6 +12,13 @@ struct KilledRunChildrenTests {
   /// enough that an orphan still ends the test, long enough to dwarf any scheduling delay.
   private static let childLifetime = 120
 
+  static func onPath(_ name: String) -> Bool {
+    let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+    return path.split(separator: ":").contains {
+      FileManager.default.isExecutableFile(atPath: "\($0)/\(name)")
+    }
+  }
+
   @Test(
     "a terminated swiftgate takes the tools it started down with it — catches builds orphaned by a killed run piling up and wedging the machine",
     arguments: [SIGTERM, SIGINT, SIGHUP])
@@ -59,6 +66,76 @@ struct KilledRunChildrenTests {
     let output = try await run.value
     #expect(output.status == .signaled(signal))
     // The pipe reaches end-of-file only once its last holder, the child, has exited.
+    #expect(await lines.next() == nil)
+    #expect(ContinuousClock.now - start < .seconds(Self.childLifetime / 2))
+  }
+
+  @Test(
+    "a terminated swiftgate takes down a grandchild that put itself in its own process group — catches swiftpm-testing-helper-style orphans a plain kill(-pid) of the direct child's group can't reach",
+    .enabled(if: onPath("python3"), "python3 is not on PATH")
+  )
+  func terminatedRunKillsARegroupedGrandchild() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-killed-run-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let bin = directory.appending(path: "bin", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let ready = directory.appending(path: "ready").path
+    try #require(mkfifo(ready, 0o600) == 0)
+    // Stands in for `swift test`, which runs its own test-runner helper as a grandchild that puts
+    // itself in a fresh process group — `os.setpgid` on the direct child here would fail (EPERM):
+    // a process already leading its own group, as swiftgate's spawned child is, can't do it again.
+    let git = bin.appending(path: "git")
+    try Data(
+      """
+      #!/bin/sh
+      exec python3 - "$READY" <<'PY'
+      import os, sys, time
+      ready = sys.argv[1]
+      swiftgate_pid = os.getppid()
+      git_pid = os.getpid()
+      child = os.fork()
+      if child == 0:
+          os.setpgid(0, 0)
+          # Held open for the sleep, like the shell script's `exec 3>`: closing right after the
+          # write (as `with open(...)` would) reaches end-of-file whether or not this process is
+          # still alive, so the read side could never tell a killed grandchild from a live one.
+          fd = os.open(ready, os.O_WRONLY)
+          os.write(fd, ("%d %d %d\\n" % (swiftgate_pid, git_pid, os.getpid())).encode())
+          time.sleep(\(Self.childLifetime))
+          os.close(fd)
+          os._exit(0)
+      else:
+          os.waitpid(child, 0)
+      PY
+
+      """.utf8
+    ).write(to: git)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
+
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let start = ContinuousClock.now
+    let run = Task {
+      try await LiveProcessRunner().run(
+        ProcessInvocation(
+          executable: binary, arguments: ["comments", "--staged"],
+          environmentOverlay: [
+            "PATH": "\(bin.path):/usr/bin:/bin", "READY": ready,
+            "LLVM_PROFILE_FILE": directory.appending(path: "swiftgate-%p.profraw").path,
+          ],
+          workingDirectory: directory.path, timeout: .seconds(3600)))
+    }
+    var lines = Self.lines(of: ready).makeAsyncIterator()
+    let pids = try #require(await lines.next()).split(separator: " ").compactMap { pid_t($0) }
+    try #require(pids.count == 3)
+    let (swiftgate, _, grandchild) = (pids[0], pids[1], pids[2])
+    #expect(getpgid(grandchild) == grandchild, "the grandchild should lead its own process group")
+    defer { kill(grandchild, SIGKILL) }
+
+    kill(swiftgate, SIGTERM)
+    let output = try await run.value
+    #expect(output.status == .signaled(SIGTERM))
+    // The pipe reaches end-of-file only once its last holder, the grandchild, has exited.
     #expect(await lines.next() == nil)
     #expect(ContinuousClock.now - start < .seconds(Self.childLifetime / 2))
   }
