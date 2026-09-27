@@ -354,6 +354,7 @@ Rewrite `<ev>/claims.jsonl` once more. For each claim:
 - the new `loc` when the output carries one.
 
 A claim missing from both keeps its line as it was. Report the counts by status.
+Then cache what verify settled: `"$SG" evidence cache record --design <doc> --json`.
 
 ### When verification leaves no path
 

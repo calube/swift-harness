@@ -396,7 +396,7 @@ const tests = {
     }, dir => {
       const { problems } = scanSkills(dir, help)
       assert.deepEqual(problems, [
-        'demo/references/deep.md:1: `swiftgate evidence` has no subcommand `verify` (has: check, capture, find)',
+        'demo/references/deep.md:1: `swiftgate evidence` has no subcommand `verify` (has: check, capture, find, cache)',
         'demo/references/deep.md:2: `frobnicate` is not a swiftgate subcommand',
       ])
     })
