@@ -1,0 +1,226 @@
+{
+  "pins": {
+    "claudeVersion": "2.1.282 (Claude Code)",
+    "harnessCommit": "0a99c70",
+    "xcode": "Xcode 26.2",
+    "model": "claude-opus-5-5",
+    "judgeModel": "claude-haiku-4-5-20251001"
+  },
+  "partial": null,
+  "costUsd": 5.3062862,
+  "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw",
+  "cases": [
+    {
+      "name": "review-clean-reset",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 1.0570182000000001
+        }
+      }
+    },
+    {
+      "name": "review-dismiss-without-cancel",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.8869442
+        }
+      }
+    },
+    {
+      "name": "review-errors-swallowed",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 1.2966832
+        }
+      }
+    },
+    {
+      "name": "review-reset-test-wrong-reason",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 0.8928423999999997
+        }
+      }
+    },
+    {
+      "name": "review-unchecked-sendable-cache",
+      "arms": {
+        "with": {
+          "runs": 1,
+          "passed": 1,
+          "passAll": true,
+          "meanScore": 1,
+          "costUsd": 1.1727981999999997
+        }
+      }
+    }
+  ],
+  "results": [
+    {
+      "name": "review-clean-reset",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 5,
+            "costUsd": 1.0570182000000001,
+            "judgeCostUsd": 0,
+            "durationSeconds": 1577,
+            "hookRecords": 14,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw/review-clean-reset/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-dismiss-without-cancel",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 3,
+            "costUsd": 0.8869442,
+            "judgeCostUsd": 0,
+            "durationSeconds": 607,
+            "hookRecords": 7,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw/review-dismiss-without-cancel/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-errors-swallowed",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 5,
+            "costUsd": 1.2966832,
+            "judgeCostUsd": 0,
+            "durationSeconds": 429,
+            "hookRecords": 10,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw/review-errors-swallowed/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-reset-test-wrong-reason",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 3,
+            "costUsd": 0.8928423999999997,
+            "judgeCostUsd": 0,
+            "durationSeconds": 438,
+            "hookRecords": 7,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw/review-reset-test-wrong-reason/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "review-unchecked-sendable-cache",
+      "arms": {
+        "with": [
+          {
+            "arm": "with",
+            "trial": 1,
+            "score": 1,
+            "passed": true,
+            "error": null,
+            "turns": 3,
+            "costUsd": 1.1727981999999997,
+            "judgeCostUsd": 0,
+            "durationSeconds": 435,
+            "hookRecords": 7,
+            "raw": "/private/tmp/claude-501/-Users-caleb-Developer-swift-harness/81806347-8893-43b9-b48c-3af0b47658eb/scratchpad/review8/raw/review-unchecked-sendable-cache/with-1",
+            "graders": [
+              {
+                "name": "review-completed",
+                "type": "command",
+                "weight": 1,
+                "scored": true,
+                "passed": true,
+                "explanation": "exit 0: "
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

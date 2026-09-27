@@ -1,7 +1,6 @@
 {
  "focus": null,
- "defects": [],
- "known": [
+ "defects": [
   {
    "id": "reset-leaves-request-running",
    "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
@@ -9,7 +8,9 @@
     66,
     70
    ],
-   "what": "reset does not cancel an in-flight fact request, so a late response brings a fact back; the baseline effect has no cancellation id"
+   "what": "the added reset handler clears fact but neither cancels the in-flight fact request nor clears isLoadingFact, so a late response shows a stale fact after reset; the diff adds these lines, so it isn't pre-existing. Relabelled from known to defect on 2026-09-27 after 3 runs flagged it",
+   "category": "concurrency"
   }
- ]
+ ],
+ "known": []
 }
