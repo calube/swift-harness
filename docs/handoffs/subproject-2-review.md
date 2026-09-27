@@ -306,3 +306,19 @@ new-file lines (3/3 matched, 0 unmatched at verify), but severity and dedupe sti
   - Every run records its wall time and token cost locally (the user's standing telemetry preference).
   - **Re-run: APPROVED 2026-09-27 by the user:** after the merge, the evals session re-runs all 5 review-accuracy
     cases, 1 trial each, unchecked-sendable-cache included (about 5 USD plus Workflow agents).
+
+From machine contention during the fix waves (2026-09-27): three ready tiers ran at once (load 240+), 16 orphaned
+`HangTests` processes from an intentionally hanging fixture ran for up to 3.5 h, and a worker's gate outlived the
+Bash timeout that killed its parent shell. The user approved this task on 2026-09-27.
+- **`ready-tier-runs-one-at-a-time-and-cleans-up`** (opus):
+  - `check --tier ready` (and any mutate or prove run) takes a machine-wide exclusive lock under
+    `~/.cache/swift-harness/locks/`, held by the kernel (`flock`), so a crashed holder frees it. A second run waits
+    and prints the holder's run id, pid, worktree and elapsed time. This replaces the racy `pgrep` wait.
+  - Every run records the process groups it spawns in its run dir. The next gate run and SessionStart kill any
+    recorded group whose owning swiftgate is dead, so a killed run's children can't outlive the next gate.
+  - `check --tier <t> --background` returns a run id at once and writes status to the run dir;
+    `swiftgate wait <runID> [--timeout <s>]` blocks up to the timeout and exits with the verdict, or with a
+    distinct code for "still running". Workers use these instead of relying on a foreground Bash call.
+  - Every ready run records per-phase wall time, CPU time and peak load (prove, reach, stress, mutate, per package)
+    in `history.jsonl` and its report, so the hour-long mutate can be cut from measured data.
+  - Later: a test-quality rule for unbounded intentional-hang fixtures.
