@@ -129,6 +129,8 @@ export const CONTRACTS = [
       '.snippet.swift',
       'sha256:',
       'a probe snippet for every API',
+      'the commit the prompt gives',
+      'no more than its quote',
     ],
   },
   { prefix: 'design-evidence-auditor', keys: REVIEWER_KEYS, strings: ['[UNVERIFIED]', 'refuted', 'perf--scale'] },
@@ -142,8 +144,23 @@ export const CONTRACTS = [
     keys: REVIEWER_KEYS,
     strings: ['best end-to-end design, not merely a complete one', 'biggest blind spot'],
   },
-  { prefix: 'design-pre-mortem', keys: REVIEWER_KEYS, strings: ['shipped and failed', 'perf--scale'] },
+  {
+    prefix: 'design-pre-mortem',
+    keys: REVIEWER_KEYS,
+    strings: ['shipped and failed', 'perf--scale', 'evidence-auditor-pre-mortem.md'],
+  },
 ]
+
+// The Apple docs lane also asks for the snapshots it could not cite. First matching prefix wins,
+// so it goes ahead of the general lane contract.
+{
+  const lane = CONTRACTS.find(c => c.prefix === 'design-lane-')
+  CONTRACTS.unshift({
+    prefix: 'design-lane-apple-docs',
+    keys: [...lane.keys, 'snapshotRequests', 'page', 'reason'],
+    strings: [...lane.strings, 'stored evidence'],
+  })
+}
 
 /** The JSON object under a reviewer prompt's `## Output contract` heading. Throws when absent. */
 export function outputExample(body) {
@@ -294,6 +311,7 @@ CONTRACTS.push(
       '`quote-ok`',
       'overstate',
       'claim-checker',
+      "the words of the text the quote doesn't back",
     ],
   },
   {
@@ -519,6 +537,16 @@ const tests = {
       return match[1]
     })
     assert.deepEqual([...named].sort(), [...lanes].sort())
+  },
+
+  'no lane prompt lets a citation go without its pin — catches a lane told to omit the pin it was never given'() {
+    const agents = readdirSync(join(root, 'agents')).filter(f => /^design-lane-.*\.md$/.test(f))
+    assert.equal(agents.length, 4)
+    for (const f of agents) {
+      const text = readFileSync(join(root, 'agents', f), 'utf8')
+      assert.ok(!/else omit/.test(text), `${f} still says "else omit"`)
+      assert.ok(text.includes('dropped'), `${f} never says a pinless claim is dropped`)
+    }
   },
 
   'every lane agent runs on sonnet — catches a lane silently moved to a costlier model'() {

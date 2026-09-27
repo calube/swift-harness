@@ -328,7 +328,8 @@ enum ModuleGraphLineFilter {
 /// modules named in the frame answers, and a lane brief (opaque text, passed through), plus
 /// existing claims pinned to the same version — both the repo's own and the user-level evidence
 /// reuse cache's — since a cache hit is a claim already proven for this exact pin, so the lane
-/// doesn't re-derive it.
+/// doesn't re-derive it. The pack also names the pin, the design doc and the evidence already
+/// stored beside it, since a lane can pin a claim or cite a snapshot only if it knows them.
 public struct ResearchLaneInputs: Sendable {
   public let frameAnswers: ContextSource
   public let area: String
@@ -340,12 +341,19 @@ public struct ResearchLaneInputs: Sendable {
   /// (`EvidenceCacheStore.contents(of: .package(pin:))`); the caller resolves the cache, this
   /// type only renders what it found.
   public let cacheHits: [CachedClaim]
-  public let pin: String
+  public let pin: ResearchLanePin
+  /// The design doc's repo-relative path. Research runs before the draft, so the file may not
+  /// exist yet.
+  public let designDocPath: String
+  /// Snapshot and capture locs already stored under the doc's evidence directory, relative to it
+  /// (`snapshots/<name>`, `captures/<hex>.txt`).
+  public let storedEvidence: [String]
 
   public init(
     frameAnswers: ContextSource, area: String, moduleGraph: ContextSource,
     touchedModules: [String], briefs: [ContextSource], claims: ContextSource,
-    cacheHits: [CachedClaim], pin: String
+    cacheHits: [CachedClaim], pin: ResearchLanePin, designDocPath: String,
+    storedEvidence: [String]
   ) {
     self.frameAnswers = frameAnswers
     self.area = area
@@ -355,6 +363,8 @@ public struct ResearchLaneInputs: Sendable {
     self.claims = claims
     self.cacheHits = cacheHits
     self.pin = pin
+    self.designDocPath = designDocPath
+    self.storedEvidence = storedEvidence
   }
 }
 
@@ -614,7 +624,26 @@ extension ContextPack {
 
   /// spec §5.10 research lane row.
   public static func researchLanePack(_ inputs: ResearchLaneInputs) -> ContextPack {
-    var slices: [ContextPackSlice] = [ContextPackSlice(inputs.frameAnswers)]
+    var slices: [ContextPackSlice] = [
+      ContextPackSlice(
+        sourceLabel: "research pin", anchor: nil,
+        lines: [
+          "pin: \(inputs.pin.rawValue) (\(inputs.pin.kind.rawValue))",
+          "citation.pin: \(inputs.pin.claimPin)",
+        ]),
+      ContextPackSlice(
+        sourceLabel: "design", anchor: nil,
+        lines: [
+          "design doc: \(inputs.designDocPath)",
+          "evidence directory: \(EvidenceLayout(designDocPath: inputs.designDocPath).root)",
+        ]),
+    ]
+    if !inputs.storedEvidence.isEmpty {
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: "stored evidence", anchor: nil, lines: inputs.storedEvidence))
+    }
+    slices.append(ContextPackSlice(inputs.frameAnswers))
     slices.append(ContextPackSlice(sourceLabel: "area", anchor: nil, lines: [inputs.area]))
 
     let graphLines = ModuleGraphLineFilter.lines(
@@ -629,7 +658,7 @@ extension ContextPack {
 
     let repoCacheHits = ClaimLineFilter.lines(
       in: MarkdownAnchorSlicer.rawLines(inputs.claims.rawText)
-    ) { $0.citation.pin == inputs.pin }
+    ) { $0.citation.pin == inputs.pin.claimPin }
     if !repoCacheHits.isEmpty {
       slices.append(
         ContextPackSlice(sourceLabel: inputs.claims.label, anchor: nil, lines: repoCacheHits))
@@ -645,7 +674,7 @@ extension ContextPack {
       if !lines.isEmpty {
         slices.append(
           ContextPackSlice(
-            sourceLabel: "evidence cache: \(inputs.pin)", anchor: nil, lines: lines))
+            sourceLabel: "evidence cache: \(inputs.pin.claimPin)", anchor: nil, lines: lines))
       }
     }
 
