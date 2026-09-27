@@ -111,6 +111,40 @@ private struct AuthorityRepository {
     try await swiftgate(
       ["plan", "claim", plan, "--session", session, "--design", design, "--json"], in: directory)
   }
+
+  /// The PreToolUse hook's decision on a Bash `command` run from the linked worktree by `session`,
+  /// from the recorded live payload; a subagent's payload adds the fields a live one carries.
+  func hookDecision(_ command: String, session: String, subagent: Bool = false) async throws
+    -> (decision: String?, reason: String?)
+  {
+    var text = try Fixture.text("Hooks/pre-tool-use-bash-allowed.json")
+    let quoted = String(decoding: try JSONEncoder().encode(command), as: UTF8.self)
+    text = text.replacingOccurrences(
+      of: "\"swiftgate check --tier fast 2>&1 | tail -25\"", with: quoted)
+    text = text.replacingOccurrences(of: "\"/REPO", with: "\"\(linked.path)")
+    text = text.replacingOccurrences(
+      of: "\"session_id\": \"8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f\"",
+      with: "\"session_id\": \"\(session)\"")
+    if subagent {
+      text = text.replacingOccurrences(
+        of: "\"tool_use_id\"",
+        with: "\"agent_id\": \"a1b2c3d4\", \"agent_type\": \"general-purpose\", \"tool_use_id\"")
+    }
+    let payload = try HookPayload.decode(Data(text.utf8))
+    #expect(payload.sessionID == session)
+    let dependencies = HookDependencies(
+      git: LiveGit(runner: runner, repositoryRoot: linked.path),
+      swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), formatter: FakeSwiftFormatter(),
+      xcode: FixedXcode(version: "26.2"), sweep: PendingOrphanCloneSweep(),
+      commitJudge: DisabledCommitCommentJudge(), environment: [:])
+    guard
+      let stdout = await PreToolUseHook.run(payload, root: linked, dependencies: dependencies)
+    else { return (nil, nil) }
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: Data(stdout.utf8)) as? [String: Any])
+    let output = json["hookSpecificOutput"] as? [String: String]
+    return (output?["permissionDecision"], output?["permissionDecisionReason"])
+  }
 }
 
 @Suite("plan state authority through the built command")
@@ -337,5 +371,65 @@ struct PlanStateAuthorityTests {
       ], in: repo.main)
     #expect(blocked.exit == 2, "\(blocked.stdout)")
     #expect(repo.contents(plan.planFile) == malformed)
+  }
+
+  /// Every build command that writes plan state, spelled as the build skill runs it.
+  static let buildVerbs: [(verb: String, arguments: String)] = [
+    ("ledger set", "\(AuthorityRepository.planA) fetch done"),
+    ("build start", "\(AuthorityRepository.planA) --preset default"),
+    ("build finish", AuthorityRepository.planA),
+    ("worktree create", "\(AuthorityRepository.planA) fetch"),
+  ]
+
+  @Test(
+    "each build command that writes plan state is denied to a subagent even with its own session and to a foreign or non-literal --session, and passes for the session's own call — catches a build worker moving its own task or starting a run",
+    arguments: buildVerbs)
+  func buildVerbsActOnlyAsTheCallingSession(verb: String, arguments: String) async throws {
+    let repo = try await AuthorityRepository()
+    defer { repo.remove() }
+    let own = AuthorityRepository.alice
+    let command = "swiftgate \(verb) \(arguments)"
+
+    let subagent = try await repo.hookDecision(
+      "\(command) --session \(own)", session: own, subagent: true)
+    #expect(subagent.decision == "deny", "\(verb)")
+    #expect(subagent.reason?.contains("orchestrator") == true, "\(subagent.reason ?? "")")
+    #expect(subagent.reason?.contains("task result") == true, "\(subagent.reason ?? "")")
+    #expect(subagent.reason?.contains("design-conflict") == false, "\(subagent.reason ?? "")")
+
+    for foreign in [
+      "\(command) --session \(AuthorityRepository.bob)",
+      "\(command) --session=\(AuthorityRepository.bob)",
+      "\(command) --session \(own) --session \(AuthorityRepository.bob)",
+      "\(command) --session \"$SESSION\"",
+      "swift run swiftgate \(verb) \(arguments) --session \(AuthorityRepository.bob)",
+    ] {
+      #expect(try await repo.hookDecision(foreign, session: own).decision == "deny", "\(foreign)")
+    }
+
+    for allowed in ["\(command) --session \(own)", "\(command) --session=\(own)"] {
+      let decision = try await repo.hookDecision(allowed, session: own)
+      #expect(decision.decision == nil, "\(allowed): \(decision.reason ?? "")")
+    }
+  }
+
+  @Test(
+    "a subagent's `plan set` is still denied with the plan-verb message, word for word — catches the build-verb wording leaking onto claim, release, set and index"
+  )
+  func planVerbKeepsItsMessage() async throws {
+    let repo = try await AuthorityRepository()
+    defer { repo.remove() }
+    let own = AuthorityRepository.alice
+
+    let denied = try await repo.hookDecision(
+      "swiftgate plan set \(AuthorityRepository.planA) --resume x --session \(own)", session: own,
+      subagent: true)
+
+    #expect(denied.decision == "deny")
+    #expect(
+      denied.reason
+        == "swiftgate \(EditGuard.planStateRuleID): a subagent never runs `swiftgate plan set`: "
+        + "claiming, releasing and indexing a plan belong to the main session that orchestrates "
+        + "it. Report `design-conflict` or `needs-replan` to it instead.")
   }
 }
