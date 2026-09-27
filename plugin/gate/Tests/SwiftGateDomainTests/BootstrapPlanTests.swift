@@ -229,13 +229,20 @@ struct BootstrapPlanTests {
     #expect(
       change(BootstrapPlanner.plan(Self.inputs(config: .loaded(current))), ".swiftgate.toml")
         == .unchanged)
+    let predatesManagedFiles = try Config(
+      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"))
+    #expect(
+      change(
+        BootstrapPlanner.plan(Self.inputs(config: .loaded(predatesManagedFiles))), ".swiftgate.toml"
+      ) != .unchanged, "a config naming neither managed file is not current")
     #expect(
       change(BootstrapPlanner.plan(Self.inputs(config: .invalid("line 3"))), ".swiftgate.toml")
         == .untouched(advice: "never rewritten by bootstrap, and it does not load: line 3"))
   }
 
   @Test(
-    "an existing config without [docs] managed_files is left alone with a note naming the missing entries — catches an upgraded repo whose bootstrap silently leaves docs-lint red"
+    "an existing config without [docs] managed_files is left alone with a note naming the missing entries, and adding them turns docs-lint GREEN — catches an upgraded repo whose bootstrap silently leaves docs-lint red"
   )
   func existingConfigMissingManagedFiles() throws {
     let noDocsSection = try Config(
@@ -249,8 +256,22 @@ struct BootstrapPlanTests {
       return
     }
     #expect(advice.contains("[docs] managed_files is missing"))
-    #expect(advice.contains(BootstrapPlanner.Paths.docsIndex))
-    #expect(advice.contains(BootstrapPlanner.Paths.agents))
+    let suggested = [BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents].filter {
+      advice.contains($0)
+    }
+    #expect(suggested == [BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents])
+
+    // The stamped router and AGENTS.md, linted as they stand before and after the suggested edit.
+    let stamped = [BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents].map { path in
+      DocsLintPolicy.ScannedDocument(
+        path: path, rawText: "one two", markdown: MarkdownDocument.parse("one two"))
+    }
+    let before = try DocsLintPolicy.check(documents: stamped, config: noDocsSection.docs)
+    #expect(before.contains { $0.ruleID == "docs-lint.managed-file-unlisted" })
+    let after = try DocsLintPolicy.check(
+      documents: stamped,
+      config: DocsConfig(managedFiles: noDocsSection.docs.managedFiles + suggested))
+    #expect(after.filter { $0.ruleID.hasPrefix("docs-lint.managed-file") } == [])
 
     let partial = try Config(
       xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
