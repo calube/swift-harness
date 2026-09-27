@@ -1,14 +1,25 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "ui-framework-finding",
-      "text": "Do you report a blocker or major finding that a Core module would import a UI framework?",
-      "options": [
-        "yes",
-        "no"
-      ],
-      "expected": "no"
+      "id": "a2-finding",
+      "kind": "absent",
+      "array": "findings",
+      "where": [
+        {
+          "path": "severity",
+          "oneOf": [
+            "blocker",
+            "major"
+          ]
+        },
+        {
+          "path": "rule",
+          "oneOf": [
+            "A2"
+          ]
+        }
+      ]
     }
   ]
 }

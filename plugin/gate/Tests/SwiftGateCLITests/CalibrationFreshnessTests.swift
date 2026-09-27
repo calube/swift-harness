@@ -29,20 +29,27 @@ struct CalibrationFreshnessTests {
     return repository
   }
 
-  /// Writes the record a full calibration pass would write over the repository as it is now.
-  static func recordPass(_ repository: ProbeRepository) throws {
+  /// Writes the record a full calibration pass would write over the repository as it is now:
+  /// one case per agent, on `models[agent]` or else the model its frontmatter names.
+  static func recordPass(
+    _ repository: ProbeRepository, models: [String: String] = [:], modelOverride: String? = nil
+  ) throws {
     let hashed = try DesignCalibrationHash.discover(root: repository.root)
+    let cases = hashed.filter { CalibrationSuite.design.isHashedAgent($0.path) }.map { file in
+      let agent = String(file.path.split(separator: "/").last?.dropLast(".md".count) ?? "")
+      let shipped = CalibrationModel.shipped(
+        frontmatterModel: AgentFrontmatter.value(
+          "model", in: String(decoding: file.contents, as: UTF8.self)))
+      return CalibrationRecord.CaseResult(
+        agent: agent, caseName: "case", model: models[agent] ?? shipped,
+        answers: [
+          CalibrationRecord.QuestionResult(
+            question: "verdict", expected: "refuted", answered: "refuted", probability: 1)
+        ])
+    }
     let record = CalibrationRecord(
       contentHash: DesignCalibrationHash.hash(hashed), hashedFiles: hashed.map(\.path),
-      model: "sonnet", passedAt: passedAt,
-      cases: [
-        CalibrationRecord.CaseResult(
-          agent: "design-claim-checker", caseName: "overstated-claim",
-          answers: [
-            CalibrationRecord.QuestionResult(
-              question: "verdict", expected: "refuted", answered: "refuted", probability: 0.9)
-          ])
-      ])
+      modelOverride: modelOverride, passedAt: passedAt, cases: cases)
     try repository.write(
       DesignCalibrationLayout.recordPath, String(decoding: try record.encoded(), as: UTF8.self))
   }
@@ -105,6 +112,64 @@ struct CalibrationFreshnessTests {
     #expect(stale.severity.failsGate)
     #expect(stale.file == DesignCalibrationLayout.recordPath)
     #expect(stale.message.contains("swiftgate calibrate design"))
+  }
+
+  @Test(
+    "a record whose cases passed on another model than an agent's frontmatter names turns push red — catches an opus agent shipping on a sonnet calibration"
+  )
+  func frontmatterModelMismatchTurnsPushRed() async throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try repository.write(
+      "plugin/agents/design-claim-checker.md",
+      "---\nname: design-claim-checker\ndescription: fixture agent\ntools: Read\nmodel: opus\n---\n\n"
+        + "You check claims.\n")
+    try Self.recordPass(repository, models: ["design-claim-checker": "sonnet"])
+
+    let report = try await Self.push(repository)
+
+    #expect(report.verdict == .red)
+    let findings = Self.freshness(report)
+    #expect(findings.map(\.ruleID) == [CalibrationFreshness.wrongModelRuleID])
+    let mismatch = try #require(findings.first)
+    #expect(mismatch.severity.failsGate)
+    #expect(mismatch.message.contains("design-claim-checker ships on opus"))
+    #expect(mismatch.message.contains("case on sonnet"))
+  }
+
+  @Test(
+    "changing an agent's frontmatter model after a pass on the old one turns push red on both the hash and the model — catches a model switch shipping on the old model's calibration"
+  )
+  func changedFrontmatterModelTurnsPushRed() async throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(repository)
+    try repository.write(
+      "plugin/agents/design-challenger.md",
+      "---\nname: design-challenger\ndescription: fixture agent\ntools: Read\nmodel: opus\n---\n\n"
+        + "You challenge.\n")
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(
+      findings.map(\.ruleID) == [
+        CalibrationFreshness.staleRuleID, CalibrationFreshness.wrongModelRuleID,
+      ])
+    #expect(findings.last?.message.contains("design-challenger ships on opus") == true)
+  }
+
+  @Test(
+    "a pass made with a --model override is never fresh, even on the agents' own models — catches an experiment committed as the calibration"
+  )
+  func overridePassIsNeverFresh() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(repository, modelOverride: CalibrationModel.unpinned)
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(findings.map(\.ruleID) == [CalibrationFreshness.wrongModelRuleID])
+    #expect(findings.first?.message.contains("--model \(CalibrationModel.unpinned)") == true)
   }
 
   @Test(

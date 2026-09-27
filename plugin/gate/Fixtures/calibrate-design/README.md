@@ -27,18 +27,18 @@ gate/Fixtures/calibrate-design/
 
 ## The seeds
 
-Each case plants one defect, and the label fixes the answer the agent's own prompt requires. Each
-defect has a clean twin: the same case with the defect removed, where the agent must not flag it.
+Each case plants one defect, and the label fixes what the agent's own prompt requires it to
+return. Each defect has a clean twin: the same case with the defect removed, where the agent must not flag it.
 The spec's layer 2 seeds come first; the rest give every other design agent a case.
 
 | Agent | Defect case: expected answer | Clean twin: expected answer |
 |---|---|---|
 | `design-claim-checker` | `overstated-claim`: a genuine quote under a claim that says "always": `refuted` | `genuine-quote`: the same quote, a claim that says only what it shows: `supported` |
-| `design-evidence-auditor` | `decision-contradicts-evidence`: the Decision says queued orders survive termination, citing a claim that they live in memory only: gating, at `decision`, `blocker` | `decision-follows-evidence`: the Decision claims only in-session retry: no gating finding |
+| `design-evidence-auditor` | `decision-contradicts-evidence`: the Decision says queued orders survive termination, citing a claim that they live in memory only: gating, at `decision`, `blocker` | `decision-follows-evidence`: the Decision claims only in-session retry: no gating finding at `decision` |
 | `design-evidence-auditor` | `option-on-probe-refuted-api`: the chosen option cites a claim whose probe failed: gating, at `decision`, `blocker` | as above |
-| `design-standards-conformance` | `uikit-in-core-module`: a Core module imports UIKit: gating, rule `A2` | `uikit-in-live-module-only`: UIKit sits behind a client in its `*Live` module: no finding |
-| `design-challenger` | `option-on-probe-refuted-api`: the chosen option rests on an API the probe refuted: gating, at `decision` | `option-on-probe-passed-api`: the chosen option's APIs all passed their probes: no finding |
-| `design-pre-mortem` | `unbounded-prefetch`: one download per album photo, all at once: gating | `bounded-prefetch`: at most 6 in flight, tested: no finding |
+| `design-standards-conformance` | `uikit-in-core-module`: a Core module imports UIKit: gating, rule `A2` | `uikit-in-live-module-only`: UIKit sits behind a client in its `*Live` module: no gating finding citing `A2` |
+| `design-challenger` | `option-on-probe-refuted-api`: the chosen option rests on an API the probe refuted: gating, at `decision` | `option-on-probe-passed-api`: the chosen option's APIs all passed their probes: no gating finding at `decision` |
+| `design-pre-mortem` | `unbounded-prefetch`: one download per album photo, all at once: gating, at `decision` or `perf--scale`, and its story has downloads grow with the album | `bounded-prefetch`: at most 6 in flight, tested: no gating story has downloads grow with the album |
 | `design-drafter` | `point-without-supported-claim`: a frame answer no supported claim backs: `[UNVERIFIED]`, repeated in Risks or Open questions | `point-with-supported-claim`: the pack holds a claim that backs it: cite it |
 | `design-decomposer` | `flow-test-needs-ready-gate`: a T3 test: gate `ready` | `host-test-needs-fast-gate`: a T1 test: gate `fast` |
 | `design-lane-codebase` | `product-intent-question`: the brief asks a product choice: `needsDecision` | `code-fact-question`: the brief asks what code does: a `file` claim |
@@ -46,56 +46,102 @@ The spec's layer 2 seeds come first; the rest give every other design agent a ca
 | `design-lane-packages` | `pinned-package-not-checked-out`: the pinned package has no checkout: `needsDecision` | `pinned-package-checked-out`: a claim citing the checkout, pinned `<pkg>@<version>` |
 | `design-lane-prior-decisions` | `refuted-prior-claim`: a prior claim was refuted: a warning claim citing the earlier design | `supported-prior-file-claim`: carried forward with its original id, status `new` |
 
-Questions name one option to pick, with 2 or 3 options. The judge rejects a reply whose
-probabilities for one question don't sum to 1, and models drift from that as the option list grows.
+These seeds each held a choice a careful agent could make either way, so each is built to leave
+one answer:
+
+- `design-standards-conformance/uikit-in-core-module` scored D2 against the label A2 at p≈0.55
+  when its pack carried D2 and D3, the client rules, whose text names UIKit. The design declares
+  no client module, and a real standards pack holds only the rules for the module kinds in
+  scope, so the seed carries A2, A5 and P9 only. The label requires a gating finding citing A2
+  and doesn't ask for it to be the only one, so an extra D2 finding is not a miss.
+- `design-lane-codebase/product-intent-question` covered its brief with `needs-decision` at
+  p=0.6 over `claim` when the label asked for one of the two. A codebase lane may back its
+  question with a claim about the code it read, and its contract asks for that (`"evidence"`
+  lists claim ids), so the two were never exclusive. The label requires a `needsDecision` entry
+  and says nothing about claims.
+- `design-drafter/*` carry no claim about `earliestBeginDate`. With one, the drafter can restate
+  the frame's "every 15 minutes" as a supported "no sooner than 15 minutes", which is a better
+  doc and dodges the point the case plants.
+- `design-evidence-auditor/decision-*` carry no claim that the queue sends one order at a time.
+  Its quote showed one awaited call under a code comment, so the auditor rightly found a gating
+  overreach in the clean twin, which has nothing to do with the planted defect.
+- `design-pre-mortem/*` are judged on what the gating failure stories say about concurrent
+  downloads. A pre-mortem is asked to find every open failure story, and the clean twin leaves
+  some open (failed downloads, cache retention), so "no gating finding" isn't its label.
 
 ## `label.json`
 
 ```json
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
       "id": "verdict",
-      "text": "Does the quoted evidence support the claim as written?",
-      "options": ["supported", "overstated"],
-      "expected": "overstated"
+      "kind": "value",
+      "array": "verdicts",
+      "where": [{ "path": "id", "oneOf": ["ev-tca-cancellable-always-cancels-in-flight"] }],
+      "field": "status",
+      "expected": "refuted"
     }
   ]
 }
 ```
 
-- `schemaVersion` is `1`. There is at least one question, and question ids are unique.
-- `options` holds two or more distinct strings, and `expected` is one of them.
-- A label that breaks any of these exits 1 with `calibrate-design.invalid-label` naming the file.
+A label holds checks on what the agent returns, never questions put to the agent. Each check has
+a unique `id` and a `kind`:
+
+| `kind` | Keys | Met when |
+|---|---|---|
+| `present` | `array`, `where` | some element of the top-level `array` meets every condition |
+| `absent` | `array`, `where` | no element of `array` meets every condition |
+| `value` | `array`, `where`, `field`, `expected` | every element that meets the conditions has `expected` at `field`, and one does |
+| `judge` | `text`, `options`, `expected` | a separate judge, reading only the agent's output, picks `expected` at p ≥ 0.7 |
+
+- A condition is `{"path", "oneOf": [...]}` or `{"path", "prefix": "..."}`. `path` and `field`
+  are dot-separated keys, such as `location.anchor`. A string array at `path` matches when any
+  of its strings does. `where` may be left out to match every element.
+- A `judge` check is for a label no JSON field carries: the drafter returns a document. Its
+  `text` asks what the output holds and never names the expected option, its options aren't
+  `yes`/`no`, and the judge's prompt and schema are built without `expected`.
+- `schemaVersion` is `2`. Unknown keys, a missing key or an empty value exit 1 with
+  `calibrate-design.invalid-label` naming the file.
 
 ## How a case runs
 
-The agent's body (its file after the frontmatter) is the system prompt. `input.md` goes on stdin
-inside the judge prompt, and each question becomes a `--json-schema` property with one
-probability per option. The flags and reply parsing are the Foundation judge's (`claude -p
---output-format json --restricted --tools "" --strict-mcp-config --no-session-persistence
---settings '{"verbose":false}'`).
-The agent gets no tools, so a case must carry everything the agent needs to answer.
+The agent's body (its file after the frontmatter) is the system prompt, and `input.md` is the
+whole prompt on stdin. The agent runs on the model its frontmatter names (`sonnet` when it names
+none), with `claude -p --output-format json --restricted --tools "" --strict-mcp-config
+--no-session-persistence --settings '{"verbose":false}'`. It gets no tools, so a case must carry
+everything the agent needs. It answers in its own output contract: one JSON object (a fence
+around it is read through), or a design doc for the drafter.
 
-A question is met when the agent's most probable option equals `expected`. Every question in
-every case met: exit 0, and `last-pass.json` is rewritten. Any miss: exit 1 with one
-`calibrate-design.label-missed` per question, and `last-pass.json` is left as it was. When
-`claude` can't run or returns an error, or a seed can't be read, the run exits 2.
+The checks score that reply. An observed check records probability 1. A judged check records the
+judge's probability for its most likely option, and passes only when that option is `expected`
+and its probability is at least 0.7: an answer that lands on the label by a coin flip is a miss,
+not a pass. Every check in every case met: exit 0, and `last-pass.json` is rewritten. Any miss:
+exit 1 with one `calibrate-design.label-missed` per check, and `last-pass.json` is left as it
+was. When `claude` can't run or returns an error, or a seed can't be read, the run exits 2.
+
+`--model <m>` runs every agent on `<m>` instead, for experiments. The record it writes carries
+`modelOverride`, and push never counts it as fresh.
 
 ## `last-pass.json`
 
-A `CalibrationRecord`: `schemaVersion` (1), `contentHash`, `hashedFiles`, `model`, `passedAt`
-(ISO 8601) and `cases` (`agent`, `case`, and `answers` with `question`, `expected`, `answered`
-and `probability`). `contentHash` is SHA-256 over the sorted list of `agents/design-*.md` and
-`workflows/design-*.js` (direct children only). Each file contributes
-`<path>\0<sha256 of its bytes>\n`, so an edit, an added or removed file, or a rename changes it.
+A `CalibrationRecord`: `schemaVersion` (2), `contentHash`, `hashedFiles`, `modelOverride` (only
+on an override run), `passedAt` (ISO 8601) and `cases` (`agent`, `case`, `model`, and `answers`
+with `question`, `expected`, `answered` and `probability`). `contentHash` is SHA-256 over the
+sorted list of `agents/design-*.md` and `workflows/design-*.js` (direct children only). Each file
+contributes `<path>\0<sha256 of its bytes>\n`, so an edit, an added or removed file, or a rename
+changes it.
 
 ## Freshness at push
 
-`swiftgate check --tier push` compares `contentHash` with the hash of the working tree's prompts.
-A mismatch is `calibration-freshness.stale`, no record is `calibration-freshness.no-record`, and an
-undecodable record or unreadable prompt is `calibration-freshness.unreadable`. All three are major,
-so push is red until `swiftgate calibrate design` passes and its record is committed. A repository
-with no `agents/design-*.md` skips the check with a `calibration-freshness.summary` note. Editing a
-seed doesn't change the hash, so rerun the calibration after changing one.
+`swiftgate check --tier push` compares `contentHash` with the hash of the working tree's prompts,
+and each agent's frontmatter `model` with the `model` of its recorded cases. A hash mismatch is
+`calibration-freshness.stale`. A case run on another model than its agent ships on, an agent
+with no recorded case, or a `modelOverride` is `calibration-freshness.wrong-model`. No record is
+`calibration-freshness.no-record`, and an undecodable record or unreadable prompt is
+`calibration-freshness.unreadable`. All are major, so push is red until `swiftgate calibrate
+design` passes on the shipped models and its record is committed. A repository with no
+`agents/design-*.md` skips the check with a `calibration-freshness.summary` note. Editing a seed
+doesn't change the hash, so rerun the calibration after changing one.

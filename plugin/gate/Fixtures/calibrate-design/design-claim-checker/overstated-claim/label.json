@@ -1,13 +1,19 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
       "id": "verdict",
-      "text": "Following your instructions, what status do you return for claim ev-tca-cancellable-always-cancels-in-flight?",
-      "options": [
-        "supported",
-        "refuted"
+      "kind": "value",
+      "array": "verdicts",
+      "where": [
+        {
+          "path": "id",
+          "oneOf": [
+            "ev-tca-cancellable-always-cancels-in-flight"
+          ]
+        }
       ],
+      "field": "status",
       "expected": "refuted"
     }
   ]

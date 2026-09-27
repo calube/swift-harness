@@ -4,31 +4,27 @@
       "agent" : "design-challenger",
       "answers" : [
         {
-          "answered" : "no",
-          "expected" : "no",
-          "probability" : 0.98,
-          "question" : "refuted-api-finding"
+          "answered" : "absent",
+          "expected" : "absent",
+          "probability" : 1,
+          "question" : "gating-finding-at-decision"
         }
       ],
-      "case" : "option-on-probe-passed-api"
+      "case" : "option-on-probe-passed-api",
+      "model" : "opus"
     },
     {
       "agent" : "design-challenger",
       "answers" : [
         {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.9,
-          "question" : "refuted-api-finding"
-        },
-        {
-          "answered" : "decision",
-          "expected" : "decision",
-          "probability" : 0.75,
-          "question" : "anchor"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "gating-finding-at-decision"
         }
       ],
-      "case" : "option-on-probe-refuted-api"
+      "case" : "option-on-probe-refuted-api",
+      "model" : "opus"
     },
     {
       "agent" : "design-claim-checker",
@@ -36,11 +32,12 @@
         {
           "answered" : "supported",
           "expected" : "supported",
-          "probability" : 0.95,
+          "probability" : 1,
           "question" : "verdict"
         }
       ],
-      "case" : "genuine-quote"
+      "case" : "genuine-quote",
+      "model" : "opus"
     },
     {
       "agent" : "design-claim-checker",
@@ -48,11 +45,12 @@
         {
           "answered" : "refuted",
           "expected" : "refuted",
-          "probability" : 0.98,
+          "probability" : 1,
           "question" : "verdict"
         }
       ],
-      "case" : "overstated-claim"
+      "case" : "overstated-claim",
+      "model" : "opus"
     },
     {
       "agent" : "design-decomposer",
@@ -60,11 +58,12 @@
         {
           "answered" : "ready",
           "expected" : "ready",
-          "probability" : 0.98,
+          "probability" : 1,
           "question" : "gate"
         }
       ],
-      "case" : "flow-test-needs-ready-gate"
+      "case" : "flow-test-needs-ready-gate",
+      "model" : "opus"
     },
     {
       "agent" : "design-decomposer",
@@ -72,269 +71,263 @@
         {
           "answered" : "fast",
           "expected" : "fast",
-          "probability" : 0.95,
+          "probability" : 1,
           "question" : "gate"
         }
       ],
-      "case" : "host-test-needs-fast-gate"
+      "case" : "host-test-needs-fast-gate",
+      "model" : "opus"
     },
     {
       "agent" : "design-drafter",
       "answers" : [
         {
-          "answered" : "cite-a-supported-claim",
-          "expected" : "cite-a-supported-claim",
+          "answered" : "a claim id starting ev-",
+          "expected" : "a claim id starting ev-",
           "probability" : 0.95,
-          "question" : "fifteen-minute-tag"
+          "question" : "interval-tag"
         }
       ],
-      "case" : "point-with-supported-claim"
+      "case" : "point-with-supported-claim",
+      "model" : "opus"
     },
     {
       "agent" : "design-drafter",
       "answers" : [
         {
-          "answered" : "unverified-tag",
-          "expected" : "unverified-tag",
-          "probability" : 0.95,
-          "question" : "fifteen-minute-tag"
+          "answered" : "the UNVERIFIED tag",
+          "expected" : "the UNVERIFIED tag",
+          "probability" : 1,
+          "question" : "interval-tag"
         },
         {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.9,
-          "question" : "fifteen-minute-risk"
+          "answered" : "Risks or Open questions",
+          "expected" : "Risks or Open questions",
+          "probability" : 1,
+          "question" : "interval-repeated"
         }
       ],
-      "case" : "point-without-supported-claim"
+      "case" : "point-without-supported-claim",
+      "model" : "opus"
     },
     {
       "agent" : "design-evidence-auditor",
       "answers" : [
         {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.97,
-          "question" : "gating-finding"
-        },
-        {
-          "answered" : "decision",
-          "expected" : "decision",
-          "probability" : 0.95,
-          "question" : "anchor"
-        },
-        {
-          "answered" : "blocker",
-          "expected" : "blocker",
-          "probability" : 0.85,
-          "question" : "severity"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "blocker-at-decision"
         }
       ],
-      "case" : "decision-contradicts-evidence"
+      "case" : "decision-contradicts-evidence",
+      "model" : "opus"
     },
     {
       "agent" : "design-evidence-auditor",
       "answers" : [
         {
-          "answered" : "no",
-          "expected" : "no",
-          "probability" : 0.95,
-          "question" : "gating-finding"
+          "answered" : "absent",
+          "expected" : "absent",
+          "probability" : 1,
+          "question" : "gating-finding-at-decision"
         }
       ],
-      "case" : "decision-follows-evidence"
+      "case" : "decision-follows-evidence",
+      "model" : "opus"
     },
     {
       "agent" : "design-evidence-auditor",
       "answers" : [
         {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.98,
-          "question" : "gating-finding"
-        },
-        {
-          "answered" : "decision",
-          "expected" : "decision",
-          "probability" : 0.97,
-          "question" : "anchor"
-        },
-        {
-          "answered" : "blocker",
-          "expected" : "blocker",
-          "probability" : 0.9,
-          "question" : "severity"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "blocker-at-decision"
         }
       ],
-      "case" : "option-on-probe-refuted-api"
+      "case" : "option-on-probe-refuted-api",
+      "model" : "opus"
     },
     {
       "agent" : "design-lane-apple-docs",
       "answers" : [
         {
-          "answered" : "snapshot",
-          "expected" : "snapshot",
-          "probability" : 0.97,
-          "question" : "citation-kind"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "snapshot-claim"
         }
       ],
-      "case" : "semantics-from-snapshot"
+      "case" : "semantics-from-snapshot",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-lane-apple-docs",
       "answers" : [
         {
-          "answered" : "probe",
-          "expected" : "probe",
-          "probability" : 0.9,
-          "question" : "citation-kind"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "probe-claim"
+        },
+        {
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "probe-snippet"
         }
       ],
-      "case" : "signature-needs-probe"
+      "case" : "signature-needs-probe",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-lane-codebase",
       "answers" : [
         {
-          "answered" : "claim",
-          "expected" : "claim",
-          "probability" : 0.95,
-          "question" : "cover"
-        },
-        {
-          "answered" : "file",
-          "expected" : "file",
-          "probability" : 0.95,
-          "question" : "citation-kind"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "file-claim"
         }
       ],
-      "case" : "code-fact-question"
+      "case" : "code-fact-question",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-lane-codebase",
       "answers" : [
         {
-          "answered" : "needs-decision",
-          "expected" : "needs-decision",
-          "probability" : 0.65,
-          "question" : "cover"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "asks-the-user"
         }
       ],
-      "case" : "product-intent-question"
+      "case" : "product-intent-question",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-lane-packages",
       "answers" : [
         {
-          "answered" : "claim-citing-checkout",
-          "expected" : "claim-citing-checkout",
-          "probability" : 0.97,
-          "question" : "answer"
-        },
-        {
-          "answered" : "swift-composable-architecture@1.26.2",
-          "expected" : "swift-composable-architecture@1.26.2",
-          "probability" : 0.97,
-          "question" : "pin"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "checkout-claim"
         }
       ],
-      "case" : "pinned-package-checked-out"
+      "case" : "pinned-package-checked-out",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-lane-packages",
       "answers" : [
         {
-          "answered" : "needs-decision",
-          "expected" : "needs-decision",
-          "probability" : 0.9,
-          "question" : "answer"
-        }
-      ],
-      "case" : "pinned-package-not-checked-out"
-    },
-    {
-      "agent" : "design-lane-prior-decisions",
-      "answers" : [
-        {
-          "answered" : "warning-claim-citing-the-earlier-design",
-          "expected" : "warning-claim-citing-the-earlier-design",
-          "probability" : 0.93,
-          "question" : "answer"
-        }
-      ],
-      "case" : "refuted-prior-claim"
-    },
-    {
-      "agent" : "design-lane-prior-decisions",
-      "answers" : [
-        {
-          "answered" : "carry-forward-with-original-id",
-          "expected" : "carry-forward-with-original-id",
-          "probability" : 0.92,
-          "question" : "answer"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "asks-the-user"
         },
+        {
+          "answered" : "absent",
+          "expected" : "absent",
+          "probability" : 1,
+          "question" : "claim-on-missing-checkout"
+        }
+      ],
+      "case" : "pinned-package-not-checked-out",
+      "model" : "sonnet"
+    },
+    {
+      "agent" : "design-lane-prior-decisions",
+      "answers" : [
+        {
+          "answered" : "absent",
+          "expected" : "absent",
+          "probability" : 1,
+          "question" : "refuted-claim-carried"
+        },
+        {
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "warning-cites-earlier-design"
+        }
+      ],
+      "case" : "refuted-prior-claim",
+      "model" : "sonnet"
+    },
+    {
+      "agent" : "design-lane-prior-decisions",
+      "answers" : [
         {
           "answered" : "new",
           "expected" : "new",
-          "probability" : 0.95,
-          "question" : "status"
+          "probability" : 1,
+          "question" : "carried-status"
         }
       ],
-      "case" : "supported-prior-file-claim"
+      "case" : "supported-prior-file-claim",
+      "model" : "sonnet"
     },
     {
       "agent" : "design-pre-mortem",
       "answers" : [
         {
-          "answered" : "no",
-          "expected" : "no",
+          "answered" : "it stays bounded, or no story says",
+          "expected" : "it stays bounded, or no story says",
           "probability" : 0.97,
-          "question" : "unbounded-downloads-finding"
+          "question" : "download-concurrency"
         }
       ],
-      "case" : "bounded-prefetch"
+      "case" : "bounded-prefetch",
+      "model" : "opus"
     },
     {
       "agent" : "design-pre-mortem",
       "answers" : [
         {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.95,
-          "question" : "unbounded-downloads-finding"
-        }
-      ],
-      "case" : "unbounded-prefetch"
-    },
-    {
-      "agent" : "design-standards-conformance",
-      "answers" : [
-        {
-          "answered" : "yes",
-          "expected" : "yes",
-          "probability" : 0.92,
-          "question" : "ui-framework-finding"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "gating-finding"
         },
         {
-          "answered" : "A2",
-          "expected" : "A2",
-          "probability" : 0.93,
-          "question" : "rule"
+          "answered" : "it grows with the album's size",
+          "expected" : "it grows with the album's size",
+          "probability" : 0.97,
+          "question" : "download-concurrency"
         }
       ],
-      "case" : "uikit-in-core-module"
+      "case" : "unbounded-prefetch",
+      "model" : "opus"
     },
     {
       "agent" : "design-standards-conformance",
       "answers" : [
         {
-          "answered" : "no",
-          "expected" : "no",
-          "probability" : 0.97,
-          "question" : "ui-framework-finding"
+          "answered" : "present",
+          "expected" : "present",
+          "probability" : 1,
+          "question" : "a2-finding"
         }
       ],
-      "case" : "uikit-in-live-module-only"
+      "case" : "uikit-in-core-module",
+      "model" : "opus"
+    },
+    {
+      "agent" : "design-standards-conformance",
+      "answers" : [
+        {
+          "answered" : "absent",
+          "expected" : "absent",
+          "probability" : 1,
+          "question" : "a2-finding"
+        }
+      ],
+      "case" : "uikit-in-live-module-only",
+      "model" : "opus"
     }
   ],
   "contentHash" : "581d8ece4f414ad8492afada21df6e2e66088036288829aaa9a4c83beefd8a9f",
@@ -353,7 +346,6 @@
     "plugin/workflows/design-research.js",
     "plugin/workflows/design-review.js"
   ],
-  "model" : "sonnet",
-  "passedAt" : "2026-09-27T09:08:41Z",
-  "schemaVersion" : 1
+  "passedAt" : "2026-09-27T11:53:43Z",
+  "schemaVersion" : 2
 }

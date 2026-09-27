@@ -1,24 +1,25 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "refuted-api-finding",
-      "text": "Do you report a blocker or major finding that the chosen option depends on an API the probe showed doesn't exist?",
-      "options": [
-        "yes",
-        "no"
-      ],
-      "expected": "yes"
-    },
-    {
-      "id": "anchor",
-      "text": "Which one section anchor locates that finding? Pick one.",
-      "options": [
-        "options",
-        "decision",
-        "architecture"
-      ],
-      "expected": "decision"
+      "id": "gating-finding-at-decision",
+      "kind": "present",
+      "array": "findings",
+      "where": [
+        {
+          "path": "severity",
+          "oneOf": [
+            "blocker",
+            "major"
+          ]
+        },
+        {
+          "path": "location.anchor",
+          "oneOf": [
+            "decision"
+          ]
+        }
+      ]
     }
   ]
 }

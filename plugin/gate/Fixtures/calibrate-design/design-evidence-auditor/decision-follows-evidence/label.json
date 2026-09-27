@@ -1,14 +1,25 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "gating-finding",
-      "text": "Do you report a blocker or major finding against the Decision bullet that chooses Option 1?",
-      "options": [
-        "yes",
-        "no"
-      ],
-      "expected": "no"
+      "id": "gating-finding-at-decision",
+      "kind": "absent",
+      "array": "findings",
+      "where": [
+        {
+          "path": "severity",
+          "oneOf": [
+            "blocker",
+            "major"
+          ]
+        },
+        {
+          "path": "location.anchor",
+          "oneOf": [
+            "decision"
+          ]
+        }
+      ]
     }
   ]
 }

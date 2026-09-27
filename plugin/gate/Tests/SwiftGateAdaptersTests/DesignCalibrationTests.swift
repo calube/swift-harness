@@ -106,39 +106,72 @@ struct DesignCalibrationTests {
   )
   func recordRejectsUnknownSchema() throws {
     let record = CalibrationRecord(
-      contentHash: "abc", hashedFiles: [], model: "sonnet",
-      passedAt: Date(timeIntervalSince1970: 1_790_000_000), cases: [])
+      contentHash: "abc", hashedFiles: [], modelOverride: nil,
+      passedAt: Date(timeIntervalSince1970: 1_790_000_000),
+      cases: [.init(agent: "design-drafter", caseName: "c", model: "opus", answers: [])])
     let encoded = String(decoding: try record.encoded(), as: UTF8.self)
     #expect(try CalibrationRecord.decode(Data(encoded.utf8)) == record)
     let future = encoded.replacingOccurrences(
-      of: "\"schemaVersion\" : 1", with: "\"schemaVersion\" : 2")
+      of: "\"schemaVersion\" : 2", with: "\"schemaVersion\" : 3")
     #expect(future != encoded)
     #expect(throws: (any Error).self) { try CalibrationRecord.decode(Data(future.utf8)) }
   }
 
-  static func label(version: Int = 1, questions: String) -> Data {
-    Data("{\"schemaVersion\": \(version), \"questions\": [\(questions)]}".utf8)
+  @Test(
+    "a judged answer passes only on the label's option at p >= 0.7, an observed one at p = 1 — catches a coin-flip answer recorded as a pass"
+  )
+  func passMargin() {
+    func result(_ answered: String, _ probability: Double) -> CalibrationRecord.QuestionResult {
+      .init(question: "q", expected: "a", answered: answered, probability: probability)
+    }
+    #expect(!result("a", 0.55).met)
+    #expect(!result("a", 0.69).met)
+    #expect(result("a", 0.7).met)
+    #expect(result("a", 1).met)
+    #expect(!result("b", 1).met)
   }
 
-  static let good = #"{"id": "v", "text": "t", "options": ["a", "b"], "expected": "a"}"#
+  static func label(version: Int = 2, checks: String) -> Data {
+    Data("{\"schemaVersion\": \(version), \"checks\": [\(checks)]}".utf8)
+  }
+
+  static let good =
+    #"{"id": "v", "kind": "value", "array": "verdicts", "where": [{"path": "id", "oneOf": ["x"]}], "field": "status", "expected": "refuted"}"#
 
   @Test(
-    "a label that no agent could meet or that isn't version 1 is rejected — catches a malformed seed silently scored",
+    "a label that no agent could meet, that isn't version 2 or that carries an unknown key is rejected — catches a malformed seed silently scored",
     arguments: [
-      ("unknown version", label(version: 2, questions: good)),
-      ("no questions", label(questions: "")),
-      ("repeated id", label(questions: good + ", " + good)),
+      ("old version", label(version: 1, checks: good)),
+      ("no checks", label(checks: "")),
+      ("repeated id", label(checks: good + ", " + good)),
+      ("unknown kind", label(checks: #"{"id": "v", "kind": "ask", "array": "a"}"#)),
+      ("unknown key", label(checks: #"{"id": "v", "kind": "present", "array": "a", "sort": 1}"#)),
+      ("no array", label(checks: #"{"id": "v", "kind": "present"}"#)),
       (
-        "one option",
-        label(questions: #"{"id": "v", "text": "t", "options": ["a"], "expected": "a"}"#)
+        "condition with both tests",
+        label(
+          checks:
+            #"{"id": "v", "kind": "absent", "array": "a", "where": [{"path": "p", "oneOf": ["x"], "prefix": "y"}]}"#
+        )
       ),
       (
-        "duplicate options",
-        label(questions: #"{"id": "v", "text": "t", "options": ["a", "a"], "expected": "a"}"#)
+        "condition with neither test",
+        label(checks: #"{"id": "v", "kind": "absent", "array": "a", "where": [{"path": "p"}]}"#)
       ),
       (
-        "expected not an option",
-        label(questions: #"{"id": "v", "text": "t", "options": ["a", "b"], "expected": "c"}"#)
+        "value without field",
+        label(checks: #"{"id": "v", "kind": "value", "array": "a", "expected": "x"}"#)
+      ),
+      (
+        "judge with one option",
+        label(
+          checks: #"{"id": "v", "kind": "judge", "text": "t", "options": ["a"], "expected": "a"}"#)
+      ),
+      (
+        "judge expecting no option",
+        label(
+          checks:
+            #"{"id": "v", "kind": "judge", "text": "t", "options": ["a", "b"], "expected": "c"}"#)
       ),
       ("not JSON", Data("nope".utf8)),
     ])
@@ -147,8 +180,34 @@ struct DesignCalibrationTests {
       Issue.record("\(name) decoded")
       return
     }
-    guard case .success = CalibrationLabel.decode(Self.label(questions: Self.good)) else {
+    guard case .success = CalibrationLabel.decode(Self.label(checks: Self.good)) else {
       Issue.record("the well-formed control label was rejected")
+      return
+    }
+  }
+
+  @Test(
+    "a judge question that names its expected option or asks yes or no is rejected — catches a leading question that hands the reader the label",
+    arguments: [
+      (
+        #"{"id": "v", "kind": "judge", "text": "Does the draft tag it UNVERIFIED?", "options": ["UNVERIFIED", "a claim id"], "expected": "UNVERIFIED"}"#,
+        "names its expected option"
+      ),
+      (
+        #"{"id": "v", "kind": "judge", "text": "Is there a blocker about the refuted API?", "options": ["Yes", "no"], "expected": "Yes"}"#,
+        "asks yes or no"
+      ),
+    ])
+  func rejectsLeadingJudgeQuestions(_ check: String, _ reason: String) {
+    guard case .failure(let error) = CalibrationLabel.decode(Self.label(checks: check)) else {
+      Issue.record("a leading question decoded")
+      return
+    }
+    #expect(error.message.contains(reason))
+    let neutral =
+      #"{"id": "v", "kind": "judge", "text": "What tag does the bullet carry?", "options": ["UNVERIFIED", "a claim id"], "expected": "UNVERIFIED"}"#
+    guard case .success = CalibrationLabel.decode(Self.label(checks: neutral)) else {
+      Issue.record("the neutral control question was rejected")
       return
     }
   }

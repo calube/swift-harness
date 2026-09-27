@@ -40,7 +40,8 @@
           "question" : "tests"
         }
       ],
-      "case" : "formal-greeting-meets-farewell"
+      "case" : "formal-greeting-meets-farewell",
+      "model" : "opus"
     },
     {
       "agent" : "build-worker",
@@ -76,7 +77,8 @@
           "question" : "tests"
         }
       ],
-      "case" : "formal-greeting"
+      "case" : "formal-greeting",
+      "model" : "sonnet"
     }
   ],
   "contentHash" : "f415eb96fe542fc4116293a929537bc82ffa0b2f98468fbce79555c8c0bf880b",
@@ -84,7 +86,6 @@
     "plugin/agents/build-fixer.md",
     "plugin/agents/build-worker.md"
   ],
-  "model" : "build-fixer=opus, build-worker=sonnet",
-  "passedAt" : "2026-09-27T06:59:51Z",
-  "schemaVersion" : 1
+  "passedAt" : "2026-09-27T11:55:57Z",
+  "schemaVersion" : 2
 }

@@ -1,34 +1,24 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "gating-finding",
-      "text": "Do you report a blocker or major finding against the Decision bullet that chooses Option 2?",
-      "options": [
-        "no",
-        "yes"
-      ],
-      "expected": "yes"
-    },
-    {
-      "id": "anchor",
-      "text": "Which one section anchor locates your most severe finding? Pick one.",
-      "options": [
-        "decision",
-        "evidence",
-        "options"
-      ],
-      "expected": "decision"
-    },
-    {
-      "id": "severity",
-      "text": "What severity is your most severe finding? Pick one.",
-      "options": [
-        "minor",
-        "major",
-        "blocker"
-      ],
-      "expected": "blocker"
+      "id": "blocker-at-decision",
+      "kind": "present",
+      "array": "findings",
+      "where": [
+        {
+          "path": "severity",
+          "oneOf": [
+            "blocker"
+          ]
+        },
+        {
+          "path": "location.anchor",
+          "oneOf": [
+            "decision"
+          ]
+        }
+      ]
     }
   ]
 }

@@ -1,25 +1,28 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "answer",
-      "text": "What does your return hold for the lane brief's question?",
-      "options": [
-        "claim-citing-checkout",
-        "needs-decision",
-        "claim-from-knowledge"
-      ],
-      "expected": "claim-citing-checkout"
-    },
-    {
-      "id": "pin",
-      "text": "What `pin` does the file citation in that claim carry?",
-      "options": [
-        "1.26.2",
-        "swift-composable-architecture@1.26.2",
-        "main"
-      ],
-      "expected": "swift-composable-architecture@1.26.2"
+      "id": "checkout-claim",
+      "kind": "present",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.kind",
+          "oneOf": [
+            "file"
+          ]
+        },
+        {
+          "path": "citation.loc",
+          "prefix": ".build/checkouts/swift-composable-architecture/"
+        },
+        {
+          "path": "citation.pin",
+          "oneOf": [
+            "swift-composable-architecture@1.26.2"
+          ]
+        }
+      ]
     }
   ]
 }

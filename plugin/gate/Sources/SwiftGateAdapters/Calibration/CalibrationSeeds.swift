@@ -156,33 +156,9 @@ public struct CalibrationSeeds<Label: CalibrationSeedLabel>: Sendable, Equatable
     return CalibrationSeeds(agents: agents, problems: problems)
   }
 
-  /// Strips a leading `---` frontmatter block, then surrounding blank lines.
-  static func body(ofAgent text: String) -> String {
-    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
-    var body = Substring(normalized)
-    if let frontmatter = frontmatterRange(normalized) {
-      body = normalized[frontmatter.upperBound...]
-    }
-    return body.trimmingCharacters(in: .whitespacesAndNewlines)
-  }
+  static func body(ofAgent text: String) -> String { AgentFrontmatter.body(of: text) }
 
-  /// A top-level `key: value` line of the frontmatter, trimmed; `nil` when absent or empty.
   static func frontmatterValue(_ key: String, ofAgent text: String) -> String? {
-    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
-    guard let frontmatter = frontmatterRange(normalized) else { return nil }
-    for line in normalized[..<frontmatter.lowerBound].split(separator: "\n")
-    where line.hasPrefix("\(key):") {
-      let value = line.dropFirst(key.count + 1).trimmingCharacters(in: .whitespaces)
-      return value.isEmpty ? nil : value
-    }
-    return nil
-  }
-
-  /// The closing `\n---\n` of a leading frontmatter block.
-  private static func frontmatterRange(_ normalized: String) -> Range<String.Index>? {
-    guard normalized.hasPrefix("---\n") else { return nil }
-    return normalized.range(
-      of: "\n---\n",
-      range: normalized.index(normalized.startIndex, offsetBy: 3)..<normalized.endIndex)
+    AgentFrontmatter.value(key, in: text)
   }
 }

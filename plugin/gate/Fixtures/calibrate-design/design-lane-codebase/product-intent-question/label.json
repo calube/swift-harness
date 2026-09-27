@@ -1,15 +1,10 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "cover",
-      "text": "How does your return cover the lane brief's question?",
-      "options": [
-        "claim",
-        "needs-decision",
-        "leave-out"
-      ],
-      "expected": "needs-decision"
+      "id": "asks-the-user",
+      "kind": "present",
+      "array": "needsDecision"
     }
   ]
 }

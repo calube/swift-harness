@@ -34,17 +34,19 @@ public struct BuildCalibrationRunner: Sendable {
   private let executable: String
   private let agentTimeout: Duration
   private let testTimeout: Duration
-  public let defaultModel: String
+  /// Every agent's model for this run in place of its frontmatter's; a pass made with one is
+  /// never fresh.
+  public let modelOverride: String?
 
   /// - Parameters:
   ///   - root: the repository holding the seeds.
   ///   - sandboxRoot: where each case's repository is built, one directory per case; give each
   ///     run its own.
   ///   - pluginBin: put first on the agent's `PATH`, so its `swiftgate` is this checkout's.
-  ///   - defaultModel: for an agent whose frontmatter pins none.
+  ///   - modelOverride: every agent's model in place of its frontmatter's, for experiments.
   public init(
     agent: any ProcessRunner, tools: any ProcessRunner, root: URL, sandboxRoot: URL,
-    pluginBin: String, defaultModel: String, executable: String = "claude",
+    pluginBin: String, modelOverride: String? = nil, executable: String = "claude",
     agentTimeout: Duration = .seconds(3600), testTimeout: Duration = .seconds(1200)
   ) {
     self.agentRunner = agent
@@ -52,14 +54,14 @@ public struct BuildCalibrationRunner: Sendable {
     self.root = root
     self.sandboxRoot = sandboxRoot
     self.pluginBin = pluginBin
-    self.defaultModel = defaultModel
+    self.modelOverride = modelOverride
     self.executable = executable
     self.agentTimeout = agentTimeout
     self.testTimeout = testTimeout
   }
 
   public func model(of agent: BuildCalibrationSeeds.Agent) -> String {
-    agent.model ?? defaultModel
+    CalibrationModel.resolve(frontmatterModel: agent.model, override: modelOverride)
   }
 
   public func run(agent: BuildCalibrationSeeds.Agent, seed: BuildCalibrationSeeds.Case)
@@ -113,10 +115,11 @@ public struct BuildCalibrationRunner: Sendable {
       "tests", "passed",
       try await repository.acceptance(tip: tip, tests: seed.label.tests, timeout: testTimeout))
 
-    let met = answers.allSatisfy { $0.answered == $0.expected }
+    let met = answers.allSatisfy(\.met)
     if met { try? FileManager.default.removeItem(at: sandbox) }
     return CaseRun(
-      result: .init(agent: agent.name, caseName: seed.name, answers: answers),
+      result: .init(
+        agent: agent.name, caseName: seed.name, model: model(of: agent), answers: answers),
       costUSD: reply.costUSD, durationMilliseconds: reply.durationMilliseconds,
       sandbox: met ? nil : sandbox.path)
   }

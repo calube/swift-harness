@@ -1,25 +1,22 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "cover",
-      "text": "How does your return cover the lane brief's question?",
-      "options": [
-        "claim",
-        "needs-decision",
-        "leave-out"
-      ],
-      "expected": "claim"
-    },
-    {
-      "id": "citation-kind",
-      "text": "What citation kind does your claim about FavoritesClient.load use?",
-      "options": [
-        "probe",
-        "file",
-        "snapshot"
-      ],
-      "expected": "file"
+      "id": "file-claim",
+      "kind": "present",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.kind",
+          "oneOf": [
+            "file"
+          ]
+        },
+        {
+          "path": "citation.loc",
+          "prefix": "Packages/Library/Sources/FavoritesClient/FavoritesClient.swift:"
+        }
+      ]
     }
   ]
 }

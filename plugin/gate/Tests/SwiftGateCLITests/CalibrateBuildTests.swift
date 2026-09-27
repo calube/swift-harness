@@ -175,7 +175,7 @@ struct CalibrateBuildTests {
     let calibration = BuildCalibrationRunner(
       agent: agent, tools: LiveProcessRunner(), root: repository.root,
       sandboxRoot: repository.root.appending(path: "sandboxes", directoryHint: .isDirectory),
-      pluginBin: repository.root.appending(path: "plugin/bin").path, defaultModel: "sonnet")
+      pluginBin: repository.root.appending(path: "plugin/bin").path)
     return await CalibrateBuildRun.run(
       root: repository.root, calibration: calibration, now: passedAt)
   }
@@ -219,7 +219,8 @@ struct CalibrateBuildTests {
     #expect(
       record.hashedFiles == ["plugin/agents/build-fixer.md", "plugin/agents/build-worker.md"])
     #expect(record.contentHash == CalibrationHash.hash(hashed))
-    #expect(record.model == "build-fixer=opus, build-worker=sonnet")
+    #expect(record.modelOverride == nil)
+    #expect(record.cases.map(\.model) == ["opus", CalibrationModel.unpinned])
     #expect(
       record.cases.map { "\($0.agent)/\($0.caseName)" } == [
         "build-fixer/formal-greeting-meets-farewell", "build-worker/formal-greeting",
@@ -353,7 +354,11 @@ struct CalibrateBuildTests {
     let hashed = try CalibrationHash.discover(root: repository.root, suite: .build)
     let record = CalibrationRecord(
       contentHash: CalibrationHash.hash(hashed), hashedFiles: hashed.map(\.path),
-      model: "build-fixer=opus, build-worker=sonnet", passedAt: Self.passedAt, cases: [])
+      modelOverride: nil, passedAt: Self.passedAt,
+      cases: [
+        .init(agent: "build-fixer", caseName: "c", model: "opus", answers: []),
+        .init(agent: "build-worker", caseName: "c", model: CalibrationModel.unpinned, answers: []),
+      ])
     try repository.write(
       CalibrationSuite.build.recordPath, String(decoding: try record.encoded(), as: UTF8.self))
     let fresh = try CalibrationFreshness.run(root: repository.root)

@@ -42,8 +42,9 @@ gate/Fixtures/calibrate-build/
    conflict, the case is a `calibrate-build.seed-defect`. `refs/remotes/origin/main` points at
    `main`, so `swiftgate check` finds its default base.
 2. `input.md` is filled in and sent on stdin to `claude -p` in the repository, with the agent's
-   body as the system prompt, its frontmatter `tools`, and its frontmatter `model` (else
-   `--model`). The run loads no user, project or local settings and no MCP servers, and this
+   body as the system prompt, its frontmatter `tools`, and its frontmatter `model` (`sonnet` when
+   it names none, as `build-worker` does: its model is chosen per task). `--model <m>` runs every
+   agent on `<m>` instead, for experiments, and push never counts that record as fresh. The run loads no user, project or local settings and no MCP servers, and this
    checkout's `plugin/bin` goes first on `PATH`. The placeholders are `{{worktree}}`,
    `{{branch}}`, `{{plan}}` (`calibrate`), `{{task}}` (the case name), `{{contextPack}}` (worker),
    and `{{mainCommit}}` and `{{taskCommit}}` (fixer). An unfilled one is a seed defect.
@@ -92,12 +93,13 @@ time. When git, `swift` or `claude` can't run or `claude` reports an error, the 
 
 A `CalibrationRecord`, as `calibrate design` writes it. `contentHash` covers
 `plugin/agents/build-worker.md` and `plugin/agents/build-fixer.md`, so editing either one makes the
-record stale. `model` names each agent's model. A build check's `probability` is `1`: it observes
+record stale. Each case's `model` is the model its agent ran on. A build check's `probability` is `1`: it observes
 rather than asks. Editing a seed doesn't change the hash, so rerun the calibration after changing
 one.
 
 ## Freshness at push
 
-`swiftgate check --tier push` compares `contentHash` with the working tree's build agents, as it
-does for the design suite, with the same `calibration-freshness.*` rules. A repository with neither
+`swiftgate check --tier push` compares `contentHash` with the working tree's build agents, and each
+case's `model` with its agent's frontmatter, as it does for the design suite, with the same
+`calibration-freshness.*` rules. A repository with neither
 build agent skips the build suite.

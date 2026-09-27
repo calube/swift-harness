@@ -1,15 +1,21 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "answer",
-      "text": "What does your return hold for the lane brief's question?",
-      "options": [
-        "claim-citing-checkout",
-        "needs-decision",
-        "claim-from-knowledge"
-      ],
-      "expected": "needs-decision"
+      "id": "asks-the-user",
+      "kind": "present",
+      "array": "needsDecision"
+    },
+    {
+      "id": "claim-on-missing-checkout",
+      "kind": "absent",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.loc",
+          "prefix": ".build/checkouts/swift-composable-architecture/"
+        }
+      ]
     }
   ]
 }
