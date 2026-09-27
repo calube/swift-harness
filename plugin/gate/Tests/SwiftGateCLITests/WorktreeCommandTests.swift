@@ -31,6 +31,7 @@ private struct WorktreeScenario {
     FakeGit(changed: [], mergeBase: "base", commonDirectory: commonDirectory.path)
   }
   var taskWorktree: String { base.appending(path: "app-\(Self.plan)-cli").path }
+  var fixWorktree: String { base.appending(path: "app-\(Self.plan)-fix-cli").path }
 
   static let ledger = Ledger(
     schemaVersion: 1, resume: "wave 1", maxParallel: 3,
@@ -266,6 +267,54 @@ struct WorktreeCommandTests {
     #expect(
       mergedWorkspace.calls == [
         .removeWorktree(path: scenario.taskWorktree, force: false), .deleteBranch(branch),
+      ])
+    #expect(try scenario.ledger() == WorktreeScenario.ledger)
+  }
+
+  @Test(
+    "remove --fix refuses an unmerged or foreign-held fix branch, and removes a merged one's fix worktree then fix branch, never the task's — catches a fixer's unmerged work deleted, or the task worktree removed in its place"
+  )
+  func removeFixOnlyMerged() async throws {
+    let scenario = try WorktreeScenario()
+    defer { scenario.remove() }
+    try scenario.claim(WorktreeScenario.alice)
+    let task = "\(WorktreeScenario.plan)/cli"
+    let fix = "\(WorktreeScenario.plan)/fix-cli"
+    for path in [scenario.taskWorktree, scenario.fixWorktree] {
+      try FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+    }
+
+    let taskOnlyMerged = FakeGitWorkspace(branches: [task, fix], merged: [task])
+    let unmerged = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", fix: true, session: WorktreeScenario.alice,
+      git: scenario.git, workspace: taskOnlyMerged)
+    let missingWorkspace = FakeGitWorkspace(branches: [task], merged: [task])
+    let missing = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", fix: true, session: WorktreeScenario.alice,
+      git: scenario.git, workspace: missingWorkspace)
+    let foreignWorkspace = FakeGitWorkspace(branches: [fix], merged: [fix])
+    let foreign = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", fix: true, session: WorktreeScenario.bob,
+      git: scenario.git, workspace: foreignWorkspace)
+    let mergedWorkspace = FakeGitWorkspace(branches: [task, fix], merged: [task, fix])
+    let merged = await WorktreeRun.remove(
+      slug: WorktreeScenario.plan, task: "cli", fix: true, session: WorktreeScenario.alice,
+      git: scenario.git, workspace: mergedWorkspace)
+
+    #expect(unmerged.status == .refused, "\(unmerged.message)")
+    #expect(unmerged.message.contains("\(fix) isn't merged into main"))
+    #expect(taskOnlyMerged.calls.isEmpty)
+    #expect(missing.status == .refused, "\(missing.message)")
+    #expect(missing.message.contains("branch \(fix) doesn't exist"))
+    #expect(foreign.status == .notHeld)
+    #expect(foreignWorkspace.calls.isEmpty)
+    #expect(merged.status == .removed, "\(merged.message)")
+    #expect(merged.verdict.exitCode == 0)
+    #expect(merged.worktree == scenario.fixWorktree)
+    #expect(merged.branch == fix)
+    #expect(
+      mergedWorkspace.calls == [
+        .removeWorktree(path: scenario.fixWorktree, force: false), .deleteBranch(fix),
       ])
     #expect(try scenario.ledger() == WorktreeScenario.ledger)
   }

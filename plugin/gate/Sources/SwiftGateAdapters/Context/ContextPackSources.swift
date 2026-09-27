@@ -130,18 +130,13 @@ public enum ContextPackLedger {
 /// §5.3): `returns/<task>.json` under a build run's directory, which sits beside `ledger.json`
 /// under the same plan directory (spec §4: `…/plans/<plan>/{ledger.json, build/<run>/}`) — derived
 /// from `ledgerPath`'s own parent, never from a second, independently-supplied plan path that
-/// could silently name a different plan than the ledger it was read from. Decodes only the `task`
-/// and `notes` fields: the full task-return schema is defined elsewhere, and this adapter has no
-/// reason to depend on it.
+/// could silently name a different plan than the ledger it was read from. The file decodes as a
+/// whole ``TaskReturn``, the shape `build check-return` passed before the build skill stored it, so
+/// a partial or hand-made return never feeds a dependent's pack.
 public enum ContextPackTaskReturn {
   public enum Failure: Error, Sendable, Equatable {
     case unreadable(path: String)
     case malformed(path: String)
-  }
-
-  private struct Minimal: Decodable {
-    let task: String
-    let notes: String
   }
 
   public static func notes(
@@ -154,12 +149,10 @@ public enum ContextPackTaskReturn {
     else {
       return .failure(.unreadable(path: relativePath))
     }
-    guard let minimal = try? JSONDecoder().decode(Minimal.self, from: data),
-      minimal.task == taskID
-    else {
+    guard let taskReturn = try? TaskReturnJSON.decode(data), taskReturn.task == taskID else {
       return .failure(.malformed(path: relativePath))
     }
-    return .success(minimal.notes)
+    return .success(taskReturn.notes)
   }
 }
 

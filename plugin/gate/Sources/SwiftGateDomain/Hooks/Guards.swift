@@ -130,11 +130,13 @@ public enum PlanCommandGuard {
   private static let sessionCommands: Set<[String]> = [
     ["plan", "claim"], ["plan", "release"], ["plan", "set"], ["index", "set"],
     ["ledger", "set"], ["build", "start"], ["build", "finish"], ["worktree", "create"],
+    ["build", "merge"],
   ]
   /// The build executor's verbs: a subagent reaching one is a build worker, which hands its result
   /// back rather than reporting a design conflict.
   private static let buildCommands: Set<[String]> = [
     ["ledger", "set"], ["build", "start"], ["build", "finish"], ["worktree", "create"],
+    ["build", "merge"],
   ]
 
   public static func evaluate(_ command: String, sessionID: String, agentID: String?)

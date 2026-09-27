@@ -171,14 +171,16 @@ Exit 1 or 2 halts: the design is missing a section the pack needs, or an input i
 
 Launch the decomposer with the Agent tool, `subagent_type: "swift-harness:design-decomposer"`.
 Give it the absolute path of `.harness/context-pack/decomposer.md`, the plan slug and the
-repository's directory name. On a replan, give it the absolute path of
-`.harness/plan-draft/<slug>/replan.json` too, and say it's a replan. That name is the main checkout's, the directory that holds the git
-common dir, even when you run from a linked worktree. Keep the agent's id for the fix round.
+repository's directory name. That name is the main checkout's, the directory that holds the git
+common dir, even when you run from a linked worktree. On a replan, give it the absolute path of
+`.harness/plan-draft/<slug>/replan.json` too, and say it's a replan. Keep the agent's id for the
+fix round.
 **Log** a `decompose` line with the tokens and duration the Agent tool reports.
 
 The reply must be a single JSON object, `{tasks, unresolved}`, in the agent's contract. Check that every
-task has the ledger task fields and `status` `pending`, with no `actualLines`. On a replan, also
-check that no reply task has the id of a `<fixed>` task. A reply that isn't in that shape halts.
+task has the ledger task fields, `status` `pending` and `model` set, with no `actualLines`. On a
+replan, also check that no reply task has the id of a `<fixed>` task. A reply that isn't in that
+shape halts.
 
 ## 5. Schedule, write the ledger, lint
 

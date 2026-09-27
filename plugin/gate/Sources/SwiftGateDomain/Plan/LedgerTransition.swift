@@ -13,6 +13,8 @@ public enum LedgerTransition {
   }
 
   /// `pending -> in-progress -> done`; `in-progress -> blocked | abandoned | pending` (a retry);
+  /// `pending -> blocked`, so a design conflict (build spec §8.4) holds the pending tasks it
+  /// touches and their dependents in the ledger, where a resumed build still sees them;
   /// `blocked -> pending | abandoned`. `done` never leaves once reached. A task whose `covers`
   /// intersects an amend's changed ids pauses as `needs-replan` from whatever non-`done` status it
   /// was in (§8.4: "only tasks whose covers intersect the changed ids pause as needs-replan.
@@ -21,6 +23,7 @@ public enum LedgerTransition {
   private static func isLegal(from: TaskStatus, to: TaskStatus) -> Bool {
     switch (from, to) {
     case (.pending, .inProgress),
+      (.pending, .blocked),
       (.inProgress, .done),
       (.inProgress, .blocked),
       (.inProgress, .abandoned),
