@@ -170,6 +170,15 @@ const tests = {
       'the in-flight halt must be checked before replan')
   },
 
+  'every replan.json key the plan skill writes is one the decomposer reads — catches the two sides of the replan input drifting apart'() {
+    const reference = readFileSync(join(root, 'skills/plan/references/state-files.md'), 'utf8')
+    const shape = section(reference, '## `replan.json`').split('```json')[1].split('```')[0]
+    const keys = Object.keys(JSON.parse(shape)).filter(k => k !== 'schemaVersion')
+    assert.ok(keys.length >= 5, `replan.json documents only ${keys}`)
+    const decomposer = section(readFileSync(join(root, 'agents/design-decomposer.md'), 'utf8'), '## Replan')
+    for (const key of keys) assert.ok(decomposer.includes(`"${key}"`), `the decomposer's Replan section never names "${key}"`)
+  },
+
   'an amended plan replans around its kept tasks and plan-lint is GREEN at the new designSha — catches a replan that edits done work or lints the old design'() {
     withRepo(ctx => {
       const { dir, run, skill, plans, readJSON, writeJSON, commitDesign } = ctx
