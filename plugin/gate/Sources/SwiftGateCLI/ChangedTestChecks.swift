@@ -228,7 +228,7 @@ enum ChangedTestChecks {
   /// answer key. Explicit and short on purpose: anything else outside the graph (docs, captured
   /// tool-output fixtures, a test's own resources) keeps the change, as it always has.
   private static let productionResourcePrefixes = [
-    "plugin/templates/", "plugin/gate/Fixtures/seeds/",
+    "plugin/templates/", "plugin/gate/Fixtures/seeds/", "plugin/bin/",
   ]
 
   private static func isProductionResource(_ path: String) -> Bool {

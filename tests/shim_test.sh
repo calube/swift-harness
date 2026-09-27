@@ -255,6 +255,58 @@ for _ in $(seq 1 25); do
   pgrep -f "$work/repo/plugin/" >/dev/null 2>&1 || break
 done
 
+# A cold hook (no binary, no previous binary) is the only session-start a fresh install or a
+# wiped cache ever sees. The plan/design/build/ship skills read the session id only from the
+# rendered "Session id: " line and refuse to claim work without it, so this line has to reach the
+# model even while the real binary is still building.
+sid_cache="$work/sid-cache"
+
+sid_out="$(
+  cd "$work/project" &&
+    printf '%s' '{"session_id":"abc-123","cwd":"'"$work/project"'","hook_event_name":"SessionStart"}' |
+    CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start
+)" || fail "cold session-start with a session id exited non-zero"
+kill_background_build || true
+printf '%s\n' "$sid_out" | python3 -m json.tool >/dev/null ||
+  fail "cold session-start with a session id was not valid JSON: '$sid_out'"
+case "$sid_out" in
+  *"Session id: abc-123"*) ;;
+  *) fail "cold session-start did not surface the stdin session id: '$sid_out'" ;;
+esac
+rm -rf "$sid_cache"
+
+# An id outside the safe character set is dropped rather than trusted into the printed JSON.
+unsafe_out="$(
+  cd "$work/project" &&
+    printf '%s' '{"session_id":"abc 123\"; touch evil","cwd":"'"$work/project"'"}' |
+    CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start
+)" || fail "cold session-start with an unsafe session id exited non-zero"
+kill_background_build || true
+printf '%s\n' "$unsafe_out" | python3 -m json.tool >/dev/null ||
+  fail "cold session-start with an unsafe session id was not valid JSON: '$unsafe_out'"
+case "$unsafe_out" in
+  *"Session id:"*) fail "cold session-start printed an unsafe session id: '$unsafe_out'" ;;
+esac
+rm -rf "$sid_cache"
+
+# Empty or absent stdin (a tty, or a hook invoked with none) must not block or crash the hook.
+nostdin_out="$(cd "$work/project" && CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start </dev/null)" ||
+  fail "cold session-start with no stdin exited non-zero"
+kill_background_build || true
+printf '%s\n' "$nostdin_out" | python3 -m json.tool >/dev/null ||
+  fail "cold session-start with no stdin was not valid JSON: '$nostdin_out'"
+case "$nostdin_out" in
+  *"Session id:"*) fail "cold session-start with no stdin printed a session id: '$nostdin_out'" ;;
+esac
+rm -rf "$sid_cache"
+# Each case above already waited out its own background build; a build that spawned late (the
+# swift build driver itself takes a moment to fork its child) gets one more, broader pass here.
+for _ in $(seq 1 50); do
+  pkill -9 -f "$work/repo/plugin/" >/dev/null 2>&1 || true
+  sleep 0.2
+  pgrep -f "$work/repo/plugin/gate" >/dev/null 2>&1 || break
+done
+
 # Every background build this test started was either killed and reaped, or let finish — none
 # should still be running.
 stray="$(pgrep -fl "$work" 2>/dev/null || true)"

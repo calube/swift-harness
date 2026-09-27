@@ -111,6 +111,33 @@ if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
 (log: $cache/build-$hash.log). Until it finishes, the swiftgate hooks are not enforced: no \
 format or lint after edits, no command guards, no Stop-hook check, no module map. Run \
 \`swiftgate check\` yourself before claiming work is done; it builds swiftgate first if needed."
+    # Claude Code passes the SessionStart payload on this hook's stdin. The compiled binary is the
+    # only thing that normally prints "Session id:", so on a cold cache with no previous binary to
+    # fall back to, this is the model's one chance to learn the id and claim a plan. Read only
+    # here, never above: the previous-binary exec must see an untouched stdin. A tty or empty
+    # stdin is never blocked on, and an id outside a safe character set is dropped rather than
+    # trusted into the JSON below.
+    session_id=""
+    if [ ! -t 0 ]; then
+      stdin_payload="$(cat)"
+      if [ -n "$stdin_payload" ]; then
+        session_id="$(printf '%s' "$stdin_payload" |
+          /usr/bin/plutil -extract session_id raw -o - - 2>/dev/null || true)"
+        if [ -z "$session_id" ]; then
+          session_id="$(printf '%s' "$stdin_payload" |
+            sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([A-Za-z0-9._-]*\)".*/\1/p' |
+            head -n 1)"
+        fi
+        case "$session_id" in
+          *[!A-Za-z0-9._-]*) session_id="" ;;
+        esac
+      fi
+    fi
+    if [ -n "$session_id" ]; then
+      # A literal newline here would need multi-line JSON escaping the sed below doesn't do; a
+      # space keeps the whole context on the one line the escaping already handles correctly.
+      context="$context Session id: $session_id (pass as \`--session\` to \`swiftgate plan claim\`/\`plan release\`)."
+    fi
     printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' \
       "$(printf '%s' "$context" | sed 's/\\/\\\\/g; s/"/\\"/g')"
   fi

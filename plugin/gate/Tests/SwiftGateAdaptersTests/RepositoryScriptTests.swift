@@ -71,7 +71,7 @@ struct RepositoryScriptTests {
   }
 
   @Test(
-    "swiftgate shim caches and rebuilds — catches a stale binary running old rules or a cold hook blocking",
+    "swiftgate shim caches and rebuilds, and a cold hook still surfaces the session id — catches a stale binary running old rules, a cold hook blocking, or a fresh install losing the session id a plan claim needs",
     .enabled(if: onPath("bash") && onPath("swift"), "bash or swift is not on PATH"))
   func shim() async throws {
     let output = try await run("bash", "tests/shim_test.sh", timeout: .seconds(600))
