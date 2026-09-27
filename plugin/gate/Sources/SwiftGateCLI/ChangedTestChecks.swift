@@ -153,13 +153,18 @@ enum ChangedTestChecks {
     } catch {
       return .blocked(ProofRules.noEvidenceRuleID, "git: \(error)")
     }
-    // Production source is reverted; tests, manifests, resources and config keep the change.
+    // Production source is reverted; tests, manifests, resources and config keep the change. A
+    // path outside the module graph (no Package.swift target claims it) is production input too
+    // when it's one of the harness's own stamped resources — a template a test can guard — so it
+    // reverts alongside the Swift sources instead of silently keeping the change under test.
     var reverted: [String] = []
     var copied: [String] = []
     for path in changed {
       guard path.hasPrefix(prefix) else { continue }
-      let module = graph.module(containingFile: String(path.dropFirst(prefix.count)))
-      if let module, !isTestModule(module) { reverted.append(path) } else { copied.append(path) }
+      let relative = String(path.dropFirst(prefix.count))
+      let module = graph.module(containingFile: relative)
+      let isProduction = module.map { !isTestModule($0) } ?? isProductionResource(relative)
+      if isProduction { reverted.append(path) } else { copied.append(path) }
     }
     guard !reverted.isEmpty else {
       return .note(
@@ -215,6 +220,15 @@ enum ChangedTestChecks {
   private static func isTestModule(_ module: Module) -> Bool {
     if case .tests = module.role { return true }
     return false
+  }
+
+  /// Non-Swift files outside the module graph that still count as production input a changed
+  /// test can guard. Explicit and short on purpose: anything else outside the graph (docs,
+  /// fixtures, a test's own resources) keeps the change, as it always has.
+  private static let productionResourcePrefixes = ["plugin/templates/"]
+
+  private static func isProductionResource(_ path: String) -> Bool {
+    Self.productionResourcePrefixes.contains { path.hasPrefix($0) }
   }
 
   // MARK: - stress

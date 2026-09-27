@@ -152,6 +152,29 @@ struct ChangedTestChecksTests {
   }
 
   @Test(
+    "a changed template outside the module graph is reverted like production source, not kept like the test — catches a template-guarding test permanently not-proven"
+  )
+  func templateInputIsReverted() async throws {
+    let setup = try Setup()
+    defer { setup.remove() }
+    let templatePath = "plugin/templates/AGENTS.md"
+    let git = FakeGit(
+      changed: [Self.testFile, Self.sourceFile, templatePath], mergeBase: "base",
+      addedSince: [AddedLines(path: Self.testFile, ranges: [1...15])])
+    let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+    let environment = ChangedTestChecks.Environment(
+      root: setup.repository.root, git: git,
+      swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), scratch: scratch,
+      scratchSwiftPM: { _ in try! ProbeRepository.swiftPM(replaying: "reverted") })
+
+    _ = try await prove(setup, environment)
+
+    let request = try #require(scratch.requests.first)
+    #expect(request.revertedPaths.contains(templatePath))
+    #expect(!request.copiedPaths.contains(templatePath))
+  }
+
+  @Test(
     "a scratch worktree that cannot be made is BLOCKED — catches an environment failure reported as unproven code"
   )
   func scratchFailure() async throws {
