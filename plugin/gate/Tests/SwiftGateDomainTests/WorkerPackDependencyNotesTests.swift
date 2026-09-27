@@ -21,7 +21,9 @@ struct WorkerPackDependencyNotesTests {
     waves: [["dep-b"], ["dep-a"], ["main-task"]])
 
   private func workerInputs(dependencyNotes: [DependencyReturnNotes]) -> WorkerInputs {
-    let designSource = ContextSource(label: "design.md", rawText: "# Design\n")
+    let designSource = ContextSource(
+      label: "design.md",
+      rawText: "# Design\n\n## Decision\n\nPersist it.\n\n## Architecture\n\nOne file.\n")
     return WorkerInputs(
       task: Self.task("main-task", deps: ["dep-a", "dep-b"]),
       design: DesignDocument(markdown: .parse(designSource.rawText)), designSource: designSource,

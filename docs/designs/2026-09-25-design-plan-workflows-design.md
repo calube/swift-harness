@@ -398,12 +398,12 @@ writes to its own `.harness/task-status.json`:
 |---|---|
 | research lane | frame answers; area; module-graph slice for touched modules; existing claims for the same pins (cache hits); lane brief |
 | claim checker | the claim records to judge; cited line ranges and snapshot excerpts only |
-| drafter | template; frame answers; `supported` claims; probe verdicts; standards anchors for the module kinds in scope |
+| drafter | template; frame answers; `supported` claims, plus at `sketch` the user's `quote-ok` answer claims; probe verdicts; standards anchors for the module kinds in scope; the `design-lint` word budgets |
 | evidence auditor | the doc; every cited claim with its citation excerpt |
 | standards reviewer | the doc's Module kinds, Decision and Test plan sections; standards and playbook sections by anchor |
 | challenger | the doc; the challenger question set |
-| decomposer | Requirements, Module kinds, Test plan sections; module graph; D16 bounds |
-| worker | its ledger task entry; design sections covering its `covers` ids, verbatim by anchor; cited claims; standards anchors for its modules' kinds; gate tier |
+| decomposer | Requirements, Decision, Architecture, Module kinds, Test plan and Risks sections; module graph; D16 bounds |
+| worker | its ledger task entry; design sections covering its `covers` ids, and the Decision and Architecture sections, verbatim by anchor; cited claims; standards anchors for its modules' kinds; gate tier |
 
 Worker pack budget defaults to ~15k tokens; over budget is a `plan-lint` error.
 

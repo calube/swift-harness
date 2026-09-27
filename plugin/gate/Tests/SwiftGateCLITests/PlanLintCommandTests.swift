@@ -60,6 +60,10 @@ private struct PlanLintRepo {
 
       Persist the queue in a file.
 
+      ## Architecture
+
+      The queue writes each order to disk before it sends.
+
       ## Test plan by tier
 
       - test-queued-order-survives-relaunch: a queued order is there after relaunch — tier T1

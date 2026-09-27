@@ -381,8 +381,9 @@ public struct ClaimCheckerInputs: Sendable {
   }
 }
 
-/// spec §5.10 drafter row: template; frame answers; `supported` claims; probe verdicts; standards
-/// anchors for the module kinds in scope.
+/// spec §5.10 drafter row: template; frame answers; `supported` claims (at `sketch`, also the
+/// user's `quote-ok` answer claims); probe verdicts; standards anchors for the module kinds in
+/// scope; the `design-lint` word budgets.
 public struct DrafterInputs: Sendable {
   public let template: ContextSource
   public let frameAnswers: ContextSource
@@ -390,10 +391,16 @@ public struct DrafterInputs: Sendable {
   public let probeVerdicts: ContextSource
   public let standards: ContextSource
   public let moduleKindAnchors: [String]
+  /// The tier the design is claimed at; `nil` when the caller didn't say, which reads as "not
+  /// sketch".
+  public let tier: DesignTier?
+  /// ``wordBudgetSource(_:)`` for the repo's budgets; `nil` leaves the pack without a budget slice.
+  public let wordBudgets: ContextSource?
 
   public init(
     template: ContextSource, frameAnswers: ContextSource, claims: ContextSource,
-    probeVerdicts: ContextSource, standards: ContextSource, moduleKindAnchors: [String]
+    probeVerdicts: ContextSource, standards: ContextSource, moduleKindAnchors: [String],
+    tier: DesignTier? = nil, wordBudgets: ContextSource? = nil
   ) {
     self.template = template
     self.frameAnswers = frameAnswers
@@ -401,6 +408,21 @@ public struct DrafterInputs: Sendable {
     self.probeVerdicts = probeVerdicts
     self.standards = standards
     self.moduleKindAnchors = moduleKindAnchors
+    self.tier = tier
+    self.wordBudgets = wordBudgets
+  }
+
+  /// The budgets `design-lint` holds a design doc to, as the text the drafter reads.
+  public static func wordBudgetSource(_ budgets: DocsBudgets) -> ContextSource {
+    let sectionLines = budgets.sections.sorted { $0.key < $1.key }.map {
+      "- \($0.key): \($0.value)"
+    }
+    let lines =
+      [
+        "Tables, diagrams and code don't count. The whole doc: \(budgets.design) prose words.",
+        "Per section, by anchor:",
+      ] + sectionLines
+    return ContextSource(label: "design-lint word budgets", rawText: lines.joined(separator: "\n"))
   }
 }
 
@@ -474,8 +496,8 @@ public struct DependencyReturnNotes: Sendable, Equatable {
   }
 }
 
-/// spec §5.10 worker row: its ledger task entry; design sections covering its `covers` ids,
-/// verbatim by anchor; cited claims; standards anchors for its modules' kinds; gate tier (carried
+/// spec §5.10 worker row: its ledger task entry; design sections covering its `covers` ids, and
+/// the Decision and Architecture sections, verbatim by anchor; cited claims; standards anchors for its modules' kinds; gate tier (carried
 /// inside the encoded ledger entry — every `LedgerTask` has one); spec §5.3: the task-return notes
 /// of every task this one depends on, already in the ledger's dependency order.
 public struct WorkerInputs: Sendable {
@@ -581,6 +603,15 @@ extension ContextPack {
         throw ContextPackError.unknownCoversID(id)
       }
       guard includedAnchors.insert(anchor).inserted else { continue }
+      slices.append(
+        try MarkdownAnchorSlicer.slice(
+          anchor: anchor, of: inputs.design.markdown, rawText: inputs.designSource.rawText,
+          sourceLabel: inputs.designSource.label))
+    }
+    // Every worker gets the shape the design chose, so parallel workers don't each invent one.
+    // `design-lint` requires both sections, so an approved design always has them.
+    for anchor in ["decision", "architecture"]
+    where inputs.design.markdown.section(anchor: anchor) != nil {
       slices.append(
         try MarkdownAnchorSlicer.slice(
           anchor: anchor, of: inputs.design.markdown, rawText: inputs.designSource.rawText,
@@ -737,14 +768,21 @@ extension ContextPack {
   /// spec §5.10 drafter row.
   public static func drafterPack(_ inputs: DrafterInputs) throws -> ContextPack {
     var slices = [ContextPackSlice(inputs.template), ContextPackSlice(inputs.frameAnswers)]
+    // At sketch no claim checker runs, so the user's own frame answers never reach `supported`;
+    // `design-lint` accepts a `quote-ok` answer there, and the drafter has to see it to cite it.
+    let acceptsCheckedAnswers = inputs.tier == .sketch
     let supported = ClaimLineFilter.lines(
       in: MarkdownAnchorSlicer.rawLines(inputs.claims.rawText)
-    ) { $0.status == .supported }
+    ) { claim in
+      claim.status == .supported
+        || (acceptsCheckedAnswers && claim.citation.kind == .answer && claim.status == .quoteOk)
+    }
     if !supported.isEmpty {
       slices.append(
         ContextPackSlice(sourceLabel: inputs.claims.label, anchor: nil, lines: supported))
     }
     slices.append(ContextPackSlice(inputs.probeVerdicts))
+    if let wordBudgets = inputs.wordBudgets { slices.append(ContextPackSlice(wordBudgets)) }
     slices.append(
       contentsOf: try MarkdownAnchorSlicer.slice(
         anchors: inputs.moduleKindAnchors, from: inputs.standards))
@@ -773,7 +811,9 @@ extension ContextPack {
   /// spec §5.10 decomposer row.
   public static func decomposerPack(_ inputs: DecomposerInputs) throws -> ContextPack {
     var slices = try MarkdownAnchorSlicer.slice(
-      anchors: ["requirements", "module-kinds", "test-plan-by-tier"], from: inputs.design)
+      anchors: [
+        "requirements", "decision", "architecture", "module-kinds", "test-plan-by-tier", "risks",
+      ], from: inputs.design)
     slices.append(ContextPackSlice(inputs.moduleGraph))
     slices.append(ContextPackSlice(inputs.taskSizingBounds))
     return ContextPack(role: .decomposer, slices: slices)

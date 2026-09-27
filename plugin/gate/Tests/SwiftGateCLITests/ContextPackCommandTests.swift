@@ -26,12 +26,12 @@ struct ContextPackCommandTests {
   }
 
   private static func claimLine(
-    id: String, loc: String, pin: String?, quote: String? = nil,
+    id: String, kind: Citation.Kind = .file, loc: String, pin: String?, quote: String? = nil,
     status: Claim.Status = .supported
   ) throws -> String {
     let claim = Claim(
       id: id, lane: "packages", text: "some claim text",
-      citation: Citation(kind: .file, loc: loc, pin: pin, quote: quote), status: status)
+      citation: Citation(kind: kind, loc: loc, pin: pin, quote: quote), status: status)
     let data = try JSONEncoder().encode(claim)
     return String(decoding: data, as: UTF8.self)
   }
@@ -271,8 +271,8 @@ struct ContextPackCommandTests {
     #expect(text.contains(hit))
     #expect(!text.contains(miss))
     #expect(text.contains("Core modules hold logic, features own screens."))
-    // The Decision section isn't covered by this task, so its content never leaks in.
-    #expect(!text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
+    // Every worker gets the Decision section, covered or not.
+    #expect(text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
   }
 
   // MARK: - Research lane: all 5 spec §5.10 parts, plus the evidence reuse cache
@@ -841,6 +841,75 @@ struct ContextPackCommandTests {
     #expect(text.contains("Drafter standards guidance."))
   }
 
+  @Test(
+    "drafter pack at --tier sketch carries the quote-ok answer claims and the repo's word budgets from .swiftgate.toml — catches the sketch drafter missing the user's answers and the budget it will be linted against"
+  )
+  func sketchDrafterPackCarriesAnswersAndBudgets() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    _ = try repository.write(
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "App"
+      packages = ["Packages/*"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+
+      [docs.budgets]
+      design = 950
+      """, at: ".swiftgate.toml")
+    let templatePath = try repository.write("## Problem\n", at: "template.md")
+    let frameAnswersPath = try repository.write("Q: …\nA: …", at: "frame-answers.md")
+    let standardsPath = try repository.write(
+      "## 2. Architecture\n\nDrafter standards guidance.\n", at: "docs/standards.md")
+    let answer = try Self.claimLine(
+      id: "ev-user-picks-both", kind: .answer, loc: "answers.jsonl#design-run/1", pin: nil,
+      quote: "Which area?", status: .quoteOk)
+    let claimsPath = try repository.write("\(answer)\n", at: "claims.jsonl")
+
+    var options = ContextPackGatherInputs()
+    options.template = templatePath
+    options.frameAnswers = frameAnswersPath
+    options.standards = standardsPath
+    options.claims = claimsPath
+    options.moduleKind = ["feature"]
+    options.tier = "sketch"
+
+    let outcome = await ContextPackRun.run(
+      role: "drafter", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains(answer))
+    #expect(text.contains("950 prose words"))
+    #expect(text.contains("architecture: 80"))
+  }
+
+  @Test("an unknown --tier fails the drafter pack by name — catches a typo reading as not-sketch")
+  func unknownTierFailsDrafterPack() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    var options = ContextPackGatherInputs()
+    options.template = try repository.write("## Problem\n", at: "template.md")
+    options.frameAnswers = try repository.write("Q: …", at: "frame-answers.md")
+    options.standards = try repository.write("## 2. Architecture\n\nx\n", at: "docs/standards.md")
+    options.moduleKind = ["feature"]
+    options.tier = "skecth"
+
+    let outcome = await ContextPackRun.run(
+      role: "drafter", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains("skecth"))
+  }
+
   // MARK: - Evidence auditor: only the given doc sections and their cited claims
 
   @Test("evidence-auditor pack holds only its given doc sections and their cited claim excerpts")
@@ -1045,7 +1114,7 @@ struct ContextPackCommandTests {
   // MARK: - Decomposer: Requirements, Module kinds, Test plan, plus module graph and bounds
 
   @Test(
-    "decomposer pack holds Requirements, Module kinds and Test plan, plus the module graph and sizing bounds"
+    "decomposer pack holds Requirements, Decision, Architecture, Module kinds, Test plan and Risks, plus the module graph and sizing bounds"
   )
   func decomposerPackHasExpectedSections() async throws {
     let repository = try Repository()
@@ -1072,6 +1141,6 @@ struct ContextPackCommandTests {
     #expect(text.contains("req-offline-queue-drains-on-reconnect"))
     #expect(text.contains("OrderQueueFeature -> OrderQueueCore"))
     #expect(text.contains("estLines 40-400"))
-    #expect(!text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
+    #expect(text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
   }
 }

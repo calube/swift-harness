@@ -234,17 +234,19 @@ struct ContextPackTests {
 
   // MARK: - Worker: spec §5.10 contents
 
-  @Test("worker pack holds only design sections covering its `covers` ids")
-  func workerPackHoldsOnlyCoveredSections() throws {
+  @Test(
+    "worker pack holds the sections covering its `covers` ids plus Decision and Architecture, and no other design section — catches parallel workers each inventing the shape the design already chose"
+  )
+  func workerPackHoldsCoveredSectionsAndTheChosenShape() throws {
     let pack = try ContextPack.workerPack(
       workerInputs(task: Self.sampleTask, moduleKindAnchors: []))
 
     let anchors = Set(pack.slices.compactMap(\.anchor))
-    #expect(anchors == ["requirements", "test-plan-by-tier"])
+    #expect(anchors == ["requirements", "test-plan-by-tier", "decision", "architecture"])
 
-    // "Client-side queue" only appears in the Decision section, which this task doesn't cover.
+    // "Client-side queue" only appears in the Decision section.
     #expect(
-      !pack.slices.contains { $0.lines.contains(where: { $0.contains("Client-side queue") }) })
+      pack.slices.contains { $0.lines.contains(where: { $0.contains("Client-side queue") }) })
   }
 
   @Test("a worker pack carries its cited claims, its standards anchors, and its gate tier")
@@ -297,7 +299,9 @@ struct ContextPackTests {
     #expect(pack.slices.filter { $0.anchor == "requirements" }.count == 1)
   }
 
-  @Test("an empty `covers` list is not an error — the pack just has no covering design sections")
+  @Test(
+    "an empty `covers` list is not an error — the pack has no covering sections, only Decision and Architecture"
+  )
   func emptyCoversIsNotAnError() throws {
     let task = LedgerTask(
       id: Self.sampleTask.id, deps: [], writeSet: Self.sampleTask.writeSet, gate: .push,
@@ -305,8 +309,7 @@ struct ContextPackTests {
 
     let pack = try ContextPack.workerPack(workerInputs(task: task, moduleKindAnchors: []))
 
-    #expect(pack.slices.count == 1)  // the ledger task entry only
-    #expect(pack.slices[0].anchor == nil)
+    #expect(pack.slices.map(\.anchor) == [nil, "decision", "architecture"])
   }
 
   @Test("an unknown module-kind anchor for a worker fails loudly")
@@ -621,6 +624,60 @@ struct ContextPackTests {
     #expect(!claimsSlice.lines.contains(notYetChecked))
   }
 
+  private static func drafterClaimsSlice(rawClaims: String, tier: DesignTier?) throws -> [String] {
+    let pack = try ContextPack.drafterPack(
+      DrafterInputs(
+        template: ContextSource(label: "template", rawText: "## Problem\n"),
+        frameAnswers: ContextSource(label: "frame answers", rawText: "Q/A"),
+        claims: ContextSource(label: "claims.jsonl", rawText: rawClaims),
+        probeVerdicts: ContextSource(label: "probe verdicts", rawText: ""),
+        standards: Self.standardsSource, moduleKindAnchors: ["core"], tier: tier))
+    return pack.slices.first { $0.sourceLabel == "claims.jsonl" }?.lines ?? []
+  }
+
+  @Test(
+    "at sketch the drafter pack carries the user's quote-ok answer claims, and no other quote-ok claim — catches the drafter never seeing the user's own frame answers as citable claims"
+  )
+  func sketchDrafterPackCarriesCheckedAnswers() throws {
+    let answer = try Self.claimLine(
+      id: "ev-user-picks-both", kind: .answer, loc: "answers.jsonl#design-run/1", pin: nil,
+      quote: "Which area?", status: .quoteOk)
+    let file = try Self.claimLine(
+      id: "ev-file", loc: "Sources/A.swift:L1-L1", pin: "p", status: .quoteOk)
+    let lines = try Self.drafterClaimsSlice(rawClaims: "\(answer)\n\(file)", tier: .sketch)
+    #expect(lines == [answer])
+  }
+
+  @Test(
+    "outside sketch the drafter pack still holds only supported claims — catches quote-ok answers leaking past the claim checker",
+    arguments: [nil, DesignTier.quick, .standard, .deep])
+  func drafterPackKeepsQuoteOkAnswersOutOutsideSketch(tier: DesignTier?) throws {
+    let answer = try Self.claimLine(
+      id: "ev-user-picks-both", kind: .answer, loc: "answers.jsonl#design-run/1", pin: nil,
+      quote: "Which area?", status: .quoteOk)
+    #expect(try Self.drafterClaimsSlice(rawClaims: answer, tier: tier) == [])
+  }
+
+  @Test(
+    "a drafter pack states the design-lint word budgets it will be held to — catches a first draft blowing the budget it was never told"
+  )
+  func drafterPackStatesWordBudgets() throws {
+    let budgets = DocsBudgets(design: 900, sections: ["architecture": 80, "problem": 120])
+    let pack = try ContextPack.drafterPack(
+      DrafterInputs(
+        template: ContextSource(label: "template", rawText: "## Problem\n"),
+        frameAnswers: ContextSource(label: "frame answers", rawText: "Q/A"),
+        claims: ContextSource(label: "claims.jsonl", rawText: ""),
+        probeVerdicts: ContextSource(label: "probe verdicts", rawText: ""),
+        standards: Self.standardsSource, moduleKindAnchors: ["core"],
+        wordBudgets: DrafterInputs.wordBudgetSource(budgets)))
+    let slice = try #require(pack.slices.first { $0.sourceLabel == "design-lint word budgets" })
+    let text = slice.lines.joined(separator: "\n")
+    #expect(text.contains("900"))
+    #expect(text.contains("architecture: 80"))
+    #expect(text.contains("problem: 120"))
+  }
+
   @Test("an unknown module-kind anchor for a drafter fails loudly")
   func drafterUnknownModuleKindAnchorFailsLoudly() {
     #expect(
@@ -734,7 +791,7 @@ struct ContextPackTests {
   // MARK: - Decomposer: Requirements, Module kinds, Test plan — not Decision
 
   @Test(
-    "a decomposer pack holds Requirements, Module kinds and Test plan, plus the module graph and bounds"
+    "a decomposer pack holds Requirements, Decision, Architecture, Module kinds, Test plan and Risks, plus the module graph and bounds — catches a decomposer splitting tasks blind to the chosen design"
   )
   func decomposerPackHoldsOnlyItsSections() throws {
     let pack = try ContextPack.decomposerPack(
@@ -747,8 +804,11 @@ struct ContextPackTests {
 
     let designAnchors = Set(
       pack.slices.filter { $0.sourceLabel == Self.designLabel }.compactMap(\.anchor))
-    #expect(designAnchors == ["requirements", "module-kinds", "test-plan-by-tier"])
-    #expect(!designAnchors.contains("decision"))
+    #expect(
+      designAnchors == [
+        "requirements", "decision", "architecture", "module-kinds", "test-plan-by-tier", "risks",
+      ])
+    #expect(!designAnchors.contains("evidence"))
     #expect(pack.slices.contains { $0.sourceLabel == "module graph" })
     #expect(pack.slices.contains { $0.sourceLabel == "task-sizing bounds" })
   }

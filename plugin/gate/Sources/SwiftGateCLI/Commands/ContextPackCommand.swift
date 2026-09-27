@@ -43,6 +43,11 @@ struct ContextPackOptions: ParsableArguments {
   var frameAnswers: String?
   @Option(help: "Path to recorded probe verdicts.")
   var probeVerdicts: String?
+  @Option(
+    help:
+      "The design's tier (drafter). At sketch the pack also carries the user's quote-ok answer claims."
+  )
+  var tier: String?
 
   // Standards (drafter, standards reviewer, worker)
   @Option(help: "Path to docs/standards.md.")
@@ -85,7 +90,7 @@ struct ContextPackOptions: ParsableArguments {
     ContextPackGatherInputs(
       key: key, brief: brief, pin: pin, area: area, cacheHome: cacheHome, design: design,
       docAnchor: docAnchor, template: template,
-      frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, standards: standards,
+      frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, tier: tier, standards: standards,
       playbook: playbook, moduleKind: moduleKind, standardsAnchor: standardsAnchor, claims: claims,
       claimID: claimID, questionSet: questionSet, moduleGraph: moduleGraph,
       taskSizingBounds: taskSizingBounds, ledger: ledger, taskID: taskID, buildRun: buildRun)
@@ -106,6 +111,7 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var template: String?
   var frameAnswers: String?
   var probeVerdicts: String?
+  var tier: String?
   var standards: String?
   var playbook: String?
   var moduleKind: [String] = []
@@ -453,6 +459,23 @@ enum ContextPackRun {
     guard let standardsPath = o.standards else {
       return .failure(GatherFailure("missing required option '--standards <path>'"))
     }
+    var tier: DesignTier?
+    if let rawTier = o.tier {
+      guard let known = DesignTier(rawValue: rawTier) else {
+        return .failure(
+          GatherFailure(
+            "--tier `\(rawTier)` is not a design tier ("
+              + DesignTier.allCases.map(\.rawValue).joined(separator: ", ") + ")"))
+      }
+      tier = known
+    }
+    let budgets: DocsBudgets
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(let config): budgets = config?.docs.budgets ?? DocsBudgets()
+    case .failure(let failure):
+      return .failure(
+        GatherFailure("can't read .swiftgate.toml for the word budgets: \(failure.outcome)"))
+    }
     let template: ContextSource
     switch ContextPackFiles.read(label: templatePath, path: templatePath, root: root) {
     case .success(let s): template = s
@@ -496,7 +519,8 @@ enum ContextPackRun {
           .drafter(
             DrafterInputs(
               template: template, frameAnswers: frameAnswers, claims: claims,
-              probeVerdicts: probeVerdicts, standards: standards, moduleKindAnchors: anchors)),
+              probeVerdicts: probeVerdicts, standards: standards, moduleKindAnchors: anchors,
+              tier: tier, wordBudgets: DrafterInputs.wordBudgetSource(budgets))),
           notes, nil
         ))
     }

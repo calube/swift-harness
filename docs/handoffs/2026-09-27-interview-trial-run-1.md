@@ -2,7 +2,7 @@
 
 <!-- RESUME
 State (2026-09-27): `/swift-harness:ship specs/1-list-detail.md --preset interview` ran in interview-rehearsal-1 and the user stopped it 13 minutes into the 38-minute build budget. Design (sketch) and plan finished. The build merged 2 of 4 tasks, then a worker hung on a permission prompt no one could approve. This doc lists the 18 findings in 6 groups.
-Fix order the user chose: groups A and B first, test-first, on branch fix/interview-trial-run-1 in the worktree ../swift-harness-trial-run-1. Then C to F.
+Done and merged to main: groups A, B, C and D. Open: E and F. The calibration records for the build and design prompts are stale, so `check --tier push` stays RED on main until `swiftgate calibrate build` and `swiftgate calibrate design` pass (paid agent runs; the user chose to calibrate later).
 Peers own plugin/: the sub-project 2 orchestrator and swift-harness-df. Message them before any merge into main.
 Evidence stays in interview-rehearsal-1 on purpose: main at 4bda12f, the stalled worktree for post-detail-feature-core, plan 2026-09-27-posts-list-detail at index status building, build run 20260927T161534Z-64950f3b.
 -->
