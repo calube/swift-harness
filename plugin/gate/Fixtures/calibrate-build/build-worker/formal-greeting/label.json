@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "outcome": "ready-to-merge",
+  "gate": "fast",
+  "writeSet": [
+    "Sources/Greeter/Greeter.swift",
+    "Tests/GreeterTests/GreeterTests.swift"
+  ],
+  "tests": [
+    "GreeterTests.CalibrationAcceptance/formalGreeting()",
+    "GreeterTests.CalibrationAcceptance/informalGreeting()",
+    "GreeterTests.CalibrationAcceptance/plainGreetingUnchanged()"
+  ]
+}

@@ -1,0 +1,13 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "Greeter"
+packages = ["."]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[[modules]]
+name = "Greeter"
+kind = "library"
+reason = "a string helper with no reducers"

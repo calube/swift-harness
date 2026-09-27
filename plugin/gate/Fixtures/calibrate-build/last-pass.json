@@ -1,0 +1,90 @@
+{
+  "cases" : [
+    {
+      "agent" : "build-fixer",
+      "answers" : [
+        {
+          "answered" : "ready-to-merge",
+          "expected" : "ready-to-merge",
+          "probability" : 1,
+          "question" : "outcome"
+        },
+        {
+          "answered" : "matches",
+          "expected" : "matches",
+          "probability" : 1,
+          "question" : "return"
+        },
+        {
+          "answered" : "inside-write-set",
+          "expected" : "inside-write-set",
+          "probability" : 1,
+          "question" : "scope"
+        },
+        {
+          "answered" : "unchanged",
+          "expected" : "unchanged",
+          "probability" : 1,
+          "question" : "refs"
+        },
+        {
+          "answered" : "resolved",
+          "expected" : "resolved",
+          "probability" : 1,
+          "question" : "resolution"
+        },
+        {
+          "answered" : "passed",
+          "expected" : "passed",
+          "probability" : 1,
+          "question" : "tests"
+        }
+      ],
+      "case" : "formal-greeting-meets-farewell"
+    },
+    {
+      "agent" : "build-worker",
+      "answers" : [
+        {
+          "answered" : "ready-to-merge",
+          "expected" : "ready-to-merge",
+          "probability" : 1,
+          "question" : "outcome"
+        },
+        {
+          "answered" : "matches",
+          "expected" : "matches",
+          "probability" : 1,
+          "question" : "return"
+        },
+        {
+          "answered" : "inside-write-set",
+          "expected" : "inside-write-set",
+          "probability" : 1,
+          "question" : "scope"
+        },
+        {
+          "answered" : "unchanged",
+          "expected" : "unchanged",
+          "probability" : 1,
+          "question" : "refs"
+        },
+        {
+          "answered" : "passed",
+          "expected" : "passed",
+          "probability" : 1,
+          "question" : "tests"
+        }
+      ],
+      "case" : "formal-greeting"
+    }
+  ],
+  "contentHash" : "f415eb96fe542fc4116293a929537bc82ffa0b2f98468fbce79555c8c0bf880b",
+  "hashedFiles" : [
+    "plugin/agents/build-fixer.md",
+    "plugin/agents/build-worker.md"
+  ],
+  "model" : "build-fixer=opus, build-worker=sonnet",
+  "passedAt" : "2026-09-27T06:59:51Z",
+  "schemaVersion" : 1
+}

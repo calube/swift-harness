@@ -495,58 +495,83 @@ enum PushDocGates {
   }
 }
 
-/// Push's calibration freshness gate (spec §6.2): a repository that ships design agents must carry
-/// a `last-pass.json` whose content hash matches its `plugin/agents/design-*.md` and
-/// `plugin/workflows/design-*.js` as they are now. Only a repository with no design agent at all (a
-/// consumer repo) skips it, and says so; a prompt that can't be read or a record that can't be
-/// decoded gates rather than skips.
+/// Push's calibration freshness gate (spec §6.2): a repository that ships a calibrated suite's
+/// agents (the design agents, the build worker and fixer) must carry that suite's `last-pass.json`
+/// whose content hash matches its prompts as they are now. A suite with no agent in the
+/// repository (a consumer repo) is skipped, and the summary says so; a prompt that can't be read
+/// or a record that can't be decoded gates rather than skips.
 enum CalibrationFreshness {
   static let staleRuleID = "calibration-freshness.stale"
   static let noRecordRuleID = "calibration-freshness.no-record"
   static let unreadableRuleID = "calibration-freshness.unreadable"
   static let summaryRuleID = "calibration-freshness.summary"
 
+  /// Gating findings for every stale suite, or else one summary note covering all of them.
   static func run(root: URL) throws(ReportContractViolation) -> [Finding] {
-    let record = DesignCalibrationLayout.recordPath
-    let rerun = "run `swiftgate calibrate design` and commit \(record)"
-    let hashed: [DesignCalibrationHash.File]
+    var gating: [Finding] = []
+    var fresh: [String] = []
+    var skipped: [String] = []
+    var file = "."
+    for suite in CalibrationSuite.allCases {
+      switch try check(suite, root: root) {
+      case .gating(let finding): gating.append(finding)
+      case .fresh(let note):
+        if fresh.isEmpty { file = suite.recordPath }
+        fresh.append(note)
+      case .skipped(let note): skipped.append(note)
+      }
+    }
+    if !gating.isEmpty { return gating }
+    let message =
+      fresh.isEmpty
+      ? "calibration freshness skipped: " + skipped.joined(separator: "; ") + "."
+      : "calibration fresh: " + (fresh + skipped).joined(separator: "; ") + "."
+    return [try finding(summaryRuleID, .nit, file: file, message)]
+  }
+
+  private enum SuiteResult {
+    case gating(Finding)
+    case fresh(String)
+    case skipped(String)
+  }
+
+  private static func check(_ suite: CalibrationSuite, root: URL)
+    throws(ReportContractViolation) -> SuiteResult
+  {
+    let name = suite.rawValue
+    let record = suite.recordPath
+    let rerun = "run `\(suite.command)` and commit \(record)"
+    let hashed: [CalibrationHash.File]
     do {
-      hashed = try DesignCalibrationHash.discover(root: root)
+      hashed = try CalibrationHash.discover(root: root, suite: suite)
     } catch {
-      return [
+      return .gating(
         try finding(
-          unreadableRuleID, .major, file: DesignCalibrationLayout.agentsDirectory,
-          "can't read the design prompts to hash them, so calibration freshness is unknown: "
-            + "\(error)")
-      ]
+          unreadableRuleID, .major, file: CalibrationSuite.agentsDirectory,
+          "can't read the \(name) prompts to hash them, so calibration freshness is unknown: "
+            + "\(error)"))
     }
-    let agentsPrefix = "\(DesignCalibrationLayout.agentsDirectory)/"
-    guard hashed.contains(where: { $0.path.hasPrefix(agentsPrefix) }) else {
-      return [
-        try finding(
-          summaryRuleID, .nit, file: ".",
-          "calibration freshness skipped: no \(DesignCalibrationLayout.agentsDirectory)/design-*.md "
-            + "in this repository, so there is "
-            + "no design agent to calibrate.")
-      ]
+    guard hashed.contains(where: { suite.isHashedAgent($0.path) }) else {
+      return .skipped(
+        "no \(suite.agentsDescription) in this repository, so there is no \(name) agent to "
+          + "calibrate")
     }
-    let current = DesignCalibrationHash.hash(hashed)
+    let current = CalibrationHash.hash(hashed)
     guard let data = FileManager.default.contents(atPath: root.appending(path: record).path)
     else {
-      return [
+      return .gating(
         try finding(
           noRecordRuleID, .major, file: record,
-          "\(hashed.count) design prompt file(s) and no calibration pass on record; \(rerun).")
-      ]
+          "\(hashed.count) \(name) prompt file(s) and no calibration pass on record; \(rerun)."))
     }
     let pass: CalibrationRecord
     do {
       pass = try CalibrationRecord.decode(data)
     } catch {
-      return [
+      return .gating(
         try finding(
-          unreadableRuleID, .major, file: record, "isn't a calibration record: \(error); \(rerun).")
-      ]
+          unreadableRuleID, .major, file: record, "isn't a calibration record: \(error); \(rerun)."
+        ))
     }
     guard pass.contentHash == current else {
       let now = Set(hashed.map(\.path))
@@ -555,19 +580,15 @@ enum CalibrationFreshness {
         now.subtracting(then).sorted().map { "added \($0)" }
         + then.subtracting(now).sorted().map { "removed \($0)" }
       let what = changes.isEmpty ? "edited" : changes.joined(separator: ", ")
-      return [
+      return .gating(
         try finding(
           staleRuleID, .major, file: record,
-          "design prompts changed since the last calibration pass (\(what)): recorded hash "
-            + "\(pass.contentHash), current \(current); \(rerun).")
-      ]
+          "\(name) prompts changed since the last calibration pass (\(what)): recorded hash "
+            + "\(pass.contentHash), current \(current); \(rerun)."))
     }
-    return [
-      try finding(
-        summaryRuleID, .nit, file: record,
-        "calibration fresh: \(hashed.count) design prompt file(s) match content hash \(current), "
-          + "passed on \(pass.model).")
-    ]
+    return .fresh(
+      "\(hashed.count) \(name) prompt file(s) match content hash \(current), passed on "
+        + "\(pass.model)")
   }
 
   private static func finding(
