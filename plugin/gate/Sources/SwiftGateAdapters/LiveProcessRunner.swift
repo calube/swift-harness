@@ -122,10 +122,11 @@ private final class ChildProcessGroups: Sendable {
       }
       source.resume()
     }
-    // A source registers on its queue after `resume`; until it has, ignoring the signal would
-    // drop it rather than route it to the handler.
-    queue.sync {}
-    for number in Self.forwarded { signal(number, SIG_IGN) }
+    // A source registers on its queue after `resume`, and ignoring a signal before then would
+    // drop it rather than route it to the handler, so the queue ignores them once it has.
+    queue.sync {
+      for number in Self.forwarded { signal(number, SIG_IGN) }
+    }
   }
 
   /// Runs `spawn` and records the child it started as one atomic step with respect to the
