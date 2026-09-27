@@ -221,6 +221,53 @@ struct DesignScopeTests {
     #expect(facts.modulesAdded == 1)
   }
 
+  /// Two packages, each a pair: an interface client with its live transport, and a feature's core
+  /// with its UI.
+  private static func pairedGraph() throws -> ModuleGraph {
+    try ModuleGraph(packages: [
+      PackageManifest(
+        name: "APIClient", path: "APIClient",
+        targets: [
+          PackageTarget(name: "APIClient", type: .library, path: "APIClient/Sources/APIClient"),
+          PackageTarget(
+            name: "APIClientLive", type: .library, path: "APIClient/Sources/APIClientLive",
+            targetDependencies: ["APIClient"]),
+        ]),
+      PackageManifest(
+        name: "AppFeature", path: "AppFeature",
+        targets: [
+          PackageTarget(name: "AppCore", type: .library, path: "AppFeature/Sources/AppCore"),
+          PackageTarget(
+            name: "AppUI", type: .library, path: "AppFeature/Sources/AppUI",
+            targetDependencies: ["AppCore"]),
+        ]),
+    ])
+  }
+
+  @Test(
+    "an interface/live pair and a core/UI pair each count as 1 touched module — catches a 2-screen interview spec scoped deep because each pair counts twice"
+  )
+  func pairsCountOnce() throws {
+    let facts = try DesignScope.deriveFacts(
+      answers: DesignScopeAnswers(
+        touchedModules: ["APIClient", "APIClientLive", "AppCore", "AppUI"], newModules: [],
+        newDependencies: []),
+      graph: Self.pairedGraph())
+    #expect(facts.modulesTouched == 2)
+    #expect(DesignScope.recommend(facts).tier != .deep)
+  }
+
+  @Test(
+    "the half of a pair touched alone still counts as 1 — catches the pairing rule dropping a module"
+  )
+  func halfAPairCountsOnce() throws {
+    let facts = try DesignScope.deriveFacts(
+      answers: DesignScopeAnswers(
+        touchedModules: ["APIClientLive", "AppUI"], newModules: [], newDependencies: []),
+      graph: Self.pairedGraph())
+    #expect(facts.modulesTouched == 2)
+  }
+
   @Test("addsDependency is true exactly when newDependencies isn't empty")
   func addsDependencyReflectsNewDependencies() throws {
     let withDependency = try DesignScope.deriveFacts(

@@ -135,6 +135,7 @@ struct DesignScopeCommand: AsyncParsableCommand {
       + "and derives modulesAdded, modulesTouched, addsModuleKind and addsDependency from it — "
       + "the frame answers name modules, they never count them. Deep when the design adds a "
       + "dependency and a module kind together, adds 2 or more modules, or touches 4 or more "
+      + "(a client/live or core/UI pair counts once) "
       + "modules (spec §8.1 Decisions; fixed thresholds, not config). Quick only when it adds "
       + "neither a dependency nor a module kind; everything else is standard. Exit 0 with the "
       + "recommendation whatever the tier. Exit 2 — and no recommendation — when "

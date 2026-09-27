@@ -151,7 +151,7 @@ public enum DesignScopeReason: String, Sendable, Equatable, Codable, CaseIterabl
     case .modulesAdded:
       "adds \(DesignScope.modulesAddedDeepThreshold) or more modules"
     case .modulesTouched:
-      "touches \(DesignScope.modulesTouchedDeepThreshold) or more modules"
+      "touches \(DesignScope.modulesTouchedDeepThreshold) or more modules (a client/live or core/UI pair counts once)"
     case .newDependency:
       "adds a new dependency"
     case .newModuleKind:
@@ -182,7 +182,8 @@ public struct DesignScopeRecommendation: Sendable, Equatable, Codable {
 public enum DesignScope {
   /// Two or more brand-new modules recommend deep on their own.
   public static let modulesAddedDeepThreshold = 2
-  /// Four or more touched modules recommend deep on their own.
+  /// Four or more touched modules recommend deep on their own. An interface/live or core/UI pair
+  /// counts as 1.
   public static let modulesTouchedDeepThreshold = 4
 
   /// Turns frame answers into graph facts, checked against `graph`. Deterministic: duplicate
@@ -210,10 +211,29 @@ public enum DesignScope {
 
     let existingKinds = Set(graph.modules.map(\.kind))
     let addsModuleKind = answers.newModules.contains { !existingKinds.contains($0.kind) }
-    let touchedAndNew = Set(answers.touchedModules).union(answers.newModules.map(\.name))
+    let touchedUnits = Set(answers.touchedModules.map { pairUnit(of: $0, in: graph) })
+    let touchedAndNew = touchedUnits.union(answers.newModules.map(\.name))
     return DesignScopeGraphFacts(
       addsDependency: !answers.newDependencies.isEmpty, addsModuleKind: addsModuleKind,
       modulesAdded: answers.newModules.count, modulesTouched: touchedAndNew.count)
+  }
+
+  /// A live client and the interface it implements, or a UI module and the core it renders, are
+  /// 1 unit of design work: the pair lives in 1 package and changes together. Each maps to its
+  /// partner's name, so touching either half or both counts once.
+  private static func pairUnit(of name: String, in graph: ModuleGraph) -> String {
+    guard let module = graph.module(named: name) else { return name }
+    let partnerRole: ModuleRole
+    switch module.role {
+    case .clientLive: partnerRole = .client
+    case .ui: partnerRole = .core
+    default: return name
+    }
+    let partner = module.dependencies.first { dependency in
+      guard let candidate = graph.module(named: dependency) else { return false }
+      return candidate.role == partnerRole && candidate.packageName == module.packageName
+    }
+    return partner ?? name
   }
 
   /// Quick is never offered once the design adds a dependency or a module kind — checked here by
