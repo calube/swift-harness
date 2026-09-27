@@ -129,6 +129,12 @@ public enum BashGuard {
 public enum PlanCommandGuard {
   private static let sessionCommands: Set<[String]> = [
     ["plan", "claim"], ["plan", "release"], ["plan", "set"], ["index", "set"],
+    ["ledger", "set"], ["build", "start"], ["build", "finish"], ["worktree", "create"],
+  ]
+  /// The build executor's verbs: a subagent reaching one is a build worker, which hands its result
+  /// back rather than reporting a design conflict.
+  private static let buildCommands: Set<[String]> = [
+    ["ledger", "set"], ["build", "start"], ["build", "finish"], ["worktree", "create"],
   ]
 
   public static func evaluate(_ command: String, sessionID: String, agentID: String?)
@@ -144,6 +150,12 @@ public enum PlanCommandGuard {
           "`swiftgate plan release --force` takes over a lock another session holds. Only the user "
             + "runs it, in their own terminal, once they know that session has ended. Ask the user."
         )
+      }
+      if agentID != nil, buildCommands.contains(verb) {
+        return violation(
+          "a subagent never runs \(spelled): task statuses, build runs and worktrees belong to the "
+            + "orchestrator, the main session that runs the build. A build worker returns its task "
+            + "result to the orchestrator instead.")
       }
       if agentID != nil {
         return violation(
