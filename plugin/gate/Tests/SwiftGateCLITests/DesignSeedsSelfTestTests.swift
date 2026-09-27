@@ -192,4 +192,46 @@ struct DesignSeedsSelfTestTests {
         $0.hasPrefix("gate/Fixtures/seeds/design-lint/valid/expected.json:")
       })
   }
+
+  // MARK: - docs-lint seeds one violation per family (spec §6.2)
+
+  @Test(
+    "docs-lint seeds at least one violation for every family the spec's docs-lint table names — catches a family shipping with no seed of its own"
+  )
+  func everyDocsLintFamilyHasASeed() throws {
+    let seedsRoot = Fixture.checkoutRoot.appending(
+      path: "gate/Fixtures/seeds/docs-lint", directoryHint: .isDirectory)
+    let directories = try FileManager.default.contentsOfDirectory(
+      at: seedsRoot, includingPropertiesForKeys: nil)
+    struct Expected: Decodable { let ruleIDs: [String] }
+    var ruleIDs: Set<String> = []
+    for directory in directories {
+      guard let data = try? Data(contentsOf: directory.appending(path: "expected.json")),
+        let expected = try? JSONDecoder().decode(Expected.self, from: data)
+      else { continue }
+      ruleIDs.formUnion(expected.ruleIDs)
+    }
+    // Spec §6.2's docs-lint family table, one row per family; a family with two rule ids (either
+    // proves it) lists both.
+    let families: [String: Set<String>] = [
+      "reference integrity": [
+        "docs-lint.dangling-id", "docs-lint.bare-adr-reference", "docs-lint.requirement-uncited",
+      ],
+      "relative links": ["docs-lint.broken-relative-link"],
+      "router reachability / managed files": [
+        "docs-lint.unreachable-doc", "docs-lint.managed-file-missing",
+        "docs-lint.managed-file-unlisted",
+      ],
+      "non-vacuity": ["docs-lint.anchor-vacuous"],
+      "banned phrases": ["docs-lint.banned-phrase"],
+      "repo-specific anchors": ["docs-lint.anchor-vacuous"],
+      "local paths": ["docs-lint.local-path"],
+      "budgets": [
+        "docs-lint.topic-word-budget", "docs-lint.router-word-budget",
+        "docs-lint.agents-md-line-budget",
+      ],
+    ]
+    let uncovered = families.filter { ruleIDs.isDisjoint(with: $0.value) }.keys.sorted()
+    #expect(uncovered == [])
+  }
 }

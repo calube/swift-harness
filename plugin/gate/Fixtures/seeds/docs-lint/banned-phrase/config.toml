@@ -1,0 +1,6 @@
+[docs]
+managed_files = ["docs/index.md"]
+
+[[docs.banned_phrases]]
+phrase = "utilize"
+reason = "vague business jargon; say what changed"
