@@ -255,3 +255,14 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   the wave took 6.5 minutes for three branches, versus about an hour of ready tier per branch.
 - **Sessions keep subagents across /clear.** A worker spawned before a context clear keeps running and reports to
   the same session; find it with ListAgents before starting a replacement.
+
+## Lessons from the first speed wave
+
+- **Surfaced branches need a merged proof base.** Each worker's surface commit holds only its own API, so at any 1
+  surface the other branches' tests don't compile. Build the integration worktree as: merge every surface commit
+  (`git merge --no-ff <surface-a> <surface-b>`), then the branches, and pass that merge as `--proof-base`.
+- **A test that passes on unchanged `main` proves nothing.** Prove reports it; pair it with a RED case rather than
+  delete it.
+- **A new required config key breaks every existing config.** Grep the repo and tell peer sessions whose repos
+  define the table before merging.
+

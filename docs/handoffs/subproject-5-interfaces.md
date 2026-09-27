@@ -205,3 +205,30 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   95 s. The README has the warm-up steps. The specs are `specs/{1-list-detail,2-favorites-search,3-offline-sync}.md`.
   The root `.swiftgate.toml` excludes `evals/apps`, so root gates skip the starter.
 - **Gate.** The push tier is GREEN on main with every task through wave 9 merged (run 20260927T084051Z-60569a67, 1696 tests).
+
+## Speed wave 1
+
+- **`task_proof`** is a required key of every `[build.presets.<name>]` table: `per-task` | `final`
+  (`BuildPreset.TaskProof`, raw values as written; run.json key `preset.taskProof`, and a run.json without it reads
+  as `per-task`). The template stamps `default` = `per-task` and `interview` = `final`. Under `final`, `build-task.js`
+  (arg `taskProof`, required) tells the worker `check --tier <taskGate> --base main` without `--prove --mutate`, and
+  `check-return` computes `proofRequired: !fix && taskProof == .perTask`. The build's final `ready` gate proves and
+  mutates every merged task once. A repo whose `.swiftgate.toml` predates the key fails config loading until it adds
+  a `task_proof` line to each preset.
+- **Fail-fast `check`.** A RED T0 skips T1 and everything after it; a RED T1 skips prove (it already skipped mutate).
+  Each skip is a `swiftgate.not-run` nit. After a RED T0: "T1 not run: T0 is RED", then "reach/stress/prove not run:
+  T0 is RED" (ready) or "prove not run: T0 is RED" (`--prove`), then the same for mutate, judge, T2 and T3. After a
+  RED T1: "prove not run: T1 is RED". Only RED counts: a BLOCKED tier still runs what
+  follows. The push doc gates still run.
+- **Fixer returns.** `TaskReturnEvidence.reviewRequired` (default true); `check-return --fix` passes `!fix`, so a
+  fixer's `review: null` passes and a worker's green return still needs its review. The surface-commit proof-base
+  check applies only when `proofRequired` is true.
+- **Gate-run provenance.** Every `GateRun.execute` command records `headCommit` (full sha) in `history.jsonl` and
+  `report.json`, absent when unknown; `RecordedRunReport.decode` reads it. T0-only `StaticCheckRun` commands record
+  none.
+- **`worktree remove`** copies the worktree's `.harness/runs/<id>/` into `<main checkout>/.harness/runs/<id>/` before
+  removing it; it copies no history lines. `--json` adds `keptRuns: [id]` and `unkeptRuns: [{runId, reason}]`; a
+  failed copy still removes the worktree, exits 0 and names the lost runs in `message`.
+- **Merge gate lesson.** Parallel surfaced branches prove together only at a merge of all their surface commits.
+- **Gate.** Integration push + prove GREEN (run 20260927T231704Z-cb69701e, 23 of 23 new tests proven); push GREEN on
+  merged main (20260927T232100Z-bc6eec17); mutate GREEN, 16 of 16 killed (20260927T232331Z-47cd38d8).
