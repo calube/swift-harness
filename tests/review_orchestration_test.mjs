@@ -132,7 +132,7 @@ const tests = {
     }
   },
 
-  async 'a verifier that drops or reorders findings verifies none of the mismatched ones — catches a partial answer verifying the wrong finding'() {
+  async 'a verifier that drops or reorders findings verifies each by its own entry and marks the missing one unmatched — catches a partial answer verifying the wrong finding'() {
     const [a, b] = [finding(12), finding(30, { category: 'lost-update' })]
     const { result } = await run({
       reviews: { concurrency: { findings: [a, b] } },
@@ -140,7 +140,25 @@ const tests = {
     })
     const [concurrency] = entry(result, 'concurrency')
     assert.equal(concurrency.findings.length, 2, 'both reviewer findings are kept')
-    assert.deepEqual(concurrency.findings.map(f => [f.line, f.verified]), [[12, false], [30, false]])
+    assert.deepEqual(
+      concurrency.findings.map(f => [f.line, f.verified, f.unmatched === true]),
+      [[12, false, true], [30, true, false]],
+    )
+
+    const reordered = await run({
+      reviews: { concurrency: { findings: [a, b] } },
+      verify: () => ({
+        findings: [
+          { ...b, verified: false, verification_note: 'b refuted' },
+          { ...a, verified: true, verification_note: 'a traced' },
+        ],
+      }),
+    })
+    const [again] = entry(reordered.result, 'concurrency')
+    assert.deepEqual(again.findings.map(f => [f.line, f.verified, f.verification_note]), [
+      [12, true, 'a traced'],
+      [30, false, 'b refuted'],
+    ])
   },
 
   async 'the return is what review-synth reads, and an unreviewed focus keeps the verdict off merge — catches the workflow and the gate drifting'() {
@@ -172,6 +190,15 @@ const tests = {
 
     const blocker = await run({ reviews: { architecture: { findings: [finding(12, { severity: 'blocker' })] } } })
     assert.equal(synth(blocker.result.reviews).verdict, 'refactor-needed')
+
+    const unmatched = await run({
+      reviews: { concurrency: { findings: [finding(12, { severity: 'minor' })] } },
+      verify: () => ({ findings: [] }),
+    })
+    const held = synth(unmatched.result.reviews)
+    assert.equal(held.verdict, 'fix-then-merge', 'an unmatched finding keeps the verdict off merge')
+    assert.deepEqual(held.unmatched.map(u => [u.focus, u.finding.line]), [['concurrency', 12]])
+    assert.deepEqual(held.dropped, [], 'an unmatched finding is not dropped')
   },
 }
 

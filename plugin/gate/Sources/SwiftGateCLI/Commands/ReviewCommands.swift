@@ -11,6 +11,7 @@ import SwiftGateRules
 enum ReviewInputRun {
   static let directoryName = "review-input"
   static let manifestFile = "manifest.json"
+  static let numberedDiffFile = "diff-numbered.txt"
 
   struct Dependencies: Sendable {
     let git: any Git
@@ -121,6 +122,12 @@ enum ReviewInputRun {
     } catch {
       return .blocked("git: \(error)")
     }
+    let numbered: String
+    do throws(NumberedDiff.Malformed) {
+      numbered = try NumberedDiff.render(diff)
+    } catch {
+      return .blocked("git diff: \(error)")
+    }
     let comments = try StaticCheckReport.make(
       runID: context.runID, durationMilliseconds: 0,
       outcome: await dependencies.comments(added.filter { $0.path.hasSuffix(".swift") }))
@@ -130,6 +137,7 @@ enum ReviewInputRun {
     let mutation = await dependencies.mutate(context)
     try write(encode(mutation.findings), "mutate.json", in: directory)
     try write(Data(diff.utf8), "diff.patch", in: directory)
+    try write(Data(numbered.utf8), numberedDiffFile, in: directory)
 
     let swiftFiles = changed.filter { $0.hasSuffix(".swift") }
     let manifest = ReviewInputManifest(
@@ -140,7 +148,8 @@ enum ReviewInputRun {
       },
       artifacts: ReviewInputManifest.Artifacts(
         check: "check.json", arch: "arch.json", testlint: "testlint.json",
-        comments: "comments.json", diff: "diff.patch", mutate: "mutate.json"),
+        comments: "comments.json", diff: "diff.patch", numberedDiff: numberedDiffFile,
+        mutate: "mutate.json"),
       notes: ["mutate: \(mutation.verdict.rawValue)"])
     try write(encode(manifest), manifestFile, in: directory)
     return .ready(manifest, directory: directory)

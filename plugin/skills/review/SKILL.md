@@ -62,8 +62,9 @@ absolute docs paths, never the reviewer's reasoning. Give every prompt the absol
 per-focus objects exactly as `reconcile()` in `workflows/review.js` does: keep the reviewer's
 `kind`, `rule`, category and location; keep the verifier's `verification_note`; accept a lower
 severity for a `standards-violation` only when the verifier gave a `downgrade_reason`; unverified
-findings keep `verified: false`, a failed agent gives `not-reviewed`, and an absent `swiftui` focus
-gives `not-applicable`.
+findings keep `verified: false`, a finding the verifier returned no entry for gets
+`verified: false, unmatched: true`, a failed agent gives `not-reviewed`, and an absent `swiftui`
+focus gives `not-applicable`.
 
 ## 3. Synthesize
 
@@ -76,13 +77,13 @@ findings). Then run:
 ```
 
 It drops findings without a failure scenario, standards violations that cite no rule, and
-findings without verification, dedupes by file, line and category, applies the verdict rule, writes `review.json`, and prints at most 30 lines. Exit 2 means
+findings the verifier refuted, lists `unmatched` findings (which keep the verdict off `merge`), dedupes by file, line and category, applies the verdict rule, writes `review.json`, and prints at most 30 lines. Exit 2 means
 an input broke the contract: fix the file you wrote, don't hand-edit the verdict.
 
 ## 4. Report
 
 Relay the summary as printed: the verdict first (`merge`, `fix-then-merge` or `refactor-needed`),
-any `NOT REVIEWED` focus, then the top findings with `file:line`, scenario and fix. Don't add
+any `NOT REVIEWED` focus and `UNMATCHED AT VERIFY` finding, then the top findings with `file:line`, scenario and fix. Don't add
 findings the panel didn't verify and don't soften the verdict.
 
 - `refactor-needed`: a verified architecture blocker, usually a `standards-violation` whose fix
