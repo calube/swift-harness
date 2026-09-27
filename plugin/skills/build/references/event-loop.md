@@ -66,7 +66,9 @@ with other tasks, or end the turn to wait; never poll.
 
 ## Returns
 
-1. Write the workflow's return, byte for byte, to `.harness/build/<run>/<task>.json`.
+1. Write the workflow's return, byte for byte, to `.harness/build/<run>/<task>.json`. Take it from
+   the `result` key of the task's output file, the path the completion notice names. The notice
+   text HTML-escapes the return, so `->` arrives as `-&gt;`, and a copy of it is corrupt.
 2. `"$SG" build check-return .harness/build/<run>/<task>.json --plan <slug> --session <session> --json`.
    Exit 0 is `verdict` GREEN. Exit 1 lists `findings` as `{rule, message}`: the return claims more
    than git or the run store shows. Exit 2 means the file is unreadable or isn't a task return.

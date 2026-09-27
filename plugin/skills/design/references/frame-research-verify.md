@@ -388,7 +388,9 @@ when no probe ran. `--tier` is the tier the plan is claimed at. The pack also st
 Launch `swift-harness:design-drafter` with the Agent tool. The prompt gives the absolute pack path,
 `<doc>`, the area, the tier, today's date and the absolute path of
 `${CLAUDE_PLUGIN_ROOT}/skills/prose/SKILL.md`. The reply is the whole doc. Write it to `<doc>` as
-returned.
+returned. When the drafter ran in the background, take the reply from the last assistant text in
+its transcript file, not from the completion notice. The notice HTML-escapes it, so a Mermaid
+`-->` arrives as `--&gt;`, and a doc written from it is corrupt.
 
 ### Lint
 
