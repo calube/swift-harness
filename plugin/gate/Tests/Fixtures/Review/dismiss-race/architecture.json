@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "focus": "architecture",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "category": "missing-effect-cancellation",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "Dismiss clears isLoadingFact but leaves the in-flight fact request running, so the fact comes back after dismissal",
+      "fix": "Give the fact effect a cancel ID (`.cancellable(id: CancelID.fact, cancelInFlight: true)`) and have factDismissButtonTapped return `.cancel(id: CancelID.fact)`. Or, if dismiss should only hide a fact that is already shown, leave isLoadingFact alone. Add a TestStore test that sends factButtonTapped, then factDismissButtonTapped, and asserts no factResponse is received.",
+      "line": 67,
+      "severity": "major",
+      "failure_scenario": "Send .factButtonTapped (isLoadingFact = true, the .run effect at 49-56 starts, with no cancel ID). Before apiClient.randomFact() returns, send .factDismissButtonTapped: fact = nil, isLoadingFact = false, returns .none, and nothing cancels the effect. When the request finishes, the effect sends .factResponse(text), and lines 58-61 set state.fact = text without checking anything, so the dismissed fact reappears. Also, because dismiss sets isLoadingFact back to false, the 'Cat fact' button (CounterView.swift:31, .disabled(store.isLoadingFact)) is enabled again, so a second request can start while the first is still running. The added test starts from State(fact: \"shown\") with no effect in flight, so it doesn't cover this path.",
+      "evidence": "CounterFeature.swift:47-56 `.factButtonTapped` returns `.run { ... await send(.factResponse(try await apiClient.randomFact().text)) ... }` with no `.cancellable(id:)`. CounterFeature.swift:67-70 (added) `case .factDismissButtonTapped: state.fact = nil; state.isLoadingFact = false; return .none`. CounterFeature.swift:58-61 `.factResponse` sets `state.fact = fact` with no condition.",
+      "verified": true,
+      "verification_note": "I read the full CounterFeature.swift. The added dismiss case (67-70) resets isLoadingFact and returns .none. The fact effect (49-56) has no cancel ID, and nothing in the reducer cancels it. factResponse (58-61) sets fact whatever state it finds. So in the reducer, the dismissed fact comes back once the in-flight request completes. Caveat: CounterView.swift doesn't show a dismiss button yet (the action is public but has no UI trigger in this diff), so right now the path can only be reached by sending the action, not by tapping. The action's name and the reducer contract say it is meant to be sent from a dismiss control. The reset of isLoadingFact also re-enables the fact button while a request is still running, which allows overlapping requests."
+    }
+  ]
+}

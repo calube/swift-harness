@@ -281,8 +281,11 @@ enum ReviewSynthRun {
     var description: String { "\(file): \(detail)" }
   }
 
-  /// Reads every focus file, writes `review.json` into `runDirectory`, and returns the report.
-  static func run(files: [URL], runDirectory: URL) throws -> ReviewReport {
+  /// Reads every focus file, files findings against the bundle's numbered diff, writes
+  /// `review.json` and `review-telemetry.json` into `runDirectory`, and returns the report.
+  static func run(
+    files: [URL], runDirectory: URL, workflowResult: URL? = nil, now: Date = Date()
+  ) throws -> ReviewReport {
     var inputs: [FocusReview] = []
     for file in files {
       do {
@@ -291,18 +294,61 @@ enum ReviewSynthRun {
         throw InputFailure(file: file.path, detail: "\(error)")
       }
     }
-    let report: ReviewReport
+    var report: ReviewReport
     do {
-      report = try ReviewSynthesis.synthesize(inputs)
+      report = try ReviewSynthesis.synthesize(inputs, baseline: baseline(runDirectory))
     } catch {
       throw InputFailure(file: "(inputs)", detail: "\(error)")
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
     try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+    let telemetry = ReviewTelemetry.make(
+      runID: runDirectory.lastPathComponent, finishedAt: now,
+      workflow: workflowTelemetry(workflowResult))
+    let telemetryURL = runDirectory.appending(path: ReviewTelemetry.fileName)
+    try encoder.encode(telemetry).write(to: telemetryURL, options: .atomic)
+    report.telemetry = telemetryURL.path
     try encoder.encode(report).write(
       to: runDirectory.appending(path: reportFile), options: .atomic)
     return report
+  }
+
+  /// The review-input bundle's numbered diff; any failure to read it is named in the report and
+  /// every finding then counts toward the verdict.
+  static func baseline(_ runDirectory: URL) -> ReviewBaseline {
+    let bundle = runDirectory.appending(
+      path: ReviewInputRun.directoryName, directoryHint: .isDirectory)
+    let manifestPath = "\(ReviewInputRun.directoryName)/\(ReviewInputRun.manifestFile)"
+    let manifest: ReviewInputManifest
+    do {
+      manifest = try JSONDecoder().decode(
+        ReviewInputManifest.self,
+        from: Data(contentsOf: bundle.appending(path: ReviewInputRun.manifestFile)))
+    } catch {
+      return .unavailable(reason: "\(manifestPath) could not be read: \(error)")
+    }
+    let diffPath = "\(ReviewInputRun.directoryName)/\(manifest.artifacts.numberedDiff)"
+    do {
+      let text = try String(
+        contentsOf: bundle.appending(path: manifest.artifacts.numberedDiff), encoding: .utf8)
+      return .diff(ChangedLines.parse(numberedDiff: text))
+    } catch {
+      return .unavailable(reason: "\(diffPath) could not be read: \(error)")
+    }
+  }
+
+  private static func workflowTelemetry(_ url: URL?) -> Result<
+    ReviewTelemetry.Workflow, ReviewTelemetry.WorkflowUnavailable
+  > {
+    guard let url else {
+      return .failure(.init(reason: "no --workflow-result was given"))
+    }
+    do {
+      return .success(try ReviewTelemetry.decodeWorkflow(Data(contentsOf: url)))
+    } catch {
+      return .failure(.init(reason: "\(url.path) has no readable telemetry: \(error)"))
+    }
   }
 }
 
@@ -351,8 +397,10 @@ struct ReviewSynthCommand: ParsableCommand {
       "Dedupe verified review findings and decide merge / fix-then-merge / refactor-needed.",
     discussion:
       "Each input is one focus's verified findings (schemaVersion 1). A focus with no input "
-      + "counts as NOT REVIEWED. Writes review.json into --run-directory and prints the verdict "
-      + "and the top 10 findings. Exit 0 whatever the verdict; 2 when an input breaks the contract.\n\n"
+      + "counts as NOT REVIEWED. Findings on lines the run's review-input/diff-numbered.txt doesn't "
+      + "add or change are listed as pre-existing and never count toward the verdict. Writes "
+      + "review.json and review-telemetry.json into --run-directory and prints the verdict and the "
+      + "top 10 findings. Exit 0 whatever the verdict; 2 when an input breaks the contract.\n\n"
       + "With --design <doc> --tier <quick|standard|deep|sketch>, each input is one design reviewer's "
       + "findings (schemaVersion 1, located by section anchor) and the verdict is ready / revise / "
       + "rethink plus the reviewers to re-run, written to design-review.json. A required reviewer "
@@ -365,6 +413,12 @@ struct ReviewSynthCommand: ParsableCommand {
 
   @Flag(help: "Print review.json instead of the summary.")
   var json = false
+
+  @Option(
+    help:
+      "The review workflow's return value saved as JSON; its telemetry goes into review-telemetry.json."
+  )
+  var workflowResult: String?
 
   @Option(help: "Synthesize a design review of this design doc instead of a code review.")
   var design: String?
@@ -391,7 +445,8 @@ struct ReviewSynthCommand: ParsableCommand {
     let report: ReviewReport
     do {
       report = try ReviewSynthRun.run(
-        files: findings.map { URL(filePath: $0) }, runDirectory: directory)
+        files: findings.map { URL(filePath: $0) }, runDirectory: directory,
+        workflowResult: workflowResult.map { URL(filePath: $0) })
     } catch let failure as ReviewSynthRun.InputFailure {
       FileHandle.standardError.write(Data("swiftgate review-synth: \(failure)\n".utf8))
       throw ExitCode(Verdict.blocked.exitCode)

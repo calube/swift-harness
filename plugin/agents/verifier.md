@@ -22,11 +22,11 @@ Each finding's `kind` says how to verify it (a finding with no `kind` is a `defe
    `diff-numbered.txt`) to trace the `failure_scenario` yourself.
 2. Walk the scenario step by step: the input or state it names, the code path it takes, the wrong
    outcome it claims. Check every claim against the code you read, not against the finding's text.
-3. `verified: true` when you reproduced the wrong outcome by tracing the code and the defect is in
-   code the diff adds or makes reachable. `verified: false` when the scenario can't happen (a
-   guard, isolation, type or test prevents it), the code doesn't say what the finding claims, the
-   defect predates the diff and the diff doesn't make it reachable, or the scenario is too vague
-   to trace ("could cause issues").
+3. `verified: true` when you reproduced the wrong outcome by tracing the code. `verified: false`
+   when the scenario can't happen (a guard, isolation, type or test prevents it), the code doesn't
+   say what the finding claims, or the scenario is too vague to trace ("could cause issues"). A
+   real defect in code the diff didn't change is still `verified: true`, cited at that code:
+   synthesis reports it as pre-existing, outside the verdict.
 
 ### `standards-violation`
 
@@ -50,8 +50,32 @@ number in `diff.patch`. When a finding's `line` doesn't hold the code it describ
 elsewhere in that file, verify it there and return that line; keep its `file` and `title`
 unchanged, so the workflow can pair your entry with the finding.
 
+Cite the line of the code that is wrong, with `end_line` when it spans several lines. When the
+wrong code is baseline code the diff didn't change, and the diff only adds a call site that
+reaches it the way existing call sites already do, return the baseline line. Synthesis decides
+from `diff-numbered.txt` whether that line is new; you don't label anything pre-existing.
+
 Keep the finding's fields and always say what you checked in `verification_note`. You may sharpen
-`failure_scenario` and `evidence` with what you traced. You may lower `severity`, never raise it:
+`failure_scenario` and `evidence` with what you traced.
+
+Set `severity_rule` on every code finding: the id of the review contract severity rule that fits what
+you reproduced, and the `severity` it states. `review-synth` raises a finding below its rule's
+severity to it.
+
+- `defect-users-hit` (defect, `blocker`): users or callers hit it through ordinary use. A race is
+  one when a plain tap sequence triggers it. The user taps Fact, then Dismiss, while the request
+  runs; nothing cancels it and the fact comes back on a screen the user closed. That is
+  `defect-users-hit`, a blocker, whatever the reviewer rated it.
+- `defect-narrow-trigger` (defect, `major`): the trigger is narrower than ordinary use, such as a
+  timing only a stress load produces. Needing the user to tap while a request is in flight is
+  ordinary use, not a narrow trigger.
+- `structural-fix` (standards violation, `blocker`): an architecture violation whose fix moves
+  logic across a module boundary or changes a module's kind.
+- `do-violation` (standards violation, `major`): any other break of a rule's **Do**.
+- `no-harm-yet` (`minor`): no concrete harm yet. `taste` (`nit`): taste.
+
+Never use a defect rule on a standards violation, or the reverse; the workflow drops it. Beyond
+what a rule states, you may only lower `severity`:
 
 - A defect: when the reproduced impact is smaller than claimed.
 - A standards violation: only when you have evidence the rule doesn't apply as claimed or an

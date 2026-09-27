@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "focus": "test-quality",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "rule": "P9",
+      "category": "missing-edge-case",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "Dismiss during an in-flight fact request doesn't cancel the effect, so the fact comes back, and no test covers it",
+      "fix": "Make the fact effect `.cancellable(id: CancelID.fact)` and have `.factDismissButtonTapped` return `.cancel(id: CancelID.fact)`. Add a TestStore test that uses a suspended `randomFact`: send `.factButtonTapped`, then send `.factDismissButtonTapped { $0.isLoadingFact = false }`, and assert that no `.factResponse` is received. The exhaustive store fails if the effect is still running.",
+      "line": 69,
+      "severity": "minor",
+      "failure_scenario": "At the reducer level: send .factButtonTapped (isLoadingFact = true, the uncancellable .run effect starts), then send .factDismissButtonTapped before randomFact returns. The reducer sets fact = nil and isLoadingFact = false and returns .none. When the effect finishes, .factResponse (line 58-61) sets state.fact again, so the dismissed fact comes back. The new test starts idle from State(fact: \"shown\") and never runs this path.",
+      "evidence": "CounterFeature.swift:47-56 `.factButtonTapped` returns `.run { ... await send(.factResponse(...)) }` with no `.cancellable(id:)`. CounterFeature.swift:67-70 `.factDismissButtonTapped` sets fact = nil and isLoadingFact = false and returns `.none`, with no `.cancel`. CounterFeatureTests.swift:74-76 only dismisses from idle.",
+      "verified": true,
+      "verification_note": "I traced the reducer. The effect isn't cancellable and dismiss returns .none, so a later .factResponse sets fact again. Clearing isLoadingFact on line 69 only matters if dismiss can happen while a request is loading, which suggests the reducer is meant to support that. I lowered severity from major to minor because no view sends .factDismissButtonTapped: CounterView.swift has no dismiss button, so no user can hit this today. Also, the view shows ProgressView instead of the fact while loading, so a dismiss button placed next to the fact text would be hidden during a load. The defect is real in the public reducer API but not user-visible in the current UI."
+    },
+    {
+      "kind": "defect",
+      "rule": "P2",
+      "category": "would-not-fail",
+      "file": "Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift",
+      "title": "dismissHidesFact starts with isLoadingFact false, so it doesn't check that dismiss resets loading",
+      "fix": "Start the test with `State(fact: \"shown\", isLoadingFact: true)` and assert `{ $0.fact = nil; $0.isLoadingFact = false }`. Better still, drive it through `.factButtonTapped` as described in the cancellation finding.",
+      "line": 74,
+      "severity": "minor",
+      "failure_scenario": "Surviving mutation: delete `state.isLoadingFact = false` at CounterFeature.swift:69. dismissHidesFact still passes, because State(fact: \"shown\") already has isLoadingFact == false (the init default, line 13), so the exhaustive assertion `{ $0.fact = nil }` sees no difference. No other test sends .factDismissButtonTapped.",
+      "evidence": "CounterFeatureTests.swift:74 `TestStore(initialState: CounterFeature.State(fact: \"shown\"))`, line 76 `await store.send(.factDismissButtonTapped) { $0.fact = nil }`. CounterFeature.swift:13 defaults isLoadingFact to false.",
+      "verified": true,
+      "verification_note": "I confirmed the init default is isLoadingFact = false and that the test only asserts fact = nil. With line 69 removed, the state after dismiss equals the expected state, so the exhaustive TestStore passes and the mutant survives. dismissHidesFact is the only test that sends this action."
+    }
+  ]
+}

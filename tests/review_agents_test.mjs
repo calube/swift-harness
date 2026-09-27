@@ -17,6 +17,7 @@ const CODE_AGENTS = [...REVIEWERS, 'verifier']
 
 // The contract's defect-severity sentence, read from the contract so the two can't drift.
 const contract = read('docs/review-contract.md')
+const SEVERITY_RULES = ['defect-users-hit', 'defect-narrow-trigger', 'structural-fix', 'do-violation', 'no-harm-yet', 'taste']
 const DEFECT_BLOCKER_RULE = /A defect is a `blocker` when users or callers hit it/.exec(contract)?.[0]
 
 const tests = {
@@ -39,6 +40,36 @@ const tests = {
     const body = read('agents/concurrency.md')
     assert.ok(body.includes(DEFECT_BLOCKER_RULE), 'concurrency.md does not quote the contract rule')
     assert.match(body, /race a user can trigger[^.]*is a `blocker`/i, 'no race example rated blocker')
+  },
+
+  'the verifier names every contract severity rule, records the one it applied, and files the tap-then-Dismiss race under defect-users-hit — catches a user-visible race left at the reviewer rating'() {
+    const body = read('agents/verifier.md')
+    for (const rule of SEVERITY_RULES) {
+      assert.ok(contract.includes(`\`${rule}\``), `review-contract.md never defines ${rule}`)
+      assert.ok(body.includes(`\`${rule}\``), `verifier.md never names ${rule}`)
+    }
+    assert.match(body, /`severity_rule`/, 'verifier.md never asks for severity_rule')
+    assert.match(body, /taps Fact, then Dismiss[^.]*\. [^.]*`defect-users-hit`/, 'no tap-then-Dismiss example under defect-users-hit')
+  },
+
+  'the contract states the dedupe window and the pre-existing rule synthesis applies — catches synthesis behaviour the agents and the user cannot read'() {
+    assert.match(contract, /within 3 lines/, 'no dedupe window in the contract')
+    assert.match(contract, /## Pre-existing defects/, 'no pre-existing section')
+    assert.match(contract, /`diff-numbered\.txt`/, 'pre-existing rule does not name the numbered diff')
+    assert.match(contract, /never counts? toward the verdict/, 'pre-existing findings may still count')
+  },
+
+  'reviewers and the verifier cite the line of the wrong code, so baseline code keeps its own line — catches a baseline defect cited at the new call site and blocking a clean change'() {
+    for (const name of CODE_AGENTS) {
+      assert.match(read(`agents/${name}.md`), /cite the line of the code that is wrong/i, `${name}: no wrong-code line rule`)
+    }
+  },
+
+  'the review skill saves the workflow result and hands it to review-synth — catches the telemetry file never getting the token counts'() {
+    const skill = read('skills/review/SKILL.md')
+    assert.match(skill, /review-workflow\.json/)
+    assert.match(skill, /review-synth --run-directory \S+ --workflow-result \S+review-workflow\.json/)
+    assert.match(skill, /review-telemetry\.json/)
   },
 }
 
