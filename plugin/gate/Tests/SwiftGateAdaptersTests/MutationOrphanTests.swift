@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
@@ -11,8 +12,21 @@ import Testing
 /// `LiveProcessRunner` — no fakes standing in for the process tree.
 @Suite("mutate's test timeout takes the whole process tree down")
 struct MutationOrphanTests {
-  /// The mutant: a real infinite loop, no test ever runs a package built from anything else.
-  private static let hangingSource = "public func answer() -> Int { while true {} }\n"
+  /// The mutant: a busy loop that outlasts any timeout this test sets, but ends on its own after
+  /// `hangSeconds` of wall time, so a copy a killed or reverted-runner run leaves behind dies by
+  /// itself. Wall time, not a parent check: an orphan reparented to init must still be there when
+  /// the test looks, or the test couldn't tell an unfixed runner from a fixed one.
+  private static let hangSeconds = 90
+  private static let hangingSource = """
+    import Foundation
+
+    public func answer() -> Int {
+      let deadline = Date().addingTimeInterval(\(hangSeconds))
+      while Date() < deadline {}
+      return 0
+    }
+
+    """
 
   /// A real, minimal package on disk, already carrying the mutant: one test that calls the
   /// looping `answer()`, built and run for real by `LiveMutationToolchain`.
@@ -62,27 +76,42 @@ struct MutationOrphanTests {
     /// the mark of a real orphan, not just this test's own already-reaped child. Reads the pipe
     /// before waiting on the process: on a machine busy enough to fill it, waiting first deadlocks
     /// against the child blocked writing to a full pipe nobody is draining.
-    func noDescendantSurvives() -> Bool {
+    func noDescendantSurvives() throws -> Bool {
+      try survivors().isEmpty
+    }
+
+    /// Every process whose command line names this package's temp path, by pid.
+    func survivors() throws -> [pid_t] {
       let pipe = Pipe()
       let process = Process()
       process.executableURL = URL(filePath: "/bin/ps")
-      process.arguments = ["-Ao", "command="]
+      process.arguments = ["-Ao", "pid=,command="]
       process.standardOutput = pipe
-      try? process.run()
+      try process.run()
       let data = pipe.fileHandleForReading.readDataToEndOfFile()
       process.waitUntilExit()
-      let text = String(decoding: data, as: UTF8.self)
-      return !text.contains(uniqueToken)
+      return String(decoding: data, as: UTF8.self).split(separator: "\n")
+        .filter { $0.contains(uniqueToken) }
+        .compactMap { pid_t($0.split(separator: " ", maxSplits: 1).first ?? "") }
+    }
+
+    /// Kills whatever is still running from this package, whether the test passed or failed, so
+    /// a run against an unfixed runner doesn't leave its orphan spinning until the deadline.
+    func killSurvivors() {
+      for pid in (try? survivors()) ?? [] { kill(pid, SIGKILL) }
     }
   }
 
   @Test(
-    "a mutant that loops forever is timed out, and no descendant of the test process (xctest, swiftpm-testing-helper) survives it — catches an orphan left spinning at ~200% CPU",
+    "a mutant that loops past its timeout is timed out, and no descendant of the test process (xctest, swiftpm-testing-helper) survives it — catches an orphan left spinning at ~200% CPU",
     .timeLimit(.minutes(10))
   )
   func timeoutTakesTheProcessTreeDown() async throws {
     let package = try Package()
-    defer { package.remove() }
+    defer {
+      package.killSurvivors()
+      package.remove()
+    }
     let toolchain = LiveMutationToolchain(runner: LiveProcessRunner())
     let selection = HostTestSelection(
       packagePath: "Hang",
@@ -104,6 +133,6 @@ struct MutationOrphanTests {
       return
     }
 
-    #expect(package.noDescendantSurvives())
+    #expect(try package.noDescendantSurvives())
   }
 }
