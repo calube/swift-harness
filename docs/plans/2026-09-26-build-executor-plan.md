@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Waves 1–2 merged on local main 2026-09-26 (push tier GREEN, 1591 tests). The user asked for every wave to run.
+Status: IN PROGRESS. Waves 1–3 merged on local main 2026-09-26 (push tier GREEN, 1620 tests). The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: wave 3 (worktree-commands, ledger-set-command, build-start-next-finish-commands).
+Next action: wave 3b (plan-state-writes-share-one-store), then wave 4.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
@@ -73,7 +73,8 @@ flowchart LR
     w1["1: build-cli-stubs<br/>build-presets-config<br/>ledger-build-states-and-fields"] --> w2["2: build-schedule-next<br/>build-run-store<br/>sketch-design-tier"]
   end
   subgraph m2["Commands"]
-    w3["3: worktree-commands<br/>ledger-set-command<br/>build-start-next-finish-commands"] --> w4["4: build-merge-and-fix-worktree<br/>build-check-return<br/>worker-context-pack-dependency-notes"]
+    w3["3: worktree-commands<br/>ledger-set-command<br/>build-start-next-finish-commands"] --> w3b["3b: plan-state-writes-share-one-store"]
+    w3b --> w4["4: build-merge-and-fix-worktree<br/>build-check-return<br/>worker-context-pack-dependency-notes"]
   end
   subgraph m3["Agents and metrics"]
     w5["5: decomposer-model-tag<br/>build-worker-and-fixer-agents<br/>stats-build-phases"] --> w6["6: build-task-workflow<br/>calibrate-build-agents<br/>self-test-build-seeds"]
@@ -94,7 +95,7 @@ flowchart LR
 | Waves | Milestone | Tasks | Why split this way |
 |---|---|---|---|
 | 1–2 | Model and config | 6 | stubs, presets and ledger states first; scheduler, run store and the `sketch` tier build on them |
-| 3–4 | Commands | 6 | worktrees, `ledger set` and the start/next loop; then merge, return checks and dependency notes |
+| 3–4 | Commands | 7 | worktrees, `ledger set` and the start/next loop; then merge, return checks and dependency notes |
 | 5–6 | Agents and metrics | 6 | agents before the workflow that runs them; seeds after every command exists |
 | 7–8 | Skills | 3 | the build skill calls every command and the workflow; `ship` wraps it |
 | 9–11 | Rehearsal and acceptance | 3 | the fixture needs the evals session; the runs need the user and share `docs/e2e-report.md`, so they run 1 per wave |
@@ -159,8 +160,14 @@ flowchart LR
 - Does: §3.2, §6.1: `start` checks the plan is `planned` and the caller holds the lock, sets the index to `building`, writes `run.json`. `next --json` prints ready tasks, running tasks and the budget phase. `finish` prints the summary and sets `done`, or leaves `building` with a resume note when tasks remain.
 - Tests: `start` on a plan that isn't `planned` exits 1 · `next` with an injected clock past the budget reports `cutoff` · `finish` with an `abandoned` task leaves the index at `building` and names the task.
 
+### `plan-state-writes-share-one-store`
+- Deps: worktree-commands, ledger-set-command, build-start-next-finish-commands · Gate: push · estLines: 220
+- Writes: `A/PlanState/LedgerWriter.swift`, `A/Build/BuildRunStore.swift`, `C/Commands/LedgerSetCommand.swift`, `C/Commands/WorktreeCommand.swift`, `C/Commands/BuildNextCommand.swift`, `C/Commands/BuildFinishCommand.swift`, `TA/LedgerWriterTests.swift`
+- Does: added after wave 3's review found 2 copies of ledger writing and 2 of the latest-run lookup. 1 `LedgerWriter` updates a single task in `ledger.json` under a plan-scoped file lock with an atomic replace; `ledger set` and `worktree create` both use it. 1 `BuildRunStore.latest(plan:git:)` replaces both latest-run lookups. Logic moves out of the command files where it's reusable.
+- Tests: 2 concurrent writers (a status change and a branch record on different tasks) lose neither update — catches the unlocked read-modify-write · `latest` picks the greatest valid run id and ignores a stray directory · both commands' existing tests stay green unchanged.
+
 ### `build-merge-and-fix-worktree`
-- Deps: build-cli-stubs, build-run-store, worktree-commands · Gate: push · estLines: 340
+- Deps: build-cli-stubs, build-run-store, worktree-commands, plan-state-writes-share-one-store · Gate: push · estLines: 340
 - Writes: `C/Commands/BuildMergeCommand.swift`, `A/Build/MergeRunner.swift`, `S/FakeMergeRunner.swift`, `TA/BuildMergeTests.swift`
 - Does: §6.2, §8.2, §8.3: checks `main` is clean and at the last merge event's post commit; `merge --no-ff`; records pre and post commits. On conflict: aborts, then cuts `../<repo>-<plan>-fix-<task>` from `main` with the task branch merged in and conflicted. `--undo` resets `main` to the recorded pre commit and cuts the same fix worktree.
 - Tests (real git in a temp repo): a conflicting pair leaves `main` untouched and the fix worktree conflicted · `main` moved by another commit → exit 1, no merge — catches the concurrent-session merge · `--undo` after `main` moved refuses · a clean merge records both commits.

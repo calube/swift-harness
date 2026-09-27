@@ -58,3 +58,28 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   standard, deep or sketch" text. `plan claim` and `plan set` accept `sketch`.
 - **Follow-up (minor).** The push tier reports 19 uncovered lines in `BuildRunStore.swift`, mostly error paths. The
   `build merge` task, which uses `lastMergePostCommit`, should cover the damaged-log path it depends on.
+
+## Wave 3
+
+- **Worktrees.** `GitWorkspace` (`A/Build/GitWorkspace.swift`): `branchExists`, `isMerged(_:into:)`,
+  `addWorktree(at:branch:from:)`, `removeWorktree(at:force:)`, `deleteBranch`, `cloneWarmBuild(_:from:into:) -> [String]`;
+  errors `GitWorkspaceError` `.git` and `.clone`. `LiveGitWorkspace`, `S/FakeGitWorkspace(branches:merged:cloneFailure:)`
+  with `.calls`. `TaskWorktree(commonDirectory:plan:task:)` gives `mainCheckout`, the path
+  `<main parent>/<repo>-<plan>-<task>`, the branch `<plan>/<task>`, and `.base` = `main`. `WarmBuild.survey(packageDirectories:in:)`
+  finds each package `.build` plus `HarnessGC.derivedDataDirectory`. `create` clones warm builds and deletes
+  `ModuleCache` and `ModuleCache.noindex`; with nothing to clone it still creates the worktree cold and lists what's
+  missing. Exits: 0 done, 1 not held, refused or cold (`warm-check`), 2 blocked. JSON keys: `command, plan, task,
+  status (created|removed|warm|cold|not-held|refused|blocked), verdict, holder, worktree, branch, cloned, missing, message`.
+- **`ledger set`.** `LedgerSetRun.run(plan:task:status:session:now:git:) async -> LedgerSetReport`. JSON keys:
+  `command, plan, task, status (updated|not-held|blocked), verdict, holder, from, to, runId, message`. Exits: 0
+  updated, 1 not the holder, 2 otherwise, including `no build run: run \`swiftgate build start\` first`.
+- **Build loop.** `BuildClock` protocol (`now() -> Date`) and `LiveBuildClock` in `A/Build/BuildClock.swift`.
+  `build start --json`: `{command, plan, runId, presetName, indexStatus}`. `build next --json`: `{runId, phase,
+  toStart, running, refused:[{task, reason:"missing-model"}]}`. `build finish --json`: `{command, plan, indexStatus,
+  counts, unfinished:[{task,status}], resume}`. A refusal prints `{command, plan, verdict, holder?, message}`. Exits: 1 not
+  the holder, or not `planned` (start only); 2 missing `--session`, unknown preset, no run, or unreadable state.
+- **Guard.** `PlanCommandGuard.sessionCommands` now includes `ledger set`, `build start`, `build finish` and
+  `worktree create`. For those verbs the subagent deny message tells a build worker to return its result to the orchestrator.
+- **Known duplication, fixed next by `plan-state-writes-share-one-store`:** `ledger set` and `worktree create` each
+  rewrite `ledger.json` with their own code, and neither takes a lock around the read-modify-write. The latest-run lookup
+  exists in both `LedgerSetRun.latestRunID(in:)` and `build next`.
