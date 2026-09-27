@@ -88,33 +88,23 @@ enum LedgerSetRun {
       return blocked("task `\(task)`: \(reason)")
     }
     let run: BuildRunStore
-    do {
-      guard let runID = try latestRunID(in: store.plan.buildDirectory) else {
+    do throws(BuildRunStoreError) {
+      guard let latest = try await BuildRunStore.latest(plan: plan, git: git) else {
         return blocked(noBuildRun)
       }
-      run = try await BuildRunStore.open(plan: plan, runID: runID, git: git)
+      run = latest
     } catch {
       return blocked("can't find plan `\(plan)`'s build run: \(error)")
     }
-    var tasks = ledger.tasks
-    tasks[index] = LedgerTask(
-      id: current.id, deps: current.deps, writeSet: current.writeSet, gate: current.gate,
-      tests: current.tests, covers: current.covers, estLines: current.estLines, status: target,
-      worktree: current.worktree, actualLines: current.actualLines, model: current.model,
-      branch: current.branch)
-    let updated = Ledger(
-      schemaVersion: ledger.schemaVersion, resume: ledger.resume, maxParallel: ledger.maxParallel,
-      tasks: tasks, waves: ledger.waves)
-    let path = store.plan.ledgerFile
-    do {
-      // Renamed over the old file: a reader sees one whole ledger or the other.
-      try LedgerJSON.encode(updated).write(to: URL(filePath: path), options: .atomic)
+    let change: LedgerWriter.Change
+    do throws(LedgerWriterError) {
+      change = try await LedgerWriter(plan: store.plan).update(task: task, .status(target))
     } catch {
-      return blocked("writing \(path): \(error)")
+      return blocked(message(for: error, plan: plan, task: task, path: store.plan.ledgerFile))
     }
+    let from = change.before.status
     do throws(BuildRunStoreError) {
-      try await run.append(
-        .transition(.init(task: task, from: current.status, to: target, at: now)))
+      try await run.append(.transition(.init(task: task, from: from, to: target, at: now)))
     } catch {
       return blocked(
         "task `\(task)` is now \(target.rawValue) in the ledger, but its event wasn't recorded in "
@@ -122,27 +112,21 @@ enum LedgerSetRun {
     }
     return LedgerSetReport(
       command: "ledger set", plan: plan, task: task, status: .updated, verdict: .green,
-      holder: nil, from: current.status, to: target, runID: run.runID,
-      message: "task `\(task)`: \(current.status.rawValue) -> \(target.rawValue) (run \(run.runID))"
+      holder: nil, from: from, to: target, runID: run.runID,
+      message: "task `\(task)`: \(from.rawValue) -> \(target.rawValue) (run \(run.runID))"
     )
   }
 
-  /// The newest run under `build/`: run ids start with their UTC start time, so the greatest
-  /// sorts last. `nil` when no run has started.
-  static func latestRunID(in buildDirectory: String) throws -> String? {
-    let names: [String]
-    do {
-      names = try FileManager.default.contentsOfDirectory(atPath: buildDirectory)
-    } catch CocoaError.fileReadNoSuchFile {
-      return nil
+  /// The same wording as the checks made before the lock, for a ledger that changed under it.
+  private static func message(
+    for error: LedgerWriterError, plan: String, task: String, path: String
+  ) -> String {
+    switch error {
+    case .ledger(let read): "\(read); the ledger was left as it is"
+    case .unknownTask: "plan `\(plan)` has no task `\(task)`"
+    case .refusedTransition(_, let reason): "task `\(task)`: \(reason)"
+    case .lock, .io: "writing \(path): \(error)"
     }
-    return names.filter { name in
-      var isDirectory: ObjCBool = false
-      return RunID.isValid(name)
-        && FileManager.default.fileExists(
-          atPath: buildDirectory + "/" + name, isDirectory: &isDirectory)
-        && isDirectory.boolValue
-    }.max()
   }
 
   static func render(_ report: LedgerSetReport, format: OutputFormat) -> String {
