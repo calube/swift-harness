@@ -1,0 +1,94 @@
+{
+  "ship": {
+    "should": [
+      ["r6-favorites-spec-to-main", "hands over a spec file and wants it taken all the way to merged, green main", [
+        "I've written specs/favorites.md describing a favorites list for the counter facts. Please take it from that spec all the way through to merged code on main, with everything green at the end.",
+        "specs/favorites.md is done. get it all the way to main, green"
+      ]],
+      ["r6-offline-readme-whole-pipeline", "wants a README-style spec run through design, plan and build in one go instead of step by step", [
+        "The document docs/offline-sync-README.md already says exactly what offline sync should do. Rather than running design, planning and the build as separate steps, could you drive the entire pipeline from that README in one go?",
+        "run the whole thing off docs/offline-sync-README.md, design thru build, one shot"
+      ]],
+      ["r6-interview-preset-spec", "a spec plus a named preset (interview) and a request to get it built end to end", [
+        "This is a timed take-home exercise. The brief is in specs/take-home.md. Please get it implemented and merged end to end using the interview preset, and tell me how long the build took.",
+        "take-home brief in specs/take-home.md, interview preset, get it merged + tell me the wall time"
+      ]],
+      ["r6-no-babysitting-streak", "wants a spec turned into shipped code without supervising each phase", [
+        "I have a spec for a daily streak counter in specs/streak.md. I don't want to babysit each phase separately; please take it from spec to merged code and only stop if something actually breaks.",
+        "specs/streak.md -> merged code. dont want to babysit design/plan/build, only ping me if it halts"
+      ]],
+      ["r6-leaderboard-spec-unattended", "a finished spec for a new GameEngine feature to be delivered unattended from spec to green main", [
+        "specs/leaderboard.md fully describes a high-score table for the tic-tac-toe game. Please turn that spec into working, merged code on main while I'm away from the keyboard.",
+        "leaderboard spec is in specs/leaderboard.md. ship it end to end while im afk"
+      ]]
+    ],
+    "near": [
+      ["r6-is-branch-shippable", "review", "asks for a merge verdict on the current branch, not a spec-to-main run", [
+        "Before I merge fact-dismiss, would you sign off on it? I want to know whether this branch is fit to ship or what is blocking it.",
+        "is fact-dismiss good to ship or not? what blocks it"
+      ]],
+      ["r6-pr-testing-section-before-ship", "validate", "wants paste-ready PR evidence text before shipping, not a build pipeline", [
+        "I'm about to open the pull request for fact-dismiss and ship it. Please write the 'How this was tested' section of the PR description with the actual test results.",
+        "need the testing section for my PR before i ship it"
+      ]],
+      ["r6-spec-design-doc-only", "design", "has a spec but explicitly wants only a design doc to review before anything is planned or built", [
+        "Using specs/favorites.md as the goal, please write a design doc for the favorites feature and stop there. I want to read and approve the design myself before any planning or code happens.",
+        "design doc for specs/favorites.md only. dont plan or build yet, i want to approve it first"
+      ]],
+      ["r6-approved-design-to-ledger", "plan", "an approved design needs decomposing into ledger tasks; nothing about building or shipping", [
+        "The offline-sync design was approved this morning. Please break it down into tasks and produce the ledger, but don't start building anything.",
+        "offline-sync design got approved. decompose it into the ledger, no building yet"
+      ]],
+      ["r6-testflight-how", "none", "general App Store / TestFlight distribution question with no harness skill involved", [
+        "What are the steps to ship an iOS build to TestFlight from Xcode, and do I need to bump the build number each time I upload?",
+        "how do i ship to testflight, do i need to bump build number every upload"
+      ]]
+    ]
+  },
+  "build": {
+    "should": [
+      ["r6-planned-ledger-start", "the plan is already planned and the user wants its ledger tasks executed", [
+        "The favorites plan has been decomposed and the ledger is ready. Please start working through its tasks now.",
+        "favorites ledger is ready, start executing the tasks"
+      ]],
+      ["r6-parallel-worktrees-kickoff", "wants ledger tasks run in parallel worktrees and merged as they finish", [
+        "The plan came back with nine ledger tasks. Please kick them off in parallel worktrees and merge each one into main as it completes.",
+        "9 tasks in the ledger. fan them out in worktrees and merge as they land"
+      ]],
+      ["r6-existing-plan-interview-preset", "an existing plan (not a spec) to execute under a named preset", [
+        "The offline-sync plan is already written and its ledger is set. Please execute it using the interview preset.",
+        "offline-sync plan already exists. run it w/ interview preset"
+      ]],
+      ["r6-resume-after-red-main", "resuming an execution run that halted on a red main after the user fixed it", [
+        "The run over the favorites ledger halted because main went red after a merge. I've fixed the failing test on main; please carry on with the remaining ledger tasks.",
+        "fixed main, it's green again. continue the rest of the ledger tasks"
+      ]],
+      ["r6-implement-remaining-tasks", "wants the rest of a planned ledger implemented and merged until main is green", [
+        "Three of the leaderboard plan's tasks are still pending in the ledger. Please get them implemented and merged so the plan is finished with main green.",
+        "leaderboard plan still has 3 pending tasks, get them done and merged"
+      ]]
+    ],
+    "near": [
+      ["r6-xcodebuild-command", "none", "asks for a command-line build invocation, a general question with no harness skill", [
+        "What xcodebuild command should I use to build the SampleApp scheme for the iPhone 17 simulator from the terminal?",
+        "xcodebuild cmd to build SampleApp for iphone 17 sim?"
+      ]],
+      ["r6-build-reset-action", "tdd", "a behavior change in an existing reducer, which is test-first work", [
+        "Please build a reset action into CounterFeature's reducer so that tapping the reset button sets the count back to zero.",
+        "add a reset action to the counter reducer, count back to 0"
+      ]],
+      ["r6-leaderboard-which-module", "architecture", "asks where new code should live and which module kind, not to execute a plan", [
+        "I'm about to build a high-score leaderboard. Should it be its own feature package with a Core/UI pair, or belong inside GameEngine? Which module kind fits?",
+        "building a leaderboard - own feature pkg or inside GameEngine? which module kind"
+      ]],
+      ["r6-make-build-plan", "plan", "wants the approved design turned into a build plan, which precedes executing it", [
+        "The streak design has been approved. Please produce the build plan for it so the work is split into ledger tasks.",
+        "streak design approved, make the build plan"
+      ]],
+      ["r6-which-plans-mid-build", "status", "wants a list of active plans across repos, not to run one", [
+        "Across all the repositories on this machine, which harness plans are currently active, and where did I leave off in each?",
+        "which plans have i got going across my repos rn"
+      ]]
+    ]
+  }
+}
