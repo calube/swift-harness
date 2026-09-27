@@ -62,8 +62,9 @@ Never run `--apply` without an explicit **Apply**.
   each unresolved value in `Notes:`, ask the user with `AskUserQuestion` (batch them into one call),
   then edit `.swiftgate.toml` by hand.
 - **Config advice.** For an existing config, `Left alone: .swiftgate.toml: … consider editing`
-  lists what breaks a run (Xcode pin, uncovered packages, app_scheme mismatch, a simulator that isn't installed). Offer
-  the edit; don't make it silently.
+  lists what breaks a run (Xcode pin, uncovered packages, app_scheme mismatch, a simulator that isn't installed, or
+  `[docs] managed_files` missing the router or `AGENTS.md` — an upgraded repo whose config predates that key
+  otherwise leaves docs-lint, and so pre-push, red with no visible cause). Offer the edit; don't make it silently.
 - **CLAUDE.md is a real file.** Offer to move its content into `AGENTS.md` outside the managed
   block, delete `CLAUDE.md`, and re-run bootstrap so it becomes the link.
 - **lefthook or swiftlint missing.** Tell the user to install it (for example with Homebrew), then

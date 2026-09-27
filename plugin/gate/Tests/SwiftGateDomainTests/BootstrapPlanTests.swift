@@ -166,7 +166,10 @@ struct BootstrapPlanTests {
       next.config = .loaded(
         try Config(
           xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
-          simulator: SimulatorConfig(device: "iPhone 17", os: "26.2")))
+          simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+          docs: DocsConfig(managedFiles: [
+            BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents,
+          ])))
     }
     for action in plan.home {
       switch action {
@@ -219,13 +222,49 @@ struct BootstrapPlanTests {
     #expect(advice.contains("xcode is \"25.0\""))
     let current = try Config(
       xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
-      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"))
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+      docs: DocsConfig(managedFiles: [
+        BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents,
+      ]))
     #expect(
       change(BootstrapPlanner.plan(Self.inputs(config: .loaded(current))), ".swiftgate.toml")
         == .unchanged)
     #expect(
       change(BootstrapPlanner.plan(Self.inputs(config: .invalid("line 3"))), ".swiftgate.toml")
         == .untouched(advice: "never rewritten by bootstrap, and it does not load: line 3"))
+  }
+
+  @Test(
+    "an existing config without [docs] managed_files is left alone with a note naming the missing entries — catches an upgraded repo whose bootstrap silently leaves docs-lint red"
+  )
+  func existingConfigMissingManagedFiles() throws {
+    let noDocsSection = try Config(
+      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"))
+    guard
+      case .untouched(let advice) = change(
+        BootstrapPlanner.plan(Self.inputs(config: .loaded(noDocsSection))), ".swiftgate.toml")
+    else {
+      Issue.record("expected the config to be left alone")
+      return
+    }
+    #expect(advice.contains("[docs] managed_files is missing"))
+    #expect(advice.contains(BootstrapPlanner.Paths.docsIndex))
+    #expect(advice.contains(BootstrapPlanner.Paths.agents))
+
+    let partial = try Config(
+      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+      docs: DocsConfig(managedFiles: [BootstrapPlanner.Paths.agents]))
+    guard
+      case .untouched(let partialAdvice) = change(
+        BootstrapPlanner.plan(Self.inputs(config: .loaded(partial))), ".swiftgate.toml")
+    else {
+      Issue.record("expected the config to be left alone")
+      return
+    }
+    #expect(
+      partialAdvice.contains("[docs] managed_files is missing \(BootstrapPlanner.Paths.docsIndex)"))
   }
 
   @Test(
