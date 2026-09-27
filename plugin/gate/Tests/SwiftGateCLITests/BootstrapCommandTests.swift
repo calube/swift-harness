@@ -220,6 +220,22 @@ struct BootstrapCommandTests {
   }
 
   @Test(
+    "the stamped .gitignore ignores the plan skill's drafts — catches a draft ledger or module-graph dump showing up as an untracked file"
+  )
+  func gitignoreCoversPlanDraft() async throws {
+    let sandbox = try Sandbox(
+      copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
+    defer { sandbox.remove() }
+
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!outcome.failed)
+    let lines = try sandbox.state()["repo/.gitignore"]?.split(separator: "\n") ?? []
+    #expect(lines.contains("**/.harness/plan-draft/"))
+  }
+
+  @Test(
     "a fresh repository gets a config inferred from it that the gate can load — catches a first bootstrap that leaves every check RED on its own config"
   )
   func freshRepositoryConfigLoads() async throws {
