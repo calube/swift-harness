@@ -145,10 +145,17 @@ export function scanSkills(skillsDir, help, labelRoot = skillsDir) {
 
 // What a call must carry because the callee refuses it otherwise. `context-pack --role
 // research-lane` exits 2 without these flags; design-research.js throws without these args.
-const REQUIRED_PACK_FLAGS = { 'research-lane': ['--key', '--design', '--pin'] }
+const REQUIRED_PACK_FLAGS = {
+  'research-lane': ['--key', '--design', '--pin'],
+  worker: ['--design', '--ledger', '--task-id'],
+}
 const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
 // A research launch names the registered workflow, or a copy of its script.
 const isResearchCall = call => call.includes('swift-harness-design-research') || call.includes('design-research.js')
+// build-task.js throws unless each of these is present (`reviewers` is optional).
+const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:']
+// The PreToolUse guard denies these without the caller's own literal `--session`.
+const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'worktree create']
 
 /**
  * Problems with the calls written in `files` ({relative path: markdown}): a fenced `context-pack`
@@ -168,6 +175,11 @@ export function requiredCallProblems(files) {
     for (const match of text.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)) {
       const call = match[0]
       const line = text.slice(0, match.index).split('\n').length
+      if (call.includes('build-task.js')) {
+        for (const arg of REQUIRED_BUILD_TASK_ARGS) {
+          if (!call.includes(arg)) problems.push(`${file}:${line}: build-task Workflow call lacks ${arg.slice(0, -1)}`)
+        }
+      }
       if (isResearchCall(call)) {
         for (const arg of REQUIRED_RESEARCH_ARGS) {
           if (!call.includes(arg)) problems.push(`${file}:${line}: design-research Workflow call lacks ${arg.slice(0, -1)}`)
@@ -223,7 +235,32 @@ const designSkillFiles = () =>
     markdownFiles(join(root, 'skills/design')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
   )
 
+const buildSkillFiles = () =>
+  Object.fromEntries(
+    markdownFiles(join(root, 'skills/build')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
+  )
+
 const tests = {
+  'the build skill names every command of its loop with the flags the CLI requires — catches a loop step dropped or a guarded call made without --session'() {
+    const files = buildSkillFiles()
+    assert.deepEqual(requiredCallProblems(files), [])
+    const all = Object.values(files).join('\n')
+    const buildCalls = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].filter(m => m[0].includes('build-task.js'))
+    assert.equal(buildCalls.length, 1, 'the build skill launches build-task.js once, with every arg')
+    const { problems, resolved } = scanSkills(join(root, 'skills/build'), help, root)
+    assert.deepEqual(problems, [])
+    const has = (path, flag) => resolved.some(r => r.path === path && (!flag || r.flags.includes(flag)))
+    for (const [path, flag] of [
+      ['plan claim', '--session'], ['build start', '--preset'], ['build next', '--json'],
+      ['worktree create', '--json'], ['context-pack', '--build-run'], ['ledger set', '--json'],
+      ['build check-return', '--plan'], ['build check-return', '--fix'], ['build merge', '--undo'],
+      ['build merge', '--fix'], ['check', '--tier'], ['worktree remove', '--session'],
+      ['worktree remove', '--fix'], ['design-render', '--ledger'], ['build finish', '--session'], ['stats', '--build'],
+    ]) assert.ok(has(path, flag), `the build skill never runs \`swiftgate ${path} ${flag}\``)
+    const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
+    assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
+  },
+
   'the design skill passes every flag and arg its callees require — catches a skill call a stricter CLI or workflow now refuses'() {
     const files = designSkillFiles()
     assert.deepEqual(requiredCallProblems(files), [])

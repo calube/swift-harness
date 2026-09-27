@@ -379,6 +379,7 @@ struct PlanStateAuthorityTests {
     ("build start", "\(AuthorityRepository.planA) --preset default"),
     ("build finish", AuthorityRepository.planA),
     ("worktree create", "\(AuthorityRepository.planA) fetch"),
+    ("build merge", "\(AuthorityRepository.planA) fetch"),
   ]
 
   @Test(
@@ -411,6 +412,28 @@ struct PlanStateAuthorityTests {
       let decision = try await repo.hookDecision(allowed, session: own)
       #expect(decision.decision == nil, "\(allowed): \(decision.reason ?? "")")
     }
+  }
+
+  @Test(
+    "`build merge --undo` and `--fix` stay session-only: denied to a subagent and to a foreign --session, allowed for the session's own call, because spec §8.3 has the executor reset main after a red merge gate — catches a fixer or worker resetting main, or the reset shut off from the orchestrator",
+    arguments: ["--undo", "--fix"])
+  func buildMergeUndoAndFixActOnlyAsTheCallingSession(flag: String) async throws {
+    let repo = try await AuthorityRepository()
+    defer { repo.remove() }
+    let own = AuthorityRepository.alice
+    let command = "swiftgate build merge \(AuthorityRepository.planA) fetch \(flag)"
+
+    let subagent = try await repo.hookDecision(
+      "\(command) --session \(own) --json", session: own, subagent: true)
+    #expect(subagent.decision == "deny", "\(flag)")
+    #expect(subagent.reason?.contains("task result") == true, "\(subagent.reason ?? "")")
+
+    let foreign = try await repo.hookDecision(
+      "\(command) --session \(AuthorityRepository.bob) --json", session: own)
+    #expect(foreign.decision == "deny", "\(flag)")
+
+    let allowed = try await repo.hookDecision("\(command) --session \(own) --json", session: own)
+    #expect(allowed.decision == nil, "\(flag): \(allowed.reason ?? "")")
   }
 
   @Test(
