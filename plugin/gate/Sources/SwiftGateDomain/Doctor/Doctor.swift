@@ -71,12 +71,14 @@ public struct DoctorFacts: Sendable {
   public let resolvedVersions: [String: String]
   /// Architecture findings doctor repeats, such as MainActor default isolation in Core.
   public let architectureFindings: [Finding]
+  /// Whether `mmdc`, the Mermaid CLI `design-lint` validates diagrams with, is on `PATH`.
+  public let mermaidCLIInstalled: Bool
 
   public init(
     config: Config, xcodeVersionOutput: String?, swiftVersionOutput: String?,
     devices: Result<[SimulatorDevice], ProbeFailure>, freeBytes: Int64?, shim: ShimStatus,
     swiftLintInstalled: Bool, packages: [PackageManifest], resolvedVersions: [String: String],
-    architectureFindings: [Finding]
+    architectureFindings: [Finding], mermaidCLIInstalled: Bool
   ) {
     self.config = config
     self.xcodeVersionOutput = xcodeVersionOutput
@@ -88,6 +90,7 @@ public struct DoctorFacts: Sendable {
     self.packages = packages
     self.resolvedVersions = resolvedVersions
     self.architectureFindings = architectureFindings
+    self.mermaidCLIInstalled = mermaidCLIInstalled
   }
 }
 
@@ -121,6 +124,7 @@ public enum Doctor {
   public static let diskRuleID = "doctor.disk"
   public static let shimRuleID = "doctor.shim"
   public static let swiftLintRuleID = "doctor.swiftlint"
+  public static let mermaidCLIRuleID = "doctor.mmdc"
   public static let issueReportingRuleID = "doctor.issue-reporting"
   public static let upgradeHazardRuleID = "doctor.upgrade-hazard"
 
@@ -228,6 +232,13 @@ public enum Doctor {
     if !facts.swiftLintInstalled {
       check.warn(
         swiftLintRuleID, .nit, "SwiftLint is not installed; it is optional and style-only")
+    }
+
+    if !facts.mermaidCLIInstalled {
+      check.warn(
+        mermaidCLIRuleID, .nit,
+        "mmdc (the Mermaid CLI) is not on PATH, so design-lint can't validate diagram syntax; "
+          + "install it with `npm install -g @mermaid-js/mermaid-cli`")
     }
 
     if let toolchain, toolchain < issueReportingSplit {

@@ -12,7 +12,7 @@ struct DoctorTests {
   private func facts(
     xcode: String? = nil, swift: String? = nil, devices: [SimulatorDevice]? = [base],
     freeBytes: Int64? = 500_000_000_000, shim: ShimStatus = .current,
-    swiftLint: Bool = true, packages: [PackageManifest] = [],
+    swiftLint: Bool = true, mmdc: Bool = true, packages: [PackageManifest] = [],
     resolved: [String: String] = [:], architecture: [Finding] = []
   ) throws -> DoctorFacts {
     DoctorFacts(
@@ -21,7 +21,7 @@ struct DoctorTests {
       swiftVersionOutput: try swift ?? Fixture.text("Doctor/swift-version.txt"),
       devices: devices.map { .success($0) } ?? .failure("simctl could not run"),
       freeBytes: freeBytes, shim: shim, swiftLintInstalled: swiftLint, packages: packages,
-      resolvedVersions: resolved, architectureFindings: architecture)
+      resolvedVersions: resolved, architectureFindings: architecture, mermaidCLIInstalled: mmdc)
   }
 
   private func ids(_ result: DoctorResult) -> [String] { result.findings.map(\.ruleID) }
@@ -34,6 +34,17 @@ struct DoctorTests {
     #expect(
       Doctor.swiftVersion(from: try Fixture.text("Doctor/swift-version.txt"))
         == ToolVersion("6.2"))
+  }
+
+  @Test(
+    "a machine without mmdc gets a doctor.mmdc nit and stays GREEN — catches design-lint quietly skipping Mermaid syntax checks with nothing in doctor saying why"
+  )
+  func missingMermaidCLIIsANit() throws {
+    let result = Doctor.evaluate(try facts(mmdc: false))
+    let finding = try #require(result.findings.first { $0.ruleID == Doctor.mermaidCLIRuleID })
+    #expect(finding.severity == .nit)
+    #expect(finding.message.contains("design-lint"))
+    #expect(result.verdict == .green)
   }
 
   @Test("a healthy machine is GREEN with no findings — catches doctor crying wolf")

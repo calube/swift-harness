@@ -67,7 +67,8 @@ struct RuleIndexTests {
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,
-      Doctor.shimRuleID, Doctor.swiftLintRuleID, Doctor.issueReportingRuleID,
+      Doctor.shimRuleID, Doctor.swiftLintRuleID, Doctor.mermaidCLIRuleID,
+      Doctor.issueReportingRuleID,
       Doctor.upgradeHazardRuleID, BashGuard.rawXcodebuildRuleID, BashGuard.simctlAllRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,

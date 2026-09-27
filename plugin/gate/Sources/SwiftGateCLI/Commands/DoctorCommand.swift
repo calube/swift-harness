@@ -46,7 +46,8 @@ enum DoctorRun {
       packages: packages,
       resolvedVersions: HarnessFiles.resolvedVersions(
         root: root, packageDirectories: packages.map(\.path)),
-      architectureFindings: architecture)
+      architectureFindings: architecture,
+      mermaidCLIInstalled: HarnessFiles.isOnPath("mmdc", path: environment["PATH"] ?? ""))
   }
 
   /// The package manifests and the architecture findings doctor repeats. A graph that cannot be
