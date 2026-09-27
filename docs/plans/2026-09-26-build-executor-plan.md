@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Waves 1–3 merged on local main 2026-09-26 (push tier GREEN, 1620 tests). The user asked for every wave to run.
+Status: IN PROGRESS. Waves 1–3, 3b, and 2 of 3 wave-4 tasks merged on local main 2026-09-26 (push tier GREEN, 1637 tests). The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: wave 3b (plan-state-writes-share-one-store), then wave 4.
+Next action: build-merge-and-fix-worktree (the last wave-4 task), then wave 5.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
@@ -168,9 +168,9 @@ flowchart LR
 
 ### `build-merge-and-fix-worktree`
 - Deps: build-cli-stubs, build-run-store, worktree-commands, plan-state-writes-share-one-store · Gate: push · estLines: 340
-- Writes: `C/Commands/BuildMergeCommand.swift`, `A/Build/MergeRunner.swift`, `S/FakeMergeRunner.swift`, `TA/BuildMergeTests.swift`
-- Does: §6.2, §8.2, §8.3: checks `main` is clean and at the last merge event's post commit; `merge --no-ff`; records pre and post commits. On conflict: aborts, then cuts `../<repo>-<plan>-fix-<task>` from `main` with the task branch merged in and conflicted. `--undo` resets `main` to the recorded pre commit and cuts the same fix worktree.
-- Tests (real git in a temp repo): a conflicting pair leaves `main` untouched and the fix worktree conflicted · `main` moved by another commit → exit 1, no merge — catches the concurrent-session merge · `--undo` after `main` moved refuses · a clean merge records both commits.
+- Writes: `C/Commands/BuildMergeCommand.swift`, `A/Build/MergeRunner.swift`, `S/FakeMergeRunner.swift`, `TA/BuildMergeTests.swift`, `D/Hooks/Guards.swift` (lock patterns only), the guard test file that covers `claim.lock.*`
+- Does: §6.2, §8.2, §8.3: checks `main` is clean and at the last merge event's post commit; `merge --no-ff`; records pre and post commits. On conflict: aborts, then cuts `../<repo>-<plan>-fix-<task>` from `main` with the task branch merged in and conflicted. `--undo` resets `main` to the recorded pre commit and cuts the same fix worktree. Adds `ledger.lock.*` (plan dir) and `events.lock.*` (`plans/<plan>/build/<run>/`) to the guard's hand-edit-protected lock patterns, next to `claim.lock.*` and `index.lock.*`, as agreed with sub-project 2.
+- Tests (real git in a temp repo): a conflicting pair leaves `main` untouched and the fix worktree conflicted · `main` moved by another commit → exit 1, no merge — catches the concurrent-session merge · `--undo` after `main` moved refuses · a clean merge records both commits · per new lock pattern: Write, Edit, and Bash `rm` or redirect denied, and a same-named file outside the plans root allowed (red first).
 
 ### `build-check-return`
 - Deps: build-cli-stubs, build-run-store · Gate: push · estLines: 260
@@ -247,7 +247,7 @@ flowchart LR
 ### `rehearsal-fixture-and-practice-specs`
 - Deps: ship-skill-and-sketch-design-flow · Gate: push · estLines: 400
 - Writes: `evals/apps/interview-starter/`, `evals/cases/interview/`
-- Does: §13: a pre-built TCA starter app and 3 practice READMEs of rising size. Before starting, the orchestrator agrees the paths with the evals session.
+- Does: §13: a pre-built TCA starter app and 3 practice READMEs of rising size. Before starting, the orchestrator agrees the paths and tags with the evals session: `claude plugin eval` scans `evals/cases/` through the staged copy, so the practice specs need tags that keep routing runs from picking them up, or a path outside `evals/cases/`.
 - Tests: the starter app passes `swiftgate check --tier push` · each README names features that decompose into ≥ 2 independent tasks.
 
 ### `interview-rehearsal-runs`

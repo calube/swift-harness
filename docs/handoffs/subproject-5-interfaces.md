@@ -83,3 +83,31 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Known duplication, fixed next by `plan-state-writes-share-one-store`:** `ledger set` and `worktree create` each
   rewrite `ledger.json` with their own code, and neither takes a lock around the read-modify-write. The latest-run lookup
   exists in both `LedgerSetRun.latestRunID(in:)` and `build next`.
+
+## Wave 3b and wave 4 (part)
+
+- **Ledger writes.** `LedgerWriter(plan: PlanStateLayout.Plan, lock:, timeout:)` in `A/PlanState/LedgerWriter.swift`:
+  `.update(task:_:) async throws(LedgerWriterError) -> LedgerWriter.Change { before, after }`, where `LedgerEdit` is
+  `.status(TaskStatus)` or `.branch(String)`. It re-reads the ledger inside the lock and writes with an atomic replace.
+  Errors: `.lock`, `.ledger(PlanStateStoreError)`, `.unknownTask`, `.refusedTransition(task:reason:)`, `.io`. The
+  lock files are `<plan dir>/ledger.lock.*`. Every ledger write goes through it.
+- **Newest run.** `BuildRunStore.latest(plan:git:) async throws(BuildRunStoreError) -> BuildRunStore?` is the only
+  lookup (it skips directories and files that aren't valid run ids). `LedgerSetRun.noBuildRun` is the shared message.
+- **Task returns.** `TaskReturn`, `TaskReturnJSON`, `TaskReturnCheck.findings(_:evidence:)` and `TaskReturnEvidence`
+  are in `D/Build/TaskReturn.swift`. Every key is required, and `gate`, `review` and `designConflict` may be `null`. An
+  unknown key throws `TaskReturnDecodingError`. `review.findings` is `[ReviewFinding]` (the review contract), and
+  `review.mode` is `BuildPreset.Review`. The command is `build check-return <file> --plan <slug> [--session <id>] --json`,
+  printing `{command, plan, task, verdict, findings:[{rule,message}], warnings, message}`. Exits: 0 pass, 1 any finding,
+  2 unreadable input. The task gate is the preset's tier, or the ledger's gate under `ledger`. Rules are
+  `build-return.` plus `branch-missing`, `no-commits`, `commit-missing`, `commit-off-branch`, `gate-missing`,
+  `gate-run-missing`, `gate-verdict-mismatch`, `gate-tier-mismatch`, `gate-not-green`, `gate-below-task-gate`,
+  `gate-red-outcome-is-green`, `review-missing`, `design-conflict-outcome`, `design-conflict-unrecorded`,
+  `design-conflict-unreturned` or `design-conflict-mismatch`.
+- **Dependency notes.** `context-pack --role worker --build-run <run-id>` adds each dependency's `notes`, verbatim.
+  Returns are stored at `<plan dir>/build/<run-id>/returns/<task-id>.json`: the build skill writes them there after
+  `check-return` passes. A missing, malformed or mismatched return exits 1. `ContextPackTaskReturn.notes` decodes
+  only `{task, notes}`. The build skill task should switch it to `TaskReturn`.
+- **Lesson.** The consolidation worker quoted a GREEN run id that belonged to another worktree; its own only run was
+  T0 RED. The orchestrator now reads each worker's `.harness/runs/history.jsonl` before merging. A second lesson:
+  2 branches merged cleanly and still failed to compile together (a removed function used by the other). Only the
+  push tier on merged main catches that, so it runs after every merge batch.
