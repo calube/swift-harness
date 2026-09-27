@@ -43,10 +43,12 @@ public struct BuildRunStore: Sendable {
   }
 
   /// Creates `plans/<plan>/build/<run>/` with a fresh run id and publishes its `run.json` whole.
-  /// - Parameter suffix: the run id's random part; tests pin it.
+  /// - Parameters:
+  ///   - startedAt: from the caller's clock; the adapter never reads one.
+  ///   - suffix: the run id's random part, drawn by the caller as `GateRun` does for gate runs.
   public static func create(
     plan: String, presetName: String, preset: BuildPreset, startedAt: Date, git: any Git,
-    suffix: UInt32 = .random(in: 0...UInt32.max)
+    suffix: UInt32
   ) async throws(BuildRunStoreError) -> BuildRunStore {
     let runID = RunID.make(startedAt: startedAt, suffix: suffix)
     let layout = try await locate(plan: plan, runID: runID, git: git)
