@@ -103,30 +103,46 @@ public struct LiveProcessRunner: ProcessRunner {
 /// Signals are process-wide, so this is too; it arms itself before the first child starts.
 private let liveChildGroups = ChildProcessGroups()
 
+/// The write end of the pipe the signal handler reports to; `-1` until the handler is installed.
+private let signalPipeWriteEnd = Atomic<Int32>(-1)
+
 private final class ChildProcessGroups: Sendable {
   static let forwarded: [Int32] = [SIGTERM, SIGINT, SIGHUP]
 
   private let groups = Mutex<Set<pid_t>>([])
-  private let sources: Mutex<[any DispatchSourceSignal]>
 
   init() {
-    let queue = DispatchQueue(label: "swiftgate.child-groups")
-    let sources = Self.forwarded.map { DispatchSource.makeSignalSource(signal: $0, queue: queue) }
-    self.sources = Mutex(sources)
-    for (number, source) in zip(Self.forwarded, sources) {
-      source.setEventHandler { [self] in
-        // Waits out a spawn in progress, so a child started this instant is signalled too.
-        for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
-        signal(number, SIG_DFL)
-        kill(getpid(), number)
+    var fds: [Int32] = [-1, -1]
+    guard pipe(&fds) == 0 else { return }
+    for fd in fds { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+    signalPipeWriteEnd.store(fds[1], ordering: .releasing)
+    let reader = fds[0]
+    // A signal handler may only make async-signal-safe calls, so it hands the signal to this
+    // thread, which may take the lock a spawn in progress holds.
+    Thread { [self] in
+      var number: Int32 = 0
+      while read(reader, &number, MemoryLayout<Int32>.size) == MemoryLayout<Int32>.size {
+        terminate(on: number)
       }
-      source.resume()
+    }.start()
+    for number in Self.forwarded {
+      var action = sigaction()
+      action.__sigaction_u.__sa_handler = { number in
+        var number = number
+        _ = write(
+          signalPipeWriteEnd.load(ordering: .acquiring), &number, MemoryLayout<Int32>.size)
+      }
+      action.sa_flags = SA_RESTART
+      sigaction(number, &action, nil)
     }
-    // A source registers on its queue after `resume`, and ignoring a signal before then would
-    // drop it rather than route it to the handler, so the queue ignores them once it has.
-    queue.sync {
-      for number in Self.forwarded { signal(number, SIG_IGN) }
-    }
+  }
+
+  /// Signals every child group, waiting out a spawn in progress so a child started this instant
+  /// is signalled too, then ends this process as `number` would have.
+  private func terminate(on number: Int32) {
+    for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
+    signal(number, SIG_DFL)
+    kill(getpid(), number)
   }
 
   /// Runs `spawn` and records the child it started as one atomic step with respect to the
