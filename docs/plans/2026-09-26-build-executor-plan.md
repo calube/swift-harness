@@ -281,13 +281,13 @@ and `P/agents/build-worker.md`.
 - Tests: a preset missing `task_proof` is a config issue naming the key · an unknown value is an issue · `build-task.js` under `final` never tells the worker `--prove` or `--mutate`, and under `per-task` always does · `check-return` fails a worker's unproved green gate under `per-task` and passes it under `final` — catches a preset that silently skips proof · the stamped template parses to `per-task` / `final`.
 
 ### `speed-fixer-return-and-gate-provenance`
-- Deps: — · Gate: push · Model: sonnet · estLines: 220
+- Deps: — · Gate: push · Model: opus · estLines: 220
 - Writes: `D/Build/TaskReturn.swift`, `C/Commands/BuildCheckReturnCommand.swift`, `D/RunHistory.swift`, `D/RunLayout.swift`, `A/RunStore.swift`, `C/Commands/WorktreeCommand.swift`, `A/Build/GitWorkspace.swift`, their tests
 - Does: 3 fixes from trial run 2. (a) `check-return --fix` accepts `review: null`, as the fixer contract says; a worker's green return still needs its review. (b) Every gate run records the HEAD commit it ran at, in its report and its run-history row (optional when decoding, so older history still loads). (c) `worktree remove` keeps the worktree's gate reports: before removing, it copies the worktree's `.harness/runs/<id>/` into the main checkout's `.harness/runs/`, and names any report it couldn't copy.
 - Tests: a fixer return with `review: null` passes `check-return --fix` and a worker return with `review: null` still fails — catches the fix path rejecting every fixer · a gate run's report and history row carry HEAD's sha, and a history row without one still decodes · after `worktree remove`, the task gate's report is readable from the main checkout — catches deleted evidence · a report that can't be copied is named, never dropped silently.
 
 ### `speed-fail-fast-gates`
-- Deps: — · Gate: push · Model: sonnet · estLines: 180
+- Deps: — · Gate: push · Model: opus · estLines: 180
 - Writes: `C/Commands/CheckCommand.swift`, `TC/CheckCommand*Tests.swift` (new or existing check-stage tests)
 - Does: `check` stops at the first failing stage that later stages depend on. A RED T0 (arch, format, lint, impact) skips the T1 build and tests, and so prove, mutate, judge and the simulator tiers. A RED T1 skips prove, as it already skips mutate. Each skipped stage shows up as a non-gating note naming the stage and the red stage that caused the skip, never silently. The verdict stays RED. The push doc gates still run, since they are cheap and independent.
 - Tests: a RED T0 never invokes the host test runner — catches a gate that builds after lint fails · a RED T1 never invokes prove · each skip leaves a note naming the skipped stage · a GREEN T0 still runs T1 — catches a gate that skips on green.

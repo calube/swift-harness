@@ -89,9 +89,8 @@ without telling you.
 One background agent per task, all spawned in one message. Wave width is at most 3, because the laptop is under
 memory pressure.
 
-- **Model.** Use `sonnet` for data models, commands, lints and fixtures. Use `opus` for security-relevant or
-  judgment-heavy work: guards, locks, cross-worktree state, the probe builder, workflows, agent prompts, skills,
-  and acceptance runs. Never leave a worker's model unset.
+- **Model.** Every build worker runs on `opus` (user decision, 2026-09-27: the quality is worth the cost). Never
+  leave a worker's model unset.
 - **Prompt template.** Replace `<task-id>` and add task-specific hard requirements where the task is risky:
 
   > You are a build worker for the swift-harness plugin. Your worktree: `../swift-harness-<task-id>` (branch
