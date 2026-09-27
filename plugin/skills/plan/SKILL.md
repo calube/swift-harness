@@ -1,6 +1,6 @@
 ---
 name: plan
-description: This skill should be used to turn an approved swift-harness design into a build plan. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD, has the decomposer agent split the design into ledger tasks, runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "/swift-harness:plan", or after /swift-harness:design reports an approved design.
+description: This skill should be used to turn an approved swift-harness design into a build plan, or to replan one after an amend. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD, has the decomposer agent split the design into ledger tasks (after an amend, only the needs-replan tasks and fix tasks for changed ids that done tasks cover, around the kept tasks), runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "replan", "/swift-harness:plan", or after /swift-harness:design reports an approved design or an amend.
 ---
 
 # Plan
@@ -94,6 +94,9 @@ The approval matches in one of 2 ways:
 
 No match: halt. Never plan a design the user hasn't approved.
 
+Before you write, keep the `designSha` that `plan.json` has now as `<planned>`: the designSha the
+current ledger was planned at, or none on a first plan. A replan (step 4) needs it.
+
 Write `plan.json` (shape in the reference): keep its fields and set `designSha` to `<current>`, and
 `approval` to the record from this step. `plan-lint` reads the design at this `designSha`.
 
@@ -109,11 +112,54 @@ each claim as `id: status`.
 
 ## 4. Decompose
 
+### Fresh plan or replan
+
+Read `<plans>/<slug>/ledger.json`, if it exists, and pick the mode from its task statuses:
+
+| The ledger | Mode |
+|---|---|
+| doesn't exist, or every task is `pending` | **fresh**: decompose the whole design |
+| has an `in-progress` task | a build is in flight: **halt** |
+| has a `needs-replan` or `done` task, and none `in-progress` | **replan** |
+| anything else (`blocked` or `abandoned` tasks, none `needs-replan` or `done`) | **halt** |
+
+A halt names each task that isn't `pending` as `id: status`. A build in flight finishes or stops
+first; the user decides what a `blocked` or `abandoned` task needs.
+
+### Replan
+
+An amend (`/swift-harness:design --amend`) set `needs-replan` on each task whose `covers` meets a
+changed id, and left `done` tasks alone: a `done` task is immutable, so a change it needs becomes a
+new fix task. A replan asks the decomposer for the new tasks only, and keeps every other task as
+it is.
+
+1. **Changed ids.** Read `<ev>/amendments.jsonl` (`<ev>` is `<doc>` without `.md`, plus
+   `.evidence`). Follow its records from `<planned>`: the record whose `fromSha` is `<planned>`,
+   then the one whose `fromSha` is that record's `toSha`, until a `toSha` equals `<current>`.
+   `<changed>` is the union of their `changedIds`. When `<planned>` equals `<current>`, `<changed>`
+   is empty. A chain that doesn't reach `<current>` halts: the ledger was planned against a design
+   the records don't connect to this one.
+2. **Split the tasks.** `<replace>` is every `needs-replan` task. `<fixed>` is every other task,
+   `done`, `pending`, `blocked` and `abandoned` alike. `<fix-ids>` is each id in `<changed>` that
+   a `done` task's `covers` names, with that task's id.
+3. **Nothing to ask.** When `<replace>` and `<fix-ids>` are both empty, skip the decomposer: the new
+   tasks are none. Go to step 5.
+4. **The replan input.** Write `.harness/plan-draft/<slug>/replan.json` (shape in the reference)
+   with `<planned>`, `<current>`, `<changed>`, `<fixed>` and `<replace>` copied as the ledger has
+   them, and `<fix-ids>`.
+
+A replan builds the same context pack as a fresh plan, below, and gives the decomposer the path of
+`replan.json` as well. Its reply holds only the new tasks: a replacement for each `<replace>` task,
+a fix task for each `<fix-ids>` entry, and a task for any design id that no `<fixed>` task covers.
+In step 5 the draft's tasks are `<fixed>`, unchanged and in their ledger order, then the reply's
+tasks. You never edit a `<fixed>` task, so a `done` task reaches the new ledger as it was.
+
+### The decomposer
+
 Build the decomposer's context pack. It needs a module graph and the task-sizing bounds as files:
 
-- Module graph: for each package directory that `.swiftgate.toml`'s `packages` names, run
-  `swift package --package-path <dir> describe --type json`. Write the outputs in sequence to
-  `.harness/plan-draft/<slug>/module-graph.txt`, each under a `## <dir>` line.
+- Module graph: `"$SG" module-graph --output .harness/plan-draft/<slug>/module-graph.txt`. Exit 2
+  names what it couldn't read, and writes no file; halt.
 - Bounds: `.swiftgate.toml` itself. Its `[plan]` table and `[[modules]]` kinds are the bounds;
   when `[plan]` is absent, the agent applies its defaults.
 
@@ -126,18 +172,21 @@ Exit 1 or 2 halts: the design is missing a section the pack needs, or an input i
 Launch the decomposer with the Agent tool, `subagent_type: "swift-harness:design-decomposer"`.
 Give it the absolute path of `.harness/context-pack/decomposer.md`, the plan slug and the
 repository's directory name. That name is the main checkout's, the directory that holds the git
-common dir, even when you run from a linked worktree. Keep the agent's id for the fix round.
+common dir, even when you run from a linked worktree. On a replan, give it the absolute path of
+`.harness/plan-draft/<slug>/replan.json` too, and say it's a replan. Keep the agent's id for the
+fix round.
 **Log** a `decompose` line with the tokens and duration the Agent tool reports.
 
 The reply must be a single JSON object, `{tasks, unresolved}`, in the agent's contract. Check that every
-task has the ledger task fields, `status` `pending` and `model` set, with no `actualLines`. A reply
-that isn't in that shape halts.
+task has the ledger task fields, `status` `pending` and `model` set, with no `actualLines`. On a
+replan, also check that no reply task has the id of a `<fixed>` task. A reply that isn't in that
+shape halts.
 
 ## 5. Schedule, write the ledger, lint
 
 1. Write the draft ledger to `.harness/plan-draft/<slug>/ledger.json`: the decomposer's `tasks`
-   copied as they are, `waves` empty, and `maxParallel` from `.swiftgate.toml` `[plan]
-   max_parallel` (3 when unset).
+   copied as they are (on a replan, the `<fixed>` tasks first, then the reply's), `waves` empty,
+   and `maxParallel` from `.swiftgate.toml` `[plan] max_parallel` (3 when unset).
 2. Compute the waves, and **log** a `schedule` line:
 
    ```bash
@@ -148,7 +197,8 @@ that isn't in that shape halts.
    leave `waves` empty; `plan-lint` reports the same problem at item 4. Exit 2 means this skill
    wrote a malformed draft: fix the draft's shape, never a task, and rerun.
    Then set the draft's `resume` to a single line, such as
-   `planned; 7 tasks in 3 waves; next: build the first wave`.
+   `planned; 7 tasks in 3 waves; next: build the first wave`. A replan's line counts the tasks
+   already done, such as `replanned at <current>; 4 of 9 tasks done; next: build the next wave`.
 3. Write the draft to `<plans>/<slug>/ledger.json` with the Write tool, byte for byte.
 4. Lint the plan, and **log** a `lint` line:
 
@@ -159,7 +209,8 @@ that isn't in that shape halts.
    Exit 0: go to step 6. Exit 2 halts: the plan state, the design at `designSha` or the module
    graph is unreadable. Exit 1: go on to the fix round.
 5. **A single fix round.** Send the decomposer every finding from the report with
-   `SendMessage` to the agent id you kept, as `rule (severity) task: message` lines. Load
+   `SendMessage` to the agent id you kept, as `rule (severity) task: message` lines. On a replan,
+   its reply is again the new tasks only, and items 1 to 4 put `<fixed>` first again. Load
    `SendMessage` with `ToolSearch` if it's deferred. **Log** a `decompose` line for its reply.
    Check the reply as in step 4, then repeat items 1 to 4 of this list once with the new tasks.
 6. After the fix round, any gating finding from `plan-lint`, or any `unresolved` entry, halts.
@@ -192,6 +243,7 @@ End with the Artifact link and a short summary:
 
 - the task count and the waves, in the order `plan-schedule` gave them;
 - the `minor` findings `plan-lint` left;
+- on a replan, the tasks replaced, the fix tasks added and the `done` tasks kept;
 - the plan's status, `planned`.
 
 The claim stays with this session. The build of the first wave starts from this ledger.
@@ -201,7 +253,8 @@ The claim stays with this session. The build of the first wave starts from this 
 - Only this main session writes `plan.json` and `ledger.json`, and only while it holds the claim.
   A subagent returns content, and this skill writes it.
 - Never write `index.json` or `orchestrator.lock`. `index set` and `plan claim` own them.
-- A `ledger.json` with a task that isn't `pending` means a build has started. Don't overwrite it;
-  halt and ask. A change to a plan in flight goes through the design's amend flow.
+- A `ledger.json` with a task that isn't `pending` means a build has started. Only a replan (step
+  4) writes over it, and only around its `<fixed>` tasks. A change to a plan in flight goes
+  through the design's amend flow, which marks the tasks this skill replaces.
 - Don't re-implement a check. When a `swiftgate` command and your reading disagree, the command
   wins.

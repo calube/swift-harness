@@ -7,5 +7,6 @@
 **/.harness/probe/
 **/.harness/context-pack/
 **/.harness/design-render/
+**/.harness/plan-draft/
 **/.harness/task-status.json
 .build/

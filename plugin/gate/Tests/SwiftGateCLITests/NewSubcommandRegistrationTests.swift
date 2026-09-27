@@ -107,6 +107,7 @@ struct NewSubcommandRegistrationTests {
       "worktree remove",
       ["worktree", "remove", "example-plan", "example-task", "--session", "session-123"], "remove"
     ),
+    ("module-graph", ["module-graph"], "module-graph"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -134,6 +135,7 @@ struct NewSubcommandRegistrationTests {
     "build merge --undo", "build merge --fix",
     "ledger set",
     "worktree create", "worktree warm-check", "worktree remove",
+    "module-graph",
   ]
 
   @Test(
