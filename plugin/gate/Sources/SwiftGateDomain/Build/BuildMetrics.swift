@@ -116,6 +116,8 @@ public enum BuildMetrics {
           MergeRecord(
             task: merge.task, at: merge.at, preCommit: merge.preCommit,
             postCommit: merge.postCommit))
+      case .undo(let undo):
+        lastEventAt = later(lastEventAt, undo.at)
       }
     }
 
