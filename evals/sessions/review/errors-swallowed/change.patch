@@ -1,0 +1,51 @@
+diff --git a/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift b/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
+index 3ab85f0..a90866e 100644
+--- a/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
++++ b/Packages/APIClient/Sources/APIClientLive/APIClientLive.swift
+@@ -43,10 +43,14 @@ extension APIClient {
+     Self(randomFact: {
+       var request = URLRequest(url: baseURL.appending(path: "fact"))
+       request.setValue("application/json", forHTTPHeaderField: "Accept")
+-      let data = try await withRetry(retry, clock: clock) { [request] in
+-        try await http.data(for: request)
++      do {
++        let data = try await withRetry(retry, clock: clock) { [request] in
++          try await http.data(for: request)
++        }
++        return Fact(text: try JSONDecoder().decode(CatFactResponse.self, from: data).fact)
++      } catch {
++        return Fact(text: "Cats are mysterious. Try again later.")
+       }
+-      return Fact(text: try JSONDecoder().decode(CatFactResponse.self, from: data).fact)
+     })
+   }
+ 
+diff --git a/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift b/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
+index 7870e23..3eb94d1 100644
+--- a/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
++++ b/Packages/APIClient/Tests/APIClientLiveTests/APIClientLiveTests.swift
+@@ -94,11 +94,12 @@ struct APIClientLiveTests {
+   }
+ 
+   @Test("client errors are not retried — catches a 4xx being retried and duplicating the request")
+-  func clientErrorNotRetried() async {
++  func clientErrorNotRetried() async throws {
+     let transport = ScriptedTransport([.status(404), .status(200)])
+     let client = APIClient.live(http: transport.client, clock: TestClock())
+ 
+-    await #expect(throws: HTTPError.unacceptableStatus(404)) { try await client.randomFact() }
++    let fact = try await client.randomFact()
++    #expect(fact.text == "Cats are mysterious. Try again later.")
+     #expect(transport.requests.count == 1)
+   }
+ 
+@@ -118,7 +119,8 @@ struct APIClientLiveTests {
+       await clock.advance(by: .seconds(1))
+       await clock.advance(by: .seconds(2))
+ 
+-      await #expect(throws: HTTPError.unacceptableStatus(503)) { try await task.value }
++      let fact = try await task.value
++      #expect(fact.text == "Cats are mysterious. Try again later.")
+       #expect(transport.requests.count == 3)
+     }
+   }

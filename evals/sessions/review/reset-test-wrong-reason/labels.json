@@ -1,0 +1,44 @@
+{
+ "focus": "test-quality",
+ "defects": [
+  {
+   "id": "reset-test-starts-at-zero",
+   "file": "Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift",
+   "category": "test-quality",
+   "what": "the test starts from count 0 with no fact, which is already the reset state, so it passes even if reset does nothing",
+   "lines": [
+    73,
+    76
+   ]
+  }
+ ],
+ "known": [
+  {
+   "id": "reset-leaves-request-running",
+   "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+   "lines": [
+    64,
+    70
+   ],
+   "what": "reset does not cancel an in-flight fact request"
+  },
+  {
+   "id": "seeded-defect-cited-at-patch-line",
+   "file": "Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift",
+   "lines": [
+    36,
+    36
+   ],
+   "what": "the seeded defect, described exactly, but cited at line 36 of diff.patch instead of line 73 of the source"
+  },
+  {
+   "id": "no-reset-in-flight-test",
+   "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+   "lines": [
+    64,
+    70
+   ],
+   "what": "no test covers reset while a fact request is in flight"
+  }
+ ]
+}

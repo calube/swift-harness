@@ -23,6 +23,8 @@
 //   command    run: a shell command in the final workspace; passes on exit 0, and when
 //              stdout_match is set, only if stdout matches it. Hidden tests go here.
 //   llm        criteria in the body; the judge model votes 3 times, 2 PASS votes pass
+// A case's `keep` frontmatter, a regex over workspace-relative paths, copies matching files to
+// <raw>/<case>/<arm>-<trial>/kept/ before the workspace is deleted.
 // Any grader may set `arm: with-only`: the without arm reports it and leaves it out of the score.
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -51,6 +53,7 @@ export function loadCase(dir) {
     timeoutSeconds: data.timeout_seconds ?? 300,
     allowedTools: data.allowed_tools ?? [],
     runs: data.runs ?? 3,
+    keep: data.keep ? new RegExp(data.keep) : null,
     scaffold: existsSync(join(dir, 'scaffold.sh')) ? join(dir, 'scaffold.sh') : null,
   }
 }
@@ -171,8 +174,14 @@ export function digest(messages, limit = 60000) {
   return all.length <= limit ? all : `${all.slice(0, limit / 2)}\n[… ${all.length - limit} characters cut …]\n${all.slice(-limit / 2)}`
 }
 
+// The digest cuts each message at 1,500 characters, so the final message, which many rubrics
+// judge, also goes in whole.
+export function judgePrompt(grader, run) {
+  return `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}\n\nRun transcript digest:\n${digest(run.messages)}\n\nFinal message, in full:\n${lastMessage(run.messages).slice(0, 20000)}\n\nFinal diff:\n${run.diffText.slice(0, 20000)}`
+}
+
 async function gradeLLM(grader, run, opts) {
-  const prompt = `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}\n\nRun transcript digest:\n${digest(run.messages)}\n\nFinal diff:\n${run.diffText.slice(0, 20000)}`
+  const prompt = judgePrompt(grader, run)
   const votes = []
   let cost = 0
   for (let i = 0; i < 3; i++) {
@@ -237,7 +246,9 @@ async function runTrial(c, arm, trial, opts) {
   const hooks = join(dir, 'hooks')
   const judgeHome = join(scratch, 'judge-home')
   for (const d of [home, workspace, hooks, judgeHome]) mkdirSync(d, { recursive: true })
-  const env = { ...baseEnv(home), SWIFTGATE_HOOK_RECORD_DIR: hooks }
+  // The shim caches its build under CLAUDE_PLUGIN_DATA when Claude Code sets it, which the
+  // scaffold can't know; pin the cache to the one the scaffold seeds, or every hook stays off.
+  const env = { ...baseEnv(home), SWIFTGATE_HOOK_RECORD_DIR: hooks, SWIFTGATE_CACHE_DIR: join(home, '.cache/swift-harness') }
   const started = Date.now()
   try {
     if (c.scaffold) execFileSync('bash', [c.scaffold], { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -253,6 +264,7 @@ async function runTrial(c, arm, trial, opts) {
     spawnSync('git', ['add', '-A', '--intent-to-add', '.'], { cwd: workspace })
     const diffText = spawnSync('git', ['diff', '--', '.', ':!.eval', ':!.harness', ':!.build'], { cwd: workspace, encoding: 'utf8', maxBuffer: 64 << 20 }).stdout
     writeFileSync(join(dir, 'diff.patch'), diffText)
+    if (c.keep) keepFiles(workspace, c.keep, join(dir, 'kept'))
     const hooksText = readdirSync(hooks).sort().map((f) => `${f}\n${readFileSync(join(hooks, f), 'utf8')}`).join('\n')
     const run = {
       messages, traceText: session.stdout, hooksText, diffText, workspace, env, judgeHome,
@@ -269,9 +281,10 @@ async function runTrial(c, arm, trial, opts) {
       graders.push({ name: g.name, type: g.type, weight: g.weight, scored: isScored(g, arm), ...(verdict ?? { passed: false, explanation: `unknown grader type ${g.type}` }) })
     }
     const { score, passed } = scoreRun(graders)
+    const inactive = arm === 'with' && hooksInactive(session.stdout)
     return {
-      arm, trial, score, passed,
-      error: session.timedOut ? `timed out after ${c.timeoutSeconds}s` : result.is_error ? result.subtype ?? 'error' : null,
+      arm, trial, score, passed: passed && !inactive,
+      error: inactive ? 'hooks inactive: SessionStart says swiftgate is still building, so the trial measured nothing' : session.timedOut ? `timed out after ${c.timeoutSeconds}s` : result.is_error ? result.subtype ?? 'error' : null,
       turns: result.num_turns ?? null, costUsd: result.total_cost_usd ?? 0, judgeCostUsd: judgeCost,
       durationSeconds: Math.round((Date.now() - started) / 1000), hookRecords: readdirSync(hooks).filter((f) => f.endsWith('.outcome.json')).length,
       raw: dir, graders,
@@ -279,6 +292,29 @@ async function runTrial(c, arm, trial, opts) {
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
+}
+
+// Copies the workspace files whose relative path matches `keep` to `dest`, keeping their paths,
+// so a case can score artifacts after the trial's workspace is deleted.
+export function keepFiles(workspace, pattern, dest) {
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(workspace, rel), { withFileTypes: true })) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.isDirectory()) {
+        if (entry.name !== '.git' && entry.name !== '.build') walk(path)
+      } else if (pattern.test(path)) {
+        mkdirSync(dirname(join(dest, path)), { recursive: true })
+        writeFileSync(join(dest, path), readFileSync(join(workspace, path)))
+      }
+    }
+  }
+  walk('')
+}
+
+// A with-plugin trial whose gate was still building ran with every hook off. Its grades describe
+// a broken sandbox, not the harness, so it counts as an error.
+export function hooksInactive(traceText) {
+  return traceText.includes('swiftgate enforcement is warming up')
 }
 
 // --- Main ----------------------------------------------------------------------------------

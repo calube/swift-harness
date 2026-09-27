@@ -1,0 +1,15 @@
+{
+ "focus": null,
+ "defects": [],
+ "known": [
+  {
+   "id": "reset-leaves-request-running",
+   "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+   "lines": [
+    66,
+    70
+   ],
+   "what": "reset does not cancel an in-flight fact request, so a late response brings a fact back; the baseline effect has no cancellation id"
+  }
+ ]
+}

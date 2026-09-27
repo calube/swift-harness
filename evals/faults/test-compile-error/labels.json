@@ -1,0 +1,1 @@
+{"command":["test","--tier","t1"],"expect":["RED"],"why":"a test target that doesn't compile is the change's fault, like a source that doesn't compile; BLOCKED would let the Stop hook release the stop, since a BLOCKED stop never blocks"}

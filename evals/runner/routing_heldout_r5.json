@@ -1,0 +1,102 @@
+{
+  "review": {
+    "should": [
+      ["r5-review-merge-verdict", "asks for a merge decision on the branch's code", [
+        "Could you look over the fact-dismiss branch and give me a verdict on whether it's good to merge as it stands?",
+        "is fact-dismiss ok to merge"
+      ]],
+      ["r5-review-concurrency-tca", "asks for a code-level inspection for concurrency and TCA problems before merging", [
+        "Before I merge, please go through the code on my branch and point out any concurrency or TCA misuse in the CounterFeature changes.",
+        "check my branch for concurrency or tca problems before i merge"
+      ]],
+      ["r5-review-before-human", "tests already gated, wants the code reviewed before a human reviewer sees it", [
+        "The test gate is green on this branch. Before I ping a teammate to look at it, give the code a thorough review pass.",
+        "gate passed. do a code review before i ask sam to look"
+      ]],
+      ["r5-review-cr-pr", "a plain request for a code review of the PR", [
+        "Could you do a code review of this PR and tell me whether anything needs fixing before it lands?",
+        "cr this pr pls"
+      ]],
+      ["r5-review-would-you-approve", "asks for an approval opinion on the change's code", [
+        "If you were the reviewer on this pull request, would you approve it as is? Walk me through anything that would block it.",
+        "would you approve this pr? what would block it"
+      ]],
+      ["r5-review-refactor-or-ship", "asks whether the change needs restructuring before it goes in", [
+        "Is the reducer change on my branch sound enough to ship, or does it need to be restructured before it goes in?",
+        "does my change need a refactor first or is it fine to ship"
+      ]]
+    ],
+    "near": [
+      ["r5-review-near-tests-catch-anything", "test-gate", "judging whether the branch's tests would fail on broken code, not reviewing the code", [
+        "Before I ask for code review, can you check whether the new test on this branch would actually fail if the dismiss logic were wrong?",
+        "would dismissFact even fail if the reducer was broken"
+      ]],
+      ["r5-review-near-testing-section", "validate", "wants the PR's testing write-up, not a review", [
+        "Please write the 'How this was tested' section for this pull request so reviewers can see what ran.",
+        "gimme the how-it-was-tested bit for the pr description"
+      ]],
+      ["r5-review-near-comments", "comment-audit", "a review of the added comments only, deciding which to keep", [
+        "Can you go through the comments I added on this branch and the staged edit, and tell me which ones are worth keeping?",
+        "which of my new comments should go"
+      ]],
+      ["r5-review-near-reviewer-feedback", "tdd", "implementing a behavior change a reviewer asked for", [
+        "A reviewer asked that tapping dismiss also cancel any in-flight fact request. Please make that change on my branch.",
+        "reviewer wants dismiss to cancel the in-flight fact request, do it"
+      ]],
+      ["r5-review-near-gh-reviewer", "none", "a general gh CLI question about requesting reviewers", [
+        "How do I request a specific reviewer on a GitHub pull request from the command line?",
+        "gh cmd to add a reviewer to my pr?"
+      ]]
+    ]
+  },
+  "validate": {
+    "should": [
+      ["r5-validate-testing-section", "wants the PR's testing section filled from real results", [
+        "Please fill in the Testing section of my PR description with what was actually run and how it went.",
+        "fill in the testing section on the pr"
+      ]],
+      ["r5-validate-paste-proof", "wants paste-ready evidence with counts and timings", [
+        "I need something I can paste into the pull request showing the checks passed, with test counts and how long they took.",
+        "need pasteable proof the checks pass, counts + timings, for the pr body"
+      ]],
+      ["r5-validate-bare", "the bare verb applied to the branch", [
+        "Validate my fact-dismiss change so I can put the results in the PR.",
+        "validate fact-dismiss"
+      ]],
+      ["r5-validate-prove-ready", "asks to prove readiness with numbers and what didn't run", [
+        "Prove this branch is ready for reviewers. I want the verdicts, the numbers, and a list of anything that didn't run.",
+        "prove fact-dismiss is ready. numbers + whatever didnt run"
+      ]],
+      ["r5-validate-reviewer-asked", "a reviewer asked how it was tested; wants a write-up for the PR", [
+        "A reviewer asked how I tested this change. Could you write that up in a form I can drop straight into the PR?",
+        "reviewer asked how this was tested, write it up for the pr"
+      ]],
+      ["r5-validate-verification-notes", "wants verification notes for the PR including skipped checks", [
+        "Draft the verification notes for this pull request, including which checks weren't run and why.",
+        "pr verification notes pls, incl what got skipped"
+      ]]
+    ],
+    "near": [
+      ["r5-validate-near-fake-tests", "test-gate", "running the gate to judge whether tests are padding, not writing PR evidence", [
+        "Run the full gate on this branch and tell me whether any of the new tests are padding that would pass no matter what.",
+        "run the full gate and flag any fake tests"
+      ]],
+      ["r5-validate-near-code-verdict", "review", "evidence is done; wants a verdict on the code itself", [
+        "I already have the testing evidence in the PR. What I need now is a verdict on the code itself: merge, fix first, or refactor?",
+        "evidence is in the pr already. is the code itself mergeable"
+      ]],
+      ["r5-validate-near-snapshot-red", "tdd", "a failing snapshot test to get passing again", [
+        "The CounterView snapshot test is failing on my branch. Please get it passing again.",
+        "counterview snapshot test is red, fix it"
+      ]],
+      ["r5-validate-near-email-regex", "none", "a general Swift question about input validation", [
+        "What's a reasonable way to validate that a string is a well-formed email address in Swift?",
+        "swift regex to validate an email?"
+      ]],
+      ["r5-validate-near-git-hooks", "bootstrap", "installing the harness git hooks so checks run automatically", [
+        "Can you add the harness git hooks to this repo so the checks run automatically before I push?",
+        "add the git hooks so checks run before push"
+      ]]
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+ "focus": "concurrency",
+ "defects": [
+  {
+   "id": "dismiss-leaves-request-running",
+   "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+   "category": "concurrency",
+   "what": "dismiss sets isLoadingFact false but never cancels the in-flight fact effect, so a late factResponse re-shows the fact after the user dismissed it",
+   "lines": [
+    67,
+    70
+   ]
+  }
+ ],
+ "known": [
+  {
+   "id": "dismiss-test-skips-in-flight",
+   "file": "Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift",
+   "lines": [
+    72,
+    77
+   ],
+   "what": "the dismiss test starts with no request in flight, so it covers neither the isLoadingFact reset nor the late-response race; labelled real after trial 1"
+  }
+ ]
+}
