@@ -129,6 +129,8 @@ export const CONTRACTS = [
       '.snippet.swift',
       'sha256:',
       'a probe snippet for every API',
+      'the commit the prompt gives',
+      'no more than its quote',
     ],
   },
   { prefix: 'design-evidence-auditor', keys: REVIEWER_KEYS, strings: ['[UNVERIFIED]', 'refuted', 'perf--scale'] },
@@ -142,8 +144,23 @@ export const CONTRACTS = [
     keys: REVIEWER_KEYS,
     strings: ['best end-to-end design, not merely a complete one', 'biggest blind spot'],
   },
-  { prefix: 'design-pre-mortem', keys: REVIEWER_KEYS, strings: ['shipped and failed', 'perf--scale'] },
+  {
+    prefix: 'design-pre-mortem',
+    keys: REVIEWER_KEYS,
+    strings: ['shipped and failed', 'perf--scale', 'evidence-auditor-pre-mortem.md'],
+  },
 ]
+
+// The Apple docs lane also asks for the snapshots it could not cite. First matching prefix wins,
+// so it goes ahead of the general lane contract.
+{
+  const lane = CONTRACTS.find(c => c.prefix === 'design-lane-')
+  CONTRACTS.unshift({
+    prefix: 'design-lane-apple-docs',
+    keys: [...lane.keys, 'snapshotRequests', 'page', 'reason'],
+    strings: [...lane.strings, 'stored evidence'],
+  })
+}
 
 /** The JSON object under a reviewer prompt's `## Output contract` heading. Throws when absent. */
 export function outputExample(body) {
@@ -294,6 +311,7 @@ CONTRACTS.push(
       '`quote-ok`',
       'overstate',
       'claim-checker',
+      "the words of the text the quote doesn't back",
     ],
   },
   {
@@ -521,6 +539,16 @@ const tests = {
     assert.deepEqual([...named].sort(), [...lanes].sort())
   },
 
+  'no lane prompt lets a citation go without its pin — catches a lane told to omit the pin it was never given'() {
+    const agents = readdirSync(join(root, 'agents')).filter(f => /^design-lane-.*\.md$/.test(f))
+    assert.equal(agents.length, 4)
+    for (const f of agents) {
+      const text = readFileSync(join(root, 'agents', f), 'utf8')
+      assert.ok(!/else omit/.test(text), `${f} still says "else omit"`)
+      assert.ok(text.includes('dropped'), `${f} never says a pinless claim is dropped`)
+    }
+  },
+
   'every lane agent runs on sonnet — catches a lane silently moved to a costlier model'() {
     const agents = readdirSync(join(root, 'agents')).filter(f => /^design-lane-.*\.md$/.test(f))
     for (const f of agents) {
@@ -633,14 +661,21 @@ Object.assign(tests, {
     assert.deepEqual(positions, [...positions].sort((a, b) => a - b), 'drafter lists the sections out of order')
   },
 
-  'the decomposer emits every LedgerTask key except actualLines — catches a proposed task the ledger cannot decode or a fabricated line count'() {
+  'the decomposer emits every LedgerTask key it owns at decomposition time — catches a proposed task the ledger cannot decode or a fabricated line count'() {
+    // actualLines and model are written later, by a worker report and the decomposer's own model
+    // tag respectively; branch is written by worktree create. None of the three is the
+    // decomposer's to emit yet.
+    const notYetDecomposerOwned = ['actualLines', 'model', 'branch']
     const keys = ledgerTaskKeys(domainSource('Plan/Ledger.swift'))
     assert.ok(keys.includes('actualLines') && keys.includes('estLines'), `LedgerTask keys: ${keys}`)
     const text = agentText('design-decomposer')
-    for (const key of keys.filter(k => k !== 'actualLines')) assert.ok(text.includes(`"${key}"`), `missing "${key}"`)
+    for (const key of keys.filter(k => !notYetDecomposerOwned.includes(k)))
+      assert.ok(text.includes(`"${key}"`), `missing "${key}"`)
     const fences = [...text.matchAll(/```json\n([\s\S]*?)```/g)].map(m => m[1])
     assert.ok(fences.length > 0, 'no json example')
-    for (const fence of fences) assert.ok(!fence.includes('"actualLines"'), 'a json example sets "actualLines"')
+    for (const fence of fences)
+      for (const key of notYetDecomposerOwned)
+        assert.ok(!fence.includes(`"${key}"`), `a json example sets "${key}"`)
   },
 
   'the decomposer names every plan-lint rule id — catches a fix round that ignores an error the gate reports'() {

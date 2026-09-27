@@ -10,20 +10,27 @@ struct ContextPackOptions: ParsableArguments {
   @Option(help: "The agent role the pack is sliced for (spec §5.10).")
   var role: String
 
-  @Option(help: "Distinguishes several packs of the same role, e.g. a worker's task id.")
+  @Option(
+    help:
+      "Distinguishes several packs of the same role: one file-name component, e.g. a worker's task id. A research lane's key is its lane name."
+  )
   var key: String?
 
   // Research lane
   @Option(help: "A lane brief text. Repeatable.")
   var brief: [String] = []
-  @Option(help: "The package/SDK pin a research lane's claim cache hits must match.")
+  @Option(
+    help:
+      "The pin a research lane researches at: a commit sha (codebase), <package>@<version> (packages, prior-decisions) or iphonesimulator<version> / iphoneos<version> (apple-docs)."
+  )
   var pin: String?
   @Option(help: "The design's area (research lane).")
   var area: String?
   @Option(help: "The evidence reuse cache's home directory; defaults to $HOME.")
   var cacheHome: String?
 
-  // Design-anchored roles (evidence auditor, standards reviewer, challenger, decomposer, worker)
+  // Design-anchored roles (research lane, claim checker, evidence auditor, standards reviewer,
+  // challenger, decomposer, worker)
   @Option(help: "Path to the design doc.")
   var design: String?
   @Option(help: "A design section anchor to include verbatim. Repeatable.")
@@ -163,10 +170,19 @@ enum ContextPackRun {
     case .worker: gathered = gatherWorker(options, root)
     }
 
-    let (inputs, notes, key): Gathered
+    let (inputs, notes, roleKey): Gathered
     switch gathered {
     case .failure(let failure): return .invalid(message: failure.message)
-    case .success(let value): (inputs, notes, key) = value
+    case .success(let value): (inputs, notes, roleKey) = value
+    }
+
+    var key: ContextPackKey?
+    if let raw = roleKey ?? options.key {
+      do {
+        key = try ContextPackKey(parsing: raw)
+      } catch {
+        return .invalid(message: error.message)
+      }
     }
 
     let pack: ContextPack
@@ -206,8 +222,34 @@ enum ContextPackRun {
     guard !o.brief.isEmpty else {
       return .failure(GatherFailure("missing required option '--brief <path>' (at least one)"))
     }
-    guard let pin = o.pin else {
+    guard let rawKey = o.key else {
+      return .failure(
+        GatherFailure("missing required option '--key <lane>' (the research lane's name)"))
+    }
+    guard let lane = ResearchLane(rawValue: rawKey) else {
+      return .failure(
+        GatherFailure(
+          "unknown research lane --key `\(rawKey)`; expected one of "
+            + ResearchLane.allCases.map(\.rawValue).joined(separator: ", ")))
+    }
+    guard let designPath = o.design else {
+      return .failure(GatherFailure("missing required option '--design <path>'"))
+    }
+    guard let rawPin = o.pin else {
       return .failure(GatherFailure("missing required option '--pin <string>'"))
+    }
+    let pin: ResearchLanePin
+    do {
+      pin = try ResearchLanePin(parsing: rawPin)
+    } catch {
+      return .failure(GatherFailure(error.message))
+    }
+    let expectedKind = ResearchLanePin.Kind.expected(for: lane)
+    guard pin.kind == expectedKind else {
+      return .failure(
+        GatherFailure(
+          "--pin `\(rawPin)` is a \(pin.kind.rawValue) pin, but the \(lane.rawValue) lane "
+            + "researches at a \(expectedKind.rawValue) pin"))
     }
 
     let frameAnswers: ContextSource
@@ -241,6 +283,12 @@ enum ContextPackRun {
     case .success(let s): claimsSource = s
     }
 
+    let evidenceLayout = EvidenceLayout(designDocPath: designPath)
+    let storedEvidence = storedEvidenceLocs(evidenceLayout, root: root)
+    if storedEvidence.isEmpty {
+      notes.append("no snapshots or captures stored under `\(evidenceLayout.root)`")
+    }
+
     switch cacheHits(for: pin, options: o) {
     case .failure(let message): return .failure(message)
     case .success(let (hits, cacheNotes)):
@@ -251,9 +299,30 @@ enum ContextPackRun {
             ResearchLaneInputs(
               frameAnswers: frameAnswers, area: area, moduleGraph: moduleGraph,
               touchedModules: touchedModules, briefs: briefs, claims: claimsSource,
-              cacheHits: hits, pin: pin)), notes, o.key
+              cacheHits: hits, pin: pin, designDocPath: designPath,
+              storedEvidence: storedEvidence)), notes, lane.rawValue
         ))
     }
+  }
+
+  /// The regular files directly under the evidence directory's `snapshots/` and `captures/`, as
+  /// the locs a citation would use. A directory that doesn't exist yet lists nothing.
+  private static func storedEvidenceLocs(_ layout: EvidenceLayout, root: URL) -> [String] {
+    var locs: [String] = []
+    for directory in [layout.snapshotsDirectory, layout.capturesDirectory] {
+      let url = root.appending(path: directory, directoryHint: .isDirectory)
+      let names =
+        (try? FileManager.default.contentsOfDirectory(
+          at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]))
+        ?? []
+      let prefix = String(directory.dropFirst(layout.root.count + 1))
+      locs.append(
+        contentsOf: names.filter {
+          (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }
+        .map { "\(prefix)/\($0.lastPathComponent)" }.sorted())
+    }
+    return locs
   }
 
   /// The touched modules a research-lane pack slices its module graph to are the SAME
@@ -309,30 +378,36 @@ enum ContextPackRun {
   /// (`--cache-home`, defaulting to `$HOME`; tests always pass an explicit temp `--cache-home` so
   /// they never touch the real one). A corrupt cache line is named as a note, never dropped
   /// silently; an empty cache is named as a note too, never a silently thinner pack.
-  private static func cacheHits(for pin: String, options o: ContextPackGatherInputs) -> Result<
-    (hits: [CachedClaim], notes: [String]), GatherFailure
-  > {
+  private typealias CacheHits = (hits: [CachedClaim], notes: [String])
+
+  private static func cacheHits(for pin: ResearchLanePin, options o: ContextPackGatherInputs)
+    -> Result<CacheHits, GatherFailure>
+  {
     guard let cacheHome = o.cacheHome ?? ProcessInfo.processInfo.environment["HOME"] else {
       return .failure(
         GatherFailure("missing required option '--cache-home <path>' ($HOME is not set)"))
     }
     let bucket: EvidenceCacheBucket
-    switch ResearchLanePin(pin) {
+    switch pin {
     case .commit:
       return .success(
-        (hits: [], notes: ["\(pin) is a commit: the reuse cache holds no codebase claims"]))
-    case .package: bucket = .package(pin: pin)
-    case .sdk: bucket = .sdk(pin: pin)
+        (
+          hits: [],
+          notes: ["\(pin.rawValue) is a commit: the reuse cache holds no codebase claims"]
+        ))
+    case .package: bucket = .package(pin: pin.claimPin)
+    case .sdk: bucket = .sdk(pin: pin.claimPin)
     }
     let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
     let contents: EvidenceCacheContents
     do {
       contents = try store.contents(of: bucket)
     } catch {
-      return .failure(GatherFailure("can't read the evidence cache for `\(pin)`: \(error)"))
+      return .failure(
+        GatherFailure("can't read the evidence cache for `\(pin.rawValue)`: \(error)"))
     }
     var notes = contents.findings.map { "evidence cache: \($0.message)" }
-    if contents.claims.isEmpty { notes.append("no cache hits for \(pin)") }
+    if contents.claims.isEmpty { notes.append("no cache hits for \(pin.claimPin)") }
     return .success((hits: contents.claims, notes: notes))
   }
 
@@ -714,8 +789,8 @@ enum ContextPackRun {
 
   // MARK: - Output
 
-  private static func outputPath(role: ContextPackRole, key: String?) -> String {
-    let suffix = key.map { "-\($0)" } ?? ""
+  private static func outputPath(role: ContextPackRole, key: ContextPackKey?) -> String {
+    let suffix = key.map { "-\($0.value)" } ?? ""
     return ".harness/context-pack/\(role.rawValue)\(suffix).md"
   }
 
@@ -804,10 +879,14 @@ struct ContextPackCommand: AsyncParsableCommand {
     discussion:
       "Gathers one role's inputs from disk (paths are repo-relative) and writes "
       + ".harness/context-pack/<role>[-<key>].md, printing the token estimate (UTF-8 bytes / 4). "
+      + "Every role honours --key, which must be one file-name component. "
       + "Exit 0 once the pack is written. Exit 2 for a bad --role, a missing or unreadable "
-      + "required input, or an unknown --module-kind. Exit 1 when the domain refuses to build "
-      + "the pack (a missing anchor, an unknown `covers` id, a citation that doesn't check out) "
-      + "— never a silently thin pack. --role selects which of: --brief/--pin (research lane), "
+      + "required input, an unsafe --key, an unknown --module-kind, a research-lane --key that "
+      + "isn't a lane name, or a --pin that isn't that lane's kind. Exit 1 when the domain "
+      + "refuses to build the pack (a missing anchor, an unknown `covers` id, a citation that "
+      + "doesn't check out) — never a silently thin pack. --role selects which of: "
+      + "--key/--design/--frame-answers/--area/--module-graph/--brief/--pin/--claims "
+      + "(research lane), "
       + "--design/--claims/--claim-id (claim checker), --template/--frame-answers/--claims/"
       + "--probe-verdicts/--standards/--module-kind (drafter), --design/--doc-anchor/--claims/"
       + "--claim-id (evidence auditor), --design/--standards/--playbook/--standards-anchor "
@@ -832,25 +911,6 @@ struct ContextPackCommand: AsyncParsableCommand {
     case .violation(let message):
       FileHandle.standardError.write(Data("swiftgate context-pack: \(message)\n".utf8))
       throw ExitCode(Verdict.red.exitCode)
-    }
-  }
-}
-
-/// What a research lane's `--pin` names, which decides the reuse-cache bucket it reads. The
-/// codebase lane pins a commit, `packages` and `prior-decisions` pin `<pkg>@<version>`, and
-/// `apple-docs` pins an SDK version.
-enum ResearchLanePin: Equatable {
-  case commit
-  case package
-  case sdk
-
-  init(_ pin: String) {
-    if pin.contains("@") {
-      self = .package
-    } else if [40, 64].contains(pin.count), pin.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) {
-      self = .commit
-    } else {
-      self = .sdk
     }
   }
 }

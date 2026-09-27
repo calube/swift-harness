@@ -26,17 +26,23 @@ fails any of these is dropped from the design, so an unverifiable claim costs mo
 
 ## Inputs
 
-The prompt gives the path of your context pack (`.harness/context-pack/research-lane-…md`), the
-design doc's path, and the SDK version the design is pinned to. The doc's evidence directory is
-`<slug>.evidence/` next to it. Read the pack first. It holds the frame answers, the area, the
-module-graph slice for the touched modules, cached claims for the SDK pin (reuse hits), the repo's
-existing claims at that pin, and your lane brief. If the prompt carries an answer to a question you
+The prompt gives the path of your context pack
+(`.harness/context-pack/research-lane-apple-docs.md`), the design doc's path and its evidence
+directory (`<slug>.evidence/` next to it), your lane's SDK pin (`iphonesimulator<version>`) and the
+commit every repo `file` citation pins to. Read the pack first. It opens with your pin and the
+`citation.pin` value a claim at it carries: the bare SDK version, such as `26.2`, which `evidence
+check` compares with the installed SDK. Then come the design doc path and its evidence directory,
+the stored evidence list (every snapshot and capture already stored there), the frame answers, the
+area, the module-graph slice for the touched modules, cached claims for the SDK (reuse hits), the
+repo's existing claims at it, and your lane brief. If the prompt carries an answer to a question you
 asked earlier, treat it as settled.
 
 ## Where Apple evidence comes from
 
 1. Documentation snapshots stored under `<slug>.evidence/snapshots/`, taken at the pinned SDK.
-   Cite only these: never the web, never what you remember of the docs.
+   The pack's stored evidence list names each one as the loc you cite (`snapshots/<name>`). Cite
+   only those: never the web, never what you remember of the docs, never a snapshot the list
+   doesn't name.
 2. A reuse hit in the pack for the same SDK pin that already covers a point: return it with its
    original `id`, `text` and `citation`, and `"status": "new"`, so the checks run again.
 
@@ -44,7 +50,10 @@ asked earlier, treat it as settled.
 availability notes. They never prove that an API exists or has a given signature, because the page
 may describe another SDK or a different overload. API existence and signature need a `probe` claim.
 If the semantics you need aren't in a stored snapshot, leave that claim out rather than cite
-memory; the design shows the gap.
+memory, and ask for the page in `"snapshotRequests"`: the design skill stores the snapshots you
+request and runs you again. Each request names the documentation page (`"page"`, its path under
+developer.apple.com such as `documentation/swiftui/view`) and the brief question it would answer
+(`"reason"`). Request only pages a brief question needs.
 
 ## Output contract
 
@@ -91,29 +100,45 @@ Return exactly one JSON object:
       "recommendation": "One view per row",
       "evidence": ["ev-observable-tracks-read-properties"]
     }
+  ],
+  "snapshotRequests": [
+    {
+      "page": "documentation/swiftui/managing-model-data-in-your-app",
+      "reason": "Does a view that only passes an observable model to a child redraw when it changes?"
+    }
   ]
 }
 ```
 
-Empty arrays are valid. Every claim:
+Empty arrays are valid, and `"snapshotRequests"` may be left out when every point is covered.
+Every claim:
 
 - `"id"`: `ev-` plus lowercase kebab words (`ev-[a-z0-9-]+`) that say what the claim is. Unique in
   your return. Never a codename or a number series.
 - `"lane"`: `"apple-docs"`.
-- `"text"`: one falsifiable sentence that the quote alone supports.
+- `"text"`: one falsifiable sentence that says no more than its quote. The claim checker refutes
+  a claim broader than its quote however real the quote is, so write the text from the quoted
+  words, not from what you know of the API. Leave out any scope the quote doesn't show ("always",
+  "every", "any" where it covers one case) and any guarantee it doesn't state (ordering, thread
+  safety, cancellation, durability). Keep every condition it carries (`#if`, `@available`, a
+  default argument, a `where` clause). A signature shows that an API exists with that shape, not
+  what it does at run time. When the point needs more than one quote shows, quote the lines
+  that show it or split it into two claims.
 - `"citation"`, by `"kind"`. A `file` loc is repo-relative; every other kind's loc is relative to
   `<slug>.evidence/`. Never an absolute path, `~/` or `$HOME`.
 
   | `kind` | `loc` | `pin` | `quote` |
   |---|---|---|---|
-  | `snapshot` | `snapshots/<name>` (already stored) | the SDK version | exact text in the snapshot |
-  | `probe` | `probes/Probe_<id>.swift`, the id with `-` turned into `_` | the SDK version it builds against | omit |
+  | `snapshot` | `snapshots/<name>` from the stored evidence list | the pack's `citation.pin`, the bare SDK version | exact text in the snapshot |
+  | `probe` | `probes/Probe_<id>.swift`, the id with `-` turned into `_` | the pack's `citation.pin`, the bare SDK version | omit |
   | `capture` | `captures/<hex>.txt` (already stored) | `sha256:<hex>`, the same 64 lowercase hex | exact text in the capture |
-  | `file` (repo) | `<path>:L<a>-L<b>` | the commit sha the prompt gives, else omit | exact text inside those lines |
+  | `file` (repo) | `<path>:L<a>-L<b>` | the commit the prompt gives | exact text inside those lines |
   | `file` (package) | `.build/checkouts/<pkg>/<path>:L<a>-L<b>` | `<pkg>@<version>` from `Package.resolved` | exact text inside those lines |
 
   Copy quotes character for character from the text you read; a quote may span lines joined with
   `\n`.
+- Every citation except `answer` carries a `pin`. The workflow drops a claim without one and
+  keeps the rest of your return.
 - `"status": "new"`, always. The gate and the claim checker set every later status.
 
 ## Probes: a probe snippet for every API the design relies on

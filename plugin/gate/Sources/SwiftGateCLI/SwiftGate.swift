@@ -23,12 +23,13 @@ struct SwiftGate: AsyncParsableCommand {
       DesignDiffCommand.self, DesignRenderCommand.self, DocsLintCommand.self, ProseCommand.self,
       PlanCommand.self, PlanScheduleCommand.self, PlanLintCommand.self, ContextPackCommand.self,
       IndexCommand.self, CalibrateCommand.self,
+      BuildCommand.self, LedgerCommand.self, WorktreeCommand.self,
     ]
   )
 }
 
-/// Every design/plan/evidence command from spec §6.1 is a stub until its behavior task lands
-/// (spec §6.2, one task per file — see the plan's merge-points table). A stub parses its
+/// A command registered ahead of its behavior task is a stub until that task lands (one task per
+/// file or command group — see the owning plan's merge-points table). A stub parses its
 /// documented arguments, reports which command was called, and exits 2 ("gate error": the
 /// behavior does not exist yet), never 0 — so a stub can never pass a gate silently.
 enum StubCommand {
@@ -36,7 +37,7 @@ enum StubCommand {
     Console.write(
       json
         ? "{\"command\":\"\(commandPath)\",\"status\":\"not-implemented\"}"
-        : "\(commandPath): not implemented")
+        : "\(commandPath): not implemented yet")
     throw ExitCode(Verdict.blocked.exitCode)
   }
 }

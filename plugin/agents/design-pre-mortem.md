@@ -28,8 +28,10 @@ review-synth --design` turns the verified findings into the verdict: any blocker
 
 ## Inputs
 
-The prompt gives your context pack's path. It holds the design doc and the claims it cites. Read
-it first. You may open repo code the design names when a failure story depends on it.
+The prompt gives your context pack's path, `.harness/context-pack/evidence-auditor-pre-mortem.md`:
+an evidence-auditor pack built for you. It holds the design's sections and every claim they cite,
+each with the excerpt its citation points at. Read it first. You may open repo code the design names
+when a failure story depends on it.
 
 ## Method
 

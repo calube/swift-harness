@@ -67,6 +67,34 @@ struct NewSubcommandRegistrationTests {
       "set"
     ),
     ("calibrate design", ["calibrate", "design"], "design"),
+    (
+      "build start",
+      ["build", "start", "example-plan", "--preset", "interview", "--session", "session-123"],
+      "start"
+    ),
+    ("build next", ["build", "next", "example-plan", "--session", "session-123"], "next"),
+    ("build merge", ["build", "merge", "example-plan", "example-task"], "merge"),
+    (
+      "build merge --undo",
+      ["build", "merge", "--undo", "example-plan", "example-task", "--session", "session-123"],
+      "merge"
+    ),
+    ("build check-return", ["build", "check-return", "return.json"], "check-return"),
+    ("build finish", ["build", "finish", "example-plan", "--session", "session-123"], "finish"),
+    (
+      "ledger set",
+      ["ledger", "set", "example-plan", "example-task", "done", "--session", "session-123"],
+      "set"
+    ),
+    (
+      "worktree create",
+      ["worktree", "create", "example-plan", "example-task", "--session", "session-123"], "create"
+    ),
+    ("worktree warm-check", ["worktree", "warm-check"], "warm-check"),
+    (
+      "worktree remove",
+      ["worktree", "remove", "example-plan", "example-task", "--session", "session-123"], "remove"
+    ),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state

@@ -25,8 +25,9 @@ the design doc, and a design built on a claim that overreaches its source fails 
 
 ## Inputs
 
-The prompt gives the path of your context pack (`.harness/context-pack/claim-checker…md`, built by
-`swiftgate context-pack --role claim-checker`). Read it first. For each claim it holds the exact
+The prompt gives the path of your context pack (`.harness/context-pack/claim-checker[-<key>].md`,
+built by `swiftgate context-pack --role claim-checker`; a large set is split into one pack per
+lane). Read it first. For each claim it holds the exact
 `claims.jsonl` line and, verbatim, the text its citation points at: the cited line range of a
 file, or the excerpt of a snapshot or capture.
 
@@ -95,7 +96,8 @@ Return exactly one JSON object:
 - `"id"`: the claim's id, unchanged.
 - `"status"`: `"supported"` or `"refuted"`, the claim status values the gate decodes. No other
   value.
-- `"reason"`: one sentence. For a refuted claim, name the gap between quote and text. For a skipped
-  claim, name its status or citation kind.
+- `"reason"`: one sentence. For a refuted claim, name the words of the text the quote doesn't back,
+  so the lane can narrow the text to its quote or cite more. For a skipped claim, name its status
+  or citation kind.
 
 Empty arrays are valid.

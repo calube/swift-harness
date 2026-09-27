@@ -15,6 +15,11 @@ enum PreToolUseHook {
     case "Bash"?:
       guard let command = payload.command else { return nil }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let violation = PlanCommandGuard.evaluate(
+        command, sessionID: payload.sessionID, agentID: payload.agentID)
+      {
+        return deny(violation)
+      }
       for path in writtenPaths(command, payload: payload, home: dependencies.environment["HOME"]) {
         if let violation = await writeViolation(
           path, payload: payload, root: root, dependencies: dependencies)
@@ -64,24 +69,23 @@ enum PreToolUseHook {
     let environmentValue = dependencies.environment[OrchestratorMarker.environmentVariable]
     let forms = ToolPath.resolvedForms(
       path, cwd: payload.cwd, home: dependencies.environment["HOME"])
-    let orchestrator = OrchestratorMarker.isOrchestrator(
-      environmentValue: environmentValue,
-      lockContents: try? String(
-        contentsOf: root.appending(path: OrchestratorMarker.lockFile), encoding: .utf8),
-      sessionID: payload.sessionID, agentID: payload.agentID)
     for form in forms {
-      if let violation = EditGuard.evaluate(path: form, isOrchestrator: orchestrator) {
-        return violation
-      }
+      if let violation = EditGuard.evaluate(path: form) { return violation }
     }
     for form in ToolPath.resolvedAbsolutes(
       path, cwd: payload.cwd, home: dependencies.environment["HOME"])
     {
-      guard var target = PlanStateGuard.target(ofResolvedPath: form) else { continue }
+      guard
+        var target = PlanStateGuard.target(
+          ofResolvedPath: form, isDirectory: isDirectory(form))
+      else { continue }
       var plans: [PlanStateGuard.PlanRecord] = []
+      var planFile: PlanStateLayout.Plan?
       if case .designArtifact(let document) = target {
         target = .designArtifact(document: ToolPath.canonical(document))
         plans = await PlanLocks.records(root: root, git: dependencies.git)
+      } else if case .planFile(let plan) = target, form.lowercased() == plan.planFile.lowercased() {
+        planFile = plan
       }
       let locks = PlanLocks.read(PlanStateGuard.lockScope(of: target))
       if let violation = PlanStateGuard.evaluate(
@@ -90,8 +94,31 @@ enum PreToolUseHook {
       {
         return violation
       }
+      if let planFile {
+        let name = URL(filePath: planFile.directory).lastPathComponent
+        if let violation = PlanStateGuard.evaluatePlanFile(
+          of: name, writing: writtenDesign(form, payload: payload, root: root),
+          plans: await PlanLocks.records(root: root, git: dependencies.git),
+          environmentValue: environmentValue, agentID: payload.agentID)
+        {
+          return violation
+        }
+      }
     }
     return nil
+  }
+
+  /// The design a file tool leaves in `plan.json`; a shell write's is unknown until it runs.
+  private static func writtenDesign(_ planFile: String, payload: HookPayload, root: URL)
+    -> PlanStateGuard.WrittenDesign
+  {
+    guard let tool = payload.toolName, fileTools.contains(tool), let write = payload.fileWrite
+    else { return .unknown }
+    let current = try? String(contentsOfFile: planFile, encoding: .utf8)
+    guard let text = write.result(over: current),
+      let file = try? PlanFileJSON.decode(Data(text.utf8)), !file.design.isEmpty
+    else { return .unreadable }
+    return .named(PlanLocks.resolve(design: file.design, root: root))
   }
 
   private static func deny(_ violation: GuardViolation) -> String {
@@ -223,18 +250,12 @@ enum PlanLocks {
     }
   }
 
-  /// Every plan under the repository's common dir with the design its `plan.json` names, resolved
-  /// against the worktree toplevel. None when git can't place the common dir or the toplevel, so
-  /// only the override can allow a design write.
+  /// Every plan under the repository's common dir with the design its `plan.json` names. None
+  /// when git can't place the common dir, so only the override can allow a design write.
   static func records(root: URL, git: any Git) async -> [PlanStateGuard.PlanRecord] {
     guard let common = try? await git.commonDirectory(),
-      let layout = try? PlanStateLayout(commonDirectory: common),
-      let prefix = try? await git.workingDirectoryPrefix()
+      let layout = try? PlanStateLayout(commonDirectory: common)
     else { return [] }
-    let base = CanonicalPath.of(root)
-    let nested = "/" + prefix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    let toplevel =
-      prefix.isEmpty ? base : base.hasSuffix(nested) ? String(base.dropLast(nested.count)) : base
     let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
     return names.sorted().compactMap { name in
       guard let plan = try? layout.plan(name) else { return nil }
@@ -242,14 +263,20 @@ enum PlanLocks {
       if let data = FileManager.default.contents(atPath: plan.planFile),
         let file = try? PlanFileJSON.decode(data), !file.design.isEmpty
       {
-        let named = file.design.hasPrefix("/") ? file.design : toplevel + "/" + file.design
-        design = .named(ToolPath.canonical(named))
+        design = .named(resolve(design: file.design, root: root))
       } else {
         design = .unreadable
       }
       return PlanStateGuard.PlanRecord(
         name: name, lock: contents(plan.orchestratorLock), design: design)
     }
+  }
+
+  /// A `plan.json` `design`, canonical. A relative one is relative to the project root, the
+  /// directory holding `.swiftgate.toml`, as `plan claim`, `evidence check` and plan-lint read it,
+  /// so a project nested below the git root names its docs the same way to all of them.
+  static func resolve(design: String, root: URL) -> String {
+    ToolPath.canonical(design.hasPrefix("/") ? design : CanonicalPath.of(root) + "/" + design)
   }
 
   private static func every(_ layout: PlanStateLayout) -> [String] {

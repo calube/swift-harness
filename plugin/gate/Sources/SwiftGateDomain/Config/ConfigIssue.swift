@@ -9,6 +9,9 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
   case unsupportedSchema(found: Int)
   case unknownModuleKind(path: String, value: String)
   case unknownJudgeBackend(path: String, value: String)
+  /// A closed field, such as a build preset's `review` or `worker_model`, holding a value none of
+  /// its cases recognize.
+  case unknownEnumValue(path: String, value: String, allowed: [String])
   case missingReason(path: String, module: String, rule: ReasonRule)
   case duplicateName(path: String, name: String)
   case tooManyFlows(count: Int, max: Int)
@@ -24,8 +27,8 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
     switch self {
     case .unknownKey(let path), .missingKey(let path), .wrongType(let path, _, _),
       .emptyValue(let path), .outOfRange(let path, _, _), .unknownModuleKind(let path, _),
-      .unknownJudgeBackend(let path, _), .missingReason(let path, _, _),
-      .duplicateName(let path, _):
+      .unknownJudgeBackend(let path, _), .unknownEnumValue(let path, _, _),
+      .missingReason(let path, _, _), .duplicateName(let path, _):
       path
     case .unsupportedSchema: "schema"
     case .tooManyFlows: "flows"
@@ -53,6 +56,8 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
     case .unknownJudgeBackend(let path, let value):
       "\(path): unknown backend \"\(value)\" (allowed: none, "
         + JudgeBackend.allCases.map(\.rawValue).joined(separator: ", ") + ")"
+    case .unknownEnumValue(let path, let value, let allowed):
+      "\(path): unknown value \"\(value)\" (allowed: " + allowed.joined(separator: ", ") + ")"
     case .missingReason(let path, let module, .nonDefaultKind(let kind)):
       "\(path): module \"\(module)\" declares kind \"\(kind.rawValue)\" without a reason"
     case .missingReason(let path, let module, .notHostTestable):
