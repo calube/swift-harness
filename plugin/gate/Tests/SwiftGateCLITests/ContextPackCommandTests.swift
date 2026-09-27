@@ -302,12 +302,16 @@ struct ContextPackCommandTests {
       + "\"newDependencies\": []}"
   }
 
+  /// The design being researched; research happens before the doc is drafted, so the file need
+  /// not exist.
+  private static let researchDesignPath = "docs/checkout/designs/offline-order-queue.md"
+
   /// `repository.seedModuleGraph()`'s package has `OrderQueueCore` and `OrderQueueFeature`, so
   /// `"OrderQueueCore"` is always a valid touched module here; `--module-graph` still names its
   /// own separate opaque dump (the pack's verbatim text source), same as decomposer's.
   private static func baseResearchLaneOptions(
     repository: Repository, pin: String, cacheHome: String,
-    touching modules: [String] = ["OrderQueueCore"]
+    touching modules: [String] = ["OrderQueueCore"], key: String = "packages"
   ) throws -> (options: ContextPackGatherInputs, swiftPM: FakeSwiftPM) {
     let swiftPM = try repository.seedModuleGraph()
     let frameAnswersPath = try repository.write(
@@ -325,6 +329,8 @@ struct ContextPackCommandTests {
     options.brief = [briefPath]
     options.pin = pin
     options.cacheHome = cacheHome
+    options.key = key
+    options.design = Self.researchDesignPath
     return (options, swiftPM)
   }
 
@@ -405,7 +411,7 @@ struct ContextPackCommandTests {
       return
     }
     #expect(message.contains("Ghost"))
-    #expect(!repository.packExists(".harness/context-pack/research-lane.md"))
+    #expect(!repository.packExists(".harness/context-pack/research-lane-packages.md"))
   }
 
   @Test("a tombstoned evidence-cache claim is absent from the research-lane pack")
@@ -473,7 +479,7 @@ struct ContextPackCommandTests {
     let commit = "6ee32101d306b2fc36641d5001b89f0d1627618c"
     let cacheHome = try Self.freshCacheHome(repository)
     let (options, swiftPM) = try Self.baseResearchLaneOptions(
-      repository: repository, pin: commit, cacheHome: cacheHome)
+      repository: repository, pin: commit, cacheHome: cacheHome, key: "codebase")
 
     let outcome = await ContextPackRun.run(
       role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
@@ -487,7 +493,7 @@ struct ContextPackCommandTests {
   }
 
   @Test(
-    "an SDK pin reads the SDK bucket of the reuse cache — catches an apple-docs pin read as a package pin"
+    "an SDK pin reads the SDK bucket at the bare version its claims carry — catches an apple-docs pin read as a package pin, or keyed by a string evidence check never compares"
   )
   func researchLaneSDKPinReadsTheSDKBucket() async throws {
     let repository = try Repository()
@@ -499,11 +505,11 @@ struct ContextPackCommandTests {
       Claim(
         id: "ev-sdk-snapshot-hit", lane: "apple-docs", text: "a snapshot claim",
         citation: Citation(
-          kind: .snapshot, loc: "snapshots/userdefaults.md", pin: sdk, quote: "UserDefaults"),
+          kind: .snapshot, loc: "snapshots/userdefaults.md", pin: "26.2", quote: "UserDefaults"),
         status: .supported))
     try await store.record(snapshot, origin: .researchLane)
     let (options, swiftPM) = try Self.baseResearchLaneOptions(
-      repository: repository, pin: sdk, cacheHome: cacheHome)
+      repository: repository, pin: sdk, cacheHome: cacheHome, key: "apple-docs")
 
     let outcome = await ContextPackRun.run(
       role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
@@ -533,6 +539,161 @@ struct ContextPackCommandTests {
       return
     }
     #expect(written.relativePath == ".harness/context-pack/research-lane-packages.md")
+  }
+
+  @Test(
+    "the research-lane pack names its pin, the pin its claims carry and the design doc path — catches a lane that can't pin its claims or find its evidence directory"
+  )
+  func researchLanePackCarriesPinAndDesignPath() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "iphonesimulator26.2", cacheHome: cacheHome, key: "apple-docs")
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("pin: iphonesimulator26.2"))
+    #expect(text.contains("citation.pin: 26.2"))
+    #expect(text.contains("design doc: \(Self.researchDesignPath)"))
+    #expect(text.contains("evidence directory: docs/checkout/designs/offline-order-queue.evidence"))
+  }
+
+  @Test(
+    "the research-lane pack lists the snapshots and captures already stored, and notes when there are none — catches a lane citing a snapshot nobody stored"
+  )
+  func researchLanePackListsStoredEvidence() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "iphonesimulator26.2", cacheHome: cacheHome, key: "apple-docs")
+
+    let empty = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let bare) = empty else {
+      Issue.record("expected .written, got \(empty)")
+      return
+    }
+    #expect(bare.notes.contains { $0.contains("no snapshots or captures stored") })
+
+    let evidence = "docs/checkout/designs/offline-order-queue.evidence"
+    try repository.write("Observation text", at: "\(evidence)/snapshots/observation.md")
+    try repository.write("out", at: "\(evidence)/captures/\(String(repeating: "a", count: 64)).txt")
+    let stored = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = stored else {
+      Issue.record("expected .written, got \(stored)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("snapshots/observation.md"))
+    #expect(text.contains("captures/\(String(repeating: "a", count: 64)).txt"))
+    #expect(!written.notes.contains { $0.contains("no snapshots or captures stored") })
+  }
+
+  @Test(
+    "a short commit sha is read as a commit, not an SDK — catches the codebase lane's pin reading the SDK cache bucket"
+  )
+  func researchLaneShortShaIsACommit() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "6ee3210", cacheHome: cacheHome, key: "codebase")
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(written.notes.contains { $0.contains("6ee3210 is a commit") })
+  }
+
+  @Test(
+    "a research-lane --key must name a lane, and the lane's pin must be its kind — exit 2 — catches a pack no lane reads, or a lane pinned to another lane's evidence",
+    arguments: [
+      ("web", "swift-composable-architecture@1.26.2"),
+      ("codebase", "swift-composable-architecture@1.26.2"),
+      ("packages", "6ee3210"),
+      ("apple-docs", "swift-composable-architecture@1.26.2"),
+      ("prior-decisions", "iphonesimulator26.2"),
+    ])
+  func researchLaneKeyAndPinMustMatchALane(key: String, pin: String) async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (options, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: pin, cacheHome: cacheHome, key: key)
+
+    let outcome = await ContextPackRun.run(
+      role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains(key) || message.contains(pin))
+    #expect(!repository.packExists(".harness/context-pack/research-lane-\(key).md"))
+  }
+
+  @Test(
+    "a research-lane pack needs --key, --design and a recognised --pin — exit 2 naming what's wrong"
+  )
+  func researchLaneRequiresKeyDesignAndKnownPin() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let cacheHome = try Self.freshCacheHome(repository)
+    let (base, swiftPM) = try Self.baseResearchLaneOptions(
+      repository: repository, pin: "iphonesimulator26.2", cacheHome: cacheHome, key: "apple-docs")
+    var noKey = base
+    noKey.key = nil
+    var noDesign = base
+    noDesign.design = nil
+    var badPin = base
+    badPin.pin = "26.2"
+    for (options, expected) in [(noKey, "--key"), (noDesign, "--design"), (badPin, "`26.2`")] {
+      let outcome = await ContextPackRun.run(
+        role: "research-lane", options: options, root: repository.root, swiftPM: swiftPM)
+      guard case .invalid(let message) = outcome else {
+        Issue.record("expected .invalid for \(expected), got \(outcome)")
+        continue
+      }
+      #expect(message.contains(expected))
+    }
+  }
+
+  @Test(
+    "a --key that is not one safe path component exits 2 and writes nothing, for every role — catches a pack overwriting a file outside the pack directory",
+    arguments: ["/../x", "../../docs/checkout/designs/offline-order-queue", ".hidden", "a/b"])
+  func unsafeKeyIsInvalid(key: String) async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let designPath = try repository.write(
+      designFixtureText, at: "docs/checkout/designs/offline-order-queue.md")
+    let questionsPath = try repository.write("1. Is this the best design?", at: "questions.md")
+    var options = ContextPackGatherInputs()
+    options.design = designPath
+    options.questionSet = questionsPath
+    options.docAnchor = ["decision"]
+    options.key = key
+
+    let outcome = await ContextPackRun.run(
+      role: "challenger", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains("--key"))
+    #expect(!repository.packExists(".harness/x.md"))
+    #expect(try repository.packText(designPath) == designFixtureText)
+    let packDirectory = repository.root.appending(path: ".harness/context-pack")
+    #expect(!FileManager.default.fileExists(atPath: packDirectory.path))
   }
 
   // MARK: - Claim checker: cited ranges only
@@ -571,6 +732,74 @@ struct ContextPackCommandTests {
     #expect(text.contains("cited middle"))
     #expect(text.contains("cited end"))
     #expect(!text.contains("never cited"))
+  }
+
+  @Test(
+    "claim-checker packs split by --key land in separate files, each with only its own claims — catches one lane's pack overwriting another's"
+  )
+  func claimCheckerPackDiffersPerKey() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let designPath = try repository.write(
+      designFixtureText, at: "docs/checkout/designs/offline-order-queue.md")
+    let citedPath = try repository.write("alpha line\nbeta line\n", at: "Sources/Example.swift")
+    let alpha = try Self.claimLine(id: "ev-alpha", loc: "\(citedPath):L1-L1", pin: "abc1234")
+    let beta = try Self.claimLine(id: "ev-beta", loc: "\(citedPath):L2-L2", pin: "abc1234")
+    let claimsPath = try repository.write("\(alpha)\n\(beta)\n", at: "claims.jsonl")
+
+    var paths: [String] = []
+    for (key, id) in [("codebase", "ev-alpha"), ("packages", "ev-beta")] {
+      var options = ContextPackGatherInputs()
+      options.design = designPath
+      options.claims = claimsPath
+      options.claimID = [id]
+      options.key = key
+      let outcome = await ContextPackRun.run(
+        role: "claim-checker", options: options, root: repository.root,
+        swiftPM: Self.unusedSwiftPM)
+      guard case .written(let written) = outcome else {
+        Issue.record("expected .written, got \(outcome)")
+        return
+      }
+      paths.append(written.relativePath)
+    }
+    #expect(
+      paths == [
+        ".harness/context-pack/claim-checker-codebase.md",
+        ".harness/context-pack/claim-checker-packages.md",
+      ])
+    let codebase = try repository.packText(paths[0])
+    let packages = try repository.packText(paths[1])
+    #expect(codebase.contains("ev-alpha") && !codebase.contains("ev-beta"))
+    #expect(packages.contains("ev-beta") && !packages.contains("ev-alpha"))
+  }
+
+  @Test(
+    "an evidence-auditor pack keyed for the pre-mortem is its own file holding the doc and the claims it cites — catches the pre-mortem reading a pack with no claims"
+  )
+  func preMortemPackCarriesCitedClaims() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let citedPath = try repository.write(
+      "public func cancellable() -> Self {\n  fatalError()\n}\n", at: "Sources/Cancel.swift")
+    let claim = Claim(
+      id: "ev-tca-effect-run-supports-cancellation", lane: "packages", text: "some claim text",
+      citation: Citation(kind: .file, loc: "\(citedPath):L1-L1", pin: "abc1234"),
+      status: .supported)
+    var options = try auditorOptions(repository: repository, claim: claim)
+    options.key = "pre-mortem"
+
+    let outcome = await ContextPackRun.run(
+      role: "evidence-auditor", options: options, root: repository.root,
+      swiftPM: Self.unusedSwiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    #expect(written.relativePath == ".harness/context-pack/evidence-auditor-pre-mortem.md")
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
+    #expect(text.contains("public func cancellable"))
   }
 
   // MARK: - Drafter: only supported claims, plus an absent optional probe-verdicts note
