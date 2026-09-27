@@ -8,7 +8,8 @@
 // lines of its range. "Before the verifier" counts every finding the reviewers returned; "after"
 // counts the findings review-synth kept in review.json. Unmatched findings are listed for a person
 // to label `real` (added to the case's `known` list) or `invented`; a finding that matches a
-// `known` entry counts as real.
+// `known` entry counts as real. A finding the workflow couldn't pair with its verifier's output
+// carries `unmatched: true`; the totals count those.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -55,7 +56,7 @@ export function scoreTrial(labels, runDir) {
     const other = list.filter((f) => !labels.defects.some((d) => matches(f, d)))
     const real = other.filter((f) => known.some((k) => matches(f, k)))
     const unlabelled = other.filter((f) => !known.some((k) => matches(f, k)))
-    return { count: list.length, seeded, real: real.length, unlabelled }
+    return { count: list.length, seeded, real: real.length, unlabelled, unmatched: list.filter((f) => f.unmatched === true).length }
   }
   // A seeded case passes on any verdict that stops the merge; which one depends on whether the
   // panel reads the fix as local (fix-then-merge) or structural (refactor-needed).
@@ -91,6 +92,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     findingsBefore: rows.reduce((s, r) => s + (r.before?.count ?? 0), 0),
     findingsAfter: rows.reduce((s, r) => s + (r.after?.count ?? 0), 0),
     unlabelledAfter: rows.reduce((s, r) => s + (r.after?.unlabelled.length ?? 0), 0),
+    unmatchedAtVerify: rows.reduce((s, r) => s + (r.before?.unmatched ?? 0), 0),
   }
   for (const r of rows) {
     if (r.error) { console.log(`${r.case} ${r.trial}: ${r.error}`); continue }

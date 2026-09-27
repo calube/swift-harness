@@ -447,6 +447,56 @@ const round5 = {
 }
 const heldOut5 = external('routing_heldout_r5.json')
 
+// Round 6 tunes the ship and build skills, which rounds 1 to 5 predate: taking a spec to merged
+// code in one command, and building an existing plan's ledger.
+const round6 = {
+  ship: {
+    should: [
+      ['r6t-ship-readme', 60, 'wants a spec taken to merged code in one go', [
+        'Here is specs/favorites.md. Take it all the way to merged, green code.',
+        'ship specs/favorites.md end to end',
+      ]],
+      ['r6t-interview-preset', 60, 'names the interview preset for a spec', [
+        'Run the offline-sync README through the whole pipeline with the interview preset and tell me how long it took.',
+        'interview preset on docs/offline-sync-README.md, full run please',
+      ]],
+    ],
+    near: [
+      ['r6t-release-notes', 'none', 60, 'shipping in the release sense, no harness work', [
+        'Write release notes for what we are shipping this week.',
+        'draft this weeks release notes',
+      ]],
+      ['r6t-spec-to-design-only', 'design', 60, 'a spec, but only a design doc is wanted', [
+        'Turn specs/favorites.md into a design doc for review. Stop after the design; no plan or code.',
+        'just design specs/favorites.md, dont build anything yet',
+      ]],
+    ],
+  },
+  build: {
+    should: [
+      ['r6t-build-the-plan', 60, 'an approved, planned ledger to build', [
+        'The fact-cache plan is approved and its ledger is ready. Start building it.',
+        'kick off the build for the fact-cache plan',
+      ]],
+      ['r6t-continue-build', 60, 'resume building remaining ledger tasks', [
+        'Main is green again. Continue building the remaining tasks in the fact-cache plan.',
+        'resume the fact-cache build, main is fixed',
+      ]],
+    ],
+    near: [
+      ['r6t-build-compiles', 'none', 60, 'build in the compile sense', [
+        'Does the project build cleanly for the simulator right now? Just check.',
+        'does it compile rn',
+      ]],
+      ['r6t-build-one-reducer-change', 'tdd', 60, 'build one small behavior change', [
+        'Build a reset action into CounterFeature that sets the count back to zero.',
+        'add a reset action to the counter reducer',
+      ]],
+    ],
+  },
+}
+const heldOut6 = external('routing_heldout_r6.json')
+
 const PROMPT_FRONTMATTER = `---
 runs: 3
 max_turns: 1
@@ -467,7 +517,7 @@ const withSplit = (table, split) => Object.fromEntries(Object.entries(table).map
 
 export function expand() {
   const out = []
-  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2], [round3, 3], [withSplit(heldOut3, 40), 3], [fiveSkills, 4], [round5, 5], [withSplit(heldOut5, 40), 5]]
+  const tables = [[requests, 1], [round2, 2], [withSplit(heldOut2, 40), 2], [round3, 3], [withSplit(heldOut3, 40), 3], [fiveSkills, 4], [round5, 5], [withSplit(heldOut5, 40), 5], [round6, 6], [withSplit(heldOut6, 40), 6]]
   const seen = new Set()
   for (const [table, round] of tables) {
     for (const [skill, { should, near }] of Object.entries(table)) {
