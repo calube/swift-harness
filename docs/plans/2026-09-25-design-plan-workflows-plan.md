@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–25, the wave 26–28 rehearsals and two defect fixes merged on local main (the plugin now lives in `plugin/`; run `plugin/bin/swiftgate`), push tier GREEN (1499 tests); review fix wave 1 merged. origin/main has waves 1–24. Backups at origin backup/subproject-2-wave-<N>.
+Status: IN PROGRESS — waves 1–25, the 26–28 rehearsals and review fix waves 1–3 (most of 4) are merged; main GREEN at 0cd14d8 (1713 tests), pushed to origin/main. The review and its remaining tasks: docs/handoffs/subproject-2-review.md.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: acceptance waves 26–28 (plugin-installs-for-real, nonexistent-api-run-refutes-claim, sampleapp-standard-design-to-plan). The user approved running them as an unattended REHEARSAL on 2026-09-26; the real run, with its Approve click, merge and push, needs the user.
+Next action: see the handoff RESUME (docs/handoffs/2026-09-25-subproject-2.md): merge the two in-flight fix workers, re-review, then the attended acceptance runs with the user.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: the dead `.harness/plans` guard rule still ships (its removal drops `isOrchestrator` from `EditGuard.evaluate`, so it needs its own change); no command dumps the module graph (design and plan skills each build it); the attended runs of 26–28 still need the user.

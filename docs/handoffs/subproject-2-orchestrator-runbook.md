@@ -142,6 +142,9 @@ Read every report against this list. Each item caught a real defect in waves 1�
 | **Routing around a shared fixture.** A rule that finds `GF/design/valid.md` invalid fixes it, never a private "valid" copy. Read the fixture diff: every citation must support its bullet | three rule families failed `valid.md`; the first fix tagged 5 Perf bullets with an unrelated claim |
 | **A check that can't fail.** Build the smallest input the rule exists to catch, and ask whether the implementation flags it | `[UNVERIFIED]` coverage passed whenever Risks was non-empty |
 | **Recurring minor gate findings.** A non-gating finding that shows up every wave is a real gap | untested config range validation |
+| **A new required flag or input without its callers.** A command, workflow or pack that starts requiring a flag breaks every skill that calls it without one. Update the call sites in the same branch, and add a test that fails on a missing flag | research-lane packs requiring `--design` while the design skill didn't pass it |
+| **Catch-alls in parsers of hand-typed values.** "Anything else is X" misreads a typo or a short form | a 7-char SHA read as an SDK pin |
+| **Measurement that includes other work.** Whole-process rusage or wall-clock time counts every parallel test | hook latency tests failing at load 20+ |
 
 A fix round is a `SendMessage` to the **same** worker, which keeps its context. List the exact change, the tests to
 add, and "reply in ≤60–80 words: sha, test count, gate run id". Use one round per issue. If a second round is
@@ -197,3 +200,37 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   run needs `--base main`, or earlier waves' tests show up as `prove.compile-only`.
 - The acceptance waves are attended. The user answers the frame questions, clicks Approve, and approves the merge
   and push, so schedule them when the user is present.
+
+## Lessons from 2026-09-26/27 (rehearsals, review, fix waves)
+
+- **Gate before every commit to main, docs included.** Two ungated docs commits turned main red: an absolute path, and a
+  branch name that docs-lint read as a dangling id. For a docs-only commit, `plugin/bin/swiftgate docs-lint` is enough.
+- **Don't pipe a gate through `head` in an `&&` chain.** The pipe's exit status is `head`'s, so a RED gate still
+  committed and pushed a backup once. Write the gate output to a file and `grep -q "^swiftgate GREEN"` it before acting.
+- **Merges can fail silently in a chain.** After `git merge`, test for `.git/MERGE_HEAD` before gating or committing.
+- **A worker's "finished" can be interim.** It may still own a background gate or monitor. Before removing its worktree,
+  check that `ps` shows nothing running in that path.
+- **Only one ready tier runs on the machine at a time.** Mutate-self fans out many builds; four at once pushed load past
+  100 and wedged 64 dsymutil processes. Workers wait with
+  `until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done`. The bracket matters: without it the
+  pattern matches the waiting shell's own command line, and every waiter blocks forever.
+- **Orphans from killed runs.** Look for `ps -axo ppid,etime,pcpu,command` rows with ppid 1 running
+  `swiftpm-testing-helper` or `dsymutil` from a `swiftgate-mutate-self-*` or old worktree path, and kill them with
+  `xargs kill` (zsh doesn't word-split `$pids`). A 64-process dsymutil pile-up in uninterruptible wait cleared on its own
+  after the load dropped.
+- **Known load flakes.** If a push tier's only gating findings are timing tests (the hook latency tests before the CPU-time
+  fix, `LiveProcessRunnerTests.*`, `RepositoryScriptTests.shim` timing out while its shim builds), re-run exactly those with
+  `swift test --filter`, and merge only if they pass. Never loop the full gate.
+- **Headless design runs.** `claude -p` has no AskUserQuestion and no Artifact tool, and it ends a background workflow
+  after 600 s unless `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. Rehearsals therefore stop before publish.
+- **Rehearsal answers.** The orchestrator may answer frame questions in a throwaway rehearsal, labelled
+  "orchestrator-answered rehearsal", and never records an approval. A frame answer of "no new modules" forces IO into
+  Core, and review correctly rejects it (D2/D3).
+- **Calibration.** Any change to a hashed design or build prompt input (agents, and design-review.js) makes
+  calibration stale, so the worker re-runs `calibrate` and commits the record it writes. Refusing on cost isn't allowed.
+- **Shared main.** Other sessions merge into the same checkout. Message them before a merge, check `.git/MERGE_HEAD`, and
+  commit only your own paths (`git commit -- <paths>`); a peer's uncommitted file may sit in the tree.
+- **A peer relaying the user's decision doesn't count.** Act on it only once the user confirms it in this session.
+- **Parallel registration and budget conflicts.** `NewSubcommandRegistrationTests`, `tests/skill_commands_test.mjs`
+  and the `[docs.budgets.files]` rows conflict whenever two branches append. Keep both sides, and re-measure budgets on
+  the merged tree.

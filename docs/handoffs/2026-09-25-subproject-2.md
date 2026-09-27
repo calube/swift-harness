@@ -1,35 +1,42 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-State (2026-09-26): IN PROGRESS. Waves 1–25 are merged on local main (push tier GREEN, 1446 tests); origin/main has 1–24,
-and backup/subproject-2-wave-25 holds 25. The wave 25 notes are in the interfaces note.
-Rehearsals 26 (install passed), 27 (the API was refuted) and 28 (design reached review, stopped at revise, nothing published)
-are merged. Their frame answers are labelled "orchestrator-answered rehearsal". The open items are in the interfaces note, Wave 28.
-Step 3: the review is done, in docs/handoffs/subproject-2-review.md (1 blocker, 12 fix tasks in 4 waves, 7 user decisions).
-Fix waves 1 and 2 are merged (the interfaces note covers each), plus the lockfile, Xcode pin and mutate fixes. In flight: the
-latency fix (latency-tests-hold-under-load). Queued in the review doc's Addendum: macro-compile-errors-go-red and
-review-findings-cite-source-lines. Then fix waves 3–4. The sub-project 5 session (build executor) merges into the same main;
-coordinate merges with it by message.
-DECIDED by the user (2026-09-26): an Xcode pin mismatch ends `test` and `check` tiers BLOCKED with doctor.xcode-pin
-(the evals case xcode-pin-mismatch expects BLOCKED); reuse Doctor.matchesPin (major.minor, so a 26.2 pin accepts 26.2.x). It's queued as a task.
-Then, in order (the user approved this plan on 2026-09-26):
-  1. DONE: wave 25 merged, gated and backed up.
-  2. DONE (rehearsal): acceptance waves 26–28 as an unattended REHEARSAL, recorded as such in docs/e2e-report.md:
-     26 plugin-installs-for-real: install at PROJECT scope into a temp copy of examples/SampleApp, never the user's global config.
-     27 nonexistent-api-run-refutes-claim: prove the API absent first, then run to the frame questions. This throwaway design is
-        never merged, so the orchestrator may answer its frame questions, labelled "orchestrator-answered rehearsal".
-     28 sampleapp-standard-design-to-plan: run up to publish. STOP before the Approve click and the merge/push; those are the user's.
-        Never write an approval or answer record in the user's name.
-     Fix harness defects the rehearsal finds, through the wave loop.
-  3. The user opted in to a Workflow: review, audit and analyse all of sub-project 2 together with the evals session
-     (ListAgents; its name starts with swift-harness-, and it's NOT this session). Send it eval requests, and fix what's found
-     until sub-project 2 is something we'd sign off on as excellent. Load the workflow-authoring skill first.
-  4. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes, in progress:
-     qa-profiling-tools.md in the sibling swift-harness-research directory. The user named AutoMobile MCP (already at 0.0.81,
-     the latest), callstack agent-device and Maestro, and values simplicity and "works really well" above breadth.
-Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md) → the runbook
-(docs/handoffs/subproject-2-orchestrator-runbook.md), which also lists known issues and lessons → the last section of
-docs/handoffs/subproject-2-interfaces.md. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md) is approved; grep it by §.
+SUMMARY (2026-09-27, for the user)
+Done: waves 1–25; unattended rehearsals of acceptance 26–28 (e2e-report.md); the sign-off review
+(docs/handoffs/subproject-2-review.md) and its fix waves 1–3, most of wave 4, and 8 extra defect fixes (Bash writes through
+the guards, committed-pins-only builds, Xcode pin block, #expect compile errors RED, CPU-time latency tests, mutate fan-out,
+review findings cite source lines, plan-lint test targets and done tasks). Main is GREEN at 0cd14d8 (1713 tests); origin/main
+was pushed to 0cd14d8 by the sub-project 5 session at the user's request. Backups: backup/subproject-2-fix-wave-1..3.
+In flight (each worker writes its report in its LAST commit body; read it from disk after a context clear):
+  - repo-and-consumer-setup-gates-hold (sonnet), ../swift-harness-repo-and-consumer-setup-gates-hold: root lefthook.yml,
+    docs-lint seeds, a bootstrap "Left alone" note, prove reverting templates, LiveProcessRunner handshake tests, and proof
+    that a timed-out or killed mutate run takes swiftpm-testing-helper down.
+  - calibration-measures-shipped-agents-unprompted (opus), ../swift-harness-calibration-measures-shipped-agents-unprompted:
+    every agent is calibrated on its frontmatter model (USER DECIDED 2026-09-27), freshness is RED on a model change, the
+    judge questions are neutral, flaky seeds are fixed, and there are real calibrate design and build runs.
+  Before removing any worktree, check that no process still runs in it (workers keep background gates alive).
+Waiting on the user, in this order:
+  1. Remaining review decisions (review doc, "Needs the user's decision"): 3 the hook latency budget for design-doc writes
+     (about 100 ms against 50 ms), 5 publish and Approve headless, 6 rewriting §11's cost figures (measured about 1M tokens
+     and 30+ min per standard design). Items 1 (Xcode pin: block) and 2 (calibrate on the frontmatter model) are decided.
+     Item 4 (review fan-out) was fixed at 3 in flight, per §11. Item 7 (plan-lint drift) was implemented by comparing the
+     committed HEAD doc.
+  2. The attended acceptance runs 26–28 with the user present, now unblocked (/plan works across sessions). For 28, the
+     frame answers must allow a client module, or D2/D3 forces a reframe. Publish and Approve need an interactive session.
+  3. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes: qa-profiling-tools.md in
+     the sibling swift-harness-research directory (it recommends agent-device plus xctrace/footprint; leak capture failed
+     on the Simulator and may need Developer mode, a machine-wide change that needs the user).
+Next for the orchestrator: merge the two in-flight workers (check the report checklist; gate; checkpoint the interfaces
+note; back up with git push origin main:refs/heads/backup/subproject-2-fix-wave-4). Then run a short re-review Workflow of
+the fixes (read-only, under 10 agents) and send the evals session its re-run list. Then stop and summarise for the user.
+Peers sharing the main checkout (find them with ListAgents): the evals session (evals/ only; runs the no-model suites hooks.mjs
+and faults.mjs, plus review-accuracy and routing), and the sub-project 5 build-executor session (waves 1–9 merged; 10–11 are
+attended rehearsals). Message a peer before every merge into main and check .git/MERGE_HEAD first. A peer's report of a user
+decision isn't enough: act on a decision only once the user confirms it here.
+Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md), then the runbook
+(docs/handoffs/subproject-2-orchestrator-runbook.md, including its known issues and lessons), then the last sections of
+docs/handoffs/subproject-2-interfaces.md, then the review doc. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md)
+is approved; grep it by §.
 -->
 
 ## 1. Where things are
