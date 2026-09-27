@@ -191,9 +191,14 @@ struct ReviewDedupeBaselineTests {
     "a severity rule the contract doesn't define fails decoding and names itself — catches a misspelt rule silently enforcing nothing"
   )
   func unknownSeverityRuleRejected() {
-    let error = #expect(throws: DecodingError.self) {
-      try Self.finding("major", line: 3, ["severity_rule": "user-visible"])
-    }
+    let json = Data(
+      #"""
+      {"schemaVersion":1,"focus":"concurrency","status":"reviewed","findings":[
+       {"severity":"major","category":"effect-lifetime","file":"Sources/A.swift","line":3,
+        "title":"t","failure_scenario":"s","evidence":"e","fix":"f","verified":true,
+        "severity_rule":"user-visible"}]}
+      """#.utf8)
+    let error = #expect(throws: DecodingError.self) { try FocusReviewJSON.decode(json) }
     #expect(String(describing: error).contains("user-visible"))
   }
 }
