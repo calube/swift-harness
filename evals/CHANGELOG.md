@@ -2,6 +2,10 @@
 
 ## 2026-09-27
 
+- **`review-accuracy` confirming run** after the severity, dedupe and pre-existing fix, all 5
+  cases: 5 of 5 verdicts right, 5 of 5 seeded defects at blocker or major, 0 invented, and the
+  dismiss race is a blocker. I relabelled `clean-reset` a seeded defect, since its reset handler
+  adds a real race, so the suite has no clean control. I froze review-accuracy. 5.31 USD.
 - **`ship` and `build` routing, held-out** (40 independent cases × 3): `build` 1.00/1.00, `ship`
   1.00 precision and 0.93 recall, 0 wrong loads in 120 trials. Both misses read the spec on turn 1
   and hit the 1-turn cap. 7.33 USD.

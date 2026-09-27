@@ -9,7 +9,9 @@
 // counts the findings review-synth kept in review.json. Unmatched findings are listed for a person
 // to label `real` (added to the case's `known` list) or `invented`; a finding that matches a
 // `known` entry counts as real. A finding the workflow couldn't pair with its verifier's output
-// carries `unmatched: true`; the totals count those.
+// lands in review.json's `unmatched` list; the totals count those. Findings in `preExisting` never
+// count toward the verdict: a `known` one there is real, and a seeded defect there is misfiled,
+// since every seeded defect is in the diff.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,6 +26,7 @@ export function matches(finding, target) {
 }
 
 const blocking = (f) => f.severity === 'blocker' || f.severity === 'major'
+const unwrap = (m) => ({ ...m.finding, focuses: m.focuses })
 
 function findRuns(dir) {
   const out = []
@@ -46,12 +49,13 @@ export function scoreTrial(labels, runDir) {
     ? readdirSync(fdir).flatMap((f) => (JSON.parse(readFileSync(join(fdir, f), 'utf8')).findings ?? []).map((x) => ({ ...x, focus: f.replace(/\.json$/, '') })))
     : []
   const report = JSON.parse(readFileSync(join(runDir, 'review.json'), 'utf8'))
-  const post = (report.findings ?? []).map((m) => ({ ...m.finding, focuses: m.focuses }))
+  const post = (report.findings ?? []).map(unwrap)
+  const baseline = (report.preExisting ?? []).map(unwrap)
   const known = labels.known ?? []
   const judge = (list) => {
     const seeded = labels.defects.map((d) => {
       const hits = list.filter((f) => matches(f, d))
-      return { id: d.id, found: hits.length > 0, blocking: hits.some(blocking), severities: hits.map((h) => h.severity) }
+      return { id: d.id, found: hits.length > 0, blocking: hits.some(blocking), blocker: hits.some((h) => h.severity === 'blocker'), severities: hits.map((h) => h.severity) }
     })
     const other = list.filter((f) => !labels.defects.some((d) => matches(f, d)))
     const real = other.filter((f) => known.some((k) => matches(f, k)))
@@ -61,7 +65,7 @@ export function scoreTrial(labels, runDir) {
   // A seeded case passes on any verdict that stops the merge; which one depends on whether the
   // panel reads the fix as local (fix-then-merge) or structural (refactor-needed).
   const expected = labels.defects.length ? ['fix-then-merge', 'refactor-needed'] : ['merge']
-  return { verdict: report.verdict, expectedVerdict: expected.join(' or '), verdictOk: expected.includes(report.verdict), dropped: (report.dropped ?? []).length, before: judge(pre), after: judge(post) }
+  return { verdict: report.verdict, expectedVerdict: expected.join(' or '), verdictOk: expected.includes(report.verdict), dropped: (report.dropped ?? []).length, unmatched: (report.unmatched ?? []).length, before: judge(pre), after: judge(post), preExisting: judge(baseline) }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -88,17 +92,20 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     recallBefore: `${seededBefore.filter((s) => s.found).length} of ${seededBefore.length}`,
     recallAfter: `${seeded.filter((s) => s.found).length} of ${seeded.length}`,
     recallAfterBlocking: `${seeded.filter((s) => s.blocking).length} of ${seeded.length}`,
+    recallAfterBlocker: `${seeded.filter((s) => s.blocker).length} of ${seeded.length}`,
     verdictsRight: `${rows.filter((r) => r.verdictOk).length} of ${rows.filter((r) => !r.error).length}`,
     findingsBefore: rows.reduce((s, r) => s + (r.before?.count ?? 0), 0),
     findingsAfter: rows.reduce((s, r) => s + (r.after?.count ?? 0), 0),
     unlabelledAfter: rows.reduce((s, r) => s + (r.after?.unlabelled.length ?? 0), 0),
-    unmatchedAtVerify: rows.reduce((s, r) => s + (r.before?.unmatched ?? 0), 0),
+    unmatchedAtVerify: rows.reduce((s, r) => s + (r.unmatched ?? 0), 0),
+    preExisting: rows.reduce((s, r) => s + (r.preExisting?.count ?? 0), 0),
+    seededFiledPreExisting: rows.reduce((s, r) => s + (r.preExisting?.seeded.filter((x) => x.found).length ?? 0), 0),
   }
   for (const r of rows) {
     if (r.error) { console.log(`${r.case} ${r.trial}: ${r.error}`); continue }
     const s = r.after.seeded.map((x) => `${x.id} ${x.found ? (x.blocking ? 'FOUND' : 'found-low') : 'MISSED'}`).join(', ') || 'clean'
-    console.log(`${r.case} ${r.trial}: verdict ${r.verdict}${r.verdictOk ? '' : ` (expected ${r.expectedVerdict})`}; ${s}; findings ${r.before.count} before, ${r.after.count} after, ${r.after.unlabelled.length} to label`)
-    for (const u of r.after.unlabelled) console.log(`    label? ${u.severity} ${u.file}:${u.line} [${u.category}] ${u.title}`)
+    console.log(`${r.case} ${r.trial}: verdict ${r.verdict}${r.verdictOk ? '' : ` (expected ${r.expectedVerdict})`}; ${s}; findings ${r.before.count} before, ${r.after.count} after, ${r.preExisting.count} pre-existing, ${r.after.unlabelled.length + r.preExisting.unlabelled.length} to label`)
+    for (const u of [...r.after.unlabelled, ...r.preExisting.unlabelled]) console.log(`    label? ${u.severity} ${u.file}:${u.line} [${u.category}] ${u.title}`)
   }
   console.log(JSON.stringify(totals))
   if (out) { mkdirSync(out, { recursive: true }); writeFileSync(join(out, 'review-accuracy.json'), JSON.stringify({ totals, rows }, null, 2) + '\n') }

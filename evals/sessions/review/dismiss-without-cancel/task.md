@@ -7,7 +7,7 @@ runs: 1
 max_turns: 80
 timeout_seconds: 3000
 allowed_tools: [Read, Glob, Grep, Skill, Bash, Edit, Write, Agent, Workflow]
-keep: '\.harness/runs/[^/]+/(review\.json|review-findings/[^/]+\.json)$'
+keep: '\.harness/runs/[^/]+/(review\.json|review-telemetry\.json|review-findings/[^/]+\.json)$'
 ---
 
 /swift-harness:review
