@@ -33,10 +33,8 @@ excerpt in the worker pack; (4) impact + coverage and an app compile in the task
 worktree remove; (9) check-return --fix accepts review: null; (10) never cut the task that makes the app compile. These
 outrank the queued hardening above unless the user says otherwise.
 Practice prompt set (user decision 2026-09-27): rotate varied shapes, each at 3–4× the list-and-detail exercise with a
-live change request at minute 35: list and detail, a form with persistence, a small state machine with undo, and two
-classic games (tic-tac-toe, and a Pac-Man-style real-time grid game). The same two games are the game apps the evals
-train and test on (evals/ owns them). Never rehearse one prompt twice in a row, and keep the harness generic: no preset
-or rule may assume one app shape.
+live change request at minute 35, drawn from varied app shapes (the evals session owns the prompt list). Never
+rehearse one prompt twice in a row, and keep the harness generic: no preset or rule may assume one app shape.
 Next session's first job (the user's ask): work out how to write ADRs (docs/adrs/, see its README), design docs
 (docs/designs/), plans (docs/plans/), and how to kick off workers (docs/handoffs/worker-brief.md and the runbook's wave
 loop), then use that to drive the queued fixes.
