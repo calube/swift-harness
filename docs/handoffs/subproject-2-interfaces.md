@@ -1024,3 +1024,34 @@ against that subcommand's help. A later skill that names a missing command or fl
   judge the hook's own CPU time (`Latency.threadCPUMilliseconds`, or `MeasuredProcessRunner` via wait4).
 - **Open:** plan-lint counts a module's test target as a second module (`too-many-modules`), and its per-task rules
   run on `done` tasks, so some replans can't reach GREEN. That task is in flight.
+
+## Review fix wave 4
+
+- **Merge gate (user decision 2026-09-27):** fix branches merge on push GREEN plus `swiftgate prove --base main`
+  with every new or changed test proven. Mutate runs once on merged main, not per branch. This wave: push
+  `20260927T143657Z-531b3515` (1746 passed), prove `20260927T143931Z-504ea6cf` (46/46). The repo-and-consumer
+  branch also passed a full ready tier alone (`20260927T140816Z-f3f1049d`).
+- **Repo hooks:** a root `lefthook.yml` runs `plugin/bin/swiftgate check --tier push` at pre-push and
+  `comments --commit-msg {1}` at commit-msg (`lefthook install` once; AGENTS.md says so).
+  `tests/repository_lefthook_test.mjs` checks the wiring. docs-lint seeds cover every family.
+- **Bootstrap:** an existing `.swiftgate.toml` without `[docs] managed_files` gets a `Left alone: … consider
+  editing` note naming the missing router and `AGENTS.md` entries.
+- **Prove:** `ChangedTestChecks.productionResourcePrefixes` (`plugin/templates/`, `plugin/gate/Fixtures/seeds/`)
+  lists non-Swift paths reverted alongside production source.
+- **Process trees:** `LiveProcessRunner` kills a spawned process's whole descendant tree, one process group at a
+  time, from a `sysctl` process-table read, on timeout, cancellation and swiftgate's own signals. SIGKILL
+  re-signals every group the SIGTERM reached. A test fixture that hangs on purpose must end by itself (the orphan
+  test's mutant stops after 90 s) and be cleaned up in every path.
+- **Review:** `review.json` has `preExisting: [{finding, focuses, lines}]` (never counted toward the verdict),
+  `baselineUnavailable` when the introduced-by-diff check couldn't run, and `telemetry` naming
+  `.harness/runs/<runID>/review-telemetry.json`. The summary prints `PRE-EXISTING (not counted toward the
+  verdict):`. The verifier applies contract severity rules (a user-visible race is a blocker) and an unknown rule
+  fails decoding. Same-category findings on nearby lines merge. Tie order: most severe first, then earliest line,
+  then earlier focus in panel order, then the copy its focus reported first.
+- **Calibration:** every case runs on its agent's frontmatter model (`build-worker` names none, so sonnet). Record
+  and label `schemaVersion` 2, with a `model` per case, an optional `modelOverride`, and check kinds
+  `present|absent|value|judge`. A judged answer passes at p ≥ 0.7. `calibration-freshness.wrong-model` is RED on a
+  model mismatch, an agent with no case, or any override. Measured: design 23/23 in 109 s (about $0.78), build 2/2 in
+  94 s ($0.26).
+- **Machine:** one ready tier at a time is still enforced by hand until `ready-tier-runs-one-at-a-time-and-cleans-up`
+  lands; a single mutate alone drove load to 264 (75 processes).

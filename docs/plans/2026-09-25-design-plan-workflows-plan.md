@@ -1,9 +1,9 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–25, the 26–28 rehearsals and review fix waves 1–3 (most of 4) are merged; main GREEN at 0cd14d8 (1713 tests), pushed to origin/main. The review and its remaining tasks: docs/handoffs/subproject-2-review.md.
+Status: IN PROGRESS — waves 1–25, the 26–28 rehearsals and review fix waves 1–4 are merged; main GREEN at 42a6f53 (1746 tests; push + prove gate, mutate once on main). The review and its remaining tasks: docs/handoffs/subproject-2-review.md.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: see the handoff RESUME (docs/handoffs/2026-09-25-subproject-2.md): merge the two in-flight fix workers, re-review, then the attended acceptance runs with the user.
+Next action: see the handoff RESUME (docs/handoffs/2026-09-25-subproject-2.md): one mutate run on main, the ready-lock task in flight, then the next fix wave (hook guard cache, §11 rewrite and design-run telemetry, rule-index rows), then the attended acceptance runs with the user.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: the dead `.harness/plans` guard rule still ships (its removal drops `isOrchestrator` from `EditGuard.evaluate`, so it needs its own change); no command dumps the module graph (design and plan skills each build it); the attended runs of 26–28 still need the user.
