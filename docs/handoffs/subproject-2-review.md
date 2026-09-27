@@ -265,3 +265,15 @@ Within this wave the three tasks write disjoint files.
 - **minor** `existing-doc-stop-vs-amend-contradiction`: The skill and its reference disagree on what to do when the frame finds an existing doc. Location: plugin/skills/design/SKILL.md:22; plugin/skills/design/references/frame-research-verify.md:99-100. Fix: Make the reference match the skill: ask with AskUserQuestion whether to switch to `--amend <slug>` (recommended) or stop.
 - **minor** `review-final-missing-after-dismissal`: review-final.json is saved only on a `ready` verdict, so a design published after the user dismisses findings loses its delta review at amend time. Location: plugin/skills/design/references/review-publish-amend.md:125, 147-149, 458-460. Fix: Save the last round's workflow.json as review-final.json on every route into publish.
 - **minor** `pre-mortem-pack-lacks-claims`: The pre-mortem's contract says its pack holds the cited claims, but it gets the challenger pack, which has none. Location: plugin/agents/design-pre-mortem.md:31; review-publish-amend.md (pre-mortem reads the challenger's pack); ContextPackCommand.swift gatherChallenger. Fix: Either pass `--claims`/`--claim-id` into a pre-mortem pack (the evidence auditor's pack works), or correct the agent's Inputs section and tell it where claims.jsonl lives.
+
+## Addendum: tasks added after the review
+
+From the evals session's first review-accuracy and failure-modes runs (evals-round-6):
+- **`macro-compile-errors-go-red`** (sonnet): a compile error inside a `#expect` expansion has no file location, so
+  it's BLOCKED `t1.no-evidence`, and the Stop hook then releases. Map it to RED `t1.build-failed`. The evals case is
+  `test-macro-compile-error`.
+- **`review-findings-cite-source-lines`** (opus): review agents cite `diff.patch` line numbers instead of lines in the
+  new code, so `reconcile()` marks a real finding unverified and synthesis drops it. Fix the agent prompts and the
+  review input so a finding's `line` is the source line, and make reconcile fail loudly rather than silently drop a
+  finding. Also check the concurrency reviewer's severity guidance: a user-visible race is a blocker under
+  `review-contract.md`.
