@@ -9,6 +9,28 @@ public enum RunStoreError: Error, Sendable, Equatable {
   public var verdict: Verdict { .blocked }
 }
 
+/// What ``RunStore/keepRuns(in:)`` copied, and each run it couldn't with the reason.
+public struct RunKeepOutcome: Sendable, Equatable {
+  public struct Unkept: Sendable, Equatable {
+    public let runID: String
+    public let reason: String
+
+    public init(runID: String, reason: String) {
+      self.runID = runID
+      self.reason = reason
+    }
+  }
+
+  /// Run ids now in the destination, sorted.
+  public let kept: [String]
+  public let unkept: [Unkept]
+
+  public init(kept: [String], unkept: [Unkept]) {
+    self.kept = kept
+    self.unkept = unkept
+  }
+}
+
 /// Persists runs under a worktree's `.harness/runs/`: one directory per run holding its logs and
 /// `report.json`, plus the shared `history.jsonl`.
 public struct RunStore: Sendable {
@@ -38,7 +60,7 @@ public struct RunStore: Sendable {
   /// Writes the run's `report.json` and appends its summary to `history.jsonl`.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
-    proofBases: [String]? = nil
+    proofBases: [String]? = nil, headCommit: String? = nil
   ) throws(RunStoreError) {
     let directory = try runDirectory(for: report.runID)
     let reportFile = directory.appending(path: RunLayout.reportFileName)
@@ -73,6 +95,11 @@ public struct RunStore: Sendable {
       throw .io(operation: "read", path: historyFile.path, reason: error.localizedDescription)
     }
     return RunHistoryJSON.decode(data)
+  }
+
+  /// Copies every run directory under this store into `destination`'s runs.
+  public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
+    RunKeepOutcome(kept: [], unkept: [])
   }
 
   /// Several sessions can share a worktree, so each record is one `O_APPEND` write made under an

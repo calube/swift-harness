@@ -275,6 +275,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let explainedEditsAllowed: Bool
   /// A worker's green gate must prove and mutate its change; a fixer's merge gate need not.
   public let proofRequired: Bool
+  /// A worker's green return must carry its review; a fixer's never does, since no review stage
+  /// runs on the fix path.
+  public let reviewRequired: Bool
   /// Where the return's `surfaceCommit` is, when it names one.
   public let surfaceCommit: CommitState?
 
@@ -282,7 +285,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
-    surfaceCommit: CommitState? = nil
+    surfaceCommit: CommitState? = nil, reviewRequired: Bool = true
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -293,6 +296,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.filesOutsideWriteSet = filesOutsideWriteSet
     self.explainedEditsAllowed = explainedEditsAllowed
     self.proofRequired = proofRequired
+    self.reviewRequired = reviewRequired
     self.surfaceCommit = surfaceCommit
   }
 }
