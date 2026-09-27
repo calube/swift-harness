@@ -463,6 +463,170 @@ enum DesignStatsRun {
   }
 }
 
+/// `swiftgate stats --build <run>`'s report: every ``BuildMetrics/Report`` field, JSON-stable and
+/// with a fixed `command`, so a reader never has to special-case the run-not-found shape.
+struct BuildStatsReport: Sendable, Equatable, Encodable {
+  struct TaskRow: Sendable, Equatable, Encodable {
+    let task: String
+    let status: TaskStatus
+    let startedAt: Date
+    let endedAt: Date
+    let wallMilliseconds: Int
+
+    init(_ duration: BuildMetrics.TaskDuration) {
+      task = duration.task
+      status = duration.endStatus
+      startedAt = duration.startedAt
+      endedAt = duration.endedAt
+      wallMilliseconds = duration.wallMilliseconds
+    }
+  }
+
+  struct MergeRow: Sendable, Equatable, Encodable {
+    let task: String
+    let at: Date
+    let preCommit: String
+    let postCommit: String
+
+    init(_ merge: BuildMetrics.MergeRecord) {
+      task = merge.task
+      at = merge.at
+      preCommit = merge.preCommit
+      postCommit = merge.postCommit
+    }
+  }
+
+  /// `events.jsonl` damage, JSON-shaped: `undecodable-line`'s `reason` is `nil` for
+  /// `torn-last-line`, never an empty string standing in for "none".
+  struct DamageRow: Sendable, Equatable, Encodable {
+    let kind: String
+    let line: Int
+    let reason: String?
+
+    init(_ damage: BuildEventLog.Damage) {
+      switch damage {
+      case .tornLastLine(let line):
+        kind = "torn-last-line"
+        self.line = line
+        reason = nil
+      case .undecodableLine(let line, let why):
+        kind = "undecodable-line"
+        self.line = line
+        reason = why
+      }
+    }
+  }
+
+  let command = "stats"
+  let verdict: Verdict
+  let plan: String
+  let runId: String
+  let presetName: String?
+  let budgetMinutes: Int?
+  let overBudget: Bool
+  let totalWallMilliseconds: Int?
+  let tasks: [TaskRow]
+  let mergeCount: Int
+  let merges: [MergeRow]
+  let damage: [DamageRow]
+  let message: String
+}
+
+/// The deterministic body of `stats --build`: opens the named run through ``BuildRunStore``
+/// (never parses `run.json`/`events.jsonl` itself), computes ``BuildMetrics``, and shapes the
+/// result for either output format. A damaged log still yields a report — the damage is a field on
+/// it, not a reason to withhold the rest.
+enum BuildStatsRun {
+  struct Options: Sendable, Equatable {
+    var runID: String
+    var plan: String
+  }
+
+  static func run(options: Options, git: any Git) async -> BuildStatsReport {
+    let store: BuildRunStore
+    do {
+      store = try await BuildRunStore.open(plan: options.plan, runID: options.runID, git: git)
+    } catch {
+      return blocked(options: options, "can't open run `\(options.runID)`: \(error)")
+    }
+    let record: BuildRunRecord
+    do {
+      record = try store.record()
+    } catch {
+      return blocked(options: options, "can't read run.json for `\(options.runID)`: \(error)")
+    }
+    let log: BuildEventLog
+    do {
+      log = try store.events()
+    } catch {
+      return blocked(options: options, "can't read events.jsonl for `\(options.runID)`: \(error)")
+    }
+    let metrics = BuildMetrics.compute(record: record, log: log)
+    let damage = metrics.damage.map(BuildStatsReport.DamageRow.init)
+    let message =
+      damage.isEmpty
+      ? "\(metrics.taskDurations.count) task(s) timed, \(metrics.merges.count) merge(s)"
+      : "\(metrics.taskDurations.count) task(s) timed, \(metrics.merges.count) merge(s); "
+        + "\(damage.count) damaged line(s) in events.jsonl"
+    return BuildStatsReport(
+      verdict: .green, plan: options.plan, runId: options.runID, presetName: record.presetName,
+      budgetMinutes: metrics.budgetMinutes, overBudget: metrics.overBudget,
+      totalWallMilliseconds: metrics.totalWallMilliseconds,
+      tasks: metrics.taskDurations.map(BuildStatsReport.TaskRow.init),
+      mergeCount: metrics.merges.count, merges: metrics.merges.map(BuildStatsReport.MergeRow.init),
+      damage: damage, message: message)
+  }
+
+  static func render(_ report: BuildStatsReport, format: OutputFormat) -> String {
+    switch format {
+    case .json:
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      encoder.dateEncodingStrategy = .iso8601
+      return String(decoding: (try? encoder.encode(report)) ?? Data(), as: UTF8.self)
+    case .human:
+      guard report.verdict == .green else {
+        return "stats \(Verdict.blocked.rawValue) \(report.message)"
+      }
+      var lines = [
+        "stats --build \(report.runId) (plan \(report.plan)"
+          + (report.presetName.map { ", preset \($0)" } ?? "") + ")"
+      ]
+      let budget = report.budgetMinutes.map { $0 == 0 ? "none" : "\($0)m" } ?? "none"
+      let total = report.totalWallMilliseconds.map(ReportRenderer.duration) ?? "n/a"
+      lines.append(
+        "budget: \(budget)  total: \(total)"
+          + (report.overBudget ? "  OVER BUDGET" : ""))
+      lines.append("tasks:")
+      if report.tasks.isEmpty {
+        lines.append("  (none timed yet)")
+      }
+      for task in report.tasks {
+        lines.append(
+          "  \(task.task): \(task.status.rawValue) \(ReportRenderer.duration(task.wallMilliseconds))"
+        )
+      }
+      lines.append("merges: \(report.mergeCount)")
+      for merge in report.merges {
+        lines.append("  \(merge.task) at \(ISO8601DateFormatter().string(from: merge.at))")
+      }
+      for damage in report.damage {
+        lines.append(
+          "  damaged line \(damage.line): \(damage.kind)"
+            + (damage.reason.map { " (\($0))" } ?? ""))
+      }
+      return lines.joined(separator: "\n")
+    }
+  }
+
+  private static func blocked(options: Options, _ message: String) -> BuildStatsReport {
+    BuildStatsReport(
+      verdict: .blocked, plan: options.plan, runId: options.runID, presetName: nil,
+      budgetMinutes: nil, overBudget: false, totalWallMilliseconds: nil, tasks: [], mergeCount: 0,
+      merges: [], damage: [], message: message)
+  }
+}
+
 enum StatsRenderer {
   static func human(_ rows: [TierStats], invalidLines: Int) -> String {
     guard !rows.isEmpty else {
@@ -527,16 +691,24 @@ struct StatsCommand: AsyncParsableCommand {
     commandName: "stats",
     abstract: "Per-command, per-tier duration p50/p95 against budgets, from run history.",
     discussion:
-      "Without --design: per-command, per-tier duration p50/p95 against budgets, from run "
-      + "history. With --design <doc>: §10/§12 design and plan metrics (lane refute/UNVERIFIED "
-      + "rates, escape rate, reviewer precision, tokens/cost/wall per agent and phase, estimate "
-      + "error, probe fail rate, cache hit rate) for that design. Exit 0 always, except 2 for a "
-      + "malformed --design, --plan or evidence input.")
+      "Without --design or --build: per-command, per-tier duration p50/p95 against budgets, from "
+      + "run history. With --design <doc>: §10/§12 design and plan metrics (lane "
+      + "refute/UNVERIFIED rates, escape rate, reviewer precision, tokens/cost/wall per agent and "
+      + "phase, estimate error, probe fail rate, cache hit rate) for that design. With --build "
+      + "<run-id> --plan <slug>: §13 wall time per task and merge for that build run, against the "
+      + "run's preset budget. Exit 0 always, except 2 for a malformed --design, --plan, --build or "
+      + "evidence input.")
 
   @Option(help: "Report §10/§12 metrics for this design doc instead of gate-run history stats.")
   var design: String?
 
-  @Option(help: "The plan slug whose ledger.json backs estimate error (needs --design).")
+  @Option(help: "Report §13 wall-time metrics for this build run id instead of other stats modes.")
+  var build: String?
+
+  @Option(
+    help: ArgumentHelp(
+      "The plan slug: required with --build (whose run store lives under it), and backs "
+        + "estimate error with --design."))
   var plan: String?
 
   @Option(help: "The evidence reuse cache's home directory; defaults to $HOME (needs --design).")
@@ -551,6 +723,17 @@ struct StatsCommand: AsyncParsableCommand {
         options: .init(design: design, plan: plan, cacheHome: cacheHome), root: root,
         runner: LiveProcessRunner())
       Console.write(DesignStatsRun.render(report, format: output.format))
+      if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
+      return
+    }
+    if let build {
+      guard let plan else {
+        Console.write("stats \(Verdict.blocked.rawValue) --build needs --plan <slug>")
+        throw ExitCode(Verdict.blocked.exitCode)
+      }
+      let report = await BuildStatsRun.run(
+        options: .init(runID: build, plan: plan), git: BuildLoop.git())
+      Console.write(BuildStatsRun.render(report, format: output.format))
       if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
       return
     }
