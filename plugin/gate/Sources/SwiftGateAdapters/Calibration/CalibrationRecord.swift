@@ -136,10 +136,6 @@ public enum CalibrationModel {
   public static func shipped(frontmatterModel: String?) -> String {
     frontmatterModel ?? unpinned
   }
-
-  public static func resolve(frontmatterModel: String?, override: String?) -> String {
-    override ?? shipped(frontmatterModel: frontmatterModel)
-  }
 }
 
 /// Reads an agent file's leading `---` frontmatter block.

@@ -175,7 +175,7 @@ struct CalibrateBuildTests {
     let calibration = BuildCalibrationRunner(
       agent: agent, tools: LiveProcessRunner(), root: repository.root,
       sandboxRoot: repository.root.appending(path: "sandboxes", directoryHint: .isDirectory),
-      pluginBin: repository.root.appending(path: "plugin/bin").path)
+      pluginBin: repository.root.appending(path: "plugin/bin").path, defaultModel: "sonnet")
     return await CalibrateBuildRun.run(
       root: repository.root, calibration: calibration, now: passedAt)
   }
@@ -219,8 +219,13 @@ struct CalibrateBuildTests {
     #expect(
       record.hashedFiles == ["plugin/agents/build-fixer.md", "plugin/agents/build-worker.md"])
     #expect(record.contentHash == CalibrationHash.hash(hashed))
-    #expect(record.modelOverride == nil)
-    #expect(record.cases.map(\.model) == ["opus", CalibrationModel.unpinned])
+    let recorded = try #require(repository.data(CalibrationSuite.build.recordPath))
+    let json = try #require(try JSONSerialization.jsonObject(with: recorded) as? [String: Any])
+    #expect(json["modelOverride"] == nil)
+    #expect(
+      (json["cases"] as? [[String: Any]])?.compactMap { $0["model"] as? String } == [
+        "opus", "sonnet",
+      ])
     #expect(
       record.cases.map { "\($0.agent)/\($0.caseName)" } == [
         "build-fixer/formal-greeting-meets-farewell", "build-worker/formal-greeting",
@@ -352,15 +357,17 @@ struct CalibrateBuildTests {
     let repository = try Repository()
     defer { repository.remove() }
     let hashed = try CalibrationHash.discover(root: repository.root, suite: .build)
-    let record = CalibrationRecord(
-      contentHash: CalibrationHash.hash(hashed), hashedFiles: hashed.map(\.path),
-      modelOverride: nil, passedAt: Self.passedAt,
-      cases: [
-        .init(agent: "build-fixer", caseName: "c", model: "opus", answers: []),
-        .init(agent: "build-worker", caseName: "c", model: CalibrationModel.unpinned, answers: []),
-      ])
+    let record: [String: Any] = [
+      "schemaVersion": 2, "contentHash": CalibrationHash.hash(hashed),
+      "hashedFiles": hashed.map(\.path), "passedAt": "2026-09-21T12:00:00Z",
+      "cases": [
+        ["agent": "build-fixer", "case": "c", "model": "opus", "answers": []],
+        ["agent": "build-worker", "case": "c", "model": "sonnet", "answers": []],
+      ],
+    ]
     try repository.write(
-      CalibrationSuite.build.recordPath, String(decoding: try record.encoded(), as: UTF8.self))
+      CalibrationSuite.build.recordPath,
+      String(decoding: try JSONSerialization.data(withJSONObject: record), as: UTF8.self))
     let fresh = try CalibrationFreshness.run(root: repository.root)
     #expect(fresh.map(\.ruleID) == [CalibrationFreshness.summaryRuleID])
     #expect(fresh.first?.message.contains("2 build prompt file(s) match") == true)

@@ -40,9 +40,9 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
     let now = Date()  // swiftgate:allow det.date-init — the CLI edge stamps when the pass ran
     try await StaticCheckRun.execute(root: root, format: output.format) {
       await CalibrateDesignRun.run(
-        root: root,
-        calibration: DesignCalibrationRunner(runner: LiveProcessRunner(), modelOverride: model),
-        now: now)
+        root: root, runner: LiveProcessRunner(), model: CalibrationModel.unpinned,
+        modelOverride: model, now: now,
+        concurrentCases: CalibrateDesignRun.defaultConcurrentCases)
     }
   }
 }
@@ -89,7 +89,8 @@ struct CalibrateBuildCommand: AsyncParsableCommand {
           + "\(ProcessInfo.processInfo.processIdentifier)",
         directoryHint: .isDirectory),
       pluginBin: root.appending(path: "\(CalibrationSuite.pluginDirectory)/bin").path,
-      modelOverride: model, agentTimeout: .seconds(timeoutMinutes * 60))
+      defaultModel: CalibrationModel.unpinned, modelOverride: model,
+      agentTimeout: .seconds(timeoutMinutes * 60))
     try await StaticCheckRun.execute(root: root, format: output.format) {
       await CalibrateBuildRun.run(root: root, calibration: calibration, now: now)
     }
@@ -98,15 +99,20 @@ struct CalibrateBuildCommand: AsyncParsableCommand {
 
 /// Loads the design seeds and runs each agent on its cases.
 enum CalibrateDesignRun {
-  /// Each case is one `claude -p` with no tools, so several run at once without contending for
-  /// the build machine.
+  /// What the command runs at once: each case is one `claude -p` with no tools, so several run
+  /// together without contending for the build machine.
   static let defaultConcurrentCases = 4
 
+  /// - Parameters:
+  ///   - model: the model for an agent whose frontmatter names none.
+  ///   - modelOverride: every agent's model instead of its own, for experiments.
   static func run(
-    root: URL, calibration: DesignCalibrationRunner, now: Date,
-    concurrentCases: Int = defaultConcurrentCases
+    root: URL, runner: any ProcessRunner, model: String, modelOverride: String? = nil,
+    now: Date, concurrentCases: Int = 1
   ) async -> StaticCheckOutcome {
-    await CalibrationRun.run(
+    let calibration = DesignCalibrationRunner(
+      runner: runner, unpinnedModel: model, modelOverride: modelOverride)
+    return await CalibrationRun.run(
       root: root, seeds: DesignCalibrationSeeds.load(root: root),
       modelOverride: calibration.modelOverride, now: now, concurrentCases: concurrentCases
     ) { agent, seed throws(CalibrationCaseError) in
@@ -183,8 +189,10 @@ enum CalibrationRun {
     await withTaskGroup(of: (Int, Result<CaseRun, CalibrationCaseError>).self) { group in
       var next = 0
       var inFlight = 0
+      // A blocked case means the environment can't answer, so no new case starts after one.
+      var blocked = false
       while true {
-        while next < jobs.count, inFlight < max(concurrentCases, 1) {
+        while !blocked, next < jobs.count, inFlight < max(concurrentCases, 1) {
           let index = next
           let job = jobs[index]
           group.addTask {
@@ -200,6 +208,7 @@ enum CalibrationRun {
         guard let (index, outcome) = await group.next() else { break }
         inFlight -= 1
         outcomes[index] = outcome
+        if case .failure(.blocked) = outcome { blocked = true }
       }
     }
     for (job, outcome) in zip(jobs, outcomes) {

@@ -262,16 +262,19 @@ public struct DesignCalibrationRunner: Sendable {
   private let judge: ClaudeCLIJudge
   private let executable: String
   private let timeout: Duration
+  /// The model for an agent whose frontmatter names none.
+  public let unpinnedModel: String
   /// Every agent's model for this run in place of its frontmatter's; a pass made with one is
   /// never fresh.
   public let modelOverride: String?
 
   public init(
-    runner: any ProcessRunner, modelOverride: String? = nil,
-    judgeModel: String = JudgeFactory.defaultModel, executable: String = "claude",
-    timeout: Duration = .seconds(900)
+    runner: any ProcessRunner, unpinnedModel: String = CalibrationModel.unpinned,
+    modelOverride: String? = nil, judgeModel: String = JudgeFactory.defaultModel,
+    executable: String = "claude", timeout: Duration = .seconds(900)
   ) {
     self.runner = runner
+    self.unpinnedModel = unpinnedModel
     self.modelOverride = modelOverride
     self.executable = executable
     self.timeout = timeout
@@ -279,7 +282,7 @@ public struct DesignCalibrationRunner: Sendable {
   }
 
   public func model(of agent: DesignCalibrationSeeds.Agent) -> String {
-    CalibrationModel.resolve(frontmatterModel: agent.model, override: modelOverride)
+    modelOverride ?? agent.model ?? unpinnedModel
   }
 
   public func run(agent: DesignCalibrationSeeds.Agent, seed: DesignCalibrationSeeds.Case)

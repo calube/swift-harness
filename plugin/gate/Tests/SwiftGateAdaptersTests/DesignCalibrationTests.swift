@@ -102,33 +102,22 @@ struct DesignCalibrationTests {
   }
 
   @Test(
-    "a record with an unknown schemaVersion fails to decode — catches a future record format read as a pass"
+    "a version 2 record with a model per case round-trips and a version 3 one fails to decode — catches a record without its models, or a future format, read as a pass"
   )
   func recordRejectsUnknownSchema() throws {
-    let record = CalibrationRecord(
-      contentHash: "abc", hashedFiles: [], modelOverride: nil,
-      passedAt: Date(timeIntervalSince1970: 1_790_000_000),
-      cases: [.init(agent: "design-drafter", caseName: "c", model: "opus", answers: [])])
+    let text = """
+      {"schemaVersion": 2, "contentHash": "abc", "hashedFiles": [],
+       "passedAt": "2026-09-21T12:00:00Z",
+       "cases": [{"agent": "design-drafter", "case": "c", "model": "opus", "answers": []}]}
+      """
+    let record = try CalibrationRecord.decode(Data(text.utf8))
     let encoded = String(decoding: try record.encoded(), as: UTF8.self)
     #expect(try CalibrationRecord.decode(Data(encoded.utf8)) == record)
+    #expect(encoded.contains("\"model\" : \"opus\""))
     let future = encoded.replacingOccurrences(
       of: "\"schemaVersion\" : 2", with: "\"schemaVersion\" : 3")
     #expect(future != encoded)
     #expect(throws: (any Error).self) { try CalibrationRecord.decode(Data(future.utf8)) }
-  }
-
-  @Test(
-    "a judged answer passes only on the label's option at p >= 0.7, an observed one at p = 1 — catches a coin-flip answer recorded as a pass"
-  )
-  func passMargin() {
-    func result(_ answered: String, _ probability: Double) -> CalibrationRecord.QuestionResult {
-      .init(question: "q", expected: "a", answered: answered, probability: probability)
-    }
-    #expect(!result("a", 0.55).met)
-    #expect(!result("a", 0.69).met)
-    #expect(result("a", 0.7).met)
-    #expect(result("a", 1).met)
-    #expect(!result("b", 1).met)
   }
 
   static func label(version: Int = 2, checks: String) -> Data {

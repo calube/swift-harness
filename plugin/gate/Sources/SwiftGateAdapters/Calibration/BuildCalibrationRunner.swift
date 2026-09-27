@@ -34,6 +34,7 @@ public struct BuildCalibrationRunner: Sendable {
   private let executable: String
   private let agentTimeout: Duration
   private let testTimeout: Duration
+  public let defaultModel: String
   /// Every agent's model for this run in place of its frontmatter's; a pass made with one is
   /// never fresh.
   public let modelOverride: String?
@@ -43,10 +44,12 @@ public struct BuildCalibrationRunner: Sendable {
   ///   - sandboxRoot: where each case's repository is built, one directory per case; give each
   ///     run its own.
   ///   - pluginBin: put first on the agent's `PATH`, so its `swiftgate` is this checkout's.
+  ///   - defaultModel: for an agent whose frontmatter names none.
   ///   - modelOverride: every agent's model in place of its frontmatter's, for experiments.
   public init(
     agent: any ProcessRunner, tools: any ProcessRunner, root: URL, sandboxRoot: URL,
-    pluginBin: String, modelOverride: String? = nil, executable: String = "claude",
+    pluginBin: String, defaultModel: String, modelOverride: String? = nil,
+    executable: String = "claude",
     agentTimeout: Duration = .seconds(3600), testTimeout: Duration = .seconds(1200)
   ) {
     self.agentRunner = agent
@@ -54,6 +57,7 @@ public struct BuildCalibrationRunner: Sendable {
     self.root = root
     self.sandboxRoot = sandboxRoot
     self.pluginBin = pluginBin
+    self.defaultModel = defaultModel
     self.modelOverride = modelOverride
     self.executable = executable
     self.agentTimeout = agentTimeout
@@ -61,7 +65,7 @@ public struct BuildCalibrationRunner: Sendable {
   }
 
   public func model(of agent: BuildCalibrationSeeds.Agent) -> String {
-    CalibrationModel.resolve(frontmatterModel: agent.model, override: modelOverride)
+    modelOverride ?? agent.model ?? defaultModel
   }
 
   public func run(agent: BuildCalibrationSeeds.Agent, seed: BuildCalibrationSeeds.Case)
