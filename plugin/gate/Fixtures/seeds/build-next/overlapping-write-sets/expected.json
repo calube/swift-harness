@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "verdict": "red",
+  "ruleIDs": ["build-next.write-set-overlap"]
+}

@@ -147,6 +147,8 @@ export function scanSkills(skillsDir, help, labelRoot = skillsDir) {
 // research-lane` exits 2 without these flags; design-research.js throws without these args.
 const REQUIRED_PACK_FLAGS = { 'research-lane': ['--key', '--design', '--pin'] }
 const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
+// A research launch names the registered workflow, or a copy of its script.
+const isResearchCall = call => call.includes('swift-harness-design-research') || call.includes('design-research.js')
 
 /**
  * Problems with the calls written in `files` ({relative path: markdown}): a fenced `context-pack`
@@ -166,7 +168,7 @@ export function requiredCallProblems(files) {
     for (const match of text.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)) {
       const call = match[0]
       const line = text.slice(0, match.index).split('\n').length
-      if (call.includes('design-research.js')) {
+      if (isResearchCall(call)) {
         for (const arg of REQUIRED_RESEARCH_ARGS) {
           if (!call.includes(arg)) problems.push(`${file}:${line}: design-research Workflow call lacks ${arg.slice(0, -1)}`)
         }
@@ -227,8 +229,13 @@ const tests = {
     assert.deepEqual(requiredCallProblems(files), [])
     const all = Object.values(files).join('\n')
     assert.ok(/context-pack --role evidence-auditor --key pre-mortem/.test(all), 'no pre-mortem pack is built')
-    const researchCalls = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].filter(m => m[0].includes('design-research.js'))
+    const workflowCalls = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].map(m => m[0])
+    const researchCalls = workflowCalls.filter(isResearchCall)
     assert.ok(researchCalls.length >= 2, `only ${researchCalls.length} design-research calls found`)
+    // The Workflow tool refuses a scriptPath outside the session's working directory, and the
+    // plugin root is outside every consumer repository.
+    assert.deepEqual(workflowCalls.filter(call => /scriptPath:\s*"\$\{CLAUDE_PLUGIN_ROOT\}/.test(call)), [])
+    assert.ok(workflowCalls.some(call => call.includes('name: "swift-harness-design-review"')), 'the review workflow is not launched by name')
   },
 
   'a call missing a required flag or arg fails and names it — catches the required-call check passing anything'() {
@@ -267,6 +274,13 @@ const tests = {
     const has = (file, path, flag) => resolved.some(r => r.file === file && r.path === path && (!flag || r.flags.includes(flag)))
     assert.ok(has('skills/review/SKILL.md', 'review-synth', '--run-directory'))
     assert.ok(has('skills/design/SKILL.md', 'plan claim', '--session'), 'design skill claims the plan with --session')
+    // The design session hands the plan on: it releases its claim, re-scopes with plan set, and
+    // stores captures before the lanes run.
+    const design = 'skills/design/references/review-publish-amend.md'
+    const frame = 'skills/design/references/frame-research-verify.md'
+    assert.ok(has(design, 'plan release', '--session'), 'the design skill never releases its claim')
+    assert.ok(has(frame, 'plan set', '--tier'), 'a re-scope never updates plan.json')
+    assert.ok(has(frame, 'evidence capture', '--design'), 'no capture step before the lanes')
     assert.ok(has('skills/design/references/frame-research-verify.md', 'evidence check', '--json'), 'reference files are scanned')
     assert.ok(has('skills/design/references/frame-research-verify.md', 'context-pack', '--role'))
     // `index set` refuses any session that doesn't hold the plan's lock, so every call names one.

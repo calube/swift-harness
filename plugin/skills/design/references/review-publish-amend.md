@@ -4,15 +4,17 @@ The long form of the design skill's later phases. The names `<slug>`, `<plan>`, 
 `<run>` and `<design-run>` mean what the skill's table says, and the JSONL and time stamp rules of
 [the frame reference](frame-research-verify.md) apply here too. `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`.
 
-Two more names:
+Three more names:
 
 | Name | Value |
 |---|---|
 | `<plans>` | `$(git rev-parse --git-common-dir)/swift-harness/plans` |
 | `<main>` | the branch `design/<slug>` merges into, as `git symbolic-ref refs/remotes/origin/HEAD` names it, else `main` |
+| `<r>` | this review round's number: 1 more than the highest `<run>/review-<n>/` that exists, from 1 |
 
 Contents:
 
+- [Claim on entry, release on exit](#claim-on-entry-release-on-exit): which session holds the plan when
 - [Review](#review): packs, the workflow, the verdict, revise rounds, the review log
 - [Publish](#publish): router rows, ADR, the proposed commit, the page, approval, merge
 - [Revise from comments](#revise-from-comments): `--revise`
@@ -20,6 +22,34 @@ Contents:
 - [Amend and clarify](#amend-and-clarify): `--amend`, stale claims, delta review, `needs-replan`
 - [Status rules](#status-rules): which status the skill may set, and when
 - [Phase log](#phase-log): the phases this part adds
+
+## Claim on entry, release on exit
+
+A plan's lock lets 1 session write its doc and state, and it stays held until that session
+releases it. Every entry point here may run in a session that didn't frame the design: the
+in-review resume ([Read the approval](#read-the-approval)), [Approved](#approved) and
+[Revise from comments](#revise-from-comments). Each starts with:
+
+```bash
+"$SG" plan claim <plan> --session <id> --json
+```
+
+- `claimed` or `already-held` (exit 0): go on.
+- Exit 1 (`held-by-other`): stop. Show the user the holder the JSON names and let them decide. If
+  that session has ended, they can run `swiftgate plan release <plan> --force` in their own
+  terminal, then run the skill again. The skill never runs `--force`: the hooks deny it to every
+  tool call.
+- Exit 2: report the message and stop.
+
+The skill releases the plan when design finishes, once it has recorded the approval, and when the
+user stops to decide on the page later. Then `/swift-harness:plan`, or this skill resumed in a new
+session, can claim it:
+
+```bash
+"$SG" plan release <plan> --session <id> --json
+```
+
+Tell the user you released the plan. Exit 1 means another session took it over: name the holder.
 
 ## Review
 
@@ -31,12 +61,14 @@ Contents:
 | `standard` | `evidence-auditor`, `standards-reviewer`, `challenger` | 1 |
 | `deep` | the 3 above and `pre-mortem` | 2 |
 
-Round `<r>` counts from 1. Each round writes into `<run>/review-<r>/`.
+Each round writes into its own `<run>/review-<r>/` and never reuses a folder, so a rethink, a
+reframe or an amend numbers on from the rounds before it. A tier's revise rounds count from the
+round that started this review, not from `review-1`.
 
 At `quick`, run the verdict with no files, which returns `ready`, and go to publish:
 
 ```bash
-"$SG" review-synth --run-directory <run>/review-1 --design <doc> --tier quick --json
+"$SG" review-synth --run-directory <run>/review-<r> --design <doc> --tier quick --json
 ```
 
 ### Packs
@@ -92,9 +124,11 @@ under `.harness/context-pack/`. Exit 1 or 2 names the missing input: fix it and 
 
 ### Run
 
+Launch the plugin's registered workflow by name:
+
 ```
 Workflow({
-  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/design-review.js",
+  name: "swift-harness-design-review",
   args: {
     tier: "<tier>",
     packs: [
@@ -107,7 +141,17 @@ Workflow({
 })
 ```
 
-List `pre-mortem` at `deep` alone. Save the whole return to `<run>/review-<r>/workflow.json`.
+List `pre-mortem` at `deep` alone. The Workflow tool refuses a `scriptPath` outside the session's
+working directory. If it refuses the name, copy the script and launch the copy with
+`scriptPath: "<absolute path of <run>/workflows/design-review.js>"` in place of `name`:
+
+```bash
+mkdir -p <run>/workflows && /bin/cp -f "${CLAUDE_PLUGIN_ROOT}/workflows/design-review.js" <run>/workflows/
+```
+
+If that's refused too, use the Agent tool fallback below and tell the user which launch failed.
+
+Save the whole return to `<run>/review-<r>/workflow.json`.
 Write each entry of its `reviews` array to its own file, `<run>/review-<r>/<reviewer>.json`, as
 returned. Then:
 
@@ -119,7 +163,7 @@ returned. Then:
 Add `<run>/review-<r>/pre-mortem.json` at `deep`. Exit 0 prints `design-review.json` and writes
 it to that folder. Exit 2 names a bad file or anchor: report it and stop.
 
-If this session has no Workflow tool, launch each reviewer's agent with the Agent tool
+If this session has no Workflow tool, or it refused both launches, launch each reviewer's agent with the Agent tool
 (`swift-harness:design-evidence-auditor`, `swift-harness:design-standards-conformance`,
 `swift-harness:design-challenger`, `swift-harness:design-pre-mortem`), then pipe each reply to
 `swift-harness:verifier` as the script does. Wrap each verified reply in
@@ -129,12 +173,14 @@ If this session has no Workflow tool, launch each reviewer's agent with the Agen
 
 Read `verdict`, `findings`, `rerun`, `notReviewed` and `notResearched` from `design-review.json`.
 
-- `ready`: log the dispositions (below), save the round's `workflow.json` as
-  `<run>/review-final.json`, then go to publish.
+- `ready`: log the dispositions (below), then go to publish. Publish starts by saving
+  `review-final.json`.
 - `revise`: run a revise round while the tier has rounds left. With none left, ask (below).
 - `rethink`: a blocker against the Decision. Halt. Ask with `AskUserQuestion`: reframe from the
   frame phase (recommended), pick another option from the doc, or stop. For another option, the
-  drafter rewrites the Decision around it, and review starts again at round 1.
+  drafter rewrites the Decision around it, and review starts again with a fresh revise allowance
+  in the next `review-<r>/`. A reframe re-runs the frame, which re-scopes the plan when the tier
+  changes.
 
 ### Revise round
 
@@ -143,9 +189,10 @@ Read `verdict`, `findings`, `rerun`, `notReviewed` and `notResearched` from `des
    and the findings. Ask for the whole doc, write it to `<doc>` and lint it as the draft step
    does, with the same 2 tolerated `docs-lint` findings.
 2. Rebuild the packs of the reviewers in `rerun` alone, since the doc changed.
-3. Relaunch with the same `scriptPath`, `packs` for the `rerun` reviewers alone,
-   `reviewers: <rerun>` and `previous: <the prior round's workflow.json>`. The other reviewers'
-   results carry forward.
+3. Relaunch the way the round launched (the same `name`, or the same `scriptPath`), `packs` for
+   the `rerun` reviewers alone, `reviewers: <rerun>` and `previous: <the prior round's
+   workflow.json>`, passed inline as the object it holds. The other reviewers' results carry
+   forward.
 4. Write the files and run `review-synth` into `<run>/review-<r+1>/` as above. Pass all the
    reviewer files: the carried ones come back in `reviews` too.
 
@@ -183,6 +230,9 @@ reads the dismissals as reviewer precision.
 ## Publish
 
 Publish starts from a `ready` verdict, or from the user's dismissal of every gating finding.
+Either way, first copy the last round's `<run>/review-<r>/workflow.json` to
+`<run>/review-final.json`: an amend's delta review carries the other reviewers forward from it.
+At `quick`, and at `sketch`, no workflow ran, so there's nothing to copy.
 
 ### Routers, ADR and the docs-lint check
 
@@ -260,9 +310,20 @@ An empty list is fine. An error saying the page has no database means `db` is un
 
 ### Read the approval
 
+A later session enters here for a plan whose index status is `in-review`: find `<plan>` and
+`<page>` in its index entry, then claim the plan ([Claim on entry](#claim-on-entry-release-on-exit)):
+
+```bash
+"$SG" plan claim <plan> --session <id> --json
+```
+
 Tell the user to open `<page>`, read it, and press Approve or Request changes. Then ask with
-`AskUserQuestion`: "I've decided on the page" (recommended), or "Stop for now". On stop, report
-`<page>` and end. A later run of the skill on this `<plan>` resumes here.
+`AskUserQuestion`: "I've decided on the page" (recommended), or "Stop for now". On stop, release
+the plan so any later session can resume here, report `<page>`, and say you released the plan:
+
+```bash
+"$SG" plan release <plan> --session <id> --json
+```
 
 ```
 ArtifactData({action: "get", url: "<page>", collection: "approval", doc_id: "<sha>"})
@@ -289,6 +350,7 @@ approval record is `{decision: "approve", designSha: <sha>, at: <the answer's at
 
 ### Approved
 
+This session holds the plan from the claim that began [Read the approval](#read-the-approval).
 Never set `approved` without an approval record whose `designSha` equals the doc's current one.
 Check it first:
 
@@ -312,14 +374,22 @@ moved after the page went out: render and publish again, and read a new approval
 
 ```bash
 "$SG" index set <plan> approved "approved <sha>; page <page>; next: /swift-harness:plan" --session <id>
+"$SG" plan release <plan> --session <id> --json
 ```
 
-Keep the plan's claim: `/swift-harness:plan` checks that this session holds it.
+Design is done, so release the plan and tell the user: "Released `<plan>`. Run
+`/swift-harness:plan` in any session to plan it." `/swift-harness:plan` claims an unheld plan.
 
 ## Revise from comments
 
 `--revise` runs this, and so does a `request-changes` decision. Find `<page>` in the index entry's
-resume note, or ask the user for it.
+resume note, or ask the user for it. Claim the plan before anything else
+([Claim on entry](#claim-on-entry-release-on-exit)); after a `request-changes` decision this
+session already holds it:
+
+```bash
+"$SG" plan claim <plan> --session <id> --json
+```
 
 ```
 ArtifactComments({action: "read", url: "<page>"})
@@ -379,7 +449,8 @@ Never amend a `built` design: a new design supersedes it. A `proposed` one takes
 ### Set up
 
 1. Find the plan whose `plan.json` names `<doc>`, then claim it:
-   `"$SG" plan claim <plan> --session <id> --json`. Exit 1: name the holder and stop.
+   `"$SG" plan claim <plan> --session <id> --json`. Exit 1: show the holder and let the user
+   decide, as [Claim on entry](#claim-on-entry-release-on-exit) says.
 2. From an up-to-date `<main>`, delete a merged `design/<slug>` with `git branch -d design/<slug>`
    (it refuses an unmerged branch: then ask), and run `git switch -c design/<slug>`.
 3. Write `<run>/frame-answers.json` again when it's missing: the area from the frontmatter, the
@@ -393,11 +464,12 @@ Never amend a `built` design: a new design supersedes it. A `proposed` one takes
 
 For each id with status `stale`, spawn a one-claim lane. Write a brief to
 `<run>/briefs/reresearch-<id>.md`: the claim's text, its citation and the pin that moved. Build
-the pack with the claim's lane as `--key`, as the research phase does, and run:
+the pack with the claim's lane as `--key`, as the research phase does, and launch the research
+workflow by name, with the research phase's fallbacks:
 
 ```
 Workflow({
-  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/design-research.js",
+  name: "swift-harness-design-research",
   args: {
     tier: "<tier>",
     mode: "reresearch",
@@ -452,6 +524,7 @@ A clarify applies itself: it needs no review and no approval.
 
    Exit 0 with `status` `valid` and `endSha` equal to `<newSha>` means the approval still holds.
    Anything else: halt and show the message. The change then needs an amend.
+4. Release the plan and say so: `"$SG" plan release <plan> --session <id> --json`.
 
 ### Amend
 
@@ -466,7 +539,8 @@ A clarify applies itself: it needs no review and no approval.
    `--claim-id`, and the standards
    reviewer's pack as review does. Run `design-review.js` with those 2 `packs`,
    `reviewers: ["evidence-auditor", "standards-reviewer"]`, and `previous` set to
-   `<run>/review-final.json`, so the challenger (and the pre-mortem at `deep`) carry forward.
+   `<run>/review-final.json` (inline, as a revise round passes it), so the challenger (and the
+   pre-mortem at `deep`) carry forward. Launch it by name, with the same fallbacks as review.
    When that file is missing, as in a fresh checkout, run the tier's whole review instead and tell
    the user why. Then `review-synth`, the verdict rules and 1 revise round, as in review. Log
    every disposition.
@@ -483,8 +557,8 @@ A clarify applies itself: it needs no review and no approval.
    the approval alone.
 6. **ADR.** At `standard` and `deep`, when `decision` is among the triggers, add an ADR as publish
    does, naming the earlier ADR by number and title.
-7. **Approved and merged**, as publish does. Then in `plan.json` set `approval` to the new record
-   and `clarifyChain` to `[]`.
+7. **Approved and merged**, as publish does, but keep the claim: steps 8 and 9 still write the
+   plan's state. Then in `plan.json` set `approval` to the new record and `clarifyChain` to `[]`.
 8. **`needs-replan`.** When `<plans>/<plan>/ledger.json` exists, copy it to
    `.harness/plan-draft/<plan>/ledger.json`. In the copy, set `status: "needs-replan"` on each task
    whose `covers` shares an id with `changedIds` and whose status isn't `done`. Leave the rest.
@@ -500,6 +574,9 @@ A clarify applies itself: it needs no review and no approval.
    ```bash
    "$SG" index set <plan> <current status> "amended to <newSha>; <n> tasks need replan; next: /swift-harness:plan" --session <id>
    ```
+
+9. **Release** the plan and tell the user it's released:
+   `"$SG" plan release <plan> --session <id> --json`.
 
 ## Status rules
 

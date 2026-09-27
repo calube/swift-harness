@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "alpha",
+      "deps": [],
+      "writeSet": ["Sources/Alpha/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-alpha"],
+      "estLines": 80,
+      "status": "pending",
+      "worktree": "../alpha",
+      "model": "sonnet"
+    },
+    {
+      "id": "beta",
+      "deps": [],
+      "writeSet": ["Sources/Beta/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-beta"],
+      "estLines": 80,
+      "status": "pending",
+      "worktree": "../beta",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [["alpha", "beta"]]
+}

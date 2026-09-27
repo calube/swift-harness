@@ -576,8 +576,8 @@ except the install check, which must go through the marketplace.
 - Attended: orchestrator plus user.
 - Deps: plugin-installs-for-real · Gate: ready · estLines: 150
 - Writes: `docs/e2e-report.md`, `examples/SampleApp/docs/` (through the design PR)
-- Does: standard `/swift-harness:design` → `/swift-harness:plan` on a real SampleApp feature (candidate: `CounterFeature` history that survives relaunch; confirmed at frame). The user answers the frame questions, clicks Approve, and approves the merge and push. `/swift-harness:plan` runs headless (`claude -p --plugin-dir plugin`) once approval is recorded.
-- Tests: design approved through the Artifact, PR merged, ledger passes `plan-lint` · `swiftgate self-test` and `calibrate design` pass · §11 estimates compared with measured tokens and wall time.
+- Does: standard `/swift-harness:design` → `/swift-harness:plan` on a real SampleApp feature (candidate: `CounterFeature` history that survives relaunch; confirmed at frame). The user answers the frame questions, clicks Approve, and approves the merge and push. The design session records the approval, then releases its plan claim and says so. `/swift-harness:plan` then runs headless (`claude -p --plugin-dir plugin`) in a new session, whose `plan claim` takes the released plan.
+- Tests: design approved through the Artifact, PR merged, the design session's release reported, the new session's `plan claim` exits 0 with `claimed`, ledger passes `plan-lint` · `swiftgate self-test` and `calibrate design` pass · §11 estimates compared with measured tokens and wall time.
 
 ---
 

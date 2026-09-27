@@ -56,149 +56,15 @@ public struct CalibrationLabel: Sendable, Equatable, Codable {
   }
 }
 
-/// The seeds under ``DesignCalibrationLayout/seedsDirectory``: one directory per agent, named
-/// after its `agents/<agent>.md`, holding one directory per case.
-public struct DesignCalibrationSeeds: Sendable, Equatable {
-  public struct Case: Sendable, Equatable {
-    public let name: String
-    /// Repo-relative case directory.
-    public let directory: String
-    public let input: String
-    public let label: CalibrationLabel
+/// The design suite's seeds: every case is an `input.md` and a question label.
+public typealias DesignCalibrationSeeds = CalibrationSeeds<CalibrationLabel>
+
+extension CalibrationLabel: CalibrationSeedLabel {
+  public static let suite = CalibrationSuite.design
+  public static func decode(_ data: Data, agent: String) -> Result<CalibrationLabel, SeedError> {
+    decode(data)
   }
-
-  public struct Agent: Sendable, Equatable {
-    public let name: String
-    /// The agent file's body after its frontmatter: what the agent runs with.
-    public let systemPrompt: String
-    public let cases: [Case]
-  }
-
-  /// A seed-set defect; `path` is repo-relative. Every one is a fix to the repository, never an
-  /// environment problem.
-  public enum Problem: Sendable, Equatable {
-    case noSeeds(path: String)
-    case missingLabel(path: String)
-    case missingInput(path: String)
-    case invalidLabel(path: String, reason: String)
-    /// A seed directory with no `agents/<name>.md`, or not named `design-*`.
-    case unknownAgent(path: String)
-    /// A hashed agent with no case.
-    case uncalibratedAgent(path: String)
-    case unreadable(path: String, reason: String)
-  }
-
-  public let agents: [Agent]
-  public let problems: [Problem]
-
-  public static func load(root: URL) -> DesignCalibrationSeeds {
-    let fileManager = FileManager.default
-    let seedsRoot = DesignCalibrationLayout.seedsDirectory
-    var problems: [Problem] = []
-    var agents: [Agent] = []
-    // Agents with at least one case directory, labelled or not: a broken case is reported as
-    // itself, not also as an uncalibrated agent.
-    var seeded: Set<String> = []
-
-    func directories(_ path: String) -> [String]? {
-      let url = root.appending(path: path, directoryHint: .isDirectory)
-      do {
-        return try fileManager.contentsOfDirectory(atPath: url.path).filter { name in
-          var isDirectory: ObjCBool = false
-          return !name.hasPrefix(".")
-            && fileManager.fileExists(
-              atPath: url.appending(path: name).path, isDirectory: &isDirectory)
-            && isDirectory.boolValue
-        }.sorted()
-      } catch {
-        problems.append(.unreadable(path: path, reason: "\(error)"))
-        return nil
-      }
-    }
-
-    func text(_ path: String) -> String? {
-      do {
-        return try String(contentsOf: root.appending(path: path), encoding: .utf8)
-      } catch {
-        problems.append(.unreadable(path: path, reason: "\(error)"))
-        return nil
-      }
-    }
-
-    func exists(_ path: String) -> Bool {
-      fileManager.fileExists(atPath: root.appending(path: path).path)
-    }
-
-    let agentNames = exists(seedsRoot) ? (directories(seedsRoot) ?? []) : []
-    for agentName in agentNames {
-      let agentSeeds = "\(seedsRoot)/\(agentName)"
-      let agentFile = "\(DesignCalibrationLayout.agentsDirectory)/\(agentName).md"
-      guard DesignCalibrationHash.isHashed(agentFile), exists(agentFile) else {
-        problems.append(.unknownAgent(path: agentSeeds))
-        continue
-      }
-      guard let agentText = text(agentFile), let caseNames = directories(agentSeeds) else {
-        continue
-      }
-      if !caseNames.isEmpty { seeded.insert(agentName) }
-      var cases: [Case] = []
-      for caseName in caseNames {
-        let directory = "\(agentSeeds)/\(caseName)"
-        let inputPath = "\(directory)/\(DesignCalibrationLayout.inputFile)"
-        let labelPath = "\(directory)/\(DesignCalibrationLayout.labelFile)"
-        guard exists(labelPath) else {
-          problems.append(.missingLabel(path: directory))
-          continue
-        }
-        guard exists(inputPath) else {
-          problems.append(.missingInput(path: directory))
-          continue
-        }
-        guard let input = text(inputPath), let labelText = text(labelPath) else { continue }
-        switch CalibrationLabel.decode(Data(labelText.utf8)) {
-        case .failure(let error):
-          problems.append(.invalidLabel(path: labelPath, reason: error.message))
-        case .success(let label):
-          cases.append(Case(name: caseName, directory: directory, input: input, label: label))
-        }
-      }
-      agents.append(
-        Agent(name: agentName, systemPrompt: body(ofAgent: agentText), cases: cases))
-    }
-
-    if let hashed = try? DesignCalibrationHash.discover(root: root) {
-      for file in hashed where file.path.hasPrefix("\(DesignCalibrationLayout.agentsDirectory)/") {
-        let name = String(
-          file.path.dropFirst(DesignCalibrationLayout.agentsDirectory.count + 1)
-            .dropLast(".md".count))
-        if !seeded.contains(name) {
-          problems.append(.uncalibratedAgent(path: file.path))
-        }
-      }
-    } else {
-      problems.append(
-        .unreadable(
-          path: DesignCalibrationLayout.agentsDirectory, reason: "can't list the design agents"))
-    }
-    if agents.allSatisfy(\.cases.isEmpty), problems.isEmpty {
-      problems.append(.noSeeds(path: seedsRoot))
-    }
-    return DesignCalibrationSeeds(agents: agents, problems: problems)
-  }
-
-  /// Strips a leading `---` frontmatter block, then surrounding blank lines.
-  static func body(ofAgent text: String) -> String {
-    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
-    var body = Substring(normalized)
-    if normalized.hasPrefix("---\n"),
-      let close = normalized.range(
-        of: "\n---\n",
-        range: normalized.index(normalized.startIndex, offsetBy: 3)..<normalized.endIndex)
-    {
-      body = normalized[close.upperBound...]
-    }
-    return body.trimmingCharacters(in: .whitespacesAndNewlines)
-  }
+  public static func requiredEntries(agent: String) -> [String] { [] }
 }
 
 /// Runs one design agent on one seed through the Foundation judge's Claude CLI invocation: the

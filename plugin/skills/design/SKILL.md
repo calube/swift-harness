@@ -15,12 +15,12 @@ checker, the drafter and 3 reviewers at `standard`; the same plus a pre-mortem a
 |---|---|
 | `/swift-harness:design <goal>` | 1. Frame |
 | `… --supersede <old-slug>` | 1. Frame; acts on the old design at the approved commit |
-| `… --revise` | [Revise from comments](references/review-publish-amend.md#revise-from-comments) |
-| `… --amend <slug>` | [Amend and clarify](references/review-publish-amend.md#amend-and-clarify) |
-| a plan whose index status is `in-review` | [Read the approval](references/review-publish-amend.md#read-the-approval) |
+| `… --revise` | [Revise from comments](references/review-publish-amend.md#revise-from-comments), after a claim |
+| `… --amend <slug>` | [Amend and clarify](references/review-publish-amend.md#amend-and-clarify), after a claim |
+| a plan whose index status is `in-review` | [Read the approval](references/review-publish-amend.md#read-the-approval), after a claim |
 
-When the frame finds that `<doc>` exists and this plan didn't write it, offer `--amend` instead
-of stopping.
+When the frame finds that `<doc>` exists and this plan didn't write it, ask with
+`AskUserQuestion`: switch to `--amend <slug>` (recommended), or stop.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the repository root, the
 directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-relative.
@@ -40,6 +40,12 @@ directory that holds `.swiftgate.toml`. Paths passed to `swiftgate` are repo-rel
 - **A premise is a claim.** An API, type or behaviour the request names isn't checked before
   research, even when a grep would settle it. The frame carries it into the lane briefs, and
   verify's probe decides it. Never stop the frame or rewrite the goal over a premise.
+- **Claim on entry, release on exit.** Every entry point claims the plan before it writes anything:
+  `"$SG" plan claim <plan> --session <id> --json`. On exit 1, show the user the holder and let
+  them decide; if that session has ended, they can run `swiftgate plan release <plan> --force` in
+  their own terminal. The skill never runs `--force`. When design finishes, once the skill has
+  recorded the approval, and when the user stops before deciding on the page, release the plan with
+  `"$SG" plan release <plan> --session <id> --json` and say so, so a new session can claim it.
 - **Halt, ask, resume.** A choice only the user can make stops the phase. Ask, record the answer,
   then resume where you stopped (`references/frame-research-verify.md` has the resume rules).
 
@@ -69,15 +75,19 @@ Follow [the frame steps](references/frame-research-verify.md#frame). In short:
 3. Ask the user to confirm the tier, with the recommended tier first.
 4. Claim the plan with this session's id:
    `"$SG" plan claim <plan> --session <id> --design <doc> --tier <tier> --json`.
-   Exit 1 means another session holds it, or another plan owns the doc: name it and stop. Only the user runs
-   `"$SG" plan release <plan> --force`.
+   Exit 1 means another session holds it, or another plan owns the doc: show the user which, and
+   let them decide. On `already-held` with a new tier, as after a reframe, re-scope with
+   `"$SG" plan set <plan> --session <id> --tier <tier> --resume "<note>" --json`.
 5. Switch to the `design/<slug>` branch, write `answers.jsonl` and the frame's `answer` claims, and
    run `"$SG" index set <plan> designing "<resume note>" --session <id>`.
 
 ## 2. Research
 
 Follow [the research steps](references/frame-research-verify.md#research). Build 1 context pack
-per lane with `"$SG" context-pack --role research-lane`, then run `workflows/design-research.js`.
+per lane with `"$SG" context-pack --role research-lane`, after storing the doc snapshots and
+command captures the briefs need. Then launch the registered workflow `swift-harness-design-research`
+by name; if Workflow refuses it, launch a copy under `<run>/workflows/`, then fall back to the
+Agent tool.
 `quick` runs the codebase lane alone; `standard` and `deep` run all 4. On `needs-decision`, ask,
 record, and relaunch with `resumeFromRunId`. Write each lane's claims to `<ev>/claims.jsonl` and
 each probe to `<ev>/probes/<ev-id>.snippet.swift`.
@@ -113,8 +123,10 @@ The draft phase ends with:
 
 Follow [the review steps](references/review-publish-amend.md#review). Build 1 pack per reviewer
 with `"$SG" context-pack --role evidence-auditor`, `--role standards-reviewer` and
-`--role challenger`; the pre-mortem gets the challenger's pack. Run
-`workflows/design-review.js`, write each `reviews` entry to its own file, then run
+`--role challenger`, and at `deep` a pre-mortem pack (`--role evidence-auditor --key pre-mortem`).
+Launch `swift-harness-design-review` by name, with the same fallbacks as research. Each round
+writes into a new `<run>/review-<r>/`, numbered on from any earlier round. Write each `reviews`
+entry to its own file, then run
 `"$SG" review-synth --run-directory <run>/review-<r> --design <doc> --tier <tier> --json` with
 those files. `quick` runs no reviewer. On `revise`, run 1 revise round (2 at `deep`): redraft,
 then relaunch with `reviewers` set to the report's `rerun` and `previous` set to the last return.
@@ -135,6 +147,11 @@ Follow [the publish steps](references/review-publish-amend.md#publish):
 5. Check the designSha with `"$SG" design-diff HEAD:<doc> <doc> --json`, set status `approved`,
    merge, record the approval in `plan.json`, and run
    `"$SG" index set <plan> approved "<note>" --session <id>`.
+6. Release the plan, `"$SG" plan release <plan> --session <id> --json`, and tell the user that
+   `/swift-harness:plan` can now claim it from any session.
+
+Publish saves the last review round's `workflow.json` as `<run>/review-final.json`, whether review
+ended `ready` or the user dismissed the gating findings.
 
 ## 7. Revise, supersede, amend
 
@@ -148,5 +165,5 @@ Follow [the publish steps](references/review-publish-amend.md#publish):
   from `"$SG" evidence check --at HEAD` spawns a one-claim `reresearch` lane first.
 
 [Status rules](references/review-publish-amend.md#status-rules) lists the only status changes the
-skill makes. End every run by reporting the doc path, the tier, the verdict, the page URL, and the
-plan's index status.
+skill makes. End every run by reporting the doc path, the tier, the verdict, the page URL, the
+plan's index status, and whether this session still holds the plan.

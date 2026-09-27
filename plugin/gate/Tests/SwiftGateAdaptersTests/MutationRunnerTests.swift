@@ -162,6 +162,59 @@ struct MutationRunnerTests {
   }
 
   @Test(
+    "the unmutated tests run once per package however many workers build it, only once no build is running, and every worker's timeouts scale from that run — catches each worker running the whole suite at once, or beside the other workers' compiles, and failing it for want of headroom"
+  )
+  func oneBaselinePerPackage() async throws {
+    let seed = try Seed()
+    defer { seed.remove() }
+    let workers = 4
+    // Holds every worker at its first build until all of them have one, so each takes work;
+    // then keeps all but the first compiling until the unmutated tests start, or a while if
+    // they wait for the compiles, as they must.
+    let building = Mutex(0)
+    let compiling = Mutex(0)
+    let allBuilding = DispatchSemaphore(value: 0)
+    let baselineStarted = DispatchSemaphore(value: 0)
+    let baselines = Mutex<[Int]>([])
+    let toolchain = FakeMutationToolchain(
+      build: { _, _ in
+        compiling.withLock { $0 += 1 }
+        defer { compiling.withLock { $0 -= 1 } }
+        let started = building.withLock { count in
+          count += 1
+          return count
+        }
+        if started == workers {
+          for _ in 0..<workers { allBuilding.signal() }
+        }
+        if started <= workers { _ = allBuilding.wait(timeout: .now() + 60) }
+        if (2...workers).contains(started) { _ = baselineStarted.wait(timeout: .now() + 2) }
+        return .built
+      },
+      test: { root, _ in
+        guard Self.content(root) == Self.original else {
+          return (.failed(failingTests: ["T.t()"]), .seconds(1))
+        }
+        let alongside = compiling.withLock { $0 }
+        baselines.withLock { $0.append(alongside) }
+        for _ in 1..<workers { baselineStarted.signal() }
+        return (.passed(executed: 1), .seconds(7))
+      })
+
+    let result = await run(
+      Self.jobs(9), scratch: CopyingScratchWorktrees(seed: seed.root), toolchain: toolchain,
+      workers: workers)
+
+    #expect(Set(toolchain.builds).count == workers)
+    // One run, with no compile beside it.
+    #expect(baselines.withLock { $0 } == [0])
+    #expect(result.results.allSatisfy { $0.outcome == .killed(failingTests: ["T.t()"]) })
+    let mutantRuns = toolchain.tests.filter { $0.timeout != .seconds(900) }
+    #expect(mutantRuns.count == 9)
+    #expect(mutantRuns.allSatisfy { $0.timeout == .seconds(35) })
+  }
+
+  @Test(
     "workers each get their own scratch tree, every mutant runs exactly once, and workers never exceed the mutants — catches parallel workers colliding or duplicating runs"
   )
   func parallelWorkers() async throws {
@@ -179,11 +232,8 @@ struct MutationRunnerTests {
     #expect(Set(scratch.trees).count == 4)
     #expect(result.results.count == 9)
     #expect(result.results.allSatisfy { $0.outcome == .killed(failingTests: ["T.t()"]) })
-    // One run per mutant plus one baseline in each tree that took work; a fast worker may
-    // drain the queue before another takes anything.
     let used = Set(toolchain.tests.map(\.root))
     #expect(used.isSubset(of: Set(scratch.trees)))
-    #expect(toolchain.tests.count == 9 + used.count)
 
     let few = await run(Self.jobs(2), scratch: scratch, toolchain: toolchain, workers: 8)
     #expect(few.workers == 2)

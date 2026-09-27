@@ -352,7 +352,7 @@ Plan identity and approval chain (the ledger holds tasks and waves):
 | `writeSet` | exact paths or `/`-terminated prefixes |
 | `gate` | tier ≥ the highest tier among `tests` |
 | `covers` | `req-…` and `test-…` ids from the design at `designSha` |
-| `status` | `pending` · `in-progress` · `done` · `needs-replan` · … (sub-project 5 may add states; `done` tasks are immutable) |
+| `status` | `pending` · `in-progress` · `done` · `needs-replan` · … (sub-project 5 adds `blocked` and `abandoned`, and tasks gain `model` and `branch`: see the [build executor spec](2026-09-26-build-executor-design.md) §5.2; `done` tasks are immutable) |
 | `worktree` | name only, `../<repo>-<plan>-<task>`; sub-project 5 creates it |
 | `waves` | must equal `plan-schedule` output (hand edits fail `plan-lint`) |
 
@@ -538,6 +538,8 @@ Native model names only. The plugin never names relay or proxy agent types.
 | quick | 3: one research lane + claim checker + drafter (without the checker no claim reaches `supported`) | — | no new module kind, no new dependency |
 | standard | ~9: 4 lanes + claim checker + drafter + 3 reviewers | — | default |
 | deep | ~12 | pre-mortem, per-option probes, 2 revise rounds | `design-scope` recommends or user picks |
+
+Only a build preset or `--tier sketch` selects a fourth tier, `sketch`: see the [build executor spec](2026-09-26-build-executor-design.md) §9.
 
 Mechanical checks (`evidence check`, `probe`, `design-lint`, `docs-lint`) run at every tier. Quick
 tier writes one design doc plus evidence, no ADR, no review agents; the user's Artifact approval is

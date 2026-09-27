@@ -1,0 +1,10 @@
+{
+  "task": "queue-core",
+  "outcome": "ready-to-merge",
+  "commits": ["{{taskCommit}}", "{{offBranchCommit}}"],
+  "gate": {"tier": "push", "verdict": "GREEN", "runId": "{{gateRunId}}"},
+  "review": {"mode": "gate", "findings": []},
+  "testsAdded": ["test-queue-drains"],
+  "notes": "Queue.drain() returns [Item]",
+  "designConflict": null
+}

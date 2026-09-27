@@ -961,3 +961,35 @@ against that subcommand's help. A later skill that names a missing command or fl
   committed pins don't cover the manifest. A missing `origin/main` names `pass --base <ref>`.
 - **Known:** mutate's unmutated baseline fails `LiveProcessRunnerTests` even on a quiet machine, so every ready
   run is BLOCKED (0 gating findings) until that's fixed. The shim runs the hooks as no-ops while it rebuilds.
+
+## Review fix wave 2
+
+- **Plan-state authority (CLI):** `plan claim --design` exits 1 with status `design-owned` (JSON key `owner`) when
+  another plan names the doc (canonical path, any case). `index set <plan> <status> <resume> --session <id>`: 0 set,
+  1 not holder (JSON `error:"not holder"`, `holder`), 2 missing or invalid session. The new
+  `plan set <plan> --session <id> [--tier quick|standard|deep|sketch] [--resume <line>] [--json]` exits 0 `updated`,
+  1 `not-held`, 2 `blocked`. Lock refusals name the holder and never print a `--force` recipe. The plans root holds
+  `claim.lock.*` and `index.lock.*`.
+- **Guards:** `ShellWriteTargets` covers `git checkout|restore|rm|mv` pathspecs. `PlanCommandGuard.sessionCommands`
+  (Guards.swift) lists the verbs that act only as the caller's own main session: plan claim/release/set and
+  index set here, plus ledger set, build start/finish, worktree create and (later) build merge from sub-project 5.
+  `plan release --force` is denied to every tool call. Exactly one plan owns a design path, and a `plan.json` edit
+  that repoints `design`, or doesn't decode, is denied. Lock files (`claim`, `index`, `ledger`, `events`) can't be
+  hand-edited. The dead `.harness/plans` rule and `isOrchestrator` are gone. The evals hooks corpus is 77 cases, all
+  correct.
+- **Shim:** during a rebuild, hooks exec the last good cached binary; only a cold install with no binary fails open.
+- **Research inputs:** research-lane packs need `--key` (one of the 4 lane names) and `--design`. `ResearchLanePin`
+  reads a short hex SHA as a commit and validates SDK pins against a closed pattern (bare version in
+  `citation.pin`). Packs include the pin and doc path. Claim-checker packs are per key. The pre-mortem pack is
+  `--role evidence-auditor --key pre-mortem`. Lanes return `dropped`, and apple-docs may return
+  `snapshotRequests [{page, reason}]`. `tests/skill_commands_test.mjs` fails on a skill call missing a required flag.
+- **Xcode pin (user decision):** `test` t1/t2/t3 and every `check` tier's T1 and simulator tiers end BLOCKED with
+  `doctor.xcode-pin` on a mismatch or an unreadable version, via `Doctor.matchesPin` (major.minor). T0 is unaffected,
+  and no pin means no block. The evals failure-modes suite is 12/12.
+- **Mutate:** each package's unmutated tests run once, after the other builds. Mutate builds and tests pass
+  `-debug-info-format none` (no dsymutil) and `--jobs` of cores ÷ workers (`MutationToolchain.sharing(jobs:)`).
+  SIGTERM, SIGINT and SIGHUP forward to child process groups. SessionStart removes `-swiftgate-prove-<dead pid>-`
+  worktrees. A self-mutate run took 54 minutes.
+- **Machine sharing:** only one ready tier runs at a time machine-wide. Wait with
+  `until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done` (the bracket keeps the pattern from
+  matching its own shell). At load 30+, `RepositoryScriptTests.shim` can hit its 600 s timeout while its shim builds.

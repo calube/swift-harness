@@ -29,7 +29,11 @@ enum BuildCheckReturnRun {
     init(_ message: String) { self.message = message }
   }
 
-  static func run(file: String, plan: String?, git: any Git) async -> BuildCheckReturnReport {
+  /// - Parameter fix: check a fixer's return: its commits are on `<plan>/fix-<task>`, its gate
+  ///   run is in the fix worktree, and the tier to meet is the run preset's merge gate.
+  static func run(file: String, plan: String?, fix: Bool = false, git: any Git) async
+    -> BuildCheckReturnReport
+  {
     let blocked = { (task: String?, message: String) in
       BuildCheckReturnReport(
         command: command, plan: plan, task: task, verdict: .blocked, findings: [], warnings: [],
@@ -48,7 +52,8 @@ enum BuildCheckReturnRun {
     }
     do throws(Blocked) {
       var warnings: [String] = []
-      let evidence = try await gather(taskReturn, plan: plan, git: git, warnings: &warnings)
+      let evidence = try await gather(
+        taskReturn, plan: plan, fix: fix, git: git, warnings: &warnings)
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       return BuildCheckReturnReport(
         command: command, plan: plan, task: taskReturn.task,
@@ -62,7 +67,8 @@ enum BuildCheckReturnRun {
   }
 
   private static func gather(
-    _ taskReturn: TaskReturn, plan slug: String, git: any Git, warnings: inout [String]
+    _ taskReturn: TaskReturn, plan slug: String, fix: Bool, git: any Git,
+    warnings: inout [String]
   ) async throws(Blocked) -> TaskReturnEvidence {
     let store: PlanStateStore
     do throws(PlanStateStoreError) {
@@ -79,11 +85,13 @@ enum BuildCheckReturnRun {
     guard let task = ledger.tasks.first(where: { $0.id == taskReturn.task }) else {
       throw Blocked("plan `\(slug)` has no task `\(taskReturn.task)`")
     }
-    let taskGate = try await taskGate(of: task, plan: store.plan, slug: slug, git: git)
+    let taskGate = try await taskGate(
+      of: task, plan: store.plan, slug: slug, fix: fix, git: git)
     let names: TaskWorktree
     do {
       names = try TaskWorktree(
-        commonDirectory: try await git.commonDirectory(), plan: slug, task: task.id)
+        commonDirectory: try await git.commonDirectory(), plan: slug,
+        task: fix ? "fix-\(task.id)" : task.id)
     } catch {
       throw Blocked("can't name task `\(task.id)`'s worktree: \(error)")
     }
@@ -113,9 +121,10 @@ enum BuildCheckReturnRun {
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree))
   }
 
-  /// The preset's fixed tier, or the ledger's own when the preset defers to it.
+  /// The preset's fixed tier, or the ledger's own when the preset defers to it. A fix is merged
+  /// straight after, so it meets the preset's merge gate instead.
   private static func taskGate(
-    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, git: any Git
+    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool, git: any Git
   ) async throws(Blocked) -> CheckTier {
     let store: BuildRunStore?
     do {
@@ -130,6 +139,7 @@ enum BuildCheckReturnRun {
     } catch {
       throw Blocked("reading build run \(store.runID): \(error)")
     }
+    if fix { return record.preset.mergeGate }
     switch record.preset.taskGate {
     case .ledger: return task.gate
     case .tier(let tier): return tier
@@ -250,12 +260,18 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
         + "nothing, so it isn't required."))
   var session: String?
 
+  @Flag(
+    help: ArgumentHelp(
+      "Check a fixer's return: commits on <plan>/fix-<task>, the gate run in the fix worktree, "
+        + "and the run preset's merge gate as the tier to meet."))
+  var fix = false
+
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let report = await BuildCheckReturnRun.run(file: file, plan: plan, git: git)
+    let report = await BuildCheckReturnRun.run(file: file, plan: plan, fix: fix, git: git)
     Console.write(BuildCheckReturnRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

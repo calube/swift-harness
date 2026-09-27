@@ -31,6 +31,8 @@ public final class FakeMutationToolchain: MutationToolchain {
   /// Scratch roots of every build, in call order.
   public var builds: [URL] { recordedBuilds.withLock { $0 } }
   public var tests: [TestCall] { recordedTests.withLock { $0 } }
+  /// Scripted handlers already stand in for the whole build, so a compile width changes nothing.
+  public func sharing(jobs: Int) -> any MutationToolchain { self }
 
   public func buildTests(root: URL, packageDirectory: String) async -> MutantBuildResult {
     recordedBuilds.withLock { $0.append(root) }
