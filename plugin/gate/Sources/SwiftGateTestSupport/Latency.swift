@@ -10,11 +10,18 @@
 /// slows every sample, including the fastest, while a scheduler stall only ever slows some of
 /// them.
 ///
-/// Pair this with ``cpuMilliseconds(_:)`` rather than a wall-clock timer: a hook budget is a cost
-/// budget, and wall time also counts time this process spent off the CPU waiting for a busy
-/// machine to schedule it, which the fastest-of-N trick alone can't fully absorb once other
+/// Pair this with ``threadCPUMilliseconds(_:)`` rather than a wall-clock timer: a hook budget is
+/// a cost budget, and wall time also counts time this process spent off the CPU waiting for a
+/// busy machine to schedule it, which the fastest-of-N trick alone can't fully absorb once other
 /// processes hold the CPU for the whole sampling window (as sub-project 2's evals found: 131 to
 /// 1149 ms wall on a loaded machine, for hooks whose own cost never changed).
+///
+/// Neither of the shared readings here is process-wide: `RUSAGE_SELF`/`RUSAGE_CHILDREN` looked
+/// right at first but measure the whole `xctest` binary, so every other test's threads and every
+/// other test's reaped children count against whichever hook happens to be sampled at the same
+/// moment — exactly the kind of load-dependent noise this file exists to remove. A per-thread
+/// clock and a per-child `wait4` reading don't have that problem: each is scoped to the one thing
+/// being measured, no matter what else the process is doing at the same time.
 public enum Latency {
   /// Runs `sample` `times` times (default 5) and returns every measured duration in
   /// milliseconds, in run order. Callers assert `samples.min()! < budget` and report every
@@ -31,45 +38,29 @@ public enum Latency {
     return samples
   }
 
-  /// Runs `body` and returns its result together with the CPU time actually consumed while it
-  /// ran, in milliseconds: this process's own time (`RUSAGE_SELF`) plus every child process it
-  /// spawned and reaped meanwhile (`RUSAGE_CHILDREN`). A child's rusage is credited to its parent
-  /// as soon as the parent reaps it — which `LiveProcessRunner` (and `Foundation.Process`) does
-  /// before `run(_:)` returns — so a hook that shells out to `git` has that git call's cost
-  /// counted here too. Unlike a wall-clock reading, this is unaffected by another process on the
-  /// machine holding the CPU: a contended scheduler only delays when this code runs, never how
-  /// much of it the CPU actually executed.
-  public static func cpuMilliseconds<T>(
+  /// Runs `body` and returns its result together with the CPU time this call spent on the
+  /// *calling thread*, in milliseconds, read from `CLOCK_THREAD_CPUTIME_ID`. That clock counts
+  /// only this thread's own execution, so a CPU-bound test running concurrently on another thread
+  /// of this same process never adds to the reading.
+  ///
+  /// Only correct for a hook that never leaves this thread while it runs: Swift's cooperative
+  /// pool is free to resume a suspended task on a different worker thread, and this clock cannot
+  /// see time spent on another one. Use this for a hook that runs synchronously and in-process
+  /// (a fake dependency with no real IO, so nothing inside it ever actually suspends); once a
+  /// hook shells out to a real child process, measure that child's own `wait4` rusage instead
+  /// (see `MeasuredProcessRunner`), which is exact regardless of which thread awaits it.
+  public static func threadCPUMilliseconds<T>(
     _ body: () async throws -> T
   ) async rethrows -> (T, Int) {
-    let before = ProcessCPUTime.current()
+    let before = Self.threadCPUNanoseconds()
     let value = try await body()
-    let after = ProcessCPUTime.current()
-    return (value, after.milliseconds(since: before))
-  }
-}
-
-/// This process's own CPU time plus every child process's, as of the moment it was read. See
-/// ``Latency/cpuMilliseconds(_:)``.
-struct ProcessCPUTime {
-  private let microseconds: Int64
-
-  static func current() -> ProcessCPUTime {
-    var own = rusage()
-    getrusage(RUSAGE_SELF, &own)
-    var children = rusage()
-    getrusage(RUSAGE_CHILDREN, &children)
-    let total =
-      Self.microseconds(own.ru_utime) + Self.microseconds(own.ru_stime)
-      + Self.microseconds(children.ru_utime) + Self.microseconds(children.ru_stime)
-    return ProcessCPUTime(microseconds: total)
+    let after = Self.threadCPUNanoseconds()
+    return (value, Int((after - before) / 1_000_000))
   }
 
-  func milliseconds(since earlier: ProcessCPUTime) -> Int {
-    Int((microseconds - earlier.microseconds) / 1000)
-  }
-
-  private static func microseconds(_ time: timeval) -> Int64 {
-    Int64(time.tv_sec) * 1_000_000 + Int64(time.tv_usec)
+  private static func threadCPUNanoseconds() -> Int64 {
+    var ts = timespec()
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts)
+    return Int64(ts.tv_sec) * 1_000_000_000 + Int64(ts.tv_nsec)
   }
 }

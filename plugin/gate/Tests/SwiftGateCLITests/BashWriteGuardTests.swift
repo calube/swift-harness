@@ -99,10 +99,15 @@ private struct BashWriteScenario {
     return output.stdout.text
   }
 
-  /// The hook's output for `command`, and how long the hook took.
-  func run(_ command: String, subagent: Bool) async throws -> (
-    output: [String: String]?, milliseconds: Int
-  ) {
+  /// The hook's output for `command`, and how long the hook took on this thread. `usingRunner`
+  /// overrides the scenario's shared `LiveProcessRunner` — a hook-latency test that needs an
+  /// isolated reading of just its own git calls passes a fresh ``MeasuredProcessRunner`` here,
+  /// since `milliseconds` alone (this thread's own time) never sees a child process's cost.
+  func run(_ command: String, subagent: Bool, usingRunner override: (any ProcessRunner)? = nil)
+    async throws -> (
+      output: [String: String]?, milliseconds: Int
+    )
+  {
     var text = try Fixture.text("Hooks/pre-tool-use-bash-allowed.json")
     let quoted = String(decoding: try JSONEncoder().encode(command), as: UTF8.self)
     text = text.replacingOccurrences(of: Self.recordedCommand, with: quoted)
@@ -113,12 +118,12 @@ private struct BashWriteScenario {
         with: "\"agent_id\": \"a1b2c3d4\", \"agent_type\": \"general-purpose\", \"tool_use_id\"")
     }
     let dependencies = HookDependencies(
-      git: LiveGit(runner: runner, repositoryRoot: worktree.path),
+      git: LiveGit(runner: override ?? runner, repositoryRoot: worktree.path),
       swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), formatter: FakeSwiftFormatter(),
       xcode: FixedXcode(version: "26.2"), sweep: PendingOrphanCloneSweep(),
       commitJudge: DisabledCommitCommentJudge(), environment: environment)
     let input = Data(text.utf8)
-    let (result, milliseconds) = await Latency.cpuMilliseconds {
+    let (result, milliseconds) = await Latency.threadCPUMilliseconds {
       await HookRunner.run(.preToolUse, input: input) { _ in dependencies }
     }
     guard let stdout = result.stdout else { return (nil, milliseconds) }
@@ -257,10 +262,14 @@ struct BashWriteGuardTests {
       "swift build 2>&1 | tee build.log && cp \(scenario.ledgerA) /tmp/backup "
       + "&& echo '{}' > \(scenario.ledgerA)"
 
+    // The guard's own work is in-process, but it resolves the plan common dir through a real
+    // `git` call: a fresh MeasuredProcessRunner per sample gives that one child's own wait4
+    // rusage, immune to every other test's children in this same xctest process.
     let samples = try await Latency.samples {
-      let (output, milliseconds) = try await scenario.run(command, subagent: true)
+      let measured = MeasuredProcessRunner(baseEnvironment: BashWriteScenario.environment)
+      let (output, _) = try await scenario.run(command, subagent: true, usingRunner: measured)
       #expect(output?["permissionDecision"] == "deny")
-      return milliseconds
+      return measured.totalChildCPUMilliseconds
     }
     #expect(samples.min()! < 50, "fast samples: \(samples)ms, budget: 50ms")
   }
