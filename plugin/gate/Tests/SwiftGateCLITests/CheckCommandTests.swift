@@ -79,6 +79,33 @@ struct CheckCommandTests {
     #expect(parts.findings.contains { $0.ruleID == HostTestEvidenceRules.noTestsRuleID })
   }
 
+  @Test(
+    "an Xcode pin mismatch ends T1, T2 and T3 BLOCKED with one doctor.xcode-pin finding, and T0 still runs — catches check reporting a build under the wrong toolchain as if the code were green"
+  )
+  func xcodePinMismatch() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+    let mismatched = SimulatorTestCheck.Dependencies(
+      makeDevices: { _ in FakeDevices() },
+      xcodebuild: FakeXcodebuild(versionOutput: "Xcode 25.0\nBuild version 1A1\n"),
+      reader: FakeXcresultReader(scenario: "pass"))
+
+    let parts = try await CheckRun.run(
+      root: repository.root, tier: .ready, base: "origin/main", context: repository.context(),
+      dependencies: CheckRun.Dependencies(
+        root: repository.root, swiftPM: try ProbeRepository.swiftPM(replaying: "pass"),
+        git: FakeGit(changed: [], mergeBase: "base"), formatter: FakeSwiftFormatter(),
+        simulator: mismatched))
+
+    #expect(parts.tiers.map(\.tier) == [.t0, .t1, .t2, .t3])
+    #expect(parts.tiers.dropFirst().allSatisfy { $0.verdict == .blocked })
+    let pinFindings = parts.findings.filter { $0.ruleID == Doctor.xcodePinRuleID }
+    #expect(pinFindings.count == 1)
+    #expect(pinFindings.first?.message.contains("25.0") == true)
+    // T1 never ran, so nothing claims to have exercised its (empty, on purpose) test target.
+    #expect(!parts.findings.contains { $0.ruleID == HostTestEvidenceRules.noTestsRuleID })
+  }
+
   @Test("ready lists every step this build cannot run yet — catches ready silently equal to push")
   func ready() async throws {
     let repository = try ProbeRepository()

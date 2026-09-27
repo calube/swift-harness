@@ -13,7 +13,7 @@ The testing rules (tiers, red/green, snapshots, flake stress) live in the testin
 
 ### Platform and toolchain
 
-Swift 6 language mode (complete concurrency checking), iOS 18+, SwiftUI. Xcode 26.2 / Swift 6.2.3, pinned in `.swiftgate.toml`; `swiftgate doctor` blocks on a mismatch. The app is a thin app target plus local Swift packages. Core packages declare `.macOS` so `swift test` runs on the host.
+Swift 6 language mode (complete concurrency checking), iOS 18+, SwiftUI. Xcode 26.2 / Swift 6.2.3, pinned in `.swiftgate.toml` (major.minor: a pin of `26.2` accepts `26.2.x`, never `26.4`). A selected Xcode that doesn't match the pin ends `swiftgate doctor` BLOCKED, and every `test`/`check` tier that builds or runs Swift BLOCKED with `doctor.xcode-pin`. T0's lint-only checks parse source with SwiftSyntax and never touch the toolchain, so they still run. The app is a thin app target plus local Swift packages. Core packages declare `.macOS` so `swift test` runs on the host.
 
 ### Library pins
 
@@ -671,5 +671,5 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `plugin-validate.failed`, `plugin-validate.not-run`, `plugin-validate.summary` | `check --tier ready` in a repository that ships a Claude Code plugin in `plugin/` runs `claude plugin validate --strict --json plugin`. Every error or warning gates, and so does output that isn't a validation report. Without `claude` on `PATH`, or when it can't run, the step is a non-gating note, never BLOCKED |
 | `comments.id-source-unreadable` | design plan workflows §5.1 (id policy); a ledger, claims file or doc that exists but doesn't parse — never gates, but a corrupt source is never silent either |
 | `swiftgate.self-test`, `swiftgate.self-test.judge`, `swiftgate.self-test.judge-metrics` | H1 |
-| `doctor.xcode-pin`, `doctor.toolchain`, `doctor.simulator-runtime`, `doctor.disk`, `doctor.shim`, `doctor.swiftlint`, `doctor.issue-reporting`, `doctor.upgrade-hazard` | `swiftgate doctor`; [Toolchain hazards](#toolchain-hazards) |
+| `doctor.xcode-pin`, `doctor.toolchain`, `doctor.simulator-runtime`, `doctor.disk`, `doctor.shim`, `doctor.swiftlint`, `doctor.issue-reporting`, `doctor.upgrade-hazard` | `swiftgate doctor`; [Toolchain hazards](#toolchain-hazards). `doctor.xcode-pin` also BLOCKS `test --tier t1\|t2\|t3` and every `check` tier's T1 and simulator tiers (never T0) when the selected Xcode doesn't match the pin, is unreadable, or isn't selected at all; a repository with no pin configured is never blocked on it |
 | `guard.raw-xcodebuild`, `guard.simctl-all`, `guard.snapshot-record`, `guard.global-derived-data`, `guard.snapshot-reference`, `guard.package-resolved`, `guard.xcresult`, `guard.plan-state` | [hooks.md](hooks.md) (PreToolUse guards) |
