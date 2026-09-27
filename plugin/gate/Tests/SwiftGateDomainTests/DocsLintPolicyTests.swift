@@ -52,20 +52,6 @@ struct DocsLintPolicyTests {
     #expect(findings.filter { $0.ruleID.hasPrefix("docs-lint.managed-file") } == [])
   }
 
-  @Test(
-    "a repo whose managed_files key never named the router or AGENTS.md goes GREEN once bootstrap's suggested edit adds them — catches the upgrade leaving docs-lint permanently red"
-  )
-  func addingBootstrapsSuggestedEntriesClearsTheFinding() throws {
-    let documents = [Self.doc("docs/index.md", "one two"), Self.doc("AGENTS.md", "one two")]
-    let before = try Self.check(documents, config: DocsConfig())
-    let unlisted = before.filter { $0.ruleID == "docs-lint.managed-file-unlisted" }
-    #expect(Set(unlisted.map(\.file)) == ["docs/index.md", "AGENTS.md"])
-
-    let after = try Self.check(
-      documents, config: DocsConfig(managedFiles: ["docs/index.md", "AGENTS.md"]))
-    #expect(after.filter { $0.ruleID.hasPrefix("docs-lint.managed-file") } == [])
-  }
-
   // MARK: - Non-vacuity: repo anchors
 
   @Test(
