@@ -120,6 +120,15 @@ struct BootstrapRouterTests {
   }
 
   @Test(
+    "the gitignore template ignores the build returns and a worker's scratch directory — catches a build leaving main dirty for the next ship preflight, and a worker's scratch files reaching a commit"
+  )
+  func gitignoreTemplateIgnoresBuildScratch() throws {
+    let text = try template("templates/gitignore")
+    #expect(text.contains("**/.harness/build/"))
+    #expect(text.contains("**/.harness/tmp/"))
+  }
+
+  @Test(
     "bootstrap wires a commit-msg hook, and tracks every hook the shipped template installs — catches lefthook.yml gaining a stanza bootstrap never checks is installed"
   )
   func commitMsgHookWiredWithItsCommand() throws {

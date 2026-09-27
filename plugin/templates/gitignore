@@ -9,4 +9,6 @@
 **/.harness/design-render/
 **/.harness/plan-draft/
 **/.harness/task-status.json
+**/.harness/build/
+**/.harness/tmp/
 .build/
