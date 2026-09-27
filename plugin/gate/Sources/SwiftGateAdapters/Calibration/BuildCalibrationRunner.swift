@@ -38,7 +38,8 @@ public struct BuildCalibrationRunner: Sendable {
 
   /// - Parameters:
   ///   - root: the repository holding the seeds.
-  ///   - sandboxRoot: where each case's repository is built.
+  ///   - sandboxRoot: where each case's repository is built, one directory per case; give each
+  ///     run its own.
   ///   - pluginBin: put first on the agent's `PATH`, so its `swiftgate` is this checkout's.
   ///   - defaultModel: for an agent whose frontmatter pins none.
   public init(
@@ -68,8 +69,9 @@ public struct BuildCalibrationRunner: Sendable {
       throw .seedDefect("\(agent.name) isn't a build agent calibrate build can seed")
     }
     let sandbox = sandboxRoot.appending(
-      path: "\(agent.name)-\(seed.name)-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory
-    )
+      path: "\(agent.name)-\(seed.name)", directoryHint: .isDirectory)
+    // A leftover from an earlier run under the same root would be laid over, not replaced.
+    try? FileManager.default.removeItem(at: sandbox)
     let repository = Sandbox(
       directory: sandbox, seed: root.appending(path: seed.directory, directoryHint: .isDirectory),
       tools: tools)

@@ -72,7 +72,9 @@ struct CalibrateBuildCommand: AsyncParsableCommand {
     let calibration = BuildCalibrationRunner(
       agent: runner, tools: runner, root: root,
       sandboxRoot: FileManager.default.temporaryDirectory.appending(
-        path: "swiftgate-calibrate-build", directoryHint: .isDirectory),
+        path: "swiftgate-calibrate-build-\(Int(now.timeIntervalSince1970))-"
+          + "\(ProcessInfo.processInfo.processIdentifier)",
+        directoryHint: .isDirectory),
       pluginBin: root.appending(path: "\(CalibrationSuite.pluginDirectory)/bin").path,
       defaultModel: model, agentTimeout: .seconds(timeoutMinutes * 60))
     try await StaticCheckRun.execute(root: root, format: output.format) {
