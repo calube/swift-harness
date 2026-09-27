@@ -130,6 +130,20 @@ struct HostTestEvidenceTests {
   }
 
   @Test(
+    "a compile error inside a #expect macro expansion is RED at the test's file:line, never BLOCKED — catches a session ending on a test that doesn't compile"
+  )
+  func macroExpansionCompileError() throws {
+    let outcome = HostTestEvidenceRules.evaluate(try evidence("macro-compile-error"))
+
+    #expect(outcome.verdict == .red)
+    #expect(outcome.findings.map(\.ruleID) == ["t1.build-failed"])
+    #expect(outcome.findings.first?.file == "\(Self.package)/Tests/ProbeTests/PassTests.swift")
+    #expect(outcome.findings.first?.line == 20)
+    #expect(
+      outcome.findings.first?.message.contains("errors thrown from here are not handled") == true)
+  }
+
+  @Test(
     "a build failure with no repository location is BLOCKED — catches toolchain breakage sent to the code"
   )
   func environmentFailure() throws {
