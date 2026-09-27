@@ -12,7 +12,7 @@ Paused, nothing running:
     WIP committed on its branch (its last commit body has the state). Scope: a machine-wide flock for ready, mutate
     and prove; reaping recorded process groups; check --background plus swiftgate wait; per-phase telemetry; a total
     mutate concurrency bound; the mutate baseline run alone before mutants. Open question it was chasing: two
-    LiveProcessRunnerTests kills took about 60 s under load (a possible real ProcessTree bug). Resume it with SendMessage or a fresh worker.
+    LiveProcessRunnerTests kills took about 60 s under load; its worker couldn't reproduce this, kills landed in under 1.1 s at load 55–76. WIP 07d00b0. Before resuming, rebase onto build-proof-and-write-sets (24fc934), which also changes check, prove and history.jsonl (--proof-base, --prove/--mutate below ready, steps, proofBases).
   - Mutate on main hasn't produced a verdict: --jobs 2 took 758 s at peak load 143 (--jobs 8 took load to 353, killed),
     and it was BLOCKED because its unmutated baseline failed 5 load-sensitive tests. Re-run after the task above lands.
   - The evals session (swift-harness-96) owes the confirming review-accuracy re-run (approved, 9 USD cap), then freezes review evals.
