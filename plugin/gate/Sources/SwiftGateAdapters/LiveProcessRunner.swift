@@ -11,6 +11,7 @@ public struct LiveProcessRunner: ProcessRunner {
   private let baseEnvironment: [String: String]
   private let terminationGracePeriod: Duration
   private let postExitDrainLimit: Duration
+  private let now: @Sendable () -> ContinuousClock.Instant
 
   /// `/usr/bin/git` is an `xcrun` shim that exports these into every git hook. Inherited by
   /// `swift`/`xcodebuild`, `SDKROOT` points builds at the CommandLineTools SDK instead of the
@@ -23,14 +24,17 @@ public struct LiveProcessRunner: ProcessRunner {
   ///   - terminationGracePeriod: time between SIGTERM and SIGKILL to the process group.
   ///   - postExitDrainLimit: how long to keep reading after the child exits, in case a surviving
   ///     descendant still holds the pipes open.
+  ///   - now: the clock the timeout, grace period and drain limit are measured on.
   public init(
     baseEnvironment: [String: String] = ProcessInfo.processInfo.environment,
     terminationGracePeriod: Duration = .seconds(2),
-    postExitDrainLimit: Duration = .seconds(2)
+    postExitDrainLimit: Duration = .seconds(2),
+    now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }
   ) {
     self.baseEnvironment = baseEnvironment.filter { !Self.droppedVariables.contains($0.key) }
     self.terminationGracePeriod = terminationGracePeriod
     self.postExitDrainLimit = postExitDrainLimit
+    self.now = now
   }
 
   public func run(_ invocation: ProcessInvocation) async throws(ProcessRunnerError)
@@ -40,7 +44,8 @@ public struct LiveProcessRunner: ProcessRunner {
     let path = try resolveExecutable(invocation.executable, environment: environment)
     let spawn = SpawnRequest(
       path: path, invocation: invocation, environment: environment,
-      terminationGracePeriod: terminationGracePeriod, postExitDrainLimit: postExitDrainLimit)
+      terminationGracePeriod: terminationGracePeriod, postExitDrainLimit: postExitDrainLimit,
+      now: now)
     let cancellation = CancellationSignal()
 
     let result = await withTaskCancellationHandler {
@@ -92,6 +97,67 @@ public struct LiveProcessRunner: ProcessRunner {
   }
 }
 
+/// Every child leads its own process group, so a signal to this process's group (Ctrl-C, or a
+/// harness stopping a run) never reaches the children. Without this, a killed run leaves its
+/// builds and test runners behind, and they pile up across runs until the machine wedges.
+/// Signals are process-wide, so this is too; it arms itself before the first child starts.
+private let liveChildGroups = ChildProcessGroups()
+
+/// The write end of the pipe the signal handler reports to; `-1` until the handler is installed.
+private let signalPipeWriteEnd = Atomic<Int32>(-1)
+
+private final class ChildProcessGroups: Sendable {
+  static let forwarded: [Int32] = [SIGTERM, SIGINT, SIGHUP]
+
+  private let groups = Mutex<Set<pid_t>>([])
+
+  init() {
+    var fds: [Int32] = [-1, -1]
+    guard pipe(&fds) == 0 else { return }
+    for fd in fds { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+    signalPipeWriteEnd.store(fds[1], ordering: .releasing)
+    let reader = fds[0]
+    // A signal handler may only make async-signal-safe calls, so it hands the signal to this
+    // thread, which may take the lock a spawn in progress holds.
+    Thread { [self] in
+      var number: Int32 = 0
+      while read(reader, &number, MemoryLayout<Int32>.size) == MemoryLayout<Int32>.size {
+        terminate(on: number)
+      }
+    }.start()
+    for number in Self.forwarded {
+      var action = sigaction()
+      action.__sigaction_u.__sa_handler = { number in
+        var number = number
+        _ = write(
+          signalPipeWriteEnd.load(ordering: .acquiring), &number, MemoryLayout<Int32>.size)
+      }
+      action.sa_flags = SA_RESTART
+      sigaction(number, &action, nil)
+    }
+  }
+
+  /// Signals every child group, waiting out a spawn in progress so a child started this instant
+  /// is signalled too, then ends this process as `number` would have.
+  private func terminate(on number: Int32) {
+    for group in groups.withLock({ $0 }) { kill(-group, SIGTERM) }
+    signal(number, SIG_DFL)
+    kill(getpid(), number)
+  }
+
+  /// Runs `spawn` and records the child it started as one atomic step with respect to the
+  /// signal handler.
+  func spawning<Failure: Error>(_ spawn: () -> Result<pid_t, Failure>) -> Result<pid_t, Failure> {
+    groups.withLock { groups in
+      let spawned = spawn()
+      if case .success(let pid) = spawned { groups.insert(pid) }
+      return spawned
+    }
+  }
+
+  func remove(_ group: pid_t) { _ = groups.withLock { $0.remove(group) } }
+}
+
 private final class CancellationSignal: Sendable {
   private let flag = Atomic<Bool>(false)
 
@@ -105,6 +171,7 @@ private struct SpawnRequest: Sendable {
   let environment: [String: String]
   let terminationGracePeriod: Duration
   let postExitDrainLimit: Duration
+  let now: @Sendable () -> ContinuousClock.Instant
 
   private enum Termination {
     case none
@@ -134,10 +201,11 @@ private struct SpawnRequest: Sendable {
       return .failure(.launchFailed(executable: executable, reason: error.reason))
     }
 
-    let clock = ContinuousClock()
-    let start = clock.now
+    let start = now()
     let pid: pid_t
-    let spawned = spawn(stdin: stdin, stdout: stdoutPipe.write, stderr: stderrPipe.write)
+    let spawned = liveChildGroups.spawning {
+      spawn(stdin: stdin, stdout: stdoutPipe.write, stderr: stderrPipe.write)
+    }
     if let stdin { close(stdin) }
     switch spawned {
     case .success(let child): pid = child
@@ -164,7 +232,7 @@ private struct SpawnRequest: Sendable {
     var killSent = false
 
     while true {
-      let now = clock.now
+      let now = self.now()
       if termination == .none {
         if cancellation.isCancelled {
           termination = .cancelled
@@ -194,7 +262,8 @@ private struct SpawnRequest: Sendable {
       Self.pollReadable(&stdoutReader, &stderrReader, timeoutMilliseconds: 20)
     }
 
-    let elapsed = clock.now - start
+    liveChildGroups.remove(pid)  // swiftgate:equivalent-mutant — observable only on pid reuse
+    let elapsed = now() - start
     switch termination {
     case .cancelled:
       return .failure(.cancelled(executable: executable))

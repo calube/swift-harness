@@ -94,7 +94,7 @@ struct LiveMutationToolchainTests {
   }
 
   @Test(
-    "a build the compiler rejects is failed with its error lines, a build that cannot launch is unavailable — catches an unviable mutant counted as an environment failure"
+    "a build the compiler rejects is failed with its error lines, a build that cannot launch is unavailable, and a build asks for no debug information — catches an unviable mutant counted as an environment failure, or dsymutil run over every mutant's test bundle"
   )
   func build() async throws {
     let stderr = try Fixture.text("SwiftTest/build-error.stderr")
@@ -111,7 +111,10 @@ struct LiveMutationToolchainTests {
     #expect(log.contains("error:"))
     let invocation = try #require(rejecting.invocations.first)
     #expect(
-      invocation.arguments == ["build", "--build-tests", "--only-use-versions-from-resolved-file"])
+      invocation.arguments == [
+        "build", "--build-tests", "--only-use-versions-from-resolved-file", "-debug-info-format",
+        "none",
+      ])
     #expect(invocation.workingDirectory == "/scratch/tree/Packages/Probe")
 
     let missing = FakeProcessRunner { invocation throws(ProcessRunnerError) in
