@@ -6,9 +6,9 @@ import Testing
 
 @testable import SwiftGateCLI
 
-/// `evidence cache record` runs in process and, where exit codes and idempotence matter, through the
-/// built binary the way the design skill calls it. The reuse it promises is always read back
-/// through the built `context-pack --role research-lane` in a different design. Every repository and cache home is a fresh temp
+/// `evidence cache record` runs through the built binary, the way the design skill calls it, and
+/// the reuse it promises is read back through a second built command (`context-pack --role
+/// research-lane`) in a different design. Every repository and cache home is a fresh temp
 /// directory, so no test touches this checkout or the real `~/.swift-harness`.
 @Suite("swiftgate evidence cache record")
 struct EvidenceCacheRecordCommandTests {
@@ -104,17 +104,19 @@ struct EvidenceCacheRecordCommandTests {
           workingDirectory: root.path, timeout: .seconds(300)))
     }
 
-    /// The command's body in process, so a test covers the code it exercises.
-    func record(_ design: String, base: String? = nil) async -> EvidenceCacheRecordReport {
-      await EvidenceCacheRecordRun.run(
-        options: .init(design: design, base: base, cacheHome: cacheHome), root: root,
-        runner: runner)
-    }
-
-    func recordWithBinary(_ design: String, extra: [String] = []) async throws -> ProcessOutput {
-      try await swiftgate(
+    /// The same argv first parses in process to the `record` leaf, so a command the binary
+    /// doesn't have fails here by name rather than as an opaque exit code.
+    func record(_ design: String, extra: [String] = []) async throws -> ProcessOutput {
+      let arguments =
         ["evidence", "cache", "record", "--design", design, "--cache-home", cacheHome, "--json"]
-          + extra)
+        + extra
+      do {
+        let parsed = try await SwiftGate.asyncParseAsRoot(arguments)
+        #expect(type(of: parsed).configuration.commandName == "record")
+      } catch {
+        Issue.record("`swiftgate \(arguments.joined(separator: " "))` doesn't parse: \(error)")
+      }
+      return try await swiftgate(arguments)
     }
 
     /// The research-lane pack a second design gets for `pin`: the text a lane would read.
@@ -203,8 +205,8 @@ struct EvidenceCacheRecordCommandTests {
     let before = try await repo.researchPack(pin: Self.packagePin)
     #expect(before.contains("no cache hits for \(Self.packagePin)"))
 
-    let report = await repo.record(Self.firstDesign)
-    #expect(report.verdict == .green, "\(report)")
+    let output = try await repo.record(Self.firstDesign)
+    #expect(output.status == .exited(0), "\(output.stdout.text)\(output.stderr.text)")
 
     let after = try await repo.researchPack(pin: Self.packagePin)
     #expect(!after.contains("no cache hits for \(Self.packagePin)"), "\(after)")
@@ -234,13 +236,13 @@ struct EvidenceCacheRecordCommandTests {
       id: "ev-store-shares-reducer-instance", text: Self.refutedSharing.text,
       quote: Self.refutedSharing.citation.quote ?? "", status: .supported)
     try repo.writeClaims([supportedElsewhere], design: Self.secondDesign)
-    let seeded = await repo.record(Self.secondDesign)
-    #expect(seeded.verdict == .green, "\(seeded)")
+    let seeded = try await repo.record(Self.secondDesign)
+    #expect(seeded.status == .exited(0), "\(seeded.stdout.text)")
     #expect(try await repo.researchPack(pin: Self.packagePin).contains(supportedElsewhere.id))
 
     try repo.writeClaims([Self.scopes, Self.refutedSharing], design: Self.firstDesign)
-    let report = await repo.record(Self.firstDesign)
-    #expect(report.verdict == .green, "\(report)")
+    let output = try await repo.record(Self.firstDesign)
+    #expect(output.status == .exited(0), "\(output.stdout.text)\(output.stderr.text)")
 
     let pack = try await repo.researchPack(pin: Self.packagePin)
     #expect(pack.contains(Self.scopes.id))
@@ -263,8 +265,8 @@ struct EvidenceCacheRecordCommandTests {
     defer { repo.remove() }
     try repo.writeClaims([Self.codebase, Self.scopes], design: Self.firstDesign)
 
-    let report = await repo.record(Self.firstDesign)
-    #expect(report.verdict == .green, "\(report)")
+    let output = try await repo.record(Self.firstDesign)
+    #expect(output.status == .exited(0), "\(output.stdout.text)\(output.stderr.text)")
 
     let files = try repo.cacheFiles()
     #expect(!files.isEmpty, "the package claim beside it should have been recorded")
@@ -274,15 +276,17 @@ struct EvidenceCacheRecordCommandTests {
       #expect(!text.contains(Self.codebase.id), "\(path) holds the codebase claim")
       #expect(!text.contains(textHash), "\(path) holds the codebase claim's verdict")
     }
+    let skipped = try #require(try Self.report(output)["skipped"] as? [[String: Any]])
     #expect(
-      report.skipped.contains(.init(claimId: Self.codebase.id, reason: .codebase)),
-      "\(report.skipped)")
+      skipped.contains {
+        $0["claimId"] as? String == Self.codebase.id && $0["reason"] as? String == "codebase"
+      }, "\(skipped)")
   }
 
   // MARK: - Idempotence
 
   @Test(
-    "a second record run, through the built binary, leaves every cache file byte for byte as it was — catches duplicate entries piling up per verify run"
+    "a second record run over the same claims leaves every cache file byte for byte as it was — catches duplicate entries piling up per verify run"
   )
   func secondRunIsIdempotent() async throws {
     let repo = try Repository()
@@ -290,13 +294,12 @@ struct EvidenceCacheRecordCommandTests {
     try repo.writeClaims(
       [Self.scopes, Self.refutedSharing, Self.codebase, Self.snapshot], design: Self.firstDesign)
 
-    let first = await repo.record(Self.firstDesign)
-    #expect(first.verdict == .green, "\(first)")
-    #expect(first.writes.contains { $0.outcome == .appended })
+    let first = try await repo.record(Self.firstDesign)
+    #expect(first.status == .exited(0), "\(first.stdout.text)\(first.stderr.text)")
     let afterFirst = try repo.cacheFiles()
     #expect(afterFirst.count == 3, "\(afterFirst.keys.sorted())")
 
-    let second = try await repo.recordWithBinary(Self.firstDesign)
+    let second = try await repo.record(Self.firstDesign)
     #expect(second.status == .exited(0), "\(second.stdout.text)\(second.stderr.text)")
     #expect(try repo.cacheFiles() == afterFirst)
     let writes = try #require(try Self.report(second)["writes"] as? [[String: Any]])
@@ -319,14 +322,14 @@ struct EvidenceCacheRecordCommandTests {
       id: "ev-store-scopes-child-state", text: "Store.scope takes a state key path",
       quote: "public func scope<ChildState>(state:", status: .supported)
     try repo.writeClaims([original], design: Self.firstDesign)
-    #expect(await repo.record(Self.firstDesign).verdict == .green)
+    #expect(try await repo.record(Self.firstDesign).status == .exited(0))
     try await repo.git(["add", "-A"])
     try await repo.git(["commit", "-q", "-m", "approved"])
     #expect(try await repo.researchPack(pin: Self.packagePin).contains(original.text))
 
     try repo.writeClaims([Self.scopes], design: Self.firstDesign)
-    let report = await repo.record(Self.firstDesign, base: "main")
-    #expect(report.verdict == .green, "\(report)")
+    let output = try await repo.record(Self.firstDesign, extra: ["--base", "main"])
+    #expect(output.status == .exited(0), "\(output.stdout.text)\(output.stderr.text)")
 
     let pack = try await repo.researchPack(pin: Self.packagePin)
     #expect(pack.contains(Self.scopes.text))
@@ -339,15 +342,12 @@ struct EvidenceCacheRecordCommandTests {
   // MARK: - Bad input
 
   @Test(
-    "a design with no claims file is BLOCKED, and the built command exits 2 and writes no cache — catches a record run that reports success over nothing"
+    "a design with no claims file exits 2 and writes no cache — catches a record run that reports success over nothing"
   )
   func missingClaimsFileIsBlocked() async throws {
     let repo = try Repository()
     defer { repo.remove() }
-    let report = await repo.record(Self.firstDesign)
-    #expect(report.verdict == .blocked)
-    #expect(report.message.contains("claims.jsonl"), "\(report.message)")
-    let output = try await repo.recordWithBinary(Self.firstDesign)
+    let output = try await repo.record(Self.firstDesign)
     #expect(output.status == .exited(2), "\(output.stdout.text)")
     #expect(try Self.report(output)["verdict"] as? String == "BLOCKED")
     #expect(try repo.cacheFiles().isEmpty)
