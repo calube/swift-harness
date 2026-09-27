@@ -42,6 +42,15 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   /// Package `.build` directories the main checkout doesn't have.
   let missing: [String]?
   let message: String
+  /// `remove`: the worktree's run ids copied into the main checkout's `.harness/runs/`.
+  var keptRuns: [String]? = nil
+  /// `remove`: runs it couldn't copy, which the removal then deleted. Absent when there are none.
+  var unkeptRuns: [UnkeptRun]? = nil
+
+  struct UnkeptRun: Sendable, Equatable, Encodable {
+    let runId: String
+    let reason: String
+  }
 }
 
 /// The testable core of the `worktree` subcommands. `create` and `remove` act only for the plan's

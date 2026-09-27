@@ -15,7 +15,12 @@ public struct BuildPreset: Sendable, Equatable {
   /// Minutes before `timeBudgetMin` after which `build next` stops starting new tasks.
   public let stopStartsBeforeMin: Int
   public let onDesignConflict: OnDesignConflict
+  /// Where each task's change is proved and mutated: in its own task gate, or once in the
+  /// build's final `ready` gate.
+  public let taskProof: TaskProof
 
+  /// `taskProof` defaults to the stricter mode for callers built before the key existed; the
+  /// config reader still requires it.
   public init(
     designTier: DesignTier,
     maxParallel: Int,
@@ -25,7 +30,8 @@ public struct BuildPreset: Sendable, Equatable {
     workerModel: WorkerModel,
     timeBudgetMin: Int,
     stopStartsBeforeMin: Int,
-    onDesignConflict: OnDesignConflict
+    onDesignConflict: OnDesignConflict,
+    taskProof: TaskProof = .perTask
   ) {
     self.designTier = designTier
     self.maxParallel = maxParallel
@@ -36,6 +42,7 @@ public struct BuildPreset: Sendable, Equatable {
     self.timeBudgetMin = timeBudgetMin
     self.stopStartsBeforeMin = stopStartsBeforeMin
     self.onDesignConflict = onDesignConflict
+    self.taskProof = taskProof
   }
 
   /// `full`: verifier + test-quality per task. `gate`: the task gate only.
@@ -70,5 +77,12 @@ public struct BuildPreset: Sendable, Equatable {
   /// `amend`: the full `--amend` flow. `block`: spec §8.4's block behavior.
   public enum OnDesignConflict: String, Sendable, Equatable, CaseIterable {
     case amend, block
+  }
+
+  /// `per-task`: each task gate runs `--prove --mutate`, and `check-return` requires it of a
+  /// worker. `final`: task gates skip both, and the build's final `ready` gate runs them once.
+  public enum TaskProof: String, Sendable, Equatable, CaseIterable {
+    case perTask = "per-task"
+    case final
   }
 }
