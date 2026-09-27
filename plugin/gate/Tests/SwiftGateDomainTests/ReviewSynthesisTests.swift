@@ -146,6 +146,57 @@ struct ReviewSynthesisTests {
   }
 
   @Test(
+    "a finding the verifier returned nothing for stays visible as unmatched and holds the verdict off merge — catches a real finding dropped silently at synthesis"
+  )
+  func unmatchedIsVisible() throws {
+    let unmatched = ReviewFinding(
+      severity: .minor, category: "missing-edge-case", file: "Tests/CounterTests.swift", line: 36,
+      title: "reset test misses the in-flight fact", failureScenario: "reset during a fact request",
+      evidence: "e", fix: "f", verified: false, verificationNote: "no verifier entry matched",
+      unmatched: true)
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.testQuality, [unmatched])))
+    #expect(report.verdict == .fixThenMerge)
+    #expect(report.dropped.isEmpty)
+    #expect(report.unmatched.map(\.focus) == [.testQuality])
+    #expect(report.unmatched.map(\.finding) == [unmatched])
+    let summary = ReviewSummary.render(report, reportPath: "review.json")
+    #expect(summary.contains("UNMATCHED AT VERIFY"))
+    #expect(summary.contains("Tests/CounterTests.swift:36"))
+  }
+
+  @Test(
+    "many unmatched findings are capped in the summary and point at review.json — catches the summary outgrowing its 30 lines"
+  )
+  func unmatchedSummaryIsCapped() throws {
+    let many = (1...40).map { line in
+      ReviewFinding(
+        severity: .major, category: "c\(line)", file: "Sources/Core/A.swift", line: line,
+        title: "t\(line)", failureScenario: "s", evidence: "e", fix: "f", verified: false,
+        unmatched: true)
+    }
+    let verified = (1...12).map { Self.finding(.major, category: "v\($0)", line: $0) }
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(
+        Self.reviewed(.concurrency, many).merging(Self.reviewed(.apiErrors, verified)) { $1 }))
+    let summary = ReviewSummary.render(report, reportPath: "review.json")
+    #expect(report.unmatched.count == 40)
+    #expect(summary.contains("… 36 more in review.json"))
+    #expect(summary.split(separator: "\n").count <= 30)
+  }
+
+  @Test(
+    "a finding the verifier refuted is still dropped, not unmatched — catches unmatched swallowing real refutations"
+  )
+  func refutedStaysDropped() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.inputs(Self.reviewed(.testQuality, [Self.finding(.major, verified: false)])))
+    #expect(report.unmatched.isEmpty)
+    #expect(report.dropped.map(\.reason) == [.unverified])
+    #expect(report.verdict == .merge)
+  }
+
+  @Test(
     "duplicates by file, line and category merge to the most severe — catches one defect counted twice or downgraded"
   )
   func dedupeKeepsMostSevere() throws {

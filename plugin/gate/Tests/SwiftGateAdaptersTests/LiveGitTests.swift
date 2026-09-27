@@ -382,4 +382,29 @@ struct LiveGitUnifiedDiffTests {
     #expect(diff.contains("-let a = 1\n+let a = 2"))
     #expect(!diff.contains("B.swift"))
   }
+
+  @Test(
+    "the numbered review diff gives a changed line its line in the new file, not in the patch — catches reviewers citing diff.patch lines"
+  )
+  func numberedDiffCitesSourceLines() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    let before = (1...80).map { "let v\($0) = \($0)" }
+    try repo.write("Tests/CounterTests.swift", before.joined(separator: "\n") + "\n")
+    let base = try await repo.commitAll("base")
+    var after = before
+    after.insert("let early = 0", at: 5)
+    after[72] = "let changed = 73"
+    try repo.write("Tests/CounterTests.swift", after.joined(separator: "\n") + "\n")
+
+    let diff = try await LiveGit(runner: repo.runner, repositoryRoot: repo.root.path)
+      .unifiedDiff(since: base)
+    let patchLine = try #require(
+      diff.split(separator: "\n").firstIndex { $0 == "+let changed = 73" })
+    let numbered = try NumberedDiff.render(diff)
+
+    #expect(patchLine + 1 != 73)
+    #expect(numbered.split(separator: "\n").contains("    73 + let changed = 73"))
+    #expect(numbered.split(separator: "\n").contains("     6 + let early = 0"))
+  }
 }

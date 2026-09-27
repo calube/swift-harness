@@ -46,17 +46,21 @@ public struct ReviewInputManifest: Sendable, Equatable, Codable {
     public let testlint: String
     public let comments: String
     public let diff: String
+    /// The diff with each context and added line prefixed by its line in the new file: the
+    /// number a finding's `line` cites.
+    public let numberedDiff: String
     public let mutate: String
 
     public init(
       check: String, arch: String, testlint: String, comments: String, diff: String,
-      mutate: String
+      numberedDiff: String, mutate: String
     ) {
       self.check = check
       self.arch = arch
       self.testlint = testlint
       self.comments = comments
       self.diff = diff
+      self.numberedDiff = numberedDiff
       self.mutate = mutate
     }
   }

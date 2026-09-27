@@ -34,7 +34,8 @@ For `would-not-fail`, the failure scenario is the mutation that survives: "chang
 The prompt gives you the review bundle directory, `.harness/runs/<id>/review-input/`. Read, in order:
 
 1. `manifest.json`: base, merge base, changed files, and which focuses run.
-2. `diff.patch`: the change under review. This is your scope.
+2. `diff-numbered.txt`: the change under review, each context and added line prefixed by its
+   line in the new file. This is your scope. (`diff.patch` is the same diff, unnumbered.)
 3. `check.json`, `arch.json`, `testlint.json`, `comments.json`, `mutate.json`: what the gate
    already found. The push gate is GREEN or you would not be running. Don't re-report a mechanical
    finding the gate already raised; use it as evidence when it supports a deeper defect.
@@ -69,7 +70,9 @@ Return findings only; the workflow enforces the JSON shape. Each finding has:
   - `minor`: worth fixing, no concrete harm yet. `nit`: taste.
 - `category`: short kebab-case defect class (examples in the rubric). Findings with the same
   file, line and category merge across reviewers, so pick the most specific class.
-- `file`, `line`: repo-relative path and the 1-based line of the defect in the new code.
+- `file`, `line`: repo-relative path and the line of the defect. `line` is the 1-based line in the new
+  file: the number `diff-numbered.txt` prints beside the code, or the line you read in the file
+  itself; never a line number in `diff.patch` or `diff-numbered.txt`. The verifier looks there.
 - `title`: one line.
 - `failure_scenario`: for a defect, the concrete input or state and the wrong outcome: "two
   `refreshTapped` actions within 50ms → both responses land and the list shows duplicates". For a
