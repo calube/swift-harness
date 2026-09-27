@@ -1,0 +1,2397 @@
+{
+  "split": "all",
+  "trials": 120,
+  "costUsd": 7.3265270000000005,
+  "durationSeconds": 818,
+  "missingTraces": [],
+  "perSkill": {
+    "architecture": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "build": {
+      "expectedTrials": 30,
+      "loadedTrials": 30,
+      "tp": 30,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "design": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "plan": {
+      "expectedTrials": 12,
+      "loadedTrials": 12,
+      "tp": 12,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "review": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "ship": {
+      "expectedTrials": 30,
+      "loadedTrials": 28,
+      "tp": 28,
+      "fp": 0,
+      "fn": 2,
+      "precision": 1,
+      "recall": 0.9333333333333333
+    },
+    "status": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "tdd": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "validate": {
+      "expectedTrials": 6,
+      "loadedTrials": 6,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1
+    }
+  },
+  "confusion": {
+    "tdd": {
+      "tdd": 6
+    },
+    "build": {
+      "build": 30
+    },
+    "architecture": {
+      "architecture": 6
+    },
+    "plan": {
+      "plan": 12
+    },
+    "status": {
+      "status": 6
+    },
+    "none": {
+      "none": 12
+    },
+    "ship": {
+      "ship": 28,
+      "none": 2
+    },
+    "review": {
+      "review": 6
+    },
+    "validate": {
+      "validate": 6
+    },
+    "design": {
+      "design": 6
+    }
+  },
+  "cases": [
+    {
+      "case": "routing-build-r6-build-reset-action-a",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "tdd",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "tdd"
+        ],
+        [
+          "tdd"
+        ],
+        [
+          "tdd"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-b",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "tdd",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "tdd"
+        ],
+        [
+          "tdd"
+        ],
+        [
+          "tdd"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-a",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-b",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-a",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-b",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-a",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "architecture",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "architecture"
+        ],
+        [
+          "architecture"
+        ],
+        [
+          "architecture"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-b",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "architecture",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "architecture"
+        ],
+        [
+          "architecture"
+        ],
+        [
+          "architecture"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-a",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "plan",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-b",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "plan",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-a",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-b",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-a",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-b",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-a",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-b",
+      "forSkill": "build",
+      "kind": "should-trigger",
+      "expect": "build",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "build"
+        ],
+        [
+          "build"
+        ],
+        [
+          "build"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-a",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "status",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "status"
+        ],
+        [
+          "status"
+        ],
+        [
+          "status"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-b",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "status",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "status"
+        ],
+        [
+          "status"
+        ],
+        [
+          "status"
+        ]
+      ]
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-a",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "none",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-b",
+      "forSkill": "build",
+      "kind": "near-miss",
+      "expect": "none",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-a",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "plan",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-b",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "plan",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ],
+        [
+          "plan"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-a",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-b",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 2,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        []
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-a",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-b",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-a",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "review",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "review"
+        ],
+        [
+          "review"
+        ],
+        [
+          "review"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-b",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "review",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "review"
+        ],
+        [
+          "review"
+        ],
+        [
+          "review"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-a",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 2,
+      "loaded": [
+        [],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-b",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-a",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-b",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-a",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-b",
+      "forSkill": "ship",
+      "kind": "should-trigger",
+      "expect": "ship",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ],
+        [
+          "ship"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-a",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "validate",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "validate"
+        ],
+        [
+          "validate"
+        ],
+        [
+          "validate"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-b",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "validate",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "validate"
+        ],
+        [
+          "validate"
+        ],
+        [
+          "validate"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-a",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "design",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "design"
+        ],
+        [
+          "design"
+        ],
+        [
+          "design"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-b",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "design",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [
+          "design"
+        ],
+        [
+          "design"
+        ],
+        [
+          "design"
+        ]
+      ]
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-a",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "none",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-b",
+      "forSkill": "ship",
+      "kind": "near-miss",
+      "expect": "none",
+      "trials": 3,
+      "passed": 3,
+      "loaded": [
+        [],
+        [],
+        []
+      ]
+    }
+  ],
+  "passAllK": 38,
+  "casesTotal": 40,
+  "flaky": [
+    "routing-ship-r6-favorites-spec-to-main-b",
+    "routing-ship-r6-leaderboard-spec-unattended-a"
+  ],
+  "trialLog": [
+    {
+      "case": "routing-build-r6-build-reset-action-a",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0610826,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-a",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0607476,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-a",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060952599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-b",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060462600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-b",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060482600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-build-reset-action-b",
+      "forSkill": "build",
+      "expect": "tdd",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060382599999999995,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "tdd"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0596576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.05962760000000001,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0596626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059607600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059582600000000006,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-existing-plan-interview-preset-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0595626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0605426,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.06097759999999999,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0601026,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060917599999999995,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0599926,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-implement-remaining-tasks-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059927600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-a",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.061157600000000006,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-a",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.06110260000000001,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-a",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.06110260000000001,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-b",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0606026,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-b",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0604126,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-leaderboard-which-module-b",
+      "forSkill": "build",
+      "expect": "architecture",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.06042259999999999,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "architecture"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-a",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0590726,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-a",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0590676,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-a",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059077599999999994,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-b",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0594126,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-b",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0594376,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-make-build-plan-b",
+      "forSkill": "build",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059377599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0597726,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059712600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0595426,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0595576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059497600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-parallel-worktrees-kickoff-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0595326,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.059577599999999994,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0595826,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0608376,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060347599999999994,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0603176,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-planned-ledger-start-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060342599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060487599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0603076,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-a",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0604826,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060827599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0603576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-resume-after-red-main-b",
+      "forSkill": "build",
+      "expect": "build",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0607626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "build"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-a",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059052600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-a",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0590476,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-a",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0590626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-b",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.058957600000000006,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-b",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0589526,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-which-plans-mid-build-b",
+      "forSkill": "build",
+      "expect": "status",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0589526,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "status"
+      ]
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-a",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0612726,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-a",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.061212600000000006,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-a",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060767600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-b",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0620776,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-b",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0626276,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-build-r6-xcodebuild-command-b",
+      "forSkill": "build",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060882599999999995,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-a",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059592599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-a",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.060107600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-a",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059592599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-b",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059522599999999995,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-b",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0595376,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-approved-design-to-ledger-b",
+      "forSkill": "ship",
+      "expect": "plan",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059507599999999994,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "plan"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0625576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0616626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.061292599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.06189760000000001,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0617326,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-favorites-spec-to-main-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": false,
+      "costUsd": 0.0616476,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0622426,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0621026,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0605576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060097599999999994,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.061462600000000006,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-interview-preset-spec-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060302600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-a",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0591126,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-a",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0604226,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-a",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0613526,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-b",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0601976,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-b",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0601776,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-is-branch-shippable-b",
+      "forSkill": "ship",
+      "expect": "review",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0603226,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "review"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": false,
+      "costUsd": 0.0635676,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0626726,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0626076,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0624026,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0629976,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-leaderboard-spec-unattended-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0617826,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060397599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0615076,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.061307600000000004,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0610876,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0611626,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-no-babysitting-streak-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0611876,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.061202599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0613026,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-a",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.06120760000000001,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0601576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.0604326,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-offline-readme-whole-pipeline-b",
+      "forSkill": "ship",
+      "expect": "ship",
+      "split": "40",
+      "kind": "should-trigger",
+      "passed": true,
+      "costUsd": 0.060517600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "ship"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-a",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0591126,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-a",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0591376,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-a",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0596426,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-b",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.058977600000000005,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-b",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0589726,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-pr-testing-section-before-ship-b",
+      "forSkill": "ship",
+      "expect": "validate",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0589976,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "validate"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-a",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0625176,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-a",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0618126,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-a",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0623426,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-b",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0606926,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-b",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059627599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-spec-design-doc-only-b",
+      "forSkill": "ship",
+      "expect": "design",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.059592599999999996,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": [
+        "design"
+      ]
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-a",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0851476,
+      "error": null,
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-a",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0777676,
+      "error": null,
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-a",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0818376,
+      "error": null,
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-b",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0610576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-b",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0610976,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    },
+    {
+      "case": "routing-ship-r6-testflight-how-b",
+      "forSkill": "ship",
+      "expect": "none",
+      "split": "40",
+      "kind": "near-miss",
+      "passed": true,
+      "costUsd": 0.0644576,
+      "error": "exit 1: Reached maximum number of turns (1)",
+      "loaded": []
+    }
+  ]
+}

@@ -2,6 +2,9 @@
 
 ## 2026-09-27
 
+- **`ship` and `build` routing, held-out** (40 independent cases × 3): `build` 1.00/1.00, `ship`
+  1.00 precision and 0.93 recall, 0 wrong loads in 120 trials. Both misses read the spec on turn 1
+  and hit the 1-turn cap. 7.33 USD.
 - **`review-accuracy` re-run after the source-line fix** (4 of 5 cases, cost cap): every seeded
   defect matches by file and line, 3 of 3, up from 3 of 4; 0 findings unmatched at verify. The
   dismiss race is still `major`, not `blocker`, and the clean control flipped to `fix-then-merge`

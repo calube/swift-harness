@@ -140,6 +140,9 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
   turns, the agent spends turn 2 spawning a shell subagent, at up to 0.48 USD.
 - `allowed_tools` doesn't stop `Agent` or `ToolSearch`. Only the turn cap keeps a run small.
 - `--max-cost-usd` ends the run with exit 0. Read `partial` and `partialReason` in the JSON.
+- `session.mjs` reserves `--session-cost-usd` for each case before it starts one. A cap of 8 with
+  4 a session stopped the review re-run after 4 of 5 cases at 4.10 USD. Set the cap to the sum of
+  the cases' expected costs plus 1 reservation.
 - `--case` takes 1 glob with no brace sets. To run a hand-picked set, add a temporary tag to
   those `case.yaml` files, run `--tag`, then `git checkout -- evals/cases`.
 - `--tag round-N` matches every split. Select a split by tag before a tuning run, or the run
@@ -206,6 +209,10 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
 - Before a merge: run `swiftgate prose` on every changed `.md`, get the push tier GREEN on the
   branch, check `.git/MERGE_HEAD` in the main checkout, and leave other sessions' uncommitted
   files unstaged.
+- `claude plugin eval` refuses a stage directory as untrusted when it runs without a terminal,
+  and trust doesn't carry over between stages. The user approved `--trust-plugin` for stages of
+  this repo on 2026-09-27. The refusal exits at once and costs nothing, so check the log's first
+  line before you wait on a run.
 - Shell aliases on this machine: `cp`, `rm` and `mv` prompt, `cat` is `bat`, `ls` is `eza`,
   `grep` is `ugrep`, `g` is `git`. Use `/bin/` and `/usr/bin/` paths. zsh doesn't word-split
   `$VAR`, and glob qualifiers such as `(N)` are off.
