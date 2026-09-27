@@ -35,17 +35,41 @@ public enum PlanLintGraph {
   /// misses the one case where the prefix names a module's root directory exactly (nothing is
   /// "under" it in the file sense), so a prefix entry falls back to an exact path match against
   /// `graph.modules` — still the graph's own `path`, not a second lookup function.
+  /// A test target counts as the module it tests (``countedModule(_:graph:)``), so a task that
+  /// writes a module and its own tests touches one module, as the decomposer is told to plan it.
   public static func modulesTouched(writeSet: [String], graph: ModuleGraph) -> Set<String> {
     var touched = Set<String>()
     for entry in writeSet {
       let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
       if let module = graph.module(containingFile: path) {
-        touched.insert(module.name)
+        touched.insert(countedModule(module, graph: graph))
       } else if entry.hasSuffix("/") {
-        touched.formUnion(graph.modules.filter { $0.path == path }.map(\.name))
+        touched.formUnion(
+          graph.modules.filter { $0.path == path }.map { countedModule($0, graph: graph) })
       }
     }
     return touched
+  }
+
+  /// The module `module` counts as for spec §9.3's module count. A test target is the module it
+  /// tests, read from its in-graph dependencies with test support and other test targets left
+  /// out: the one remaining dependency, or, when it depends on several, the one its name names
+  /// (`FooTests` → `Foo`). A test target the graph can't tie to one module counts as itself, so
+  /// an ambiguous one can't hide a second module.
+  static func countedModule(_ module: Module, graph: ModuleGraph) -> String {
+    guard case .tests = module.role else { return module.name }
+    let tested = module.dependencies.filter { name in
+      switch graph.module(named: name)?.role {
+      case nil, .tests?, .testSupport?: return false
+      default: return true
+      }
+    }
+    if tested.count == 1 { return tested[0] }
+    if module.name.hasSuffix("Tests") {
+      let named = String(module.name.dropLast("Tests".count))
+      if tested.contains(named) { return named }
+    }
+    return module.name
   }
 
   // MARK: - DAG and waves (spec §9.2: acyclic, deps exist, waves = plan-schedule)
@@ -223,8 +247,8 @@ public enum PlanLintGraph {
 
   // MARK: - Worker pack inputs (spec §9.3: a task's pack must actually have been resolved)
 
-  /// The command is expected to build one worker pack per ledger task before calling `plan-lint`
-  /// (spec §9.3). A task absent from `workerPacks` isn't "not sized yet" — it's a pack that failed
+  /// The command is expected to build one worker pack per ledger task that isn't done before
+  /// calling `plan-lint` (spec §9.3); a done task is never handed to a worker again. A task absent from `workerPacks` isn't "not sized yet" — it's a pack that failed
   /// to build, and without this check ``PlanLintCoverage/sizeFindings(task:modulesTouched:workerPack:bounds:)``
   /// would simply skip its over-budget bound, so a broken pack reads as proven within budget. A
   /// `workerPacks` key that names no task in `ledger.tasks` is reported too, since a mis-keyed map
@@ -233,7 +257,8 @@ public enum PlanLintGraph {
     throws(ReportContractViolation) -> [Finding]
   {
     var findings: [Finding] = []
-    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) where workerPacks[task.id] == nil {
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id })
+    where task.status != .done && workerPacks[task.id] == nil {
       findings.append(
         try Finding(
           ruleID: packMissingRuleID, severity: .major, file: task.id, line: nil,
@@ -306,8 +331,11 @@ public enum PlanLintGraph {
     findings += try PlanLintCoverage.coverageFindings(
       design: design, tasks: ledger.tasks, designPath: designPath)
 
+    // A done task is immutable history (spec §5.7, §8.4): the rules that judge a task against the
+    // current design, or size it for a worker, can't be met by a task that will never change.
+    // It still counts for the DAG, id uniqueness, waves and coverage.
     let testTiers = PlanLintCoverage.testTiers(design: design)
-    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) {
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) where task.status != .done {
       findings += try PlanLintCoverage.gateFindings(task: task, testTiers: testTiers)
       findings += try PlanLintCoverage.unknownTestFindings(task: task, design: design)
       findings += try PlanLintCoverage.missingModelFindings(task: task)
