@@ -149,6 +149,13 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
   only the `e-*` directories that the result JSON names.
 - Plug the laptop in for a long batch. The machine hibernated mid-run at 1% battery; the grades
   held, but that batch's wall time didn't.
+- A routing run costs more as the plugin grows: 0.058 USD with 11 skills, 0.068 in round 4 and
+  0.10 with 13. Re-price from the last batch before each round.
+- `total_cost_usd` leaves out Workflow agents. `/swift-harness:review` runs its panel through a
+  Workflow, so a review trial costs more than the trace says, by an amount the trace doesn't give.
+- A session trial's hooks read the gate from the cache the scaffold seeds. The shim prefers
+  `CLAUDE_PLUGIN_DATA`, so `session.mjs` pins `SWIFTGATE_CACHE_DIR`; a trial whose SessionStart says
+  the gate is still building counts as an error, not a score.
 
 **Designing cases**
 
@@ -165,6 +172,20 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
   request that mentions a test") showed nothing: 0 wrong loads in 16. Prove precision with a
   description that claims its neighbours' jobs. That one caused 6 wrong loads in 8.
 - Deciding to keep trials that ran by accident is fair only if you decide before you read them.
+- Prove every new grader on hand-built variants before a paid run: an unfixed tree, a blind fix,
+  a real fix, a hollow fix. Proofs caught a hidden test missing `import APIClient`, a snapshot path
+  1 folder short, and a `plan.json` fixture the guard rejects as undecodable.
+- Grade the outcome, not the path. A regex over the trace missed a real RED that the agent had
+  piped through a JSON filter; read `.harness/runs/history.jsonl` instead.
+- A slash-invoked skill (`/swift-harness:design ...`) shows no `Skill` tool call in stream-json.
+- The judge gets the final message whole; the digest cuts each message at 1,500 characters.
+- A review case must pass the push tier, since `review-input` stops on RED. Prove each seeded diff
+  GREEN first.
+- Red-first a gate change against the commit before it: add a detached worktree at that commit,
+  build its shim once, and run the corpus with `SWIFTGATE=<worktree>/plugin/bin/swiftgate`. Find
+  the commit with `git log -S` on the guard source; a peer's "as of merge X" can be off by 1.
+- A Stop-hook case must start on a RED tree. A capable agent avoids the violation, so the hook
+  never has to block.
 
 **Harness and repo**
 
@@ -180,6 +201,14 @@ Each rule below cost a rerun or a wrong number once. The results summaries under
   binary for the same `gate/` sources.
 - Another session merges plan waves into `main`. Before you merge, run `git log main` and
   `git worktree list`, and message that session.
+- `plugin/` belongs to the orchestrator sessions. Send a finding with its repro, test a
+  description change in a staged copy, and let the orchestrator ship it as a wave.
+- Before a merge: run `swiftgate prose` on every changed `.md`, get the push tier GREEN on the
+  branch, check `.git/MERGE_HEAD` in the main checkout, and leave other sessions' uncommitted
+  files unstaged.
+- Shell aliases on this machine: `cp`, `rm` and `mv` prompt, `cat` is `bat`, `ls` is `eza`,
+  `grep` is `ugrep`, `g` is `git`. Use `/bin/` and `/usr/bin/` paths. zsh doesn't word-split
+  `$VAR`, and glob qualifiers such as `(N)` are off.
 
 ## Commit
 
