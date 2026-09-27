@@ -111,3 +111,32 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   T0 RED. The orchestrator now reads each worker's `.harness/runs/history.jsonl` before merging. A second lesson:
   2 branches merged cleanly and still failed to compile together (a removed function used by the other). Only the
   push tier on merged main catches that, so it runs after every merge batch.
+
+## Wave 4 (rest) and wave 5 (part)
+
+- **Merge.** The command is `build merge <plan> <task> [--fix] [--undo] --session <id> [--json]`, with the flow in
+  `A/Build/MergeRunner.swift` (`MergeRunner`, `LiveMergeRunner`, `S/FakeMergeRunner`). Exits: 0 merged or undone; 1
+  conflicted, refused or not held; 2 blocked. JSON keys: `command, plan, task, status (merged|undone|conflicted|refused|not-held|blocked),
+  verdict, holder?, runId?, branch?, mainCheckout?, mainCheck (at-last-merge|no-merge-yet)?, preCommit?, postCommit?,
+  fixWorktree?, fixBranch?, conflictedFiles?, message`. The fix branch is `<plan>/fix-<task>`, in worktree
+  `<main parent>/<repo>-<plan>-fix-<task>`. `--fix` merges the fix branch. `--undo` resets `main` to the pre commit
+  of this task's latest merge, and only while `main` is still at that merge's post commit.
+- **Events.** `BuildEvent` gains `undo`: `{"kind":"undo","task","fromCommit","toCommit","at"}`. Older logs still
+  decode. `lastMergePostCommit()` is the commit `main` should be at: the newest merge's post commit, or a later
+  undo's `toCommit`. Stats count an undo's time toward wall time.
+- **check-return `--fix`** checks a fixer's return against `<plan>/fix-<task>` and the preset's `mergeGate`.
+- **Guard.** `ledger.lock.*` (plan dir) and `events.lock.*` (`plans/<plan>/build/<run>/`) can't be hand-edited.
+  `build merge` isn't in `sessionCommands` yet; the build-skill task adds it.
+- **Agents.** `swift-harness:build-worker` takes task id, plan slug, worktree path, branch, write set, task gate tier,
+  `test-…` ids and context pack path, plus the earlier attempt's findings on a fix pass. It has no fixed model, so the
+  workflow passes the task's. It always returns `"review": null`: `build-task.js` MUST fill `review`, or `check-return`
+  fails with `build-return.review-missing`. `swift-harness:build-fixer` (opus) takes the plan slug, task id, fix
+  worktree path, fix branch, whether the merge conflicted or went red, both `TaskReturn`s and the merge gate tier. It
+  returns `ready-to-merge` or `gate-red`.
+- **Stats.** `swiftgate stats --build <run-id> --plan <slug> [--json]`. `BuildMetrics.compute(record:log:) -> Report`
+  in `D/Build/BuildMetrics.swift`. JSON keys: `command, verdict, plan, runId, presetName, budgetMinutes, overBudget,
+  totalWallMilliseconds, tasks:[{task,status,startedAt,endedAt,wallMilliseconds}], mergeCount, merges, damage, message`.
+  `LedgerRender.Input.buildMetrics` adds a duration chip per task.
+- **Gate note.** After these merges, the push tier on `c21179b` (which includes sub-project 2's mutate fix) was RED
+  only on load: 35 `git` 30-second timeouts plus 2 kill-timing tests, at load average 28–38. All 134 tests in the 16
+  affected suites pass alone. The full push tier gets re-run when load drops.
