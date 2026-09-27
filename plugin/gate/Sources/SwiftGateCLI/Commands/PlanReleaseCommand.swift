@@ -19,7 +19,10 @@ struct PlanReleaseCommand: AsyncParsableCommand {
   @Option(help: "The releasing session's id; must match the lock. Not needed with --force.")
   var session: String?
 
-  @Flag(help: "Take over an abandoned lock without checking who holds it.")
+  @Flag(
+    help: ArgumentHelp(
+      "The user's takeover of a lock whose session has ended: removes it without checking who "
+        + "holds it. An agent never passes it."))
   var force = false
 
   @OptionGroup var output: OutputOptions

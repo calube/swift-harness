@@ -8,7 +8,7 @@ import Testing
 /// from calling a command that was never wired into `SwiftGate`'s subcommand tree.
 @Suite("new subcommand registration")
 struct NewSubcommandRegistrationTests {
-  /// One entry per §6.1 command, plus `plan claim`/`plan release` (Decisions table). Each
+  /// One entry per §6.1 command, plus `plan claim`/`plan release`/`plan set` (Decisions table). Each
   /// argument list is a full path to a leaf command, never a bare command group.
   /// `leafCommandName` is that leaf's own `CommandConfiguration.commandName`, so a parse that
   /// silently resolves to the wrong command (e.g. a help command, or a same-named sibling) fails
@@ -50,10 +50,22 @@ struct NewSubcommandRegistrationTests {
     ("plan claim", ["plan", "claim", "example-plan", "--session", "session-123"], "claim"),
     ("plan release", ["plan", "release", "example-plan"], "release"),
     ("plan release --force", ["plan", "release", "example-plan", "--force"], "release"),
+    (
+      "plan set",
+      [
+        "plan", "set", "example-plan", "--session", "session-123", "--tier", "deep", "--resume",
+        "resume text",
+      ],
+      "set"
+    ),
     ("plan-schedule", ["plan-schedule", "ledger.json"], "plan-schedule"),
     ("plan-lint", ["plan-lint", "example-plan"], "plan-lint"),
     ("context-pack", ["context-pack", "--role", "worker"], "context-pack"),
-    ("index set", ["index", "set", "example-plan", "designing", "resume text"], "set"),
+    (
+      "index set",
+      ["index", "set", "example-plan", "designing", "resume text", "--session", "session-123"],
+      "set"
+    ),
     ("calibrate design", ["calibrate", "design"], "design"),
   ]
 
@@ -61,11 +73,11 @@ struct NewSubcommandRegistrationTests {
   /// under the git common dir; `design-scope` instead exits 2 for a real reason (no
   /// `--frame-answers` given) that the generic "not implemented" check can't tell apart from a
   /// stub. Either way their behaviour is covered by their own suites (`PlanClaimCommandTests`,
-  /// `IndexSetCommandTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`). Listed by
+  /// `IndexSetCommandTests`, `PlanStateAuthorityTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`). Listed by
   /// exact invocation name so a still-stubbed sibling never drops out of the stub check by
   /// sharing a prefix.
   static let implemented: Set<String> = [
-    "plan claim", "plan release", "plan release --force", "index set", "design-diff",
+    "plan claim", "plan release", "plan release --force", "plan set", "index set", "design-diff",
     "design-diff --chain", "design-scope", "evidence capture",
     "plan-schedule",
     "prose",

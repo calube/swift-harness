@@ -61,6 +61,17 @@ or when the holder's `plan.json` is missing or corrupt: claim the plan with a `p
 names the doc first. `design` is resolved against the worktree toplevel and compared as a
 canonical path, so a sibling worktree's copy of the doc isn't the plan's doc.
 
+Plan-state commands check the same authority, and exit 1 on refusal:
+
+| Command | Writes | Refused when |
+|---|---|---|
+| `plan claim <plan> --session <id> [--design <doc>] [--tier <tier>]` | the lock; a new plan's `plan.json` | another session holds the plan, or another plan names `<doc>` (canonical path, any case) |
+| `plan release <plan> --session <id>` | removes the lock | another session holds it |
+| `plan set <plan> --session <id> [--tier <tier>] [--resume <text>]` | `plan.json` `tier`, `resume` | `<id>` isn't the holder |
+| `index set <plan> <status> <resume> --session <id>` | the plan's `index.json` entry | `<id>` isn't the holder |
+
+A refusal names the holder. Taking over a lock whose session has ended is the user's decision.
+
 The older `.harness/plans/` ledger and index rule, with its repo-level `.harness/orchestrator.lock`,
 still applies to repositories that have those files.
 

@@ -12,6 +12,8 @@ struct PlanLockReport: Sendable, Equatable, Encodable {
     case released
     case notClaimed = "not-claimed"
     case forceReleased = "force-released"
+    /// A new plan named a design doc another plan's `plan.json` already names.
+    case designOwned = "design-owned"
     case blocked
   }
 
@@ -21,13 +23,19 @@ struct PlanLockReport: Sendable, Equatable, Encodable {
   let verdict: Verdict
   /// The lock's holder when another session holds it, or the session a forced release overrode.
   let holder: String?
+  /// The plan that already owns the design a refused claim named.
+  let owner: String?
   let lockFile: String?
   let message: String
 }
 
 enum PlanLockRun {
+  /// - Parameter root: the directory the command runs in. Design paths are compared after
+  ///   resolving them against its worktree toplevel, so a symlinked alias names the same doc;
+  ///   `nil` compares them as spelled.
   static func claim(
-    slug: String, session: String?, design: String? = nil, tier: String? = nil, git: any Git
+    slug: String, session: String?, design: String? = nil, tier: String? = nil,
+    root: URL? = nil, git: any Git
   ) async -> PlanLockReport {
     let command = "plan claim"
     if let design, !PlanFile.isValidDesignPath(design) {
@@ -44,16 +52,44 @@ enum PlanLockRun {
     } else {
       parsedTier = nil
     }
-    let lock: PlanLock
+    let located: Located
     switch await locate(slug, session: session, requireSession: true, git: git) {
     case .failure(let message): return blocked(command, slug, message)
-    case .success(let located): lock = located
+    case .success(let value): located = value
     }
+    let lock = located.lock
     if design == nil, !lock.hasPlanFile {
       return blocked(
         command, slug,
         "`\(slug)` is a new plan: --design is required, so the edit guard can tie the design doc "
           + "to it")
+    }
+    // Every claim that may seed a plan.json runs its ownership check, lock and seed under one
+    // repository-wide lock, so two new plans can't both pass the check for the same doc.
+    var lease: LockLease?
+    defer { lease?.release() }
+    if let design, !lock.hasPlanFile {
+      do {
+        lease = try await FileCountingLock(
+          directory: URL(filePath: located.layout.root, directoryHint: .isDirectory),
+          name: "claim.lock", capacity: 1
+        ).acquire(timeout: .seconds(30))
+      } catch {
+        return blocked(command, slug, "can't take the plan-state claim lock: \(error)")
+      }
+      if !lock.hasPlanFile {
+        switch await owner(of: design, excluding: slug, in: located.layout, root: root, git: git) {
+        case .failure(let failure): return blocked(command, slug, failure)
+        case .success(let owner?):
+          return PlanLockReport(
+            command: command, plan: slug, status: .designOwned, verdict: .red, holder: nil,
+            owner: owner, lockFile: nil,
+            message:
+              "plan `\(owner)` already owns \(design): one design doc belongs to one plan. "
+              + "Continue that plan, or name a different design doc.")
+        case .success(nil): break
+        }
+      }
     }
     let file = lock.plan.orchestratorLock
     let outcome: PlanLock.ClaimOutcome
@@ -65,9 +101,7 @@ enum PlanLockRun {
     switch outcome {
     case .heldByOther(let holder):
       return report(
-        command, slug, .heldByOther, .red, holder, file,
-        "plan `\(slug)` is held by session \(holder); it stays live until that session runs "
-          + "`swiftgate plan release`, or the user runs `swiftgate plan release \(slug) --force`")
+        command, slug, .heldByOther, .red, holder, file, heldByOtherMessage(slug, holder))
     case .claimed, .alreadyHeld:
       var seeded = ""
       if let design, !lock.hasPlanFile {
@@ -96,7 +130,7 @@ enum PlanLockRun {
     let lock: PlanLock
     switch await locate(slug, session: session, requireSession: !force, git: git) {
     case .failure(let message): return blocked(command, slug, message)
-    case .success(let located): lock = located
+    case .success(let located): lock = located.lock
     }
     let file = lock.plan.orchestratorLock
     do {
@@ -121,9 +155,7 @@ enum PlanLockRun {
           "plan `\(slug)` is not claimed; nothing to release")
       case .heldByOther(let holder):
         return report(
-          command, slug, .heldByOther, .red, holder, file,
-          "plan `\(slug)` is held by session \(holder), not this one; only the user takes it over, "
-            + "with `swiftgate plan release \(slug) --force`")
+          command, slug, .heldByOther, .red, holder, file, heldByOtherMessage(slug, holder))
       }
     } catch {
       return blocked(command, slug, describe(error))
@@ -142,11 +174,80 @@ enum PlanLockRun {
     }
   }
 
+  /// Names the situation and leaves the decision with the user. It never spells out a takeover
+  /// command: an agent shown one tends to run it.
+  static func heldByOtherMessage(_ slug: String, _ holder: String) -> String {
+    "plan `\(slug)` is held by session \(holder), not this one. A held lock stays live until its "
+      + "session releases it, and only the user can tell whether that session has ended. Stop "
+      + "and ask the user to decide."
+  }
+
+  struct Located {
+    let layout: PlanStateLayout
+    let lock: PlanLock
+  }
+
+  /// The other plan whose `plan.json` names `design`, compared case-insensitively after both are
+  /// resolved against this worktree's toplevel. A plan.json that can't be read or decoded fails
+  /// the claim: it might name the doc.
+  private static func owner(
+    of design: String, excluding slug: String, in layout: PlanStateLayout, root: URL?,
+    git: any Git
+  ) async -> Result<String?, LocateFailure> {
+    let toplevel: String?
+    if let root {
+      do {
+        let prefix = try await git.workingDirectoryPrefix()
+          .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let base = CanonicalPath.of(root)
+        toplevel =
+          prefix.isEmpty
+          ? base : base.hasSuffix("/" + prefix) ? String(base.dropLast(prefix.count + 1)) : base
+      } catch {
+        return .failure(LocateFailure("can't find the worktree toplevel: \(error)"))
+      }
+    } else {
+      toplevel = nil
+    }
+    func key(_ path: String) -> String {
+      let absolute = path.hasPrefix("/") ? path : toplevel.map { $0 + "/" + path }
+      let resolved = absolute.map { CanonicalPath.of(URL(filePath: $0)) } ?? path
+      return resolved.lowercased()
+    }
+    let wanted = key(design)
+    let names: [String]
+    do {
+      names = try FileManager.default.contentsOfDirectory(atPath: layout.root)
+    } catch CocoaError.fileReadNoSuchFile {
+      return .success(nil)
+    } catch {
+      return .failure(LocateFailure("listing \(layout.root): \(error.localizedDescription)"))
+    }
+    for name in names.sorted() where name != slug {
+      guard let plan = try? layout.plan(name) else { continue }
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: plan.directory, isDirectory: &isDirectory),
+        isDirectory.boolValue, FileManager.default.fileExists(atPath: plan.planFile)
+      else { continue }
+      let file: PlanFile
+      do {
+        file = try PlanFileJSON.decode(try Data(contentsOf: URL(filePath: plan.planFile)))
+      } catch {
+        return .failure(
+          LocateFailure(
+            "\(plan.planFile) can't be read, so it can't be ruled out as the owner of "
+              + "\(design): \(error)"))
+      }
+      if key(file.design) == wanted { return .success(name) }
+    }
+    return .success(nil)
+  }
+
   /// Validates the inputs and places the plan under the git common dir, so every worktree of
   /// the repository contends for the same lock.
   private static func locate(
     _ slug: String, session: String?, requireSession: Bool, git: any Git
-  ) async -> Result<PlanLock, LocateFailure> {
+  ) async -> Result<Located, LocateFailure> {
     if let session, !PlanLock.isValidSession(session) {
       return .failure(LocateFailure("--session must be a non-empty id without whitespace"))
     }
@@ -161,7 +262,8 @@ enum PlanLockRun {
       return .failure(LocateFailure("can't find the git common dir: \(error)"))
     }
     do {
-      return .success(PlanLock(plan: try PlanStateLayout(commonDirectory: common).plan(slug)))
+      let layout = try PlanStateLayout(commonDirectory: common)
+      return .success(Located(layout: layout, lock: PlanLock(plan: try layout.plan(slug))))
     } catch {
       return .failure(LocateFailure("invalid plan name `\(slug)`: \(error)"))
     }
@@ -196,7 +298,7 @@ enum PlanLockRun {
     _ holder: String?, _ lockFile: String?, _ message: String
   ) -> PlanLockReport {
     PlanLockReport(
-      command: command, plan: slug, status: status, verdict: verdict, holder: holder,
+      command: command, plan: slug, status: status, verdict: verdict, holder: holder, owner: nil,
       lockFile: lockFile, message: message)
   }
 }
@@ -207,7 +309,8 @@ struct PlanClaimCommand: AsyncParsableCommand {
     abstract: "Create the plan directory under the git common dir and write orchestrator.lock.",
     discussion:
       "Exits 0 when this session now holds the plan (or already did), 1 when another session "
-      + "holds it, and 2 for an invalid plan name, a missing session or no git repository.")
+      + "holds it or another plan already owns the --design doc, and 2 for an invalid plan name, "
+      + "a missing session or no git repository.")
 
   @Argument(help: "The plan's slug.")
   var slug: String
@@ -230,7 +333,7 @@ struct PlanClaimCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let report = await PlanLockRun.claim(
-      slug: slug, session: session, design: design, tier: tier, git: git)
+      slug: slug, session: session, design: design, tier: tier, root: root, git: git)
     Console.write(PlanLockRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
