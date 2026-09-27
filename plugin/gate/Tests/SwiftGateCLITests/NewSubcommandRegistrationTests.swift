@@ -118,6 +118,7 @@ struct NewSubcommandRegistrationTests {
     "plan-lint",
     "design-render",
     "calibrate design",
+    "worktree create", "worktree warm-check", "worktree remove",
   ]
 
   @Test(
