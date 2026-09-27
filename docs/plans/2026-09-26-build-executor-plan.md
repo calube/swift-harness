@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Wave 1 merged on local main 2026-09-26 (push tier GREEN, 1562 tests).
+Status: IN PROGRESS. Waves 1–2 merged on local main 2026-09-26 (push tier GREEN, 1591 tests). The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: wave 2 (build-schedule-next, build-run-store, sketch-design-tier).
+Next action: wave 3 (worktree-commands, ledger-set-command, build-start-next-finish-commands).
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
@@ -60,6 +60,7 @@ The [orchestrator runbook](../handoffs/subproject-2-orchestrator-runbook.md) app
 | `C/Commands/PlanSetCommand.swift`, `C/Commands/PlanClaimCommand.swift` | `sketch-design-tier` |
 | `D/Context/ContextPack.swift`, `A/Context/ContextPackSources.swift` | `worker-context-pack-dependency-notes` |
 | `C/Commands/SelfTestCommand.swift` | `self-test-build-seeds` |
+| `D/Hooks/Guards.swift`, `TC/PlanStateAuthorityTests.swift` (sub-project 2 owns them; message its orchestrator before the merge) | `ledger-set-command` |
 | `P/skills/design/SKILL.md` and its references | `ship-skill-and-sketch-design-flow` |
 | `P/skills/plan/SKILL.md`, `P/agents/design-decomposer.md`, `D/Plan/PlanLintCoverage.swift` | `decomposer-model-tag` |
 | `docs/index.md`, `docs/designs/*` | `spec-corrections-and-routers` |
@@ -148,9 +149,9 @@ flowchart LR
 
 ### `ledger-set-command`
 - Deps: build-cli-stubs, ledger-build-states-and-fields, build-run-store · Gate: push · estLines: 200
-- Writes: `C/Commands/LedgerSetCommand.swift`, `TC/LedgerSetCommandTests.swift`
-- Does: §6.2: 1 status change under the plan lock, checked against `LedgerTransition`; appends an event. Exit 2 on an illegal transition.
-- Tests: `done → pending` exits 2 and leaves the file byte-identical · a non-holder session is refused · each change appends exactly 1 event · a subagent call (any `agent_id`) is refused by the guard.
+- Writes: `C/Commands/LedgerSetCommand.swift`, `TC/LedgerSetCommandTests.swift`, `D/Hooks/Guards.swift`, `TC/PlanStateAuthorityTests.swift`
+- Does: §6.2: 1 status change under the plan lock, checked against `LedgerTransition`; appends an event. Exit 2 on an illegal transition. Adds `["ledger","set"]`, `["build","start"]`, `["build","finish"]` and `["worktree","create"]` to `PlanCommandGuard.sessionCommands`, so subagents and a foreign or non-literal `--session` are denied. The subagent deny message becomes verb-aware: for these verbs it tells a build worker to return its task result to the orchestrator, not to report `design-conflict` or `needs-replan`.
+- Tests: `done → pending` exits 2 and leaves the file byte-identical · a non-holder session is refused · each change appends exactly 1 event · per new verb in `PlanStateAuthorityTests`: subagent denied, foreign session denied, own session allowed (red first) · the build-verb deny message names the orchestrator, and the `plan` verbs keep their current message.
 
 ### `build-start-next-finish-commands`
 - Deps: build-cli-stubs, build-presets-config, build-schedule-next, build-run-store · Gate: push · estLines: 300
