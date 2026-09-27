@@ -6,10 +6,11 @@ import Testing
 
 @testable import SwiftGateCLI
 
+/// Runs the built `swiftgate module-graph` on a copy of a real two-package repository, one package
+/// depending on the other's product through a local path, so the golden holds both an in-package
+/// edge and a cross-package one.
 @Suite("module-graph command")
 struct ModuleGraphCommandTests {
-  /// Two real packages, one depending on the other's product through a local path, so the golden
-  /// covers both an in-package edge and a cross-package one.
   static let fixture = Fixture.gateDirectory.appending(
     path: "Fixtures/module-graph/repo", directoryHint: .isDirectory)
 
@@ -23,15 +24,38 @@ struct ModuleGraphCommandTests {
     OrderQueueCore -> OrderQueueClient
     OrderQueueCoreTests -> OrderQueueCore
     OrderQueueUI -> OrderQueueCore
+
     """
 
-  /// A copy, so `swift package describe` and the manifest cache write nothing into the checkout.
+  struct Result {
+    let status: SwiftGateAdapters.ExitStatus
+    let stdout: String
+    let stderr: String
+  }
+
+  /// A copy, so `swift package describe`, the manifest cache and coverage output write nothing
+  /// into the checkout.
   private static func copyOfFixture() throws -> URL {
     let root = FileManager.default.temporaryDirectory
       .appending(path: "swiftgate-module-graph-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.copyItem(at: fixture, to: root)
     return root
+  }
+
+  /// Checks the command tree accepts `module-graph` in process, then runs the built binary in
+  /// `root`, whose repository it describes.
+  private static func moduleGraph(in root: URL) async throws -> Result {
+    _ = try await SwiftGate.asyncParseAsRoot(["module-graph"])
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: binary, arguments: ["module-graph"],
+        environmentOverlay: [
+          "LLVM_PROFILE_FILE": root.appending(path: "swiftgate-%p.profraw").path
+        ],
+        workingDirectory: root.path, timeout: .seconds(120)))
+    return Result(status: output.status, stdout: output.stdout.text, stderr: output.stderr.text)
   }
 
   @Test(
@@ -41,46 +65,70 @@ struct ModuleGraphCommandTests {
     let root = try Self.copyOfFixture()
     defer { try? FileManager.default.removeItem(at: root) }
 
-    let outcome = await ModuleGraphRun.run(
-      root: root, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+    let result = try await Self.moduleGraph(in: root)
 
-    #expect(outcome == .dumped(Self.golden))
+    #expect(result.status == .exited(0), "\(result.stderr)")
+    #expect(result.stdout == Self.golden)
   }
 
   @Test(
-    "a repository with no .swiftgate.toml fails naming the config — catches an empty dump passing as a graph with no modules"
+    "the dump's module lines are the ones SessionStart shows for the same repository — catches a pack's graph disagreeing with the session's map"
+  )
+  func sameMapAsSessionStart() async throws {
+    let root = try Self.copyOfFixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root) else {
+      Issue.record("the fixture's .swiftgate.toml doesn't load")
+      return
+    }
+    guard
+      case .success(let entries) = await SessionStartHook.moduleMap(
+        root: root, config: config, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+    else {
+      Issue.record("SessionStart built no module map for the fixture")
+      return
+    }
+    let session = SessionContext.render(
+      SessionContext.Inputs(
+        projectName: "fixture", modules: entries, xcode: nil, plans: .none, notes: []))
+
+    let result = try await Self.moduleGraph(in: root)
+
+    let mapLines = result.stdout.split(separator: "\n").filter { !$0.contains(" -> ") }
+    #expect(mapLines.count == 3, "\(result.stdout)\(result.stderr)")
+    for line in mapLines {
+      #expect(session.contains(line), "\(line)")
+    }
+  }
+
+  @Test(
+    "a repository with no .swiftgate.toml exits 2 naming the config and prints no dump — catches an empty dump passing as a graph with no modules"
   )
   func noConfig() async throws {
     let root = try Self.copyOfFixture()
     defer { try? FileManager.default.removeItem(at: root) }
-    try FileManager.default.removeItem(at: root.appending(path: ConfigLoader.fileName))
+    try FileManager.default.removeItem(at: root.appending(path: ".swiftgate.toml"))
 
-    let outcome = await ModuleGraphRun.run(
-      root: root, swiftPM: FakeSwiftPM(serving: []))
+    let result = try await Self.moduleGraph(in: root)
 
-    guard case .failed(let message) = outcome else {
-      Issue.record("expected .failed, got \(outcome)")
-      return
-    }
-    #expect(message.contains(ConfigLoader.fileName))
+    #expect(result.status == .exited(2))
+    #expect(result.stdout.isEmpty)
+    #expect(result.stderr.contains(".swiftgate.toml"), "\(result.stderr)")
   }
 
   @Test(
-    "a package SwiftPM can't describe fails naming it — catches a partial graph dumped as if complete"
+    "a package SwiftPM can't describe exits 2 naming it and prints no dump — catches a partial graph dumped as if complete"
   )
   func describeFailure() async throws {
     let root = try Self.copyOfFixture()
     defer { try? FileManager.default.removeItem(at: root) }
-    let failing = FakeSwiftPM { _ throws(SwiftPMError) in
-      throw .unparseableOutput(command: "package describe", detail: "boom")
-    }
+    try Data("this is not a manifest\n".utf8).write(
+      to: root.appending(path: "Packages/Logging/Package.swift"))
 
-    let outcome = await ModuleGraphRun.run(root: root, swiftPM: failing)
+    let result = try await Self.moduleGraph(in: root)
 
-    guard case .failed(let message) = outcome else {
-      Issue.record("expected .failed, got \(outcome)")
-      return
-    }
-    #expect(message.contains("Packages/Logging") || message.contains("Packages/Orders"))
+    #expect(result.status == .exited(2))
+    #expect(result.stdout.isEmpty)
+    #expect(result.stderr.contains("Packages/Logging"), "\(result.stderr)")
   }
 }
