@@ -200,10 +200,9 @@ store those pages the same way, then rerun that lane.
   answer. At `deep`, ask each lane for a probe snippet per option, not only for the chosen path.
   Every API or type the request names goes, as the request names it, into the `packages` brief
   (the `codebase` brief at `quick`) as a question that needs a probe snippet using it.
-- Module graph, `<run>/module-graph.txt`: the SessionStart `Modules by package` lines, then 1
-  `<Target> -> <Dependency>` line per target dependency, from
-  `swift package --package-path <package> describe --type json` for each package that holds a
-  touched module. The pack keeps the lines that name a touched module.
+- Module graph, `<run>/module-graph.txt`: written once per run by
+  `"$SG" module-graph --output <run>/module-graph.txt`. Exit 2 names what it couldn't read: fix it
+  and rerun. The pack keeps the lines that name a touched module.
 - Pin: `codebase` takes `git rev-parse HEAD`; `packages` and `prior-decisions` take
   `<identity>@<version>` from `Package.resolved` for the dependency the design leans on most;
   `apple-docs` takes `iphonesimulator<version>` from `xcrun --sdk iphonesimulator --show-sdk-version`.
@@ -354,6 +353,7 @@ Rewrite `<ev>/claims.jsonl` once more. For each claim:
 - the new `loc` when the output carries one.
 
 A claim missing from both keeps its line as it was. Report the counts by status.
+Then cache what verify settled: `"$SG" evidence cache record --design <doc> --json`.
 
 ### When verification leaves no path
 

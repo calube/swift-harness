@@ -119,8 +119,12 @@ struct ReviewInputTests {
     #expect(
       files == [
         "check.json", "arch.json", "testlint.json", "comments.json", "mutate.json", "diff.patch",
-        "manifest.json",
+        "diff-numbered.txt", "manifest.json",
       ])
+    #expect(manifest.artifacts.numberedDiff == "diff-numbered.txt")
+    #expect(
+      try String(contentsOf: directory.appending(path: "diff-numbered.txt"), encoding: .utf8)
+        .hasPrefix(NumberedDiff.legend))
     #expect(manifest.artifacts.mutate == "mutate.json")
     #expect(manifest.notes.contains("mutate: RED"))
     let mutate = try JSONDecoder().decode(

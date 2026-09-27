@@ -71,12 +71,13 @@ private struct PlanLintRepo {
 
   static func task(
     id: String = "queue-core", deps: [String] = [],
-    covers: [String] = ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"]
+    covers: [String] = ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"],
+    model: TaskModel? = .sonnet
   ) -> LedgerTask {
     LedgerTask(
       id: id, deps: deps, writeSet: ["Sample/Sources/Core/"], gate: .fast,
       tests: ["test-queued-order-survives-relaunch"], covers: covers, estLines: 120,
-      status: .pending, worktree: "../app-\(slug)-\(id)")
+      status: .pending, worktree: "../app-\(slug)-\(id)", model: model)
   }
 
   static func ledger(tasks: [LedgerTask] = [task()], waves: [[String]] = [["queue-core"]])
@@ -508,5 +509,30 @@ struct PlanLintCommandTests {
     #expect(report.findings.contains { $0.ruleID == PlanLintGraph.packMissingRuleID })
     #expect(run.packFailures["queue-core"]?.contains("claims.jsonl") == true)
     #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "§8.4: a done task naming a test id an amend renamed builds no pack and, with a fix task, exits 0 — catches a replan left red by history it can't change"
+  )
+  func doneTaskWithRenamedTestIsGreen() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    let done = LedgerTask(
+      id: "queue-core", deps: [], writeSet: ["Sample/Sources/Core/"], gate: .fast,
+      tests: ["test-queued-order-kept-on-disk"],
+      covers: ["req-orders-survive-app-kill", "test-queued-order-kept-on-disk"], estLines: 120,
+      status: .done, worktree: "../app-queue-core", actualLines: 130)
+    let fix = PlanLintRepo.task(
+      id: "queue-core-relaunch", deps: ["queue-core"],
+      covers: ["test-queued-order-survives-relaunch"])
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText),
+      ledger: PlanLintRepo.ledger(
+        tasks: [done, fix], waves: [["queue-core"], ["queue-core-relaunch"]]))
+
+    let (report, run) = try await repo.lint()
+    #expect(run.packFailures == [:])
+    #expect(report.findings.filter(\.severity.failsGate) == [])
+    #expect(report.verdict.exitCode == 0)
   }
 }

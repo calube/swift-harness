@@ -4,7 +4,7 @@ schema = 1
 xcode = "26.2"
 app_scheme = "swiftgate"
 packages = ["plugin/gate"]
-exclude = ["plugin/gate/Fixtures", "examples", "evals/corpora"]
+exclude = ["plugin/gate/Fixtures", "examples", "evals/corpora", "evals/apps"]
 
 [simulator]
 device = "iPhone 17"

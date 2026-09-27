@@ -52,4 +52,5 @@ The verdict is a literal string: `merge`, `fix-then-merge` or `refactor-needed`.
 - Anything else gives `merge`.
 
 A reviewer that fails leaves its focus not reviewed, and the verdict can't be `merge` while any
-focus is unreviewed.
+focus is unreviewed. A finding the verifier returns no entry for stays in `review.json` as
+`unmatched`, which likewise keeps the verdict off `merge`.

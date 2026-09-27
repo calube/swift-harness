@@ -993,3 +993,34 @@ against that subcommand's help. A later skill that names a missing command or fl
 - **Machine sharing:** only one ready tier runs at a time machine-wide. Wait with
   `until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done` (the bracket keeps the pattern from
   matching its own shell). At load 30+, `RepositoryScriptTests.shim` can hit its 600 s timeout while its shim builds.
+
+## Review fix wave 3
+
+- **Design across sessions:** design releases its claim (`plan release --session`) after the approval is recorded, and
+  when the user stops at the approval wait. In-review, Approve and Revise start with `plan claim`; on exit 1 the
+  skill shows the holder and leaves `--force` to the user's terminal. Workflows launch by registered name, then from
+  a copy under `<run>/workflows/`, then through the Agent tool. Doc pages are stored under `snapshots/` and command
+  output through `evidence capture` before the lanes run. Every route into publish saves `review-final.json`. A
+  re-scope runs `plan set --tier <tier> --resume` (`sketch` is valid). Review folders are never reused. Frame answers
+  record `<label>: <description>`. In a headless turn, the resume command is the last line.
+  `tests/design_session_handoff_test.mjs` runs the skill's commands across two sessions.
+- **Plan replan:** with `needs-replan` or `done` tasks in the ledger, `/plan` passes the kept tasks to the decomposer as
+  fixed. It replaces `needs-replan` tasks, adds fix tasks for changed ids that `done` tasks cover, then runs
+  plan-schedule and plan-lint at the new `designSha` (`tests/plan_replan_test.mjs`). The decomposer tags every task
+  `model: sonnet|opus`, and `plan-lint.missing-model` is major.
+- **`swiftgate module-graph [--repo <dir>] [--output <file>]`:** prints `Modules by package (role, kind):`, then
+  `- <package>: <Module> (<role>, <kind>), …`, then sorted `<Target> -> <Dependency>` lines. Exit 0 prints or writes;
+  exit 2 writes nothing. The design and plan skills call it. SessionStart shares its module-entry code. The stamped
+  `.gitignore` covers `**/.harness/plan-draft/`.
+- **Design review workflow:** at most 3 agents in flight. A revise round's `previous` is
+  `{reviews: [{reviewer, status, findings: [{id, disposition, summary}]}]}`, built from `review-log.jsonl` and
+  rejected over 16 KB (`PreviousTooLargeError`). The output's `carried[]` names reviewers that didn't rerun. A
+  workflow script test that prints `skip` lines fails.
+- **Code review:** `review-input` writes `diff-numbered.txt` (manifest `artifacts.numberedDiff`), where each line
+  carries its new-file number. Reconcile matches by file+line, then file+title, then the single remaining
+  same-category entry. An unmatched finding gets `unmatched: true`, is listed under UNMATCHED AT VERIFY, and blocks a
+  `merge` verdict. A user-visible race is a blocker.
+- **Gate:** a compile error inside a `#expect`/`#require` expansion is RED `t1.build-failed`. Hook latency budgets
+  judge the hook's own CPU time (`Latency.threadCPUMilliseconds`, or `MeasuredProcessRunner` via wait4).
+- **Open:** plan-lint counts a module's test target as a second module (`too-many-modules`), and its per-task rules
+  run on `done` tasks, so some replans can't reach GREEN. That task is in flight.

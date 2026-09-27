@@ -708,9 +708,10 @@ private enum SeedRunners {
 
   // MARK: plan-lint
 
-  /// A package with one library module, real enough for `swift package describe` to answer —
-  /// every case shares it, so `PlanLintRun.run`'s module graph always resolves the same way and
-  /// only the case's own `design.md`/`ledger.json` decide which rule fires.
+  /// A package with two library modules and `Core`'s test target, real enough for
+  /// `swift package describe` to answer — every case shares it, so `PlanLintRun.run`'s module
+  /// graph always resolves the same way and only the case's own `design.md`/`ledger.json` decide
+  /// which rule fires.
   private static let planLintPackageManifest = """
     // swift-tools-version: 6.2
     import PackageDescription
@@ -718,7 +719,9 @@ private enum SeedRunners {
     let package = Package(
       name: "Sample",
       targets: [
-        .target(name: "Core", path: "Sources/Core")
+        .target(name: "Core", path: "Sources/Core"),
+        .target(name: "Other", path: "Sources/Other"),
+        .testTarget(name: "CoreTests", dependencies: ["Core"], path: "Tests/CoreTests"),
       ]
     )
 
@@ -769,6 +772,8 @@ private enum SeedRunners {
       repo.write(ConfigLoader.fileName, planLintConfig + bounds),
       repo.write("Sample/Package.swift", planLintPackageManifest),
       repo.write("Sample/Sources/Core/Core.swift", "public enum Core {}\n"),
+      repo.write("Sample/Sources/Other/Other.swift", "public enum Other {}\n"),
+      repo.write("Sample/Tests/CoreTests/CoreTests.swift", "import Core\n"),
       repo.write(designPath, design),
       await repo.git("init", "-q", "-b", "main"),
       await repo.git("config", "commit.gpgsign", "false"),

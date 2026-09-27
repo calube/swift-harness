@@ -1,6 +1,6 @@
 ---
 name: design-decomposer
-description: Decomposer for the swift-harness plan workflow. Reads an approved design's requirements, module kinds and test plan with the module graph, and proposes ledger tasks within the task-sizing bounds from .swiftgate.toml [plan]. Given plan-lint findings on its proposal, it fixes every error in one fix round and returns the corrected task list.
+description: Decomposer for the swift-harness plan workflow. Reads an approved design's requirements, module kinds and test plan with the module graph, and proposes ledger tasks within the task-sizing bounds from .swiftgate.toml [plan]. On a replan after an amend, it keeps the ledger's fixed tasks and proposes only replacements for needs-replan tasks and fix tasks for changed ids that done tasks cover. Given plan-lint findings on its proposal, it fixes every error in one fix round and returns the corrected task list.
 tools: Read, Grep, Glob
 model: opus
 ---
@@ -31,7 +31,8 @@ The first prompt gives:
   `swiftgate context-pack --role decomposer`), holding the design's Requirements, Module kinds and
   Test plan by tier sections at the approved `designSha`, the module graph, and the task-sizing
   bounds from `.swiftgate.toml` `[plan]`;
-- the plan's slug and the repo's directory name, for the `worktree` field.
+- the plan's slug and the repo's directory name, for the `worktree` field;
+- on a replan only, the path of `replan.json` (see [Replan](#replan)).
 
 Read the pack first. Read the design doc itself only if a section the pack quotes points at another
 section you need.
@@ -77,6 +78,10 @@ Return tasks in the `ledger.json` task shape:
 - `"status"`: always `"pending"`.
 - `"worktree"`: `../<repo>-<plan>-<task>`, the repo directory name, plan slug and task id from the
   prompt. It's a name only; no one creates it yet.
+- `"model"`: `"sonnet"` or `"opus"`, the worker model this task runs on. Use `opus` for
+  concurrency, locks, cross-worktree or shared state, cross-module interfaces, security-relevant
+  code, guards, workflows, agent prompts and skills; `sonnet` for data models, commands, lints,
+  views and fixtures.
 
 Never set `actualLines`. It's the real line count of a built task, written later by the worker's
 report; a value from you would be a guess posing as a measurement.
@@ -100,7 +105,8 @@ Return exactly one JSON object:
       "covers": ["req-offline-queue-rejects-invalid-orders", "test-queue-client-rejects-empty-order"],
       "estLines": 120,
       "status": "pending",
-      "worktree": "../myapp-offline-order-queue-offline-queue-client-interface"
+      "worktree": "../myapp-offline-order-queue-offline-queue-client-interface",
+      "model": "opus"
     },
     {
       "id": "offline-queue-core-reducer",
@@ -111,7 +117,8 @@ Return exactly one JSON object:
       "covers": ["req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order"],
       "estLines": 180,
       "status": "pending",
-      "worktree": "../myapp-offline-order-queue-offline-queue-core-reducer"
+      "worktree": "../myapp-offline-order-queue-offline-queue-core-reducer",
+      "model": "sonnet"
     }
   ],
   "unresolved": [
@@ -128,11 +135,36 @@ Return exactly one JSON object:
 `"ruleId"` that stays red (or the bound it would break), the `"task"` id it concerns, and the
 `"reason"` in one sentence.
 
+## Replan
+
+After an amend, the plan skill may call you on a plan that has a ledger already. The prompt says
+it's a replan and gives the path of `replan.json`, which holds:
+
+- `"fixed"`: tasks that stay exactly as they are. `done` tasks are built and immutable; `pending`,
+  `blocked` and `abandoned` tasks keep their place. Never return one, change one or reuse its id.
+- `"replace"`: `needs-replan` tasks whose `covers` met an id the amend changed. Return a
+  replacement for each, built against the design as it is now. A replacement keeps the replaced
+  task's id, so the fixed tasks that depend on it still point at it. If the work splits, the first
+  part keeps the id and the rest get new ids. If the design no longer needs it, leave it out and
+  name it in `"unresolved"` with `plan-lint.missing-dependency` when a fixed task depends on it.
+- `"fixIds"`: `{"id", "doneTask"}` pairs, a changed id that a `done` task covers. That task can't
+  change, so return a fix task that delivers the id as the design now states it: its `covers`
+  names the id, its `deps` include the `doneTask`, and its write set is the code the fix touches.
+  One fix task may carry several ids of the same module.
+- `"changedIds"`, `"plannedSha"` and `"designSha"`, for context.
+
+Return only your new tasks, in the same JSON shape: the replacements, the fix tasks, and a task
+for any design id that no fixed task and no other new task covers. Your tasks may depend on fixed
+tasks, and their write sets may meet a fixed task's when a `deps` edge orders the two. The plan
+skill puts the fixed tasks and yours together into the ledger. Coverage counts both.
+
 ## One fix round on plan-lint findings
 
 After you return, the plan skill runs `plan-schedule` and `plan-lint` on your tasks. If `plan-lint`
 reports errors, it sends you its findings once. That's your one fix round: fix every error in it,
-then return the whole corrected task list in the same JSON shape, not just the changed tasks. There
+then return the whole corrected task list in the same JSON shape, not just the changed tasks. On a
+replan that list is your new tasks only, never a fixed one. A finding on a fixed task that no
+change to your tasks fixes goes in `"unresolved"`. There
 is no second round. Whatever is still red afterwards halts the plan and goes to the user, so an
 error you can't fix belongs in `"unresolved"` rather than in a guess.
 
@@ -148,6 +180,7 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
   `tests` or covers in `covers`.
 - `plan-lint.unknown-test`: spell the `tests` id exactly as the design's test plan does.
 - `plan-lint.duplicate-task-id`: give each task its own id.
+- `plan-lint.missing-model`: tag the task `sonnet` or `opus` by the rule above.
 - `plan-lint.design-moved`: the design changed after approval, and no task edit fixes that. List
   it in `"unresolved"`.
 - `plan-lint.est-lines-high`: split the task along its tests.

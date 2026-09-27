@@ -662,10 +662,9 @@ Object.assign(tests, {
   },
 
   'the decomposer emits every LedgerTask key it owns at decomposition time — catches a proposed task the ledger cannot decode or a fabricated line count'() {
-    // actualLines and model are written later, by a worker report and the decomposer's own model
-    // tag respectively; branch is written by worktree create. None of the three is the
-    // decomposer's to emit yet.
-    const notYetDecomposerOwned = ['actualLines', 'model', 'branch']
+    // actualLines is written later, by a worker report; branch is written by worktree create.
+    // Neither is the decomposer's to emit yet. model is the decomposer's own tag (spec §5.2).
+    const notYetDecomposerOwned = ['actualLines', 'branch']
     const keys = ledgerTaskKeys(domainSource('Plan/Ledger.swift'))
     assert.ok(keys.includes('actualLines') && keys.includes('estLines'), `LedgerTask keys: ${keys}`)
     const text = agentText('design-decomposer')

@@ -1,0 +1,33 @@
+import Foundation
+import LogClient
+import OSLog
+import Testing
+
+@testable import LogClientLive
+
+struct OSLogEmissionTests {
+  @Test(
+    "emit writes the record to unified logging — catches the live client silently dropping every log line"
+  )
+  func emitReachesUnifiedLogging() throws {
+    let subsystem = "com.example.InterviewStarter.tests.\(UUID().uuidString)"
+    let store = try OSLogStore(scope: .currentProcessIdentifier)
+    let start = store.position(date: Date().addingTimeInterval(-1))
+
+    LogClient.osLog(subsystem: subsystem).emit(
+      LogRecord(
+        level: .error, category: "Emission", message: "posts request failed",
+        attributes: [.public("count", 7)])
+    )
+
+    let entries = try store.getEntries(
+      at: start, matching: NSPredicate(format: "subsystem == %@", subsystem)
+    )
+    .compactMap { $0 as? OSLogEntryLog }
+    #expect(entries.count == 1)
+    let entry = try #require(entries.first)
+    #expect(entry.category == "Emission")
+    #expect(entry.level == .error)
+    #expect(entry.composedMessage.hasPrefix("posts request failed count=7"))
+  }
+}

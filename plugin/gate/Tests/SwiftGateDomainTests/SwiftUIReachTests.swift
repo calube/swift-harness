@@ -49,7 +49,7 @@ struct SwiftUIReachTests {
   func manifestFocuses() {
     let artifacts = ReviewInputManifest.Artifacts(
       check: "check.json", arch: "arch.json", testlint: "testlint.json", comments: "comments.json",
-      diff: "diff.patch", mutate: "mutate.json")
+      diff: "diff.patch", numberedDiff: "diff-numbered.txt", mutate: "mutate.json")
     let without = ReviewInputManifest(
       runID: "r", base: "origin/main", mergeBase: "abc", gateVerdict: .green, changedFiles: [],
       swiftUIUnits: [], artifacts: artifacts, notes: [])

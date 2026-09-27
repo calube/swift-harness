@@ -13,9 +13,21 @@ public enum PlanLintCoverage {
   /// in the design's own order (requirements first, then the test plan) so two runs over the same
   /// design agree on order.
   public static func uncoveredIDs(design: DesignDocument, tasks: [LedgerTask]) -> [String] {
-    let covered = Set(tasks.flatMap(\.covers))
+    let tiers = testTiers(design: design)
+    let covered = Set(tasks.flatMap { countedCovers(task: $0, testTiers: tiers) })
     let designIDs = design.requirements.map(\.id) + design.testPlan.map(\.id)
     return designIDs.filter { !covered.contains($0) }
+  }
+
+  /// The ids `task`'s `covers` still vouches for. A done task is immutable (spec §5.7, §8.4): it
+  /// ran its tests at the gate it declared then, so a test whose tier has since risen above that
+  /// gate was never run where it now must be. It needs a fix task at the new gate.
+  static func countedCovers(task: LedgerTask, testTiers: [String: Tier]) -> [String] {
+    guard task.status == .done else { return task.covers }
+    return task.covers.filter { id in
+      guard let tier = testTiers[id] else { return true }
+      return minimumGate(for: tier).rank <= task.gate.rank
+    }
   }
 
   /// One `major` finding per id ``uncoveredIDs(design:tasks:)`` returns — a requirement or test
@@ -23,12 +35,21 @@ public enum PlanLintCoverage {
   public static func coverageFindings(
     design: DesignDocument, tasks: [LedgerTask], designPath: String
   ) throws(ReportContractViolation) -> [Finding] {
+    let tiers = testTiers(design: design)
     var findings: [Finding] = []
     for id in uncoveredIDs(design: design, tasks: tasks) {
+      let outgrown = tasks.filter { $0.status == .done && $0.covers.contains(id) }
+      let message =
+        outgrown.isEmpty
+        ? "\(id) is in the design but no task's covers list names it"
+        : "\(id) is covered only by done task \(outgrown.map(\.id).sorted().joined(separator: ", ")) "
+          + "at gate \(outgrown.map(\.gate.rawValue).sorted().joined(separator: ", ")), below the "
+          + "\(tiers[id].map { minimumGate(for: $0).rawValue } ?? "gate") its tier now needs; add a "
+          + "fix task that covers it"
       findings.append(
         try Finding(
           ruleID: uncoveredRuleID, severity: .major, file: designPath, line: nil,
-          message: "\(id) is in the design but no task's covers list names it",
+          message: message,
           failureScenario:
             "the design defines \(id); no ledger task covers it, so it never turns green"))
     }
@@ -110,6 +131,27 @@ public enum PlanLintCoverage {
             + "task's gate"))
     }
     return findings
+  }
+
+  // MARK: - Model tag (spec §5.2: the decomposer tags every task sonnet or opus)
+
+  public static let missingModelRuleID = "plan-lint.missing-model"
+
+  /// One `major` finding when a task carries no `model`: the decomposer must tag every task
+  /// `sonnet` or `opus` (spec §5.2), and an untagged task would otherwise fall through to
+  /// `build next`'s preset default silently, on work the decomposer never sized for that model.
+  public static func missingModelFindings(task: LedgerTask) throws(ReportContractViolation)
+    -> [Finding]
+  {
+    guard task.model == nil else { return [] }
+    return [
+      try Finding(
+        ruleID: missingModelRuleID, severity: .major, file: task.id, line: nil,
+        message: "task \(task.id) has no model; the decomposer must tag every task sonnet or opus",
+        failureScenario:
+          "an untagged task silently falls through to the preset's default worker model instead "
+          + "of the one its work needs")
+    ]
   }
 
   // MARK: - Task sizing (spec §9.3)

@@ -59,11 +59,14 @@ public struct ReviewFinding: Sendable, Equatable, Codable {
   public let rule: String?
   /// What the verifier traced; kept so a reader of `review.json` can audit the confirmation.
   public let verificationNote: String?
+  /// Set by the review workflow when the verifier returned no entry for this finding.
+  public let unmatched: Bool?
 
   public init(
     severity: Severity, category: String, file: String, line: Int?, title: String,
     failureScenario: String?, evidence: String, fix: String, verified: Bool?,
-    kind: Kind? = nil, rule: String? = nil, verificationNote: String? = nil
+    kind: Kind? = nil, rule: String? = nil, verificationNote: String? = nil,
+    unmatched: Bool? = nil
   ) {
     self.severity = severity
     self.category = category
@@ -77,10 +80,11 @@ public struct ReviewFinding: Sendable, Equatable, Codable {
     self.kind = kind
     self.rule = rule
     self.verificationNote = verificationNote
+    self.unmatched = unmatched
   }
 
   private enum CodingKeys: String, CodingKey {
-    case severity, category, file, line, title, evidence, fix, verified, kind, rule
+    case severity, category, file, line, title, evidence, fix, verified, kind, rule, unmatched
     case failureScenario = "failure_scenario"
     case verificationNote = "verification_note"
   }
@@ -177,6 +181,13 @@ public struct ReviewReport: Sendable, Equatable, Codable {
     public let reason: Reason
   }
 
+  /// A finding the verifier returned no entry for: kept visible, and the verdict can't be
+  /// `merge` while one is listed, as for an unreviewed focus.
+  public struct Unmatched: Sendable, Equatable, Codable {
+    public let focus: ReviewFocus
+    public let finding: ReviewFinding
+  }
+
   public struct Unreviewed: Sendable, Equatable, Codable {
     public let focus: ReviewFocus
     public let reason: String
@@ -189,6 +200,7 @@ public struct ReviewReport: Sendable, Equatable, Codable {
   /// Most severe first, then by file, line and category.
   public let findings: [Merged]
   public let dropped: [Dropped]
+  public let unmatched: [Unmatched]
   public let notReviewed: [Unreviewed]
   public let notApplicable: [ReviewFocus]
 }
@@ -211,6 +223,7 @@ public enum ReviewSynthesis {
     var notReviewed: [ReviewReport.Unreviewed] = []
     var notApplicable: [ReviewFocus] = []
     var dropped: [ReviewReport.Dropped] = []
+    var unmatched: [ReviewReport.Unmatched] = []
     var merged: [DedupeKey: (finding: ReviewFinding, focuses: Set<ReviewFocus>)] = [:]
     for focus in ReviewFocus.allCases {
       guard let review = byFocus[focus] else {
@@ -229,6 +242,11 @@ public enum ReviewSynthesis {
       }
       for finding in review.findings {
         if let reason = dropReason(finding) {
+          // The verifier never judged this finding, so it is neither verified nor refuted.
+          if reason == .unverified, finding.unmatched == true {
+            unmatched.append(.init(focus: focus, finding: finding))
+            continue
+          }
           dropped.append(.init(focus: focus, finding: finding, reason: reason))
           continue
         }
@@ -248,9 +266,11 @@ public enum ReviewSynthesis {
       .sorted { order($0.finding) < order($1.finding) }
     return ReviewReport(
       schemaVersion: ReviewReport.schemaVersion,
-      verdict: verdict(findings: findings, anyUnreviewed: !notReviewed.isEmpty),
+      verdict: verdict(
+        findings: findings, anyUnreviewed: !notReviewed.isEmpty || !unmatched.isEmpty),
       findings: findings,
       dropped: dropped.sorted { order($0.finding) < order($1.finding) },
+      unmatched: unmatched.sorted { order($0.finding) < order($1.finding) },
       notReviewed: notReviewed, notApplicable: notApplicable)
   }
 
@@ -270,7 +290,7 @@ public enum ReviewSynthesis {
       return .refactorNeeded
     }
     if findings.contains(where: { $0.finding.severity.failsGate }) { return .fixThenMerge }
-    // An unreviewed focus may hide a blocker; the fix is to re-run it.
+    // An unreviewed focus or finding may hide a blocker; the fix is to re-run it.
     return anyUnreviewed ? .fixThenMerge : .merge
   }
 
@@ -323,6 +343,7 @@ public enum ReviewSynthesis {
 /// The ≤ 30-line summary the caller of the review receives: verdict, gaps, top 10 findings.
 public enum ReviewSummary {
   public static let topFindings = 10
+  static let topUnmatched = 4
   static let scenarioLimit = 160
 
   public static func render(_ report: ReviewReport, reportPath: String) -> String {
@@ -339,6 +360,20 @@ public enum ReviewSummary {
         "NOT REVIEWED: "
           + report.notReviewed.map { "\($0.focus.rawValue) (\($0.reason))" }.joined(
             separator: "; "))
+    }
+    if !report.unmatched.isEmpty {
+      lines.append(
+        "UNMATCHED AT VERIFY (the verifier returned nothing for these; re-run the review):")
+      for entry in report.unmatched.prefix(topUnmatched) {
+        let finding = entry.finding
+        let location = finding.line.map { "\(finding.file):\($0)" } ?? finding.file
+        lines.append(
+          "   [\(finding.severity.rawValue)] \(entry.focus.rawValue)/\(finding.category) \(location) — \(finding.title)"
+        )
+      }
+      if report.unmatched.count > topUnmatched {
+        lines.append("   … \(report.unmatched.count - topUnmatched) more in review.json")
+      }
     }
     for (index, merged) in report.findings.prefix(topFindings).enumerated() {
       let finding = merged.finding
