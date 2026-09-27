@@ -259,6 +259,11 @@ struct PlanStateAuthorityTests {
     #expect(try repo.planFile(AuthorityRepository.planA).tier == .deep)
     #expect(try repo.planFile(AuthorityRepository.planA).resume == "drafting")
 
+    let toSketch = try await repo.swiftgate(
+      set + ["--session", AuthorityRepository.alice, "--tier", "sketch"], in: repo.linked)
+    #expect(toSketch.exit == 0, "plan set --tier sketch: \(toSketch.stdout)")
+    #expect(try repo.planFile(AuthorityRepository.planA).tier == .sketch)
+
     let before = repo.contents(try repo.layout.plan(AuthorityRepository.planA).planFile)
     for (arguments, exit) in [
       (["--session", AuthorityRepository.bob, "--tier", "standard"], Int32(1)),

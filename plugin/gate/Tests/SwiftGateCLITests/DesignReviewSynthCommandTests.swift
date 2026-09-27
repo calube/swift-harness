@@ -89,6 +89,20 @@ struct DesignReviewSynthCommandTests {
     #expect(report.verdict == expected)
   }
 
+  @Test(
+    "sketch with no reviewer files is ready, the same as quick — catches sketch demanding an agent it never runs"
+  )
+  func sketchRunsNoReviewers() throws {
+    let scratch = try Scratch()
+    defer { scratch.remove() }
+
+    #expect(scratch.exitCode(["--design", scratch.doc, "--tier", "sketch"]) == 0)
+
+    let report = try JSONDecoder().decode(
+      DesignReviewReportProbe.self, from: Data(contentsOf: scratch.report))
+    #expect(report.verdict == "ready")
+  }
+
   enum Failure: String, CaseIterable {
     case badTier, missingTier, missingDesign, unknownReviewer, duplicateReviewer, absentAnchor
     case unreadableReviewerFile, unreadableDesign

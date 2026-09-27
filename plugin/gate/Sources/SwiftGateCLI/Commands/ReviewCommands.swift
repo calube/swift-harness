@@ -344,7 +344,7 @@ struct ReviewSynthCommand: ParsableCommand {
       "Each input is one focus's verified findings (schemaVersion 1). A focus with no input "
       + "counts as NOT REVIEWED. Writes review.json into --run-directory and prints the verdict "
       + "and the top 10 findings. Exit 0 whatever the verdict; 2 when an input breaks the contract.\n\n"
-      + "With --design <doc> --tier <quick|standard|deep>, each input is one design reviewer's "
+      + "With --design <doc> --tier <quick|standard|deep|sketch>, each input is one design reviewer's "
       + "findings (schemaVersion 1, located by section anchor) and the verdict is ready / revise / "
       + "rethink plus the reviewers to re-run, written to design-review.json. A required reviewer "
       + "with no input counts as NOT REVIEWED. Exit 0 whatever the verdict; 2 on a contract "
@@ -360,7 +360,7 @@ struct ReviewSynthCommand: ParsableCommand {
   @Option(help: "Synthesize a design review of this design doc instead of a code review.")
   var design: String?
 
-  @Option(help: "The design's depth tier (quick, standard, deep); required with --design.")
+  @Option(help: "The design's depth tier (quick, standard, deep, sketch); required with --design.")
   var tier: String?
 
   @Argument(help: "Per-focus findings files (per-reviewer files with --design).")
@@ -398,7 +398,7 @@ struct ReviewSynthCommand: ParsableCommand {
 
   private func runDesign() throws {
     guard let design else { try fail("--tier needs --design <doc>") }
-    guard let tier else { try fail("--design needs --tier <quick|standard|deep>") }
+    guard let tier else { try fail("--design needs --tier <quick|standard|deep|sketch>") }
     guard let designTier = DesignTier(rawValue: tier) else {
       try fail(
         "unknown tier '\(tier)'; expected one of "

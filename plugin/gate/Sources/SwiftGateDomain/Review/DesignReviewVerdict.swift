@@ -5,11 +5,15 @@ public enum DesignTier: String, Sendable, Codable, CaseIterable {
   case quick
   case standard
   case deep
+  /// A spec that already states what to build, such as an interview README (spec §9). Never
+  /// recommended by `design-scope`; only a preset or `--tier sketch` selects it.
+  case sketch
 
-  /// Quick tier runs no review agents: the user's Artifact approval is its review (spec §8.1).
+  /// Quick and sketch tiers run no review agents: the user's approval is the review (spec §8.1,
+  /// §9).
   public var requiredReviewers: [DesignReviewer] {
     switch self {
-    case .quick: []
+    case .quick, .sketch: []
     case .standard: [.evidenceAuditor, .standardsReviewer, .challenger]
     case .deep: [.evidenceAuditor, .standardsReviewer, .challenger, .preMortem]
     }
