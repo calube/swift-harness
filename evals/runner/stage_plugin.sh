@@ -16,7 +16,7 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 
 mkdir -p "$stage"
 rsync -a --delete --exclude .build --exclude .swiftpm "$repo/plugin/" "$stage/plugin/"
-rsync -a --delete --exclude results "$repo/evals/" "$stage/plugin/evals/"
+rsync -a --delete --exclude results --exclude apps --exclude .build "$repo/evals/" "$stage/plugin/evals/"
 rsync -a --delete --exclude .build "$repo/examples/" "$stage/examples/"
 /bin/cp -f "$repo/.gitignore" "$stage/.gitignore"
 ln -sfn plugin/evals "$stage/evals"
