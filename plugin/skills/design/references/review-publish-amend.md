@@ -191,11 +191,16 @@ Read `verdict`, `findings`, `rerun`, `notReviewed` and `notResearched` from `des
    does, with the same 2 tolerated `docs-lint` findings.
 2. Rebuild the packs of the reviewers in `rerun` alone, since the doc changed.
 3. Relaunch the way the round launched (the same `name`, or the same `scriptPath`), `packs` for
-   the `rerun` reviewers alone, `reviewers: <rerun>` and `previous: <the prior round's
-   workflow.json>`, passed inline as the object it holds. The other reviewers' results carry
-   forward.
-4. Write the files and run `review-synth` into `<run>/review-<r+1>/` as above. Pass all the
-   reviewer files: the carried ones come back in `reviews` too.
+   the `rerun` reviewers alone, `reviewers: <rerun>` and `previous: {reviews: [...]}`, one entry
+   per `rerun` reviewer built from `<ev>/review-log.jsonl`: that reviewer's own findings from the
+   round it last ran, each `{id, disposition, summary}` (`summary` is the finding's `title`).
+   Never pass the prior round's full `workflow.json` or an entry for a reviewer `rerun` doesn't
+   name: the whole earlier return runs to tens of KB, too big for a headless launch, and the
+   workflow rejects `previous` over 16 KB.
+4. Write the returned `reviews[]` entries (one per `rerun` reviewer) to
+   `<run>/review-<r+1>/<reviewer>.json`. Run `review-synth` over all the reviewer files: those, plus
+   the `carried` reviewers' own files from `<run>/review-<r>/`, passed again unchanged (`review-synth`
+   reads a file wherever it lives, so nothing is copied).
 
 When the tier has no rounds left and the verdict is still `revise`, ask 1 question per surviving
 blocker or major: another revise round (recommended), dismiss it with a reason, or stop. A
@@ -539,12 +544,14 @@ A clarify applies itself: it needs no review and no approval.
    evidence auditor's pack with those anchors as `--doc-anchor` and the claims they cite as
    `--claim-id`, and the standards
    reviewer's pack as review does. Run `design-review.js` with those 2 `packs`,
-   `reviewers: ["evidence-auditor", "standards-reviewer"]`, and `previous` set to
-   `<run>/review-final.json` (inline, as a revise round passes it), so the challenger (and the
-   pre-mortem at `deep`) carry forward. Launch it by name, with the same fallbacks as review.
-   When that file is missing, as in a fresh checkout, run the tier's whole review instead and tell
-   the user why. Then `review-synth`, the verdict rules and 1 revise round, as in review. Log
-   every disposition.
+   `reviewers: ["evidence-auditor", "standards-reviewer"]`, and `previous: {reviews: [...]}` built
+   the same way a revise round does, from `<ev>/review-log.jsonl` — never `<run>/review-final.json`
+   inline, which is the size a revise round's `previous` must never be. Launch it by name, with the
+   same fallbacks as review. Write its 2 returned files, then run `review-synth` over them plus the
+   challenger's (and, at `deep`, the pre-mortem's) own entry from `review-final.json`'s `reviews[]`,
+   each written to its own file so they carry forward unchanged. When `review-final.json` is
+   missing, as in a fresh checkout, run the tier's whole review instead and tell the user why. Then
+   the verdict rules and 1 revise round, as in review. Log every disposition.
 4. **Approval.** Render, publish to `<page>` (the index note has it), and read the approval for
    `<newSha>` as publish does, including the `AskUserQuestion` fallback.
 5. **Record.** Append the amendment to `<ev>/amendments.jsonl`:
