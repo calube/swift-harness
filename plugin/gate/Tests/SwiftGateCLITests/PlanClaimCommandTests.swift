@@ -68,7 +68,7 @@ struct PlanClaimCommandTests {
     #expect(
       scenario.planStateFiles() == [
         "plans", "plans/\(LockScenario.plan)", "plans/\(LockScenario.plan)/orchestrator.lock",
-        "plans/\(LockScenario.plan)/plan.json",
+        "plans/\(LockScenario.plan)/plan.json", "plans/claim.lock.0", "plans/claim.lock.guard",
       ])
   }
 
@@ -236,7 +236,7 @@ struct PlanClaimCommandTests {
   }
 
   @Test(
-    "a claim with --design lets the claiming session write that design doc and denies every other session — catches every design-doc write being denied at frame"
+    "a claim with --design lets the claiming session write that design doc, denies every other session, and refuses a new plan naming the same doc — catches every design-doc write being denied at frame, or a second plan co-owning it"
   )
   func claimWithDesignOpensTheDesignDoc() async throws {
     let scenario = try PlanStateScenario()
@@ -254,9 +254,13 @@ struct PlanClaimCommandTests {
 
     _ = await PlanLockRun.release(
       slug: "2026-09-26-frame-other", session: LockScenario.bob, force: false, git: git)
-    let claim = await PlanLockRun.claim(
+    let second = await PlanLockRun.claim(
       slug: "2026-09-26-frame", session: PlanStateScenario.session, design: design,
       tier: "standard", git: git)
+    #expect(second.verdict == .red, "a new plan can't take a doc another plan owns")
+    #expect(try await scenario.decision(document) == "deny")
+    let claim = await PlanLockRun.claim(
+      slug: "2026-09-26-frame-other", session: PlanStateScenario.session, git: git)
     #expect(claim.status == .claimed)
     #expect(try await scenario.decision(document) == nil)
   }

@@ -169,7 +169,7 @@ in that shape halts.
 ## 6. Set the index
 
 ```bash
-"$SG" index set <slug> planned "<resume>"
+"$SG" index set <slug> planned "<resume>" --session <session>
 ```
 
 `<resume>` is the ledger's `resume` line. Before this call, write the same line to the `resume`

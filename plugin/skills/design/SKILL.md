@@ -69,10 +69,10 @@ Follow [the frame steps](references/frame-research-verify.md#frame). In short:
 3. Ask the user to confirm the tier, with the recommended tier first.
 4. Claim the plan with this session's id:
    `"$SG" plan claim <plan> --session <id> --design <doc> --tier <tier> --json`.
-   Exit 1 means another session holds it: name the holder and stop. Only the user runs
+   Exit 1 means another session holds it, or another plan owns the doc: name it and stop. Only the user runs
    `"$SG" plan release <plan> --force`.
 5. Switch to the `design/<slug>` branch, write `answers.jsonl` and the frame's `answer` claims, and
-   run `"$SG" index set <plan> designing "<resume note>"`.
+   run `"$SG" index set <plan> designing "<resume note>" --session <id>`.
 
 ## 2. Research
 
@@ -127,13 +127,14 @@ Follow [the publish steps](references/review-publish-amend.md#publish):
 1. Add the area router row, and at `standard` and `deep` the ADR. Run `"$SG" docs-lint`: from
    here on it no longer tolerates `docs-lint.unreachable-doc` on `<doc>`.
 2. Commit on `design/<slug>`; this 1st commit is status `proposed`. Run
-   `"$SG" index set <plan> in-review "<note>"`.
+   `"$SG" index set <plan> in-review "<note>" --session <id>`.
 3. Run `"$SG" design-render <doc> --json` and publish its `output` with the `Artifact` tool,
    `capabilities: {"comments": {}, "db": {}}`.
 4. Read the approval with `ArtifactData` `get`, collection `approval`, doc id = the designSha.
    Without `db`, ask with `AskUserQuestion` and record an `answer` claim bound to the designSha.
 5. Check the designSha with `"$SG" design-diff HEAD:<doc> <doc> --json`, set status `approved`,
-   merge, record the approval in `plan.json`, and run `"$SG" index set <plan> approved "<note>"`.
+   merge, record the approval in `plan.json`, and run
+   `"$SG" index set <plan> approved "<note>" --session <id>`.
 
 ## 7. Revise, supersede, amend
 
