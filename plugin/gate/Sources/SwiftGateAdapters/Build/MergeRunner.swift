@@ -155,6 +155,27 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case blocked
   }
 
+  /// Why a merge or undo didn't happen, for a `refused`, `conflicted` or `not-held` report. Closed,
+  /// so a caller matches on it rather than on the message's wording.
+  public enum Reason: String, Sendable, Equatable, Encodable, CaseIterable {
+    /// `main` isn't where the run's newest merge or undo event left it.
+    case mainMoved = "main-moved"
+    /// The main checkout has uncommitted changes to tracked files.
+    case dirtyCheckout = "dirty-checkout"
+    /// The main checkout is on another branch or a detached `HEAD`.
+    case notOnMain = "not-on-main"
+    /// The caller doesn't hold the plan's lock.
+    case notHeld = "not-held"
+    /// The branch conflicts with `main`.
+    case conflicted
+    /// The run's newest merge isn't this task's, is already undone, or there is none.
+    case undoRefused = "undo-refused"
+    /// The branch to merge doesn't exist.
+    case branchMissing = "branch-missing"
+    /// The branch is already merged into `main`.
+    case alreadyMerged = "already-merged"
+  }
+
   /// Whether `main` was checked against the run's last merge.
   public enum MainCheck: String, Sendable, Encodable {
     /// `main` was where the run's newest merge or undo event left it.
@@ -167,6 +188,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   public let plan: String
   public let task: String
   public let status: Status
+  public let reason: Reason?
   public let verdict: Verdict
   public let holder: String?
   public let runId: String?
@@ -181,8 +203,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   public let message: String
 
   public init(
-    command: String, plan: String, task: String, status: Status, verdict: Verdict,
-    holder: String? = nil, runId: String? = nil, branch: String? = nil,
+    command: String, plan: String, task: String, status: Status, reason: Reason? = nil,
+    verdict: Verdict, holder: String? = nil, runId: String? = nil, branch: String? = nil,
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
     conflictedFiles: [String]? = nil, message: String
@@ -191,6 +213,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.plan = plan
     self.task = task
     self.status = status
+    self.reason = reason
     self.verdict = verdict
     self.holder = holder
     self.runId = runId
@@ -267,7 +290,8 @@ public struct BuildMerge: Sendable {
       }
       if merged {
         throw stop(
-          command, context, .refused, "\(branch) is already merged into \(TaskWorktree.base)")
+          command, context, .refused, "\(branch) is already merged into \(TaskWorktree.base)",
+          reason: .alreadyMerged)
       }
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
@@ -294,16 +318,16 @@ public struct BuildMerge: Sendable {
         try await abort(command, context, pre: pre)
         if fix {
           return report(
-            command, context, .conflicted, .red, mainCheck: mainCheck, pre: pre,
-            conflicted: files,
+            command, context, .conflicted, .red, reason: .conflicted, mainCheck: mainCheck,
+            pre: pre, conflicted: files,
             message: "\(branch) conflicts with \(TaskWorktree.base) in "
               + files.joined(separator: ", ") + "; main is untouched at \(pre). Resolve it in "
               + "\(context.fix.path) and merge again.")
         }
         let (fixFiles, detail) = try await cutFix(command, context)
         return report(
-          command, context, .conflicted, .red, mainCheck: mainCheck, pre: pre,
-          conflicted: fixFiles.isEmpty ? files : fixFiles,
+          command, context, .conflicted, .red, reason: .conflicted, mainCheck: mainCheck,
+          pre: pre, conflicted: fixFiles.isEmpty ? files : fixFiles,
           message: "\(branch) conflicts with \(TaskWorktree.base) in "
             + files.joined(separator: ", ") + "; main is untouched at \(pre). \(detail)")
       }
@@ -342,14 +366,16 @@ public struct BuildMerge: Sendable {
         throw stop(
           command, context, .refused,
           "the run's newest merge is task `\(merge.task)`, not `\(task)`; undoing `\(task)` "
-            + "would also drop it")
+            + "would also drop it", reason: .undoRefused)
       case .undo(let undo):
         throw stop(
           command, context, .refused,
-          "the run's newest merge, task `\(undo.task)`'s, is already undone")
+          "the run's newest merge, task `\(undo.task)`'s, is already undone",
+          reason: .undoRefused)
       case .transition, nil:
         throw stop(
-          command, context, .refused, "build run \(context.run.runID) has no merge to undo")
+          command, context, .refused, "build run \(context.run.runID) has no merge to undo",
+          reason: .undoRefused)
       }
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
       try await checkFixIsFree(command, context)
@@ -415,7 +441,8 @@ public struct BuildMerge: Sendable {
       try await workspace.branchExists(branch)
     }
     guard exists else {
-      throw stop(command, context, .refused, "branch \(branch) doesn't exist")
+      throw stop(
+        command, context, .refused, "branch \(branch) doesn't exist", reason: .branchMissing)
     }
     return context
   }
@@ -437,19 +464,21 @@ public struct BuildMerge: Sendable {
     guard branch == base else {
       throw stop(
         command, context, .refused,
-        "\(main) is on \(branch ?? "a detached HEAD"), not \(base); switch it back first")
+        "\(main) is on \(branch ?? "a detached HEAD"), not \(base); switch it back first",
+        reason: .notOnMain)
     }
     guard dirty.isEmpty else {
       throw stop(
         command, context, .refused,
         "\(main) has uncommitted changes in \(dirty.joined(separator: ", ")); commit or stash "
-          + "them first")
+          + "them first", reason: .dirtyCheckout)
     }
     if let expected, head != expected {
       throw stop(
         command, context, .refused,
         "\(base) moved since the run's last merge: it is at \(head), the last merge left it at "
-          + "\(expected). Another session may have merged; find out who before merging.")
+          + "\(expected). Another session may have merged; find out who before merging.",
+        reason: .mainMoved)
     }
     return head
   }
@@ -524,12 +553,12 @@ public struct BuildMerge: Sendable {
 
   private func stop(
     _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ message: String,
-    pre: String? = nil, post: String? = nil
+    reason: BuildMergeReport.Reason? = nil, pre: String? = nil, post: String? = nil
   ) -> Stop {
     Stop(
       report: report(
-        command, context, status, status == .blocked ? .blocked : .red, pre: pre, post: post,
-        message: message))
+        command, context, status, status == .blocked ? .blocked : .red, reason: reason, pre: pre,
+        post: post, message: message))
   }
 
   private func bare(_ command: String, _ status: BuildMergeReport.Status, _ message: String)
@@ -543,12 +572,13 @@ public struct BuildMerge: Sendable {
 
   private func report(
     _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ verdict: Verdict,
-    mainCheck: BuildMergeReport.MainCheck? = nil, pre: String? = nil, post: String? = nil,
+    reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
+    pre: String? = nil, post: String? = nil,
     conflicted: [String]? = nil, message: String
   ) -> BuildMergeReport {
     let cut = status == .conflicted || status == .undone
     return BuildMergeReport(
-      command: command, plan: plan, task: task, status: status, verdict: verdict,
+      command: command, plan: plan, task: task, status: status, reason: reason, verdict: verdict,
       runId: context.run.runID, branch: context.branch,
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? context.fix.path : nil,
