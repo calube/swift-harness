@@ -18,13 +18,13 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.95,
+          "probability" : 0.97,
           "question" : "refuted-api-finding"
         },
         {
           "answered" : "decision",
           "expected" : "decision",
-          "probability" : 0.85,
+          "probability" : 0.9,
           "question" : "anchor"
         }
       ],
@@ -84,7 +84,7 @@
         {
           "answered" : "cite-a-supported-claim",
           "expected" : "cite-a-supported-claim",
-          "probability" : 0.95,
+          "probability" : 0.93,
           "question" : "fifteen-minute-tag"
         }
       ],
@@ -96,13 +96,13 @@
         {
           "answered" : "unverified-tag",
           "expected" : "unverified-tag",
-          "probability" : 0.95,
+          "probability" : 0.75,
           "question" : "fifteen-minute-tag"
         },
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.95,
+          "probability" : 0.7,
           "question" : "fifteen-minute-risk"
         }
       ],
@@ -114,7 +114,7 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.98,
+          "probability" : 0.97,
           "question" : "gating-finding"
         },
         {
@@ -126,7 +126,7 @@
         {
           "answered" : "blocker",
           "expected" : "blocker",
-          "probability" : 0.82,
+          "probability" : 0.78,
           "question" : "severity"
         }
       ],
@@ -150,19 +150,19 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.97,
+          "probability" : 0.98,
           "question" : "gating-finding"
         },
         {
           "answered" : "decision",
           "expected" : "decision",
-          "probability" : 0.95,
+          "probability" : 1,
           "question" : "anchor"
         },
         {
           "answered" : "blocker",
           "expected" : "blocker",
-          "probability" : 0.85,
+          "probability" : 0.95,
           "question" : "severity"
         }
       ],
@@ -174,7 +174,7 @@
         {
           "answered" : "snapshot",
           "expected" : "snapshot",
-          "probability" : 0.97,
+          "probability" : 1,
           "question" : "citation-kind"
         }
       ],
@@ -216,7 +216,7 @@
         {
           "answered" : "needs-decision",
           "expected" : "needs-decision",
-          "probability" : 0.7,
+          "probability" : 0.6,
           "question" : "cover"
         }
       ],
@@ -258,7 +258,7 @@
         {
           "answered" : "warning-claim-citing-the-earlier-design",
           "expected" : "warning-claim-citing-the-earlier-design",
-          "probability" : 0.95,
+          "probability" : 0.93,
           "question" : "answer"
         }
       ],
@@ -270,7 +270,7 @@
         {
           "answered" : "carry-forward-with-original-id",
           "expected" : "carry-forward-with-original-id",
-          "probability" : 0.9,
+          "probability" : 0.92,
           "question" : "answer"
         },
         {
@@ -300,7 +300,7 @@
         {
           "answered" : "yes",
           "expected" : "yes",
-          "probability" : 0.92,
+          "probability" : 0.95,
           "question" : "unbounded-downloads-finding"
         }
       ],
@@ -354,6 +354,6 @@
     "plugin/workflows/design-review.js"
   ],
   "model" : "sonnet",
-  "passedAt" : "2026-09-27T04:57:17Z",
+  "passedAt" : "2026-09-27T08:05:55Z",
   "schemaVersion" : 1
 }
