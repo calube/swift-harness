@@ -397,10 +397,12 @@ returned.
 ```
 
 `design-lint` must exit 0. For `docs-lint`, set aside the findings the baseline already had. The
-new doc then shows 2 expected rule ids, which publish resolves:
+new doc then shows up to 2 expected rule ids, which publish resolves:
 
 - `docs-lint.unreachable-doc` on `<doc>`: no router row links it yet;
-- `docs-lint.requirement-uncited` on `<doc>`: nothing outside the doc cites its requirements yet.
+- `docs-lint.requirement-uncited` on `<doc>` at `standard` and `deep`: nothing outside the doc
+  cites its requirements yet. The gate exempts a `quick` or `sketch` doc, since neither writes an
+  ADR.
 
 Any other new finding fails the draft.
 

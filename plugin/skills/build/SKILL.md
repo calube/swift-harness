@@ -40,10 +40,16 @@ recommended first. Never work around a halt by hand. The reference lists the opt
 
 1. `"$SG" plan claim <slug> --session <session> --json`. Exit 1 names the session that holds the
    plan: halt.
-2. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
+2. Unless the index is already `building` (a resume), check that `main` is green:
+   `"$SG" check --tier <merge_gate>`, with the preset's `merge_gate` from `.swiftgate.toml`. Not
+   GREEN: halt, and quote the findings as `rule: message`. Options: **stop** (Recommended) so
+   `main` gets fixed first, or **go on** with these findings as the baseline. With a baseline, a
+   later merge gate passes when its gating findings are exactly the baseline's. Every merge gate
+   runs on `main`, so a finding already there would read as the task's fault.
+3. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
-3. Read `<plans>/<slug>/build/<run>/run.json` for the preset, `<plans>/<slug>/plan.json` for the
+4. Read `<plans>/<slug>/build/<run>/run.json` for the preset, `<plans>/<slug>/plan.json` for the
    design doc, and start the cutoff timer when `timeBudgetMin` isn't 0
    ([time budget](references/event-loop.md#time-budget)).
 
@@ -59,6 +65,8 @@ For each task in `toStart`:
 4. Launch `workflows/build-task.js` with the Workflow tool, in the background, with the
    [args](references/event-loop.md#launch) the task and preset give. Keep the task id the tool
    returns, for its completion notice and for `TaskStop`.
+5. Start the task's [stall watch](references/event-loop.md#stall-watch) on the transcript
+   directory the Workflow tool printed.
 
 A non-zero exit at any of these halts that task alone. `refused` tasks never start: list them for
 the user once. Then wait for a completion notice.
@@ -76,7 +84,8 @@ Handle notices one at a time: merges run in completion order.
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
 4. `"$SG" build merge <slug> <task> --session <session> --json`, then
    `"$SG" check --tier <mergeGate>` on main. A conflict or a red gate goes to
-   [the fixer](references/event-loop.md#conflict-or-red-main).
+   [the fixer](references/event-loop.md#conflict-or-red-main). A gate whose gating findings are
+   exactly the step 1 baseline counts as GREEN.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.

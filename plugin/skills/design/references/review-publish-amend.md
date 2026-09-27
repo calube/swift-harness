@@ -264,8 +264,11 @@ At `quick`, and at `sketch`, no workflow ran, so there's nothing to copy.
    **the draft's tolerance for `docs-lint.unreachable-doc` on `<doc>` ends here**: the router row
    makes the doc reachable, so that finding now fails publish. So does
    `docs-lint.requirement-uncited` at `standard` and `deep`, where the ADR cites every
-   requirement. At `quick` there's no ADR, so `requirement-uncited` on `<doc>` stays tolerated;
-   name it in the final report. Fix any other new finding and run the checks again.
+   requirement. At `quick` there's no ADR, and the gate exempts the doc from
+   `requirement-uncited`. Fix any other new finding and run the checks again.
+
+   `docs-lint` resolves links against tracked files, so `git add` the doc, `<ev>/`, the ADR and
+   the routers before you run it. A link to a file that isn't staged reads as broken.
 
 ### The proposed commit
 
@@ -371,12 +374,18 @@ moved after the page went out: render and publish again, and read a new approval
    `unchanged`, since the status line isn't part of the designSha.
 2. With `--supersede`, set the old design's status in this commit too ([Supersede](#supersede)).
 3. Commit `<doc>`, and `<ev>/` when the fallback added an answer.
-4. Merge. With a PR: `gh pr merge design/<slug> --merge`. Without:
+4. Gate the merge. On `design/<slug>`, run `"$SG" check --tier push`, the tier the pre-push hook
+   and a build's merge gate run. A local merge fires no pre-push hook, so this is the only gate
+   between the design and `<main>`. Not GREEN: don't merge. Halt, quote the findings as
+   `rule: message`, and ask: fix them on `design/<slug>` (Recommended), or stop. A design that
+   turns `<main>` red makes every later merge gate red, and a build can't tell that from its own
+   tasks' faults.
+5. Merge. With a PR: `gh pr merge design/<slug> --merge`. Without:
    `git switch <main>`, then `git merge --no-ff design/<slug>`.
-5. Write the approval record into `<plans>/<plan>/plan.json` as `approval`, keeping every other
+6. Write the approval record into `<plans>/<plan>/plan.json` as `approval`, keeping every other
    field, pretty-printed with sorted keys. `/swift-harness:plan` and `design-diff --chain` start
    from it. This session holds the plan, so the edit guard allows the write.
-6. Run `"$SG" docs-lint --json` on `<main>` and report any new finding.
+7. Run `"$SG" docs-lint --json` on `<main>` and report any new finding.
 
 ```bash
 "$SG" index set <plan> approved "approved <sha>; page <page>; next: /swift-harness:plan" --session <id>
@@ -648,8 +657,9 @@ No reviewer runs. Record the empty review, which returns `ready`:
 ### Sketch publish
 
 1. **Router.** Add the area router row as [publish](#routers-adr-and-the-docs-lint-check) says. A
-   sketch writes no ADR. Run `"$SG" docs-lint --json`: `unreachable-doc` on `<doc>` now fails, and
-   `requirement-uncited` on `<doc>` stays tolerated, as at `quick`. Name it in the final report.
+   sketch writes no ADR, and the gate exempts a sketch doc from `requirement-uncited`, as at
+   `quick`. Stage the doc, `<ev>/` and the routers, then run `"$SG" docs-lint --json`:
+   `unreachable-doc` on `<doc>` now fails, like any other new finding.
 2. **Proposed commit**, as [the proposed commit](#the-proposed-commit) says, but ask no push
    question: a sketch merges on this machine.
 

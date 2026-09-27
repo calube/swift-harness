@@ -156,7 +156,7 @@ Follow [the publish steps](references/review-publish-amend.md#publish):
 4. Read the approval with `ArtifactData` `get`, collection `approval`, doc id = the designSha.
    Without `db`, ask with `AskUserQuestion` and record an `answer` claim bound to the designSha.
 5. Check the designSha with `"$SG" design-diff HEAD:<doc> <doc> --json`, set status `approved`,
-   merge, record the approval in `plan.json`, and run
+   gate the merge with `"$SG" check --tier push` (not GREEN: halt, don't merge), merge, record the approval in `plan.json`, and run
    `"$SG" index set <plan> approved "<note>" --session <id>`.
 6. Release the plan, `"$SG" plan release <plan> --session <id> --json`, and tell the user that
    `/swift-harness:plan` can now claim it from any session.

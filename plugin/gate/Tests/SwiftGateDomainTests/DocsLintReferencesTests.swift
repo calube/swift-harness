@@ -202,10 +202,10 @@ struct DocsLintReferencesTests {
   }
 
   @Test(
-    "a quick-tier design's uncited requirement is not flagged — catches a quick design failing a rule it has no ADR to satisfy"
-  )
-  func quickTierDesignIsExempt() throws {
-    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: "quick")]) == [])
+    "a quick- or sketch-tier design's uncited requirement is not flagged — catches a design failing a rule it has no ADR to satisfy, which turns the push gate red on every later merge",
+    arguments: ["quick", "sketch"])
+  func adrlessTierDesignIsExempt(tier: String) throws {
+    #expect(try Self.uncited([Self.tieredDesign("docs/designs/a.md", tier: tier)]) == [])
   }
 
   @Test(

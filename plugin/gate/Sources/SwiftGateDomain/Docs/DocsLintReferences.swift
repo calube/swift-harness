@@ -120,21 +120,21 @@ public enum DocsLintReferences {
   /// inside its own defining doc (including a second mention there) is still flagged; one
   /// mentioned in *any* other corpus file, design or not, is not.
   ///
-  /// A quick-tier design is exempt: it has no ADR, so nothing outside it ever cites its
-  /// requirements. Only a design doc whose `tier` frontmatter decodes to exactly
-  /// ``DesignTier/quick`` qualifies; a missing or unknown tier keeps the finding, and an unknown
-  /// one is named in its message.
+  /// A quick- or sketch-tier design is exempt: neither writes an ADR, so nothing outside it ever
+  /// cites its requirements. Only a design doc whose `tier` frontmatter decodes to exactly
+  /// ``DesignTier/quick`` or ``DesignTier/sketch`` qualifies; a missing or unknown tier keeps the
+  /// finding, and an unknown one is named in its message.
   private static func requirementUncitedFindings(
     scans: [DocScan]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     for scan in scans {
       let tier = scan.designTier
-      if tier == .known(.quick) { continue }
+      if tier == .known(.quick) || tier == .known(.sketch) { continue }
       let tierNote: String
       if case .unknown(let raw) = tier {
         tierNote =
-          " The design's unknown tier \"\(raw)\" can't exempt it; quick is the only exempt tier."
+          " The design's unknown tier \"\(raw)\" can't exempt it; quick and sketch are the only exempt tiers."
       } else {
         tierNote = ""
       }

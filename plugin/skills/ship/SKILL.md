@@ -49,6 +49,10 @@ Each check must pass before any design work starts. On a failure, report it and 
    compiling. Stop, name the `missing` entries, and tell the user to warm it by building once in
    the main checkout: `swift build --package-path <dir>` for each package `.swiftgate.toml` names.
    Then run ship again. Exit 2: report the message and stop.
+5. **Green main.** `"$SG" check --tier <merge_gate>`, where `<merge_gate>` is the preset's
+   `merge_gate` key. Not GREEN: quote the findings as `rule: message` and stop. Every merge gate
+   in the build runs this tier on `main`. A finding that is already there turns each of them red,
+   and the build blames the task it just merged.
 
 ## 2. Design
 

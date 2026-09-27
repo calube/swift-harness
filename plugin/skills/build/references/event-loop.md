@@ -11,6 +11,7 @@ Contents:
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
 - [Design conflict](#design-conflict)
+- [Stall watch](#stall-watch): a worker that stops without returning
 - [Time budget](#time-budget)
 - [Final gate](#final-gate)
 - [Resume](#resume)
@@ -19,7 +20,7 @@ Contents:
 
 Keep these in the conversation; none of them is a file:
 
-- per running task: its Workflow task id, `worktree`, `branch`;
+- per running task: its Workflow task id, its stall watch's task id, `worktree`, `branch`;
 - the order tasks merged in, for the fixer's second return;
 - the ledger page's file path, `.harness/design-render/<slug>-ledger.html`.
 
@@ -81,6 +82,10 @@ start from a return this skill skipped.
 
 The merge gate is the preset's `mergeGate`. Run it on `main` after every clean merge:
 `"$SG" check --tier <mergeGate>`.
+
+When the user chose **go on** at the start's green-main check, compare the gate's gating findings
+with that baseline by `rule`, `file` and `message`. The same set counts as GREEN. Anything new is a
+red gate, and the fixer gets only the new findings.
 
 | What happened | Next |
 |---|---|
@@ -151,6 +156,29 @@ preset's `onDesignConflict` decides.
 with the Skill tool: `swift-harness:design` with `--amend <slug>`. It marks the affected tasks
 `needs-replan`. The other tasks keep building; the report names the `needs-replan` tasks, which wait
 for `/swift-harness:plan`.
+
+## Stall watch
+
+A background worker can stop without returning. A permission prompt it can't show is 1 cause: the
+tool call never runs, and nothing tells the orchestrator. The workflow script has no clock, so the
+orchestrator watches from outside. After each launch, run this with `run_in_background`, where
+`<dir>` is the transcript directory the Workflow tool printed:
+
+```bash
+d=<dir>; while /bin/sleep 120; do [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -15)" ] && { echo "stalled: $d"; exit 0; }; done
+```
+
+Every tool call and result appends to an agent's transcript, so 15 minutes with no change means no
+agent in that workflow has moved. Keep the watch's task id beside the workflow's. When the
+workflow's completion notice arrives, `TaskStop` its watch.
+
+When a watch fires, read the last line of the newest `agent-*.jsonl` in `<dir>`. Halt, and quote its
+last tool call. Options:
+
+- **Stop and retry** (Recommended): `TaskStop` the workflow, `ledger set … pending`, and relaunch
+  into the same worktree. The worker's uncommitted edits stay there.
+- **Wait**: restart the watch. Pick this when the last call is a long gate, such as a `ready` tier.
+- **Abandon**: `TaskStop` the workflow, then `ledger set … abandoned`.
 
 ## Time budget
 
