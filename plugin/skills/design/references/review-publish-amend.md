@@ -563,6 +563,7 @@ A clarify applies itself: it needs no review and no approval.
    `trigger` is `design-conflict from task <task>`, `stale claim <id>` or `user request`.
    `review.reviewers` lists the reviewers that ran. A `quick` amend has no review, so it records
    the approval alone.
+   Then tombstone the claims it replaced: `"$SG" evidence cache record --design <doc> --base <main> --json`.
 6. **ADR.** At `standard` and `deep`, when `decision` is among the triggers, add an ADR as publish
    does, naming the earlier ADR by number and title.
 7. **Approved and merged**, as publish does, but keep the claim: steps 8 and 9 still write the

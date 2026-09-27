@@ -108,6 +108,10 @@ struct NewSubcommandRegistrationTests {
       ["worktree", "remove", "example-plan", "example-task", "--session", "session-123"], "remove"
     ),
     ("module-graph", ["module-graph"], "module-graph"),
+    (
+      "evidence cache record",
+      ["evidence", "cache", "record", "--design", "docs/designs/example.md"], "record"
+    ),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -136,6 +140,7 @@ struct NewSubcommandRegistrationTests {
     "ledger set",
     "worktree create", "worktree warm-check", "worktree remove",
     "module-graph",
+    "evidence cache record",
   ]
 
   @Test(
