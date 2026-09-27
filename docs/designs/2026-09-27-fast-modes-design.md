@@ -1,8 +1,9 @@
 # swift-harness: fast modes (surface commits, sprint, design-free ship)
 
 <!-- RESUME
-Status: DRAFT 2026-09-27. The user answered every open question (§7); it awaits the user's approval before any
-plan task starts.
+Status: APPROVED 2026-09-27 by the user, after answering every open question (§7).
+Plan: docs/plans/2026-09-27-fast-modes-plan.md (surface-check, then sprint; design-free ship waits for sprint's
+rehearsals).
 Why: interview trial run 2 (docs/handoffs/2026-09-27-interview-trial-run-2.md) and the ship speed research. Design
 and plan take 13–14 min before any code; only 27–40% of a run is model coding.
 Covers the research's changes 5 (a design-free ship path), 6 (a sprint skill) and 7 (surface commits and

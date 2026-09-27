@@ -1,6 +1,6 @@
 # 0003. Ship may skip the design step
 
-Status: proposed, 2026-09-27. Awaits the user's approval with the fast modes design
+Status: accepted, 2026-09-27, with the fast modes design
 (`docs/designs/2026-09-27-fast-modes-design.md`). Changes the build executor spec §3.1 and §5.1.
 
 ## Context
