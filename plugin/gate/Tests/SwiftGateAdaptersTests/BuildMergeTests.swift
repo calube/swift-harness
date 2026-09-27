@@ -334,6 +334,51 @@ struct BuildMergeTests {
   }
 
   @Test(
+    "every refusal and conflict names its closed reason, and a merge or undo names none — catches a caller left matching on the message's wording"
+  )
+  func refusalsNameTheirReason() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    try await scenario.taskBranch("t2", "A.swift", "t2\n")
+    var reasons: [String: String] = [:]
+
+    reasons["no merge to undo"] = await scenario.undo("t1").reason?.rawValue ?? "none"
+    try scenario.repo.write("A.swift", "main\n")
+    _ = try await scenario.repo.commitAll("main edit")
+    reasons["conflict"] = await scenario.merge("t2").reason?.rawValue ?? "none"
+    reasons["missing branch"] = await scenario.merge("t9").reason?.rawValue ?? "none"
+    try scenario.repo.write("A.swift", "uncommitted\n")
+    reasons["dirty"] = await scenario.merge("t1").reason?.rawValue ?? "none"
+    try await scenario.repo.git("checkout", "--", "A.swift")
+    try await scenario.repo.git("switch", "-q", "search/t1")
+    reasons["off main"] = await scenario.merge("t1").reason?.rawValue ?? "none"
+    try await scenario.repo.git("switch", "-q", "main")
+    let merged = await scenario.merge("t1")
+    reasons["merged"] = merged.reason?.rawValue ?? "none"
+    reasons["already merged"] = await scenario.merge("t1").reason?.rawValue ?? "none"
+    try scenario.repo.write("D.swift", "d\n")
+    _ = try await scenario.repo.commitAll("another session's merge")
+    reasons["moved"] = await scenario.merge("t2").reason?.rawValue ?? "none"
+    reasons["undo after moved"] = await scenario.undo("t1").reason?.rawValue ?? "none"
+    try await scenario.repo.git("reset", "-q", "--hard", try #require(merged.postCommit))
+    let undone = await scenario.undo("t1")
+    reasons["undone"] = undone.reason?.rawValue ?? "none"
+    reasons["already undone"] = await scenario.undo("t1").reason?.rawValue ?? "none"
+
+    #expect(merged.status == .merged, "\(merged.message)")
+    #expect(undone.status == .undone, "\(undone.message)")
+    #expect(
+      reasons == [
+        "no merge to undo": "undo-refused", "conflict": "conflicted",
+        "missing branch": "branch-missing",
+        "dirty": "dirty-checkout", "off main": "not-on-main", "merged": "none",
+        "already merged": "already-merged", "moved": "main-moved", "undo after moved": "main-moved",
+        "undone": "none", "already undone": "undo-refused",
+      ])
+  }
+
+  @Test(
     "a merge git refuses for a reason other than a conflict blocks with exit 2, records nothing and cuts no fix worktree — catches an untracked-file refusal read as a conflict or a success"
   )
   func mergeFailureBlocks() async throws {

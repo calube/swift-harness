@@ -1267,19 +1267,11 @@ private enum BuildSeedRunners {
       workspace: LiveGitWorkspace(runner: repo.runner, repositoryRoot: repo.root.path),
       merger: LiveMergeRunner(runner: repo.runner), clock: FixedBuildClock(date: startedAt))
     let report = await checks.merge(flow)
-    switch report.status {
-    case .merged, .undone: return .ruleIDs([])
-    case .refused:
-      // The report carries no closed refusal reason, so the moved-main refusal is told apart by
-      // the sentence `build merge` prints for it.
-      return .ruleIDs(
-        [
-          report.message.contains("moved since the run's last merge")
-            ? "build-merge.main-moved" : "build-merge.refused"
-        ])
-    case .conflicted: return .ruleIDs(["build-merge.conflicted"])
-    case .notHeld: return .ruleIDs(["build-merge.not-held"])
-    case .blocked: return .blocked(report.message)
+    switch (report.status, report.reason) {
+    case (.blocked, _): return .blocked(report.message)
+    case (.merged, _), (.undone, _): return .ruleIDs([])
+    case (_, let reason?): return .ruleIDs(["build-merge.\(reason.rawValue)"])
+    case (_, nil): return .blocked("\(report.status.rawValue) with no reason: \(report.message)")
     }
   }
 

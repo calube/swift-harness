@@ -16,7 +16,8 @@ enum BuildMergeRun {
     {
       return BuildMergeReport(
         command: command, plan: slug, task: task,
-        status: refusal.verdict == .blocked ? .blocked : .notHeld, verdict: refusal.verdict,
+        status: refusal.verdict == .blocked ? .blocked : .notHeld,
+        reason: refusal.verdict == .blocked ? nil : .notHeld, verdict: refusal.verdict,
         holder: refusal.holder, message: refusal.message)
     }
     let flow = BuildMerge(

@@ -6,5 +6,4 @@ ahead, and a build run whose last merge event left `main` at that first commit. 
 another session's merge would be.
 
 `main-moved` has that file, so the merge is refused. `valid` doesn't, so the task branch merges.
-`BuildMergeReport` has no closed refusal reason yet, so the runner tells the moved-main refusal
-apart by its message.
+The runner names a refusal by the report's closed `reason`, as `build-merge.<reason>`.
