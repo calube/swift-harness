@@ -1,8 +1,8 @@
 # swift-harness: fast modes (surface commits, sprint, design-free ship)
 
 <!-- RESUME
-Status: DRAFT 2026-09-27, for the user's review. Nothing here is approved; no worker starts on it until the user
-answers §7 and approves.
+Status: DRAFT 2026-09-27. The user answered every open question (§7); it awaits the user's approval before any
+plan task starts.
 Why: interview trial run 2 (docs/handoffs/2026-09-27-interview-trial-run-2.md) and the ship speed research. Design
 and plan take 13–14 min before any code; only 27–40% of a run is model coding.
 Covers the research's changes 5 (a design-free ship path), 6 (a sprint skill) and 7 (surface commits and
@@ -59,9 +59,10 @@ A SwiftSyntax pass over the commit's diff against its first parent.
 
 | Added or changed code | Allowed body |
 |---|---|
-| Function, initializer, accessor, closure | empty; 1 `return` of a literal, `nil`, `[]`, `[:]`, `.init()` or an enum case with no payload; a call that forwards to code already on the parent |
+| Function, initializer, accessor, closure | empty; 1 `return` of an empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`, `.init()`) or an enum case with no payload; a call that forwards to code already on the parent |
 | Reducer body | returns `.none` for every action, and never mutates state |
-| SwiftUI `body` | 1 of `EmptyView()`, `Text` with a literal, or a container of those |
+| SwiftUI `body` | `EmptyView()`, or a container of `EmptyView()` |
+| `#Preview` and preview fixtures | none with non-empty sample data |
 | Test files | none: a surface commit adds no tests |
 
 Anything else is a finding `surface-check.behaviour` (major) naming the declaration. `fatalError` and `preconditionFailure`
@@ -85,8 +86,8 @@ and for change requests on a build that's already merged.
 
 ### 4.1 Flow
 
-1. **Spec page.** The session writes a 1-page spec from the spec file (§5.2 format) and asks the user to confirm
-   it once.
+1. **Spec page.** The session writes a 1-page spec from the spec file (§5.2 format). When every slice maps to an
+   acceptance test the spec file lists, it goes on; otherwise it asks the user to confirm the page once.
 2. **Branch.** `swiftgate sprint start` creates branch `sprint/<slug>` from a green `main` and records the run.
 3. **Surface.** The session commits the surface (§3); `swiftgate sprint surface` runs `surface-check` on it and
    records the sha.
@@ -131,7 +132,7 @@ against its own surface.
 
 With `design_tier = "none"`, ship runs:
 
-1. the spec page (§5.2), confirmed once by the user;
+1. the spec page (§5.2), confirmed once by the user unless every slice maps to an acceptance test the spec lists;
 2. the surface commit and `surface-check` (§3) on `main`;
 3. `/swift-harness:plan` decomposing the spec page's slices into ledger tasks, each with a write set disjoint from
    the others and `surfaceCommit` set to the 1 surface;
@@ -158,16 +159,15 @@ No preset, profile or mode may turn these off:
 - The build or sprint ends with 1 `ready` gate: prove, reach, stress and mutate over everything it added.
 - A surface commit passes `surface-check`.
 
-## 7. Open questions for the user
+## 7. Decisions from the user (2026-09-27)
 
-1. **Order.** Answered 2026-09-27: sprint first, built for correctness.
-2. **Ledger in sprint.** §4.2 proposes a small sprint state file rather than the plan ledger: it resumes after a
-   crash and checks every step, without plan-lint, waves or worker packs. Is that enough, or should sprint also
-   render a ledger page you can watch?
-3. **Stub list.** Is §3.2's allowed-body list right? In particular: may a stub return a fixed sample value (for
-   example a preview's data), or does that count as behaviour?
-4. **Profile default.** May a repo's profile make `design_tier = "none"` its default, or must each run ask for it?
-5. **Confirm step.** One confirm of the spec page, or none when the spec file already lists acceptance tests?
+| Question | Answer |
+|---|---|
+| Order | sprint first, built for correctness |
+| Sprint state | a sprint state file only (§4.2); no plan, ledger or ledger page |
+| Sample data in stubs | no: a stub returns only an empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`, `.init()`); non-empty sample data, previews included, is behaviour |
+| Profile default | yes: a profile picks a preset, and a preset with `design_tier = "none"` makes design-free ship the default |
+| Confirming the spec page | skipped when every slice maps to an acceptance test the spec file already lists; otherwise 1 confirm |
 
 ## 8. Testing the harness
 

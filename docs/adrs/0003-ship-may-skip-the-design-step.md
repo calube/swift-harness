@@ -12,10 +12,11 @@ we build and is it feasible"; for a spec that already answers that, they add tim
 
 ## Decision
 
-A preset may set `design_tier = "none"`. Ship then replaces design and plan's design doc with a 1-page spec the
-user confirms once, and builds from a surface commit that `swiftgate surface-check` proves has no behaviour.
+A preset may set `design_tier = "none"`. Ship then replaces design and plan's design doc with a 1-page spec, and builds from a surface commit that `swiftgate surface-check` proves has no behaviour.
 
-Only a preset or an explicit flag selects it; `design-scope` never recommends it. The quality floor in the fast
+Only a preset or an explicit flag selects it; `design-scope` never recommends it. A repo's profile may pick such a
+preset, which makes it that repo's default. The user confirms the spec page once, unless every slice maps to an
+acceptance test the spec file already lists. The quality floor in the fast
 modes design §6 still holds: test-first, same-line reasons on escape hatches, GREEN merge gates, and 1 final
 `ready` gate over everything the build added.
 
