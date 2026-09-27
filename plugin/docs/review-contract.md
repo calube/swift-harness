@@ -64,7 +64,9 @@ Synthesis merges findings of the same kind in the same file: defects with the sa
 standards violations with the same rule. They merge when their line ranges overlap or lie within 3
 lines of each other. The window comes from a real run in which one race came back from 3
 reviewers at lines 67, 69 and 70. The merged finding keeps the most severe copy, every focus that
-reported it, every cited line, and each distinct `evidence` once.
+reported it, every cited line, and each distinct `evidence` once. Among copies of the same severity,
+the one on the earliest line leads, then the one from the earlier focus in panel order, then the
+one its focus reported first.
 
 ## Pre-existing defects
 

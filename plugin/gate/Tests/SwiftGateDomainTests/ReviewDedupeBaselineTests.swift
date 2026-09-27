@@ -146,6 +146,25 @@ struct ReviewDedupeBaselineTests {
   }
 
   @Test(
+    "of two equally severe copies at one line the one its focus reported first leads, and the other's evidence follows — catches a merge whose lead and evidence order flip with the verifier's output order"
+  )
+  func tiedCopiesKeepReportOrder() throws {
+    let report = try ReviewSynthesis.synthesize(
+      Self.only(
+        .concurrency,
+        [
+          try Self.finding(
+            "major", line: 10, evidence: "second trace", ["fix": "cancel on dismiss"]),
+          try Self.finding(
+            "major", line: 10, evidence: "first trace", ["fix": "guard the response"]),
+        ]))
+    let merged = try #require(report.findings.first)
+    #expect(report.findings.count == 1)
+    #expect(merged.finding.fix == "cancel on dismiss")
+    #expect(merged.finding.evidence == "second trace\n---\nfirst trace")
+  }
+
+  @Test(
     "a verified defect the verifier filed under defect-users-hit is a blocker whatever the reviewer rated it — catches the tap-Fact-then-Dismiss race staying major"
   )
   func usersHitRaisesToBlocker() throws {

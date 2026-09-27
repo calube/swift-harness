@@ -425,7 +425,8 @@ public enum ReviewSynthesis {
   }
 
   private static func merged(_ cluster: [Candidate]) -> ReviewReport.Merged {
-    // The most severe copy leads; ties go to the first in focus, line and title order.
+    // The most severe copy leads; ties go to the first in line, focus and title order, then to
+    // the one its focus reported first.
     let lead = cluster.dropFirst().reduce(cluster[0]) { best, next in
       (next.finding.severity.rank, clusterOrder(next))
         < (best.finding.severity.rank, clusterOrder(best)) ? next : best
@@ -449,7 +450,7 @@ public enum ReviewSynthesis {
     let range = candidate.finding.lineRange
     return ClusterKey(
       lower: range?.lowerBound ?? 0, upper: range?.upperBound ?? 0, focus: candidate.focus,
-      title: candidate.finding.title, evidence: candidate.finding.evidence)
+      title: candidate.finding.title)
   }
 
   private struct ClusterKey: Comparable {
@@ -457,11 +458,9 @@ public enum ReviewSynthesis {
     let upper: Int
     let focus: ReviewFocus
     let title: String
-    let evidence: String
 
     static func < (lhs: Self, rhs: Self) -> Bool {
-      (lhs.lower, lhs.upper, lhs.focus, lhs.title, lhs.evidence)
-        < (rhs.lower, rhs.upper, rhs.focus, rhs.title, rhs.evidence)
+      (lhs.lower, lhs.upper, lhs.focus, lhs.title) < (rhs.lower, rhs.upper, rhs.focus, rhs.title)
     }
   }
 
