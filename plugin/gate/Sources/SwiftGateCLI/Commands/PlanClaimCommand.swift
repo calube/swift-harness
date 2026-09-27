@@ -30,6 +30,14 @@ struct PlanLockReport: Sendable, Equatable, Encodable {
 }
 
 enum PlanLockRun {
+  /// The accepted `--tier` values, listed from ``DesignTier``'s own cases so a tier the shared
+  /// type gains never drifts out of sync with the message naming it.
+  static var tierList: String {
+    let names = DesignTier.allCases.map(\.rawValue)
+    guard let last = names.last else { return "" }
+    return names.count == 1 ? last : names.dropLast().joined(separator: ", ") + " or " + last
+  }
+
   /// - Parameter root: the directory the command runs in. Design paths are compared after
   ///   resolving them against its worktree toplevel, so a symlinked alias names the same doc;
   ///   `nil` compares them as spelled.
@@ -46,7 +54,7 @@ enum PlanLockRun {
     let parsedTier: DesignTier?
     if let tier {
       guard let resolved = DesignTier(rawValue: tier) else {
-        return blocked(command, slug, "--tier `\(tier)` must be quick, standard or deep")
+        return blocked(command, slug, "--tier `\(tier)` must be \(tierList)")
       }
       parsedTier = resolved
     } else {
@@ -324,7 +332,10 @@ struct PlanClaimCommand: AsyncParsableCommand {
         + "new plan: it seeds plan.json, which is how the edit guard ties the doc to this plan."))
   var design: String?
 
-  @Option(help: "The design's tier, recorded in a seeded plan.json: quick, standard or deep.")
+  @Option(
+    help: ArgumentHelp(
+      "The design's tier, recorded in a seeded plan.json.",
+      discussion: "One of \(PlanLockRun.tierList)."))
   var tier: String?
 
   @OptionGroup var output: OutputOptions

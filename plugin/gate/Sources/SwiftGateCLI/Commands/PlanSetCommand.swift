@@ -32,7 +32,7 @@ enum PlanSetRun {
     let parsedTier: DesignTier?
     if let tier {
       guard let resolved = DesignTier(rawValue: tier) else {
-        return blocked(slug, "--tier `\(tier)` must be quick, standard or deep")
+        return blocked(slug, "--tier `\(tier)` must be \(PlanLockRun.tierList)")
       }
       parsedTier = resolved
     } else {
@@ -135,7 +135,8 @@ struct PlanSetCommand: AsyncParsableCommand {
   @Option(help: "The session id holding the plan's lock (from the SessionStart context).")
   var session: String?
 
-  @Option(help: "The design's tier: quick, standard or deep.")
+  @Option(
+    help: ArgumentHelp("The design's tier.", discussion: "One of \(PlanLockRun.tierList)."))
   var tier: String?
 
   @Option(help: "The one-line resume note.")
