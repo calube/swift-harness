@@ -57,6 +57,30 @@ Path: `<plans>/<slug>/ledger.json`, and the draft at `.harness/plan-draft/<slug>
 - `gate` is `fast`, `push` or `ready`. `status` is `pending` for every new task. There is no
   `actualLines` until a worker reports one.
 
+On a replan, `tasks` is the `<fixed>` tasks as the old ledger had them, in its order, then the
+decomposer's new tasks. A `done` task keeps every field, `actualLines`, `model` and `branch`
+included.
+
+## `replan.json`
+
+Path: `.harness/plan-draft/<slug>/replan.json`. The plan skill writes it on a replan, and the
+decomposer reads it. It isn't plan state and isn't committed.
+
+```json
+{
+  "schemaVersion": 1,
+  "plannedSha": "<the designSha the ledger was planned at>",
+  "designSha": "<current designSha>",
+  "changedIds": ["req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order"],
+  "fixed": [{"id": "offline-queue-core-reducer", "status": "done", "…": "every ledger field"}],
+  "replace": [{"id": "offline-queue-sync-feature", "status": "needs-replan", "…": "every ledger field"}],
+  "fixIds": [{"id": "req-offline-queue-drains-on-reconnect", "doneTask": "offline-queue-core-reducer"}]
+}
+```
+
+- `fixed` and `replace` hold whole ledger tasks, copied as they are.
+- `fixIds` has one entry per changed id per `done` task whose `covers` names it.
+
 ## `phases.jsonl`
 
 Path: `.harness/runs/design-<name>/phases.jsonl` in this checkout, where `<name>` is the design
