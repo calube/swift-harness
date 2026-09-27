@@ -54,6 +54,12 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
    make the smallest change, name it in DEVIATIONS with the reason, and check it isn't a hot file another
    task in your wave owns (see the plan's Merge points).
 
+10. **Surface commit first, so prove can run.** The merge gate runs `prove`, which reverts your source change and
+    needs each new test to fail on an assertion. A test that uses new API can't compile with the change reverted.
+    So commit the new API first as behaviour-free stubs (existing behaviour unchanged, no `fatalError`), then the
+    tests and the behaviour. Check with `plugin/bin/swiftgate check --tier push --base main --prove --proof-base
+    <surface sha>`: 0 `prove.compile-only` findings. Report the surface sha.
+
 ## Cost discipline
 - **Report once.** Your final message is the report. Don't send progress updates or re-report state that hasn't
   changed; each extra message costs the orchestrator a full context re-read.

@@ -107,6 +107,9 @@ memory pressure.
   > - Test-first. Stay inside your write set; if you must go outside it, stop and report why.
   > - Run every build, test and gate in the FOREGROUND: no Monitor, no run_in_background, and a Bash timeout of up
   >   to 600000. Ending your turn is your return value.
+  > - Commit new API as a behaviour-free surface commit before the tests and behaviour (brief pitfall 10), and
+  >   prove at it: `check --tier push --base main --prove --proof-base <surface sha>`, one prove on the machine
+  >   at a time.
   > - Done means `plugin/bin/swiftgate check --tier <gate>` is GREEN, plus the brief's self-gate. Main is green, so any
   >   red finding is yours.
   > - Commit messages describe behaviour, never contain task ids or wave numbers, and end with the repo's
@@ -129,7 +132,7 @@ Read every report against this list. Each item caught a real defect in waves 1�
 | Check | What it caught |
 |---|---|
 | **Enforcement lands with its first passing input.** Does the task switch on a check, hook or gate that calls something not built yet? | a stamped `commit-msg` hook calling a flag that didn't exist yet (it would have failed every commit in bootstrapped repos); the calibration gate that would have been red for 6 waves |
-| **Worker brief pitfalls 1–9** were added after wave 5. Still check each report against them; the brief lowers the rate, it doesn't make it zero. |  |
+| **Worker brief pitfalls 1–10** were added after wave 5 (10, the surface commit, after the first speed wave's prove went RED on 28 compile-only tests). Still check each report against them; the brief lowers the rate, it doesn't make it zero. |  |
 | **Types at trust boundaries are closed.** Look for `String` where an enum exists, or `.other(String)` / `.unknown` catch-alls. A parser of hand-written docs may keep unknowns *for a lint to report*; data written by workers or read by a gate must fail loudly | the ledger gate typed as `String`; an open `TaskStatus` |
 | **Scope of authority.** Guards, locks and ownership: can holder A act on B's resource? | any plan's lock could write any plan's design doc |
 | **Deviations outside the write set.** Are they justified, and do they collide with a later task's file? Update the plan's Merge points if they do | `HookRunner.swift`, `Rule.swift`, `standards.md` rule-index rows |
