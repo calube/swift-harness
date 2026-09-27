@@ -329,4 +329,32 @@ struct BuildCheckReturnTests {
         evidence(status: .init(task: "t", state: "blocked", report: otherConflict)))
         == [.designConflictMismatch])
   }
+
+  @Test(
+    "a return whose review carries a captured review-contract finding decodes and round-trips, and one missing a contract key fails decoding — catches review findings the orchestrator can't read back as the contract"
+  )
+  func reviewFindingsUseTheReviewContract() throws {
+    let captured = try FocusReviewJSON.decode(Fixture.data("Review/d7-api-errors.json"))
+    let finding = try #require(captured.findings.first)
+    let original = TaskReturn(
+      task: "t", outcome: .reviewBlocked, commits: ["abc1"],
+      gate: .init(tier: .push, verdict: .green, runID: "r1"),
+      review: .init(mode: .full, findings: [finding]), testsAdded: [], notes: "",
+      designConflict: nil)
+
+    let decoded = try TaskReturnJSON.decode(try TaskReturnJSON.encode(original))
+    #expect(decoded == original)
+    #expect(decoded.review?.findings.first?.rule == "D7")
+
+    var object = try #require(
+      try JSONSerialization.jsonObject(with: try TaskReturnJSON.encode(original))
+        as? [String: Any])
+    var review = try #require(object["review"] as? [String: Any])
+    var findings = try #require(review["findings"] as? [[String: Any]])
+    findings[0].removeValue(forKey: "severity")
+    review["findings"] = findings
+    object["review"] = review
+    let missingSeverity = try JSONSerialization.data(withJSONObject: object)
+    #expect(throws: DecodingError.self) { try TaskReturnJSON.decode(missingSeverity) }
+  }
 }

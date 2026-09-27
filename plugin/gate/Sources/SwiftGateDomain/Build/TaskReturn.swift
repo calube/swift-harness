@@ -28,11 +28,12 @@ public struct TaskReturn: Sendable, Equatable {
     }
   }
 
+  /// The review stage's result: its findings are the Foundation review contract's.
   public struct Review: Sendable, Equatable {
     public let mode: BuildPreset.Review
-    public let findings: [String]
+    public let findings: [ReviewFinding]
 
-    public init(mode: BuildPreset.Review, findings: [String]) {
+    public init(mode: BuildPreset.Review, findings: [ReviewFinding]) {
       self.mode = mode
       self.findings = findings
     }
@@ -125,7 +126,7 @@ extension TaskReturn.Review: Codable {
     let c = try decoder.container(keyedBy: CodingKeys.self)
     self.init(
       mode: try c.decode(BuildPreset.Review.self, forKey: .mode),
-      findings: try c.decode([String].self, forKey: .findings))
+      findings: try c.decode([ReviewFinding].self, forKey: .findings))
   }
 }
 
