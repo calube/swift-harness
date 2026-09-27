@@ -1,29 +1,26 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-SUMMARY (2026-09-27, for the user)
-Done: waves 1–25; unattended rehearsals of acceptance 26–28 (e2e-report.md); the sign-off review
-(docs/handoffs/subproject-2-review.md) and its fix waves 1–3, most of wave 4, and 8 extra defect fixes (Bash writes through
-the guards, committed-pins-only builds, Xcode pin block, #expect compile errors RED, CPU-time latency tests, mutate fan-out,
-review findings cite source lines, plan-lint test targets and done tasks). Main is GREEN at 0cd14d8 (1713 tests); origin/main
-was pushed to 0cd14d8 by the sub-project 5 session at the user's request. Backups: backup/subproject-2-fix-wave-1..3.
-In flight (each worker writes its report in its LAST commit body; read it from disk after a context clear):
-  - repo-and-consumer-setup-gates-hold (sonnet), ../swift-harness-repo-and-consumer-setup-gates-hold: root lefthook.yml,
-    docs-lint seeds, a bootstrap "Left alone" note, prove reverting templates, LiveProcessRunner handshake tests, and proof
-    that a timed-out or killed mutate run takes swiftpm-testing-helper down.
-  - calibration-measures-shipped-agents-unprompted (opus), ../swift-harness-calibration-measures-shipped-agents-unprompted:
-    every agent is calibrated on its frontmatter model (USER DECIDED 2026-09-27), freshness is RED on a model change, the
-    judge questions are neutral, flaky seeds are fixed, and there are real calibrate design and build runs.
-  Before removing any worktree, check that no process still runs in it (workers keep background gates alive).
-  Pending from the evals session: scores for the review-accuracy re-run after the source-line fix (expect
-  clean-reset to cite CounterFeatureTests.swift:73 and dismiss-without-cancel to be rated blocker). The ship/build routing
-  held-out verdict waits on the user's eval budget (red-first run: ship 0.75, build 1.00).
+SUMMARY (2026-09-27 afternoon, for the user) — PAUSED so the user can build apps with the harness.
+Done: review fix waves 1–4 are merged. Local main 0a99c70 is GREEN (push 1746 tests, prove 46/46), with backup
+backup/subproject-2-fix-wave-4. origin/main is at 7ad8e81 (evals round 7); wave 4 isn't pushed to origin/main yet.
+The user decided (in this session): the hook guard gets a cache (50 ms budget stands); headless runs stop at in-review;
+§11 is rewritten to measured figures and design runs save local telemetry; review reports pre-existing defects and
+never blocks on them; fix branches merge on push + prove, with mutate once on main.
+Paused, nothing running:
+  - ready-tier-runs-one-at-a-time-and-cleans-up (opus), ../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up:
+    WIP committed on its branch (its last commit body has the state). Scope: a machine-wide flock for ready, mutate
+    and prove; reaping recorded process groups; check --background plus swiftgate wait; per-phase telemetry; a total
+    mutate concurrency bound; the mutate baseline run alone before mutants. Open question it was chasing: two
+    LiveProcessRunnerTests kills took about 60 s under load (a possible real ProcessTree bug). Resume it with SendMessage or a fresh worker.
+  - Mutate on main hasn't produced a verdict: --jobs 2 took 758 s at peak load 143 (--jobs 8 took load to 353, killed),
+    and it was BLOCKED because its unmutated baseline failed 5 load-sensitive tests. Re-run after the task above lands.
+  - The evals session (swift-harness-96) owes the confirming review-accuracy re-run (approved, 9 USD cap), then freezes review evals.
+Next fix wave (queued, not started): hook guard PlanLocks cache; §11 rewrite plus design-run telemetry; rule-index
+rows for every design-lint.* and design-diff.* rule (none exist; CLAUDE.md requires them); a lint rule for
+unbounded intentional-hang fixtures.
 Waiting on the user, in this order:
-  1. Remaining review decisions (review doc, "Needs the user's decision"): 3 the hook latency budget for design-doc writes
-     (about 100 ms against 50 ms), 5 publish and Approve headless, 6 rewriting §11's cost figures (measured about 1M tokens
-     and 30+ min per standard design). Items 1 (Xcode pin: block) and 2 (calibrate on the frontmatter model) are decided.
-     Item 4 (review fan-out) was fixed at 3 in flight, per §11. Item 7 (plan-lint drift) was implemented by comparing the
-     committed HEAD doc.
+  1. Whether to push wave 4 (0a99c70) to origin/main, and when to resume the paused hardening above.
   2. The attended acceptance runs 26–28 with the user present, now unblocked (/plan works across sessions). For 28, the
      frame answers must allow a client module, or D2/D3 forces a reframe. Publish and Approve need an interactive session.
   3. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes: qa-profiling-tools.md in

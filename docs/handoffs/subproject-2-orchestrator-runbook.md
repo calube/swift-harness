@@ -234,3 +234,22 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **Parallel registration and budget conflicts.** `NewSubcommandRegistrationTests`, `tests/skill_commands_test.mjs`
   and the `[docs.budgets.files]` rows conflict whenever two branches append. Keep both sides, and re-measure budgets on
   the merged tree.
+
+## Lessons from 2026-09-27 afternoon (machine contention)
+
+- **Watch the machine, don't park.** Arm a watchdog Monitor (orphaned harness processes with ppid 1, more than one
+  ready tier, sustained load) as soon as workers start, and act on it without waiting for the user. Sixteen leaked
+  `HangTests` processes ran for up to 3.5 h while the orchestrator waited on notifications.
+- **A fixture that hangs on purpose must end by itself.** prove and mutate run tests against reverted code, so a hang
+  that the fix is meant to kill leaks on every run unless the fixture has its own deadline. The same goes for load
+  generators: bound them with `timeout`, never rely on a cleanup line after a long foreground command.
+- **Bash timeouts orphan gates.** A worker's 600 s tool timeout kills the shell, not the gate; the gate runs on with
+  ppid 1. Until `check --background` and `swiftgate wait` land, write gate output to a file and wait in chunks.
+- **`mutate --jobs N` multiplies, it doesn't cap.** On this 16-core laptop `--jobs 8` spawned 480 processes and load
+  353. `--jobs 2` peaked at load 143 in 758 s. A single ready tier alone reached load 264.
+- **Mutate's baseline is judged under mutant load.** Five load-sensitive tests failed the unmutated baseline and
+  blocked the verdict while passing in the push tier.
+- **Merge gate (user decision):** push + `prove --base main` on one integration worktree holding every branch of
+  the wave took 6.5 minutes for three branches, versus about an hour of ready tier per branch.
+- **Sessions keep subagents across /clear.** A worker spawned before a context clear keeps running and reports to
+  the same session; find it with ListAgents before starting a replacement.
