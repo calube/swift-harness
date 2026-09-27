@@ -87,26 +87,79 @@ public enum ContextPackCitationSource {
   }
 }
 
-/// Loads `ledger.json` and finds one task by id, for a worker pack.
+/// Loads `ledger.json`, whole or one task by id, for a worker pack.
 public enum ContextPackLedger {
+  public enum LoadFailure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+    case malformed(path: String)
+  }
+
   public enum Failure: Error, Sendable, Equatable {
     case unreadable(path: String)
     case malformed(path: String)
     case taskNotFound(id: String, ledgerPath: String)
   }
 
-  public static func task(id: String, ledgerPath: String, root: URL) -> Result<LedgerTask, Failure>
-  {
+  /// The whole decoded ledger — for a worker pack's dependency-notes section, which needs
+  /// ``Ledger/waves`` to order a task's `deps`, not just that one task's own entry.
+  public static func load(ledgerPath: String, root: URL) -> Result<Ledger, LoadFailure> {
     guard let data = try? Data(contentsOf: ContextPackFiles.resolve(ledgerPath, root: root)) else {
       return .failure(.unreadable(path: ledgerPath))
     }
     guard let ledger = try? LedgerJSON.decode(data) else {
       return .failure(.malformed(path: ledgerPath))
     }
-    guard let task = ledger.tasks.first(where: { $0.id == id }) else {
-      return .failure(.taskNotFound(id: id, ledgerPath: ledgerPath))
+    return .success(ledger)
+  }
+
+  public static func task(id: String, ledgerPath: String, root: URL) -> Result<LedgerTask, Failure>
+  {
+    switch load(ledgerPath: ledgerPath, root: root) {
+    case .failure(.unreadable(let path)): return .failure(.unreadable(path: path))
+    case .failure(.malformed(let path)): return .failure(.malformed(path: path))
+    case .success(let ledger):
+      guard let task = ledger.tasks.first(where: { $0.id == id }) else {
+        return .failure(.taskNotFound(id: id, ledgerPath: ledgerPath))
+      }
+      return .success(task)
     }
-    return .success(task)
+  }
+}
+
+/// Reads one dependency's task-return notes for a worker pack's dependency-notes section (spec
+/// §5.3): `returns/<task>.json` under a build run's directory, which sits beside `ledger.json`
+/// under the same plan directory (spec §4: `…/plans/<plan>/{ledger.json, build/<run>/}`) — derived
+/// from `ledgerPath`'s own parent, never from a second, independently-supplied plan path that
+/// could silently name a different plan than the ledger it was read from. Decodes only the `task`
+/// and `notes` fields: the full task-return schema is defined elsewhere, and this adapter has no
+/// reason to depend on it.
+public enum ContextPackTaskReturn {
+  public enum Failure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+    case malformed(path: String)
+  }
+
+  private struct Minimal: Decodable {
+    let task: String
+    let notes: String
+  }
+
+  public static func notes(
+    forTask taskID: String, buildRun runID: String, ledgerPath: String, root: URL
+  ) -> Result<String, Failure> {
+    let planDirectory = ledgerPath.lastIndex(of: "/").map { String(ledgerPath[..<$0]) } ?? ""
+    let relativePath =
+      (planDirectory.isEmpty ? "" : planDirectory + "/") + "build/\(runID)/returns/\(taskID).json"
+    guard let data = try? Data(contentsOf: ContextPackFiles.resolve(relativePath, root: root))
+    else {
+      return .failure(.unreadable(path: relativePath))
+    }
+    guard let minimal = try? JSONDecoder().decode(Minimal.self, from: data),
+      minimal.task == taskID
+    else {
+      return .failure(.malformed(path: relativePath))
+    }
+    return .success(minimal.notes)
   }
 }
 
