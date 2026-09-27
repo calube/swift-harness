@@ -18,7 +18,9 @@ Paused, nothing running:
   - The evals session (swift-harness-96) owes the confirming review-accuracy re-run (approved, 9 USD cap), then freezes review evals.
 Next fix wave (queued, not started): hook guard PlanLocks cache; §11 rewrite plus design-run telemetry; rule-index
 rows for every design-lint.* and design-diff.* rule (none exist; CLAUDE.md requires them); a lint rule for
-unbounded intentional-hang fixtures.
+unbounded intentional-hang fixtures; review.json `telemetry` set on every run (missing in 2 of 5 eval trials); dedupe
+merging a rule-less duplicate at the same line as a ruled blocker. Shim fix 9184436 (cold-cache SessionStart prints the
+Session id) is on local main. Review-accuracy is frozen: the confirming run was 5/5 verdicts, 5/5 seeded at blocker or major.
 Waiting on the user, in this order:
   1. Whether to push wave 4 (0a99c70) to origin/main, and when to resume the paused hardening above.
   2. The attended acceptance runs 26–28 with the user present, now unblocked (/plan works across sessions). For 28, the
