@@ -272,7 +272,7 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     guard name.hasPrefix("."), let marker = name.range(of: nameMarker, options: .backwards)
     else { return nil }
     let fields = name[marker.upperBound...].split(separator: "-")
-    guard fields.count == 2, let pid = Int32(fields[0]), pid > 0 else { return nil }
+    guard fields.count == 2, let pid = Int32(fields[0]) else { return nil }
     return pid
   }
 

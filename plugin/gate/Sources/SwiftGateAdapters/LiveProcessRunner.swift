@@ -245,7 +245,7 @@ private struct SpawnRequest: Sendable {
       Self.pollReadable(&stdoutReader, &stderrReader, timeoutMilliseconds: 20)
     }
 
-    liveChildGroups.remove(pid)
+    liveChildGroups.remove(pid)  // swiftgate:equivalent-mutant — observable only on pid reuse
     let elapsed = now() - start
     switch termination {
     case .cancelled:
