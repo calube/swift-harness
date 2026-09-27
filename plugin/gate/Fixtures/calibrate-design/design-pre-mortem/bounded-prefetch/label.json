@@ -1,14 +1,15 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "unbounded-downloads-finding",
-      "text": "Do you report a blocker or major finding whose failure story is the number of simultaneous thumbnail downloads growing with album size?",
+      "id": "download-concurrency",
+      "kind": "judge",
+      "text": "What do the blocker and major findings' failure stories say about how many thumbnail downloads run at once?",
       "options": [
-        "yes",
-        "no"
+        "it grows with the album's size",
+        "it stays bounded, or no story says"
       ],
-      "expected": "no"
+      "expected": "it stays bounded, or no story says"
     }
   ]
 }

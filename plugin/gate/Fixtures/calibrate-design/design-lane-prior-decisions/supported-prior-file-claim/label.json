@@ -1,23 +1,19 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "answer",
-      "text": "How does your return treat the prior claim ev-grdb-insert-in-write-transaction?",
-      "options": [
-        "carry-forward-with-original-id",
-        "warning-claim-citing-the-earlier-design",
-        "leave-out"
+      "id": "carried-status",
+      "kind": "value",
+      "array": "claims",
+      "where": [
+        {
+          "path": "id",
+          "oneOf": [
+            "ev-grdb-insert-in-write-transaction"
+          ]
+        }
       ],
-      "expected": "carry-forward-with-original-id"
-    },
-    {
-      "id": "status",
-      "text": "What `status` does that claim carry in your return?",
-      "options": [
-        "supported",
-        "new"
-      ],
+      "field": "status",
       "expected": "new"
     }
   ]

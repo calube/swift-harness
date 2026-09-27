@@ -8,7 +8,8 @@ import Testing
 
 /// Every test builds fixture agents and seeds in a temp repository root and answers through a
 /// recorded runner: the real `claude -p` result envelope captured for the judge, with only its
-/// `structured_output` swapped per case. Nothing calls the real `claude` CLI.
+/// `result` (an agent's reply) or `structured_output` (the judge's) swapped per case. Nothing
+/// calls the real `claude` CLI.
 @Suite("swiftgate calibrate design")
 struct CalibrateDesignCommandTests {
   static let passedAt = Date(timeIntervalSince1970: 1_790_000_000)
@@ -34,41 +35,54 @@ struct CalibrateDesignCommandTests {
 
     func data(_ path: String) -> Data? { try? Data(contentsOf: root.appending(path: path)) }
 
-    func agent(_ name: String, body: String) throws {
+    func agent(_ name: String, body: String, model: String? = nil) throws {
+      let pinned = model.map { "model: \($0)\n" } ?? ""
       try write(
         "plugin/agents/\(name).md",
-        "---\nname: \(name)\ndescription: fixture agent\ntools: Read\n---\n\n\(body)\n")
+        "---\nname: \(name)\ndescription: fixture agent\ntools: Read\n\(pinned)---\n\n\(body)\n")
     }
 
-    /// A case whose input carries `token`, so the recorded runner can tell cases apart.
+    /// A case whose input carries `token`, so the recorded runner can tell cases apart. Its
+    /// label checks that the returned verdict for `ev-case` has status `expected`.
     func seed(
       agent: String, name: String, token: String, expected: String, label: Bool = true
     ) throws {
-      let directory = "\(DesignCalibrationLayout.seedsDirectory)/\(agent)/\(name)"
-      try write("\(directory)/input.md", "Case \(token): the design says X; the evidence says Y.\n")
-      if label {
-        try write(
-          "\(directory)/label.json",
-          """
+      try seed(
+        agent: agent, name: name, token: token,
+        label: label
+          ? """
           {
-            "schemaVersion": 1,
-            "questions": [
+            "schemaVersion": 2,
+            "checks": [
               {
                 "id": "verdict",
-                "text": "Is the claim supported by the quoted evidence?",
-                "options": ["supported", "overstated"],
+                "kind": "value",
+                "array": "verdicts",
+                "where": [{"path": "id", "oneOf": ["ev-case"]}],
+                "field": "status",
                 "expected": "\(expected)"
               }
             ]
           }
-          """)
-      }
+          """ : nil)
     }
 
-    /// Two design agents, one case each, both labelled `overstated`.
+    func seed(agent: String, name: String, token: String, label: String?) throws {
+      let directory = "\(DesignCalibrationLayout.seedsDirectory)/\(agent)/\(name)"
+      try write("\(directory)/input.md", Self.input(token))
+      if let label { try write("\(directory)/label.json", label) }
+    }
+
+    static func input(_ token: String) -> String {
+      "Case \(token): the design says X; the evidence says Y.\n"
+    }
+
+    /// Two design agents, one case each, both labelled `overstated`. The claim checker pins opus
+    /// in its frontmatter; the challenger pins nothing.
     static func calibrated() throws -> Repository {
       let repository = try Repository()
-      try repository.agent("design-claim-checker", body: "You check claims. CLAIM-CHECKER-BODY")
+      try repository.agent(
+        "design-claim-checker", body: "You check claims. CLAIM-CHECKER-BODY", model: "opus")
       try repository.agent("design-challenger", body: "You challenge options.")
       try repository.write("plugin/workflows/design-review.js", "export const steps = [];\n")
       try repository.seed(
@@ -78,33 +92,82 @@ struct CalibrateDesignCommandTests {
         agent: "design-challenger", name: "refuted-api", token: "TOKEN-B", expected: "overstated")
       return repository
     }
+
+    /// Adds a drafter whose one case is judged: `interval-tag` expects `expected`.
+    func judgedDrafter(expected: String) throws {
+      try agent("design-drafter", body: "You draft designs.", model: "opus")
+      try seed(
+        agent: "design-drafter", name: "unbacked-point", token: "TOKEN-J",
+        label: """
+          {
+            "schemaVersion": 2,
+            "checks": [
+              {
+                "id": "interval-tag",
+                "kind": "judge",
+                "text": "What tag does the Decision bullet on the sync interval carry?",
+                "options": ["ev-claim", "unverified", "none"],
+                "expected": "\(expected)"
+              }
+            ]
+          }
+          """)
+    }
   }
 
-  /// The real envelope from `Judge/claude-result.json` with `structured_output` replaced.
-  static func envelope(_ structured: [String: Any]) -> String {
+  /// The real envelope from `Judge/claude-result.json` with `result` or `structured_output`
+  /// replaced.
+  static func envelope(result: String? = nil, structured: [String: Any]? = nil) -> String {
     guard
       let data = try? Fixture.data("Judge/claude-result.json"),
       var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     else { return "" }
+    if let result { object["result"] = result }
     object["structured_output"] = structured
     let encoded = (try? JSONSerialization.data(withJSONObject: object)) ?? Data()
     return String(decoding: encoded, as: UTF8.self)
   }
 
-  /// Answers `verdict` with probability 0.9 on `answers[token]` for the case whose stdin carries
-  /// that token.
-  static func recorded(_ answers: [String: String]) -> FakeProcessRunner {
+  static func isJudge(_ invocation: ProcessInvocation) -> Bool {
+    invocation.arguments.contains("--json-schema")
+  }
+
+  static func stdin(_ invocation: ProcessInvocation) -> String {
+    String(decoding: invocation.standardInput ?? Data(), as: UTF8.self)
+  }
+
+  /// Plays each agent: returns `ev-case` with `statuses[token]` for the case whose stdin carries
+  /// that token, fenced as models often do. Plays the judge too: `interval-tag` gets `judged`
+  /// with probability `judgedProbability`.
+  static func recorded(
+    _ statuses: [String: String], judged: String = "unverified", judgedProbability: Double = 0.9
+  ) -> FakeProcessRunner {
     FakeProcessRunner { invocation throws(ProcessRunnerError) in
-      let stdin = String(decoding: invocation.standardInput ?? Data(), as: UTF8.self)
-      guard let (_, option) = answers.first(where: { stdin.contains($0.key) }) else {
+      let stdin = Self.stdin(invocation)
+      if Self.isJudge(invocation) {
+        var answer: [String: Any] = ["rationale": "recorded"]
+        let options = ["ev-claim", "unverified", "none"]
+        for option in options {
+          answer[option] =
+            option == judged
+            ? judgedProbability : (1 - judgedProbability) / Double(options.count - 1)
+        }
+        return ProcessOutput(
+          status: .exited(0), stdout: envelope(structured: ["interval-tag": answer]))
+      }
+      if stdin.contains("TOKEN-J") {
+        return ProcessOutput(
+          status: .exited(0),
+          stdout: envelope(
+            result: "# Sync\n\n## Decision\n\n- Sync every 15 minutes [UNVERIFIED]\n"))
+      }
+      guard let (_, status) = statuses.first(where: { stdin.contains($0.key) }) else {
         return ProcessOutput(status: .exited(1), stdout: "", stderr: "unscripted case")
       }
-      let other = option == "supported" ? "overstated" : "supported"
+      let reply =
+        #"{"verdicts": [{"id": "ev-case", "status": "\#(status)", "reason": "r"}], "skipped": []}"#
       return ProcessOutput(
-        status: .exited(0),
-        stdout: envelope([
-          "verdict": [option: 0.9, other: 0.1, "rationale": "recorded"] as [String: Any]
-        ]))
+        status: .exited(0), stdout: envelope(result: "```json\n\(reply)\n```"))
     }
   }
 
@@ -113,6 +176,18 @@ struct CalibrateDesignCommandTests {
   {
     await CalibrateDesignRun.run(
       root: repository.root, runner: runner, model: "sonnet", now: passedAt)
+  }
+
+  /// The record as the JSON push reads.
+  static func recordJSON(_ repository: Repository) throws -> [String: Any] {
+    let data = try #require(repository.data(DesignCalibrationLayout.recordPath))
+    return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+  }
+
+  /// `agent/case model` for each recorded case.
+  static func recordedModels(_ repository: Repository) throws -> [String] {
+    let cases = try #require(try recordJSON(repository)["cases"] as? [[String: Any]])
+    return cases.map { "\($0["agent"] ?? "")/\($0["case"] ?? "") \($0["model"] ?? "none")" }
   }
 
   static func exitCode(_ outcome: StaticCheckOutcome) throws -> Int32 {
@@ -125,10 +200,20 @@ struct CalibrateDesignCommandTests {
     return result.findings
   }
 
+  static func model(_ runner: FakeProcessRunner, token: String) -> String? {
+    guard
+      let invocation = runner.invocations.first(where: {
+        !isJudge($0) && stdin($0).contains(token)
+      }),
+      let index = invocation.arguments.firstIndex(of: "--model")
+    else { return nil }
+    return invocation.arguments[index + 1]
+  }
+
   // MARK: - Runs
 
   @Test(
-    "every label met writes last-pass.json with the current content hash — catches a pass recording a stale or missing hash"
+    "every label met writes last-pass.json with the current content hash and each case's model — catches a pass recording a stale hash or no model"
   )
   func fullPassWritesRecord() async throws {
     let repository = try Repository.calibrated()
@@ -139,7 +224,7 @@ struct CalibrateDesignCommandTests {
     let record = try CalibrationRecord.decode(data)
     let expectedHash = DesignCalibrationHash.hash(
       try DesignCalibrationHash.discover(root: repository.root))
-    #expect(record.schemaVersion == 1)
+    #expect(record.schemaVersion == 2)
     #expect(record.contentHash == expectedHash)
     #expect(
       record.hashedFiles == [
@@ -147,15 +232,81 @@ struct CalibrateDesignCommandTests {
         "plugin/workflows/design-review.js",
       ])
     #expect(record.passedAt == Self.passedAt)
-    #expect(record.model == "sonnet")
+    #expect(try Self.recordJSON(repository)["modelOverride"] == nil)
     #expect(
-      record.cases.map { "\($0.agent)/\($0.caseName)" } == [
-        "design-challenger/refuted-api", "design-claim-checker/overstated-claim",
+      try Self.recordedModels(repository) == [
+        "design-challenger/refuted-api sonnet", "design-claim-checker/overstated-claim opus",
       ])
     #expect(
       record.cases.flatMap(\.answers).allSatisfy {
-        $0.answered == "overstated" && $0.expected == "overstated"
+        $0.answered == "overstated" && $0.expected == "overstated" && $0.probability == 1
       })
+  }
+
+  @Test(
+    "each agent runs on the model its frontmatter names, and one that names none on the unpinned default — catches an opus agent calibrated on sonnet"
+  )
+  func runsEachAgentOnItsFrontmatterModel() async throws {
+    let repository = try Repository.calibrated()
+    let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+
+    _ = await Self.run(repository, runner: runner)
+
+    #expect(Self.model(runner, token: "TOKEN-A") == "opus")
+    #expect(Self.model(runner, token: "TOKEN-B") == "sonnet")
+  }
+
+  @Test(
+    "a --model override runs every agent on it and marks the record — catches an experiment's record passing for the shipped models"
+  )
+  func overrideIsRecorded() async throws {
+    let repository = try Repository.calibrated()
+    let bin = repository.root.appending(path: "fake-bin", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(
+      at: bin.appending(path: "calls"), withIntermediateDirectories: true)
+    let reply = #"{"verdicts": [{"id": "ev-case", "status": "overstated", "reason": "r"}]}"#
+    try Data(Self.envelope(result: reply).utf8).write(to: bin.appending(path: "reply.json"))
+    // A stand-in `claude` that logs its arguments and answers every case alike.
+    let claude = bin.appending(path: "claude")
+    try Data(
+      """
+      #!/bin/bash
+      here="$(cd "$(dirname "$0")" && pwd)"
+      cat > /dev/null
+      printf '%s\\n' "$@" > "$(mktemp "$here/calls/call.XXXXXX")"
+      cat "$here/reply.json"
+
+      """.utf8
+    ).write(to: claude)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: claude.path)
+
+    // The same argv parses in process first, so a flag the command lacks fails here by name.
+    let parsed = try CalibrateCommand.parseAsRoot(["design", "--model", "haiku"])
+    #expect((parsed as? CalibrateDesignCommand)?.model == "haiku")
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path,
+        arguments: ["calibrate", "design", "--model", "haiku"],
+        environmentOverlay: [
+          "PATH": "\(bin.path):\(ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin")",
+          "LLVM_PROFILE_FILE": repository.root.appending(path: "swiftgate-%p.profraw").path,
+        ],
+        workingDirectory: repository.root.path, timeout: .seconds(300)))
+
+    #expect(output.status == .exited(0), "\(output.stdout.text)\(output.stderr.text)")
+    let calls = try FileManager.default.contentsOfDirectory(
+      at: bin.appending(path: "calls"), includingPropertiesForKeys: nil)
+    #expect(calls.count == 2)
+    for call in calls {
+      let arguments = try String(contentsOf: call, encoding: .utf8).split(separator: "\n")
+      let model = try #require(arguments.firstIndex(of: "--model"))
+      #expect(arguments[model + 1] == "haiku")
+    }
+    #expect(try Self.recordJSON(repository)["modelOverride"] as? String == "haiku")
+    #expect(
+      try Self.recordedModels(repository) == [
+        "design-challenger/refuted-api haiku", "design-claim-checker/overstated-claim haiku",
+      ])
   }
 
   @Test(
@@ -171,8 +322,99 @@ struct CalibrateDesignCommandTests {
     #expect(repository.data(DesignCalibrationLayout.recordPath) == Data(previous.utf8))
     let missed = Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }
     #expect(missed.count == 1)
-    #expect(missed.first?.message.contains("design-claim-checker/overstated-claim") == true)
-    #expect(missed.first?.message.contains("supported") == true)
+    #expect(missed.first?.message.contains("design-claim-checker/overstated-claim on opus") == true)
+    #expect(missed.first?.message.contains("answered `supported`") == true)
+  }
+
+  @Test(
+    "an agent reply holding no JSON object misses every JSON check instead of blocking — catches prose that ignores the output contract scored as a pass or an outage"
+  )
+  func replyWithoutJSONMisses() async throws {
+    let repository = try Repository.calibrated()
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      ProcessOutput(
+        status: .exited(0),
+        stdout: Self.envelope(result: "The claim looks overstated to me."))
+    }
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 1)
+    let missed = Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }
+    #expect(missed.count == 2)
+    #expect(missed.allSatisfy { $0.message.contains("answered `no JSON object`") })
+  }
+
+  @Test(
+    "the agent gets the case input alone on stdin and nothing from its label — catches a calibration question leading the agent to the planted answer"
+  )
+  func agentPromptCarriesNoLabel() async throws {
+    let repository = try Repository.calibrated()
+    let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+
+    _ = await Self.run(repository, runner: runner)
+
+    let agentRuns = runner.invocations.filter { !Self.isJudge($0) }
+    #expect(agentRuns.count == 2)
+    for invocation in agentRuns {
+      let stdin = Self.stdin(invocation)
+      #expect(stdin == Repository.input("TOKEN-A") || stdin == Repository.input("TOKEN-B"))
+      let everything = ([stdin] + invocation.arguments).joined(separator: "\n")
+      #expect(!everything.contains("overstated"))
+      #expect(!everything.contains("verdict"))
+    }
+  }
+
+  @Test(
+    "the judge's prompt and schema are the same whichever option the label expects, and hold the agent's output — catches a judge question that leaks the expected answer"
+  )
+  func judgePromptCarriesNoExpectedLabel() async throws {
+    var judgeInvocations: [ProcessInvocation] = []
+    for expected in ["unverified", "ev-claim"] {
+      let repository = try Repository.calibrated()
+      try repository.judgedDrafter(expected: expected)
+      let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+      _ = await Self.run(repository, runner: runner)
+      judgeInvocations.append(try #require(runner.invocations.first(where: Self.isJudge)))
+    }
+    #expect(judgeInvocations[0].arguments == judgeInvocations[1].arguments)
+    #expect(Self.stdin(judgeInvocations[0]) == Self.stdin(judgeInvocations[1]))
+    let prompt = Self.stdin(judgeInvocations[0])
+    #expect(prompt.contains("- Sync every 15 minutes [UNVERIFIED]"))
+    #expect(!prompt.contains("expected"))
+    #expect(!prompt.contains("TOKEN-J"))
+  }
+
+  @Test(
+    "a judged answer on the label's option passes at p = 0.7 and misses at p = 0.6, naming the margin — catches a coin-flip answer recorded as calibrated"
+  )
+  func judgedAnswerNeedsTheMargin() async throws {
+    let repository = try Repository.calibrated()
+    try repository.judgedDrafter(expected: "unverified")
+
+    let weak = await Self.run(
+      repository,
+      runner: Self.recorded(
+        ["TOKEN-A": "overstated", "TOKEN-B": "overstated"], judged: "unverified",
+        judgedProbability: 0.6))
+    #expect(try Self.exitCode(weak) == 1)
+    let missed = Self.findings(weak).filter { $0.ruleID == "calibrate-design.label-missed" }
+    #expect(missed.count == 1)
+    #expect(missed.first?.message.contains("p=0.60, below the 0.70") == true)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == nil)
+
+    let firm = await Self.run(
+      repository,
+      runner: Self.recorded(
+        ["TOKEN-A": "overstated", "TOKEN-B": "overstated"], judged: "unverified",
+        judgedProbability: 0.7))
+    #expect(try Self.exitCode(firm) == 0)
+    let record = try CalibrationRecord.decode(
+      try #require(repository.data(DesignCalibrationLayout.recordPath)))
+    let drafter = try #require(record.cases.first { $0.agent == "design-drafter" })
+    #expect(drafter.answers.map(\.answered) == ["unverified"])
+    #expect(drafter.answers.first?.probability == 0.7)
+    #expect(try Self.recordedModels(repository).contains("design-drafter/unbacked-point opus"))
   }
 
   @Test(
@@ -193,18 +435,24 @@ struct CalibrateDesignCommandTests {
   }
 
   @Test(
-    "a label whose expected answer isn't one of its options exits 1 naming the file — catches a typo'd label that no agent can meet"
+    "a label with a leading judge question exits 1 naming the file — catches a question that names its answer reaching a run"
   )
   func invalidLabelFails() async throws {
     let repository = try Repository.calibrated()
     try repository.seed(
-      agent: "design-challenger", name: "typo", token: "TOKEN-D", expected: "overstatd")
+      agent: "design-challenger", name: "leading", token: "TOKEN-D",
+      label: """
+        {"schemaVersion": 2, "checks": [{"id": "q", "kind": "judge",
+          "text": "Is there a blocker finding about the refuted API?",
+          "options": ["yes", "no"], "expected": "yes"}]}
+        """)
     let outcome = await Self.run(repository, runner: Self.recorded([:]))
     #expect(try Self.exitCode(outcome) == 1)
     let finding = Self.findings(outcome).first { $0.ruleID == "calibrate-design.invalid-label" }
     #expect(
       finding?.file
-        == "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/typo/label.json")
+        == "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/leading/label.json")
+    #expect(finding?.message.contains("asks yes or no") == true)
   }
 
   @Test(
@@ -257,25 +505,22 @@ struct CalibrateDesignCommandTests {
   }
 
   @Test(
-    "each case runs the agent's prompt body as the system prompt with the case input on stdin and no tools — catches calibrating a different prompt than the one shipped"
+    "each case runs the agent's prompt body as the system prompt with the case input on stdin, no tools and no calibration schema — catches calibrating a different prompt or contract than the one shipped"
   )
   func invocationCarriesAgentPromptAndCase() async throws {
     let repository = try Repository.calibrated()
     let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
     _ = await Self.run(repository, runner: runner)
     let invocation = try #require(
-      runner.invocations.first {
-        String(decoding: $0.standardInput ?? Data(), as: UTF8.self).contains("TOKEN-A")
-      })
+      runner.invocations.first { Self.stdin($0).contains("TOKEN-A") })
     let arguments = invocation.arguments
     #expect(invocation.executable == "claude")
     let systemPrompt = try #require(arguments.firstIndex(of: "--system-prompt"))
     #expect(arguments[systemPrompt + 1] == "You check claims. CLAIM-CHECKER-BODY")
     let tools = try #require(arguments.firstIndex(of: "--tools"))
     #expect(arguments[tools + 1] == "")
-    let model = try #require(arguments.firstIndex(of: "--model"))
-    #expect(arguments[model + 1] == "sonnet")
-    #expect(arguments.contains("--json-schema"))
+    #expect(!arguments.contains("--json-schema"))
+    #expect(arguments.contains("--restricted"))
   }
 
   // MARK: - Seed and runner failures

@@ -1,15 +1,35 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "answer",
-      "text": "How does your return treat the prior claim ev-grdb-batch-insert-ten-thousand-rows-fast?",
-      "options": [
-        "carry-forward-with-original-id",
-        "warning-claim-citing-the-earlier-design",
-        "leave-out"
-      ],
-      "expected": "warning-claim-citing-the-earlier-design"
+      "id": "refuted-claim-carried",
+      "kind": "absent",
+      "array": "claims",
+      "where": [
+        {
+          "path": "id",
+          "oneOf": [
+            "ev-grdb-batch-insert-ten-thousand-rows-fast"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "warning-cites-earlier-design",
+      "kind": "present",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.kind",
+          "oneOf": [
+            "file"
+          ]
+        },
+        {
+          "path": "citation.loc",
+          "prefix": "docs/library/designs/book-cache."
+        }
+      ]
     }
   ]
 }

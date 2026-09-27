@@ -497,11 +497,13 @@ enum PushDocGates {
 
 /// Push's calibration freshness gate (spec §6.2): a repository that ships a calibrated suite's
 /// agents (the design agents, the build worker and fixer) must carry that suite's `last-pass.json`
-/// whose content hash matches its prompts as they are now. A suite with no agent in the
-/// repository (a consumer repo) is skipped, and the summary says so; a prompt that can't be read
-/// or a record that can't be decoded gates rather than skips.
+/// whose content hash matches its prompts as they are now, and whose cases each ran on the model
+/// their agent's frontmatter names. A suite with no agent in the repository (a consumer repo) is
+/// skipped, and the summary says so; a prompt that can't be read or a record that can't be
+/// decoded gates rather than skips.
 enum CalibrationFreshness {
   static let staleRuleID = "calibration-freshness.stale"
+  static let wrongModelRuleID = "calibration-freshness.wrong-model"
   static let noRecordRuleID = "calibration-freshness.no-record"
   static let unreadableRuleID = "calibration-freshness.unreadable"
   static let summaryRuleID = "calibration-freshness.summary"
@@ -514,7 +516,7 @@ enum CalibrationFreshness {
     var file = "."
     for suite in CalibrationSuite.allCases {
       switch try check(suite, root: root) {
-      case .gating(let finding): gating.append(finding)
+      case .gating(let findings): gating += findings
       case .fresh(let note):
         if fresh.isEmpty { file = suite.recordPath }
         fresh.append(note)
@@ -530,7 +532,7 @@ enum CalibrationFreshness {
   }
 
   private enum SuiteResult {
-    case gating(Finding)
+    case gating([Finding])
     case fresh(String)
     case skipped(String)
   }
@@ -545,11 +547,12 @@ enum CalibrationFreshness {
     do {
       hashed = try CalibrationHash.discover(root: root, suite: suite)
     } catch {
-      return .gating(
+      return .gating([
         try finding(
           unreadableRuleID, .major, file: CalibrationSuite.agentsDirectory,
           "can't read the \(name) prompts to hash them, so calibration freshness is unknown: "
-            + "\(error)"))
+            + "\(error)")
+      ])
     }
     guard hashed.contains(where: { suite.isHashedAgent($0.path) }) else {
       return .skipped(
@@ -559,36 +562,49 @@ enum CalibrationFreshness {
     let current = CalibrationHash.hash(hashed)
     guard let data = FileManager.default.contents(atPath: root.appending(path: record).path)
     else {
-      return .gating(
+      return .gating([
         try finding(
           noRecordRuleID, .major, file: record,
-          "\(hashed.count) \(name) prompt file(s) and no calibration pass on record; \(rerun)."))
+          "\(hashed.count) \(name) prompt file(s) and no calibration pass on record; \(rerun).")
+      ])
     }
     let pass: CalibrationRecord
     do {
       pass = try CalibrationRecord.decode(data)
     } catch {
-      return .gating(
+      return .gating([
         try finding(
           unreadableRuleID, .major, file: record, "isn't a calibration record: \(error); \(rerun)."
-        ))
+        )
+      ])
     }
-    guard pass.contentHash == current else {
+    var gating: [Finding] = []
+    if pass.contentHash != current {
       let now = Set(hashed.map(\.path))
       let then = Set(pass.hashedFiles)
       let changes =
         now.subtracting(then).sorted().map { "added \($0)" }
         + then.subtracting(now).sorted().map { "removed \($0)" }
       let what = changes.isEmpty ? "edited" : changes.joined(separator: ", ")
-      return .gating(
+      gating.append(
         try finding(
           staleRuleID, .major, file: record,
           "\(name) prompts changed since the last calibration pass (\(what)): recorded hash "
             + "\(pass.contentHash), current \(current); \(rerun)."))
     }
+    let modelProblems = pass.modelProblems(agents: hashed, suite: suite)
+    if !modelProblems.isEmpty {
+      gating.append(
+        try finding(
+          wrongModelRuleID, .major, file: record,
+          "the \(name) calibration didn't run every agent on the model it ships on: "
+            + modelProblems.joined(separator: "; ") + "; \(rerun) without `--model`."))
+    }
+    if !gating.isEmpty { return .gating(gating) }
+    let models = Set(pass.cases.map(\.model)).sorted().joined(separator: ", ")
     return .fresh(
-      "\(hashed.count) \(name) prompt file(s) match content hash \(current), passed on "
-        + "\(pass.model)")
+      "\(hashed.count) \(name) prompt file(s) match content hash \(current), each agent passed "
+        + "on its own model (\(models))")
   }
 
   private static func finding(

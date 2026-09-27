@@ -22,7 +22,6 @@ Changelog.
 ## Supported claims
 
 ```json
-{"id": "ev-bg-refresh-request-sets-earliest-begin-date", "lane": "apple-docs", "text": "BGAppRefreshTaskRequest.earliestBeginDate sets the earliest time the system may launch the task; the system decides the actual time.", "citation": {"kind": "snapshot", "loc": "snapshots/bgapprefreshtaskrequest.md", "pin": "26.2", "quote": "The earliest date and time at which to run the task. The system doesn't guarantee launching the task at the specified date, only that it won't begin sooner."}, "status": "supported"}
 {"id": "ev-bg-refresh-runs-every-fifteen-minutes", "lane": "apple-docs", "text": "An app refresh task whose handler resubmits a request with earliestBeginDate 15 minutes ahead runs every 15 minutes while the app is in the background.", "citation": {"kind": "capture", "loc": "captures/4f9c0a3b8e21d7c65a09f3e4b1c28d7a6e5f40b3c2d1e0f9a8b7c6d5e4f3a2b1.txt", "pin": "sha256:4f9c0a3b8e21d7c65a09f3e4b1c28d7a6e5f40b3c2d1e0f9a8b7c6d5e4f3a2b1", "quote": "refresh ran at 10:00, 10:15, 10:30, 10:45"}, "status": "supported"}
 {"id": "ev-bg-task-scheduler-submit-exists", "lane": "apple-docs", "text": "BGTaskScheduler.shared.submit(_:) takes a BGTaskRequest and throws.", "citation": {"kind": "probe", "loc": "probes/Probe_ev_bg_task_scheduler_submit_exists.swift", "pin": "26.2"}, "status": "supported"}
 ```

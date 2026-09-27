@@ -1,14 +1,16 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "fifteen-minute-tag",
-      "text": "How do you tag the Decision bullet stating that background sync runs every 15 minutes: with an [ev-\u2026] id of a supported claim from the pack, or [UNVERIFIED]?",
+      "id": "interval-tag",
+      "kind": "judge",
+      "text": "In the draft's Decision section, what tag does the bullet that sets how often background sync runs carry?",
       "options": [
-        "cite-a-supported-claim",
-        "unverified-tag"
+        "a claim id starting ev-",
+        "the UNVERIFIED tag",
+        "no tag, or no such bullet"
       ],
-      "expected": "cite-a-supported-claim"
+      "expected": "a claim id starting ev-"
     }
   ]
 }

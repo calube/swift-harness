@@ -125,18 +125,69 @@ public enum DesignCalibrationHash {
   }
 }
 
+/// Which model a calibrated agent runs on. Every agent is calibrated on the model its
+/// frontmatter names, so the pass measures the agent as it ships; an agent that pins none runs on
+/// ``unpinned``. A `--model` override exists for experiments, and a pass made with one is never
+/// fresh.
+public enum CalibrationModel {
+  public static let unpinned = JudgeFactory.defaultModel
+
+  /// The model an agent ships on, given its frontmatter's `model`.
+  public static func shipped(frontmatterModel: String?) -> String {
+    frontmatterModel ?? unpinned
+  }
+}
+
+/// Reads an agent file's leading `---` frontmatter block.
+public enum AgentFrontmatter {
+  /// A top-level `key: value` line of the frontmatter, trimmed; `nil` when absent or empty.
+  public static func value(_ key: String, in text: String) -> String? {
+    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+    guard let frontmatter = closingRange(normalized) else { return nil }
+    for line in normalized[..<frontmatter.lowerBound].split(separator: "\n")
+    where line.hasPrefix("\(key):") {
+      let value = line.dropFirst(key.count + 1).trimmingCharacters(in: .whitespaces)
+      return value.isEmpty ? nil : value
+    }
+    return nil
+  }
+
+  /// Strips a leading frontmatter block, then surrounding blank lines.
+  public static func body(of text: String) -> String {
+    let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+    var body = Substring(normalized)
+    if let frontmatter = closingRange(normalized) {
+      body = normalized[frontmatter.upperBound...]
+    }
+    return body.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  /// The closing `\n---\n` of a leading frontmatter block.
+  private static func closingRange(_ normalized: String) -> Range<String.Index>? {
+    guard normalized.hasPrefix("---\n") else { return nil }
+    return normalized.range(
+      of: "\n---\n",
+      range: normalized.index(normalized.startIndex, offsetBy: 3)..<normalized.endIndex)
+  }
+}
+
 /// The committed proof that every agent in a suite met every label at one content hash
-/// (`last-pass.json`). Written only by a full pass; the push check compares `contentHash` with
-/// ``CalibrationHash`` over the working tree.
+/// (`last-pass.json`), each case on the model it ran on. Written only by a full pass; the push
+/// check compares `contentHash` with ``CalibrationHash`` over the working tree and each case's
+/// model with its agent's frontmatter.
 public struct CalibrationRecord: Sendable, Equatable, Codable {
-  public static let currentSchemaVersion = 1
+  public static let currentSchemaVersion = 2
 
   public struct QuestionResult: Sendable, Equatable, Codable {
+    /// A judged answer counts only at this probability or above, so a coin-flip answer that
+    /// happens to land on the label fails instead of passing by luck.
+    public static let passMargin = 0.7
+
     public let question: String
     public let expected: String
-    /// The agent's most probable option, or what a build check observed.
+    /// The agent's most probable option, or what a check of its output observed.
     public let answered: String
-    /// The option's probability; `1` for a build check, which observes rather than asks.
+    /// The option's probability; `1` for a check that observes rather than asks.
     public let probability: Double
 
     public init(question: String, expected: String, answered: String, probability: Double) {
@@ -145,22 +196,28 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
       self.answered = answered
       self.probability = probability
     }
+
+    public var met: Bool { answered == expected && probability >= Self.passMargin }
   }
 
   public struct CaseResult: Sendable, Equatable, Codable {
     public let agent: String
     public let caseName: String
+    /// The model the agent ran on.
+    public let model: String
     public let answers: [QuestionResult]
 
-    public init(agent: String, caseName: String, answers: [QuestionResult]) {
+    public init(agent: String, caseName: String, model: String, answers: [QuestionResult]) {
       self.agent = agent
       self.caseName = caseName
+      self.model = model
       self.answers = answers
     }
 
     private enum CodingKeys: String, CodingKey {
       case agent
       case caseName = "case"
+      case model
       case answers
     }
   }
@@ -168,24 +225,25 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
   public let schemaVersion: Int
   public let contentHash: String
   public let hashedFiles: [String]
-  public let model: String
+  /// The `--model` every agent ran on instead of its own; `nil` for a pass on shipped models.
+  public let modelOverride: String?
   public let passedAt: Date
   public let cases: [CaseResult]
 
   public init(
-    contentHash: String, hashedFiles: [String], model: String, passedAt: Date,
+    contentHash: String, hashedFiles: [String], modelOverride: String?, passedAt: Date,
     cases: [CaseResult]
   ) {
     self.schemaVersion = Self.currentSchemaVersion
     self.contentHash = contentHash
     self.hashedFiles = hashedFiles
-    self.model = model
+    self.modelOverride = modelOverride
     self.passedAt = passedAt
     self.cases = cases
   }
 
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, contentHash, hashedFiles, model, passedAt, cases
+    case schemaVersion, contentHash, hashedFiles, modelOverride, passedAt, cases
   }
 
   public init(from decoder: any Decoder) throws {
@@ -199,7 +257,7 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     schemaVersion = version
     contentHash = try container.decode(String.self, forKey: .contentHash)
     hashedFiles = try container.decode([String].self, forKey: .hashedFiles)
-    model = try container.decode(String.self, forKey: .model)
+    modelOverride = try container.decodeIfPresent(String.self, forKey: .modelOverride)
     passedAt = try container.decode(Date.self, forKey: .passedAt)
     cases = try container.decode([CaseResult].self, forKey: .cases)
   }
@@ -217,5 +275,36 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     return try decoder.decode(CalibrationRecord.self, from: data)
+  }
+
+  /// Why this record doesn't show each hashed agent calibrated on the model it ships on: a
+  /// `--model` override, an agent with no case, or a case run on another model than the agent's
+  /// frontmatter names. Empty when every agent passed on its own model.
+  public func modelProblems(agents: [CalibrationHash.File], suite: CalibrationSuite) -> [String] {
+    if let modelOverride {
+      return [
+        "the pass ran every agent on `--model \(modelOverride)`, and a pass on an override never "
+          + "counts"
+      ]
+    }
+    var problems: [String] = []
+    for file in agents where suite.isHashedAgent(file.path) {
+      let name = String(
+        file.path.dropFirst(CalibrationSuite.agentsDirectory.count + 1).dropLast(".md".count))
+      let shipped = CalibrationModel.shipped(
+        frontmatterModel: AgentFrontmatter.value(
+          "model", in: String(decoding: file.contents, as: UTF8.self)))
+      let recorded = cases.filter { $0.agent == name }
+      if recorded.isEmpty {
+        problems.append("\(name) has no case in the record")
+        continue
+      }
+      let wrong = recorded.filter { $0.model != shipped }
+      if !wrong.isEmpty {
+        let runs = wrong.map { "\($0.caseName) on \($0.model)" }.joined(separator: ", ")
+        problems.append("\(name) ships on \(shipped) but its cases passed as \(runs)")
+      }
+    }
+    return problems
   }
 }

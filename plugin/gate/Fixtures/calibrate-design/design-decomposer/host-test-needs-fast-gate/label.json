@@ -1,14 +1,19 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
       "id": "gate",
-      "text": "What `gate` do you give the task whose tests include test-receipt-state-carries-order-total?",
-      "options": [
-        "fast",
-        "push",
-        "ready"
+      "kind": "value",
+      "array": "tasks",
+      "where": [
+        {
+          "path": "tests",
+          "oneOf": [
+            "test-receipt-state-carries-order-total"
+          ]
+        }
       ],
+      "field": "gate",
       "expected": "fast"
     }
   ]

@@ -29,9 +29,4 @@ would otherwise read from disk.
 **A5. No logic in views.**
 - **Do:** views read state and send actions. Formatting that needs a test goes in State or Core.
 
-**D2. Every service is a `FooClient` / `FooClientLive` pair.**
-- **Do:** two modules. `FooClient` holds the `@DependencyClient struct` and may import Foundation, Dependencies and other interfaces. `FooClientLive` holds `liveValue`, real IO and vendor SDKs, and is imported by the app target only. A Live module that needs UIKit declares `host_testable = false` in `.swiftgate.toml`.
-
-**D3. IO and vendor SDKs live only in `*Live` modules.**
-
 **P9.** Every changed Core, client or live module has a test in the plan.

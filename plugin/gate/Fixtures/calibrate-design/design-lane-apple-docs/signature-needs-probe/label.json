@@ -1,15 +1,23 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "citation-kind",
-      "text": "What citation kind backs your claim that URLSession.data(for:) exists with that signature?",
-      "options": [
-        "snapshot",
-        "probe",
-        "file"
-      ],
-      "expected": "probe"
+      "id": "probe-claim",
+      "kind": "present",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.kind",
+          "oneOf": [
+            "probe"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "probe-snippet",
+      "kind": "present",
+      "array": "probes"
     }
   ]
 }

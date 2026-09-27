@@ -29,22 +29,38 @@ struct CalibrationFreshnessTests {
     return repository
   }
 
-  /// Writes the record a full calibration pass would write over the repository as it is now.
-  static func recordPass(_ repository: ProbeRepository) throws {
+  /// The model an agent's frontmatter names, or the unpinned default.
+  static func shippedModel(_ file: DesignCalibrationHash.File) -> String {
+    let text = String(decoding: file.contents, as: UTF8.self)
+    let line = text.split(separator: "\n").first { $0.hasPrefix("model:") }
+    return line.map { $0.dropFirst("model:".count).trimmingCharacters(in: .whitespaces) }
+      ?? "sonnet"
+  }
+
+  /// Writes the record a full calibration pass would write over the repository as it is now:
+  /// one case per agent, on `models[agent]` or else the model its frontmatter names. Written as
+  /// JSON, the format push reads.
+  static func recordPass(
+    _ repository: ProbeRepository, models: [String: String] = [:], modelOverride: String? = nil
+  ) throws {
     let hashed = try DesignCalibrationHash.discover(root: repository.root)
-    let record = CalibrationRecord(
-      contentHash: DesignCalibrationHash.hash(hashed), hashedFiles: hashed.map(\.path),
-      model: "sonnet", passedAt: passedAt,
-      cases: [
-        CalibrationRecord.CaseResult(
-          agent: "design-claim-checker", caseName: "overstated-claim",
-          answers: [
-            CalibrationRecord.QuestionResult(
-              question: "verdict", expected: "refuted", answered: "refuted", probability: 0.9)
-          ])
-      ])
-    try repository.write(
-      DesignCalibrationLayout.recordPath, String(decoding: try record.encoded(), as: UTF8.self))
+    let cases: [[String: Any]] = hashed.filter { $0.path.hasPrefix("plugin/agents/") }.map {
+      file in
+      let agent = String(file.path.split(separator: "/").last?.dropLast(".md".count) ?? "")
+      return [
+        "agent": agent, "case": "case", "model": models[agent] ?? shippedModel(file),
+        "answers": [
+          ["question": "verdict", "expected": "refuted", "answered": "refuted", "probability": 1]
+        ],
+      ]
+    }
+    var record: [String: Any] = [
+      "schemaVersion": 2, "contentHash": DesignCalibrationHash.hash(hashed),
+      "hashedFiles": hashed.map(\.path), "passedAt": "2026-09-21T12:00:00Z", "cases": cases,
+    ]
+    if let modelOverride { record["modelOverride"] = modelOverride }
+    let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+    try repository.write(DesignCalibrationLayout.recordPath, String(decoding: data, as: UTF8.self))
   }
 
   static func push(_ repository: ProbeRepository) async throws -> RunReport {
@@ -105,6 +121,64 @@ struct CalibrationFreshnessTests {
     #expect(stale.severity.failsGate)
     #expect(stale.file == DesignCalibrationLayout.recordPath)
     #expect(stale.message.contains("swiftgate calibrate design"))
+  }
+
+  @Test(
+    "a record whose cases passed on another model than an agent's frontmatter names turns push red — catches an opus agent shipping on a sonnet calibration"
+  )
+  func frontmatterModelMismatchTurnsPushRed() async throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try repository.write(
+      "plugin/agents/design-claim-checker.md",
+      "---\nname: design-claim-checker\ndescription: fixture agent\ntools: Read\nmodel: opus\n---\n\n"
+        + "You check claims.\n")
+    try Self.recordPass(repository, models: ["design-claim-checker": "sonnet"])
+
+    let report = try await Self.push(repository)
+
+    #expect(report.verdict == .red)
+    let findings = Self.freshness(report)
+    #expect(findings.map(\.ruleID) == ["calibration-freshness.wrong-model"])
+    let mismatch = try #require(findings.first)
+    #expect(mismatch.severity.failsGate)
+    #expect(mismatch.message.contains("design-claim-checker ships on opus"))
+    #expect(mismatch.message.contains("case on sonnet"))
+  }
+
+  @Test(
+    "changing an agent's frontmatter model after a pass on the old one turns push red on both the hash and the model — catches a model switch shipping on the old model's calibration"
+  )
+  func changedFrontmatterModelTurnsPushRed() async throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(repository)
+    try repository.write(
+      "plugin/agents/design-challenger.md",
+      "---\nname: design-challenger\ndescription: fixture agent\ntools: Read\nmodel: opus\n---\n\n"
+        + "You challenge.\n")
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(
+      findings.map(\.ruleID) == [
+        CalibrationFreshness.staleRuleID, "calibration-freshness.wrong-model",
+      ])
+    #expect(findings.last?.message.contains("design-challenger ships on opus") == true)
+  }
+
+  @Test(
+    "a pass made with a --model override is never fresh, even on the agents' own models — catches an experiment committed as the calibration"
+  )
+  func overridePassIsNeverFresh() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(repository, modelOverride: "sonnet")
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(findings.map(\.ruleID) == ["calibration-freshness.wrong-model"])
+    #expect(findings.first?.message.contains("--model sonnet") == true)
   }
 
   @Test(

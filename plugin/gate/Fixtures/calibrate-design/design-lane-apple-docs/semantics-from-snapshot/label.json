@@ -1,15 +1,24 @@
 {
-  "schemaVersion": 1,
-  "questions": [
+  "schemaVersion": 2,
+  "checks": [
     {
-      "id": "citation-kind",
-      "text": "What citation kind backs your claim about when SwiftUI updates a view for an observable property?",
-      "options": [
-        "snapshot",
-        "probe",
-        "file"
-      ],
-      "expected": "snapshot"
+      "id": "snapshot-claim",
+      "kind": "present",
+      "array": "claims",
+      "where": [
+        {
+          "path": "citation.kind",
+          "oneOf": [
+            "snapshot"
+          ]
+        },
+        {
+          "path": "citation.loc",
+          "oneOf": [
+            "snapshots/observation-migrating.md"
+          ]
+        }
+      ]
     }
   ]
 }
