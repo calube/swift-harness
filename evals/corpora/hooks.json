@@ -753,5 +753,169 @@
    "command": "rm -f $PLANS/claim.lock.demo"
   },
   "session": "orch"
+ },
+ {
+  "name": "subagent-ledger-set",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate ledger set demo t2 done --session orch"
+  },
+  "session": "orch",
+  "agent": "sub1"
+ },
+ {
+  "name": "ledger-set-foreign-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate ledger set demo t2 done --session orch"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "ledger-set-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate ledger set demo t2 done --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "subagent-build-start",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build start demo --preset standard --session orch"
+  },
+  "session": "orch",
+  "agent": "sub1"
+ },
+ {
+  "name": "build-start-foreign-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build start demo --preset standard --session orch"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "build-start-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build start demo --preset standard --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "subagent-build-finish",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build finish demo --session orch"
+  },
+  "session": "orch",
+  "agent": "sub1"
+ },
+ {
+  "name": "build-finish-foreign-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build finish demo --session orch"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "build-finish-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build finish demo --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "subagent-worktree-create",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate worktree create demo t2 --session orch"
+  },
+  "session": "orch",
+  "agent": "sub1"
+ },
+ {
+  "name": "worktree-create-foreign-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate worktree create demo t2 --session orch"
+  },
+  "session": "worker"
+ },
+ {
+  "name": "worktree-create-by-holder",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate worktree create demo t2 --session orch"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "ledger-set-nonliteral-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate ledger set demo t2 done --session \"$SESSION\""
+  },
+  "session": "orch"
+ },
+ {
+  "name": "build-start-repeated-session",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build start demo --preset standard --session orch --session worker"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "build-finish-equals-foreign",
+  "kind": "deny",
+  "expect": "deny",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build finish demo --session=worker"
+  },
+  "session": "orch"
+ },
+ {
+  "name": "build-finish-equals-own",
+  "kind": "control",
+  "expect": "allow",
+  "tool": "Bash",
+  "input": {
+   "command": "swiftgate build finish demo --session=orch"
+  },
+  "session": "orch"
  }
 ]
