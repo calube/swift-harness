@@ -85,9 +85,8 @@ public struct EvidenceCacheStore: Sendable {
 
   /// Hides the claim in its own pin's file. The same text and quote under another pin, and the
   /// checker's verdict on them, are separate facts and stay served.
-  @discardableResult
   public func tombstone(_ claim: ReusableClaim, reason: EvidenceCacheTombstoneReason)
-    async throws(EvidenceCacheStoreError) -> EvidenceCacheWrite
+    async throws(EvidenceCacheStoreError)
   {
     try await append(to: claim.bucket) { contents in
       if let existing = contents.tombstones[claim.fingerprint] {

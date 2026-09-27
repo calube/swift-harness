@@ -414,21 +414,6 @@ struct EvidenceCacheStoreTests {
     #expect(try store.contents(of: probe.bucket).tombstones[probe.fingerprint] == .amended)
   }
 
-  @Test(
-    "a tombstone reports appended when it lands and the standing reason on a repeat — catches a rerun counted as a new write"
-  )
-  func tombstoneReportsItsOutcome() async throws {
-    let home = try ScratchHome()
-    defer { home.remove() }
-    let store = home.store()
-    let claim = try Claims.reusable(
-      Claims.packageClaim(
-        "ev-effect-run-is-cancellable", text: "Effect.run can be cancelled.",
-        quote: "public func cancellable<ID"))
-    #expect(try await store.tombstone(claim, reason: .refuted) == .appended)
-    #expect(try await store.tombstone(claim, reason: .amended) == .tombstoned(.refuted))
-  }
-
   private static func expectEveryWriterLanded(home: ScratchHome, writers: Int, perWriter: Int)
     throws
   {

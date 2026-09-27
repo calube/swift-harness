@@ -155,7 +155,7 @@ enum EvidenceCacheRecordRun {
       writes.append(
         Write(
           claimId: claim.claim.id, entry: .claim, bucket: bucketName(claim.bucket, store),
-          outcome: reportOutcome(outcome, entry: .claim)))
+          outcome: reportOutcome(outcome)))
       if let write = try await verdict(.supported, claim, store: store, notes: &notes) {
         writes.append(write)
       }
@@ -242,15 +242,18 @@ enum EvidenceCacheRecordRun {
   private static func tombstone(
     _ claim: ReusableClaim, _ reason: EvidenceCacheTombstoneReason, store: EvidenceCacheStore
   ) async throws -> Write {
-    let outcome: EvidenceCacheWrite
+    // The store skips a fingerprint that already has a tombstone, so the read only decides what
+    // the report says; the write stays the store's own locked decision.
+    let standing: Bool
     do {
-      outcome = try await store.tombstone(claim, reason: reason)
+      standing = try store.contents(of: claim.bucket).tombstones[claim.fingerprint] != nil
+      try await store.tombstone(claim, reason: reason)
     } catch {
       throw Blocked("\(claim.claim.id): the \(reason.rawValue) tombstone was not written: \(error)")
     }
     return Write(
       claimId: claim.claim.id, entry: .tombstone, bucket: bucketName(claim.bucket, store),
-      outcome: reportOutcome(outcome, entry: .tombstone))
+      outcome: standing ? .alreadyCached : .appended)
   }
 
   /// The checker judged the quote against the text, so the verdict is keyed by both; a claim
@@ -271,16 +274,16 @@ enum EvidenceCacheRecordRun {
     }
     return Write(
       claimId: claim.claim.id, entry: .verdict, bucket: bucketName(.verdicts, store),
-      outcome: reportOutcome(outcome, entry: .verdict))
+      outcome: reportOutcome(outcome))
   }
 
-  private static func reportOutcome(
-    _ write: EvidenceCacheWrite, entry: EvidenceCacheRecordReport.Entry
-  ) -> EvidenceCacheRecordReport.Outcome {
+  private static func reportOutcome(_ write: EvidenceCacheWrite)
+    -> EvidenceCacheRecordReport.Outcome
+  {
     switch write {
     case .appended: .appended
     case .alreadyCached: .alreadyCached
-    case .tombstoned: entry == .tombstone ? .alreadyCached : .tombstoned
+    case .tombstoned: .tombstoned
     }
   }
 
