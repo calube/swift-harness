@@ -15,12 +15,14 @@ struct CheckJudgeStepTests {
   private static func ready(judge: FakeJudge?) async throws -> (t1: TierResult, judged: [Finding]) {
     let repository = try ProbeRepository(config: JudgeCommandsTests.enabled)
     defer { repository.remove() }
+    // The fixture's unnamed `@Test` would turn T0 RED and skip T1 before the judge is reached.
     try repository.write(
       JudgeCommandsTests.testFile,
       try String(
         contentsOf: Fixture.gateDirectory.appending(
           path: "Fixtures/swifttest/XUnitProbe/Tests/ProbeTests/PassTests.swift"),
-        encoding: .utf8))
+        encoding: .utf8
+      ).replacing("@Test func", with: "@Test(\"doubles — catches a wrong product\") func"))
     // Without the probe's deliberately empty target, whose T1 is RED on every run.
     let probe = try ProbeRepository.manifest()
     let swiftPM = try ProbeRepository.swiftPM(

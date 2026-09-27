@@ -119,20 +119,6 @@ enum ChangedTestChecks {
   /// Spec §7.2 rule 6's N for the `ready` tier.
   static let readyStressIterations = 10
 
-  /// The `ready` tier's host-test steps: reach first (each test alone), then stress, then prove,
-  /// whose scratch tree builds from cold.
-  static func ready(
-    _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
-    context: GateRun.Context
-  ) async -> ChangedTestJudgement {
-    let reached = await reach(environment, graph: graph, base: base, context: context)
-    let stressed = await stress(
-      environment, graph: graph, base: base, iterations: readyStressIterations, context: context)
-    let proven = await prove(
-      environment, graph: graph, base: base, proofBases: proofBases, context: context)
-    return reached.merged(with: stressed).merged(with: proven)
-  }
-
   // MARK: - prove
 
   /// - Parameter proofBases: ancestors of HEAD, oldest first, where a test that only fails to
