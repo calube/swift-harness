@@ -298,8 +298,8 @@ public enum ConfigSchema {
     let designTier: BuildPreset.DesignTier =
       readEnum(&reader, table, "design_tier", at: path) ?? .standard
     let review: BuildPreset.Review = readEnum(&reader, table, "review", at: path) ?? .full
-    let taskGate: BuildPreset.TaskGate = readEnum(&reader, table, "task_gate", at: path) ?? .ledger
-    let mergeGate: BuildPreset.MergeGate = readEnum(&reader, table, "merge_gate", at: path) ?? .push
+    let taskGate = readTaskGate(&reader, table, at: path)
+    let mergeGate: CheckTier = readEnum(&reader, table, "merge_gate", at: path) ?? .push
     let workerModel: BuildPreset.WorkerModel =
       readEnum(&reader, table, "worker_model", at: path) ?? .tagged
     let onDesignConflict: BuildPreset.OnDesignConflict =
@@ -312,6 +312,22 @@ public enum ConfigSchema {
       stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
         ?? 0,
       onDesignConflict: onDesignConflict)
+  }
+
+  /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both
+  /// legal, so it can't share ``readEnum``'s `CaseIterable` constraint.
+  private static func readTaskGate(
+    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String
+  ) -> BuildPreset.TaskGate {
+    guard let raw = reader.string(table, "task_gate", at: path, required: true) else {
+      return .ledger
+    }
+    if let value = BuildPreset.TaskGate(rawValue: raw) { return value }
+    reader.issues.append(
+      .unknownEnumValue(
+        path: Reader.join(path, "task_gate"), value: raw,
+        allowed: BuildPreset.TaskGate.allowedRawValues))
+    return .ledger
   }
 
   /// Reads a required string key as a closed enum. A value none of `Value`'s cases recognize is

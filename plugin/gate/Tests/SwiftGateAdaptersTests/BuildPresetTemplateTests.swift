@@ -20,7 +20,7 @@ struct BuildPresetTemplateTests {
     workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend)
 
   private static let interviewPreset = BuildPreset(
-    designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .fast, mergeGate: .push,
+    designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
     workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
 
   @Test(

@@ -85,6 +85,47 @@ struct BuildPresetConfigTests {
   }
 
   @Test(
+    "an unknown merge_gate value is a config issue listing fast|push|ready — catches a value the shared CheckTier doesn't recognize"
+  )
+  func unknownMergeGateValueIsAnIssue() {
+    let input = root(withDefaultPreset: ["merge_gate": .string("slow")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .unknownEnumValue(
+          path: "build.presets.default.merge_gate", value: "slow",
+          allowed: ["fast", "push", "ready"])
+      ]
+    }
+  }
+
+  @Test(
+    "an unknown task_gate value is a config issue listing ledger|fast|push|ready — catches a value that is neither ledger nor a CheckTier"
+  )
+  func unknownTaskGateValueIsAnIssue() {
+    let input = root(withDefaultPreset: ["task_gate": .string("slow")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .unknownEnumValue(
+          path: "build.presets.default.task_gate", value: "slow",
+          allowed: ["ledger", "fast", "push", "ready"])
+      ]
+    }
+  }
+
+  @Test(
+    "task_gate accepts every CheckTier value, not only ledger — catches task_gate silently limited to ledger"
+  )
+  func taskGateAcceptsEveryCheckTier() throws {
+    let input = root(withDefaultPreset: ["task_gate": .string("ready")])
+    let config = try ConfigSchema.config(from: input)
+    #expect(config.buildPresets["default"]?.taskGate == .tier(.ready))
+  }
+
+  @Test(
     "stop_starts_before_min above time_budget_min is a config issue — catches a stop point beyond the budget it belongs to"
   )
   func stopStartsBeforeMinAboveBudgetIsAnIssue() {

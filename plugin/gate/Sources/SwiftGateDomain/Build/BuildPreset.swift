@@ -8,7 +8,7 @@ public struct BuildPreset: Sendable, Equatable {
   public let maxParallel: Int
   public let review: Review
   public let taskGate: TaskGate
-  public let mergeGate: MergeGate
+  public let mergeGate: CheckTier
   public let workerModel: WorkerModel
   /// Minutes budgeted to the whole build; 0 means no budget.
   public let timeBudgetMin: Int
@@ -21,7 +21,7 @@ public struct BuildPreset: Sendable, Equatable {
     maxParallel: Int,
     review: Review,
     taskGate: TaskGate,
-    mergeGate: MergeGate,
+    mergeGate: CheckTier,
     workerModel: WorkerModel,
     timeBudgetMin: Int,
     stopStartsBeforeMin: Int,
@@ -47,13 +47,23 @@ public struct BuildPreset: Sendable, Equatable {
     case full, gate
   }
 
-  /// `ledger`: each task's planned gate. Otherwise a fixed tier for every task.
-  public enum TaskGate: String, Sendable, Equatable, CaseIterable {
-    case ledger, fast, push, ready
-  }
+  /// `ledger`: each task's planned gate. Otherwise a fixed ``CheckTier`` for every task.
+  public enum TaskGate: Sendable, Equatable {
+    case ledger
+    case tier(CheckTier)
 
-  public enum MergeGate: String, Sendable, Equatable, CaseIterable {
-    case fast, push, ready
+    /// The source strings this field accepts, for the config issue's `allowed` list.
+    public static let allowedRawValues = ["ledger"] + CheckTier.allCases.map(\.rawValue)
+
+    public init?(rawValue: String) {
+      if rawValue == "ledger" {
+        self = .ledger
+      } else if let tier = CheckTier(rawValue: rawValue) {
+        self = .tier(tier)
+      } else {
+        return nil
+      }
+    }
   }
 
   /// `tagged`: the decomposer's per-task tag.
