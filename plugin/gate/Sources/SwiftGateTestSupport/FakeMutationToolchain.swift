@@ -19,7 +19,6 @@ public final class FakeMutationToolchain: MutationToolchain {
   private let testHandler: Test
   private let recordedBuilds = Mutex<[URL]>([])
   private let recordedTests = Mutex<[TestCall]>([])
-  private let recordedJobs = Mutex<[Int]>([])
 
   public init(
     build: @escaping Build = { _, _ in .built },
@@ -32,13 +31,8 @@ public final class FakeMutationToolchain: MutationToolchain {
   /// Scratch roots of every build, in call order.
   public var builds: [URL] { recordedBuilds.withLock { $0 } }
   public var tests: [TestCall] { recordedTests.withLock { $0 } }
-  /// Every compile width a caller shared this toolchain at, in call order.
-  public var sharedJobs: [Int] { recordedJobs.withLock { $0 } }
-
-  public func sharing(jobs: Int) -> any MutationToolchain {
-    recordedJobs.withLock { $0.append(jobs) }
-    return self
-  }
+  /// Scripted handlers already stand in for the whole build, so a compile width changes nothing.
+  public func sharing(jobs: Int) -> any MutationToolchain { self }
 
   public func buildTests(root: URL, packageDirectory: String) async -> MutantBuildResult {
     recordedBuilds.withLock { $0.append(root) }

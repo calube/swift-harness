@@ -123,8 +123,9 @@ enum MutateCheck {
       mutants: jobs.count { !$0.selections.isEmpty })
     let run = await MutationRunner(
       scratch: environment.scratch,
-      toolchain: environment.toolchain.sharing(
-        jobs: MutationWorkers.buildJobs(cores: environment.cores, workers: workers)),
+      // Every worker builds at once, and SwiftPM's default is a job per core, so without a share
+      // the machine runs `workers` times as many compilers as it has cores.
+      toolchain: environment.toolchain.sharing(jobs: max(1, environment.cores / workers)),
       workers: workers, timeout: environment.timeout
     ).run(
       jobs,

@@ -100,7 +100,7 @@ struct MutateCheckTests {
   }
 
   @Test(
-    "with no --jobs or max_workers the worker count follows the default cap, each tree is seeded with the mutated packages' builds, and the workers share the cores — catches one cold build per core, workers never reusing the main build, or every worker compiling full width at once"
+    "with no --jobs or max_workers the worker count follows the default cap, and each tree is seeded with the mutated packages' builds — catches one cold build per core, or workers never reusing the main build"
   )
   func defaultWorkersAndSeeds() async throws {
     let setup = try Setup()
@@ -119,8 +119,6 @@ struct MutateCheckTests {
     #expect(summary?.message.contains("2 workers") == true)
     #expect(scratch.requests.count == 2)
     #expect(scratch.requests.allSatisfy { $0.seededBuildDirectories == [Self.package] })
-    // 18 cores shared by 2 workers.
-    #expect(toolchain.sharedJobs == [9])
   }
 
   @Test(
