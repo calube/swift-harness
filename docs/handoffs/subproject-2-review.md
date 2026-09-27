@@ -210,7 +210,7 @@ Within this wave the three tasks write disjoint files.
    - (a) The mismatch fails t1 and t2.
    - (b) It warns only (current behaviour).
    - (c) It fails only at the push tier.
-2. **Calibrating on the shipped model (calibration-wrong-model).** Running the 7 opus agents on opus raises the cost of `calibrate design` several times over. Options:
+2. **Calibrating on the shipped model (calibration-wrong-model). DECIDED 2026-09-27: the user chose (a), each agent on its frontmatter model.** Running the 7 opus agents on opus raises the cost of `calibrate design` several times over. Options:
    - (a) Calibrate each agent on its frontmatter model, always.
    - (b) Use opus only on the push tier or before a release, and sonnet for day-to-day runs.
    - (c) Keep sonnet and document that opus agents are calibrated as a proxy.
