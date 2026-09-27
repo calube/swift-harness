@@ -1,9 +1,9 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Waves 1–3, 3b, and 2 of 3 wave-4 tasks merged on local main 2026-09-26 (push tier GREEN, 1637 tests). The user asked for every wave to run.
+Status: IN PROGRESS. Merged on local main by 2026-09-27: waves 1–4, wave 6, spec-corrections-and-routers, and every wave-5 task but decomposer-model-tag. Push tier GREEN (1681 tests). The user asked for every wave to run.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: build-merge-and-fix-worktree (the last wave-4 task), then wave 5.
+Next action: merge build-skill and decomposer-model-tag (both in flight), then ship-skill-and-sketch-design-flow.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
@@ -226,9 +226,9 @@ flowchart LR
 
 ### `build-skill`
 - Deps: worktree-commands, ledger-set-command, build-start-next-finish-commands, build-merge-and-fix-worktree, build-check-return, worker-context-pack-dependency-notes, build-task-workflow · Gate: fast · estLines: 300
-- Writes: `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, `tests/skill_commands_test.mjs`
-- Does: §3.2, §3.4, §8: the event loop. Launches `build-task.js` in the background per ready task, and on each completion checks the return, merges, gates, sets the ledger, republishes the ledger page. Halts per §3.4. Cutoff stops running workflows with `TaskStop`.
-- Tests: every `swiftgate` command the skill names exists with those flags (`skill_commands_test.mjs`) · `prose` clean · skill review passes.
+- Writes: `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, `tests/skill_commands_test.mjs`, `D/Hooks/Guards.swift` (1 verb only), `TC/PlanStateAuthorityTests.swift`, `D/Context/ContextPack.swift` and `A/Context/ContextPackSources.swift` (returns decoding only)
+- Does: §3.2, §3.4, §8: the event loop. Launches `build-task.js` in the background per ready task, and on each completion checks the return, merges, gates, sets the ledger, republishes the ledger page. Halts per §3.4. Cutoff stops running workflows with `TaskStop`. Adds `["build","merge"]` to `PlanCommandGuard.sessionCommands`, agreed with sub-project 2. `--undo` stays session-only, not user-only, because spec §8.3 has the executor reset `main` after a red merge gate. It still refuses once `main` has moved. The dependency-notes reader switches from its minimal `{task, notes}` decode to `TaskReturn`.
+- Tests: every `swiftgate` command the skill names exists with those flags (`skill_commands_test.mjs`) · `prose` clean · skill review passes · `build merge` in `PlanStateAuthorityTests`: subagent denied, foreign session denied, own session allowed, with the `--undo` case's test name citing spec §8.3 (red first).
 
 ### `ship-skill-and-sketch-design-flow`
 - Deps: sketch-design-tier, decomposer-model-tag, build-skill · Gate: fast · estLines: 220

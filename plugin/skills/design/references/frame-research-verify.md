@@ -9,8 +9,8 @@ says to rewrite. Time stamps are UTC ISO-8601 to the second with a `Z` and no fr
 
 Contents:
 
-- [Frame](#frame): ask, scope, claim, branch and record
-- [Research](#research): lanes, packs, the workflow, halt and resume, writing results
+- [Frame](#frame): ask, scope, claim and re-scope, branch and record
+- [Research](#research): lanes, stored evidence, packs, the workflow, halt and resume, writing results
 - [Verify](#verify): mechanical check, probe, claim checker, final statuses
 - [Draft](#draft): pack, drafter, lint and revise
 - [Phase log](#phase-log): the `phases.jsonl` line
@@ -36,8 +36,10 @@ Ask with `AskUserQuestion`, at most 4 questions per prompt, recommended option f
 
 Ask a 5th question about constraints (deadline, platform floor, a module that mustn't change) in a
 2nd prompt when the request leaves them open. When the goal itself reads 2 ways, ask which one
-first. For every question keep the exact question text, the option labels as shown and the answer:
-the chosen label, or the user's own words for a free-text reply.
+first. For every question keep the exact question text, each option's full text and the answer.
+An option's full text is its label and its description as shown, `<label>: <description>`, or the
+label alone when it has none. The answer is the chosen option's full text, or the user's own words
+for a free-text reply. A bare label can't back a claim about what the option meant.
 
 ### Headless
 
@@ -46,8 +48,9 @@ with only the questions of 1 prompt, so at most 4, and the constraints question 
 turn like any 2nd prompt. List them numbered, each with its exact text, then its options as a
 lettered list, recommended first with `(Recommended)` and its description, and a last line saying
 the answers come back through `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p --resume <session id>`
-(without it, `claude -p` ends a workflow still running after 600 s). Write no file and claim nothing before the
-answers arrive. The resuming message holds the answers, a chosen label or the user's own words,
+(without it, `claude -p` ends a workflow still running after 600 s). **The resume command is the
+last line of the turn; nothing follows it**: no summary, no note, no closing paragraph. Write no
+file and claim nothing before the answers arrive. The resuming message holds the answers, a chosen label or the user's own words,
 and they're recorded as the Branch and record step says, exactly as `AskUserQuestion` answers
 would be. The same shape serves every later ask in the skill.
 
@@ -83,6 +86,12 @@ is never quick. Always offer `deep`.
 
 ### Claim
 
+Check `<doc>` first. If it exists and no earlier run of this plan wrote it (no
+`<plans>/<plan>/plan.json` names it), the goal changes a design that's already there. Ask with
+`AskUserQuestion`: switch to `--amend <slug>` (recommended), or stop. On amend, go to
+[Amend and clarify](review-publish-amend.md#amend-and-clarify) with the frame's answers as the
+user's change. `<plans>` is `$(git rev-parse --git-common-dir)/swift-harness/plans`.
+
 Read the session id from the `Session id: <id>` line of the SessionStart context, then:
 
 ```bash
@@ -90,16 +99,25 @@ Read the session id from the `Session id: <id>` line of the SessionStart context
 ```
 
 - `claimed`: a new plan. Continue.
-- `already-held`: this session holds it from an earlier run. Continue, and keep the files that
-  exist.
-- `held-by-other` (exit 1): stop. Tell the user which session holds it. Taking over an abandoned
-  lock is the user's call: `"$SG" plan release <plan> --force`.
+- `already-held`: this session holds it from an earlier run, such as a reframe. Continue, and keep
+  the files that exist. `plan claim` doesn't change an existing plan's tier, so re-scope it (below).
+- `held-by-other` (exit 1): stop. Show the user the holder the JSON names, and let them decide. If
+  that session has ended, they can run `swiftgate plan release <plan> --force` in their own
+  terminal. The skill never runs `--force`: the hooks deny it to every tool call.
 - `design-owned` (exit 1): another plan already owns this design doc, and the message names it.
   Stop, and ask the user whether to continue that plan or name another doc.
 - exit 2: report the message and stop.
 
-If `<doc>` exists and this plan didn't write it, the user wants an amend, which this part of the
-skill doesn't cover. Stop and say so.
+**Re-scope.** Whenever the confirmed tier differs from the one in `<plans>/<plan>/plan.json`, as
+after a reframe or a user's change of depth, record it:
+
+```bash
+"$SG" plan set <plan> --session <id> --tier <tier> --resume "re-scoped to <tier>; next: research" --json
+```
+
+`<tier>` is 1 of `quick`, `standard`, `deep` or `sketch`: `design-scope` never recommends
+`sketch`, but a plan a preset claimed at `sketch` keeps it valid. Exit 1 means this session no
+longer holds the plan: handle it as `held-by-other` above. Exit 2: report it and stop.
 
 ### Branch and record
 
@@ -110,7 +128,7 @@ write into a sibling worktree's copy of `<doc>`.
 Append 1 line per frame answer to `<ev>/answers.jsonl`:
 
 ```json
-{"runId":"design-20260925T180000Z","question":"Which area does this design belong to?","options":["ordering","payments","A new area: sync"],"answer":"ordering","at":"2026-09-25T18:00:12Z"}
+{"runId":"design-20260925T180000Z","question":"Which area does this design belong to?","options":["ordering (Recommended): order entry, the cart and checkout","payments: card and wallet flows","A new area: sync"],"answer":"ordering (Recommended): order entry, the cart and checkout","at":"2026-09-25T18:00:12Z"}
 ```
 
 `runId` is `<design-run>` for every frame answer. Then append 1 `answer` claim per record to
@@ -149,6 +167,33 @@ Take a `docs-lint` baseline so the draft step can tell its own findings from old
 | `quick` | `codebase` |
 | `standard`, `deep` | `codebase`, `apple-docs`, `packages`, `prior-decisions` |
 
+### Stored evidence
+
+At `standard` and `deep`, before any pack exists, store the evidence the briefs need. A pack
+lists only the files already under `<ev>/snapshots/` and `<ev>/captures/`, and the apple-docs lane
+cites nothing else.
+
+- **Doc pages.** For each Apple documentation page the `apple-docs` brief's questions need, save
+  the page as fetched, byte for byte, to `<ev>/snapshots/<page path with / as ->.json`:
+
+  ```bash
+  curl -fsS https://developer.apple.com/tutorials/data/documentation/swiftui/view.json \
+    -o <ev>/snapshots/documentation-swiftui-view.json
+  ```
+
+  When a page fails to fetch, store nothing for it and tell the user its path.
+- **Command output.** For any brief question a command answers, such as the SDK version or a
+  tool's output, capture it:
+
+  ```bash
+  "$SG" evidence capture --design <doc> --json -- xcrun --sdk iphonesimulator --show-sdk-version
+  ```
+
+  It stores the output under `<ev>/captures/` and prints the `capture` citation.
+
+List the stored names in each brief that uses them. When a lane later returns `snapshotRequests`,
+store those pages the same way, then rerun that lane.
+
 ### Inputs per lane
 
 - Brief, `<run>/briefs/<lane>.md`: the goal, the constraints and the questions this lane must
@@ -174,11 +219,11 @@ fix it and rerun. Never hand a lane a pack you wrote yourself.
 
 ### Run
 
-Tell the user how many lanes start. Then:
+Tell the user how many lanes start. Then launch the plugin's registered workflow by name:
 
 ```
 Workflow({
-  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/design-research.js",
+  name: "swift-harness-design-research",
   args: {
     tier: "<tier>",
     mode: "research",
@@ -189,6 +234,18 @@ Workflow({
   }
 })
 ```
+
+The Workflow tool refuses a `scriptPath` outside the session's working directory, so never point
+it at `${CLAUDE_PLUGIN_ROOT}`. If it refuses the name too, copy the script under `<run>/` and
+launch the copy with the same args:
+
+```bash
+mkdir -p <run>/workflows && /bin/cp -f "${CLAUDE_PLUGIN_ROOT}/workflows/design-research.js" <run>/workflows/
+```
+
+Then call `Workflow` with `scriptPath: "<absolute path of <run>/workflows/design-research.js>"` in
+place of `name`. If that's refused as well, use the Agent tool fallback below and tell the user
+which launch failed.
 
 Keep the `runId` from the tool result. The script returns `status`, an entry per lane, the merged
 `needsDecision` list and `unusedAnswers`.
@@ -208,13 +265,13 @@ Keep the `runId` from the tool result. The script returns `status`, an entry per
    `evidence` claim ids go in the description.
 3. Append each answer to `answers.jsonl` with `runId` = the run that returned the ask, and add its
    `answer` claim with that lane.
-4. Relaunch with the same `scriptPath` and the same args, `answers` holding every research answer
+4. Relaunch the way the run launched (the same `name`, or the same `scriptPath`) and the same args, `answers` holding every research answer
    so far as `{question, answer}`, plus `resumeFromRunId: "<that runId>"`. Answered lanes rerun
    from their cached first call; the others replay unchanged.
 5. Repeat until the status isn't `needs-decision`. A non-empty `unusedAnswers` means a question
    text changed. Tell the user rather than dropping it.
 
-If this session has no Workflow tool, launch `swift-harness:design-lane-<lane>` with the Agent tool
+If this session has no Workflow tool, or it refused both launches, launch `swift-harness:design-lane-<lane>` with the Agent tool
 instead, at most 3 at once. Give each the tier, the absolute pack path and the scope sentence the
 script's prompt uses, and ask for the JSON object its agent file defines. Answer a lane's question
 with `SendMessage` to that agent; those answers use `<design-run>` as their `runId`.
@@ -229,8 +286,9 @@ For each researched lane:
 - `dropped` lists claims the script removed for having no pin. Write none of them, and tell the
   user their ids and the lane.
 - `snapshotRequests` (apple-docs only) lists doc pages the lane needed but found no stored snapshot
-  for. Tell the user the pages: those points stay unclaimed until the pages are stored under
-  `<ev>/snapshots/` and the lane reruns.
+  for. Store each page as [Stored evidence](#stored-evidence) says, then rerun the apple-docs lane
+  alone (a fresh launch with that lane and no `resumeFromRunId`). When the fetch fails, the point
+  stays unclaimed: tell the user which page.
 
 ## Verify
 

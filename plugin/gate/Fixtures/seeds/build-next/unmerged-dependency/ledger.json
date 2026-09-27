@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "core",
+      "deps": [],
+      "writeSet": ["Sources/Core/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-core"],
+      "estLines": 80,
+      "status": "in-progress",
+      "worktree": "../core",
+      "model": "sonnet"
+    },
+    {
+      "id": "feature",
+      "deps": ["core"],
+      "writeSet": ["Sources/Feature/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-feature"],
+      "estLines": 80,
+      "status": "pending",
+      "worktree": "../feature",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [["core"], ["feature"]]
+}

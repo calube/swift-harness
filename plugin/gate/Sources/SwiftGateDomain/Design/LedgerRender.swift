@@ -11,12 +11,19 @@ public enum LedgerRender {
     /// The design at the plan's `designSha` (spec §5.4): never the working tree.
     public let design: DesignDocument
     public let designSha: String
+    /// This plan's build run metrics, when one exists; `nil` renders the wave timeline exactly as
+    /// it did before durations existed.
+    public let buildMetrics: BuildMetrics.Report?
 
-    public init(slug: String, ledger: Ledger, design: DesignDocument, designSha: String) {
+    public init(
+      slug: String, ledger: Ledger, design: DesignDocument, designSha: String,
+      buildMetrics: BuildMetrics.Report? = nil
+    ) {
       self.slug = slug
       self.ledger = ledger
       self.design = design
       self.designSha = designSha
+      self.buildMetrics = buildMetrics
     }
   }
 
@@ -31,7 +38,7 @@ public enum LedgerRender {
     let body: [HTMLFragment] = [
       header(slug: input.slug, designSha: input.designSha),
       dagSection(tasks: tasks),
-      waveSection(ledger: input.ledger, schedule: schedule),
+      waveSection(ledger: input.ledger, schedule: schedule, buildMetrics: input.buildMetrics),
       matrixSection(design: input.design, tasks: tasks),
       overheadSection(tasks: tasks, schedule: schedule),
     ]
@@ -98,7 +105,8 @@ public enum LedgerRender {
   /// instead of trusting either side silently — a page can be rendered from a ledger `plan-lint`
   /// hasn't re-checked since a hand edit.
   static func waveSection(
-    ledger: Ledger, schedule: Result<[[String]], PlanSchedule.ScheduleError>
+    ledger: Ledger, schedule: Result<[[String]], PlanSchedule.ScheduleError>,
+    buildMetrics: BuildMetrics.Report? = nil
   ) -> HTMLFragment {
     switch schedule {
     case .failure(let error):
@@ -121,13 +129,24 @@ public enum LedgerRender {
       }
       let statusByID = Dictionary(
         ledger.tasks.map { ($0.id, $0.status) }, uniquingKeysWith: { first, _ in first })
+      let durationByID = Dictionary(
+        (buildMetrics?.taskDurations ?? []).map { ($0.task, $0.wallMilliseconds) },
+        uniquingKeysWith: { first, _ in first })
       let rows = waves.enumerated().map { index, wave in
         HTMLFragment.element(
           "tr", attributes: ["data-wave": String(index)],
           [
             .element("th", attributes: ["scope": "row"], text: "Wave \(index + 1)"),
             .element(
-              "td", [.element("ul", wave.map { taskListItem(id: $0, status: statusByID[$0]) })]),
+              "td",
+              [
+                .element(
+                  "ul",
+                  wave.map {
+                    taskListItem(
+                      id: $0, status: statusByID[$0], wallMilliseconds: durationByID[$0])
+                  })
+              ]),
           ])
       }
       content.append(
@@ -153,8 +172,11 @@ public enum LedgerRender {
   /// A wave list entry: the task id, plus a status badge whose visible text (not colour alone)
   /// distinguishes every state — `blocked` and `abandoned` included, and from each other. `status`
   /// is `nil` for a task id the wave names but the ledger's `tasks` list doesn't (only reachable
-  /// from a hand-edited ledger; the id still renders, with no badge).
-  static func taskListItem(id: String, status: TaskStatus?) -> HTMLFragment {
+  /// from a hand-edited ledger; the id still renders, with no badge). `wallMilliseconds` renders a
+  /// duration chip only when given, so a page built without build metrics is unchanged.
+  static func taskListItem(id: String, status: TaskStatus?, wallMilliseconds: Int? = nil)
+    -> HTMLFragment
+  {
     let statusValue = status?.rawValue ?? "unknown"
     var children: [HTMLFragment] = [.element("span", attributes: ["class": "task-id"], text: id)]
     if let status {
@@ -162,6 +184,12 @@ public enum LedgerRender {
         .element(
           "span", attributes: ["class": "status-badge", "data-status": statusValue],
           text: statusLabel(status)))
+    }
+    if let wallMilliseconds {
+      children.append(
+        .element(
+          "span", attributes: ["class": "task-duration"],
+          text: ReportRenderer.duration(wallMilliseconds)))
     }
     return .element("li", attributes: ["data-status": statusValue], children)
   }

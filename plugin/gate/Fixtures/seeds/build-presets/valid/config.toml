@@ -1,0 +1,19 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "Sample"
+packages = ["Sample"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[build.presets.complete]
+design_tier = "standard"
+max_parallel = 3
+review = "full"
+task_gate = "ledger"
+merge_gate = "push"
+worker_model = "tagged"
+time_budget_min = 0
+stop_starts_before_min = 0
+on_design_conflict = "amend"

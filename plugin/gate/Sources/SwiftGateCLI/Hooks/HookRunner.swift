@@ -35,7 +35,9 @@ struct HookDependencies: Sendable {
       formatter: LiveSwiftFormatter(runner: runner, repositoryRoot: root.path),
       xcode: LiveXcodeSelection(
         runner: runner, developerDirectoryOverride: environment["DEVELOPER_DIR"]),
-      sweep: PendingOrphanCloneSweep(), commitJudge: ConfiguredCommitCommentJudge.live,
+      sweep: ScratchWorktreeOrphanSweep(
+        scratch: LiveScratchWorktrees(runner: runner, repositoryRoot: root.path)),
+      commitJudge: ConfiguredCommitCommentJudge.live,
       environment: environment)
   }
 }
@@ -49,6 +51,33 @@ protocol OrphanCloneSweeping: Sendable {
 
 struct PendingOrphanCloneSweep: OrphanCloneSweeping {
   func sweep() async -> String? { nil }
+}
+
+/// Removes `prove` and `mutate` scratch worktrees left registered by a run that was killed before
+/// its cleanup, with whatever they hold (a whole checkout, often profile data).
+struct ScratchWorktreeOrphanSweep: OrphanCloneSweeping {
+  let scratch: LiveScratchWorktrees
+
+  func sweep() async -> String? {
+    let result: ScratchWorktreeSweep
+    do throws(ScratchWorktreeError) {
+      result = try await scratch.sweepRegisteredOrphans()
+    } catch {
+      return "Scratch worktree sweep could not list worktrees: \(error)"
+    }
+    var lines: [String] = []
+    if !result.removed.isEmpty {
+      lines.append(
+        "Removed \(result.removed.count) scratch worktree(s) left by killed runs: "
+          + result.removed.joined(separator: ", "))
+    }
+    if !result.failures.isEmpty {
+      lines.append(
+        "Could not remove \(result.failures.count) orphaned scratch worktree(s): "
+          + result.failures.joined(separator: "; "))
+    }
+    return lines.isEmpty ? nil : lines.joined(separator: "\n")
+  }
 }
 
 /// The judge's comment questions on a Claude-authored commit (spec §7.5): advisory, cached by

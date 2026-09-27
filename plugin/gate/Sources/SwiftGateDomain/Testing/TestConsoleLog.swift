@@ -27,11 +27,23 @@ public struct TestConsoleLog: Sendable, Equatable {
   public private(set) var compilerErrors: [Location] = []
   /// Other `error:` lines (for example `<unknown>:0: error: …`), in order.
   public private(set) var otherErrors: [String] = []
+  /// A `#expect`/`#require` macro expansion that fails to compile (for example `try` in a
+  /// non-throwing test): `macro expansion #<name>:<line>:<col>: error: <message>`. Its own
+  /// location names the macro, not a file, so `file`/`line` come instead from the compiler's
+  /// companion `note: expanded code originates here` on the following line when one names a real
+  /// path; otherwise they're `nil`.
+  public struct MacroExpansionError: Sendable, Equatable {
+    public let message: String
+    public let file: String?
+    public let line: Int?
+  }
+  public private(set) var macroExpansionErrors: [MacroExpansionError] = []
 
   public init(stdout: String, stderr: String) {
     var currentXCTest: String?
     var started: [String] = []
     var continuedIssue: Int?
+    var pendingMacroExpansionMessage: String?
     for rawLine in (stdout + "\n" + stderr).split(separator: "\n", omittingEmptySubsequences: true)
     {
       let line = String(rawLine)
@@ -42,6 +54,13 @@ public struct TestConsoleLog: Sendable, Equatable {
         continue
       }
       continuedIssue = nil
+      if let message = pendingMacroExpansionMessage {
+        pendingMacroExpansionMessage = nil
+        let note = Self.macroExpansionNote(line)
+        macroExpansionErrors.append(
+          MacroExpansionError(message: message, file: note?.file, line: note?.line))
+        if note != nil { continue }
+      }
       if let test = Self.between(line, "Test Case '-[", "]' started.") {
         currentXCTest = Self.xctestKey(test)
       } else if line.hasPrefix("Test Case '-[") {
@@ -59,6 +78,8 @@ public struct TestConsoleLog: Sendable, Equatable {
         if let index = started.firstIndex(where: { rest.hasPrefix($0 + " ") }) {
           started.remove(at: index)
         }
+      } else if let message = Self.macroExpansionError(line) {
+        pendingMacroExpansionMessage = message
       } else if let error = Self.compilerError(line) {
         compilerErrors.append(error)
       } else if line.contains("error: ") {
@@ -118,5 +139,25 @@ public struct TestConsoleLog: Sendable, Equatable {
     guard parts.count == 3, let number = Int(parts[1]), Int(parts[2]) != nil else { return nil }
     return Location(
       file: String(parts[0]), line: number, message: String(line[marker.upperBound...]))
+  }
+
+  /// `macro expansion #<name>:<line>:<col>: error: <message>`: the location names the macro, not a
+  /// file, so only the message is usable here.
+  private static func macroExpansionError(_ line: String) -> String? {
+    guard line.hasPrefix("macro expansion "), let marker = line.range(of: ": error: ") else {
+      return nil
+    }
+    return String(line[marker.upperBound...])
+  }
+
+  /// The line the compiler prints right after a macro expansion error, when it can name where the
+  /// expanded code came from: `` `- <file>:<line>:<col>: note: expanded code originates here``.
+  private static func macroExpansionNote(_ line: String) -> (file: String, line: Int)? {
+    var rest = Substring(line)
+    if rest.hasPrefix("`- ") { rest.removeFirst(3) }
+    guard rest.hasPrefix("/"), let marker = rest.range(of: ": note: ") else { return nil }
+    let parts = rest[..<marker.lowerBound].split(separator: ":")
+    guard parts.count == 3, let number = Int(parts[1]), Int(parts[2]) != nil else { return nil }
+    return (String(parts[0]), number)
   }
 }

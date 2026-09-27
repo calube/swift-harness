@@ -1,0 +1,340 @@
+// Runs workflows/build-task.js against stubbed build-worker and reviewer agents.
+// Run: node tests/build_task_workflow_test.mjs
+// Regressions caught: a gate-only preset still paying for reviewers; a second fix pass, or a fix
+// pass reusing the first worker instead of a fresh one; a design conflict reviewed or "fixed"
+// instead of going straight back to the orchestrator; a return whose keys drift from `TaskReturn`,
+// so `build check-return` rejects it; a `review: null` return, which check-return fails as
+// `build-return.review-missing`.
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// The plugin directory: every path this test reads is relative to it.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
+const source = readFileSync(join(root, 'workflows/build-task.js'), 'utf8').replace(/^export const meta/m, 'const meta')
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor
+const script = new AsyncFunction('args', 'agent', 'log', source)
+
+// `TaskReturn`'s JSON keys, from the CodingKeys in D/Build/TaskReturn.swift
+// (plugin/gate/Sources/SwiftGateDomain/Build/TaskReturn.swift). Hard-coded on purpose: a change
+// there must be made here too, by hand.
+const TASK_RETURN_KEYS = ['task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict']
+// `ReviewFinding`'s JSON keys (D/Review/ReviewSynthesis.swift), which `review.findings` decodes.
+const REVIEW_FINDING_KEYS = [
+  'severity', 'category', 'file', 'line', 'title', 'failure_scenario', 'evidence', 'fix', 'verified', 'kind', 'rule',
+  'verification_note',
+]
+
+const WORKER = 'swift-harness:build-worker'
+const REVIEWERS = { 'swift-harness:verifier': 'verifier', 'swift-harness:test-quality': 'test-quality' }
+
+const baseArgs = (extra = {}) => ({
+  task: 'catalog-list-reducer',
+  plan: 'catalog',
+  worktree: '/work/app-catalog-catalog-list-reducer',
+  branch: 'catalog/catalog-list-reducer',
+  writeSet: ['Sources/CatalogCore/CatalogList.swift', 'Tests/CatalogCoreTests/CatalogListTests.swift'],
+  taskGate: 'fast',
+  tests: ['test-catalog-list-loads-first-page'],
+  contextPack: '/work/app/.harness/context-pack/worker-catalog-list-reducer.md',
+  model: 'sonnet',
+  review: 'full',
+  ...extra,
+})
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+const workerReturn = (overrides = {}) => ({
+  task: 'catalog-list-reducer',
+  outcome: 'ready-to-merge',
+  commits: ['3f2a91c'],
+  gate: { tier: 'fast', verdict: 'GREEN', runId: '20260926T141502Z-4c1eab90' },
+  review: null,
+  testsAdded: ['test-catalog-list-loads-first-page'],
+  notes: 'CatalogClient.fetchPage(_:) returns [Product]; page size is 20',
+  designConflict: null,
+  ...overrides,
+})
+const red = (overrides = {}) =>
+  workerReturn({ outcome: 'gate-red', gate: { tier: 'fast', verdict: 'RED', runId: '20260926T150000Z-0000beef' }, ...overrides })
+const conflict = {
+  kind: 'design-conflict',
+  section: 'decision',
+  ids: ['req-catalog-pages-by-cursor'],
+  claim: 'the endpoint pages by cursor, not by offset',
+  evidence: [{ kind: 'capture', loc: '.harness/runs/r1/response.json', pin: 'sha256:9f2c', quote: '"next": "c2"' }],
+}
+
+const finding = (overrides = {}) => ({
+  kind: 'defect',
+  severity: 'major',
+  category: 'lost-page',
+  file: 'Sources/CatalogCore/CatalogList.swift',
+  line: 42,
+  title: 'second page replaces the first',
+  failure_scenario: 'loading page 2 drops page 1 from state.products',
+  evidence: 'CatalogList.swift:42 `state.products = page`',
+  fix: 'append the page',
+  ...overrides,
+})
+
+// `workers` is a list of returns, one per worker call in order (a function gets the prompt).
+// `reviews[reviewer]` is a list of returns, one per review round.
+async function run(args, { workers = [workerReturn()], reviews = {} } = {}) {
+  const calls = []
+  let inFlight = 0
+  let maxReviewersInFlight = 0
+  const perReviewer = {}
+  const agent = async (prompt, opts) => {
+    calls.push({ prompt, opts })
+    if (opts.agentType === WORKER) {
+      const n = calls.filter(c => c.opts.agentType === WORKER).length
+      const next = workers[n - 1]
+      assert.ok(next !== undefined, `unexpected worker call ${n}`)
+      return typeof next === 'function' ? next(prompt) : structuredClone(next)
+    }
+    const reviewer = REVIEWERS[opts.agentType]
+    assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
+    const round = (perReviewer[reviewer] = (perReviewer[reviewer] ?? 0) + 1)
+    inFlight++
+    maxReviewersInFlight = Math.max(maxReviewersInFlight, inFlight)
+    try {
+      await delay(reviewer === 'verifier' ? 15 : 5)
+      const next = (reviews[reviewer] ?? [])[round - 1]
+      return next === undefined ? { findings: [] } : structuredClone(next)
+    } finally {
+      inFlight--
+    }
+  }
+  const logs = []
+  const result = await script(args, agent, message => logs.push(message))
+  const workerCalls = calls.filter(c => c.opts.agentType === WORKER)
+  const reviewerCalls = calls.filter(c => c.opts.agentType !== WORKER)
+  return { result, calls, workerCalls, reviewerCalls, maxReviewersInFlight, logs }
+}
+
+// The contract `build check-return` decodes: exactly TaskReturn's keys, `review` always filled.
+function assertTaskReturn(result, mode) {
+  assert.deepEqual(Object.keys(result).sort(), [...TASK_RETURN_KEYS].sort(), JSON.stringify(result))
+  assert.ok(result.review !== null && typeof result.review === 'object', 'review is null')
+  assert.deepEqual(Object.keys(result.review).sort(), ['findings', 'mode'])
+  assert.equal(result.review.mode, mode)
+  assert.ok(Array.isArray(result.review.findings))
+  for (const f of result.review.findings) {
+    for (const key of Object.keys(f)) assert.ok(REVIEW_FINDING_KEYS.includes(key), `unexpected finding key ${key}`)
+  }
+  assert.ok(['ready-to-merge', 'gate-red', 'review-blocked', 'design-conflict'].includes(result.outcome))
+}
+
+const tests = {
+  async 'review gate spawns no reviewer and returns review.mode gate — catches a gate-only preset still paying for reviewers'() {
+    const { result, reviewerCalls, workerCalls } = await run(baseArgs({ review: 'gate' }))
+    assert.equal(reviewerCalls.length, 0)
+    assert.equal(workerCalls.length, 1)
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.deepEqual(result.review, { mode: 'gate', findings: [] })
+    assertTaskReturn(result, 'gate')
+  },
+
+  async 'the worker runs as build-worker on the task model with every input in its prompt — catches a worker on the wrong model or blind to its write set'() {
+    const { workerCalls } = await run(baseArgs({ model: 'opus', review: 'gate' }))
+    const [{ prompt, opts }] = workerCalls
+    assert.equal(opts.agentType, WORKER)
+    assert.equal(opts.model, 'opus')
+    const a = baseArgs()
+    for (const needle of [a.task, a.plan, a.worktree, a.branch, a.contextPack, ...a.writeSet, ...a.tests, '--tier fast']) {
+      assert.ok(prompt.includes(needle), `worker prompt lacks ${needle}`)
+    }
+  },
+
+  async 'the worker schema requires exactly TaskReturn keys — catches a schema drifting from the type check-return decodes'() {
+    const { workerCalls } = await run(baseArgs({ review: 'gate' }))
+    const { schema } = workerCalls[0].opts
+    assert.equal(schema.type, 'object')
+    assert.deepEqual([...schema.required].sort(), [...TASK_RETURN_KEYS].sort())
+    assert.deepEqual(Object.keys(schema.properties).sort(), [...TASK_RETURN_KEYS].sort())
+    assert.equal(schema.additionalProperties, false)
+  },
+
+  async 'full review runs verifier and test-quality in parallel on the task commits — catches a serial or missing reviewer'() {
+    const { result, reviewerCalls, maxReviewersInFlight, workerCalls } = await run(baseArgs())
+    assert.deepEqual(reviewerCalls.map(c => REVIEWERS[c.opts.agentType]).sort(), ['test-quality', 'verifier'])
+    assert.equal(maxReviewersInFlight, 2)
+    for (const { prompt } of reviewerCalls) {
+      assert.ok(prompt.includes('3f2a91c'), 'reviewer prompt lacks the commit')
+      assert.ok(prompt.includes(baseArgs().worktree), 'reviewer prompt lacks the worktree')
+    }
+    assert.equal(workerCalls.length, 1)
+    assert.equal(result.outcome, 'ready-to-merge')
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'a red gate after the fix pass returns gate-red with exactly 2 worker calls — catches a second fix pass'() {
+    const gateMode = await run(baseArgs({ review: 'gate' }), { workers: [red(), red({ commits: ['3f2a91c', '77aa001'] })] })
+    assert.equal(gateMode.workerCalls.length, 2)
+    assert.equal(gateMode.result.outcome, 'gate-red')
+    assertTaskReturn(gateMode.result, 'gate')
+
+    const fullMode = await run(baseArgs(), {
+      workers: [workerReturn(), red()],
+      reviews: { verifier: [{ findings: [finding()] }] },
+    })
+    assert.equal(fullMode.workerCalls.length, 2)
+    assert.equal(fullMode.reviewerCalls.length, 2, 'no review of a red fix pass')
+    assert.equal(fullMode.result.outcome, 'gate-red')
+    assertTaskReturn(fullMode.result, 'full')
+  },
+
+  async 'the fix pass is a fresh worker handed the red gate run — catches a fixer that never learns why it runs'() {
+    const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), {
+      workers: [red(), workerReturn({ commits: ['77aa001'], gate: { tier: 'fast', verdict: 'GREEN', runId: 'g2' } })],
+    })
+    assert.equal(workerCalls.length, 2)
+    assert.ok(workerCalls[1].prompt.includes('20260926T150000Z-0000beef'), 'fix prompt lacks the red run id')
+    assert.ok(!workerCalls[0].prompt.includes('20260926T150000Z-0000beef'))
+    assert.equal(workerCalls[1].opts.agentType, WORKER)
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.deepEqual(result.commits, ['3f2a91c', '77aa001'], 'both attempts land on the branch')
+    assert.equal(result.gate.runId, 'g2')
+  },
+
+  async 'a blocking review finding gets one fix pass and a re-review — catches review findings never reaching a worker'() {
+    const blocking = finding()
+    const { workerCalls, reviewerCalls, result } = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { verifier: [{ findings: [blocking] }, { findings: [] }] },
+    })
+    assert.equal(workerCalls.length, 2)
+    assert.ok(workerCalls[1].prompt.includes(blocking.failure_scenario), 'fix prompt lacks the finding')
+    assert.equal(reviewerCalls.length, 4)
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.deepEqual(result.review.findings, [])
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'blocking findings after the fix pass return review-blocked and no third worker — catches an unbounded fix loop'() {
+    const { workerCalls, result } = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { 'test-quality': [{ findings: [finding()] }, { findings: [finding({ severity: 'blocker' })] }] },
+    })
+    assert.equal(workerCalls.length, 2)
+    assert.equal(result.outcome, 'review-blocked')
+    assert.equal(result.review.findings.length, 1)
+    assert.equal(result.review.findings[0].severity, 'blocker')
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'minor and nit findings pass without a fix pass — catches taste blocking a merge'() {
+    const { workerCalls, result } = await run(baseArgs(), {
+      reviews: { verifier: [{ findings: [finding({ severity: 'minor' }), finding({ severity: 'nit', line: 7 })] }] },
+    })
+    assert.equal(workerCalls.length, 1)
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.equal(result.review.findings.length, 2)
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'design-conflict returns at once with no reviewer and no fix — catches a conflict hidden behind a fix attempt'() {
+    const { workerCalls, reviewerCalls, result } = await run(baseArgs(), {
+      workers: [workerReturn({ outcome: 'design-conflict', commits: [], gate: null, designConflict: conflict })],
+    })
+    assert.equal(workerCalls.length, 1)
+    assert.equal(reviewerCalls.length, 0)
+    assert.equal(result.outcome, 'design-conflict')
+    assert.deepEqual(result.designConflict, conflict)
+    assert.equal(result.gate, null)
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'a failed reviewer blocks the task without a fix pass — catches an unreviewed task returned as ready-to-merge'() {
+    const { workerCalls, result, logs } = await run(baseArgs(), { reviews: { verifier: [null] } })
+    assert.equal(workerCalls.length, 1)
+    assert.equal(result.outcome, 'review-blocked')
+    assert.match(result.notes, /verifier/)
+    assert.ok(logs.some(l => /verifier/.test(l)))
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'a malformed reviewer finding counts as a failed reviewer — catches agent output check-return cannot decode'() {
+    const { result } = await run(baseArgs(), {
+      reviews: { 'test-quality': [{ findings: [finding({ severity: 'critical' })] }] },
+    })
+    assert.equal(result.outcome, 'review-blocked')
+    assert.deepEqual(result.review.findings, [])
+    assertTaskReturn(result, 'full')
+  },
+
+  async 'a dead or off-contract first worker gets the fix pass; a second one throws — catches a fabricated return'() {
+    const revived = await run(baseArgs({ review: 'gate' }), { workers: [null, workerReturn()] })
+    assert.equal(revived.workerCalls.length, 2)
+    assert.equal(revived.result.outcome, 'ready-to-merge')
+    await assert.rejects(run(baseArgs({ review: 'gate' }), { workers: [null, null] }), /build-worker/)
+    await assert.rejects(
+      run(baseArgs({ review: 'gate' }), { workers: [workerReturn({ task: 'other' }), workerReturn({ outcome: 'review-blocked' })] }),
+      /build-worker/,
+    )
+  },
+
+  async 'review is never null in any path — catches build-return.review-missing'() {
+    const scenarios = [
+      [baseArgs({ review: 'gate' }), {}],
+      [baseArgs({ review: 'gate' }), { workers: [red(), red()] }],
+      [baseArgs({ review: 'gate' }), { workers: [workerReturn({ outcome: 'design-conflict', gate: null, designConflict: conflict })] }],
+      [baseArgs(), {}],
+      [baseArgs(), { workers: [red(), red()] }],
+      [baseArgs(), { workers: [red(), workerReturn({ outcome: 'design-conflict', gate: null, designConflict: conflict })] }],
+      [baseArgs(), { workers: [workerReturn(), workerReturn()], reviews: { verifier: [{ findings: [finding()] }, { findings: [finding()] }] } }],
+      [baseArgs(), { reviews: { verifier: [null] } }],
+    ]
+    for (const [args, behave] of scenarios) {
+      const { result } = await run(args, behave)
+      assertTaskReturn(result, args.review)
+    }
+  },
+
+  async 'reviewers narrows the review panel — catches the reviewers arg being ignored'() {
+    const { reviewerCalls } = await run(baseArgs({ reviewers: ['test-quality'] }))
+    assert.deepEqual(reviewerCalls.map(c => REVIEWERS[c.opts.agentType]), ['test-quality'])
+  },
+
+  async 'invalid args fail before any agent runs — catches a worker launched into the wrong branch or mode'() {
+    const cases = [
+      undefined,
+      baseArgs({ budget: 3 }),
+      baseArgs({ review: 'light' }),
+      baseArgs({ model: 'haiku' }),
+      baseArgs({ taskGate: 'slow' }),
+      baseArgs({ branch: 'main' }),
+      baseArgs({ worktree: 'relative/path' }),
+      baseArgs({ writeSet: [] }),
+      baseArgs({ reviewers: ['architecture'] }),
+      baseArgs({ reviewers: [] }),
+      baseArgs({ review: 'gate', reviewers: ['verifier'] }),
+    ]
+    for (const args of cases) {
+      const calls = []
+      await assert.rejects(
+        script(args, async (p, o) => calls.push(o), () => {}),
+        /build-task/,
+        JSON.stringify(args),
+      )
+      assert.equal(calls.length, 0)
+    }
+  },
+}
+
+let failed = 0
+for (const [name, test] of Object.entries(tests)) {
+  try {
+    await test()
+    console.log(`ok   ${name}`)
+  } catch (error) {
+    failed++
+    console.log(`FAIL ${name}\n     ${error.message.split('\n').join('\n     ')}`)
+  }
+}
+if (failed) {
+  console.log(`${failed} failed`)
+  process.exit(1)
+}

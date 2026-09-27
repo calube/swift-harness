@@ -213,7 +213,8 @@ public struct BuildRunStore: Sendable {
     return BuildEventJSON.decode(data)
   }
 
-  /// Where `main` should be: the newest merge's post commit, or `nil` before the first merge.
+  /// Where `main` should be: the newest merge's post commit, or the newest undo's `toCommit` when
+  /// the undo came later; `nil` before the first merge.
   /// - Throws: ``BuildRunStoreError/damagedLog(_:)`` when any line is torn or undecodable, since
   ///   the lost line could be a later merge.
   public func lastMergePostCommit() throws(BuildRunStoreError) -> String? {

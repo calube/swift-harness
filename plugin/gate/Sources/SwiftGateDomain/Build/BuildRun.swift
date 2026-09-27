@@ -138,6 +138,7 @@ extension BuildPreset: Codable {
 public enum BuildEvent: Sendable, Equatable {
   case transition(Transition)
   case merge(Merge)
+  case undo(Undo)
 
   public struct Transition: Sendable, Equatable {
     public let task: String
@@ -169,14 +170,31 @@ public enum BuildEvent: Sendable, Equatable {
     }
   }
 
+  /// `build merge --undo` moved `main` from `fromCommit`, the undone merge's post commit, back
+  /// to `toCommit`, its pre commit.
+  public struct Undo: Sendable, Equatable {
+    public let task: String
+    public let fromCommit: String
+    public let toCommit: String
+    public let at: Date
+
+    public init(task: String, fromCommit: String, toCommit: String, at: Date) {
+      self.task = task
+      self.fromCommit = fromCommit
+      self.toCommit = toCommit
+      self.at = at
+    }
+  }
+
   public enum Kind: String, Sendable, Codable, CaseIterable {
-    case transition, merge
+    case transition, merge, undo
   }
 
   public var kind: Kind {
     switch self {
     case .transition: .transition
     case .merge: .merge
+    case .undo: .undo
     }
   }
 
@@ -184,13 +202,14 @@ public enum BuildEvent: Sendable, Equatable {
     switch self {
     case .transition(let transition): transition.task
     case .merge(let merge): merge.task
+    case .undo(let undo): undo.task
     }
   }
 }
 
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
-    case kind, task, from, to, preCommit, postCommit, at
+    case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at
   }
 
   public init(from decoder: any Decoder) throws {
@@ -208,6 +227,11 @@ extension BuildEvent: Codable {
         Merge(
           task: task, preCommit: try container.decode(String.self, forKey: .preCommit),
           postCommit: try container.decode(String.self, forKey: .postCommit), at: at))
+    case .undo:
+      self = .undo(
+        Undo(
+          task: task, fromCommit: try container.decode(String.self, forKey: .fromCommit),
+          toCommit: try container.decode(String.self, forKey: .toCommit), at: at))
     }
   }
 
@@ -225,6 +249,11 @@ extension BuildEvent: Codable {
       try container.encode(merge.preCommit, forKey: .preCommit)
       try container.encode(merge.postCommit, forKey: .postCommit)
       try container.encode(merge.at, forKey: .at)
+    case .undo(let undo):
+      try container.encode(undo.task, forKey: .task)
+      try container.encode(undo.fromCommit, forKey: .fromCommit)
+      try container.encode(undo.toCommit, forKey: .toCommit)
+      try container.encode(undo.at, forKey: .at)
     }
   }
 }
@@ -247,11 +276,15 @@ public struct BuildEventLog: Sendable, Equatable {
     self.damage = damage
   }
 
-  /// The post commit of the newest merge, which is where `main` should be now; `nil` before the
-  /// run's first merge.
+  /// Where `main` should be now: the newest merge's post commit, or the newest undo's
+  /// `toCommit` when the undo came later; `nil` before the run's first merge.
   public var lastMergePostCommit: String? {
     for event in events.reversed() {
-      if case .merge(let merge) = event { return merge.postCommit }
+      switch event {
+      case .merge(let merge): return merge.postCommit
+      case .undo(let undo): return undo.toCommit
+      case .transition: continue
+      }
     }
     return nil
   }

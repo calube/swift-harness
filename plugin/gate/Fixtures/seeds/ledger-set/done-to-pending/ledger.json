@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "shipped",
+      "deps": [],
+      "writeSet": ["Sources/Shipped/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-shipped"],
+      "estLines": 80,
+      "status": "done",
+      "worktree": "../shipped",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [["shipped"]]
+}

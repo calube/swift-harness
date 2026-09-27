@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "resume": "self-test",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "queued",
+      "deps": [],
+      "writeSet": ["Sources/Queued/"],
+      "gate": "fast",
+      "tests": [],
+      "covers": ["req-queued"],
+      "estLines": 80,
+      "status": "pending",
+      "worktree": "../queued",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [["queued"]]
+}

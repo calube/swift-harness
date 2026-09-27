@@ -15,6 +15,8 @@ private struct ReturnScenario {
   static let finishedAt = Date(timeIntervalSince1970: 1_790_000_000)
 
   let base: URL
+  let main: URL
+  let runner: LiveProcessRunner
   let git: LiveGit
   let worktree: URL
   let taskCommit: String
@@ -36,8 +38,10 @@ private struct ReturnScenario {
     base = FileManager.default.temporaryDirectory
       .appending(path: "check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
     let main = base.appending(path: "app", directoryHint: .isDirectory)
+    self.main = main
     try FileManager.default.createDirectory(at: main, withIntermediateDirectories: true)
     let runner = LiveProcessRunner(baseEnvironment: Self.environment(home: base))
+    self.runner = runner
     @discardableResult
     func run(_ arguments: [String], in directory: URL) async throws -> String {
       let output = try await runner.run(
@@ -84,13 +88,15 @@ private struct ReturnScenario {
   }
 
   /// Records a gate run in the task worktree's run store through the writer `check` uses.
-  func recordGateRun(tier: CheckTier, verdict: Verdict, suffix: UInt32) throws -> String {
+  func recordGateRun(
+    tier: CheckTier, verdict: Verdict, suffix: UInt32, in checkout: URL? = nil
+  ) throws -> String {
     let runID = RunID.make(startedAt: Self.finishedAt, suffix: suffix)
     let report = try RunReport(
       runID: runID, durationMilliseconds: 1200,
       tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1200, testCounts: nil)],
       findings: [])
-    try RunStore(worktreeRoot: worktree).record(
+    try RunStore(worktreeRoot: checkout ?? worktree).record(
       report, finishedAt: Self.finishedAt, command: "check \(tier.rawValue)")
     return runID
   }
@@ -111,12 +117,35 @@ private struct ReturnScenario {
     return file.path
   }
 
-  func check(_ taskReturn: TaskReturn) async throws -> BuildCheckReturnReport {
-    await check(file: try write(try TaskReturnJSON.encode(taskReturn)))
+  func check(_ taskReturn: TaskReturn, fix: Bool = false) async throws -> BuildCheckReturnReport {
+    await check(file: try write(try TaskReturnJSON.encode(taskReturn)), fix: fix)
   }
 
-  func check(file: String) async -> BuildCheckReturnReport {
-    await BuildCheckReturnRun.run(file: file, plan: Self.plan, git: git)
+  func check(file: String, fix: Bool = false) async -> BuildCheckReturnReport {
+    await BuildCheckReturnRun.run(file: file, plan: Self.plan, fix: fix, git: git)
+  }
+
+  /// Cuts the fix worktree `build merge` makes, on `<plan>/fix-<task>` from `main`, and commits
+  /// the fixer's work there.
+  /// - Returns: the fix worktree and the fixer's commit.
+  func cutFixWorktree() async throws -> (worktree: URL, commit: String) {
+    let names = try TaskWorktree(
+      commonDirectory: try await git.commonDirectory(), plan: Self.plan, task: "fix-\(Self.task)")
+    let fix = URL(filePath: names.path, directoryHint: .isDirectory)
+    for (arguments, directory) in [
+      (["worktree", "add", "-q", "-b", names.branch, names.path, "main"], main),
+      (["commit", "-q", "--allow-empty", "-m", "fix conflict"], fix),
+    ] {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: directory.path,
+          timeout: .seconds(60)))
+      try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    }
+    return (
+      fix,
+      try #require(try await LiveGit(runner: runner, repositoryRoot: fix.path).revision("HEAD"))
+    )
   }
 
   func remove() { try? FileManager.default.removeItem(at: base) }
@@ -124,6 +153,44 @@ private struct ReturnScenario {
 
 @Suite("build check-return")
 struct BuildCheckReturnTests {
+  @Test(
+    "a fixer's commit on the fix branch with a GREEN merge-gate run in the fix worktree passes with --fix and is off-branch without it — catches a fixer's honest return refused, or checked against the task branch"
+  )
+  func fixReturnChecksTheFixBranch() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let (fix, commit) = try await scenario.cutFixWorktree()
+    let runID = try scenario.recordGateRun(tier: .ready, verdict: .green, suffix: 2, in: fix)
+    let fixReturn = scenario.returnValue(
+      commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: runID))
+
+    let withFix = try await scenario.check(fixReturn, fix: true)
+    let withoutFix = try await scenario.check(fixReturn)
+
+    #expect(withFix.findings == [])
+    #expect(withFix.verdict == .green)
+    #expect(withoutFix.findings.map(\.rule).contains(.commitOffBranch))
+    #expect(withoutFix.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a fix return whose GREEN gate is below the preset's merge gate is a below-task-gate finding — catches a fixer passing the task gate when the merge gate decides"
+  )
+  func fixReturnMeetsTheMergeGate() async throws {
+    let scenario = try await ReturnScenario(ledgerGate: .push, presetGate: .tier(.push))
+    defer { scenario.remove() }
+    let (fix, commit) = try await scenario.cutFixWorktree()
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2, in: fix)
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: .init(tier: .push, verdict: .green, runID: runID)),
+      fix: true)
+
+    #expect(report.findings.map(\.rule) == [.gateBelowTaskGate])
+    #expect(report.verdict.exitCode == 1)
+  }
+
   @Test(
     "a return whose commit is on the task branch and whose GREEN push run is in the worktree's run store passes with exit 0 — catches the check refusing an honest return"
   )

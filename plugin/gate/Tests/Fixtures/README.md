@@ -52,6 +52,7 @@ file is one where `swift test` wrote none.
 | `crash` | `ProbeTests\.Crash` | an index-out-of-range trap in each framework |
 | `zero` | `^EmptyTests\.` | a target with no tests |
 | `build-error` | `ProbeTests\.Pass` | a copy of the package (no build output) with a type error in `Probe.swift` |
+| `macro-compile-error` | `ProbeTests\.Pass` | a copy with a `#expect(try …)` call added to `PassTests.swift` inside a non-throwing test: no report, a macro expansion diagnostic with no file:line of its own |
 | `reverted` | `ProbeTests\.Pass` | a copy with `double` computing `value * 3`: the passing tests fail on their assertions, as `prove` expects with a source change reverted |
 | `compile-only` | `ProbeTests\.Pass` | a copy without the public `double` the tests call: no report, compile errors located in the test files |
 | `stale-module-cache` | `ProbeTests\.Pass` | a copy including `.build/`, so the module cache path is stale (recorded as `/MOVED/XUnitProbe`) |
@@ -74,7 +75,10 @@ Observed behavior (Swift 6.2, `--parallel`) the evidence rules rely on:
 - A target with no tests yields reports with `tests="0"`, exit status 0, and the stderr warning
   `No matching test cases were run`.
 - A compile error writes no report; stderr has `<abs path>:<line>:<col>: error: <text>`. Toolchain
-  or cache failures print `<unknown>:0: error: …` instead.
+  or cache failures print `<unknown>:0: error: …` instead. A `#expect`/`#require` macro that fails
+  to expand (for example `try` in a non-throwing test) prints `macro expansion #<name>:<line>:<col>:
+  error: <text>` instead of a file location, followed by `` `- <abs path>:<line>:<col>: note:
+  expanded code originates here`` naming the real test file.
 - Toggling `--enable-code-coverage` rebuilds the package (about 20s for the SampleApp's TCA
   package), so every T1 run enables it.
 
