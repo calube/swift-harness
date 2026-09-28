@@ -250,7 +250,7 @@ public enum SurfaceBodyScan {
 /// An existing `Package.swift` read against its parent token by token, where only the lists
 /// labelled `dependencies`, `products` and `targets` may gain elements (fast modes §3.2). Trivia
 /// and the commas between list elements are ignored; the tools-version comment is not.
-private enum ManifestDiff {
+enum ManifestDiff {
   struct Change {
     let excerpt: String
     let node: Syntax

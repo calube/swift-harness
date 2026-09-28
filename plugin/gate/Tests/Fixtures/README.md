@@ -545,3 +545,27 @@ The `rejected-manifest-*` near misses remove a dependency, change an element's v
 flag to `swiftSettings`, change a platform, change the tools version and add a statement. The
 base tree's `Packages/AppFeature/Package.swift` is the manifest they edit. The same capture
 command records them.
+
+## Sprint slice manifests (`sprint slice`)
+
+git 2.50.1 (Apple Git-155). The 3 `Package.swift` files a sprint rehearsal's surface (`b12ac55`) and
+its slice 4 (`1e3285e`, which added the `ProfileClientLive` target and product) committed, from the
+rehearsal checkout's `sprint/edit-your-profile` branch. `sprint-manifests/<side>/<path>.txt` is
+`git show <rev>:<path>`; the `.txt` suffix keeps Swift tools off them.
+
+```sh
+R=<rehearsal checkout>
+cd plugin/gate/Tests/Fixtures
+for side in surface:b12ac55 slice:1e3285e; do
+  name=${side%%:*}; rev=${side##*:}
+  for p in Packages/AppFeature/Package.swift Packages/ProfileClient/Package.swift \
+    Packages/ProfileFeature/Package.swift; do
+    mkdir -p sprint-manifests/$name/$(dirname $p)
+    git -C $R show $rev:$p > sprint-manifests/$name/$p.txt
+  done
+done
+```
+
+Between the sides, `ProfileClient` gains the `ProfileClientLive` target and product and 2 test
+targets, `ProfileFeature` gains a test target and `AppFeature` gains a local package dependency and
+its product: `sprint slice` refuses only `ProfileClient`'s change.

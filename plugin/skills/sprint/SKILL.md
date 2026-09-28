@@ -48,6 +48,7 @@ machine wins.
 | `sprint.gate-red`, `sprint.gate-blocked` | fix the gate's findings, commit, run the gate again at HEAD, pass its new id |
 | `sprint.gate-stale` | a commit landed after the gate ran: run the gate again at HEAD, pass its new id |
 | `sprint.gate-base` | run `check --tier push --base <surface>` at HEAD, pass its new id |
+| `sprint.target-outside-surface` | halt: a slice declared a target or product the surface lacks, and the fix the message names rewrites the recorded surface |
 | `sprint.gate-tier`, `sprint.gate-not-ready`, `sprint.gate-proof-base` | run the gate with the tier and flags this skill gives for the step, pass its new id |
 | `sprint.surface-behaviour` | turn each body it names back into a stub, `git commit --amend`, pass the new sha |
 | `sprint.wrong-branch` | `git switch` to the branch the message names |

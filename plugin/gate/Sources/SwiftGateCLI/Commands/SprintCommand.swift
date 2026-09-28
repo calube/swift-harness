@@ -27,6 +27,7 @@ enum SprintRefusal: String, CaseIterable, Sendable {
   case gateStale = "sprint.gate-stale"
   case gateProofBase = "sprint.gate-proof-base"
   case gateBase = "sprint.gate-base"
+  case targetOutsideSurface = "sprint.target-outside-surface"
   case mainMoved = "sprint.main-moved"
   case notFastForward = "sprint.not-fast-forward"
   case mainCheckedOut = "sprint.main-checked-out"
@@ -197,6 +198,7 @@ enum SprintCommandRun {
       let head = try await branchHead(current, context)
       try requireGreen(record, at: head, current)
       try requireSurfaceBase(record, current)
+      try await requireDeclaredTargets(number, at: head, current, context)
       let run = try await apply(.slice(number, gateRun: gate), context)
       return (run, "slice \(number) passed at \(head) with \(tier.rawValue) run \(gate)")
     }
@@ -414,6 +416,36 @@ enum SprintCommandRun {
         + (record.base ?? "no recorded base")
         + ", not the sprint's surface \(surface); run `swiftgate check --tier push --base "
         + "\(surface)` at HEAD and pass its id")
+  }
+
+  /// A slice declares no target or product the surface lacks, so the `ready` gate can prove every
+  /// test at the surface.
+  private static func requireDeclaredTargets(
+    _ number: Int, at head: String, _ run: SprintRun, _ context: SprintContext
+  ) async throws(Refused) {
+    guard let surface = run.surfaceCommit else {
+      throw Refused(.outOfOrder, "no surface is recorded; run `\(nextCommand(.surface))` first")
+    }
+    let paths = try await git("listing files changed since the surface") { () throws(GitError) in
+      try await context.git.changedFiles(from: surface, to: head)
+    }.filter(ManifestDeclarationsReader.isManifest)
+    guard !paths.isEmpty else { return }
+    let before = try await git("reading manifests at the surface") { () throws(GitError) in
+      try await context.git.contents(of: paths, at: surface)
+    }
+    let after = try await git("reading manifests at \(head)") { () throws(GitError) in
+      try await context.git.contents(of: paths, at: head)
+    }
+    let findings = SliceManifestCheck.findings(
+      paths.map { path in
+        SliceManifest(
+          path: path, atSurface: before[path].map(ManifestDeclarationsReader.read),
+          atHead: after[path].map(ManifestDeclarationsReader.read))
+      })
+    guard !findings.isEmpty else { return }
+    throw Refused(
+      .targetOutsideSurface,
+      SliceManifestCheck.message(findings, slice: number, surface: surface, head: head))
   }
 
   private static func requireGreenMain(_ base: String, _ context: SprintContext) throws(Refused) {
@@ -691,7 +723,8 @@ struct SprintSliceCommand: AsyncParsableCommand {
     discussion:
       "Reads the run from this checkout's run history: it must be a GREEN `check --tier push` or "
       + "`ready` run whose HEAD was the sprint branch's HEAD and whose `--base` was the sprint's "
-      + "surface.")
+      + "surface. Refuses a slice whose `Package.swift` files declare a target or product the "
+      + "surface doesn't.")
 
   @Argument(help: "The slice's number on the spec page, from 1.")
   var number: Int
