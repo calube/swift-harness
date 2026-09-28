@@ -41,7 +41,7 @@ results.
 | Decision | Proposed | Section |
 |---|---|---|
 | Surface commits are checked, not trusted | `swiftgate surface-check` fails any added body that isn't a stub | §3 |
-| One proof base per build | every test in a build proves at the surface commit | §3.3 |
+| One proof base per build | every test in a build proves at the surface commit, or at the extra stub commit that added its missing API | §3.3 |
 | Sprint is its own skill | `/swift-harness:sprint <spec>`; the main session builds; fast tier inner loop | §4 |
 | Ship may skip design | `design_tier = "none"` in a preset; a 1-page spec plus 1 confirm replaces design and plan | §5, [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md) |
 | The quality floor is fixed | test-first, escape-hatch reasons, green merge gates and a final `ready` gate in every mode | §6 |
@@ -85,6 +85,11 @@ the base.
 The build records the surface commit on the run (`surfaceCommit`, which already exists per task) and passes it to
 every `prove` as `--proof-base`. A worker no longer rewrites finished code into stubs to make a base: trial run 2's
 list worker spent 8 commits doing that.
+
+A sprint slice can find that its test needs an API the surface lacks (orchestrator decision 2026-09-28, pending the
+user's confirmation). The recorded surface stays as it is: the slice commits the missing API alone as an extra stub
+that passes `surface-check`. The sprint's final `ready` gate then proves at the surface and at every extra stub,
+oldest first, with 1 `--proof-base` each.
 
 ## 4. Sprint
 

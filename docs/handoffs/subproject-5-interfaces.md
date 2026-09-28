@@ -301,3 +301,49 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   tests proven); push GREEN on merged main (20260928T033942Z-663c5f3d). Mutate over this wave and hardening wave 1
   together is RED (20260928T034623Z-e2a26931, 52 min at `--jobs 2`) on 2 survivors: `SprintStore.swift`'s
   `unlink(staging)` and a `>` boundary in `SurfaceBodyScan.swift`. The next wave fixes both.
+
+## Fast-modes waves 2 and 3
+
+- **`swiftgate sprint`.** `start <slug> --spec-page <spec-page> --slices <slices>` creates `sprint/<slug>` at `main`'s
+  HEAD without switching to it; it needs a GREEN `check --tier push` (or above) at that HEAD in this checkout's run
+  history, an existing spec page and a new branch. `surface <commit>` runs `surface-check` on the commit and refuses
+  on any finding but `surface-check.summary`; the surface must be the branch's first commit, whose parent is the
+  sprint's `baseCommit`. `slice <number> --gate <gate>` needs a GREEN `push` or `ready` run at the branch HEAD.
+  `finish --gate <gate>` needs a GREEN `ready` run at the branch HEAD whose proof bases name the surface (full sha or
+  an abbreviation of 7 or more hex digits). `status` prints the recorded run. Every command takes `--json` and acts
+  only from a checkout on the sprint's branch, except `start` and `status`.
+- **`finish` only fast-forwards `main`.** It moves `main` from the sprint's `baseCommit` to the branch HEAD, never
+  merges or rebases, and refuses while any worktree has `main` checked out. `main` already at the branch HEAD counts
+  as a finish that moved it and stopped before recording.
+- **Exit codes.** 0 when the command did its step; 1 on a refusal (RED); 2 when the command can't read the sprint
+  state, run history or git (BLOCKED).
+- **`--json` keys.** `command`, `verdict` (`GREEN` | `RED` | `BLOCKED`), `rule` (absent when not refused), `message`,
+  `next` (`start` | `surface` | `slice <n>` | `finish`), `nextCommand`, and `sprint` (absent with no recorded run):
+  `slug`, `specPage`, `branch`, `baseCommit`, `surfaceCommit`, `step` (`started` | `surfaced` | `slicing` |
+  `finished`), `slicesPassed`, `slices[{number, status, gateRun}]`, `finalGateRun`.
+- **Refusal ids (`SprintRefusal`).** Exit 1: `sprint.out-of-order`, `sprint.invalid-slug`,
+  `sprint.invalid-spec-page`, `sprint.invalid-commit`, `sprint.invalid-gate-run`, `sprint.invalid-slice-count`,
+  `sprint.spec-page-missing`, `sprint.main-not-green`, `sprint.branch-exists`, `sprint.wrong-branch`,
+  `sprint.surface-off-branch`, `sprint.surface-behaviour`, `sprint.gate-unknown`, `sprint.gate-tier`,
+  `sprint.gate-not-ready`, `sprint.gate-red`, `sprint.gate-blocked`, `sprint.gate-stale`, `sprint.gate-proof-base`,
+  `sprint.main-moved`, `sprint.not-fast-forward`, `sprint.main-checked-out`. Exit 2: `sprint.surface-unreadable`,
+  `sprint.history-unreadable`, `sprint.state-malformed`, `sprint.state-locked`, `sprint.state-io`,
+  `sprint.common-directory`, `sprint.git`. All 29 are in the rule id index.
+- **Staging leftovers.** `SprintStoreError.stagingLeft(operation:path:reason:staging:removal:)` is a failed write
+  that left its staging file beside `sprint.json` behind, unable to delete it; `leftoverStaging` names it. It reports as
+  `sprint.state-io`, naming the file to delete. `sprint.json` is unchanged in every `SprintStoreError` case.
+- **`surface-check` accepts 3 more stubs** (orchestrator decision 2026-09-27, pending the user's confirmation). New
+  `SurfaceStubForm` cases. `throwsError`: only a `throw` of a payload-free case, an initializer call or an
+  empty-payload case. `emptyPayloadCase`: an enum case the parent or the same file declares, built with each
+  associated value an empty default or a parameter passed through (`.exited(0)`, `.loaded(items)`).
+  `returnsUnchanged`: a parameter or a property of `self` returned as is (`value`, `self.limit`).
+  `SurfaceParentIndex` gains `cases`.
+- **`/swift-harness:sprint <spec-file>`.** `plugin/skills/sprint/SKILL.md`. Preflight is `## 1. Preflight`. The spec
+  page is `<plans>/sprints/<slug>.md`, with `<plans>` the plan-state root under the git common dir. An API a slice
+  finds missing from the surface goes in its own stub commit, checked with `swiftgate surface-check <sha>`; the
+  skill never amends the recorded surface. The final `ready` gate passes `--proof-base <surface>` and then
+  `--proof-base <sha>` for each extra stub, oldest first. Verified: prove 2 of 2 and `finish` moved `main`.
+- **Gates.** Wave 2 integration push + prove GREEN (run 20260928T053305Z-0ba4b650, 28 of 28 proven). Push on merged
+  main RED (20260928T053831Z-66eb5be1) only on the `RepositoryScriptTests.shim` load flake; that test passed when
+  re-run alone. Wave 3 integration GREEN (20260928T060653Z-b0d8b1c8); push on merged main GREEN
+  (20260928T061215Z-fd24c4d0). Mutate: running.

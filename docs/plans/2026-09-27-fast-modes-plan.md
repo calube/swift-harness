@@ -1,7 +1,7 @@
 # Fast modes: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Wave 1 merged 2026-09-28 with speed wave 3 (push and prove GREEN; mutate RED on 2 survivors, fixed in the next wave; interfaces note docs/handoffs/subproject-5-interfaces.md). Wave 2 (`sprint-commands`, `surface-check-accepts-stub-shapes`) is running.
+Status: IN PROGRESS. Wave 1 merged 2026-09-28 with speed wave 3 (push and prove GREEN; mutate RED on 2 survivors, fixed in the next wave; interfaces note docs/handoffs/subproject-5-interfaces.md). Waves 2 and 3 merged 2026-09-28 (interfaces note "Fast-modes waves 2 and 3"; mutate running). Wave 4 (`sprint-rehearsals`) is attended and waits for the user.
 Spec: docs/designs/2026-09-27-fast-modes-design.md (approved 2026-09-27). Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md).
 Scope: surface commits (`swiftgate surface-check`) and sprint. Design-free ship waits for sprint's rehearsals and gets its own plan tasks then.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec by §.
