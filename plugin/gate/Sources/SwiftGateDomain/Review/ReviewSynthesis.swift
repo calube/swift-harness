@@ -256,9 +256,11 @@ public enum ReviewSynthesis {
     "missing-effect-cancellation": "effect-lifetime",
   ]
 
+  /// `telemetry` is the path of the run's telemetry file, written before synthesis.
   public static func synthesize(
     _ inputs: [FocusReview],
-    baseline: ReviewBaseline = .unavailable(reason: "no numbered diff was given")
+    baseline: ReviewBaseline = .unavailable(reason: "no numbered diff was given"),
+    telemetry: String
   ) throws(ReviewContractViolation) -> ReviewReport {
     var byFocus: [ReviewFocus: FocusReview] = [:]
     for input in inputs {
