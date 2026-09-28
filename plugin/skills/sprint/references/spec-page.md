@@ -48,6 +48,7 @@ Spec: <spec-file>
 - **Slices.** Each slice has 1 acceptance test, no more, and each test observes behaviour a user or
   caller can see. Order slices so each builds on the ones before it. The slice count here is the
   `--slices` value.
+- **Tier.** A slice's test is T1. For T2 or T3, add `Tier: T2.` or `Tier: T3.` just before its `Spec:`.
 - **Spec.** Quote the spec file's own acceptance line, word for word, when the slice's test
   checks it. Write `none` when the spec file lists no such line. A paraphrase counts as `none`.
 - **Confirm.** When no slice says `Spec: none`, the page goes on without asking. Otherwise the

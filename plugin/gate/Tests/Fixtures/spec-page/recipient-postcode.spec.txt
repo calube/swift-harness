@@ -1,0 +1,30 @@
+# Feature: Save a recipient and postcode
+
+The app builds, launches, and its first screen shows how many posts it loaded. Keep the existing
+tests passing.
+
+## What to build
+
+A shipping address form on the first screen, under the posts count. Nothing here talks to the
+network.
+
+- **Recipient**: required. Trim spaces at both ends, then it must be 2 to 50 characters.
+- **Postcode**: required. Exactly 5 digits, such as `90210`.
+- Show each field's error under the field as soon as its value is invalid, and only then.
+- **Save** is disabled while any field is invalid. Saving stores the address on the device, so the
+  next launch opens with the saved values.
+- **Clear** empties every field and clears every error, without touching the saved address.
+
+Keep the storage behind a dependency so tests don't touch the disk.
+
+## Acceptance tests
+
+1. A recipient of fewer than 2 characters after trimming shows "Recipient must be 2 to 50 characters" and Save stays disabled.
+2. A postcode that is not exactly 5 digits shows "Enter a 5-digit postcode" and Save stays
+   disabled.
+3. Saving a valid address stores it, and the next launch shows the saved values.
+4. Clear empties every field and clears every error, and the saved address is unchanged.
+
+## Out of scope
+
+More than one address, address lookup, and syncing to a server.

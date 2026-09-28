@@ -1,0 +1,28 @@
+# Feature: Task status with undo
+
+The app builds, launches, and its first screen shows how many posts it loaded. Keep the existing
+tests passing.
+
+## What to build
+
+One task card on the first screen, under the posts count. The task moves through these statuses:
+
+- **To do** offers "Start".
+- **In progress** offers "Block" and "Finish".
+- **Blocked** offers "Unblock", which returns the task to In progress.
+- **Done** offers "Reopen", which returns the task to To do.
+
+Every change adds a line to a history shown newest first, such as "To do → In progress". An
+**Undo** button reverts the most recent change and removes its history line; it is disabled when
+the history is empty.
+
+## Acceptance tests
+
+1. A new task is in To do, offers only "Start", and has an empty history.
+2. From In progress, "Block" moves the task to Blocked and adds "In progress → Blocked" to the history.
+3. Only a Blocked task offers "Unblock", and a Done task offers only "Reopen".
+4. Undo reverts the most recent change and removes it from the history, and it is disabled when the history is empty.
+
+## Out of scope
+
+More than one task, due dates, and saving the task between launches.

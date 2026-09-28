@@ -1,0 +1,30 @@
+# Task status with undo
+
+Spec: ./task-status.spec.md
+
+## Goal
+On the first screen, under the posts count, a user moves one task through To do, In progress, Blocked and Done, sees each change in a newest-first history, and can undo the most recent change.
+
+## Modules
+| Module | Kind | Owns | Depends on |
+|---|---|---|---|
+| AppCore | feature | `AppFeature` task status, transitions, history and undo | LogClient |
+| AppUI | feature | `AppView` task card under the posts count | AppCore |
+
+## Surface
+- `TaskStatus`: `toDo`, `inProgress`, `blocked`, `done`; `title: String`
+- `TaskTransition`: `start`, `block`, `unblock`, `finish`, `reopen`; `title: String`
+- `TaskChange`: `from: TaskStatus`, `to: TaskStatus`, `line: String` ("To do → In progress")
+- `AppFeature.State`: `taskStatus: TaskStatus`, `taskHistory: [TaskChange]` (newest first), `availableTransitions: [TaskTransition]`, `isUndoEnabled: Bool`
+- `AppFeature.Action`: `taskTransitionTapped(TaskTransition)`, `undoTapped`
+- `AppView`: task card showing status, one button per available transition, an Undo button and the history list
+
+## Slices
+1. Add the task in To do with its offered transitions and empty history. Test: `testNewTaskIsToDoWithOnlyStartAndEmptyHistory`: a fresh `AppFeature.State` has `taskStatus == .toDo`, `availableTransitions == [.start]` and empty `taskHistory`. Spec: "A new task is in To do, offers only "Start", and has an empty history."
+2. Add transitions and history lines. Test: `testBlockFromInProgressMovesToBlockedAndRecordsHistory`: after Start then Block, `taskStatus == .blocked` and `taskHistory.first?.line == "In progress → Blocked"`. Spec: "From In progress, "Block" moves the task to Blocked and adds "In progress → Blocked" to the history."
+3. Add Unblock and Reopen with per-status offers. Test: `testOnlyBlockedOffersUnblockAndDoneOffersOnlyReopen`: across all four statuses, only Blocked includes `.unblock`, and Done's `availableTransitions == [.reopen]`. Spec: "Only a Blocked task offers "Unblock", and a Done task offers only "Reopen"."
+4. Add Undo. Test: `testUndoRevertsLatestChangeAndIsDisabledWhenHistoryEmpty`: after Start then Block, `undoTapped` returns the task to In progress and drops the Blocked line; with empty history `isUndoEnabled` is false. Spec: "Undo reverts the most recent change and removes it from the history, and it is disabled when the history is empty."
+
+## Out of scope
+- More than one task, due dates, and saving the task between launches.
+- Changes to LogClient or the posts count, beyond keeping existing tests passing.

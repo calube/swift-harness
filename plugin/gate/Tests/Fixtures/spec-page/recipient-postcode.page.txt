@@ -1,0 +1,30 @@
+# Save a recipient and postcode
+
+Spec: ./recipient-postcode.spec.md
+
+## Goal
+On the first screen, under the posts count, a user fills in a recipient and a 5-digit postcode, sees each field's error while it is invalid, and saves the address on the device so the next launch opens with it. Clear empties the form without touching the saved address.
+
+## Modules
+| Module | Kind | Owns | Depends on |
+|---|---|---|---|
+| AddressClient | client | `AddressClient` / `AddressClientLive` pair: load and save 1 `Address` on the device | none |
+| AppCore | feature | `AppFeature` form state, validation, save, clear, load on launch | AddressClient, LogClient |
+| AppUI | feature | `AppView` form under the posts count | AppCore |
+
+## Surface
+- `Address`: `recipient: String`, `postcode: String`
+- `AddressClient`: `load: () async throws -> Address?`, `save: (Address) async throws -> Void`; `DependencyValues.addressClient`
+- `AppFeature.State`: `recipient: String`, `postcode: String`, `recipientError: String?`, `postcodeError: String?`, `isSaveDisabled: Bool`
+- `AppFeature.Action`: `recipientChanged(String)`, `postcodeChanged(String)`, `saveTapped`, `clearTapped`, `addressLoaded(Address?)`
+- `AppView`: Recipient and Postcode fields, each with its error text under it, and Save and Clear buttons, under the posts count
+
+## Slices
+1. Recipient field with trim and 2 to 50 character validation. Test: `testShortRecipientShowsErrorAndDisablesSave`: sending `recipientChanged(" a ")` sets `recipientError` to "Recipient must be 2 to 50 characters" and `isSaveDisabled` stays true. Spec: "A recipient of fewer than 2 characters after trimming shows "Recipient must be 2 to 50 characters" and Save stays disabled."
+2. Postcode field with exactly-5-digits validation. Test: `testInvalidPostcodeShowsErrorAndDisablesSave`: sending `postcodeChanged("9021")` sets `postcodeError` to "Enter a 5-digit postcode" and `isSaveDisabled` stays true. Spec: "A postcode that is not exactly 5 digits shows "Enter a 5-digit postcode" and Save stays disabled."
+3. Save through `AddressClient` and load on launch. Test: `testSaveStoresAddressAndNextLaunchShowsIt`: with a valid address, `saveTapped` stores it in an in-memory `AddressClient`, and a new store sharing that client loads the same `recipient` and `postcode` on launch. Spec: "Saving a valid address stores it, and the next launch shows the saved values."
+4. Clear. Test: `testClearEmptiesFieldsAndErrorsKeepsSavedAddress`: after a save and invalid edits, `clearTapped` empties both fields, sets both errors to nil, and the client still holds the saved address. Spec: "Clear empties every field and clears every error, and the saved address is unchanged."
+
+## Out of scope
+- More than one address, address lookup, and syncing to a server.
+- Any network call from the form.
