@@ -517,6 +517,11 @@ let store = TestStore(initialState: CheckoutFeature.State()) { CheckoutFeature()
 - **Tell:** a leaf row holding the whole parent store; a body that reads many unrelated state fields.
 - **Enforced by:** review (profiling arrives in a later harness release) · **Source:** [Demystify SwiftUI performance (WWDC23)](https://developer.apple.com/videos/play/wwdc2023/10160/). Incident: none yet.
 
+**U5. Views compile on the host.**
+- **Do:** keep a UI module's views compiling on the macOS host; wrap only the iOS-only modifiers or types in `#if os(iOS)`.
+- **Tell:** a UI file whose every declaration sits inside `#if os(iOS)` or `#if canImport(UIKit)`, with nothing in a `#else`. It builds as an empty module on the host, so only the app build or T3 finds its compile errors.
+- **Enforced by:** `arch` `arch.ui-host-compiled`, reported at the `#if`. A file that can't compile on the host at all carries `// swiftgate:allow arch.ui-host-compiled — <reason>` on that `#if` line · **Source:** [Conditional compilation block](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/statements/#Conditional-Compilation-Block): the compiler skips a branch whose condition is false. Incident: none yet.
+
 ## 7. Accessibility
 
 **X1. Interactive elements carry an identifier and a label.**
@@ -621,6 +626,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `arch.undeclared-kind`, `arch.config-module-mismatch` | A1, A3 |
 | `arch.test-support-dependency` | A1 |
 | `arch.ui-framework-in-core` | A2 |
+| `arch.ui-host-compiled` | U5 |
 | `arch.core-main-actor-isolation` | C5 |
 | `arch.live-dependency`, `arch.live-depends-on-feature`, `arch.vendor-dependency` | D2, D3 |
 | `arch.dependency-client-test-value` | D4 |
@@ -637,6 +643,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `test.misplaced-t2` | playbook §4 |
 | `test.xcuitest-unlisted-flow` | playbook P11 |
 | `test.leaked-id` | design plan workflows §5.1 (id policy) |
+| `test.hang-without-deadline` | playbook P12 |
 
 ### Test evidence (`test`, `check`)
 
