@@ -5,6 +5,7 @@ Status: APPROVED 2026-09-27 by the user (§6): §3 and §4 become plan tasks in 
 Why: the ship speed research after interview trial run 2 ranked 10 harness changes and a few side findings. This doc
 maps every one of them to the design, ADR and plan task that carries it, and proposes the 2 that nothing covers yet.
 Read first: §2 (the map), then §3 and §4.
+Plan: §3 and §4 are built by [the sub-project 2 hardening plan](../plans/2026-09-27-subproject-2-hardening-plan.md).
 -->
 
 ## 1. Purpose
