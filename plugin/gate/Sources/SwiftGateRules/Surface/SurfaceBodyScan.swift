@@ -249,7 +249,7 @@ public enum SurfaceBodyScan {
 
 /// An existing `Package.swift` read against its parent token by token, where only the lists
 /// labelled `dependencies`, `products` and `targets` may gain elements (fast modes §3.2). Trivia
-/// and the commas between list elements are ignored; the tools-version comment is not.
+/// and commas are ignored; the tools-version comment is not.
 enum ManifestDiff {
   struct Change {
     let excerpt: String
@@ -314,8 +314,10 @@ enum ManifestDiff {
     {
       return compareLists(Array(oldList), Array(newList), in: newList, added: &added)
     }
-    let oldChildren = Array(old.children(viewMode: .sourceAccurate))
-    let newChildren = Array(new.children(viewMode: .sourceAccurate))
+    // A removed last argument takes the comma before it along; skipping commas names the
+    // argument instead of that comma.
+    let oldChildren = old.children(viewMode: .sourceAccurate).filter { !isComma($0) }
+    let newChildren = new.children(viewMode: .sourceAccurate).filter { !isComma($0) }
     for (oldChild, newChild) in zip(oldChildren, newChildren) {
       let inner = isContext(newChild) ? newChild : context
       if let change = compare(oldChild, newChild, context: inner, added: &added) { return change }
@@ -433,6 +435,10 @@ enum ManifestDiff {
 
   private static func head(_ expression: ExprSyntax) -> String? {
     expression.as(FunctionCallExprSyntax.self)?.calledExpression.trimmedDescription
+  }
+
+  private static func isComma(_ node: Syntax) -> Bool {
+    node.as(TokenSyntax.self)?.tokenKind == .comma
   }
 
   /// A labelled argument (`exact: "1.2.0"`) or a statement; an unlabelled argument such as
