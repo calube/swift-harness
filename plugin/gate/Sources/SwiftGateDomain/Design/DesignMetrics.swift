@@ -196,16 +196,26 @@ public enum DesignPlanPhase: String, Sendable, Equatable, CaseIterable, Codable 
 /// `agentRole == .researchLane`, naming which of the four lanes ran. A pre-mortem pass (deep tier
 /// only) is logged under `agentRole == .challenger`: it shares that role's context pack and isn't
 /// a fifth ``ContextPackRole``.
+///
+/// Schema 1 lines were written by hand and always carry `tokens`. Schema 2 lines are written by
+/// `swiftgate design-telemetry` from what a tool reported: `tokens` is `nil` when nothing reported
+/// them, and ``unavailable`` then names why.
 public struct PhaseRecord: Sendable, Equatable, Codable {
+  public static let currentSchemaVersion = 2
+
   public let schemaVersion: Int
   public let runId: String
   public let phase: DesignPlanPhase
   public let agentRole: ContextPackRole?
   public let lane: ResearchLane?
-  public let tokens: Int
+  /// `nil` only on a schema 2 line whose tokens no tool reported (never a placeholder `0`).
+  public let tokens: Int?
   /// `nil` when cost isn't tracked for this invocation (never a placeholder `0`).
   public let costUSD: Double?
   public let wallMilliseconds: Int
+  /// What no tool reported for this record, each naming why. `nil` on a schema 1 line, which
+  /// predates the field.
+  public let unavailable: [String]?
 
   public init(
     schemaVersion: Int = 1, runId: String, phase: DesignPlanPhase, agentRole: ContextPackRole?,
@@ -219,6 +229,23 @@ public struct PhaseRecord: Sendable, Equatable, Codable {
     self.tokens = tokens
     self.costUSD = costUSD
     self.wallMilliseconds = wallMilliseconds
+    self.unavailable = nil
+  }
+
+  /// A schema 2 record.
+  public init(
+    runId: String, phase: DesignPlanPhase, agentRole: ContextPackRole?, lane: ResearchLane?,
+    tokens: Int?, costUSD: Double?, wallMilliseconds: Int, unavailable: [String]
+  ) {
+    self.schemaVersion = Self.currentSchemaVersion
+    self.runId = runId
+    self.phase = phase
+    self.agentRole = agentRole
+    self.lane = lane
+    self.tokens = tokens
+    self.costUSD = costUSD
+    self.wallMilliseconds = wallMilliseconds
+    self.unavailable = unavailable
   }
 }
 
@@ -226,17 +253,118 @@ public struct PhaseRecord: Sendable, Equatable, Codable {
 public struct PhaseGroupTotals<Key: Sendable & Equatable>: Sendable, Equatable {
   public let key: Key
   public let runs: Int
-  public let tokens: Int
+  /// The sum over records that carry tokens; `nil` when none of them does.
+  public let tokens: Int?
+  /// Records in this group whose tokens no tool reported: counted here, never summed as 0.
+  public let unmeasuredRuns: Int
   /// `nil` only when not one contributing record carried a cost.
   public let costUSD: Double?
   public let wallMilliseconds: Int
 
-  public init(key: Key, runs: Int, tokens: Int, costUSD: Double?, wallMilliseconds: Int) {
+  public init(
+    key: Key, runs: Int, tokens: Int?, unmeasuredRuns: Int = 0, costUSD: Double?,
+    wallMilliseconds: Int
+  ) {
     self.key = key
     self.runs = runs
     self.tokens = tokens
+    self.unmeasuredRuns = unmeasuredRuns
     self.costUSD = costUSD
     self.wallMilliseconds = wallMilliseconds
+  }
+}
+
+// MARK: - Design workflow telemetry
+
+/// `<run>/telemetry/<phase>-<n>.json`: one design workflow run's telemetry as
+/// `swiftgate design-telemetry` recorded it. It names the session's transcript file rather than
+/// copying it.
+public struct DesignTelemetryRecord: Sendable, Equatable, Codable {
+  public static let schemaVersion = 1
+  public static let directoryName = "telemetry"
+
+  public let schemaVersion: Int
+  public let runId: String
+  public let phase: DesignPlanPhase
+  public let startedAt: String
+  public let finishedAt: String
+  /// From `--started-at` to the moment the record was written: the workflow run alone.
+  public let wallMilliseconds: Int
+  public let workflow: WorkflowTelemetry
+  public let sessionId: String?
+  /// The session record's `transcriptPath`; `nil` with a reason in ``unavailable``.
+  public let transcriptPath: String?
+  public let unavailable: [String]
+
+  public init(
+    runId: String, phase: DesignPlanPhase, startedAt: String, finishedAt: String,
+    wallMilliseconds: Int, workflow: WorkflowTelemetry, sessionId: String?,
+    transcriptPath: String?, unavailable: [String]
+  ) {
+    self.schemaVersion = Self.schemaVersion
+    self.runId = runId
+    self.phase = phase
+    self.startedAt = startedAt
+    self.finishedAt = finishedAt
+    self.wallMilliseconds = wallMilliseconds
+    self.workflow = workflow
+    self.sessionId = sessionId
+    self.transcriptPath = transcriptPath
+    self.unavailable = unavailable
+  }
+}
+
+/// Where the session's transcript path came from, or why there is none.
+public enum SessionTranscript: Sendable, Equatable {
+  /// No `--session` was given.
+  case notRequested
+  /// The session record was read; its `transcriptPath` may itself be absent.
+  case recorded(sessionId: String, transcriptPath: String?)
+  /// `--session` named a record that couldn't be read.
+  case unreadable(sessionId: String, reason: String)
+}
+
+public enum DesignTelemetryError: Error, Sendable, Equatable, CustomStringConvertible {
+  case unknownPhase(String)
+  case invalidRunID(String)
+  case invalidStartedAt(String)
+  case unreadableResult(String)
+
+  public var description: String {
+    switch self {
+    case .unknownPhase(let phase):
+      "unknown phase `\(phase)`: a design workflow runs in "
+        + DesignTelemetry.workflowPhases.map(\.rawValue).joined(separator: ", ")
+    case .invalidRunID(let id):
+      "--run-id `\(id)` is not a design run id (design-<yyyyMMddTHHmmssZ>)"
+    case .invalidStartedAt(let reason): "--started-at \(reason)"
+    case .unreadableResult(let reason): "--workflow-result \(reason)"
+    }
+  }
+}
+
+/// `swiftgate design-telemetry`'s pure half: from a design workflow's return value and its timing
+/// to one schema 2 ``PhaseRecord`` and one ``DesignTelemetryRecord``.
+public enum DesignTelemetry {
+  /// The phases in which the design skill runs `design-research.js` or `design-review.js`.
+  public static let workflowPhases: [DesignPlanPhase] = [.research, .review, .revise, .amend]
+
+  public static func phase(named name: String) throws(DesignTelemetryError) -> DesignPlanPhase {
+    throw .unknownPhase(name)
+  }
+
+  public static func validateRunID(_ id: String) throws(DesignTelemetryError) {}
+
+  /// The `telemetry` object of a saved design workflow return value.
+  public static func decodeResult(_ data: Data) throws(DesignTelemetryError) -> WorkflowTelemetry {
+    throw .unreadableResult("is not implemented")
+  }
+
+  public static func make(
+    runId: String, phase: DesignPlanPhase, startedAt: Date, finishedAt: Date,
+    workflow: WorkflowTelemetry, session: SessionTranscript
+  ) throws(DesignTelemetryError) -> (phase: PhaseRecord, telemetry: DesignTelemetryRecord) {
+    throw .invalidStartedAt("is not implemented")
   }
 }
 
@@ -392,7 +520,7 @@ public enum DesignMetrics {
   {
     let costs = records.compactMap(\.costUSD)
     return PhaseGroupTotals(
-      key: key, runs: records.count, tokens: records.reduce(0) { $0 + $1.tokens },
+      key: key, runs: records.count, tokens: records.reduce(0) { $0 + ($1.tokens ?? 0) },
       costUSD: costs.isEmpty ? nil : costs.reduce(0, +),
       wallMilliseconds: records.reduce(0) { $0 + $1.wallMilliseconds })
   }
