@@ -256,7 +256,7 @@ struct BootstrapCommandTests {
       #expect(!outcome.failed)
       let text = try sandbox.state()["repo/\(Config.fileName)"] ?? ""
       #expect(text.contains("[harness]\nprofile = \"\(expected)\"\n"))
-      let config = try? ConfigLoader().load(repositoryRoot: sandbox.repository)
+      let config = try ConfigLoader().load(repositoryRoot: sandbox.repository)
       #expect(config?.profile == expected)
       #expect(config?.buildPresets[expected] != nil)
     }

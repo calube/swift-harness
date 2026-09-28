@@ -20,15 +20,24 @@ struct RepositoryProfileConfigTests {
     "a [harness] profile names the preset a build uses, and a repository with no [harness] table keeps default — catches a profile silently ignored, or an older config losing its default"
   )
   func profileResolvesPresetName() {
-    let named = try? ConfigSchema.config(
-      from: root(harness: .table(["profile": .string("interview")])))
+    let named = decoded(root(harness: .table(["profile": .string("interview")])))
     #expect(named?.profile == "interview")
     #expect(named?.profileName == "interview")
 
-    let unnamed = try? ConfigSchema.config(from: root(harness: nil))
+    let unnamed = decoded(root(harness: nil))
     #expect(unnamed != nil)
     #expect(unnamed?.profile == nil)
     #expect(unnamed?.profileName == "default")
+  }
+
+  /// The config, or `nil` with the load error recorded as this test's issue.
+  private func decoded(_ document: ConfigValue) -> Config? {
+    do {
+      return try ConfigSchema.config(from: document)
+    } catch {
+      Issue.record("the config does not load: \(error)")
+      return nil
+    }
   }
 
   @Test(

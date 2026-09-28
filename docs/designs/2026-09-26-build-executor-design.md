@@ -162,7 +162,7 @@ A preset table must set every key, so a typo fails `swiftgate doctor` rather tha
 default without warning. `max_parallel` here overrides `[plan] max_parallel` for scheduling only; waves in
 the ledger stay as planned.
 
-A repository says which preset it is optimised for with `[harness] profile = "<name>"`.
+A repository names the preset it prefers with `[harness] profile = "<name>"`.
 `/swift-harness:build` and `/swift-harness:ship` use `--preset` when given, else the profile, else
 `default`. `swiftgate bootstrap --profile <name>` stamps it, `default` without the flag. The key is
 optional, but a profile naming no `[build.presets.<name>]` table fails `swiftgate doctor`
