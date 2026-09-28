@@ -1077,3 +1077,51 @@ against that subcommand's help. A later skill that names a missing command or fl
 - **Gate:** integration push + prove GREEN (run 20260928T031838Z-f403ce52, 34 of 34 proven); push GREEN on merged
   main (20260928T032239Z-fdd77f1f). Mutate ran with speed wave 3 and fast-modes wave 1 (subproject-5 interfaces
   note): RED on 2 survivors in those waves' code, fixed in the next wave.
+
+## Hardening waves 2 and 3
+
+- **Rule id index scan.** `RuleIDSourceScan` (in `SwiftGateTestSupport`) reads every single-line string literal in
+  the gate's Swift source: a whole lowercase dotted literal is an id, and an interpolated one that starts with a
+  literal word is a family (`design-diff.*`). `RuleIDSourceScan.notRuleIDs` and `notRuleIDFamilies` list dotted
+  literals that name something else (a config key, a `sprint.json` field, a thread name), each with its reason.
+  `RuleIndexTests` fails on an id the registry or the rule id index doesn't list, and on a family with no entry in
+  `enumeratedFamilies` (the closed type that lists its members) or `openFamilies`. A new dotted id needs a row in
+  `plugin/docs/standards.md`'s rule id index.
+- **Build workers loop to green.** A RED gate is the start of the worker's loop, never a reason to return. A
+  `gate-red` return must carry `redReason`: `outside-write-set`, `no-progress` (the same finding survived 3 fix
+  attempts) or `environment`. `build-task.js` appends it as the last `notes` line (`redReason: <value>`) before
+  `build check-return`; a `gate-red` return with no `redReason` or another value, or any other outcome that carries
+  one, is unusable.
+- **Session records.** SessionStart writes `.harness/hook-state/sessions/<session id>.json`
+  (`SessionRecordStore.directory`) by atomic rename, and keeps the newest 20 (`SessionRecordStore.retained`). Keys:
+  `schemaVersion` (1), `sessionId`, `recordedAt`, `pluginRoot`, `pluginVersion`, `treeHash`, optional
+  `transcriptPath`; an unknown key or version fails decoding. `PluginTree.hash(root:)` is a SHA-256 over the version
+  in `.claude-plugin/plugin.json` and each file's relative path and bytes under `agents/`, `skills/` and
+  `workflows/`, skipping `.DS_Store`. `SessionRecordStore.write(_:)`, `record(sessionID:)` and `scan()` read and
+  write it; `doctor-plugin-changed` compares it with the plugin on disk.
+- **`arch.ui-host-compiled`** (major, standards U5): a UI module file whose every declaration sits under an `#if`
+  the macOS host never meets (`os(iOS|tvOS|watchOS|visionOS)`, `canImport(UIKit)`), with nothing in a `#else`. The
+  finding sits on the `#if`, and so does its allow: `// swiftgate:allow arch.ui-host-compiled — <reason>`.
+- **`test.hang-without-deadline`** (major, testing playbook P12): a string literal in a test that loops or waits
+  forever with no deadline anywhere in the literal. Its allow is the same-line
+  `// swiftgate:allow test.hang-without-deadline — <reason>`.
+- **`swiftgate design-telemetry --run <run> --run-id <run-id> --phase <phase> --workflow-result <workflow-result>
+  --started-at <started-at> [--session <session>] [--json]`.** `--run` is `.harness/runs/design-<slug>`, `--run-id`
+  is `design-<yyyyMMddTHHmmssZ>`, `--phase` is `research`, `review`, `revise` or `amend`, and `--started-at` is ISO
+  8601 UTC. Exit 0 when recorded. Exit 2 on a missing option, an unknown phase, a bad run id or start time, a missing
+  run directory, an unreadable workflow result, or an unsafe `--session` id. A missing or unreadable session record
+  is a named gap in `unavailable`, never an exit.
+- **`phases.jsonl` schema 2.** 1 line per workflow run, every key written, `null` included: `schemaVersion` (2),
+  `runId`, `phase`, `agentRole`, `lane`, `tokens`, `costUSD`, `wallMilliseconds`, `unavailable`. `tokens` is `null`
+  only with a reason in `unavailable`. Schema 1 lines still decode.
+- **`<run>/telemetry/<phase>-<n>.json`** (`DesignTelemetryRecord`, `schemaVersion` 1), with `n` the next free number:
+  `runId`, `phase`, `startedAt`, `finishedAt`, `wallMilliseconds`, `workflow` (the workflow's `telemetry`),
+  `sessionId`, `transcriptPath` and `unavailable`.
+- **Shim test cleanup.** `tests/shim_test.sh` leads its own process group, and a watchdog stops it at its deadline
+  (`SHIM_TEST_DEADLINE_SECONDS`, 540 by default) and kills every process the group or its temp directory holds.
+  `tests/shim_kill_cleanup_test.mjs` kills the test outright and `tests/shim_deadline_cleanup_test.mjs` runs it past a
+  6 s deadline; each checks that no process outlives it.
+- **Gates.** Wave 2 integration push + prove GREEN (run 20260928T044952Z-829886bf, 28 of 28 proven); push GREEN on
+  merged main (20260928T045444Z-bb6cec24). Wave 3 integration GREEN (20260928T060217Z-f4984ebd, 24 of 24 proven);
+  push GREEN on merged main (20260928T060658Z-f66fb6ca). The shim cleanup fix: push GREEN on main
+  (20260928T061905Z-5cf3b6df).

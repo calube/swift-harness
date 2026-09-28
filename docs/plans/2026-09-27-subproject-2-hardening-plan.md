@@ -1,7 +1,7 @@
 # Sub-project 2 hardening: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Wave 1 merged 2026-09-28 (push and prove GREEN; interfaces note docs/handoffs/subproject-2-interfaces.md "Hardening wave 1"). Wave 2 is running.
+Status: IN PROGRESS. Wave 1 merged 2026-09-28 (push and prove GREEN; interfaces note docs/handoffs/subproject-2-interfaces.md "Hardening wave 1"). Waves 2 and 3 merged 2026-09-28 (interfaces note "Hardening waves 2 and 3"). Wave 4 (`doctor-plugin-changed`) is running.
 Scope: the hardening queue the user approved (handoff docs/handoffs/2026-09-25-subproject-2.md, overnight queue item 4):
 hook guard plan-lock cache; §11 of the design-plan-workflows design rewritten to measured figures plus design-run
 telemetry; rule-index rows for every rule id; a lint for fixtures that hang on purpose; review.json telemetry; review

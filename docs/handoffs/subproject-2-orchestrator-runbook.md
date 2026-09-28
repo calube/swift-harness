@@ -284,3 +284,10 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   cold `swift-build` running with ppid 1. The watchdog catches it as an orphan; kill the whole tree.
 - **A worker that stops at its write-set boundary is right.** It proposes the rule instead of editing a file
   outside its write set. Widen the write set in a fix round when no other branch owns the files.
+- **Lint what a conflict resolution touched before gating.** After auto-resolving a merge conflict, lint the
+  resolved files: a hunk boundary can drop a bracket outside the conflict markers. It cost 1 RED gate.
+- **Prove only judges production source.** A test written only to kill a surviving mutant in code already on `main`
+  can't be proven, and neither can a test of a test script. Make the change real (a silent fallback that now
+  reports, say) or move the check to a repository script. Never exempt it.
+- **Parallel waves conflict on shared registration lists.** Waves that both append to `SwiftGate.swift`'s subcommand
+  list, `NewSubcommandRegistrationTests` or `RuleIndexTests` conflict every time. Keep both sides, then format-lint.
