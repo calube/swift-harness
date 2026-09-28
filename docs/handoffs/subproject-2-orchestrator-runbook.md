@@ -206,7 +206,9 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 ## Lessons from 2026-09-26/27 (rehearsals, review, fix waves)
 
 - **Gate before every commit to main, docs included.** Two ungated docs commits turned main red: an absolute path, and a
-  branch name that docs-lint read as a dangling id. For a docs-only commit, `plugin/bin/swiftgate docs-lint` is enough.
+  branch name that docs-lint read as a dangling id. A docs-only commit needs `plugin/bin/swiftgate docs-lint` plus prose over the changed markdown, because the push tier
+  gates both: `git diff --name-only --diff-filter=AM origin/main..HEAD -- '*.md' | xargs plugin/bin/swiftgate prose`
+  (push judges only added lines outside `[docs] prose_exclude`, so read the findings on those lines).
 - **Don't pipe a gate through `head` in an `&&` chain.** The pipe's exit status is `head`'s, so a RED gate still
   committed and pushed a backup once. Write the gate output to a file and `grep -q "^swiftgate GREEN"` it before acting.
 - **Merges can fail silently in a chain.** After `git merge`, test for `.git/MERGE_HEAD` before gating or committing.

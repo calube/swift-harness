@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "focus": "concurrency",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "rule": "C3",
+      "category": "effect-lifetime",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "Dismissing a fact doesn't cancel the in-flight fact request, so its response brings the fact back after dismiss",
+      "fix": "Add `enum CancelID { case fact }`. Mark the effect at line 49 with `.cancellable(id: CancelID.fact, cancelInFlight: true)`, and have `.factDismissButtonTapped` return `.cancel(id: CancelID.fact)`. Add a TestStore test that sends factButtonTapped and then factDismissButtonTapped, and checks that no factResponse is received.",
+      "line": 67,
+      "end_line": 70,
+      "severity": "blocker",
+      "severity_rule": "defect-users-hit",
+      "failure_scenario": "A caller sends .factButtonTapped: isLoadingFact becomes true and the .run effect at line 49 starts, with no cancel ID. Before apiClient.randomFact() returns, the caller sends .factDismissButtonTapped. Lines 68-70 set fact = nil and isLoadingFact = false and return .none, so nothing cancels the request. When the request finishes, the effect sends .factResponse, lines 59-60 set fact to the new text, and the fact comes back after the dismiss.",
+      "evidence": "CounterFeature.swift:49-56 `return .run { [count = state.count, apiClient, log] send in ... await send(.factResponse(...)) }` has no `.cancellable(id:)`. CounterFeature.swift:67-70 `case .factDismissButtonTapped: state.fact = nil; state.isLoadingFact = false; return .none` clears the loading flag, so it expects to run during a load, but it never returns `.cancel(id:)`. The new test at CounterFeatureTests.swift:72-77 only dismisses a fact that is already shown, with no request in flight.",
+      "verified": true,
+      "verification_note": "I read CounterFeature.swift. The .run effect at lines 49-56 has no cancellable ID. The new dismiss case at lines 67-70 returns .none and also resets isLoadingFact, which only matters if dismiss arrives while a request is loading. When the request finishes, .factResponse (lines 58-61) sets the fact again, so the claimed wrong outcome holds at the reducer level. Two caveats from CounterView.swift. First, the view doesn't wire a Dismiss button yet, so today a caller of the public Dismiss action hits this, not a tap in the shipped UI. I still rated it defect-users-hit because the action is meant to be sent during a load (it clears isLoadingFact), and sending it then is ordinary use. Second, the finding's second scenario (tapping Fact twice) can't happen: line 31 `.disabled(store.isLoadingFact)` stops a second tap while a request is loading."
+    }
+  ]
+}

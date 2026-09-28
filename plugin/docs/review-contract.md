@@ -60,13 +60,12 @@ The verifier gets the findings and the code, never the reviewer's reasoning.
 
 ## Dedupe
 
-Synthesis merges findings of the same kind in the same file: defects with the same category,
-standards violations with the same rule. They merge when their line ranges overlap or lie within 3
-lines of each other. The window comes from a real run in which one race came back from 3
-reviewers at lines 67, 69 and 70. The merged finding keeps the most severe copy, every focus that
-reported it, every cited line, and each distinct `evidence` once. Among copies of the same severity,
-the one on the earliest line leads, then the one from the earlier focus in panel order, then the
-one its focus reported first.
+Synthesis merges same-file findings whose line ranges overlap or lie within 3 lines: 3 reviewers
+once cited 1 race at lines 67, 69 and 70. Defects merge on category, standards violations on
+rule, and a defect citing no rule joins the single nearby rule of its category. The merged finding keeps the most severe copy, every focus and cited line, and each
+distinct `evidence`. A copy citing a rule sets its `kind` and `rule`, and the strongest
+`severity_rule` stays. Among copies of the same severity the earliest line leads, then the focus
+first in panel order, then the copy reported first.
 
 ## Pre-existing defects
 
@@ -90,3 +89,5 @@ Only findings on code the diff changed count. A reviewer that fails leaves its f
 reviewed, and the verdict can't be `merge` while any focus is unreviewed. A finding the verifier
 returns no entry for stays in `review.json` as `unmatched`, which likewise keeps the verdict off
 `merge` unless it is pre-existing.
+
+`review.json` comes only from `review-synth`; its `telemetry` path is relative.
