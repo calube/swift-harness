@@ -1,6 +1,6 @@
 # 0006. Profiling wraps xctrace, and reports before it blocks
 
-Status: proposed, 2026-09-28, with the agentic profiling design
+Status: accepted, 2026-09-28, by the user, with the agentic profiling design
 (`docs/designs/2026-09-28-agentic-profiling-design.md`). Fills the foundation design's sub-project 4 row and the
 build executor spec's `validate` stage (§8.6).
 

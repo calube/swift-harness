@@ -1,17 +1,16 @@
 # swift-harness: agentic profiling (sub-project 4)
 
 <!-- RESUME
-Status: PROPOSED 2026-09-28. The user made the 4 decisions in §2 and §9; every other choice is marked Proposed and
-listed in §12 for approval.
+Status: APPROVED 2026-09-28 by the user: the 4 decisions in §2 and §9, and all 12 choices §12 records.
 Why: the foundation design's sub-project map row for 4 ("`swiftgate profile` / `leaks`: xctrace + `leaks` summarized
 to compact JSON; signpost-scoped measurements; XCTMetric baselines") and the build executor's `validate` stage (§8.6,
 §15), which calls sub-projects 3 and 4 once they exist.
 Evidence: the QA and profiling tool survey (2026-09-26), sections 1, 3, 4, 5 and 6. Its probes ran on this laptop
 against examples/SampleApp.
-Depends on: sub-project 3, simulator QA (docs/designs/2026-09-28-simulator-qa-design.md), for flow replay. The
-dependency runs one way: 4 uses 3, and 3 never reads anything 4 writes.
-Decision record: [ADR 0006](../adrs/0006-profiling-wraps-xctrace-report-only-first.md), proposed.
-Read first: this header, then §2, then §5 and §12.
+Depends on: sub-project 3, simulator QA (docs/designs/2026-09-28-simulator-qa-design.md), for flow replay: kept QA
+flows are XCUITests that T3 runs. The dependency runs one way: 4 uses 3, and 3 never reads anything 4 writes.
+Decision record: [ADR 0006](../adrs/0006-profiling-wraps-xctrace-report-only-first.md), accepted.
+Read first: this header, then §2, then §5 and §12 (approved choices).
 -->
 
 ## 1. Purpose
@@ -36,11 +35,11 @@ parsing, so no hook, skill or workflow re-implements a check.
 | Platform | Simulator only: Time Profiler, App Launch, Hangs, `footprint` peak, os_signpost intervals per span, XCTMetric tests | user | §4 |
 | Gating | report only until enough runs set per-metric noise bands; a later change turns on blocking beyond them | user | §7 |
 | Leak evidence | XCTest-level checks (weak refs after deinit) by default, overridable to the host `leaks` tool | user | §9 |
-| Command surface and JSON schema | `profile`, `profile calibrate`, `leaks`; schema 1 | Proposed | §5 |
-| Before/after in 1 job | interleaved base and head runs on 1 cloned simulator | Proposed | §6 |
-| Where baselines live | per host, in the git common dir, never committed | Proposed | §7 |
-| Scenario choice | launch always, plus the `[[flows]]` the diff reaches | Proposed | §8 |
-| Machine-time budget | 1 profile run on the machine at a time, 6 min default ceiling | Proposed | §10 |
+| Command surface and JSON schema | `profile`, `profile calibrate`, `leaks`; schema 1 | user | §5 |
+| Before/after in 1 job | interleaved base and head runs on 1 cloned simulator | user | §6 |
+| Where baselines live | per host, in the git common dir, never committed | user | §7 |
+| Scenario choice | launch always, plus the `[[flows]]` the diff reaches | user | §8 |
+| Machine-time budget | 1 profile run on the machine at a time, 6 min default ceiling | user | §10 |
 
 ## 3. Architecture
 
@@ -48,7 +47,7 @@ parsing, so no hook, skill or workflow re-implements a check.
 
 - **`SwiftGateAdapters`**: a `TraceRecorder` protocol with an `XctraceRecorder` that runs `xcrun xctrace record`
   and `xctrace export --xpath`, a `FootprintSampler` over `footprint -p <pid> -j`, and a `FlowDriver` protocol whose
-  live value calls sub-project 3's replay command. The simulator clone and its lock come from the same adapter T2
+  live value runs a kept QA flow's XCUITest through T3. The simulator clone and its lock come from the same adapter T2
   and T3 use.
 - **`SwiftGateDomain`**: pure parsers from xctrace export XML and `footprint` JSON into typed samples, the statistics
   (median, median absolute deviation, delta), and the verdict per metric. No `Process` or `FileManager` IO.
@@ -96,7 +95,7 @@ so.
 Simulator CPU runs on the Mac's cores, so an absolute number means nothing off this host. Every metric compares a
 base and a head measured on the same host in the same job (§6).
 
-## 5. Command surface (Proposed)
+## 5. Command surface
 
 ```
 swiftgate profile [--base <ref>] [--scenario <name>]... [--runs <n>] [--budget-min <m>] [--keep-traces] [--json]
@@ -156,7 +155,7 @@ not the trace.
 
 The rule index rows in `plugin/docs/standards.md` land with the checks, in the same change, per the repo rule.
 
-## 6. Before and after in 1 job (Proposed)
+## 6. Before and after in 1 job
 
 `profile --base` builds base and head into separate derived-data paths with `-skipMacroValidation` (the survey found a
 fresh derived-data path fails without it). It installs both on 1 cloned simulator under distinct bundle ids, then runs
@@ -174,12 +173,12 @@ the trace unless the caller passes `--keep-traces`.
 
 Noise bands come from history, not from a guess.
 
-- **Proposed: where history lives.** `$(git rev-parse --git-common-dir)/swift-harness/profile/<host-key>.jsonl`, 1 line
+- **Where history lives.** `$(git rev-parse --git-common-dir)/swift-harness/profile/<host-key>.jsonl`, 1 line
   per metric per run. The host key hashes the Mac model, Xcode version, simulator device and OS. Every worktree
   shares it and no commit carries it, since a Simulator number from 1 Mac says nothing about another.
-- **Proposed: what counts as a sample.** Every `profile calibrate` run and every `profile --base` run's per-side
+- **What counts as a sample.** Every `profile calibrate` run and every `profile --base` run's per-side
   medians add to the history. A calibrate run gives the cleanest noise estimate, since both sides run the same code.
-- **Proposed: the band.** Once a metric has 20 A/A samples from at least 5 separate sessions, its band is the 95th
+- **The band.** Once a metric has 20 A/A samples from at least 5 separate sessions, its band is the 95th
   percentile of the absolute A/A delta. Until then `band_pct` stays `null` and the fallback note fires at 10%.
 - **User decision: blocking waits.** Every profiling finding is non-gating now. A later change, with its own design
   note, turns on blocking for metrics that have a band, as a `major` finding beyond it. That change cites the history.
@@ -188,7 +187,7 @@ XCTMetric tests keep Xcode's own baselines out of the picture: Xcode keys them p
 doesn't survive cloned simulators. `swiftgate` reads each measure block's values from the xcresult and applies the
 same base-versus-head comparison.
 
-## 8. Scenarios (Proposed)
+## 8. Scenarios
 
 A scenario is a named flow the profiler drives while it records.
 
@@ -196,11 +195,11 @@ A scenario is a named flow the profiler drives while it records.
 - **Flow scenarios** reuse the `[[flows]]` entries in `.swiftgate.toml` that T3 and sub-project 3 already declare.
   `validate` picks the flows whose modules the diff reaches, using the same `impact` data the push tier computes, and
   caps them at 3. `--scenario` names them by hand.
-- **XCTMetric tests** are T2 tests that call `measure(metrics:)` for the hot paths a plan names. `profile` runs them
+- **XCTMetric tests** are T3 XCUITests that call `measure(metrics:)` for the hot paths a plan names. `profile` runs them
   with `xcodebuild test -only-testing` on the same clone.
 
-Sub-project 3 owns flow replay. The `FlowDriver` adapter calls its replay command with the flow name and waits for
-its exit; profiling adds no flow format of its own. If the repo hasn't set up sub-project 3, flow scenarios report
+Sub-project 3 owns the flows: each kept QA flow is an XCUITest that T3 runs. The `FlowDriver` adapter runs that
+test with `-only-testing` while the recorder captures, and waits for its exit; profiling adds no flow format of its own. If the repo hasn't set up sub-project 3, flow scenarios report
 `profile.no-evidence` naming the missing driver, and launch and XCTMetric still run.
 
 ## 9. Leaks
@@ -216,7 +215,7 @@ simulators. Fixing it needs Developer mode (`DevToolsSecurity -enable`), which o
   `leaks <pid> --outputGraph` at scenario end and parses the leak count and root types. A host failure is a
   `leaks.host-unavailable` note, never a quiet pass.
 
-## 10. Machine time (Proposed)
+## 10. Machine time
 
 This laptop wedged at load 100+ with 4 ready tiers at once, and a single ready tier reached load 264 (orchestrator
 runbook). Profiling measures timing, so load corrupts it.
@@ -233,18 +232,18 @@ runbook). Profiling measures timing, so load corrupts it.
 - **`/swift-validate` and the build executor's `validate` stage** run `swiftgate leaks`, then `profile --base
   <merge base>`, after sub-project 3's QA and after the `ready` tier. Findings go into the evidence summary and the
   PR-body block. The stage stays non-gating for profiling, per §7.
-- **Proposed: sprint.** A sprint finish runs `validate` only when the preset sets `validate = true`. The timed
+- **Sprint.** A sprint finish runs `validate` only when the preset sets `validate = true`. The timed
   presets leave it off, since 6 min doesn't fit a timed session.
-- **Proposed: fixtures.** Parser fixtures under `plugin/gate/Tests/Fixtures/profile/` come from real `xctrace export
+- **Fixtures.** Parser fixtures under `plugin/gate/Tests/Fixtures/profile/` come from real `xctrace export
   --xpath` runs against `examples/SampleApp` on the pinned Xcode, 1 per table in §3.2, plus 1 `footprint -j` file and
   1 xcresult with a measure block. Each capture command goes in the fixtures README. The narrow `--xpath` keeps them
   small without hand edits. A change to the Xcode pin recaptures them.
 - **Later, optional: the device lane.** The SwiftUI instrument, hitches and representative timings, on a physical
   device, when the user wants it.
 
-## 12. Open for approval
+## 12. Approved choices
 
-The user hasn't approved any item below yet; §2 holds the user's decisions.
+The user approved these 12 choices on 2026-09-28, with the decisions in §2.
 
 1. Command surface: `profile [--base]`, `profile calibrate`, `leaks [--mode]` (§5).
 2. JSON schema 1 and the closed verdict enum (§5.1).
