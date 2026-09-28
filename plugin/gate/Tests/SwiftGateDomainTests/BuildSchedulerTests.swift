@@ -210,7 +210,7 @@ struct BuildSchedulerTests {
   }
 
   @Test(
-    "past the no-new-starts point a required task still starts and an optional one doesn't — catches a RED final gate from a skipped view task"
+    "past the no-new-starts point a required task still starts and an optional one doesn't, and at cutoff neither does — catches a RED final gate from a skipped view task"
   )
   func requiredTaskStartsPastNoNewStarts() {
     let ledger = Self.ledger([
@@ -226,19 +226,10 @@ struct BuildSchedulerTests {
 
     #expect(noNewStarts.phase == .noNewStarts)
     #expect(noNewStarts.toStart == ["app-views"])
-  }
-
-  @Test(
-    "at cutoff even a required task doesn't start — catches the exemption outliving the budget"
-  )
-  func requiredTaskWaitsAtCutoff() {
-    let ledger = Self.ledger([Self.task(id: "app-views", writeSet: ["App/AppView.swift"])])
-    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
 
     let cutoff = BuildScheduler.next(
-      ledger: ledger, running: [], preset: Self.preset(timeBudgetMin: 30, stopStartsBeforeMin: 5),
-      startedAt: Self.epoch, now: Self.epoch.addingTimeInterval(30 * 60), required: required)
-
+      ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
+      now: Self.epoch.addingTimeInterval(30 * 60), required: required)
     #expect(cutoff.phase == .cutoff)
     #expect(cutoff.toStart.isEmpty)
   }
