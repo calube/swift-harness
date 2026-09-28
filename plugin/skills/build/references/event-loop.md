@@ -21,6 +21,7 @@ Contents:
 
 Keep these in the conversation; none of them is a file:
 
+- the plan's source (its design doc, or its spec page) and its plan surface, from `plan.json`;
 - per running task: its Workflow task id, its stall watch's task id, `worktree`, `branch`;
 - the order tasks merged in, for the fixer's second return;
 - the ledger page's file path, `.harness/design-render/<slug>-ledger.html`.
@@ -33,11 +34,23 @@ absolute path. From the main checkout's toplevel, `git rev-parse --git-common-di
 
 ## Worker pack
 
-Build it with exactly the flags the skill's step names:
+Build it with exactly the flags the skill's step names. A design plan:
 
 ```
 "$SG" context-pack --role worker --design <doc> --ledger <plans>/<slug>/ledger.json --task-id <task> --build-run <run>
 ```
+
+A spec page plan (`"source": "specPage"` in `plan.json`), with its page at
+`<plans>/<slug>/<specPage.path>`:
+
+```
+"$SG" context-pack --role worker --spec-page <plans>/<slug>/spec-page.md --ledger <plans>/<slug>/ledger.json --task-id <task> --build-run <run>
+```
+
+Pass exactly 1 of `--design` and `--spec-page`; the command exits 2 on both or neither. A spec page
+pack names the slices the task covers, as `<slice id>: T<n>`, where a design pack names design
+sections. A page that doesn't parse, or a task covering a slice id the page lacks, exits 1 and halts
+the task.
 
 Never pass `--module-kind`: the command refuses it for a worker. It reads the task's write set
 against the repo's module graph (`.swiftgate.toml`'s packages) and packs the standards sections for
@@ -69,7 +82,8 @@ Workflow({
     contextPack: "<absolute path of .harness/context-pack/worker-<task>.md>",
     model: "<sonnet|opus>",
     review: "<full|gate>",
-    taskProof: "<per-task|final>"
+    taskProof: "<per-task|final>",
+    planSurface: "<plan.json's surfaceCommit, or null>"
   }
 })
 ```
@@ -81,6 +95,12 @@ Workflow({
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
+- `planSurface`: `surfaceCommit` from `plan.json`, or JSON `null` when the plan has none; never
+  leave it out. With a sha, the worker writes no surface of its own: its task gate adds
+  `--proof-base <planSurface>`, and when a test needs API the plan surface lacks it commits that API
+  alone as a stub, checks it with `swiftgate surface-check <sha>`, and returns the stub as
+  `surfaceCommit`. [`build proof-bases`](#final-gate) lists the plan surface first, then each stub in
+  merge order. `null` leaves the worker's prompt exactly as it was before the arg existed.
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
@@ -167,7 +187,10 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
 ## Design conflict
 
 A checked `design-conflict` return carries `designConflict` with `section`, `ids` and `claim`. The
-preset's `onDesignConflict` decides.
+preset's `onDesignConflict` decides. For a spec page plan, `section` is a spec page section
+(`slices`, `surface` or `modules`) and `ids` are slice ids; its preset is always `block`, since a
+preset with no design step can't `amend`. A `surface` conflict usually means the plan surface lacks a
+target or product the task needs, which only a new surface can add.
 
 `block`:
 
@@ -237,7 +260,9 @@ When the timer fires, or any `build next` reports `phase` `cutoff`:
 
 Only 1 `ready` tier runs at a time on this machine. Wait for the others in the foreground first.
 Then pass every merged task's surface commit as a proof base, so a test of API that `main` lacked
-before the build is proven where that API first existed without its behavior:
+before the build is proven where that API first existed without its behavior. `build proof-bases`
+prints `plan.json`'s `surfaceCommit` first when the plan has one, then each merged task's return
+`surfaceCommit` in merge order, each sha once:
 
 ```bash
 until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done

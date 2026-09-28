@@ -46,6 +46,7 @@ const baseArgs = (extra = {}) => ({
   model: 'sonnet',
   review: 'full',
   taskProof: 'per-task',
+  planSurface: null,
   ...extra,
 })
 
@@ -407,6 +408,89 @@ const tests = {
   async 'reviewers narrows the review panel — catches the reviewers arg being ignored'() {
     const { reviewerCalls } = await run(baseArgs({ reviewers: ['test-quality'] }))
     assert.deepEqual(reviewerCalls.map(c => REVIEWERS[c.opts.agentType]), ['test-quality'])
+  },
+
+  async 'a missing or malformed planSurface arg throws build-task before any agent runs — catches a skill that forgets to pass the plan surface'() {
+    const { planSurface, ...withoutSurface } = baseArgs()
+    await assert.rejects(script(withoutSurface, async () => {}, () => {}), /^Error: build-task: planSurface is required/)
+    for (const args of [withoutSurface, baseArgs({ planSurface: '' }), baseArgs({ planSurface: 42 }),
+      baseArgs({ planSurface: 'HEAD' }), baseArgs({ planSurface: ['1a2b3c4d'] }), baseArgs({ planSurface: undefined })]) {
+      const calls = []
+      await assert.rejects(
+        script(args, async (p, o) => calls.push(o), () => {}),
+        /^Error: build-task: planSurface /,
+        JSON.stringify(args),
+      )
+      assert.equal(calls.length, 0)
+    }
+  },
+
+  async 'with a plan surface every worker prompt proves at it and forbids a surface of its own — catches a worker writing a second surface or proving at the wrong base'() {
+    const sha = '1a2b3c4d5e6f'
+    for (const taskProof of ['per-task', 'final']) {
+      const { workerCalls } = await run(baseArgs({ review: 'gate', taskProof, planSurface: sha }), {
+        workers: [red(), workerReturn({ commits: ['77aa001'] })],
+      })
+      assert.equal(workerCalls.length, 2)
+      for (const { prompt } of workerCalls) {
+        const gate = `--impact --coverage --app-build --proof-base ${sha}`
+        assert.ok(prompt.includes(gate), `a ${taskProof} worker prompt lacks ${gate}:\n${prompt}`)
+        assert.ok(prompt.includes(`Plan surface: ${sha}`), `a ${taskProof} worker prompt does not name the plan surface`)
+        assert.ok(prompt.includes('write no surface commit of your own'), 'the prompt does not forbid a new surface')
+        assert.ok(prompt.includes('swiftgate surface-check <stub sha>'), 'the prompt does not check a stub with surface-check')
+        assert.ok(prompt.includes('return its sha as surfaceCommit'), 'the prompt does not return the stub as surfaceCommit')
+        assert.ok(!prompt.includes('<surface commit> when the task adds API'), 'the prompt still asks for a surface of its own')
+      }
+    }
+  },
+
+  async 'with a null plan surface the worker prompt and schema are today\'s, byte for byte — catches a design plan\'s workers told about a plan surface'() {
+    const head =
+      'Build this task and return one TaskReturn JSON object with "review": null.\n\n' +
+      'Task: catalog-list-reducer (plan catalog).\n' +
+      'Worktree: /work/app-catalog-catalog-list-reducer, branch catalog/catalog-list-reducer, already checked out.\n' +
+      'Write set: Sources/CatalogCore/CatalogList.swift, Tests/CatalogCoreTests/CatalogListTests.swift.\n'
+    const tail =
+      'Tests to turn green: test-catalog-list-loads-first-page.\n' +
+      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.'
+    const expected = {
+      'per-task':
+        head + 'Task proof: per-task.\n' +
+        'Task gate: swiftgate check --tier fast --base main --prove --mutate --impact --coverage --app-build, ' +
+        'plus --proof-base <surface commit> when the task adds API.\n' + tail,
+      final:
+        head + 'Task proof: final.\n' +
+        'Task gate: swiftgate check --tier fast --base main --impact --coverage --app-build, ' +
+        "plus --proof-base <surface commit> when the task adds API. The build's final ready gate proves and mutates every task at once.\n" +
+        tail,
+    }
+    for (const [taskProof, prompt] of Object.entries(expected)) {
+      const { workerCalls } = await run(baseArgs({ review: 'gate', taskProof }))
+      assert.equal(workerCalls[0].prompt, prompt)
+      const section = workerCalls[0].opts.schema.properties.designConflict.properties.section
+      assert.deepEqual(section, { type: 'string', description: 'the design section anchor, e.g. decision' })
+    }
+  },
+
+  async 'with a plan surface a design conflict must name a spec page section — catches a conflict citing a design section the plan does not have'() {
+    const args = baseArgs({ planSurface: '1a2b3c4d' })
+    const { workerCalls, result } = await run(args, {
+      workers: [workerReturn({ outcome: 'design-conflict', commits: [], gate: null, designConflict: { ...conflict, section: 'surface', ids: ['slice-2-lists-saved-items'] } })],
+    })
+    assert.match(workerCalls[0].prompt, /spec page section: `slices`, `surface` or `modules`/)
+    assert.deepEqual(workerCalls[0].opts.schema.properties.designConflict.properties.section.enum, ['slices', 'surface', 'modules'])
+    assert.equal(result.outcome, 'design-conflict')
+    assert.equal(result.designConflict.section, 'surface')
+
+    const refused = await run(args, {
+      workers: [workerReturn({ outcome: 'design-conflict', commits: [], gate: null, designConflict: conflict }), workerReturn({ commits: ['77aa001'] })],
+    })
+    assert.equal(refused.workerCalls.length, 2, 'a design-section conflict on a spec page plan went back as usable')
+    assert.match(refused.workerCalls[1].prompt, /unusable.*spec page section/)
+    await assert.rejects(
+      run(args, { workers: [red(), workerReturn({ outcome: 'design-conflict', commits: [], gate: null, designConflict: conflict })] }),
+      /spec page section/,
+    )
   },
 
   async 'invalid args fail before any agent runs — catches a worker launched into the wrong branch or mode'() {
