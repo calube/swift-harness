@@ -50,8 +50,8 @@ reason = "plain word is \"use\""
 
 # Long reference docs keep a budget near their current size, so they can't keep growing unnoticed.
 [docs.budgets.files]
-"plugin/docs/standards.md" = 2700
-"plugin/docs/testing-playbook.md" = 3000
+"plugin/docs/standards.md" = 2850
+"plugin/docs/testing-playbook.md" = 3150
 "docs/e2e-report.md" = 2700
 "plugin/docs/hooks.md" = 900
 "docs/adrs/0001-review-severity-for-standards-violations.md" = 900

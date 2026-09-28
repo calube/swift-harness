@@ -151,4 +151,40 @@ struct TestlintRulesTests {
       context: RuleContext(scopes: PathConventionModuleScopes()))
     #expect(result.findings.isEmpty)
   }
+
+  @Test(
+    "the orphan test's pre-deadline mutant `while true {}` is RED at its literal and today's deadline version passes — catches a fixture that hangs on every prove and mutate run"
+  )
+  func hangWithoutDeadlineOrphanMutant() throws {
+    let id = "test.hang-without-deadline"
+    #expect(try lines(id, "bad/OrphanMutantBeforeDeadline.swift") == [15])
+    #expect(try lines(id, "good/OrphanMutantWithDeadline.swift") == [])
+  }
+
+  @Test(
+    "every forever-waiting shape a test writes out is RED: constant-true loops in Swift, C, shell and Python with no exit, a break that only leaves an inner loop, sleep infinity, RunLoop run(), dispatchMain() and pause() — catches a hang the orphan test's shape alone would miss"
+  )
+  func hangWithoutDeadlineShapes() throws {
+    #expect(
+      try lines("test.hang-without-deadline", "bad/Shapes.swift")
+        == [6, 7, 8, 9, 10, 18, 24, 25, 26, 27, 28])
+  }
+
+  @Test(
+    "a loop with a break, return or exit, a finite sleep, and any literal that sets its own deadline (Date, deadline, DispatchTime, time.time(), timeout N, alarm, withTimeout) pass beside a bare spin that fails — catches the rule flagging fixtures that end by themselves"
+  )
+  func hangWithoutDeadlineBounded() throws {
+    #expect(try lines("test.hang-without-deadline", "good/Bounded.swift") == [])
+    let directory = RuleFixtureTests.fixturesRoot.appending(path: "test.hang-without-deadline")
+    let text = try String(
+      contentsOf: directory.appending(path: "bad/Shapes.swift"), encoding: .utf8)
+    let result = try RuleEngine(rules: RuleCatalog.testlint).run(
+      [SourceInput(path: "Tests/HangTests/Shapes.swift", text: text)],
+      context: RuleContext(scopes: PathConventionModuleScopes()))
+    let finding = try #require(
+      result.findings.first { $0.ruleID == "test.hang-without-deadline" && $0.line == 9 })
+    #expect(finding.severity == .major)
+    #expect(finding.message.contains("while :"))
+    #expect(finding.message.contains("deadline"))
+  }
 }

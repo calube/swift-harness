@@ -4,7 +4,7 @@ import SwiftSyntax
 /// `swiftgate arch` rules that need source: what a module's files import and declare (spec §6.1).
 enum ArchSourceRules {
   static let all: [any Rule] = [
-    UIFrameworkInCoreRule(), UndeclaredKindRule(), ClientTestValueRule(),
+    UIFrameworkInCoreRule(), UndeclaredKindRule(), ClientTestValueRule(), UIHostCompiledRule(),
   ]
 }
 

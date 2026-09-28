@@ -119,6 +119,11 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 - **Tell:** an XCUITest whose class and method match no flow; more flows than `pyramid.max_flows`.
 - **Enforced by:** `testlint` `test.xcuitest-unlisted-flow`; `test --tier t3` (and `check --tier ready`) judges the UI tests that actually ran: `t3.unmapped-flow` (a test matching no flow), `t3.flow-untested` (a flow no test covered), `t3.max-flows` (more UI tests than `pyramid.max_flows`). Loading `.swiftgate.toml` also rejects more `[[flows]]` entries than `max_flows` · **Source:** incident: none yet.
 
+**P12. A fixture that hangs on purpose ends by itself.**
+- **Do:** give any script or source a test writes out that loops or waits on purpose its own bound: a `Date` or `DispatchTime` deadline, `timeout <n>`, `alarm(`, or an exit in the loop.
+- **Tell:** a string literal in a test holding a constant-true loop (`while true`, `while :`, `while True:`, `for (;;)`, `repeat … while true`) with no `break`, `return` or `exit` in its body, or `sleep infinity`, `RunLoop…run()`, `dispatchMain()` or `pause()`, and no deadline anywhere in the literal.
+- **Enforced by:** `testlint` `test.hang-without-deadline` · **Source:** incident: prove and mutate run tests against reverted code, and the orphan test's `while true {}` mutant spun on after every such run until it gained a 90 s deadline.
+
 ## 4. Pyramid enforcement
 
 Raw tier counts are easy to game, so the gate checks where tests live and what they reach.
@@ -156,6 +161,7 @@ SwiftSyntax over test files. Every rule is RED.
 | `test.xcuitest-unlisted-flow` | XCUITest outside `[[flows]]` |
 | `test.misplaced-t2` | T2 test that should be T1 |
 | `test.testclock-serialized` | A Swift Testing test using `TestClock` or `withMainSerialExecutor` outside a `.serialized` suite (P6) |
+| `test.hang-without-deadline` | A string literal that waits forever with no deadline (P12) |
 
 Run it on a path relative to the repository root, e.g. `swiftgate testlint Packages/CounterFeature/Tests` in an app repository. With no argument it checks everything.
 
