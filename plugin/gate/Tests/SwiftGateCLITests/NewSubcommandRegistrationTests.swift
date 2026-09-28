@@ -132,6 +132,11 @@ struct NewSubcommandRegistrationTests {
     ("sprint finish", ["sprint", "finish", "--gate", "r1"], "finish"),
     ("sprint status", ["sprint", "status"], "status"),
     ("sprint status --json", ["sprint", "status", "--json"], "status"),
+    ("spec-page check", ["spec-page", "check", "page.md", "--spec", "spec.md"], "check"),
+    (
+      "spec-page check --json",
+      ["spec-page", "check", "page.md", "--spec", "spec.md", "--json"], "check"
+    ),
     (
       "design-telemetry",
       [
@@ -175,6 +180,7 @@ struct NewSubcommandRegistrationTests {
     "surface-check", "surface-check --json",
     "sprint start", "sprint surface", "sprint slice", "sprint finish", "sprint status",
     "sprint status --json",
+    "spec-page check", "spec-page check --json",
     "design-telemetry",
   ]
 

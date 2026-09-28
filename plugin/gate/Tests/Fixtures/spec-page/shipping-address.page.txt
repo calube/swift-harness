@@ -1,0 +1,31 @@
+# Save a shipping address
+
+Spec: ./shipping-address.spec.md
+
+## Goal
+A user fills in a shipping address form under the posts count on the first screen, sees each field's error as soon as its value is invalid, saves a valid address to the device, and finds it filled in on the next launch.
+
+## Modules
+| Module | Kind | Owns | Depends on |
+|---|---|---|---|
+| AddressClient | client | `ShippingAddress`, `AddressClient` / `AddressClientLive` on-device storage | none |
+| AppCore | feature | Form state, validation, save, clear and load in `AppFeature` | AddressClient, LogClient |
+| AppUI | feature | Address form in `AppView` | AppCore |
+
+## Surface
+- `ShippingAddress`: `recipient: String`, `postcode: String`, `deliveryNote: String`
+- `AddressClient`: `load: () -> ShippingAddress?`, `save: (ShippingAddress) -> Void`; `AddressClientLive` stores on the device
+- `AppFeature.State`: `recipient`, `postcode`, `deliveryNote: String`; `recipientError`, `postcodeError`, `deliveryNoteError: String?`; `deliveryNoteCharactersLeft: Int`; `isSaveDisabled: Bool`
+- `AppFeature.Action`: `recipientChanged(String)`, `postcodeChanged(String)`, `deliveryNoteChanged(String)`, `saveTapped`, `clearTapped`, `addressLoaded(ShippingAddress?)`
+- `AppView`: Recipient, Postcode and Delivery note fields under the posts count, each with its error text; a characters-left label; Save and Clear buttons
+
+## Slices
+1. Recipient field with trimming and 2 to 50 character validation. Test: `recipientTooShortShowsErrorAndDisablesSave`: a 1-character recipient after trimming sets `recipientError` to "Recipient must be 2 to 50 characters" and `isSaveDisabled` to true. Spec: "A recipient of fewer than 2 characters after trimming shows "Recipient must be 2 to 50 characters" and Save stays disabled."
+2. Postcode field with 5-digit validation. Test: `invalidPostcodeShowsErrorAndDisablesSave`: a 4-digit postcode sets `postcodeError` to "Enter a 5-digit postcode" and `isSaveDisabled` to true. Spec: "A postcode that is not exactly 5 digits shows "Enter a 5-digit postcode" and Save stays disabled."
+3. Optional delivery note with 120-character limit and a count of characters left. Test: `deliveryNoteShowsCharactersLeft`: a 20-character note sets `deliveryNoteCharactersLeft` to 100 with no error, and a 121-character note sets `deliveryNoteError` and disables Save. Spec: none
+4. Save stores the address through `AddressClient`, and launch loads it. Test: `savedAddressIsShownOnNextLaunch`: `saveTapped` on a valid address calls `save` with it, and a fresh store whose `load` returns it shows the same values. Spec: "Saving a valid address stores it, and the next launch shows the saved values."
+5. Clear empties the form. Test: `clearEmptiesFieldsAndErrorsWithoutTouchingSaved`: `clearTapped` empties every field and error, and `save` is never called. Spec: "Clear empties every field and clears every error, and the saved address is unchanged."
+
+## Out of scope
+- More than one address, address lookup, and syncing to a server.
+- Any network use by the form.

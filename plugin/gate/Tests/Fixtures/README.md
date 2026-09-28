@@ -586,3 +586,27 @@ swiftgate plan set 2026-09-28-saved-search --session $S --tier deep --resume 're
 cp .git/swift-harness/plans/2026-09-28-reading-list/plan.json <fixtures>/PlanState/claim-seeded.json
 cp .git/swift-harness/plans/2026-09-28-saved-search/plan.json <fixtures>/PlanState/plan-set-tier-and-resume.json
 ```
+
+## Spec pages (`spec-page check`)
+
+`spec-page/<name>.page.txt` is a spec page a sprint session wrote from `spec-page/<name>.spec.txt`,
+with Claude Code 2.1.282 on `opus`. The captures named both files `.md`; the `.txt` copies keep
+the prose lint off tool output, and each page still names its spec as `<name>.spec.md`. The spec
+files are generic features written for these captures, not the sprint rehearsals' prompts, so no
+fixture quotes rehearsal prompt text. The rehearsal pages have the same shape; the tests derive a
+wrapped goal like theirs from a captured page.
+
+`spec-page/capture-prompt.txt` is the prompt head: the sprint skill's spec page step,
+`skills/sprint/references/spec-page.md` and standards.md's module kinds, as they stood at capture,
+followed by `=== SPECFILE`. In an empty directory holding `<name>.spec.md`:
+
+| File | Capture |
+|---|---|
+| `task-status.page.txt`, `shipping-address.page.txt` | `sed "s#SPECFILE#<name>.spec.md#" capture-prompt.txt > prompt.txt && cat <name>.spec.md >> prompt.txt && claude -p --model opus --tools "" < prompt.txt > <name>.page.md` |
+| `recipient-postcode.page.txt` | as above, with the prompt's last instruction line `Print ONLY the spec page's Markdown, nothing before or after it, no code fence. Use no tools.` replaced by `Write the page to ./page.md with the Write tool; you may check it with Bash (for example wc -w). Reply "done" when it is written.`, run as `claude -p --model opus --allowedTools "Write,Read,Bash(wc:*)" --permission-mode acceptEdits < prompt.txt`, then `page.md` copied |
+
+What the pages show: every slice of `task-status` and `recipient-postcode` quotes its spec, so
+both are `confirm: skippable`. `recipient-postcode` slice 2 quotes an acceptance line the spec
+file wraps over 2 lines, joined onto 1. `shipping-address` marks the delivery note slice
+`Spec: none` (its spec lists no acceptance line for it) and runs to 417 words, over the 400-word
+limit: a real `too-long` page.

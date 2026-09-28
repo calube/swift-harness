@@ -42,6 +42,7 @@ struct RuleIndexTests {
     ]
     let surface = [SurfaceCheck.behaviourRuleID, SurfaceCheck.summaryRuleID]
     let sprint = SprintRefusal.allCases.map(\.rawValue)
+    let specPage = SpecPageCheck.Rule.allCases.map(\.rawValue)
     let mutation = [
       MutationRules.survivedRuleID, MutationRules.killedRuleID, MutationRules.unviableRuleID,
       MutationRules.noEvidenceRuleID, MutationRules.bareEquivalentRuleID,
@@ -86,7 +87,7 @@ struct RuleIndexTests {
     return Set(
       buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
         + changedTests + coverage + mutation + judge + harness + environment + surface
-        + commandRules + sprint)
+        + commandRules + sprint + specPage)
   }
 
   /// Every backticked rule id in the index section.
