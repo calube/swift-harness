@@ -28,6 +28,9 @@ const ARGS =
 const TASK_RETURN_KEYS = [
   'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
 ]
+// Why a worker may stop with its task gate red. A worker adds `redReason` to a gate-red return and to
+// no other; this workflow moves it into `notes`, so what check-return decodes keeps TaskReturn's keys.
+const RED_REASONS = ['outside-write-set', 'no-progress', 'environment']
 // A worker never returns review-blocked: only this workflow's review stage decides it.
 const WORKER_OUTCOMES = ['ready-to-merge', 'gate-red', 'design-conflict']
 const TIERS = ['fast', 'push', 'ready']
@@ -130,6 +133,11 @@ const TASK_RETURN_SCHEMA = {
   required: TASK_RETURN_KEYS,
   additionalProperties: false,
   properties: {
+    redReason: {
+      type: 'string',
+      enum: RED_REASONS,
+      description: 'gate-red only, and required there: why the gate could not be brought to GREEN',
+    },
     task: { type: 'string' },
     outcome: { type: 'string', enum: WORKER_OUTCOMES },
     commits: { type: 'array', items: { type: 'string' }, description: 'shas on the task branch, oldest first' },
@@ -176,7 +184,7 @@ const REVIEW_SCHEMA = {
 // anything. Returns why a worker return is off-contract, or null when it is usable.
 function workerDefect(r) {
   if (!r || typeof r !== 'object' || Array.isArray(r)) return 'it returned no object'
-  const keys = Object.keys(r)
+  const keys = Object.keys(r).filter(k => k !== 'redReason')
   const missing = TASK_RETURN_KEYS.filter(k => !keys.includes(k))
   const extra = keys.filter(k => !TASK_RETURN_KEYS.includes(k))
   if (missing.length || extra.length) return `its keys differ from TaskReturn (missing: ${missing.join(', ') || 'none'}; extra: ${extra.join(', ') || 'none'})`
@@ -201,6 +209,24 @@ function workerDefect(r) {
   if (r.outcome === 'ready-to-merge' && r.gate.verdict !== 'GREEN') return `it claims ready-to-merge on a ${r.gate.verdict} gate`
   if (r.outcome === 'gate-red' && r.gate.verdict === 'GREEN') return 'it claims gate-red on a GREEN gate'
   return null
+}
+
+// A gate-red return must say why the worker stopped short of GREEN, from a closed list; a red run is
+// otherwise the start of the worker's loop, not a reason to return.
+function redReasonDefect(r) {
+  const has = Object.prototype.hasOwnProperty.call(r, 'redReason')
+  if (r.outcome !== 'gate-red') return has ? `a ${r.outcome} return carries a redReason` : null
+  if (!has) return `a gate-red return names no redReason (one of ${RED_REASONS.join(', ')})`
+  if (!RED_REASONS.includes(r.redReason)) {
+    return `its redReason ${JSON.stringify(r.redReason)} isn't one of ${RED_REASONS.join(', ')}`
+  }
+  return null
+}
+
+// The worker's return as TaskReturn's keys, its redReason moved to the end of `notes`.
+function withoutRedReason(r) {
+  const notes = r.redReason === undefined ? r.notes : [r.notes, `redReason: ${r.redReason}`].filter(Boolean).join('\n')
+  return Object.fromEntries(TASK_RETURN_KEYS.map(k => [k, k === 'notes' ? notes : r[k]]))
 }
 
 // Returns why a reviewer finding can't go into `review.findings`, or null. `ReviewFinding` decodes
@@ -279,7 +305,10 @@ async function runWorker(fix) {
     return { defect: `it failed: ${error && error.message ? error.message : String(error)}` }
   }
   const defect = workerDefect(result)
-  return defect ? { defect } : { value: result }
+  if (defect) return { defect }
+  // A return that is well formed but for its redReason still names real commits on the branch.
+  const reasonDefect = redReasonDefect(result)
+  return reasonDefect ? { defect: reasonDefect, salvage: withoutRedReason(result) } : { value: withoutRedReason(result) }
 }
 
 function reviewPrompt(reviewer, commits) {
@@ -344,7 +373,7 @@ function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, ext
     notes: extraNote ? [worker.notes, extraNote].filter(Boolean).join('\n') : worker.notes,
     designConflict: outcome === 'design-conflict' ? worker.designConflict : null,
     // A fix pass works on the same branch, so the first attempt's surface commit still stands.
-    surfaceCommit: worker.surfaceCommit ?? (first.value ? first.value.surfaceCommit : null),
+    surfaceCommit: worker.surfaceCommit ?? (firstAttempt ? firstAttempt.surfaceCommit : null),
   }
   return Object.fromEntries(TASK_RETURN_KEYS.map(k => [k, out[k]]))
 }
@@ -354,16 +383,17 @@ const gateFinding = gate =>
 
 // Attempt 1.
 const first = await runWorker(null)
+const firstAttempt = first.value ?? first.salvage ?? null
 let fix
 let lastFindings = []
 if (first.defect) {
   log(`build-worker for ${A.task} was unusable: ${first.defect}`)
-  fix = { reason: `the earlier worker's return was unusable: ${first.defect}`, earlier: null, findings: [] }
+  fix = { reason: `the earlier worker's return was unusable: ${first.defect}`, earlier: first.salvage ?? null, findings: [] }
 } else {
   const w = first.value
   if (w.outcome === 'design-conflict') return taskReturn('design-conflict', w, [], [], [])
   if (w.outcome === 'gate-red') {
-    fix = { reason: gateFinding(w.gate), earlier: w, findings: [] }
+    fix = { reason: `${gateFinding(w.gate)}; the earlier worker stopped there (${w.notes})`, earlier: w, findings: [] }
   } else if (A.review === 'full') {
     const review = await runReview(w.commits)
     lastFindings = review.findings
@@ -387,8 +417,8 @@ const second = await runWorker(fix)
 if (second.defect) {
   throw new Error(`build-task: the fix-pass build-worker for ${A.task} was unusable: ${second.defect}`)
 }
-const earlierCommits = first.value ? first.value.commits : []
-const earlierTests = first.value ? first.value.testsAdded : []
+const earlierCommits = firstAttempt ? firstAttempt.commits : []
+const earlierTests = firstAttempt ? firstAttempt.testsAdded : []
 const w2 = second.value
 if (w2.outcome === 'design-conflict') return taskReturn('design-conflict', w2, earlierCommits, earlierTests, lastFindings)
 if (w2.outcome === 'gate-red') {
