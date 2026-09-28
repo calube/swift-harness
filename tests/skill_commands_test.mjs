@@ -415,7 +415,50 @@ export function sprintSkillProblems(text, steps) {
   return problems
 }
 
+/**
+ * Problems with how a skill's `SKILL.md` text runs doctor before it starts work: under the
+ * `heading` section, a `doctor --session` call, and a stop on `doctor.plugin-changed` telling the
+ * user to start a fresh session. A running session keeps the prompts it loaded at start, so only
+ * a fresh one runs a changed plugin.
+ */
+function doctorPreflightProblems(text, heading) {
+  const padded = `\n${text}`
+  const at = padded.indexOf(`\n${heading}\n`)
+  if (at < 0) return [`no \`${heading}\` section`]
+  const section = padded.slice(at + 1).split(/\n## /)[0]
+  const problems = []
+  const calls = extractInvocations(section).filter(inv => inv.words[0] === 'doctor')
+  if (!calls.some(inv => inv.words.some(w => flagOf(w) === '--session'))) {
+    problems.push(`\`${heading}\` never runs \`swiftgate doctor --session\``)
+  }
+  if (!/`doctor\.plugin-changed`[^]*?\bstop\b[^]*?fresh session/.test(section)) {
+    problems.push(`\`${heading}\` never stops on \`doctor.plugin-changed\` for a fresh session`)
+  }
+  return problems
+}
+
 const tests = {
+  'ship, build and sprint run doctor with the session id at their preflight and stop on doctor.plugin-changed — catches a session running stale prompts past its preflight'() {
+    for (const [skill, heading] of [['ship', '## 1. Preflight'], ['sprint', '## 1. Preflight'], ['build', '## 1. Start']]) {
+      const text = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8')
+      assert.deepEqual(doctorPreflightProblems(text, heading), [], `the ${skill} skill`)
+      const { problems, resolved } = scanSkills(join(root, `skills/${skill}`), help, root)
+      assert.deepEqual(problems, [])
+      assert.ok(resolved.some(r => r.path === 'doctor' && r.flags.includes('--session')), `the ${skill} skill's doctor --session isn't a real flag`)
+    }
+    const build = readFileSync(join(root, 'skills/build/SKILL.md'), 'utf8').split('\n## 1. Start\n')[1] ?? ''
+    assert.ok(/^\n1\. `"\$SG" doctor --session <session>`/.test(build), 'the build skill does not run doctor as its first start step')
+  },
+
+  'a preflight without doctor --session or its stop fails and names both — catches the doctor preflight check passing anything'() {
+    const skill = ['## 1. Preflight', '1. `"$SG" doctor`. Any non-zero exit: stop.', '## 2. Next', '`doctor.plugin-changed`: stop; start a fresh session.'].join('\n')
+    assert.deepEqual(doctorPreflightProblems(skill, '## 1. Preflight'), [
+      '`## 1. Preflight` never runs `swiftgate doctor --session`',
+      '`## 1. Preflight` never stops on `doctor.plugin-changed` for a fresh session',
+    ])
+    assert.deepEqual(doctorPreflightProblems(skill, '## 1. Start'), ['no `## 1. Start` section'])
+  },
+
   'the build skill names every command of its loop with the flags the CLI requires — catches a loop step dropped or a guarded call made without --session'() {
     const files = buildSkillFiles()
     assert.deepEqual(requiredCallProblems(files), [])

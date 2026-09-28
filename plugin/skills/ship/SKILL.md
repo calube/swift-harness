@@ -41,7 +41,12 @@ Each check must pass before any design work starts. On a failure, report it and 
 
 1. **Preset.** Read `.swiftgate.toml`. When it has no `[build.presets.<preset>]` table, stop and
    list the preset names it does define. Keep `<design_tier>`.
-2. **Machine.** `"$SG" doctor`. Any non-zero exit: quote its findings and stop.
+2. **Machine.** `"$SG" doctor --session <session>`, with `<session>` from the `Session id: <id>`
+   line of the SessionStart context. Without that line, run `"$SG" doctor`, which judges the
+   newest session record instead. Any non-zero exit: quote its findings and stop.
+   `doctor.plugin-changed` means the plugin changed after this session started, and this session
+   still runs the skills and agent prompts it loaded then: stop, and tell the user to start a
+   fresh session.
 3. **Clean main.** `git branch --show-current` prints `main`, and `git status --porcelain` prints
    nothing. Otherwise stop, and ask the user to commit, stash or switch first. Never do it for them.
 4. **Warm build.** `"$SG" worktree warm-check --json`. Exit 1 means the main checkout has no warm

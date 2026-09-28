@@ -75,7 +75,12 @@ checkout, after the commit it judges.
 1. **Recorded sprint.** `"$SG" sprint status --json`. When `next` isn't `start`, a sprint is in
    flight: go to [Resume](#resume). When its `sprint.specPage` isn't this spec's page, halt: only
    finishing that sprint lets another start.
-2. **Machine.** `"$SG" doctor`. Any non-zero exit: quote its findings and stop.
+2. **Machine.** `"$SG" doctor --session <session>`, with `<session>` from the `Session id: <id>`
+   line of the SessionStart context. Without that line, run `"$SG" doctor`, which judges the
+   newest session record instead. Any non-zero exit: quote its findings and stop.
+   `doctor.plugin-changed` means the plugin changed after this session started, and this session
+   still runs the skills and agent prompts it loaded then: stop, and tell the user to start a
+   fresh session.
 3. **Clean main.** `git branch --show-current` prints `main`, and `git status --porcelain` prints
    nothing. Otherwise stop, and ask the user to commit, stash or switch first. Never do it for them.
 4. **Green main.** `"$SG" check --tier push --base main`. `sprint start` needs a GREEN push run at
