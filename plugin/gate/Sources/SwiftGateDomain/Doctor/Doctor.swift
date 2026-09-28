@@ -73,12 +73,15 @@ public struct DoctorFacts: Sendable {
   public let architectureFindings: [Finding]
   /// Whether `mmdc`, the Mermaid CLI `design-lint` validates diagrams with, is on `PATH`.
   public let mermaidCLIInstalled: Bool
+  /// The session's plugin record against the tree on disk; `nil` when not gathered.
+  public let pluginSession: PluginSessionFacts?
 
   public init(
     config: Config, xcodeVersionOutput: String?, swiftVersionOutput: String?,
     devices: Result<[SimulatorDevice], ProbeFailure>, freeBytes: Int64?, shim: ShimStatus,
     swiftLintInstalled: Bool, packages: [PackageManifest], resolvedVersions: [String: String],
-    architectureFindings: [Finding], mermaidCLIInstalled: Bool
+    architectureFindings: [Finding], mermaidCLIInstalled: Bool,
+    pluginSession: PluginSessionFacts? = nil
   ) {
     self.config = config
     self.xcodeVersionOutput = xcodeVersionOutput
@@ -91,6 +94,56 @@ public struct DoctorFacts: Sendable {
     self.resolvedVersions = resolvedVersions
     self.architectureFindings = architectureFindings
     self.mermaidCLIInstalled = mermaidCLIInstalled
+    self.pluginSession = pluginSession
+  }
+}
+
+/// What a session recorded of its plugin at start, next to that plugin as it is now.
+public struct PluginSessionFacts: Sendable, Equatable {
+  /// The session doctor was asked about; `nil` means the newest record stands in for it.
+  public let sessionID: String?
+  /// The record judged; `nil` when there is none to judge.
+  public let recorded: RecordedPluginSession?
+  /// Record files that couldn't be read, with why.
+  public let unreadable: [UnreadableSessionRecord]
+  /// Where records live, for a message that names the source.
+  public let directory: String
+
+  public init(
+    sessionID: String?, recorded: RecordedPluginSession?, unreadable: [UnreadableSessionRecord],
+    directory: String
+  ) {
+    self.sessionID = sessionID
+    self.recorded = recorded
+    self.unreadable = unreadable
+    self.directory = directory
+  }
+}
+
+public struct RecordedPluginSession: Sendable, Equatable {
+  public let record: SessionRecord
+  /// The tree at the record's `pluginRoot` now.
+  public let current: PluginTreeState
+
+  public init(record: SessionRecord, current: PluginTreeState) {
+    self.record = record
+    self.current = current
+  }
+}
+
+public enum PluginTreeState: Sendable, Equatable {
+  case tree(version: String, hash: String)
+  case rootMissing
+  case unreadable(reason: String)
+}
+
+public struct UnreadableSessionRecord: Sendable, Equatable {
+  public let path: String
+  public let reason: String
+
+  public init(path: String, reason: String) {
+    self.path = path
+    self.reason = reason
   }
 }
 
@@ -128,6 +181,8 @@ public enum Doctor {
   public static let issueReportingRuleID = "doctor.issue-reporting"
   public static let upgradeHazardRuleID = "doctor.upgrade-hazard"
   public static let profileRuleID = "doctor.profile"
+  public static let pluginChangedRuleID = "doctor.plugin-changed"
+  public static let sessionRecordRuleID = "doctor.session-record"
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.
@@ -255,6 +310,10 @@ public enum Doctor {
 
     check.findings += facts.architectureFindings
 
+    if let session = facts.pluginSession {
+      check.findings += pluginSessionFindings(session)
+    }
+
     if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
       let defined = facts.config.buildPresets.keys.sorted()
       check.fail(
@@ -280,6 +339,48 @@ public enum Doctor {
       }
     }
     return check.result
+  }
+
+  /// Whether the session still runs the plugin text on disk: a running session keeps the skills
+  /// and agent prompts it loaded at start, so a plugin change reaches only new sessions.
+  public static func pluginSessionFindings(_ facts: PluginSessionFacts) -> [Finding] {
+    var check = DoctorJudgement()
+    for record in facts.unreadable {
+      check.fail(
+        sessionRecordRuleID, record.path,
+        "session record \(record.path) can't be read (\(record.reason)), so doctor can't tell "
+          + "whether the plugin changed after that session started; delete it and start a "
+          + "fresh session")
+    }
+    guard let recorded = facts.recorded else {
+      if facts.unreadable.isEmpty {
+        let whose = facts.sessionID.map { "for session \($0) " } ?? ""
+        check.warn(
+          sessionRecordRuleID, .nit,
+          "no session record \(whose)under \(facts.directory), so doctor can't tell whether the "
+            + "plugin changed after this session started; the SessionStart hook writes one")
+      }
+      return check.findings
+    }
+    let record = recorded.record
+    let root = record.pluginRoot
+    let restart = "the plugin changed after this session started; start a fresh session"
+    let loaded =
+      "session \(record.sessionId) loaded version \(record.pluginVersion), tree "
+      + record.treeHash
+    switch recorded.current {
+    case .tree(let version, let hash) where hash != record.treeHash:
+      check.fail(
+        pluginChangedRuleID, root,
+        "\(restart) (\(loaded); \(root) now holds version \(version), tree \(hash))")
+    case .tree: break
+    case .rootMissing:
+      check.fail(pluginChangedRuleID, root, "\(restart) (\(loaded); \(root) no longer exists)")
+    case .unreadable(let reason):
+      check.fail(
+        pluginChangedRuleID, root, "\(restart) (\(loaded); \(root) can't be hashed: \(reason))")
+    }
+    return check.findings
   }
 
   private static func gibibytes(_ bytes: Int64) -> String {

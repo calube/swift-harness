@@ -38,18 +38,22 @@ recommended first. Never work around a halt by hand. The reference lists the opt
 
 ## 1. Start
 
-1. `"$SG" plan claim <slug> --session <session> --json`. Exit 1 names the session that holds the
+1. `"$SG" doctor --session <session>`. A running session keeps the skills and agent prompts it
+   loaded at start, so a plugin change reaches only new sessions. `doctor.plugin-changed` means
+   this session runs the old text: stop, and tell the user to start a fresh session. Any other
+   non-zero exit: quote its findings as `rule: message` and stop.
+2. `"$SG" plan claim <slug> --session <session> --json`. Exit 1 names the session that holds the
    plan: halt.
-2. Unless the index is already `building` (a resume), check that `main` is green:
+3. Unless the index is already `building` (a resume), check that `main` is green:
    `"$SG" check --tier <merge_gate>`, with the preset's `merge_gate` from `.swiftgate.toml`. Not
    GREEN: halt, and quote the findings as `rule: message`. Options: **stop** (Recommended) so
    `main` gets fixed first, or **go on** with these findings as the baseline. With a baseline, a
    later merge gate passes when its gating findings are exactly the baseline's. Every merge gate
    runs on `main`, so a finding already there would read as the task's fault.
-3. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
+4. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
-4. Read `<plans>/<slug>/build/<run>/run.json` for the preset, `<plans>/<slug>/plan.json` for the
+5. Read `<plans>/<slug>/build/<run>/run.json` for the preset, `<plans>/<slug>/plan.json` for the
    design doc, and start the cutoff timer when `timeBudgetMin` isn't 0
    ([time budget](references/event-loop.md#time-budget)).
 

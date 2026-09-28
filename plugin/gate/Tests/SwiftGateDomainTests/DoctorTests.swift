@@ -185,3 +185,125 @@ struct DoctorTests {
     #expect(!(ToolVersion("26.2") < ToolVersion("26.2.0")))
   }
 }
+
+@Suite("doctor: the session's plugin")
+struct DoctorPluginSessionTests {
+  private static let recordedHash = String(repeating: "a", count: 64)
+  private static let changedHash = String(repeating: "b", count: 64)
+
+  private func record(_ id: String = "session-a") throws -> SessionRecord {
+    try SessionRecord(
+      sessionId: id, recordedAt: Date(timeIntervalSince1970: 1_000), pluginRoot: "/plugins/harness",
+      pluginVersion: "0.1.0", treeHash: Self.recordedHash, transcriptPath: nil)
+  }
+
+  private func evaluate(_ session: PluginSessionFacts) throws -> DoctorResult {
+    let device = SimulatorDevice(
+      udid: "B", name: "iPhone 17",
+      runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-2", state: "Shutdown",
+      isAvailable: true)
+    return Doctor.evaluate(
+      DoctorFacts(
+        config: try SampleGraph.config(modules: []),
+        xcodeVersionOutput: try Fixture.text("Doctor/xcodebuild-version.txt"),
+        swiftVersionOutput: try Fixture.text("Doctor/swift-version.txt"),
+        devices: .success([device]), freeBytes: 500_000_000_000, shim: .current,
+        swiftLintInstalled: true, packages: [], resolvedVersions: [:], architectureFindings: [],
+        mermaidCLIInstalled: true, pluginSession: session))
+  }
+
+  private func facts(
+    sessionID: String? = nil, recorded: RecordedPluginSession?,
+    unreadable: [UnreadableSessionRecord] = []
+  ) -> PluginSessionFacts {
+    PluginSessionFacts(
+      sessionID: sessionID, recorded: recorded, unreadable: unreadable,
+      directory: ".harness/hook-state/sessions")
+  }
+
+  private func sessionFindings(_ result: DoctorResult) -> [Finding] {
+    result.findings.filter {
+      [Doctor.pluginChangedRuleID, Doctor.sessionRecordRuleID].contains($0.ruleID)
+    }
+  }
+
+  @Test(
+    "a record whose tree hash differs from the plugin on disk is a major doctor.plugin-changed naming both hashes and versions and saying to start a fresh session, and a matching one stays GREEN — catches a session running stale prompts with nothing to stop it, or a check failing every session"
+  )
+  func changedTreeFailsAndMatchingPasses() throws {
+    let matching = try evaluate(
+      facts(
+        recorded: RecordedPluginSession(
+          record: try record(), current: .tree(version: "0.1.0", hash: Self.recordedHash))))
+    #expect(sessionFindings(matching).isEmpty)
+    #expect(matching.verdict == .green)
+
+    let result = try evaluate(
+      facts(
+        recorded: RecordedPluginSession(
+          record: try record(), current: .tree(version: "0.2.0", hash: Self.changedHash))))
+    let finding = try #require(sessionFindings(result).first)
+    #expect(sessionFindings(result).count == 1)
+    #expect(finding.ruleID == Doctor.pluginChangedRuleID)
+    #expect(finding.severity == .major)
+    #expect(result.verdict == .red)
+    for part in [Self.recordedHash, Self.changedHash, "0.1.0", "0.2.0", "start a fresh session"] {
+      #expect(finding.message.contains(part), "message lacks \(part): \(finding.message)")
+    }
+  }
+
+  @Test(
+    "no record, or none for the named session, is a doctor.session-record nit that never gates — catches a repository bootstrapped before the hook failing doctor"
+  )
+  func noRecordIsANote() throws {
+    for sessionID in [nil, "session-b"] {
+      let result = try evaluate(facts(sessionID: sessionID, recorded: nil))
+      let finding = try #require(sessionFindings(result).first)
+      #expect(sessionFindings(result).count == 1)
+      #expect(finding.ruleID == Doctor.sessionRecordRuleID)
+      #expect(finding.severity == .nit)
+      #expect(result.verdict == .green)
+      #expect(finding.message.contains(".harness/hook-state/sessions"))
+      if let sessionID { #expect(finding.message.contains(sessionID)) }
+    }
+  }
+
+  @Test(
+    "a plugin root that no longer exists, or a tree there that can't be hashed, is a major doctor.plugin-changed naming the root — catches a moved plugin passing as unchanged"
+  )
+  func missingOrUnreadableRootFails() throws {
+    for current in [PluginTreeState.rootMissing, .unreadable(reason: "no string \"version\"")] {
+      let result = try evaluate(
+        facts(recorded: RecordedPluginSession(record: try record(), current: current)))
+      let finding = try #require(sessionFindings(result).first)
+      #expect(finding.ruleID == Doctor.pluginChangedRuleID)
+      #expect(finding.severity == .major)
+      #expect(finding.message.contains("/plugins/harness"))
+      #expect(finding.message.contains("start a fresh session"))
+      #expect(result.verdict == .red)
+    }
+  }
+
+  @Test(
+    "an unreadable record is a major doctor.session-record naming its path and reason, even beside a matching record — catches a corrupt or newer-schema record read as a match"
+  )
+  func unreadableRecordFails() throws {
+    let unreadable = UnreadableSessionRecord(
+      path: ".harness/hook-state/sessions/session-c.json",
+      reason: "session record has schemaVersion 2; this swiftgate reads 1")
+    for recorded in [
+      nil,
+      RecordedPluginSession(
+        record: try record(), current: .tree(version: "0.1.0", hash: Self.recordedHash)),
+    ] {
+      let result = try evaluate(facts(recorded: recorded, unreadable: [unreadable]))
+      let finding = try #require(sessionFindings(result).first)
+      #expect(sessionFindings(result).count == 1)
+      #expect(finding.ruleID == Doctor.sessionRecordRuleID)
+      #expect(finding.severity == .major)
+      #expect(finding.message.contains(unreadable.path))
+      #expect(finding.message.contains("schemaVersion 2"))
+      #expect(result.verdict == .red)
+    }
+  }
+}
