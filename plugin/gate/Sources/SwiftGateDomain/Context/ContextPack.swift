@@ -97,10 +97,9 @@ public enum ContextPackError: Error, Sendable, Equatable {
   /// couldn't be read or decoded under the given build run — never rendered as a thin pack that
   /// silently drops one dependency's notes.
   case missingDependencyReturn(task: String)
-  /// A worker's write-set entry lies in no module and no package of the module graph, so its
-  /// module kind, and the standards that go with it, can't be known. Also thrown with the first
-  /// entry when no entry names a module at all, and with `nil` for an empty write set: a pack
-  /// without standards is never built.
+  /// A worker's write-set entry lies in a module the graph gives no kind, so the standards that go
+  /// with it can't be known. `nil` when the module graph itself couldn't be built because the
+  /// repository's config names a module kind outside ``ModuleKind``.
   case unknownModuleKind(writeSetEntry: String?)
 }
 
@@ -830,30 +829,24 @@ extension ContextPack {
 public enum WorkerModuleKinds {
   /// Each entry is a file or, with a trailing `/`, a directory. A test target counts as the module
   /// it tests, as `plan-lint` counts it, so an engine's tests get the engine standards. An entry
-  /// inside a package but no module (its manifest) adds no kind; any other entry outside every
-  /// module is an unknown kind.
+  /// outside every module (a doc, a manifest, a fixture) adds no kind, so the result is empty for
+  /// a write set with no module entries.
   public static func kinds(writeSet: [String], graph: ModuleGraph) throws(ContextPackError)
     -> [ModuleKind]
   {
-    var found = Set<String>()
+    var kinds = Set<ModuleKind>()
     for entry in writeSet {
       let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
       var modules: [Module] = graph.module(containingFile: path).map { [$0] } ?? []
       if modules.isEmpty, entry.hasSuffix("/") {
         modules = graph.modules.filter { $0.path == path || $0.path.hasPrefix(path + "/") }
       }
-      if modules.isEmpty {
-        guard graph.package(containingFile: path) != nil else {
-          throw .unknownModuleKind(writeSetEntry: entry)
-        }
-        continue
-      }
       for module in modules {
-        found.insert(PlanLintGraph.countedModule(module, graph: graph))
+        guard let counted = graph.module(named: PlanLintGraph.countedModule(module, graph: graph))
+        else { throw .unknownModuleKind(writeSetEntry: entry) }
+        kinds.insert(counted.kind)
       }
     }
-    guard !found.isEmpty else { throw .unknownModuleKind(writeSetEntry: writeSet.first) }
-    let kinds = Set(found.compactMap { graph.module(named: $0)?.kind })
     return ModuleKind.allCases.filter(kinds.contains)
   }
 }

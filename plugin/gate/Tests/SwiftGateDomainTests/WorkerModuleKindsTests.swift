@@ -50,24 +50,12 @@ struct WorkerModuleKindsTests {
   }
 
   @Test(
-    "an entry in no module or package is the unknown-kind error naming it — catches a silently thin pack"
+    "an entry outside every module adds no kind and no error — catches a code task that also edits a doc refused its pack"
   )
-  func entryOutsideTheGraphIsAnUnknownKind() throws {
-    let stray = "Sources/Stray/Stray.swift"
-    #expect(throws: ContextPackError.unknownModuleKind(writeSetEntry: stray)) {
-      try WorkerModuleKinds.kinds(
-        writeSet: ["\(Self.packages)/GameEngine/Sources/GameEngine/", stray],
-        graph: Self.graph())
-    }
-  }
-
-  @Test(
-    "a write set naming no module at all is the unknown-kind error, never an empty kind list — catches a pack with no standards"
-  )
-  func writeSetWithNoModuleIsAnUnknownKind() throws {
-    let manifest = "\(Self.packages)/GameEngine/Package.swift"
-    #expect(throws: ContextPackError.unknownModuleKind(writeSetEntry: manifest)) {
-      try WorkerModuleKinds.kinds(writeSet: [manifest], graph: Self.graph())
-    }
+  func entryOutsideEveryModuleAddsNoKind() throws {
+    let kinds = try WorkerModuleKinds.kinds(
+      writeSet: ["\(Self.packages)/GameEngine/Sources/GameEngine/", "docs/notes.md"],
+      graph: Self.graph())
+    #expect(kinds == [.engine])
   }
 }

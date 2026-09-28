@@ -385,6 +385,23 @@ enum ContextPackRun {
     return .success(answers.touchedModules)
   }
 
+  /// A write set with no module entries (docs, fixtures) still gets a standards section, one that
+  /// says why it holds no excerpt, so a reader never takes an empty section for a lost one.
+  private static let noModuleKindsAnchor = "no-module-kinds"
+  private static let noModuleKindsStandards = ContextSource(
+    label: "standards",
+    rawText:
+      "## No module kinds\n\nNo module kinds in this task's write set; no standards excerpt.\n")
+
+  private static func configLoadError(root: URL) -> ConfigLoadError? {
+    do throws(ConfigLoadError) {
+      _ = try ConfigLoader().load(repositoryRoot: root)
+      return nil
+    } catch {
+      return error
+    }
+  }
+
   private static func loadModuleGraph(root: URL, swiftPM: any SwiftPM) async -> Result<
     ModuleGraph, GatherFailure
   > {
@@ -746,6 +763,13 @@ enum ContextPackRun {
       }
     }
 
+    if case .invalid(let validation)? = configLoadError(root: root),
+      validation.issues.contains(where: {
+        if case .unknownModuleKind = $0 { return true } else { return false }
+      })
+    {
+      return .failure(GatherFailure(violation: .unknownModuleKind(writeSetEntry: nil)))
+    }
     let graph: ModuleGraph
     switch await loadModuleGraph(root: root, swiftPM: swiftPM) {
     case .success(let loaded): graph = loaded
@@ -759,7 +783,9 @@ enum ContextPackRun {
     }
 
     let standards: ContextSource
-    if let standardsPath = o.standards {
+    if kinds.isEmpty {
+      standards = noModuleKindsStandards
+    } else if let standardsPath = o.standards {
       switch readStandardsAndPlaybook(
         standardsPath: standardsPath, playbookPath: o.playbook, root: root)
       {
@@ -785,7 +811,8 @@ enum ContextPackRun {
           WorkerInputs(
             task: task, design: design, designSource: designSource, claims: claims,
             citedClaimIDs: o.claimID, standards: standards,
-            moduleKindAnchors: ContextPackModuleKindAnchors.anchors(for: kinds),
+            moduleKindAnchors: kinds.isEmpty
+              ? [noModuleKindsAnchor] : ContextPackModuleKindAnchors.anchors(for: kinds),
             dependencyNotes: dependencyNotes)),
         notes, o.key ?? taskID
       ))
@@ -938,11 +965,12 @@ enum ContextPackRun {
     case .missingDependencyReturn(let task):
       return "no task return for dependency `\(task)`: run `swiftgate build check-return` first"
     case .unknownModuleKind(let entry?):
-      return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in no module of "
-        + "the module graph, so its standards can't be packed"
+      return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in a module with "
+        + "no known kind, so its standards can't be packed"
     case .unknownModuleKind(nil):
-      return "context-pack.module-kind-unknown: the task's write set is empty, so no standards "
-        + "can be packed"
+      return "context-pack.module-kind-unknown: \(ConfigLoader.fileName) names a module kind "
+        + "outside \(ModuleKind.allCases.map(\.rawValue).joined(separator: ", ")), so the "
+        + "task's standards can't be packed"
     }
   }
 

@@ -358,15 +358,65 @@ struct ContextPackCommandTests {
   }
 
   @Test(
-    "a write-set entry in no module is the named unknown-kind violation and writes no pack — catches a silently thin pack"
+    "a Core module file plus a doc gets exactly the Core kind's standards — catches a code task that also edits a doc halted or over-packed"
   )
-  func workerPackRefusesAnUnknownModuleKind() async throws {
+  func workerPackIgnoresADocBesideACoreModule() async throws {
     let repository = try Repository()
     defer { repository.remove() }
     let swiftPM = try repository.seedModuleGraph()
     try repository.write(Self.sectionedStandards, at: "docs/standards.md")
     let options = try workerOptions(
-      writeSet: ["Sample/Sources/OrderQueueCore/", "Tools/Stray/Stray.swift"], in: repository)
+      writeSet: ["Sample/Sources/OrderQueueCore/Queue.swift", "docs/standards.md"], in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ARCHITECTURE-SECTION"))
+    #expect(!text.contains("CLIENTS-SECTION"))
+    #expect(!text.contains("RENDER-SECTION"))
+    #expect(!text.contains("ENGINE-SECTION"))
+  }
+
+  @Test(
+    "a docs-only write set builds a pack whose standards section says it has no module kinds — catches a docs task halted, or an empty section"
+  )
+  func docsOnlyWorkerPackSaysItHasNoModuleKinds() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: ["docs/guide.md", "Sample/Package.swift"], in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("No module kinds in this task's write set; no standards excerpt."))
+    #expect(!text.contains("ARCHITECTURE-SECTION"))
+  }
+
+  @Test(
+    "an entry inside a module whose configured kind is unknown is the named violation and writes no pack — catches a silently thin pack"
+  )
+  func workerPackRefusesAnUnknownModuleKind() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    let config = try repository.packText(ConfigLoader.fileName)
+    try repository.write(
+      config + "\n[[modules]]\nname = \"OrderQueueCore\"\nkind = \"widget\"\n",
+      at: ConfigLoader.fileName)
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueCore/Queue.swift"], in: repository)
 
     let outcome = await ContextPackRun.run(
       role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
@@ -375,7 +425,6 @@ struct ContextPackCommandTests {
       return
     }
     #expect(message.contains("context-pack.module-kind-unknown"))
-    #expect(message.contains("Tools/Stray/Stray.swift"))
     #expect(!repository.packExists(".harness/context-pack/worker-worker-task.md"))
   }
 

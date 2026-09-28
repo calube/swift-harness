@@ -45,9 +45,10 @@ every module kind the write set touches. A test target counts as the module it t
 standards are the repo's `docs/standards.md` plus `docs/testing-playbook.md`, else the harness
 plugin's; `--standards` overrides that.
 
-A write-set entry in no module and no package, or a write set naming no module at all, exits 1
-with `context-pack.module-kind-unknown` and the entry. It never writes a pack without standards.
-That halts the task: the plan's write set is wrong, so tell the user which entry.
+An entry outside every module (a doc, a manifest, a fixture) adds no kind. A write set with no
+module entries gets a standards section saying "No module kinds in this task's write set; no
+standards excerpt." A module kind `.swiftgate.toml` names outside the known kinds exits 1 with
+`context-pack.module-kind-unknown` and writes no pack. That halts the task: tell the user.
 
 ## Launch
 
