@@ -24,8 +24,32 @@ private struct BuildScenario {
     onDesignConflict: .block)
   static let presets = ["default": preset, "interview": preset]
 
+  static let config = """
+    schema = 1
+    xcode = "26.2"
+    app_scheme = "App"
+    packages = ["Packages/*"]
+
+    [simulator]
+    device = "iPhone 17"
+    os = "26.2"
+
+    """
+
   let shared = SharedPlanState()
   var git: FakeGit { shared.git() }
+
+  /// A repository with one package, inside the common dir so `shared.remove()` removes it too.
+  var repository: URL {
+    shared.commonDirectory.appending(path: "repo", directoryHint: .isDirectory)
+  }
+
+  func writeRepository(config: String? = Self.config) throws {
+    try write(repository.appending(path: "Packages/Feed/Package.swift").path, Data())
+    if let config {
+      try write(repository.appending(path: ".swiftgate.toml").path, Data(config.utf8))
+    }
+  }
 
   func layout(_ plan: String = Self.plan) throws -> PlanStateLayout.Plan {
     try PlanStateLayout(commonDirectory: shared.commonDirectory.path).plan(plan)
@@ -58,11 +82,15 @@ private struct BuildScenario {
     }
   }
 
-  func writeLedger(_ statuses: [(String, TaskStatus)], plan: String = Self.plan) throws {
+  func writeLedger(
+    _ statuses: [(String, TaskStatus)], plan: String = Self.plan,
+    writeSets: [String: [String]] = [:]
+  ) throws {
+    try writeRepository()
     let tasks = statuses.map { id, status in
       LedgerTask(
-        id: id, deps: [], writeSet: ["Sources/\(id)/"], gate: .push, tests: [], covers: [],
-        estLines: 10, status: status, worktree: "../\(id)", model: .sonnet)
+        id: id, deps: [], writeSet: writeSets[id] ?? ["Sources/\(id)/"], gate: .push, tests: [],
+        covers: [], estLines: 10, status: status, worktree: "../\(id)", model: .sonnet)
     }
     let ledger = Ledger(
       schemaVersion: 1, resume: "r", maxParallel: 3, tasks: tasks, waves: [tasks.map(\.id)])
@@ -88,7 +116,8 @@ private struct BuildScenario {
   {
     await BuildNextRun.run(
       slug: plan, session: session, git: git,
-      clock: FixedClock(date: Self.startedAt.addingTimeInterval(minutesIn * 60)))
+      clock: FixedClock(date: Self.startedAt.addingTimeInterval(minutesIn * 60)),
+      root: repository)
   }
 
   func finish(session: String? = Self.alice, plan: String = Self.plan) async

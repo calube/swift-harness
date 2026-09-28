@@ -39,6 +39,42 @@ public enum BuildScheduler {
     }
   }
 
+  /// A task the app target needs before it compiles, so the budget's no-new-starts phase still
+  /// starts it: the app target is every `.swift` file outside the repository's packages.
+  public struct RequiredTask: Sendable, Equatable {
+    public let taskID: String
+    /// The app-target file behind it: the task's own write-set entry, or, for a dependency, the
+    /// entry of the required task that waits on it.
+    public let appPath: String
+
+    public init(taskID: String, appPath: String) {
+      self.taskID = taskID
+      self.appPath = appPath
+    }
+  }
+
+  /// Every required task in a ledger, found from the repository's package directories.
+  public struct RequiredTasks: Sendable, Equatable {
+    /// Sorted by task id.
+    public let tasks: [RequiredTask]
+
+    /// For a ledger read without a repository, such as a self-test seed.
+    public static let empty = RequiredTasks(tasks: [])
+
+    private init(tasks: [RequiredTask]) {
+      self.tasks = tasks
+    }
+
+    /// `packageDirectories` are repository-relative, as the config's `packages` globs resolve.
+    public init(ledger: Ledger, packageDirectories: [String]) {
+      self.tasks = []
+    }
+
+    public func task(_ id: String) -> RequiredTask? {
+      tasks.first { $0.taskID == id }
+    }
+  }
+
   /// Schedules the next tasks to start.
   ///
   /// - A task is ready when it's `pending` and every dependency is `done`; `blocked`,
@@ -55,7 +91,8 @@ public enum BuildScheduler {
   ///   running task's or an already-started task's from this same call — the next `build next`
   ///   call reconsiders it. In `.noNewStarts` or `.cutoff` phase, nothing starts.
   public static func next(
-    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date
+    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
+    required: RequiredTasks = .empty
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
     let phase = budgetPhase(preset: preset, startedAt: startedAt, now: now)

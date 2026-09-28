@@ -100,7 +100,7 @@ public struct BuildCalibrationRunner: Sendable {
         "return", "matches",
         try await repository.returnFindings(
           decoded, taskID: seed.name, branch: setup.branch, tip: tip, gate: seed.label.gate,
-          proofRequired: role == .worker))
+          proofRequired: role == .worker, taskGateStepsRequired: role == .worker))
     case .failure(let problem):
       answer("outcome", seed.label.outcome.rawValue, "no return: \(problem.reason)")
       answer("return", "matches", "no return")
@@ -377,11 +377,14 @@ struct Sandbox {
   /// The return's claims against git and the sandbox's run store, as `build check-return`
   /// checks them. A worker's `review` is always `null` until the workflow fills it, so its
   /// absence isn't a finding here.
-  /// - Parameter proofRequired: a worker's green gate must prove and mutate its change, as
-  ///   `build check-return` requires of a task; a fixer's need not.
+  /// - Parameters:
+  ///   - proofRequired: a worker's green gate must prove and mutate its change, as
+  ///     `build check-return` requires of a task; a fixer's need not.
+  ///   - taskGateStepsRequired: a worker's green gate must run the task gate's impact, coverage
+  ///     and app-build steps, as `build check-return` requires; a fixer's need not.
   func returnFindings(
     _ taskReturn: TaskReturn, taskID: String, branch: String, tip: String?, gate: CheckTier,
-    proofRequired: Bool
+    proofRequired: Bool, taskGateStepsRequired: Bool
   ) async throws(CalibrationCaseError) -> String {
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
     var surface: TaskReturnEvidence.CommitState?
