@@ -1,45 +1,22 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-SUMMARY (2026-09-28 ~00:45, for the next orchestrator session). Context was cleared on purpose; the user wants every
-remaining unattended wave run overnight, in order, without waiting on them.
-State: origin/main 3dee52a (untouched; never push it without the user). Local main c48f765 holds speed wave 1 (merged,
-push + prove + mutate GREEN, 16/16 killed), the fast-modes design (APPROVED) and plan, [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md) (accepted), and docs
-commits. Backup: origin backup/subproject-2-speed-wave-1 = 9f913d2.
-In flight at the clear: speed wave 2 (repo profile, worker-pack standards, task-gate impact/coverage/app-build). All 3
-branches passed report review and sit merged on worktree ../swift-harness-speed-integration (branch speed-integration,
-HEAD 7cb53d3; merged-surface proof base 002f4ae). Its gate `check --tier push --base main --prove --proof-base 002f4ae`
-was running; read its report under that worktree's .harness/runs/ (newest), or re-run it. GREEN → message peers,
-merge speed-integration into main, push tier on main, `mutate --base <main before the merge> --jobs 2`, checkpoint.
-Overnight queue, in order (all opus, surface-first, push + prove merge gate, mutate once on main per wave):
-  1. Finish speed wave 2 as above; append "Speed wave 2" to docs/handoffs/subproject-5-interfaces.md from the reports
-     (profile: `[harness] profile`, `bootstrap --profile`, `doctor.profile`; worker pack derives kinds from the write set,
-     `context-pack.module-kind-unknown`; check steps `--impact --coverage --app-build`, rules `app-build.*`).
-  2. Combined wave (4 tasks, disjoint files): speed wave 3 (`speed-budget-keeps-app-compiling`,
-     `speed-check-return-requires-task-gate-steps`, build-executor plan "Speed") + fast-modes wave 1
-     (`surface-check-command`, `sprint-state-machine`, docs/plans/2026-09-27-fast-modes-plan.md).
-  3. Fast-modes wave 2 (`sprint-commands`), then wave 3 (`sprint-skill`). Wave 4 (rehearsals) is attended: stop there.
-  4. Then plan and run the queued sub-project 2 hardening the user already approved: hook guard PlanLocks cache (50 ms
-     budget stands); §11 rewritten to measured figures + design-run telemetry; rule-index rows for every design-lint.*
-     and design-diff.* rule; a lint for intentional-hang fixtures without their own deadline; review.json `telemetry` on
-     every run; dedupe merging a rule-less duplicate of a ruled blocker; running sessions caching agent prompts (at
-     least document it in the build skill); plan-lint's budget estimate dropping unresolved write-set entries silently;
-     a build worker stopping at its first red test; plus, approved 2026-09-27, `arch.ui-host-compiled` (major) and the
-     stale-session doctor check that stops ship, build and sprint (docs/designs/2026-09-27-speed-research-coverage-design.md
-     §3, §4). All of it tonight (user, 2026-09-27). Write their task sections in a plan before spawning workers.
-Rules from the user (2026-09-27): every worker on opus (the runbook says so). Build the harness for correctness: design
-approval, plan tasks, surface-first workers, push + prove merge gate, mutate once on main; never shortcut because the
-feature is a speed mode. Only 1 ready tier or prove on the machine at a time (workers share the mkdir lock
-/tmp/swift-harness-speed-prove.lock); arm the watchdog Monitor while workers run and handle orphans and load yourself.
-Gate before every commit. Message peer sessions (ListAgents) before each merge into main. Never push origin/main; a
-backup branch push is fine after grepping the unpushed diff (`git diff origin/main..main`) for interview-specific terms.
-Keep the harness generic. The ready-lock branch (../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up) stays
-parked. Attended work waits for the user: fast-modes rehearsals, build-executor waves 10–11, acceptance runs 26–28,
-sub-projects 3 and 4.
-Known gaps to watch: interview-rehearsal-1's .swiftgate.toml lacks `task_proof` (its session was told; leave its repo
-alone). Design-free ship (fast-modes design §5) waits for sprint's rehearsals before it gets plan tasks.
-Read first: this header, the runbook in full (docs/handoffs/subproject-2-orchestrator-runbook.md, including "Lessons from
-the first speed wave"), docs/handoffs/worker-brief.md (pitfall 10), then each plan's task sections as you reach them.
+SUMMARY (2026-09-28 ~04:45, overnight orchestrator). The overnight queue is built and merged on local main; origin/main is
+untouched (never push it without the user). Backup: origin backup/subproject-2-overnight-2026-09-27 (refresh after the
+last merge). Merged tonight, each through push + prove on an integration worktree and push on merged main: speed wave 2;
+speed wave 3 + fast-modes wave 1 (combined); fast-modes waves 2 and 3 (`swiftgate sprint`, `/swift-harness:sprint`);
+hardening waves 1-3 plus `doctor-plugin-changed` (docs/plans/2026-09-27-subproject-2-hardening-plan.md); a shim-test
+leak fix; tests for mutate survivors. Interfaces: docs/handoffs/subproject-5-interfaces.md and
+docs/handoffs/subproject-2-interfaces.md (last sections). Runbook: "Lessons from the overnight run (2026-09-27)".
+In flight at this writing: a worker hardening the tests of `SurfaceBodyScan` and `HangWithoutDeadlineRule` (mutate
+kept sampling new survivors there), then one more `mutate --base 4a54bf8 --jobs 2` on main.
+Waiting for the user: fast-modes wave 4 (sprint rehearsals, attended); design-free ship plan tasks (after rehearsals);
+build-executor waves 10-11; acceptance runs 26-28; sub-projects 3 and 4. Decisions made overnight that the user should
+confirm are in the overnight report (surface-check's extra stub shapes, the sprint extra-stub proof base, the budget's
+required-task rule, the build worker's redReason reading, and evals/ files unwrapped for arch.ui-host-compiled).
+Rules from the user still stand: every worker on opus; build for correctness; one prove on the machine at a time
+(mkdir lock /tmp/swift-harness-speed-prove.lock); watchdog Monitor while workers run; the orchestrator delegates all
+work to workers; keep the harness generic; ready-lock branch stays parked.
 -->
 
 ## 1. Where things are
