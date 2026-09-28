@@ -21,6 +21,9 @@ public enum PlanIndexStoreError: Error, Sendable, Equatable {
 /// next to the destination and `rename`s it into place — so a concurrent reader (SessionStart,
 /// another `index set`) always sees either the old file or the new one, never a partial write.
 public struct PlanIndexStore: Sendable {
+  /// The plan-state root's lock: every read-modify-write of a file in the root takes it.
+  public static let lockName = "index.lock"
+
   private let path: String
   private let lock: any CountingLock
   private let timeout: Duration
@@ -38,7 +41,7 @@ public struct PlanIndexStore: Sendable {
     self.lock =
       lock
       ?? FileCountingLock(
-        directory: URL(filePath: path).deletingLastPathComponent(), name: "index.lock",
+        directory: URL(filePath: path).deletingLastPathComponent(), name: Self.lockName,
         capacity: 1)
     self.timeout = timeout
   }
