@@ -7,6 +7,14 @@ import SwiftGateDomain
 enum DoctorRun {
   static let shimPath = ".local/bin/swiftgate"
 
+  /// - Parameter sessionID: the session whose plugin record doctor judges; `nil` judges the
+  ///   newest record.
+  static func run(
+    root: URL, sessionID: String?, swiftPM: any SwiftPM, runner: any ProcessRunner
+  ) async throws -> GateRunParts {
+    try await run(root: root, swiftPM: swiftPM, runner: runner)
+  }
+
   static func run(root: URL, swiftPM: any SwiftPM, runner: any ProcessRunner) async throws
     -> GateRunParts
   {
@@ -114,6 +122,12 @@ struct DoctorCommand: AsyncParsableCommand {
       + "and toolchain-incompatible dependencies.")
 
   @OptionGroup var output: OutputOptions
+
+  @Option(
+    help: ArgumentHelp(
+      "Check this session's plugin record, not the newest one; the SessionStart context's "
+        + "`Session id:` line."))
+  var session: String?
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
