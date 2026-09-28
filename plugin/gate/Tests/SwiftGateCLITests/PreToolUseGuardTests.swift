@@ -393,6 +393,75 @@ extension PlanStateScenario {
   }
 }
 
+@Suite("PreToolUse sprint spec pages")
+struct SprintPageWriteTests {
+  static func sprints(_ scenario: PlanStateScenario) -> String {
+    scenario.layout.root + "/" + PlanStateLayout.sprintsDirectoryName
+  }
+
+  @Test(
+    "a main session holding no plan writes <plans>/sprints/<slug>.md with Write, and a subagent is denied it even with a lock and the override — catches the sprint skill's page write refused, or workers editing it"
+  )
+  func pageWritableByMainSessionOnly() async throws {
+    var scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    let page = Self.sprints(scenario) + "/login-flow.md"
+
+    #expect(try await scenario.decision(page) == nil)
+    #expect(try await scenario.toolDecision(page, writing: "# Login flow\n") == nil)
+
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    scenario.harness.environment = [OrchestratorMarker.environmentVariable: "1"]
+    #expect(try await scenario.decision(page, subagent: true) == "deny")
+  }
+
+  @Test(
+    "a nested path, a non-page file and the sprints directory's own name are denied to the main session, and a plan's files still need its lock — catches the page allowance widening past pages or unlocking plans"
+  )
+  func onlyPagesAllowed() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try FileManager.default.createDirectory(
+      atPath: Self.sprints(scenario) + "/existing", withIntermediateDirectories: true)
+    try scenario.claim(PlanStateScenario.planB, by: PlanStateScenario.session)
+    let planA = try scenario.layout.plan(PlanStateScenario.planA)
+
+    for path in [
+      Self.sprints(scenario) + "/login-flow/notes.md",
+      Self.sprints(scenario) + "/login-flow.json",
+      Self.sprints(scenario) + "/existing",
+      Self.sprints(scenario),
+      planA.directory + "/sprints/login-flow.md",
+      planA.ledgerFile,
+    ] {
+      #expect(try await scenario.decision(path) == "deny", "\(path)")
+    }
+  }
+
+  @Test(
+    "plan claim refuses a plan named sprints and writes no lock — catches a plan taking the sprint pages' directory"
+  )
+  func claimSprintsRefused() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    let before = try scenario.planStateSnapshot()
+
+    let design = "docs/counter/designs/orphan.md"
+    for name in ["sprints", "Sprints"] {
+      let report = await PlanLockRun.claim(
+        slug: name, session: PlanStateScenario.session, design: design, root: scenario.root,
+        git: scenario.harness.git)
+      #expect(report.verdict == .blocked, "\(name)")
+      #expect(report.message.contains("invalid plan name"), "\(report.message)")
+    }
+    #expect(try scenario.planStateSnapshot() == before)
+    let control = await PlanLockRun.claim(
+      slug: "sprints-2026", session: PlanStateScenario.session, design: design,
+      root: scenario.root, git: scenario.harness.git)
+    #expect(control.status == .claimed, "\(control.message)")
+  }
+}
+
 @Suite("PreToolUse design ownership is exclusive")
 struct DesignOwnershipHookTests {
   @Test(

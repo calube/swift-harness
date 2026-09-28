@@ -56,7 +56,7 @@ public enum KnownIdSources {
     else { return SourceResult() }
     let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
     var result = SourceResult()
-    for name in names.sorted() {
+    for name in names.sorted() where name.lowercased() != PlanStateLayout.sprintsDirectoryName {
       guard let plan = try? layout.plan(name) else {
         result.unreadable.append(
           UnreadableSource(

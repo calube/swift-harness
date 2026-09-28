@@ -122,6 +122,27 @@ struct KnownIdSourcesTests {
   }
 
   @Test(
+    "the sprints directory of spec pages is no plan and no unreadable source — catches every gate after a sprint reporting it as a bad plan directory"
+  )
+  func sprintsDirectoryIsSkipped() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    let layout = try await plans(repo)
+    let plan = try layout.plan("search")
+    try FileManager.default.createDirectory(
+      atPath: plan.directory, withIntermediateDirectories: true)
+    try Self.ledger(taskID: "search-debounce-task").write(to: URL(filePath: plan.ledgerFile))
+    let sprints = layout.root + "/" + PlanStateLayout.sprintsDirectoryName
+    try FileManager.default.createDirectory(atPath: sprints, withIntermediateDirectories: true)
+    try Data("# Login flow\n".utf8).write(to: URL(filePath: sprints + "/login-flow.md"))
+
+    let loaded = await KnownIdSources.load(root: repo.root, git: repo.adapter)
+
+    #expect(loaded.ids == ["search-debounce-task"])
+    #expect(loaded.unreadable.isEmpty, "\(loaded.unreadable)")
+  }
+
+  @Test(
     "a ledger without read permission is reported by path and the other plans still load — catches an unreadable ledger silently dropping its task ids",
     .enabled(if: FileSystemConditions.permissionsDeny, "chmod doesn't deny root"))
   func unreadableLedgerIsReported() async throws {

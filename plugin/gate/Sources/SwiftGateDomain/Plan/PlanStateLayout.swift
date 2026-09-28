@@ -33,12 +33,16 @@ public struct PlanStateLayout: Sendable, Equatable {
   public static let sprintsDirectoryName = "sprints"
 
   /// - Throws: ``PlanStateLayoutError/invalidPlanName(_:)`` for a name that is not a single path
-  ///   component, since it would address another plan's files or the index.
+  ///   component, since it would address another plan's files or the index, or that is
+  ///   ``sprintsDirectoryName`` in any letter case, since a plan's lock would then decide the
+  ///   sprint pages.
   public func plan(_ name: String) throws(PlanStateLayoutError) -> Plan {
     let isSingleComponent =
       !name.isEmpty && name != "." && name != ".."
       && !name.contains(where: { $0 == "/" || $0 == "\0" || $0.isNewline })
-    guard isSingleComponent else { throw .invalidPlanName(name) }
+    guard isSingleComponent, name.lowercased() != Self.sprintsDirectoryName else {
+      throw .invalidPlanName(name)
+    }
     return Plan(directory: root + "/" + name)
   }
 }

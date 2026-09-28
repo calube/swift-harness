@@ -251,3 +251,91 @@ struct DesignOwnershipTests {
         == EditGuard.planStateRuleID)
   }
 }
+
+@Suite("Sprint spec pages under the plan-state root")
+struct SprintPageGuardTests {
+  static let plans = "/r/.git/swift-harness/plans"
+  static let sprints = plans + "/" + PlanStateLayout.sprintsDirectoryName
+
+  /// The guard's verdict on a write, judged as the hook judges it: classify the path, read the
+  /// locks its scope names from `locks`, then evaluate. A path outside plan state is `nil`.
+  static func judge(
+    _ path: String, isDirectory: Bool = false, locks: [String: String] = [:],
+    environmentValue: String? = nil, sessionID: String = "session-a", agentID: String? = nil
+  ) -> (classified: Bool, violation: GuardViolation?) {
+    guard let target = PlanStateGuard.target(ofResolvedPath: path, isDirectory: isDirectory)
+    else { return (false, nil) }
+    let held: [String] =
+      switch PlanStateGuard.lockScope(of: target) {
+      case .none: []
+      case .plan(let plan): locks[plan.directory].map { [$0] } ?? []
+      case .everyPlan: Array(locks.values)
+      }
+    let violation = PlanStateGuard.evaluate(
+      target, locks: held, environmentValue: environmentValue, sessionID: sessionID,
+      agentID: agentID)
+    return (true, violation)
+  }
+
+  @Test(
+    "a main session with no claim writes a sprint page, in any letter case — catches the sprints directory read as a plan whose lock no sprint holds",
+    arguments: [
+      sprints + "/login-flow.md", "/r/.git/Swift-Harness/PLANS/Sprints/Login-Flow.MD",
+    ])
+  func mainSessionWritesPage(path: String) {
+    let verdict = Self.judge(path)
+    #expect(verdict.classified, "\(path) must stay plan state, so a subagent's write is judged")
+    #expect(verdict.violation == nil, "\(path)")
+  }
+
+  @Test(
+    "a subagent may not write a sprint page, even with the override and another plan's lock — catches workers rewriting the spec a sprint builds from"
+  )
+  func subagentDeniedPage() throws {
+    let feed = try PlanStateLayout(commonDirectory: "/r/.git").plan("2026-09-24-feed")
+    let verdict = Self.judge(
+      Self.sprints + "/login-flow.md", locks: [feed.directory: "session-a"],
+      environmentValue: "1", agentID: "worker")
+    #expect(verdict.violation?.ruleID == EditGuard.planStateRuleID)
+  }
+
+  @Test(
+    "anything under sprints but a page directly in it is denied to everyone, holder and override included — catches the page allowance widening to nested paths, other files or the directory itself",
+    arguments: [
+      (sprints + "/login-flow/notes.md", false), (sprints + "/login-flow.json", false),
+      (sprints + "/.md", false), (sprints, true), (sprints, false),
+    ])
+  func otherSprintPathsDenied(path: String, isDirectory: Bool) {
+    #expect(
+      PlanStateGuard.target(ofResolvedPath: path, isDirectory: isDirectory) == .malformedPlanPath,
+      "\(path)")
+    let verdict = Self.judge(
+      path, isDirectory: isDirectory, locks: [Self.sprints: "session-a"], environmentValue: "1")
+    #expect(verdict.violation?.ruleID == EditGuard.planStateRuleID, "\(path)")
+  }
+
+  @Test(
+    "no plan may be named sprints, in any letter case — catches a claimed plan taking the sprint pages' directory and its lock deciding them",
+    arguments: ["sprints", "Sprints", "SPRINTS"])
+  func sprintsIsNoPlanName(name: String) throws {
+    let layout = try PlanStateLayout(commonDirectory: "/r/.git")
+    #expect(throws: PlanStateLayoutError.invalidPlanName(name)) {
+      _ = try layout.plan(name)
+    }
+    #expect(try layout.plan("sprints-2026").directory == Self.plans + "/sprints-2026")
+  }
+
+  @Test(
+    "a page-shaped file inside a real plan still needs that plan's lock — catches the sprint allowance leaking to plan directories"
+  )
+  func planFilesStillNeedTheirLock() throws {
+    let feed = try PlanStateLayout(commonDirectory: "/r/.git").plan("2026-09-24-feed")
+    for path in [feed.directory + "/sprints/login-flow.md", feed.directory + "/login-flow.md"] {
+      #expect(PlanStateGuard.target(ofResolvedPath: path) == .planFile(feed), "\(path)")
+      #expect(Self.judge(path).violation?.ruleID == EditGuard.planStateRuleID, "\(path)")
+      #expect(Self.judge(path, locks: [feed.directory: "session-a"]).violation == nil, "\(path)")
+    }
+    let other = Self.plans + "/sprints-2026/login-flow.md"
+    #expect(Self.judge(other).violation?.ruleID == EditGuard.planStateRuleID)
+  }
+}

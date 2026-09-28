@@ -277,6 +277,9 @@ public enum PlanStateGuard {
     /// `docs/**/designs/*.md`, or anything under its `<doc>.evidence/` directory: writable only
     /// by the holder of the plan whose `plan.json` names `document`.
     case designArtifact(document: String)
+    /// A sprint's spec page, `<plans>/sprints/<name>.md`: no plan owns it, so any main session
+    /// writes it and a subagent never does.
+    case sprintPage
   }
 
   /// One plan under the repository's common dir, as the caller read it.
@@ -324,7 +327,7 @@ public enum PlanStateGuard {
 
   public static func lockScope(of target: Target) -> LockScope {
     switch target {
-    case .orchestratorLock, .malformedPlanPath, .designArtifact: .none
+    case .orchestratorLock, .malformedPlanPath, .designArtifact, .sprintPage: .none
     case .planFile(let plan): .plan(plan)
     case .sharedPlanFile(let layout): .everyPlan(layout)
     }
@@ -345,6 +348,11 @@ public enum PlanStateGuard {
           + "or steal a claim.")
     case .malformedPlanPath:
       return violation("this path names no valid plan under the shared plan state.")
+    case .sprintPage:
+      guard agentID != nil else { return nil }
+      return violation(
+        "a sprint's spec page is written only by the main session running the sprint; a subagent "
+          + "never qualifies. Report what the page should say instead.")
     case .designArtifact(let document):
       let override = OrchestratorMarker.isOrchestrator(
         environmentValue: environmentValue, lockContents: nil, sessionID: sessionID,
@@ -474,6 +482,12 @@ public enum PlanStateGuard {
     let common = "/" + components[..<index].joined(separator: "/")
     guard let layout = try? PlanStateLayout(commonDirectory: common) else {
       return .malformedPlanPath
+    }
+    if inside.first?.lowercased() == PlanStateLayout.sprintsDirectoryName {
+      guard inside.count == 2, !isDirectory, let page = inside.last?.lowercased(),
+        page.count > ".md".count, page.hasSuffix(".md")
+      else { return .malformedPlanPath }
+      return .sprintPage
     }
     guard inside.count >= 2 || isDirectory else { return .sharedPlanFile(layout) }
     guard let plan = try? layout.plan(inside[inside.startIndex]) else {
