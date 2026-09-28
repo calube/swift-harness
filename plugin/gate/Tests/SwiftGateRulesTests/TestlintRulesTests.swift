@@ -201,4 +201,32 @@ struct TestlintRulesTests {
   func hangWithoutDeadlineExitAfterLoop() throws {
     #expect(try lines("test.hang-without-deadline", "bad/ExitAfterLoop.swift") == [4])
   }
+
+  @Test(
+    "a loop a literal opens but never closes, and a Python `while True:` ending the literal, are RED — catches a script assembled from pieces crashing the scan past its last character"
+  )
+  func hangWithoutDeadlineUnclosedFragments() throws {
+    #expect(try lines("test.hang-without-deadline", "bad/UnclosedFragments.swift") == [4, 5, 6])
+  }
+
+  @Test(
+    "a Python exit at the loop's own indent is after the loop, not in it — catches the line that ends a Python loop's body read as part of it"
+  )
+  func hangWithoutDeadlinePythonExitAfterLoop() throws {
+    #expect(try lines("test.hang-without-deadline", "bad/PythonExitAfterLoop.swift") == [4])
+  }
+
+  @Test(
+    "a carriage return and an escaped quote in a literal keep the words around them apart — catches a spin hidden by decoding `\\r` or `\\\"` to nothing"
+  )
+  func hangWithoutDeadlineEscapedSeparators() throws {
+    #expect(try lines("test.hang-without-deadline", "bad/EscapedSeparators.swift") == [4, 5])
+  }
+
+  @Test(
+    "a repeat tail with no opening brace, a shell loop that exits before a missing done, a break after a nested shell loop and a tab-indented Python break all pass — catches a crash on a fragment, or a loop's own exit missed"
+  )
+  func hangWithoutDeadlineLoopFragments() throws {
+    #expect(try lines("test.hang-without-deadline", "good/LoopFragments.swift") == [])
+  }
 }

@@ -171,8 +171,7 @@ public enum SurfaceBodyScan {
     let fresh = unit.node.switchCases.filter { !known.contains(normalize(Syntax($0))) }
     let outermost = fresh.filter { clause in
       !fresh.contains { other in
-        other.id != clause.id && other.position <= clause.position
-          && clause.endPosition <= other.endPosition
+        other.id != clause.id && encloses(other, clause)
       }
     }
     guard !outermost.isEmpty else { return nil }
@@ -181,6 +180,14 @@ public enum SurfaceBodyScan {
     }
     guard remaining.map(\.text).joined(separator: " ") == previous.normalized else { return nil }
     return outermost
+  }
+
+  /// Whether clause `o` holds clause `i`. Distinct clauses never share a start or an end: a nested
+  /// one starts after its enclosing clause's label and ends before its switch's closing brace.
+  private static func encloses(_ o: SwitchCaseSyntax, _ i: SwitchCaseSyntax) -> Bool {
+    let starts = o.position <= i.position  // swiftgate:equivalent-mutant — starts are never equal
+    let ends = i.endPosition <= o.endPosition  // swiftgate:equivalent-mutant — ends are never equal
+    return starts && ends
   }
 
   /// Whether `node`'s only change over `previous` is new array elements that are each a bare type
@@ -639,8 +646,7 @@ private struct Judge {
     guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
       member.declName.baseName.text == "init"
     else { return false }
-    guard let base = member.base else { return true }
-    return base.as(DeclReferenceExprSyntax.self)?.baseName.text.first?.isUppercase == true
+    return Self.isTypeOrOmitted(member.base)
   }
 
   private func stub(_ items: CodeBlockItemListSyntax) -> SurfaceJudgement.Outcome {
@@ -700,7 +706,6 @@ private struct Judge {
       member.declName.argumentNames == nil, Self.isTypeOrOmitted(member.base)
     else { return false }
     let name = member.declName.baseName.text
-    guard name != "init" else { return false }
     return fileCases.contains(name) || declares(name, .enumCase)
   }
 
