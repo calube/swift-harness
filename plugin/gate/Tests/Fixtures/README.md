@@ -537,3 +537,11 @@ empty defaults or parameters, and a parameter or property of `self` returned unc
 near miss that must still fail: `rejected-throw-near-miss`, `rejected-payload-case-near-miss` and
 `rejected-returns-near-miss`. The base tree's `Status.swift` declares the payload enums they
 construct. The same capture command records them.
+
+`allowed-manifest-local-package` is the rehearsal's surface: an existing manifest gains a local
+package, its product and a target, beside a new package's manifest.
+`allowed-manifest-products-and-targets` adds a URL package, a library, targets and a target name.
+The `rejected-manifest-*` near misses remove a dependency, change an element's version, add a
+flag to `swiftSettings`, change a platform, change the tools version and add a statement. The
+base tree's `Packages/AppFeature/Package.swift` is the manifest they edit. The same capture
+command records them.
