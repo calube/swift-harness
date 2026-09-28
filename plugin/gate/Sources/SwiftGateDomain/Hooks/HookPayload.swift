@@ -39,12 +39,14 @@ public struct HookPayload: Sendable, Equatable {
   public let fileWrite: FileWrite?
   /// SessionStart: `startup`, `resume`, `clear`, `compact` or `fork`.
   public let source: String?
+  /// The session's transcript file, as Claude Code names it; `nil` when absent.
+  public let transcriptPath: String?
 
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
     agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil,
-    agentType: String? = nil
+    agentType: String? = nil, transcriptPath: String? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -57,6 +59,7 @@ public struct HookPayload: Sendable, Equatable {
     self.agentType = agentType
     self.source = source
     self.fileWrite = fileWrite
+    self.transcriptPath = transcriptPath
   }
 
   public static func decode(_ data: Data) throws(HookPayloadError) -> HookPayload {

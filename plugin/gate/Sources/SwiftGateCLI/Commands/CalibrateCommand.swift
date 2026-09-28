@@ -148,6 +148,25 @@ enum CalibrateBuildRun {
 /// What every suite shares: seed defects stop the run before any agent is called, so a broken
 /// seed set costs nothing; the pass record is written only when nothing missed.
 enum CalibrationRun {
+  /// Every rule a calibration run reports; a finding's id is `calibrate-<suite>.<rule>`.
+  enum Rule: String, Sendable, CaseIterable {
+    case usage
+    case seedDefect = "seed-defect"
+    case labelMissed = "label-missed"
+    case passed
+    case noSeeds = "no-seeds"
+    case missingLabel = "missing-label"
+    case missingInput = "missing-input"
+    case missingEntry = "missing-entry"
+    case invalidLabel = "invalid-label"
+    case unknownAgent = "unknown-agent"
+    case uncalibratedAgent = "uncalibrated-agent"
+  }
+
+  static func ruleID(_ suite: CalibrationSuite, _ rule: Rule) -> String {
+    ""
+  }
+
   struct CaseRun: Sendable {
     let result: CalibrationRecord.CaseResult
     /// Shown as a non-gating `usage` finding, such as what the agent run cost.
