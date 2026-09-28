@@ -1,0 +1,1 @@
+Tests/AppTests/DetailTests.swift

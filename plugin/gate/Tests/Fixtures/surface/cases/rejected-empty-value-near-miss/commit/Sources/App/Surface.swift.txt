@@ -1,0 +1,16 @@
+struct Page {
+  var items: [Int]
+  var title: String
+}
+
+func firstPage(title: String) -> Page {
+  Page(items: [1], title: title)
+}
+
+func namedPage(title: String) -> Page {
+  Page(items: [], title: title.uppercased())
+}
+
+func markedPage(title: String) -> Page {
+  Page(items: [], title: title + "!")
+}

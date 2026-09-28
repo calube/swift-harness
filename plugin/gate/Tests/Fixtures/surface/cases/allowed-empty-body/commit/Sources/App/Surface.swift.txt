@@ -1,0 +1,7 @@
+extension ItemClient {
+  func reset() {}
+
+  func stop() {
+    return
+  }
+}

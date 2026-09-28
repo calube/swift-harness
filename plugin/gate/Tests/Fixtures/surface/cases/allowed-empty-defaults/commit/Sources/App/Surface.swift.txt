@@ -1,0 +1,29 @@
+extension ItemClient {
+  func find(id: String) -> Item? {
+    return nil
+  }
+
+  func all() -> [Item] {
+    []
+  }
+
+  func byName() -> [String: Item] {
+    [:]
+  }
+
+  func total() -> Int {
+    0
+  }
+
+  func hasMore() -> Bool {
+    false
+  }
+
+  func title() -> String {
+    ""
+  }
+
+  func blank() -> Item {
+    .init()
+  }
+}

@@ -1,0 +1,15 @@
+import SwiftUI
+
+struct PaddedView: View {
+  var body: some View {
+    EmptyView().padding()
+  }
+}
+
+struct SpacedView: View {
+  var body: some View {
+    VStack(spacing: 8) {
+      EmptyView()
+    }
+  }
+}

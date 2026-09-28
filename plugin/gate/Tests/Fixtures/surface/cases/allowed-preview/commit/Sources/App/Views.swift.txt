@@ -1,0 +1,19 @@
+import SwiftUI
+
+struct DetailView: View {
+  var body: some View {
+    EmptyView()
+  }
+}
+
+#Preview {
+  DetailView()
+}
+
+#Preview("Empty list") {
+  DetailView()
+}
+
+extension Item {
+  static let preview = Item(name: "")
+}

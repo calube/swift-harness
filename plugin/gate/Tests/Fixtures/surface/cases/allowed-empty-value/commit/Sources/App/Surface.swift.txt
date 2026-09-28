@@ -1,0 +1,15 @@
+struct Page {
+  var items: [Item]
+  var title: String
+  var cursor: String?
+
+  static var empty: Page { Page(items: [], title: "", cursor: nil) }
+}
+
+func firstPage(title: String) -> Page {
+  return Page(items: [], title: title, cursor: nil)
+}
+
+struct Pager {
+  var makePage: (String) -> Page = { title in .init(items: [], title: title, cursor: nil) }
+}

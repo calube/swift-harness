@@ -1,0 +1,39 @@
+import ComposableArchitecture
+import SwiftUI
+
+@Reducer
+struct Feature {
+  @ObservableState
+  struct State: Equatable {
+    var count = 0
+  }
+
+  enum Action {
+    case increment
+  }
+
+  var body: some ReducerOf<Self> {
+    Reduce { state, action in
+      switch action {
+      case .increment:
+        state.count += 1
+        return .none
+      }
+    }
+  }
+}
+
+struct FeatureView: View {
+  let store: StoreOf<Feature>
+
+  var body: some View {
+    Text("Count")
+  }
+}
+
+func describe(_ tab: Tab) -> String {
+  switch tab {
+  case .home: return "Start"
+  case .settings: return "Settings"
+  }
+}

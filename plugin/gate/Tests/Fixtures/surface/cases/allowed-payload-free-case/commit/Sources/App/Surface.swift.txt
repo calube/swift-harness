@@ -1,0 +1,3 @@
+func initialTab() -> Tab {
+  .home
+}

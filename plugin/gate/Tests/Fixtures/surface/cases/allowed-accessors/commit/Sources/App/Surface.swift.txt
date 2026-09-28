@@ -1,0 +1,14 @@
+final class Settings {
+  var isEmpty: Bool { false }
+
+  var title: String {
+    get { "" }
+    set {}
+  }
+
+  var limit: Int = 0 {
+    didSet {}
+  }
+
+  subscript(index: Int) -> Item? { nil }
+}

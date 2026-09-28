@@ -1,0 +1,11 @@
+func reload(client: ItemClient) async throws -> [Item] {
+  try await client.fetchItems()
+}
+
+func sum(values: [Int]) -> Int {
+  existingTotal(values)
+}
+
+func makeItem(name: String) -> Item {
+  Item(name: name)
+}

@@ -1,0 +1,11 @@
+extension ItemClient {
+  func load() async throws -> [Item] {
+    []
+  }
+
+  func save(_ item: Item) async throws {}
+
+  func refresh() async throws -> [Item] {
+    try await fetchItems()
+  }
+}
