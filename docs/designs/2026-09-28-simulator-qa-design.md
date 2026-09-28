@@ -1,13 +1,13 @@
 # swift-harness: simulator QA (sub-project 3)
 
 <!-- RESUME
-Status: DRAFT 2026-09-28. The tool choice (§2) is the user's; every other choice is marked Proposed and listed in
-§11 for approval.
+Status: APPROVED 2026-09-28 by the user: the tool choice (§2), and every choice in §11, with kept flows as T3 UI
+flows.
 Why: the Foundation design's sub-project 3 row (`swiftgate sim`, launch-arg dependency scenarios, a QA skill driving
 `agent-device`, screenshot and accessibility-tree evidence), and the build executor's `validate` stage (§8.6), which
 calls sub-projects 3 and 4 once they exist.
-Decision record: [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md).
-Read first: this header, §2, then §4 and §11.
+Decision record: [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), accepted.
+Read first: this header, §2, then §4 and §11 (approved choices).
 -->
 
 ## 1. Purpose
@@ -30,7 +30,7 @@ Input: the QA and profiling tool survey (2026-09-26), sections 1, 2, 4, 5 and 6.
 | Question (survey §6) | Answer |
 |---|---|
 | Driver | `agent-device`, at a pinned version, is the agent's hands and evidence collector. `swiftgate sim` shells out to its CLI; agents may use its MCP server or its CLI. |
-| Regression format | A flow worth keeping becomes XCUITest in the repo, run by `xcodebuild test` on a cloned simulator. Not `.ad`, not Maestro YAML. |
+| Regression format | A flow worth keeping becomes a T3 UI flow: XCUITest in the UI test target plus a `[[flows]]` entry, run by T3 on a cloned simulator. Not `.ad`, not Maestro YAML. |
 | Maestro | Dropped. It needs Java 17, which isn't installed. |
 | AutoMobile | May stay connected for ad-hoc exploration. It is never the gate's driver. |
 
@@ -40,16 +40,16 @@ usage telemetry.
 
 ## 3. Decision map
 
-| Decision | Proposed | Section |
+| Decision | Choice | Section |
 |---|---|---|
 | Command surface | `swiftgate sim up · snap · verify · down` | §4 |
 | Evidence | `.harness/runs/<id>/sim/` with `session.json`, `steps.ndjson`, a PNG and a tree per step | §5 |
 | Scenarios | 1 closed list, selected by the `-harness-scenario <name>` launch argument, applied with `prepareDependencies` | §6 |
 | Devices | the harness creates, locks and deletes the device; `agent-device` only drives it | §7 |
 | QA skill and callers | `/swift-harness:qa`; the `validate` stage and `/swift-validate` call it | §8 |
-| Kept flows | an XCUITest plus a `[[flows]]` entry, written test-first | §8.3 |
+| Kept flows | T3 UI flows: an XCUITest in the UI test target plus a `[[flows]]` entry, written test-first | §8.3 |
 
-## 4. `swiftgate sim` (Proposed)
+## 4. `swiftgate sim`
 
 `swiftgate sim` owns the device, the run directory and the verdict. The agent owns the taps.
 
@@ -69,7 +69,7 @@ The pinned version lives in the plugin beside the `agent-device` fixtures, becau
 Layering: an `AgentDevice` protocol in `SwiftGateAdapters` wraps the CLI through `ProcessRunner`. Parsing the tree,
 the step log and the rules in §5.2 is pure `SwiftGateDomain` code. The CLI wires them.
 
-## 5. Evidence (Proposed)
+## 5. Evidence
 
 ### 5.1 Layout
 
@@ -102,7 +102,7 @@ directories with the rest of `.harness/runs/`.
 The 2 accessibility rules turn standards §7 (Accessibility), which says "review" today, into a mechanical check on the
 real tree, not the source. Each rule ships with a fixture and a rule-index row in `plugin/docs/standards.md`.
 
-## 6. Dependency scenarios (Proposed)
+## 6. Dependency scenarios
 
 A scenario is a named set of dependency overrides, such as `empty`, `network-offline` or `signed-in-with-3-items`.
 
@@ -121,7 +121,7 @@ A scenario is a named set of dependency overrides, such as `empty`, `network-off
 Whether `agent-device open` forwards launch arguments is unverified. If it does, `sim up` uses it. If not, `sim up`
 launches with `simctl launch` and then opens the session on the running app.
 
-## 7. Devices, claims and the simulator lock (Proposed)
+## 7. Devices, claims and the simulator lock
 
 The harness already runs simulators for T2 and T3 (Foundation design §4.4). It clones or creates a device per run
 and holds 1 slot of the machine-wide `sim` counting lock (default 2) for the device's life. It sweeps devices whose
@@ -140,7 +140,7 @@ owner process died.
 5. A lease covers 1 worktree and 1 device. `sim snap`, `verify` and `down` refuse a caller from another worktree
    with `sim.not-owner`, and a test covers that cross case.
 
-## 8. The QA skill and its callers (Proposed)
+## 8. The QA skill and its callers
 
 ### 8.1 `/swift-harness:qa`
 
@@ -165,8 +165,8 @@ The skill decides what to try. The verdict comes only from `sim verify`.
 
 ### 8.3 Keeping a flow
 
-A kept flow becomes an XCUITest built on the same identifiers and scenario, plus a `[[flows]]` entry, because the
-Foundation design §7.3 requires every XCUITest to map to 1. It follows the quality floor: it must fail on an
+A kept flow becomes a T3 UI flow: an XCUITest in the app's UI test target, built on the same identifiers and
+scenario, plus a `[[flows]]` entry, because the Foundation design §7.3 requires every XCUITest to map to 1. T3 runs it. It follows the quality floor: it must fail on an
 assertion with the feature reverted, so `prove` covers it. At `max_flows` the skill asks the user which flow to drop,
 or not to keep this flow.
 
@@ -193,9 +193,9 @@ or not to keep this flow.
   worktree that acts on the other's device.
 - **Kill test.** Killing the holder mid-run leaves no device and no `agent-device` claim after the next sweep.
 
-## 11. Open for approval
+## 11. Approved choices
 
-This design proposes every item below; the user may overrule any.
+The user approved each item on 2026-09-28.
 
 1. Command surface `sim up · snap · verify · down`, with a detached holder process keeping the lock (§4, §7).
 2. The `agent-device` pin lives in the plugin beside its fixtures, and `doctor` checks it (§4).
@@ -205,5 +205,5 @@ This design proposes every item below; the user may overrule any.
    `sim.scenario-drift` check (§6).
 6. QA shares the T2/T3 `sim` lock and cap, and the harness, not `agent-device`, creates and deletes devices (§7).
 7. The QA skill name `/swift-harness:qa`, and a `sim_qa` preset key defaulting to `changed` (§8).
-8. Kept flows land in T3: an XCUITest plus a `[[flows]]` entry under `max_flows`. The user's answer called this the T2
-   tier's format; the Foundation design runs XCUITest flows as T3, so this needs a confirm (§8.3).
+8. Kept flows are T3 UI flows: an XCUITest in the UI test target plus a `[[flows]]` entry under `max_flows`, run by T3
+   (§8.3).

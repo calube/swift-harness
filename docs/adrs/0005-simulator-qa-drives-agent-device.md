@@ -1,7 +1,7 @@
 # 0005. Simulator QA drives agent-device
 
-Status: accepted for the tool choice by the user, 2026-09-28, with the simulator QA design
-(`docs/designs/2026-09-28-simulator-qa-design.md`); the rest of that design awaits the user's approval.
+Status: accepted by the user, 2026-09-28, with the simulator QA design
+(`docs/designs/2026-09-28-simulator-qa-design.md`).
 Fills the Foundation design's sub-project 3 row.
 
 ## Context
@@ -15,8 +15,8 @@ sessions. AutoMobile is pre-1.0, and its iOS runner changes in almost every rele
 ## Decision
 
 `agent-device`, at a pinned version, is the agent's hands and evidence collector. `swiftgate sim` shells out to its
-CLI; agents may call it through its MCP server or its CLI. A flow worth keeping becomes an XCUITest in the repo,
-run by `xcodebuild test` on a cloned simulator. The repo holds no `.ad` scripts and no Maestro YAML. The harness
+CLI; agents may call it through its MCP server or its CLI. A flow worth keeping becomes a T3 UI flow: an XCUITest in
+the UI test target plus a `[[flows]]` entry, run by T3 on a cloned simulator. The repo holds no `.ad` scripts and no Maestro YAML. The harness
 drops Maestro. AutoMobile may stay connected for ad-hoc exploration, but no gate calls it.
 
 ## Consequences
