@@ -312,7 +312,7 @@ enum ReviewSynthRun {
     let report: ReviewReport
     do {
       report = try ReviewSynthesis.synthesize(
-        inputs, baseline: baseline(runDirectory), telemetry: telemetryURL.path)
+        inputs, baseline: baseline(runDirectory), telemetry: ReviewTelemetry.fileName)
     } catch {
       throw InputFailure(file: "(inputs)", detail: "\(error)")
     }

@@ -4,7 +4,7 @@ import Testing
 
 @testable import SwiftGateDomain
 
-let reviewTelemetryPath = ".harness/runs/20260927T151548Z-aabadbfd/review-telemetry.json"
+let reviewTelemetryPath = "review-telemetry.json"
 
 extension ReviewSynthesis {
   /// Synthesis as `review-synth` calls it, with the telemetry path the command names.
@@ -325,7 +325,7 @@ struct ReviewSynthesisTests {
     #expect(lines.contains { $0.hasPrefix("pre-existing check unavailable: ") })
     #expect(lines.filter { $0.hasPrefix("[major]") || $0.contains(". [major]") }.count == 10)
     #expect(lines.dropLast().last?.contains("15 more") == true)
-    #expect(lines.last == "telemetry: \(reviewTelemetryPath)")
+    #expect(lines.last == "telemetry: .harness/runs/x/review-telemetry.json")
   }
 
   @Test(
@@ -448,7 +448,7 @@ struct ReviewSynthesisTests {
   }
 
   @Test(
-    "a report records the telemetry path synthesis was given, even with no focus results, the summary names it, and a review.json without telemetry fails decoding naming the key — catches a review whose cost file is missing or a report written outside review-synth"
+    "a report records the telemetry path synthesis was given, even with no focus results, the summary names it, and a review.json without telemetry, or with an absolute or home-relative one, fails decoding naming the key — catches a review whose cost file is missing or a report written outside review-synth"
   )
   func telemetryIsAlwaysPresent() throws {
     for inputs in [Self.inputs(), []] {
@@ -466,6 +466,15 @@ struct ReviewSynthesisTests {
         try JSONDecoder().decode(ReviewReport.self, from: written)
       }
       #expect(String(describing: error).contains("telemetry"))
+
+      for machinePath in ["/Users/dev/app/.harness/runs/r/review-telemetry.json", "~/r/t.json"] {
+        object["telemetry"] = machinePath
+        let absolute = try JSONSerialization.data(withJSONObject: object)
+        let rejected = #expect(throws: DecodingError.self) {
+          try JSONDecoder().decode(ReviewReport.self, from: absolute)
+        }
+        #expect(String(describing: rejected).contains("telemetry"), "\(machinePath)")
+      }
     }
   }
 

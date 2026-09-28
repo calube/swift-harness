@@ -239,9 +239,40 @@ public struct ReviewReport: Sendable, Equatable, Codable {
   public let notApplicable: [ReviewFocus]
   /// Why the pre-existing check didn't run, when it didn't; every finding then counts.
   public let baselineUnavailable: String?
-  /// The run's telemetry file. Required: `review-synth` writes it before the report, so a
-  /// `review.json` without it didn't come from `review-synth`.
+  /// The run's telemetry file, relative to the directory holding `review.json`. Required:
+  /// `review-synth` writes it before the report, so a `review.json` without it didn't come from
+  /// `review-synth`. Never absolute: the report travels with evidence, where a machine path is
+  /// rejected.
   public let telemetry: String
+
+  /// Where ``telemetry`` lives for a report stored at `reportPath`.
+  public func telemetryPath(reportPath: String) -> String {
+    guard let slash = reportPath.lastIndex(of: "/") else { return telemetry }
+    return reportPath[...slash] + telemetry
+  }
+}
+
+extension ReviewReport {
+  public init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+    verdict = try container.decode(ReviewVerdict.self, forKey: .verdict)
+    findings = try container.decode([Merged].self, forKey: .findings)
+    preExisting = try container.decode([Merged].self, forKey: .preExisting)
+    dropped = try container.decode([Dropped].self, forKey: .dropped)
+    unmatched = try container.decode([Unmatched].self, forKey: .unmatched)
+    notReviewed = try container.decode([Unreviewed].self, forKey: .notReviewed)
+    notApplicable = try container.decode([ReviewFocus].self, forKey: .notApplicable)
+    baselineUnavailable = try container.decodeIfPresent(
+      String.self, forKey: .baselineUnavailable)
+    telemetry = try container.decode(String.self, forKey: .telemetry)
+    if telemetry.hasPrefix("/") || telemetry.hasPrefix("~") {
+      throw DecodingError.dataCorruptedError(
+        forKey: .telemetry, in: container,
+        debugDescription:
+          "telemetry '\(telemetry)' must be relative to the directory holding review.json")
+    }
+  }
 }
 
 /// `review-synth`: deterministic dedupe and verdict (spec §9.2 step 4). No judgment happens here;
@@ -257,7 +288,8 @@ public enum ReviewSynthesis {
     "missing-effect-cancellation": "effect-lifetime",
   ]
 
-  /// `telemetry` is the path of the run's telemetry file, written before synthesis.
+  /// `telemetry` is the run's telemetry file, written before synthesis, relative to the
+  /// directory `review.json` is written to.
   public static func synthesize(
     _ inputs: [FocusReview],
     baseline: ReviewBaseline = .unavailable(reason: "no numbered diff was given"),
@@ -617,7 +649,7 @@ public enum ReviewSummary {
         "PRE-EXISTING (not counted toward the verdict): \(report.preExisting.count) — "
           + shown.joined(separator: "; ") + more)
     }
-    tail.append("telemetry: \(report.telemetry)")
+    tail.append("telemetry: \(report.telemetryPath(reportPath: reportPath))")
 
     // Each listed finding takes two lines; one more line closes the list.
     let room = max(0, (maxLines - head.count - tail.count - 1) / 2)

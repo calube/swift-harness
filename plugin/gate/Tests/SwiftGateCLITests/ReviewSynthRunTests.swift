@@ -196,7 +196,7 @@ struct ReviewSynthRunTests {
   }
 
   @Test(
-    "synth writes review-telemetry.json with the wall time since review-input started, says the tokens are unknown without a workflow result, and names the file — catches a review whose cost nobody can find"
+    "synth writes review-telemetry.json with the wall time since review-input started, says the tokens are unknown without a workflow result, and names the file relative to review.json — catches a review whose cost nobody can find, or a machine path in the report"
   )
   func telemetryWithoutWorkflowResult() throws {
     let started = Date().addingTimeInterval(-120)
@@ -211,9 +211,10 @@ struct ReviewSynthRunTests {
     #expect(telemetry["outputTokens"] == nil)
     let unavailable = try #require(telemetry["unavailable"] as? [String])
     #expect(unavailable.contains { $0.contains("--workflow-result") })
+    #expect(try run.json("review.json")["telemetry"] as? String == "review-telemetry.json")
+    let reportPath = run.directory.appending(path: "review.json").path
     let path = run.directory.appending(path: "review-telemetry.json").path
-    #expect(try run.json("review.json")["telemetry"] as? String == path)
-    #expect(ReviewSummary.render(report, reportPath: "review.json").contains("telemetry: \(path)"))
+    #expect(ReviewSummary.render(report, reportPath: reportPath).contains("telemetry: \(path)"))
   }
 
   /// Runs the built `swiftgate review-synth` on `run`'s focus files from `run.root`, as the
@@ -239,8 +240,8 @@ struct ReviewSynthRunTests {
     let output = try await Self.synthWithBinary(run)
     #expect(output.status == .exited(0), "\(output.stderr.text)")
     let telemetry = try #require(try run.json("review.json")["telemetry"] as? String)
-    #expect(telemetry == run.directory.appending(path: "review-telemetry.json").path)
-    #expect(FileManager.default.fileExists(atPath: telemetry))
+    #expect(telemetry == "review-telemetry.json")
+    #expect(FileManager.default.fileExists(atPath: run.directory.appending(path: telemetry).path))
 
     let blocked = try Self.run([Self.finding(line: 67)], patch: Self.cleanReset())
     defer { blocked.remove() }

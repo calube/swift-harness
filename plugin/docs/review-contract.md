@@ -90,4 +90,4 @@ reviewed, and the verdict can't be `merge` while any focus is unreviewed. A find
 returns no entry for stays in `review.json` as `unmatched`, which likewise keeps the verdict off
 `merge` unless it is pre-existing.
 
-`review.json` comes only from `review-synth` and always names its telemetry file.
+`review.json` comes only from `review-synth`; its `telemetry` path is relative.
