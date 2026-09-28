@@ -33,10 +33,13 @@ enum PlanLintRun {
       return blocked("plan `\(slug)`: \(describe(error))")
     }
 
-    guard let planDesign = plan.designSource else {
-      return blocked(
-        "plan `\(slug)` is a spec-page plan: plan-lint reads a design's test plan, and this plan "
-          + "has no design")
+    let planDesign: PlanFile.DesignSource
+    switch plan.source {
+    case .design(let source): planDesign = source
+    case .specPage(let pageSource):
+      return await runSpecPage(
+        slug: slug, pageSource: pageSource, store: store, ledger: ledger, root: root,
+        swiftPM: swiftPM, harnessRoot: harnessRoot)
     }
     guard let designSha = planDesign.designSha else {
       return blocked(
@@ -66,18 +69,10 @@ enum PlanLintRun {
     let design = DesignDocument(markdown: .parse(found.text))
 
     let config: Config
-    switch StaticCheckInputs.loadConfig(root: root) {
-    case .success(let loaded?): config = loaded
-    case .success(nil):
-      return blocked("no \(ConfigLoader.fileName): plan-lint needs the module graph")
-    case .failure(let failure):
-      return Result(outcome: failure.outcome, packFailures: [:], notes: [])
-    }
     let graph: ModuleGraph
-    do {
-      graph = try await ModuleGraphLoader(swiftPM: swiftPM, root: root).load(config: config)
-    } catch {
-      return blocked("can't load the module graph: \(error)")
+    switch await loadGraph(root: root, swiftPM: swiftPM) {
+    case .success(let loaded): (config, graph) = loaded
+    case .failure(let refusal): return refusal.result
     }
 
     let sources = WorkerPackSources.gather(
@@ -103,6 +98,106 @@ enum PlanLintRun {
         design: design, designPath: planDesign.design, ledger: ledger,
         ledgerPath: store.plan.ledgerFile, graph: graph, workerPacks: workerPacks,
         bounds: config.plan)
+      return Result(
+        outcome: .checked(RuleRunResult(findings: moved + findings, allowances: [])),
+        packFailures: packFailures, notes: sources.notes)
+    } catch {
+      return blocked("plan-lint: \(error)")
+    }
+  }
+
+  /// Why plan-lint can't run; its result is the command's.
+  private struct Refusal: Error {
+    let result: Result
+  }
+
+  private static func loadGraph(root: URL, swiftPM: any SwiftPM) async
+    -> Swift.Result<(Config, ModuleGraph), Refusal>
+  {
+    let config: Config
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(let loaded?): config = loaded
+    case .success(nil):
+      return .failure(
+        Refusal(result: blocked("no \(ConfigLoader.fileName): plan-lint needs the module graph")))
+    case .failure(let failure):
+      return .failure(
+        Refusal(result: Result(outcome: failure.outcome, packFailures: [:], notes: [])))
+    }
+    do {
+      return .success(
+        (config, try await ModuleGraphLoader(swiftPM: swiftPM, root: root).load(config: config)))
+    } catch {
+      return .failure(Refusal(result: blocked("can't load the module graph: \(error)")))
+    }
+  }
+
+  /// A spec-page plan, linted against the page in its plan directory. The page is never
+  /// committed, so its confirmed pageSha is the only trace of what was confirmed: a page whose
+  /// bytes hash to anything else is a gating `plan-lint.spec-page-moved`, and the rest of the
+  /// lint reads the page as it now stands.
+  private static func runSpecPage(
+    slug: String, pageSource: PlanFile.SpecPageSource, store: PlanStateStore, ledger: Ledger,
+    root: URL, swiftPM: any SwiftPM, harnessRoot: URL?
+  ) async -> Result {
+    guard let approval = pageSource.approval else {
+      return blocked(
+        "plan `\(slug)`'s spec page isn't confirmed yet, so no pageSha names the page to lint "
+          + "against: confirm it with `swiftgate plan confirm \(slug)` first")
+    }
+    let path = store.specPageFile(pageSource)
+    let bytes: Data
+    do {
+      bytes = try Data(contentsOf: URL(filePath: path))
+    } catch {
+      return blocked(
+        "plan `\(slug)`: can't read its spec page `\(path)`: \(error.localizedDescription)")
+    }
+    guard let text = String(data: bytes, encoding: .utf8) else {
+      return blocked("plan `\(slug)`: its spec page `\(path)` isn't UTF-8")
+    }
+    let page: SpecPage
+    switch SpecPage.parse(text) {
+    case .parsed(let parsed): page = parsed
+    case .malformed(let problems):
+      let listed = problems.map { problem in
+        problem.line.map { "line \($0): \(problem.message)" } ?? problem.message
+      }
+      return blocked(
+        "plan `\(slug)`: its spec page `\(path)` doesn't parse (run `swiftgate spec-page check` "
+          + "on it): " + listed.joined(separator: "; "))
+    }
+
+    let config: Config
+    let graph: ModuleGraph
+    switch await loadGraph(root: root, swiftPM: swiftPM) {
+    case .success(let loaded): (config, graph) = loaded
+    case .failure(let refusal): return refusal.result
+    }
+
+    let sources = WorkerPackSources.gatherForSpecPage(root: root, harnessRoot: harnessRoot)
+    let pageContext = SpecPageSource(page: page, source: ContextSource(label: path, rawText: text))
+    var workerPacks: [String: ContextPack] = [:]
+    var packFailures: [String: String] = [:]
+    for task in ledger.tasks where task.status != .done {
+      switch sources.inputs(task: task, specPage: pageContext, graph: graph) {
+      case .failure(let reason): packFailures[task.id] = reason.message
+      case .success(let inputs):
+        do {
+          workerPacks[task.id] = try ContextPack.build(
+            role: .worker, inputs: .specPageWorker(inputs))
+        } catch {
+          packFailures[task.id] = "\(error)"
+        }
+      }
+    }
+
+    do throws(ReportContractViolation) {
+      let moved = try PlanLintGraph.specPageMovedFindings(
+        pagePath: path, pageSha: SpecPageCheck.pageSha(bytes), confirmedPageSha: approval.pageSha)
+      let findings = try PlanLintGraph.allFindings(
+        specPage: page, pagePath: path, ledger: ledger, ledgerPath: store.plan.ledgerFile,
+        graph: graph, workerPacks: workerPacks, bounds: config.plan)
       return Result(
         outcome: .checked(RuleRunResult(findings: moved + findings, allowances: [])),
         packFailures: packFailures, notes: sources.notes)
@@ -194,6 +289,22 @@ struct WorkerPackSources: Sendable {
       }
     }
 
+    return WorkerPackSources(
+      claims: claims, standards: gatherStandards(root: root, harnessRoot: harnessRoot),
+      notes: notes)
+  }
+
+  /// A spec-page plan's sources: the standards as ``gather(designPath:root:harnessRoot:)`` finds
+  /// them, and no claims, since a spec page has no evidence lane.
+  static func gatherForSpecPage(root: URL, harnessRoot: URL? = nil) -> WorkerPackSources {
+    WorkerPackSources(
+      claims: .success((ContextSource(label: "claims.jsonl", rawText: ""), [])),
+      standards: gatherStandards(root: root, harnessRoot: harnessRoot), notes: [])
+  }
+
+  private static func gatherStandards(root: URL, harnessRoot: URL?)
+    -> Swift.Result<ContextSource?, Failure>
+  {
     let standards: Swift.Result<ContextSource?, Failure>
     if exists(standardsPath, root: root) {
       standards = readStandards(root: root, labelPrefix: "")
@@ -209,7 +320,35 @@ struct WorkerPackSources: Sendable {
           message: "no standards doc for worker packs: neither this repository's "
             + "`\(standardsPath)` nor \(harness) exists"))
     }
-    return WorkerPackSources(claims: claims, standards: standards, notes: notes)
+    return standards
+  }
+
+  /// A spec-page worker's inputs, its module kinds resolved through the page's Modules table as
+  /// `context-pack --spec-page` resolves them.
+  func inputs(task: LedgerTask, specPage: SpecPageSource, graph: ModuleGraph)
+    -> Swift.Result<SpecPageWorkerInputs, Failure>
+  {
+    let claimsSource: ContextSource
+    let claimIDs: [String]
+    switch claims {
+    case .failure(let failure): return .failure(failure)
+    case .success(let value): (claimsSource, claimIDs) = value
+    }
+    let standardsSource: ContextSource?
+    switch standards {
+    case .failure(let failure): return .failure(failure)
+    case .success(let value): standardsSource = value
+    }
+    let resolution = SpecPageWriteSet.resolve(
+      task.writeSet, graph: graph, page: specPage.page,
+      packageDirectories: graph.packages.map(\.path))
+    return .success(
+      SpecPageWorkerInputs(
+        task: task, specPage: specPage, claims: claimsSource, citedClaimIDs: claimIDs,
+        standards: standardsSource ?? ContextSource(label: "standards", rawText: ""),
+        moduleKindAnchors: standardsSource == nil
+          ? [] : ContextPackModuleKindAnchors.anchors(for: resolution.kinds),
+        touchedModules: resolution.moduleNames))
   }
 
   func inputs(
@@ -269,13 +408,18 @@ struct WorkerPackSources: Sendable {
 struct PlanLintCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "plan-lint",
-    abstract: "Lint plan.json and ledger.json against the design at designSha (spec §9.2).",
+    abstract:
+      "Lint plan.json and ledger.json against the design at designSha, or the confirmed spec "
+      + "page (spec §9.2).",
     discussion:
       "Reads the plan's shared state under the git common dir, the design revision whose "
       + "designSha plan.json records (walked from committed history, never the working tree), "
-      + "the module graph and a worker context pack per task. Exit 0 clean, 1 on a gating "
-      + "finding, 2 when the plan state, the design at designSha or the module graph can't be "
-      + "read (including a plan with no designSha yet).")
+      + "the module graph and a worker context pack per task. A spec-page plan reads its "
+      + "spec-page.md instead: each slice is a coverage item at its tier, and a page whose sha "
+      + "differs from the confirmed pageSha is plan-lint.spec-page-moved. Exit 0 clean, 1 on a "
+      + "gating finding, 2 when the plan state, the design at designSha, the spec page or the "
+      + "module graph can't be read (including a plan with no designSha yet, or a spec page not "
+      + "confirmed yet).")
 
   @Argument(help: "The plan's slug.")
   var slug: String

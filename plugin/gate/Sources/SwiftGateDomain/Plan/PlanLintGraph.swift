@@ -154,6 +154,15 @@ public enum PlanLintGraph {
   public static func writeSetUnresolvedFindings(
     task: LedgerTask, resolution: WriteSetResolution
   ) throws(ReportContractViolation) -> [Finding] {
+    try writeSetUnresolvedFindings(
+      task: task, resolution: resolution, plannedTable: "the design's Module kinds table")
+  }
+
+  /// ``writeSetUnresolvedFindings(task:resolution:)`` naming `plannedTable` as the table that
+  /// places the modules a plan creates.
+  static func writeSetUnresolvedFindings(
+    task: LedgerTask, resolution: WriteSetResolution, plannedTable: String
+  ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     for entry in resolution.unresolved {
       findings.append(
@@ -161,8 +170,8 @@ public enum PlanLintGraph {
           ruleID: writeSetUnresolvedRuleID, severity: .major, file: task.id, line: nil,
           message:
             "task \(task.id)'s write-set entry `\(entry)` names a module directory that no module "
-            + "in the graph or the design's Module kinds table answers to: correct the path, or "
-            + "add the module to the design's Module kinds table",
+            + "in the graph or \(plannedTable) answers to: correct the path, or "
+            + "add the module to \(plannedTable)",
           failureScenario:
             "the module count and the worker pack's module-kind standards skip the entry, so a "
             + "task over the module bound, or missing its kind's standards, passes plan-lint"))
@@ -314,12 +323,20 @@ public enum PlanLintGraph {
   )
     throws(ReportContractViolation) -> [Finding]
   {
-    let modulesByTask = Dictionary(
-      ledger.tasks.map {
-        ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph, design: design))
-      },
-      uniquingKeysWith: { first, second in first.union(second) })
+    try singleDependentChainFindings(
+      ledger: ledger, ledgerPath: ledgerPath,
+      modulesByTask: Dictionary(
+        ledger.tasks.map {
+          ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph, design: design))
+        },
+        uniquingKeysWith: { first, second in first.union(second) }))
+  }
 
+  /// ``singleDependentChainFindings(ledger:graph:ledgerPath:design:)`` over each task's modules
+  /// as the plan's source resolves them.
+  static func singleDependentChainFindings(
+    ledger: Ledger, ledgerPath: String, modulesByTask: [String: Set<String>]
+  ) throws(ReportContractViolation) -> [Finding] {
     var dependentsOf: [String: Set<String>] = [:]
     for task in ledger.tasks {
       for dependency in task.deps { dependentsOf[dependency, default: []].insert(task.id) }
@@ -441,7 +458,17 @@ public enum PlanLintGraph {
   public static func specPageMovedFindings(
     pagePath: String, pageSha: String, confirmedPageSha: String
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    guard pageSha != confirmedPageSha else { return [] }
+    return [
+      try Finding(
+        ruleID: specPageMovedRuleID, severity: .major, file: pagePath, line: nil,
+        message:
+          "\(pagePath) hashes to \(pageSha), but the plan was confirmed at pageSha "
+          + "\(confirmedPageSha). Confirm the page again with `swiftgate plan confirm`, or replan",
+        failureScenario:
+          "workers build the plan's tasks against a page nobody confirmed, so a changed slice "
+          + "ships unplanned")
+    ]
   }
 
   // MARK: - Entry point
@@ -500,7 +527,35 @@ extension PlanLintGraph {
     specPage: SpecPage, pagePath: String, ledger: Ledger, ledgerPath: String,
     graph: ModuleGraph, workerPacks: [String: ContextPack], bounds: PlanConfig
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    var findings = try PlanLintCoverage.coverageFindings(
+      page: specPage, tasks: ledger.tasks, pagePath: pagePath)
+
+    let sliceTiers = PlanLintCoverage.sliceTiers(page: specPage)
+    let packageDirectories = graph.packages.map(\.path)
+    var modulesByTask: [String: Set<String>] = [:]
+    for task in ledger.tasks.sorted(by: { $0.id < $1.id }) {
+      let resolution = SpecPageWriteSet.resolve(
+        task.writeSet, graph: graph, page: specPage, packageDirectories: packageDirectories)
+      modulesByTask[task.id, default: []].formUnion(resolution.moduleNames)
+      // A done task is immutable history, as in the design entry point.
+      guard task.status != .done else { continue }
+      findings += try PlanLintCoverage.sliceGateFindings(task: task, sliceTiers: sliceTiers)
+      findings += try PlanLintCoverage.unknownTestFindings(task: task, page: specPage)
+      findings += try PlanLintCoverage.missingModelFindings(task: task)
+      findings += try writeSetUnresolvedFindings(
+        task: task, resolution: resolution, plannedTable: "the spec page's Modules table")
+      findings += try PlanLintCoverage.sizeFindings(
+        task: task, modulesTouched: resolution.moduleNames, workerPack: workerPacks[task.id],
+        bounds: bounds, testsCovered: task.covers.count, testNoun: "slices")
+    }
+
+    findings += try scheduleFindings(ledger: ledger, ledgerPath: ledgerPath)
+    findings += try writeSetOverlapFindings(ledger: ledger, ledgerPath: ledgerPath)
+    findings += try hotFileFindings(ledger: ledger, ledgerPath: ledgerPath)
+    findings += try singleDependentChainFindings(
+      ledger: ledger, ledgerPath: ledgerPath, modulesByTask: modulesByTask)
+    findings += try workerPackFindings(ledger: ledger, workerPacks: workerPacks)
+    return findings
   }
 }
 
