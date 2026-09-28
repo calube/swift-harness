@@ -58,6 +58,14 @@ public enum SurfaceStubForm: String, Sendable, Equatable, CaseIterable {
   /// An existing array literal that only gains bare type references or `Type.self` elements, as a
   /// command or registration list does.
   case registersType
+  /// Only a `throw` of an error value: a payload-free case, an initializer call or an empty-payload
+  /// case, each as the other stub forms allow them.
+  case throwsError
+  /// An enum case the repository declares, constructed with each associated value an empty
+  /// default or a parameter passed through (`.exited(0)`, `.loaded(items)`).
+  case emptyPayloadCase
+  /// A parameter or a property of `self` returned unchanged (`value`, `self.limit`).
+  case returnsUnchanged
 }
 
 /// Why a judged body is behaviour, not a stub.

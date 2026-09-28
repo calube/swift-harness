@@ -8,10 +8,13 @@ public struct SurfaceParentIndex: Sendable, Equatable {
   /// dependency client's endpoints are closures).
   public let functions: Set<String>
   public let types: Set<String>
+  /// Enum case names, which an empty-payload case stub may construct.
+  public let cases: Set<String>
 
-  public init(functions: Set<String>, types: Set<String>) {
+  public init(functions: Set<String>, types: Set<String>, cases: Set<String> = []) {
     self.functions = functions
     self.types = types
+    self.cases = cases
   }
 
   public static func build(_ sources: [String: String]) -> SurfaceParentIndex {
