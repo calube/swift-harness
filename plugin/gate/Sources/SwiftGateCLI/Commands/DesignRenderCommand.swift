@@ -220,6 +220,8 @@ enum LedgerRenderRun {
   enum Outcome: Sendable, Equatable {
     /// `path` is repo-relative; `capabilities` is the Artifact tool's `capabilities` value.
     case written(path: String, designSha: String, capabilities: String, notes: [String])
+    /// A spec-page plan's page, rendered from the page whose bytes hash to `pageSha`.
+    case writtenFromSpecPage(path: String, pageSha: String, capabilities: String, notes: [String])
     case blocked(String)
   }
 
@@ -345,6 +347,12 @@ enum LedgerRenderRun {
         json.designSha = designSha
         json.capabilities = capabilities
         json.notes = notes
+      case .writtenFromSpecPage(let path, let pageSha, let capabilities, let notes):
+        json.verdict = Verdict.green.rawValue
+        json.output = path
+        json.pageSha = pageSha
+        json.capabilities = capabilities
+        json.notes = notes
       case .blocked(let message):
         json.verdict = Verdict.blocked.rawValue
         json.message = message
@@ -360,6 +368,12 @@ enum LedgerRenderRun {
           "  publish with capabilities \(capabilities)",
         ]
         return (lines + notes.map { "  note: \($0)" }).joined(separator: "\n")
+      case .writtenFromSpecPage(let path, let pageSha, let capabilities, let notes):
+        let lines = [
+          "design-render: \(Verdict.green.rawValue) wrote \(path)", "  pageSha \(pageSha)",
+          "  publish with capabilities \(capabilities)",
+        ]
+        return (lines + notes.map { "  note: \($0)" }).joined(separator: "\n")
       case .blocked(let message):
         return "design-render: \(Verdict.blocked.rawValue) \(message)"
       }
@@ -368,7 +382,7 @@ enum LedgerRenderRun {
 
   static func exitCode(_ outcome: Outcome) -> Int32 {
     switch outcome {
-    case .written: Verdict.green.exitCode
+    case .written, .writtenFromSpecPage: Verdict.green.exitCode
     case .blocked: Verdict.blocked.exitCode
     }
   }
@@ -381,6 +395,7 @@ struct LedgerRenderJSON: Encodable {
   var plan: String
   var output: String?
   var designSha: String?
+  var pageSha: String?
   var capabilities: String?
   var notes: [String]?
   var message: String?
