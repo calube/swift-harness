@@ -815,7 +815,7 @@ struct CheckCommand: AsyncParsableCommand {
     try await GateRun.execute(
       root: root, format: output.format, command: "check \(tier.rawValue)",
       steps: steps.isEmpty ? nil : steps.map(\.rawValue),
-      proofBases: proofBases.isEmpty ? nil : proofBases
+      proofBases: proofBases.isEmpty ? nil : proofBases, base: base
     ) { context in
       try await CheckRun.run(
         root: root, tier: tier, base: base, extraSteps: Set(steps), proofBases: proofBases,

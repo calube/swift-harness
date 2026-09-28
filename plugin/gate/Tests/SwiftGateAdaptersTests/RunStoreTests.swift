@@ -95,6 +95,37 @@ struct RunStoreTests {
   }
 
   @Test(
+    "a run recorded with the sha its --base resolved to carries it in its history line, after an older line without one that decodes as nil — catches a sprint unable to tell what a slice gate measured from, or reading a missing base as some default"
+  )
+  func recordsBase() throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(
+      at: store.historyFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let older =
+      #"{"command":"check push","durationMilliseconds":9360,"findingCount":8,"#
+      + #""finishedAt":"2026-09-28T13:19:21Z","#
+      + #""headCommit":"788175ea48ce89455ff309643ad9c0c84ffcbb2e","#
+      + #""runID":"20260928T131912Z-cc90d5bd","schemaVersion":1,"#
+      + #""tiers":[{"durationMilliseconds":282,"testCounts":null,"tier":"T0","verdict":"GREEN"}],"#
+      + #""verdict":"RED"}"# + "\n"
+    try Data(older.utf8).write(to: store.historyFile)
+    let surface = "5c1e0a9b7d3f2e1c0b9a8f7e6d5c4b3a2f1e0d9c"
+    try store.record(
+      try Self.report("run-a"), finishedAt: Date(), command: "check push",
+      headCommit: "4411bca7e0c2d7f3a9b8c6d5e4f3a2b1c0d9e8f7", base: surface)
+    try store.record(try Self.report("run-b"), finishedAt: Date(), command: "lint")
+
+    let history = try store.readHistory()
+    let raw = try String(contentsOf: store.historyFile, encoding: .utf8)
+
+    #expect(history.invalidLines == 0)
+    #expect(
+      history.records.map(\.runID) == ["20260928T131912Z-cc90d5bd", "run-a", "run-b"])
+    #expect(history.records.map(\.base) == [nil, surface, nil])
+    #expect(raw.split(separator: "\n").map { $0.contains(#""base":"#) } == [false, true, false])
+  }
+
+  @Test(
     "keeping runs copies nothing before any run, then each run directory into the other checkout's runs, and never the history file — catches a removed worktree taking its gate reports with it"
   )
   func keepsRunsInAnotherCheckout() throws {

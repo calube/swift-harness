@@ -47,6 +47,7 @@ enum GateRun {
     // Package.resolved, on any path those flags missed.
     let resolvedFilesBefore = await ResolvedFileGuard.snapshot(root: root, git: git)
     let headCommit = await headCommit(git: git)
+    let resolvedBase = await resolved(base: base, git: git)
     var parts = try await body(Context(runID: runID, directory: directory))
     let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
     if let finding = try ResolvedFileGuard.finding(
@@ -60,7 +61,7 @@ enum GateRun {
     do {
       try store.record(
         report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
-        headCommit: headCommit)
+        headCommit: headCommit, base: resolvedBase)
     } catch {
       FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
     }
@@ -79,6 +80,22 @@ enum GateRun {
         Data("swiftgate: could not read HEAD to record with the run: \(error)\n".utf8))
       return nil
     }
+  }
+
+  /// The sha `base` names, so a reader can tell what the run's diff was measured from. `nil` with
+  /// no base, or when it names no commit or git fails, which stderr says rather than going
+  /// unrecorded.
+  private static func resolved(base: String?, git: any Git) async -> String? {
+    guard let base else { return nil }
+    do {
+      if let sha = try await git.revision(base) { return sha }
+      FileHandle.standardError.write(
+        Data("swiftgate: --base \(base) names no commit to record with the run\n".utf8))
+    } catch {
+      FileHandle.standardError.write(
+        Data("swiftgate: could not resolve --base \(base) to record with the run: \(error)\n".utf8))
+    }
+    return nil
   }
 
   static func milliseconds(_ duration: Duration) -> Int {

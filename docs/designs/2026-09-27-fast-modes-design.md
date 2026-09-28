@@ -104,8 +104,9 @@ and for change requests on a build that's already merged.
 3. **Surface.** The session commits the surface (§3); `swiftgate sprint surface` runs `surface-check` on it and
    records the sha.
 4. **Slices.** For each slice in the page's order: a failing test, the code, `check --tier fast` as the inner loop
-   (1–7 s in trial runs), then `check --tier push` at the slice boundary, a commit, and `swiftgate sprint slice
-   <n> --gate <run id>`.
+   (1–7 s in trial runs), then `check --tier push --base <surface>` at the slice boundary, a commit, and
+   `swiftgate sprint slice <n> --gate <run id>`. Measuring from the surface keeps a stub a later slice fills out of
+   this slice's diff coverage; the finish gate measures from `main`, so it still covers every changed line once.
 5. **Finish.** `check --tier ready --base main --proof-base <surface>` once, then `swiftgate sprint finish --gate
    <run id>`, which fast-forwards `main` to the branch.
 
@@ -121,6 +122,7 @@ command that checks it, and the skill can't advance without it.
 | Steps run in order: start, surface, slices in the page's order, finish | a closed state machine in `SwiftGateDomain`; any other transition exits 1 and names the step it expected |
 | A slice's gate ran at that slice's commit | the gate run's `headCommit` equals the branch HEAD the command sees |
 | Every slice passed `push` before the next starts | `sprint slice` refuses a RED, BLOCKED or stale run |
+| A slice's gate measured its diff from the surface | the run's history line records the sha `--base` resolved to; `sprint slice` refuses any other base, or none, with `sprint.gate-base` |
 | The surface has no behaviour | `sprint surface` runs `surface-check` and refuses on any finding |
 | Every new test fails on an assertion without its code | the final `ready` gate's prove at the surface base; `sprint finish` refuses unless it's GREEN at HEAD |
 | `main` only moves to a green sprint | `sprint finish` fast-forwards and refuses when `main` moved since `start` |

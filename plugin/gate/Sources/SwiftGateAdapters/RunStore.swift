@@ -73,7 +73,7 @@ public struct RunStore: Sendable {
       line = try RunHistoryJSON.encodeLine(
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,
-          proofBases: proofBases, headCommit: headCommit))
+          proofBases: proofBases, headCommit: headCommit, base: base))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }

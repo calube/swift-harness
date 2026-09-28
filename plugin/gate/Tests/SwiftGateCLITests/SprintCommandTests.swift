@@ -74,19 +74,34 @@ private struct SprintRepo {
 
   func sha(_ ref: String) async throws -> String { try await git("rev-parse", ref) }
 
+  /// The ref a recorded gate run names as its `--base`.
+  enum GateBase {
+    /// The recorded sprint's surface, or no base before one is recorded: what the skill passes.
+    case recordedSurface
+    case ref(String)
+    /// A run with no base, as history written before runs recorded one.
+    case none
+  }
+
   /// Records a gate run at the current HEAD through the real run driver and returns its id.
   func gate(
     _ command: String, _ verdict: Verdict = .green, steps: [String]? = nil,
-    proofBases: [String]? = nil
+    proofBases: [String]? = nil, base: GateBase = .recordedSurface
   ) async throws -> String {
     let parts = GateRunParts(
       tiers: [try TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1, testCounts: nil)]
     )
+    let baseRef: String? =
+      switch base {
+      case .recordedSurface: try await context().store.read()?.surfaceCommit
+      case .ref(let ref): ref
+      case .none: nil
+      }
     var captured: String?
     do {
       try await GateRun.execute(
         root: root, format: .json, command: command, steps: steps, proofBases: proofBases,
-        git: liveGit
+        base: baseRef, git: liveGit
       ) { context in
         captured = context.runID
         return parts
@@ -524,5 +539,58 @@ struct SprintCommandTests {
       try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
     #expect(object["next"] as? String == "start")
     #expect(object["sprint"] == nil)
+  }
+  @Test(
+    "slice refuses a green push run measured from main, and one whose history line names no base, and accepts it measured from the surface — catches a slice gate judging coverage against the wrong base, or an unrecorded base passing"
+  )
+  func sliceNeedsGateMeasuredFromSurface() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, surface) = try await repo.surfaced()
+    try await repo.commit("Sources/App/Feature.swift", SprintRepo.behaviour, "slice 1")
+
+    let fromMain = await SprintCommandRun.slice(
+      1, gate: try await repo.gate("check push", base: .ref("main")), context: context)
+    let unrecorded = await SprintCommandRun.slice(
+      1, gate: try await repo.gate("check push", base: .none), context: context)
+    let stepAfterRefusals = try context.store.read()?.step
+    let fromSurface = await SprintCommandRun.slice(
+      1, gate: try await repo.gate("check push", base: .ref(surface)), context: context)
+
+    #expect(fromMain.refusal == .gateBase, "\(fromMain.message)")
+    #expect(fromMain.verdict.exitCode == 1)
+    #expect(
+      fromMain.message.contains("check --tier push --base \(surface)"), "\(fromMain.message)")
+    #expect(unrecorded.refusal == .gateBase, "\(unrecorded.message)")
+    #expect(stepAfterRefusals == .surfaced)
+    #expect(fromSurface.refusal == nil, "\(fromSurface.message)")
+    #expect(try context.store.read()?.step == .slicing(1))
+  }
+
+  @Test(
+    "a slice's push run records the surface as its base, so the diff it judges holds slice 1's lines and not a surface stub a later slice fills — catches slice 1 failing coverage on stubs it never touched"
+  )
+  func sliceGateDiffExcludesSurfaceStubs() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let context = try await repo.started(slices: 2)
+    try Data(SprintRepo.clean.utf8).write(
+      to: repo.root.appending(path: "Sources/App/Feature.swift"))
+    let surface = try await repo.commit(
+      "Sources/App/Later.swift", "func later() -> Int {\n  0\n}\n", "surface")
+    let surfaced = await SprintCommandRun.surface(commit: surface, context: context)
+    try #require(surfaced.refusal == nil, "\(surfaced.message)")
+    try await repo.commit("Sources/App/Feature.swift", SprintRepo.behaviour, "slice 1")
+
+    let id = try await repo.gate("check push")
+    let record = try #require(
+      try RunStore(worktreeRoot: repo.root).readHistory().records.last { $0.runID == id })
+    let base = try #require(record.base, "the push run recorded no base")
+    let fromBase = try await CoverageCheck.addedLines(git: repo.liveGit, base: base).get()
+    let fromMain = try await CoverageCheck.addedLines(git: repo.liveGit, base: "main").get()
+
+    #expect(base == surface)
+    #expect(fromBase.map(\.path) == ["Sources/App/Feature.swift"])
+    #expect(Set(fromMain.map(\.path)) == ["Sources/App/Feature.swift", "Sources/App/Later.swift"])
   }
 }
