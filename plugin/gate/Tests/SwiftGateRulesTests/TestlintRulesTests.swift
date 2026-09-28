@@ -187,4 +187,18 @@ struct TestlintRulesTests {
     #expect(finding.message.contains("while :"))
     #expect(finding.message.contains("deadline"))
   }
+
+  @Test(
+    "a spinning script held in a file-scope constant, outside any function or type, is RED — catches a top-level literal skipped as if it were an attribute argument"
+  )
+  func hangWithoutDeadlineFileScope() throws {
+    #expect(try lines("test.hang-without-deadline", "bad/FileScope.swift") == [3])
+  }
+
+  @Test(
+    "an exit after a spinning loop's closing brace doesn't count as leaving it — catches the loop body read past its own closing brace"
+  )
+  func hangWithoutDeadlineExitAfterLoop() throws {
+    #expect(try lines("test.hang-without-deadline", "bad/ExitAfterLoop.swift") == [4])
+  }
 }

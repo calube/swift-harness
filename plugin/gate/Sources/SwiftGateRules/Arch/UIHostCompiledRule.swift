@@ -82,23 +82,10 @@ struct UIHostCompiledRule: FileRule {
       default: return false
       }
     }
-    if let infix = condition.as(InfixOperatorExprSyntax.self),
-      let op = infix.operator.as(BinaryOperatorExprSyntax.self)?.operator.text
-    {
-      return combine(op, neverOnHost(infix.leftOperand), neverOnHost(infix.rightOperand)) ?? false
-    }
     if let sequence = condition.as(SequenceExprSyntax.self) {
       return sequenceNeverOnHost(Array(sequence.elements))
     }
     return false
-  }
-
-  private static func combine(_ op: String, _ left: Bool, _ right: Bool) -> Bool? {
-    switch op {
-    case "&&": return left || right
-    case "||": return left && right
-    default: return nil
-    }
   }
 
   /// An unfolded `a && b || c` chain: `&&` binds tighter, so it is false when every `||` group
