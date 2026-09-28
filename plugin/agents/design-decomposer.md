@@ -37,6 +37,23 @@ The first prompt gives:
 Read the pack first. Read the design doc itself only if a section the pack quotes points at another
 section you need.
 
+### A spec page in place of a design
+
+A plan may have a spec page as its source instead of a design (`/swift-harness:ship` with a preset
+whose `design_tier` is `none`). Its pack is built with `--spec-page` in place of `--design` and holds
+the page's Modules, Surface and Slices sections verbatim, then 1 `<slice id>: <tier>` line per slice,
+such as `slice-2-test-block-moves-to-blocked: T1`. Then:
+
+- Each slice is 1 coverage id, `slice-<n>-<kebab test name>`, exactly as the pack lists it. There
+  are no `req-…` or `test-…` ids. A task's `"tests"` and `"covers"` name the slice ids it turns
+  green, and every slice id is covered at least once.
+- A slice's tier is the one its line gives, T1 unless the page says `Tier: T2` or `Tier: T3`, and
+  sets the task's `gate` as a `test-…` item's tier does.
+- The Modules table stands in for the design's Module kinds table: a write-set entry under a module
+  the graph doesn't have yet must name a module that table lists.
+- The surface is already on `main`. A task may own surface stub files in its write set and fill
+  them in; don't plan a task that only declares types.
+
 ## The unit of work
 
 A task is one module's vertical slice that turns at least one `test-…` item from the design green:
