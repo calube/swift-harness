@@ -368,3 +368,24 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   60 s `git` timeout, then `MutationOrphanTests.timeoutTakesTheProcessTreeDown` and the shim tests). Every one
   passed re-run alone; standalone prove GREEN (run 20260928T164005Z-aaa5df2c) at proof base `416348d`. Merged as a
   fast-forward to the integration branch.
+
+## Fast-modes waves 6 and 7 (sprint rehearsal fixes)
+
+- **T3 never clones a booted base.** `SimulatorSelection.provision(from:)` returns
+  `SimulatorProvision.clone(baseUDID:)` only when the base's state is `Shutdown`, else
+  `.create(deviceType:runtime:)`, made with `Simctl.create(name:deviceType:runtime:)` under the same lock, name and
+  orphan sweep as a clone. A booted base is never shut down. `SimulatorSelectionError.baseDeviceTypeUnknown(udid:state:)`,
+  `SimctlError.timedOut(command:deadline:)`. Config `[simulator] simctl_timeout_seconds`: default 180, range
+  30...1800, else `outOfRange "30...1800"`; boot and install keep 300 s. The test fake is `FakeSimctl`, and it refuses
+  to clone a booted device. No new rule id: `t3.no-evidence`.
+- **Surfaces may extend a manifest.** `SurfaceStubForm.extendsManifest`: in an existing `Package.swift`, array
+  literals that only gain dependencies, products, targets or target names are stubs.
+  `SurfaceBehaviour.changesManifest(excerpt:)` covers every other manifest change, as `surface-check.behaviour`
+  (declaration `package`, not waivable). A new manifest still judges nothing.
+- **Shim kill-cleanup test.** It waits for the cold build's own lock on disk, under a 30 s deadline it names when it
+  runs out, then 20 s for the reap check. The root cause was a fixed 20 s deadline racing `shim_test.sh`'s rsync of
+  the gate package at load 150.
+- **Sprint skill.** Slice gates run `--base <surface>`; only preflight's push gate and `finish`'s `ready` gate take
+  `--base main`. The `ready` gate runs in the foreground. `<spec-file>` may sit outside the repository. A new
+  `@Dependency` accessor stubs as `get { .init() }` / `set {}`. `plugin/docs/hooks.md` lists the sprint page row.
+- **Gates.** Integration push + prove GREEN (run 20260928T171856Z-96f22392), 14 of 14 proven at proof base `aaf4733`.
