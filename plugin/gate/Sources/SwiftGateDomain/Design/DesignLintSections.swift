@@ -51,7 +51,8 @@ public enum DesignLintSections {
     where document.markdown.section(anchor: section.anchor) == nil {
       findings.append(
         try Finding(
-          ruleID: "design-lint.section-missing", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.sectionMissing.rawValue, severity: .major, file: docPath,
+          line: nil,
           message: "\"\(section.name)\" section is missing (spec §5.3).", failureScenario: nil))
     }
 
@@ -65,7 +66,7 @@ public enum DesignLintSections {
     if actualOrder != expectedOrder {
       findings.append(
         try Finding(
-          ruleID: "design-lint.section-order", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.sectionOrder.rawValue, severity: .major, file: docPath, line: nil,
           message:
             "design sections are out of §5.3 order: expected "
             + "\(expectedOrder.joined(separator: ", ")); got \(actualOrder.joined(separator: ", ")).",
@@ -91,7 +92,7 @@ public enum DesignLintSections {
     guard let problem = document.problem, problem.proseWordCount == 0 else { return [] }
     return [
       try Finding(
-        ruleID: "design-lint.problem-empty", severity: .major, file: docPath, line: nil,
+        ruleID: DesignLintRule.problemEmpty.rawValue, severity: .major, file: docPath, line: nil,
         message: "\"Problem\" section is present but has no prose (spec §5.3).",
         failureScenario: nil)
     ]
@@ -109,32 +110,32 @@ public enum DesignLintSections {
 
     try findings.append(
       contentsOf: formFindings(
-        ids: requirementIDs, prefix: "req-", ruleID: "design-lint.requirement-id-form",
+        ids: requirementIDs, prefix: "req-", rule: .requirementIDForm,
         docPath: docPath))
     try findings.append(
       contentsOf: formFindings(
-        ids: testIDs, prefix: "test-", ruleID: "design-lint.test-id-form", docPath: docPath))
+        ids: testIDs, prefix: "test-", rule: .testIDForm, docPath: docPath))
     try findings.append(
       contentsOf: duplicateFindings(
         ids: requirementIDs, otherDesignIds: otherDesignIds,
         otherDesignSources: otherDesignSources,
-        ruleID: "design-lint.requirement-id-duplicate", docPath: docPath))
+        rule: .requirementIDDuplicate, docPath: docPath))
     try findings.append(
       contentsOf: duplicateFindings(
         ids: testIDs, otherDesignIds: otherDesignIds, otherDesignSources: otherDesignSources,
-        ruleID: "design-lint.test-id-duplicate",
+        rule: .testIDDuplicate,
         docPath: docPath))
     return findings
   }
 
   private static func formFindings(
-    ids: [String], prefix: String, ruleID: String, docPath: String
+    ids: [String], prefix: String, rule: DesignLintRule, docPath: String
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     for id in ids where !isD18Form(id, prefix: prefix) {
       findings.append(
         try Finding(
-          ruleID: ruleID, severity: .major, file: docPath, line: nil,
+          ruleID: rule.rawValue, severity: .major, file: docPath, line: nil,
           message:
             "id \"\(id)\" isn't \"\(prefix)\" plus \(minimumIDWords)+ kebab words (spec §5.1).",
           failureScenario: nil))
@@ -155,7 +156,7 @@ public enum DesignLintSections {
   /// this check.
   private static func duplicateFindings(
     ids: [String], otherDesignIds: Set<String>, otherDesignSources: [String: String],
-    ruleID: String, docPath: String
+    rule: DesignLintRule, docPath: String
   ) throws(ReportContractViolation) -> [Finding] {
     var countInThisDoc: [String: Int] = [:]
     for id in ids { countInThisDoc[id, default: 0] += 1 }
@@ -168,7 +169,7 @@ public enum DesignLintSections {
       let location = otherDesignSources[id].map { " (also defined in \($0))" } ?? ""
       findings.append(
         try Finding(
-          ruleID: ruleID, severity: .major, file: docPath, line: nil,
+          ruleID: rule.rawValue, severity: .major, file: docPath, line: nil,
           message:
             "id \"\(id)\" is defined more than once\(location); ids are unique across the repo, "
             + "not per design (spec §5.1).",
@@ -191,7 +192,8 @@ public enum DesignLintSections {
           + "(must be T1, T2 or T3)."
       findings.append(
         try Finding(
-          ruleID: "design-lint.test-tier-invalid", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.testTierInvalid.rawValue, severity: .major, file: docPath,
+          line: nil,
           message: message, failureScenario: nil))
     }
     return findings
@@ -214,7 +216,7 @@ public enum DesignLintSections {
     guard count < minimumOptions || count > maximumOptions else { return [] }
     return [
       try Finding(
-        ruleID: "design-lint.options-count", severity: .major, file: docPath, line: nil,
+        ruleID: DesignLintRule.optionsCount.rawValue, severity: .major, file: docPath, line: nil,
         message:
           "Options has \(count) option(s); spec §5.3 requires \(minimumOptions)–\(maximumOptions).",
         failureScenario: nil)
@@ -239,7 +241,8 @@ public enum DesignLintSections {
       let moduleName = row.first ?? raw
       findings.append(
         try Finding(
-          ruleID: "design-lint.module-kind-unknown", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.moduleKindUnknown.rawValue, severity: .major, file: docPath,
+          line: nil,
           message:
             "\(moduleName) names an unrecognised module kind \"\(raw)\" (standards model §2).",
           failureScenario: nil))

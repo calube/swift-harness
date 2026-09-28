@@ -38,7 +38,7 @@ public enum DesignLintDiagrams {
       let named = fence.mermaidDiagramType.map { "\"\($0)\"" } ?? "none declared"
       findings.append(
         try Finding(
-          ruleID: "design-lint.architecture-diagram-unknown-type", severity: .major,
+          ruleID: DesignLintRule.architectureDiagramUnknownType.rawValue, severity: .major,
           file: docPath, line: nil,
           message:
             "Architecture has a mermaid fence with an unrecognised diagram type (\(named)).",
@@ -49,7 +49,7 @@ public enum DesignLintDiagrams {
     if knownDiagramCount < minimumArchitectureDiagrams {
       findings.append(
         try Finding(
-          ruleID: "design-lint.architecture-diagram-count", severity: .major, file: docPath,
+          ruleID: DesignLintRule.architectureDiagramCount.rawValue, severity: .major, file: docPath,
           line: nil,
           message:
             "Architecture has \(knownDiagramCount) mermaid diagram(s) of a known type; "
@@ -85,7 +85,8 @@ public enum DesignLintDiagrams {
       if let limit = budgets.sections[section.anchor], section.proseWordCount > limit {
         findings.append(
           try Finding(
-            ruleID: "design-lint.section-word-budget", severity: .major, file: docPath, line: nil,
+            ruleID: DesignLintRule.sectionWordBudget.rawValue, severity: .major, file: docPath,
+            line: nil,
             message:
               "\"\(section.heading)\" is \(section.proseWordCount) prose words, "
               + "over its \(limit)-word budget.",
@@ -105,7 +106,8 @@ public enum DesignLintDiagrams {
     guard total > budgets.design else { return [] }
     return [
       try Finding(
-        ruleID: "design-lint.document-word-budget", severity: .major, file: docPath, line: nil,
+        ruleID: DesignLintRule.documentWordBudget.rawValue, severity: .major, file: docPath,
+        line: nil,
         message: "the design doc is \(total) prose words, over its \(budgets.design)-word budget.",
         failureScenario: nil)
     ]

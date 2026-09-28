@@ -126,7 +126,7 @@ enum DesignLintCheck {
     guard case .unknown(let raw) = document.status else { return [] }
     return [
       try Finding(
-        ruleID: "design-lint.status-unknown", severity: .major, file: docPath, line: nil,
+        ruleID: DesignLintRule.statusUnknown.rawValue, severity: .major, file: docPath, line: nil,
         message:
           "frontmatter status \"\(raw)\" is none of proposed, approved, built or "
           + "superseded-by: <slug> (spec §5.4).",
@@ -143,7 +143,8 @@ enum DesignLintCheck {
     if claimsLoaded.claims == nil, hasTaggedBullets(document) {
       findings.append(
         try Finding(
-          ruleID: "design-lint.claims-file-missing", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.claimsFileMissing.rawValue, severity: .major, file: docPath,
+          line: nil,
           message:
             "the design tags Evidence, Decision or Perf & scale bullets, but its claims.jsonl "
             + "doesn't exist; every tag will read as citing an unknown claim.",
@@ -152,7 +153,8 @@ enum DesignLintCheck {
     if claimsLoaded.invalidLineCount > 0 {
       findings.append(
         try Finding(
-          ruleID: "design-lint.claims-file-unreadable-lines", severity: .minor, file: docPath,
+          ruleID: DesignLintRule.claimsFileUnreadableLines.rawValue, severity: .minor,
+          file: docPath,
           line: nil,
           message:
             "\(claimsLoaded.invalidLineCount) line(s) of claims.jsonl didn't parse as a claim "
@@ -184,7 +186,8 @@ enum DesignLintCheck {
       guard hasMermaidFences else { return [] }
       return [
         try Finding(
-          ruleID: "design-lint.mmdc-unavailable", severity: .minor, file: docPath, line: nil,
+          ruleID: DesignLintRule.mmdcUnavailable.rawValue, severity: .minor, file: docPath,
+          line: nil,
           message:
             "mmdc is not on PATH: mermaid fences were checked for a known diagram type but not "
             + "validated for syntax (spec §5.3).",
@@ -195,7 +198,8 @@ enum DesignLintCheck {
       for failure in failures {
         findings.append(
           try Finding(
-            ruleID: "design-lint.mermaid-syntax", severity: .major, file: docPath, line: nil,
+            ruleID: DesignLintRule.mermaidSyntax.rawValue, severity: .major, file: docPath,
+            line: nil,
             message:
               "\(failure.heading)'s mermaid fence #\(failure.index + 1) failed mmdc validation: "
               + "\(failure.diagnostic)",

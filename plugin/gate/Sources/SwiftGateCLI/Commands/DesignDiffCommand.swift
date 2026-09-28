@@ -29,8 +29,6 @@ struct DesignDiffReport: Sendable, Equatable, Encodable {
       case unknownToSha = "unknown-to-sha"
       case noChange = "no-change"
       case amend
-
-      static var allCases: [Problem] { [] }
     }
 
     let index: Int
