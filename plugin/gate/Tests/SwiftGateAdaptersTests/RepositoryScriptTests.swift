@@ -78,4 +78,16 @@ struct RepositoryScriptTests {
     #expect(output.status.isSuccess, "\(output.stdout.text)\n\(output.stderr.text)")
     #expect(output.stdout.text.contains("shim_test: PASS"))
   }
+
+  @Test(
+    "a shim test killed outright or run past its deadline leaves no process under its temp directory — catches a cold build outliving the test that started it",
+    .enabled(
+      if: onPath("node") && onPath("bash") && onPath("swift"), "node, bash or swift is not on PATH")
+  )
+  func shimCleanup() async throws {
+    let output = try await run("node", "tests/shim_cleanup_check.mjs", timeout: .seconds(300))
+    #expect(output.status.isSuccess, "\(output.stdout.text)\n\(output.stderr.text)")
+    let passed = output.stdout.text.split(separator: "\n").filter { $0.hasPrefix("ok   ") }
+    #expect(passed.count == 2, "expected both cleanup cases to report ok:\n\(output.stdout.text)")
+  }
 }

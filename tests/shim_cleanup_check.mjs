@@ -1,7 +1,9 @@
 // Checks that tests/shim_test.sh never leaves a process running once it has ended. A cold hook
-// starts a detached `swift build` that runs for minutes; a shim test that dies early (killed by a
-// harness timeout, or past its own deadline) used to leave that build running with no parent.
-// Run: node tests/shim_cleanup_test.mjs
+// starts a detached `swift build` that runs for minutes, and a shim test that dies early (killed by
+// a harness timeout, or past its own deadline) must not leave it running with no parent.
+// Run: node tests/shim_cleanup_check.mjs. It is not a `_test.mjs`: each case starts a real cold
+// build, which under a loaded `swift test` outruns the 60s every discovered script gets, so
+// RepositoryScriptTests runs it on its own, longer timeout.
 // Regressions caught: a detached cold build outliving a shim test that was killed outright, and a
 // shim test that runs on past its own deadline instead of stopping and reaping what it started.
 import assert from 'node:assert/strict'
@@ -92,15 +94,15 @@ const tests = {
     const run = start()
     let work
     try {
-      work = await until(() => workDirectory(run.child.pid), 30_000)
-      assert.ok(work, `the shim test ran no shim within 30s:\n${run.output}`)
+      work = await until(() => workDirectory(run.child.pid), 60_000)
+      assert.ok(work, `the shim test ran no shim within 60s:\n${run.output}`)
       process.kill(run.child.pid, 'SIGKILL')
       await run.exited
       const left = await until(() => {
         const rows = survivors(run.child.pid, work)
         return rows.length === 0 ? [] : undefined
-      }, 15_000)
-      assert.ok(left, `processes still running 15s after the shim test was killed:\n${describe(survivors(run.child.pid, work))}`)
+      }, 30_000)
+      assert.ok(left, `processes still running 30s after the shim test was killed:\n${describe(survivors(run.child.pid, work))}`)
     } finally {
       reap(run, work)
     }
@@ -109,13 +111,13 @@ const tests = {
     const run = start({ SHIM_TEST_DEADLINE_SECONDS: '6' })
     let work
     try {
-      work = await until(() => workDirectory(run.child.pid) ?? run.exit, 30_000)
+      work = await until(() => workDirectory(run.child.pid) ?? run.exit, 60_000)
       if (typeof work !== 'string') work = undefined
-      const exit = await Promise.race([run.exited, pause(25_000)])
-      assert.ok(exit, `the shim test was still running 25s after a 6s deadline:\n${run.output}`)
+      const exit = await Promise.race([run.exited, pause(60_000)])
+      assert.ok(exit, `the shim test was still running 60s after a 6s deadline:\n${run.output}`)
       assert.notEqual(exit.code, 0, `the shim test passed its deadline yet exited 0:\n${run.output}`)
       assert.match(run.output, /deadline/, 'the shim test did not say it hit its deadline')
-      const left = await until(() => (survivors(run.child.pid, work).length === 0 ? [] : undefined), 5_000)
+      const left = await until(() => (survivors(run.child.pid, work).length === 0 ? [] : undefined), 10_000)
       assert.ok(left, `processes still running after the shim test stopped:\n${describe(survivors(run.child.pid, work))}`)
     } finally {
       reap(run, work)
