@@ -67,4 +67,24 @@ struct SurfaceCheckTests {
         + "parameters, or parameter or property of `self` unchanged; only throws such an error "
         + "value; or forwards to code the parent declares")
   }
+
+  @Test(
+    "a manifest change past added list elements names the change and says a surface only adds dependencies, products and targets — catches a finding that leaves the author guessing which line to undo"
+  )
+  func manifestChangeNamesTheChange() throws {
+    let surface = SurfaceCommit(commit: "c", parent: "p", changes: [], otherPaths: [])
+    let findings = try SurfaceCheck.findings(
+      surface,
+      judgements: [
+        SurfaceJudgement(
+          file: "Package.swift", line: 16, declaration: "package",
+          outcome: .behaviour(.changesManifest(excerpt: "exact: \"1.27.0\"")))
+      ])
+
+    #expect(
+      findings.first?.message
+        == "`package` changes the package manifest (`exact: \"1.27.0\"`): a surface only adds "
+        + "dependencies, products and targets to an existing manifest's lists, and removes or "
+        + "changes nothing")
+  }
 }

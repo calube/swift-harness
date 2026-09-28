@@ -478,21 +478,6 @@ struct SurfaceCheckCommandTests {
   }
 
   @Test(
-    "a manifest change past added list elements says what changed and that a surface only adds dependencies, products and targets — catches a finding that leaves the session guessing which line to undo"
-  )
-  func manifestFindingNamesTheChange() async throws {
-    let (_, report) = try await Self.run("rejected-manifest-changed-element")
-
-    let finding = try #require(
-      report.findings.first { $0.ruleID == SurfaceCheck.behaviourRuleID })
-    #expect(
-      finding.message
-        == "`package` changes the package manifest (`exact: \"1.27.0\"`): a surface only adds "
-        + "dependencies, products and targets to an existing manifest's lists, and removes or "
-        + "changes nothing")
-  }
-
-  @Test(
     "a commit that deletes a file, edits a doc and only reformats a body judges nothing and passes, counting what it skipped — catches an unchanged body judged as new"
   )
   func unchangedBodiesAreNotJudged() async throws {
