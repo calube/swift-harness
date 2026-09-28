@@ -136,6 +136,7 @@ extension RuleIndexTests {
       PlanLintGraph.hotFileRuleID, PlanLintGraph.singleDependentChainRuleID,
       PlanLintGraph.packMissingRuleID, PlanLintGraph.packUnknownTaskRuleID,
       PlanLintGraph.duplicateTaskIDRuleID, PlanLintGraph.designMovedRuleID,
+      PlanLintGraph.specPageMovedRuleID,
       PlanLintCoverage.uncoveredRuleID, PlanLintCoverage.weakGateRuleID,
       PlanLintCoverage.unknownTestRuleID, PlanLintCoverage.missingModelRuleID,
       PlanLintCoverage.estLinesHighRuleID, PlanLintCoverage.estLinesLowRuleID,

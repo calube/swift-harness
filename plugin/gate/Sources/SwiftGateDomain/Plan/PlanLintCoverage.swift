@@ -35,23 +35,32 @@ public enum PlanLintCoverage {
   public static func coverageFindings(
     design: DesignDocument, tasks: [LedgerTask], designPath: String
   ) throws(ReportContractViolation) -> [Finding] {
-    let tiers = testTiers(design: design)
+    try uncoveredFindings(
+      ids: uncoveredIDs(design: design, tasks: tasks), tiers: testTiers(design: design),
+      tasks: tasks, file: designPath, source: "the design")
+  }
+
+  /// A `major` ``uncoveredRuleID`` finding per id in `ids`, which `source` (the design, or the
+  /// spec page) defines and `file` holds.
+  private static func uncoveredFindings(
+    ids: [String], tiers: [String: Tier], tasks: [LedgerTask], file: String, source: String
+  ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
-    for id in uncoveredIDs(design: design, tasks: tasks) {
+    for id in ids {
       let outgrown = tasks.filter { $0.status == .done && $0.covers.contains(id) }
       let message =
         outgrown.isEmpty
-        ? "\(id) is in the design but no task's covers list names it"
+        ? "\(id) is in \(source) but no task's covers list names it"
         : "\(id) is covered only by done task \(outgrown.map(\.id).sorted().joined(separator: ", ")) "
           + "at gate \(outgrown.map(\.gate.rawValue).sorted().joined(separator: ", ")), below the "
           + "\(tiers[id].map { minimumGate(for: $0).rawValue } ?? "gate") its tier now needs; add a "
           + "fix task that covers it"
       findings.append(
         try Finding(
-          ruleID: uncoveredRuleID, severity: .major, file: designPath, line: nil,
+          ruleID: uncoveredRuleID, severity: .major, file: file, line: nil,
           message: message,
           failureScenario:
-            "the design defines \(id); no ledger task covers it, so it never turns green"))
+            "\(source) defines \(id); no ledger task covers it, so it never turns green"))
     }
     return findings
   }
@@ -59,14 +68,19 @@ public enum PlanLintCoverage {
   /// Every slice id `page` defines that no task's `covers` names, in page order. Each slice is
   /// one coverage item: a spec page has no requirements apart from its slices' acceptance tests.
   public static func uncoveredSliceIDs(page: SpecPage, tasks: [LedgerTask]) -> [String] {
-    []
+    let tiers = sliceTiers(page: page)
+    let covered = Set(tasks.flatMap { countedCovers(task: $0, testTiers: tiers) })
+    var seen: Set<String> = []
+    return page.slices.map(\.id).filter { !covered.contains($0) && seen.insert($0).inserted }
   }
 
   /// One `major` ``uncoveredRuleID`` finding per id ``uncoveredSliceIDs(page:tasks:)`` returns.
   public static func coverageFindings(
     page: SpecPage, tasks: [LedgerTask], pagePath: String
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    try uncoveredFindings(
+      ids: uncoveredSliceIDs(page: page, tasks: tasks), tiers: sliceTiers(page: page),
+      tasks: tasks, file: pagePath, source: "the spec page")
   }
 
   // MARK: - Test tier → minimum gate (spec §9.2, Foundation's tier composition)
@@ -107,8 +121,15 @@ public enum PlanLintCoverage {
   public static func gateFindings(
     task: LedgerTask, testTiers: [String: Tier]
   ) throws(ReportContractViolation) -> [Finding] {
-    let owned = Set(task.tests + task.covers.filter { $0.hasPrefix("test-") })
-    let requiredGates = owned.compactMap { testTiers[$0] }.map(minimumGate(for:))
+    try gateFindings(
+      task: task, owned: Set(task.tests + task.covers.filter { $0.hasPrefix("test-") }),
+      tiers: testTiers)
+  }
+
+  private static func gateFindings(
+    task: LedgerTask, owned: Set<String>, tiers: [String: Tier]
+  ) throws(ReportContractViolation) -> [Finding] {
+    let requiredGates = owned.compactMap { tiers[$0] }.map(minimumGate(for:))
     guard let strongestRequired = requiredGates.max(by: { $0.rank < $1.rank }),
       task.gate.rank < strongestRequired.rank
     else { return [] }
@@ -128,7 +149,11 @@ public enum PlanLintCoverage {
   /// Slice id → the slice's tier: T1 unless its line names `Tier: T2` or `Tier: T3`. A repeated
   /// id keeps its first tier.
   public static func sliceTiers(page: SpecPage) -> [String: Tier] {
-    [:]
+    var result: [String: Tier] = [:]
+    for slice in page.slices where result[slice.id] == nil {
+      result[slice.id] = slice.tier
+    }
+    return result
   }
 
   /// ``gateFindings(task:testTiers:)`` for a spec-page plan: a task owns every slice its `tests`
@@ -136,7 +161,7 @@ public enum PlanLintCoverage {
   public static func sliceGateFindings(
     task: LedgerTask, sliceTiers: [String: Tier]
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    try gateFindings(task: task, owned: Set(task.tests + task.covers), tiers: sliceTiers)
   }
 
   public static let unknownTestRuleID = "plan-lint.unknown-test"
@@ -164,7 +189,18 @@ public enum PlanLintCoverage {
   public static func unknownTestFindings(task: LedgerTask, page: SpecPage)
     throws(ReportContractViolation) -> [Finding]
   {
-    []
+    let known = Set(page.slices.map(\.id))
+    var findings: [Finding] = []
+    for id in Set(task.tests).subtracting(known).sorted() {
+      findings.append(
+        try Finding(
+          ruleID: unknownTestRuleID, severity: .major, file: task.id, line: nil,
+          message: "task \(task.id) names test \(id), which isn't a slice id on the spec page",
+          failureScenario:
+            "a misspelled slice id names a test nobody writes, and its real tier never sets the "
+            + "task's gate"))
+    }
+    return findings
   }
 
   // MARK: - Model tag (spec §5.2: the decomposer tags every task sonnet or opus)
@@ -212,6 +248,18 @@ public enum PlanLintCoverage {
   public static func sizeFindings(
     task: LedgerTask, modulesTouched: Set<String>, workerPack: ContextPack?, bounds: PlanConfig
   ) throws(ReportContractViolation) -> [Finding] {
+    try sizeFindings(
+      task: task, modulesTouched: modulesTouched, workerPack: workerPack, bounds: bounds,
+      testsCovered: task.covers.filter { $0.hasPrefix("test-") }.count, testNoun: "test-… items")
+  }
+
+  /// ``sizeFindings(task:modulesTouched:workerPack:bounds:)`` with the tests bound counting
+  /// `testsCovered`, named `testNoun` in the finding: a design plan's `test-…` covers, or a
+  /// spec-page plan's slices, each of which is 1 test.
+  static func sizeFindings(
+    task: LedgerTask, modulesTouched: Set<String>, workerPack: ContextPack?, bounds: PlanConfig,
+    testsCovered: Int, testNoun: String
+  ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
 
     if task.estLines > bounds.estLinesMax {
@@ -243,13 +291,12 @@ public enum PlanLintCoverage {
             "a task spanning unrelated modules can't be reviewed or reverted as one unit"))
     }
 
-    let testsCovered = task.covers.filter { $0.hasPrefix("test-") }.count
     if testsCovered > bounds.maxTestsPerTask {
       findings.append(
         try Finding(
           ruleID: tooManyTestsRuleID, severity: .major, file: task.id, line: nil,
           message:
-            "task \(task.id) covers \(testsCovered) test-… items, over the \(bounds.maxTestsPerTask) bound",
+            "task \(task.id) covers \(testsCovered) \(testNoun), over the \(bounds.maxTestsPerTask) bound",
           failureScenario: "a task covering this many tests is more than one green unit"))
     }
 

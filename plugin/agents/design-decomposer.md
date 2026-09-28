@@ -203,6 +203,8 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
 - `plan-lint.missing-model`: tag the task `sonnet` or `opus` by the rule above.
 - `plan-lint.design-moved`: the design changed after approval, and no task edit fixes that. List
   it in `"unresolved"`.
+- `plan-lint.spec-page-moved`: the spec page changed after its confirmation, and no task edit
+  fixes that. List it in `"unresolved"`.
 - `plan-lint.est-lines-high`: split the task along its tests.
 - `plan-lint.too-many-modules`: split the task per module, keeping an `X` plus `XLive` pair only.
 - `plan-lint.too-many-tests`: split the task so each covers at most the bound.
