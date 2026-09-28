@@ -35,6 +35,11 @@ struct ContextPackOptions: ParsableArguments {
   var design: String?
   @Option(help: "A design section anchor to include verbatim. Repeatable.")
   var docAnchor: [String] = []
+  @Option(
+    help:
+      "Path to the plan's spec page (decomposer, worker), in place of --design when the plan's source is a spec page."
+  )
+  var specPage: String?
 
   // Drafter
   @Option(help: "Path to the design template.")
@@ -96,7 +101,8 @@ struct ContextPackOptions: ParsableArguments {
       frameAnswers: frameAnswers, probeVerdicts: probeVerdicts, tier: tier, standards: standards,
       playbook: playbook, moduleKind: moduleKind, standardsAnchor: standardsAnchor, claims: claims,
       claimID: claimID, questionSet: questionSet, moduleGraph: moduleGraph,
-      taskSizingBounds: taskSizingBounds, ledger: ledger, taskID: taskID, buildRun: buildRun)
+      taskSizingBounds: taskSizingBounds, ledger: ledger, taskID: taskID, buildRun: buildRun,
+      specPage: specPage)
   }
 }
 
@@ -127,6 +133,7 @@ struct ContextPackGatherInputs: Sendable, Equatable {
   var ledger: String?
   var taskID: String?
   var buildRun: String?
+  var specPage: String?
   /// The harness plugin directory whose `docs/standards.md` a worker pack falls back to when the
   /// repository has none. Set from the environment by the command, never a flag.
   var harnessRoot: URL?
@@ -980,6 +987,8 @@ enum ContextPackRun {
     case .unknownModuleKind(let entry?):
       return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in a module with "
         + "no known kind, so its standards can't be packed"
+    case .unknownSliceID:
+      return ""
     case .unknownModuleKind(nil):
       return "context-pack.module-kind-unknown: \(ConfigLoader.fileName) names a module kind "
         + "outside \(ModuleKind.allCases.map(\.rawValue).joined(separator: ", ")), so the "

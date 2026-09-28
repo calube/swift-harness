@@ -101,6 +101,8 @@ public enum ContextPackError: Error, Sendable, Equatable {
   /// with it can't be known. `nil` when the module graph itself couldn't be built because the
   /// repository's config names a module kind outside ``ModuleKind``.
   case unknownModuleKind(writeSetEntry: String?)
+  /// A ledger task's `covers` named an id that isn't a slice id of the spec page at `page`.
+  case unknownSliceID(String, page: String)
 }
 
 /// A labelled raw text a pack can slice from — a frame-answers transcript, a lane brief, a
@@ -487,6 +489,64 @@ public struct DecomposerInputs: Sendable {
   }
 }
 
+/// A spec page a pack reads from: the parsed page, and its raw text labelled with its path, which
+/// every excerpt is cut from byte for byte.
+public struct SpecPageSource: Sendable, Equatable {
+  public let page: SpecPage
+  public let source: ContextSource
+
+  public init(page: SpecPage, source: ContextSource) {
+    self.page = page
+    self.source = source
+  }
+}
+
+/// The decomposer's inputs when a spec page is the plan's source (fast modes §5.2): the page's
+/// Modules, Surface and Slices sections, the module graph and the task-sizing bounds.
+public struct SpecPageDecomposerInputs: Sendable {
+  public let specPage: SpecPageSource
+  public let moduleGraph: ContextSource
+  public let taskSizingBounds: ContextSource
+
+  public init(
+    specPage: SpecPageSource, moduleGraph: ContextSource, taskSizingBounds: ContextSource
+  ) {
+    self.specPage = specPage
+    self.moduleGraph = moduleGraph
+    self.taskSizingBounds = taskSizingBounds
+  }
+}
+
+/// A worker's inputs when a spec page is the plan's source: as ``WorkerInputs``, with the page in
+/// place of the design, and the modules the task's write set touches, whose Modules rows it gets.
+public struct SpecPageWorkerInputs: Sendable {
+  public let task: LedgerTask
+  public let specPage: SpecPageSource
+  public let claims: ContextSource
+  public let citedClaimIDs: [String]
+  public let standards: ContextSource
+  public let moduleKindAnchors: [String]
+  /// The modules the task's write set touches, as ``SpecPageWriteSet/resolve(_:graph:page:packageDirectories:)``
+  /// counts them.
+  public let touchedModules: Set<String>
+  public let dependencyNotes: [DependencyReturnNotes]
+
+  public init(
+    task: LedgerTask, specPage: SpecPageSource, claims: ContextSource, citedClaimIDs: [String],
+    standards: ContextSource, moduleKindAnchors: [String], touchedModules: Set<String>,
+    dependencyNotes: [DependencyReturnNotes] = []
+  ) {
+    self.task = task
+    self.specPage = specPage
+    self.claims = claims
+    self.citedClaimIDs = citedClaimIDs
+    self.standards = standards
+    self.moduleKindAnchors = moduleKindAnchors
+    self.touchedModules = touchedModules
+    self.dependencyNotes = dependencyNotes
+  }
+}
+
 /// One dependency's task-return notes for a worker pack's dependency-notes section (spec §5.3), or
 /// its absence. `notes` is `nil` only when the caller couldn't read or decode that dependency's
 /// task return — never an empty string standing in for "not available" (worker-brief pitfall 2).
@@ -821,6 +881,30 @@ extension ContextPack {
     slices.append(ContextPackSlice(inputs.moduleGraph))
     slices.append(ContextPackSlice(inputs.taskSizingBounds))
     return ContextPack(role: .decomposer, slices: slices)
+  }
+}
+
+extension ContextPack {
+  /// The decomposer's pack for a spec page.
+  public static func specPageDecomposerPack(_ inputs: SpecPageDecomposerInputs) throws
+    -> ContextPack
+  {
+    ContextPack(role: .decomposer, slices: [])
+  }
+
+  /// A worker's pack for a spec page.
+  public static func specPageWorkerPack(_ inputs: SpecPageWorkerInputs) throws -> ContextPack {
+    ContextPack(role: .worker, slices: [])
+  }
+}
+
+/// Resolves a worker's write set when a spec page is the plan's source.
+public enum SpecPageWriteSet {
+  public static func resolve(
+    _ writeSet: [String], graph: ModuleGraph, page: SpecPage, packageDirectories: [String]
+  ) -> WriteSetResolution {
+    PlanLintGraph.resolveWriteSet(
+      writeSet, graph: graph, design: nil, packageDirectories: packageDirectories)
   }
 }
 
