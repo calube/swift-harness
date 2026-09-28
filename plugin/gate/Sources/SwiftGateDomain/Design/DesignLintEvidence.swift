@@ -97,7 +97,7 @@ public enum DesignLintEvidence {
     guard let raw else { return (nil, nil) }
     guard let tier = DesignTier(rawValue: raw) else {
       let finding = try Finding(
-        ruleID: "design-lint.unknown-tier", severity: .major, file: docPath, line: nil,
+        ruleID: DesignLintRule.unknownTier.rawValue, severity: .major, file: docPath, line: nil,
         message:
           "frontmatter tier \"\(raw)\" is not a known design tier ("
           + DesignTier.allCases.map(\.rawValue).joined(separator: ", ") + ").",
@@ -121,7 +121,8 @@ public enum DesignLintEvidence {
       guard !tags.isEmpty else {
         findings.append(
           try Finding(
-            ruleID: "design-lint.untagged-bullet", severity: .major, file: docPath, line: nil,
+            ruleID: DesignLintRule.untaggedBullet.rawValue, severity: .major, file: docPath,
+            line: nil,
             message: "\(sectionName) has an untagged bullet: \"\(bullet.text)\".",
             failureScenario: nil))
         continue
@@ -132,7 +133,7 @@ public enum DesignLintEvidence {
       if forbidUnverified, tags.contains("UNVERIFIED") {
         findings.append(
           try Finding(
-            ruleID: "design-lint.unverified-in-decision", severity: .major, file: docPath,
+            ruleID: DesignLintRule.unverifiedInDecision.rawValue, severity: .major, file: docPath,
             line: nil,
             message:
               "Decision has an [UNVERIFIED] bullet: \"\(bullet.text)\". "
@@ -143,7 +144,8 @@ public enum DesignLintEvidence {
         guard let recorded = claimsByID[tag], !recorded.isEmpty else {
           findings.append(
             try Finding(
-              ruleID: "design-lint.unknown-claim", severity: .major, file: docPath, line: nil,
+              ruleID: DesignLintRule.unknownClaim.rawValue, severity: .major, file: docPath,
+              line: nil,
               message: "\(sectionName) cites \"\(tag)\", which isn't a captured claim.",
               failureScenario: nil))
           continue
@@ -158,7 +160,7 @@ public enum DesignLintEvidence {
         guard requireSupported, let status = unsupported.first else { continue }
         findings.append(
           try Finding(
-            ruleID: "design-lint.citation-not-supported", severity: .major, file: docPath,
+            ruleID: DesignLintRule.citationNotSupported.rawValue, severity: .major, file: docPath,
             line: nil,
             message:
               "\(sectionName) cites \"\(tag)\", which is \(status.rawValue), not supported.",
@@ -182,7 +184,8 @@ public enum DesignLintEvidence {
       let statuses = recorded.map(\.status.rawValue).joined(separator: ", ")
       findings.append(
         try Finding(
-          ruleID: "design-lint.claim-id-duplicate", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.claimIDDuplicate.rawValue, severity: .major, file: docPath,
+          line: nil,
           message:
             "claims.jsonl records \"\(id)\" \(recorded.count) times (\(statuses)); a claim id "
             + "names exactly one claim.",
@@ -213,7 +216,8 @@ public enum DesignLintEvidence {
         guard !coverage.contains(where: { $0.contains(normalized) }) else { continue }
         findings.append(
           try Finding(
-            ruleID: "design-lint.unverified-uncovered", severity: .major, file: docPath, line: nil,
+            ruleID: DesignLintRule.unverifiedUncovered.rawValue, severity: .major, file: docPath,
+            line: nil,
             message:
               "\(entry.name)'s \"\(bullet.text)\" is tagged [UNVERIFIED] but isn't restated in "
               + "Risks or Open questions.",
@@ -259,7 +263,8 @@ public enum DesignLintEvidence {
       }
       findings.append(
         try Finding(
-          ruleID: "design-lint.perf-missing-dimension", severity: .major, file: docPath, line: nil,
+          ruleID: DesignLintRule.perfMissingDimension.rawValue, severity: .major, file: docPath,
+          line: nil,
           message: "Perf & scale doesn't name \(dimension.displayName).", failureScenario: nil))
     }
     return findings

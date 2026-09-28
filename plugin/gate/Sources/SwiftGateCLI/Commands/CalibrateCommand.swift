@@ -148,6 +148,25 @@ enum CalibrateBuildRun {
 /// What every suite shares: seed defects stop the run before any agent is called, so a broken
 /// seed set costs nothing; the pass record is written only when nothing missed.
 enum CalibrationRun {
+  /// Every rule a calibration run reports; a finding's id is `calibrate-<suite>.<rule>`.
+  enum Rule: String, Sendable, CaseIterable {
+    case usage
+    case seedDefect = "seed-defect"
+    case labelMissed = "label-missed"
+    case passed
+    case noSeeds = "no-seeds"
+    case missingLabel = "missing-label"
+    case missingInput = "missing-input"
+    case missingEntry = "missing-entry"
+    case invalidLabel = "invalid-label"
+    case unknownAgent = "unknown-agent"
+    case uncalibratedAgent = "uncalibrated-agent"
+  }
+
+  static func ruleID(_ suite: CalibrationSuite, _ rule: Rule) -> String {
+    "calibrate-\(suite.rawValue).\(rule.rawValue)"
+  }
+
   struct CaseRun: Sendable {
     let result: CalibrationRecord.CaseResult
     /// Shown as a non-gating `usage` finding, such as what the agent run cost.
@@ -216,11 +235,11 @@ enum CalibrationRun {
       case .success(let run):
         results.append(run.result)
         if let note = run.note {
-          notes += make(suite, "usage", .nit, file: job.seed.directory, note)
+          notes += make(suite, .usage, .nit, file: job.seed.directory, note)
         }
       case .failure(.seedDefect(let reason)):
         defects += make(
-          suite, "seed-defect", .major, file: job.seed.directory,
+          suite, .seedDefect, .major, file: job.seed.directory,
           "\(job.agent.name)/\(job.seed.name): \(reason)")
       case .failure(.blocked(let reason)):
         return .blocked(
@@ -240,7 +259,7 @@ enum CalibrationRun {
             + "a judged answer needs"
           : ""
         missed += make(
-          suite, "label-missed", .major,
+          suite, .labelMissed, .major,
           file: "\(suite.seedsDirectory)/\(result.agent)/\(result.caseName)",
           "\(result.agent)/\(result.caseName) on \(result.model): `\(answer.question)` answered "
             + "`\(answer.answered)` (p=\(String(format: "%.2f", answer.probability))\(margin)), "
@@ -269,7 +288,7 @@ enum CalibrationRun {
     let agents = Set(results.map(\.agent)).count
     return checked(
       make(
-        suite, "passed", .nit, file: suite.recordPath,
+        suite, .passed, .nit, file: suite.recordPath,
         "\(results.count) case(s) across \(agents) agent(s) met every label; recorded content "
           + "hash \(record.contentHash)"
           + (modelOverride.map {
@@ -283,12 +302,12 @@ enum CalibrationRun {
 
   /// Every argument here is non-empty by construction, so the report contract can't reject it.
   private static func make(
-    _ suite: CalibrationSuite, _ rule: String, _ severity: Severity, file: String,
+    _ suite: CalibrationSuite, _ rule: Rule, _ severity: Severity, file: String,
     _ message: String
   ) -> [Finding] {
     guard
       let finding = try? Finding(
-        ruleID: "calibrate-\(suite.rawValue).\(rule)", severity: severity, file: file, line: nil,
+        ruleID: ruleID(suite, rule), severity: severity, file: file, line: nil,
         message: message, failureScenario: nil)
     else { return [] }
     return [finding]
@@ -301,27 +320,27 @@ enum CalibrationRun {
     return switch problem {
     case .noSeeds(let path):
       make(
-        suite, "no-seeds", .major, file: path,
+        suite, .noSeeds, .major, file: path,
         "no calibration seeds: nothing to calibrate (\(layout))")
     case .missingLabel(let path):
       make(
-        suite, "missing-label", .major, file: path,
+        suite, .missingLabel, .major, file: path,
         "case \(path) has no \(CalibrationSuite.labelFile) (\(layout))")
     case .missingInput(let path):
       make(
-        suite, "missing-input", .major, file: path,
+        suite, .missingInput, .major, file: path,
         "case \(path) has no \(CalibrationSuite.inputFile) (\(layout))")
     case .missingEntry(let path):
-      make(suite, "missing-entry", .major, file: path, "case entry \(path) is missing (\(layout))")
+      make(suite, .missingEntry, .major, file: path, "case entry \(path) is missing (\(layout))")
     case .invalidLabel(let path, let reason):
-      make(suite, "invalid-label", .major, file: path, "\(path): \(reason)")
+      make(suite, .invalidLabel, .major, file: path, "\(path): \(reason)")
     case .unknownAgent(let path):
       make(
-        suite, "unknown-agent", .major, file: path,
+        suite, .unknownAgent, .major, file: path,
         "seeds in \(path) name no \(suite.agentsDescription) agent")
     case .uncalibratedAgent(let path):
       make(
-        suite, "uncalibrated-agent", .major, file: path,
+        suite, .uncalibratedAgent, .major, file: path,
         "\(path) has no calibration case under \(suite.seedsDirectory)")
     case .unreadable: []
     }

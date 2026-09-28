@@ -39,12 +39,14 @@ public struct HookPayload: Sendable, Equatable {
   public let fileWrite: FileWrite?
   /// SessionStart: `startup`, `resume`, `clear`, `compact` or `fork`.
   public let source: String?
+  /// The session's transcript file, as Claude Code names it; `nil` when absent.
+  public let transcriptPath: String?
 
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
     agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil,
-    agentType: String? = nil
+    agentType: String? = nil, transcriptPath: String? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -57,6 +59,7 @@ public struct HookPayload: Sendable, Equatable {
     self.agentType = agentType
     self.source = source
     self.fileWrite = fileWrite
+    self.transcriptPath = transcriptPath
   }
 
   public static func decode(_ data: Data) throws(HookPayloadError) -> HookPayload {
@@ -71,7 +74,8 @@ public struct HookPayload: Sendable, Equatable {
       toolName: wire.toolName, command: wire.toolInput?.command,
       filePath: wire.toolInput?.filePath ?? wire.toolInput?.notebookPath,
       stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
-      fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType)
+      fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType,
+      transcriptPath: wire.transcriptPath)
   }
 
   private struct Wire: Decodable {
@@ -132,6 +136,7 @@ public struct HookPayload: Sendable, Equatable {
     let agentID: String?
     let agentType: String?
     let source: String?
+    let transcriptPath: String?
 
     enum CodingKeys: String, CodingKey {
       case sessionID = "session_id"
@@ -143,6 +148,7 @@ public struct HookPayload: Sendable, Equatable {
       case agentID = "agent_id"
       case agentType = "agent_type"
       case source
+      case transcriptPath = "transcript_path"
     }
   }
 }
