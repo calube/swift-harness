@@ -62,7 +62,9 @@ struct LedgerRenderTests {
         at: startedAt.addingTimeInterval(minutes * 60)))
   }
 
-  static func buildView() -> LedgerRender.BuildView {
+  static func buildView(required: LedgerRender.BuildView.Required = .known(.empty))
+    -> LedgerRender.BuildView
+  {
     LedgerRender.BuildView(
       runID: "20260927T183225Z-b36f002c", presetName: "interview", timeBudgetMin: 38,
       totalWallMilliseconds: 1_415_000,
@@ -76,7 +78,8 @@ struct LedgerRenderTests {
               stage: .final, tier: .ready, verdict: .red, runID: "run-final",
               at: startedAt.addingTimeInterval(20 * 60))),
         ],
-        damage: []))
+        damage: []),
+      required: required)
   }
 
   @Test(
@@ -99,6 +102,50 @@ struct LedgerRenderTests {
     #expect(!html.contains("run-merge-a1"))
     #expect(html.contains(#"data-verdict="RED""#))
     #expect(html.contains(#"data-verdict="GREEN""#))
+  }
+
+  static func buildPage(ledger: Ledger, required: LedgerRender.BuildView.Required) -> String {
+    LedgerRender.page(
+      .init(
+        slug: "sample-plan", ledger: ledger, design: Self.design(requirements: []),
+        designSha: "deadbeef00112233", build: Self.buildView(required: required))
+    ).html
+  }
+
+  @Test(
+    "a task the app target needs says why on the page, and an optional one says nothing — catches a view task started past the budget's no-new-starts point with no reason shown"
+  )
+  func requiredReasonShown() throws {
+    let ledger = Self.ledger(
+      tasks: [
+        LedgerTask(
+          id: "app-views", deps: [], writeSet: ["App/AppView.swift"], gate: .fast, tests: [],
+          covers: [], estLines: 10, status: .inProgress, worktree: "../app-views"),
+        Self.task(id: "task-a"),
+      ],
+      waves: [["app-views", "task-a"]])
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: ["Sample"])
+
+    let html = Self.buildPage(ledger: ledger, required: .known(required))
+
+    let reason = "Required: the app target needs it to compile (<code>App/AppView.swift</code>)"
+    #expect(html.components(separatedBy: reason).count == 2, "page lacks \(reason) once")
+    let taskA = try #require(html.range(of: #"<span class="task-id">task-a</span>"#))
+    #expect(!html[taskA.upperBound...].contains("Required:"))
+  }
+
+  @Test(
+    "a page whose required tasks can't be read says so with the reason — catches a missing config rendered as no task being required"
+  )
+  func requiredUnknownShown() {
+    let ledger = Self.ledger(tasks: [Self.task(id: "task-a")], waves: [["task-a"]])
+
+    let html = Self.buildPage(
+      ledger: ledger, required: .unknown(reason: "no .swiftgate.toml to read the packages globs"))
+
+    #expect(
+      html.contains(
+        "Tasks the app target needs are unknown: no .swiftgate.toml to read the packages globs"))
   }
 
   @Test(

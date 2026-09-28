@@ -1,0 +1,3 @@
+extension ItemClient {
+  var isIdle: Bool { timeout == 0 }
+}

@@ -257,7 +257,7 @@ enum LedgerRenderRun {
 
     let design = DesignDocument(markdown: .parse(found.text))
     var notes: [String] = []
-    let build = await buildView(slug: slug, ledger: ledger, git: git, notes: &notes)
+    let build = await buildView(slug: slug, ledger: ledger, root: root, git: git, notes: &notes)
     let page = LedgerRender.page(
       .init(
         slug: slug, ledger: ledger, design: design, designSha: designSha,
@@ -278,7 +278,7 @@ enum LedgerRenderRun {
   /// The plan's newest build run, as the page shows it: `nil` before any run. A run that can't be
   /// read renders the page without it and says why in `notes`, since the plan itself still is.
   private static func buildView(
-    slug: String, ledger: Ledger, git: any Git, notes: inout [String]
+    slug: String, ledger: Ledger, root: URL, git: any Git, notes: inout [String]
   ) async -> (view: LedgerRender.BuildView, metrics: BuildMetrics.Report)? {
     let store: BuildRunStore
     let record: BuildRunRecord
@@ -302,11 +302,19 @@ enum LedgerRenderRun {
         notes.append("task `\(task.id)`'s stored return is unreadable: \(error)")
       }
     }
+    let required: LedgerRender.BuildView.Required
+    switch AppTargetPackages.required(ledger: ledger, root: root) {
+    case .success(let found): required = .known(found)
+    case .failure(let error):
+      notes.append("tasks the app target needs not shown: \(error)")
+      required = .unknown(reason: error.description)
+    }
     let metrics = BuildMetrics.compute(record: record, log: log)
     let view = LedgerRender.BuildView(
       runID: record.runID, presetName: record.presetName,
       timeBudgetMin: record.preset.timeBudgetMin,
-      totalWallMilliseconds: metrics.totalWallMilliseconds, taskGates: taskGates, log: log)
+      totalWallMilliseconds: metrics.totalWallMilliseconds, taskGates: taskGates, log: log,
+      required: required)
     return (view, metrics)
   }
 

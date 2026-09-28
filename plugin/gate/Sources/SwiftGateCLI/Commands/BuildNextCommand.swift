@@ -14,10 +14,65 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   let toStart: [String]
   let running: [String]
   let refused: [Refused]
+  /// Every not-done task the app target needs, which the no-new-starts phase still starts.
+  let required: [Required]
+
+  struct Required: Sendable, Equatable, Encodable {
+    let task: String
+    let appPath: String
+  }
+}
+
+/// Why `build next` can't tell which tasks the app target needs. Never read as "none needed":
+/// that would let the budget skip the task that makes the app compile.
+enum AppTargetPackagesError: Error, Sendable, Equatable, CustomStringConvertible {
+  case noConfig
+  case config(String)
+  case packages(ModuleGraphLoadError)
+
+  var description: String {
+    switch self {
+    case .noConfig: "no \(ConfigLoader.fileName) to read the packages globs from"
+    case .config(let reason): reason
+    case .packages(let error): error.description
+    }
+  }
+}
+
+/// The repository's package directories, from `.swiftgate.toml`'s `packages` globs: every
+/// `.swift` file outside them belongs to the app target.
+enum AppTargetPackages {
+  static func directories(root: URL) -> Result<[String], AppTargetPackagesError> {
+    let config: Config
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(let loaded?): config = loaded
+    case .success(nil): return .failure(.noConfig)
+    case .failure(let failure):
+      switch failure.outcome {
+      case .invalid(let reason, _), .blocked(let reason): return .failure(.config(reason))
+      default: return .failure(.config("\(ConfigLoader.fileName) failed to load"))
+      }
+    }
+    do throws(ModuleGraphLoadError) {
+      return .success(try PackageDirectories.resolve(globs: config.packages, root: root))
+    } catch {
+      return .failure(.packages(error))
+    }
+  }
+
+  static func required(ledger: Ledger, root: URL)
+    -> Result<BuildScheduler.RequiredTasks, AppTargetPackagesError>
+  {
+    directories(root: root).map {
+      BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: $0)
+    }
+  }
 }
 
 enum BuildNextRun {
-  static func run(slug: String, session: String?, git: any Git, clock: any BuildClock) async
+  static func run(
+    slug: String, session: String?, git: any Git, clock: any BuildClock, root: URL
+  ) async
     -> BuildLoopResult<BuildNextReport>
   {
     let command = "build next"
@@ -53,14 +108,25 @@ enum BuildNextRun {
         return .blocked(command, slug, "reading build run \(runID): \(error)")
       }
       let ledger = try BuildLoop.ledger(plan)
+      let required: BuildScheduler.RequiredTasks
+      switch AppTargetPackages.required(ledger: ledger, root: root) {
+      case .success(let found): required = found
+      case .failure(let error):
+        return .blocked(
+          command, slug, "can't tell which tasks the app target needs to compile: \(error)")
+      }
       let running = Set(ledger.tasks.filter { $0.status == .inProgress }.map(\.id))
       let result = BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
-        now: clock.now())
+        now: clock.now(), required: required)
+      let notDone = Set(ledger.tasks.filter { $0.status != .done }.map(\.id))
       let report = BuildNextReport(
         runId: runID, phase: result.phase, toStart: result.toStart, running: result.running,
         refused: result.refused.map {
           BuildNextReport.Refused(task: $0.taskID, reason: Self.reason($0.reason))
+        },
+        required: required.tasks.filter { notDone.contains($0.taskID) }.map {
+          BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
         })
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
@@ -111,7 +177,8 @@ struct BuildNextCommand: AsyncParsableCommand {
 
   func run() async throws {
     let result = await BuildNextRun.run(
-      slug: plan, session: session, git: BuildLoop.git(), clock: LiveBuildClock())
+      slug: plan, session: session, git: BuildLoop.git(), clock: LiveBuildClock(),
+      root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory))
     Console.write(BuildNextRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

@@ -1,0 +1,13 @@
+struct Root {
+  static let commands: [Any.Type] = [
+    ListCommand.self,
+    ShowCommand.self,
+    makeCommand(),
+  ]
+
+  static var names: [Any.Type] { [ListCommand.self, Registry.lookup("add")] }
+}
+
+struct ListCommand {}
+
+struct ShowCommand {}

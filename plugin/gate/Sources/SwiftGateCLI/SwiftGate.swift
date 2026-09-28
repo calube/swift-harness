@@ -25,6 +25,7 @@ struct SwiftGate: AsyncParsableCommand {
       IndexCommand.self, CalibrateCommand.self,
       BuildCommand.self, LedgerCommand.self, WorktreeCommand.self,
       ModuleGraphCommand.self,
+      SurfaceCheckCommand.self,
     ]
   )
 }

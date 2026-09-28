@@ -2,6 +2,17 @@ import Foundation
 import SwiftGateDomain
 import Testing
 
+extension BuildScheduler {
+  /// The scheduling tests that predate required tasks read a ledger with none.
+  fileprivate static func next(
+    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date
+  ) -> Result {
+    next(
+      ledger: ledger, running: running, preset: preset, startedAt: startedAt, now: now,
+      required: .empty)
+  }
+}
+
 @Suite("Build scheduler (design spec §8.1, §8.5)")
 struct BuildSchedulerTests {
   static func task(
@@ -175,6 +186,83 @@ struct BuildSchedulerTests {
       ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
       now: Self.epoch.addingTimeInterval(30 * 60))
     #expect(cutoff.toStart.isEmpty)
+  }
+
+  // MARK: - Tasks the app target needs
+
+  static let packages = ["Packages/Feed", "Packages/Posts"]
+
+  @Test(
+    "a task writing a .swift file outside every package is required, and so is each not-done task it depends on — catches the app target read as package code, or a required task left waiting on an optional dependency"
+  )
+  func requiredTasksFollowTheAppTarget() {
+    let ledger = Self.ledger([
+      Self.task(
+        id: "done-core", writeSet: ["Packages/Feed/Sources/Feed/Feed.swift"], status: .done),
+      Self.task(
+        id: "posts-core", deps: ["done-core"],
+        writeSet: ["Packages/Posts/Sources/Posts/Posts.swift"]),
+      Self.task(
+        id: "app-views", deps: ["posts-core"],
+        writeSet: ["Packages/Posts/Sources/PostsUI/List.swift", "App/AppView.swift"]),
+      Self.task(id: "feed-only", writeSet: ["Packages/Feed/Sources/Feed/More.swift"]),
+      Self.task(id: "docs-only", writeSet: ["docs/notes.md", "App/"]),
+      Self.task(id: "prefix-lookalike", writeSet: ["Packages/FeedExtras/Extra.swift"]),
+    ])
+
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+
+    #expect(
+      required.tasks == [
+        .init(taskID: "app-views", appPath: "App/AppView.swift"),
+        .init(taskID: "posts-core", appPath: "App/AppView.swift"),
+        .init(taskID: "prefix-lookalike", appPath: "Packages/FeedExtras/Extra.swift"),
+      ])
+  }
+
+  @Test(
+    "past the no-new-starts point a required task still starts and an optional one doesn't, and at cutoff neither does — catches a RED final gate from a skipped view task"
+  )
+  func requiredTaskStartsPastNoNewStarts() {
+    let ledger = Self.ledger([
+      Self.task(id: "app-views", writeSet: ["App/AppView.swift"], estLines: 10),
+      Self.task(id: "optional-core", writeSet: ["Packages/Feed/Sources/Feed/Feed.swift"]),
+    ])
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+    let preset = Self.preset(timeBudgetMin: 30, stopStartsBeforeMin: 5)
+
+    let noNewStarts = BuildScheduler.next(
+      ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
+      now: Self.epoch.addingTimeInterval(26 * 60), required: required)
+
+    #expect(noNewStarts.phase == .noNewStarts)
+    #expect(noNewStarts.toStart == ["app-views"])
+
+    let cutoff = BuildScheduler.next(
+      ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
+      now: Self.epoch.addingTimeInterval(30 * 60), required: required)
+    #expect(cutoff.phase == .cutoff)
+    #expect(cutoff.toStart.isEmpty)
+  }
+
+  @Test(
+    "past the no-new-starts point required tasks still fill only free slots and skip write-set overlaps — catches the exemption also bypassing capacity"
+  )
+  func requiredTasksRespectSlotsAndOverlap() {
+    let ledger = Self.ledger([
+      Self.task(id: "running-app", writeSet: ["App/Root.swift"], status: .inProgress),
+      Self.task(id: "app-overlap", writeSet: ["App/Root.swift"]),
+      Self.task(id: "app-a", writeSet: ["App/A.swift"]),
+      Self.task(id: "app-b", writeSet: ["App/B.swift"]),
+    ])
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+
+    let result = BuildScheduler.next(
+      ledger: ledger, running: ["running-app"],
+      preset: Self.preset(maxParallel: 2, timeBudgetMin: 30, stopStartsBeforeMin: 5),
+      startedAt: Self.epoch, now: Self.epoch.addingTimeInterval(26 * 60), required: required)
+
+    #expect(result.toStart == ["app-a"])
   }
 
   // MARK: - Determinism

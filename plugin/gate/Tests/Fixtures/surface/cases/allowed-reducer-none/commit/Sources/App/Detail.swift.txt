@@ -1,0 +1,33 @@
+import ComposableArchitecture
+
+@Reducer
+struct Detail {
+  struct State: Equatable {}
+
+  enum Action {
+    case appeared
+    case closed
+  }
+
+  var body: some ReducerOf<Self> {
+    Reduce { state, action in
+      switch action {
+      case .appeared:
+        return .none
+      case .closed:
+        return .none
+      }
+    }
+  }
+}
+
+@Reducer
+struct Placeholder {
+  struct State: Equatable {}
+
+  enum Action {}
+
+  var body: some ReducerOf<Self> {
+    Reduce { _, _ in .none }
+  }
+}

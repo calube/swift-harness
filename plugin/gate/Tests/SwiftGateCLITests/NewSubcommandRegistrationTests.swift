@@ -121,6 +121,8 @@ struct NewSubcommandRegistrationTests {
       "evidence cache record",
       ["evidence", "cache", "record", "--design", "docs/designs/example.md"], "record"
     ),
+    ("surface-check", ["surface-check", "HEAD"], "surface-check"),
+    ("surface-check --json", ["surface-check", "HEAD", "--json"], "surface-check"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -152,6 +154,7 @@ struct NewSubcommandRegistrationTests {
     "worktree create", "worktree warm-check", "worktree remove",
     "module-graph",
     "evidence cache record",
+    "surface-check", "surface-check --json",
   ]
 
   @Test(

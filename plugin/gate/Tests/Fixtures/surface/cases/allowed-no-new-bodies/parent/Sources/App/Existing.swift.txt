@@ -1,0 +1,26 @@
+import Foundation
+
+struct Item: Equatable {
+  var name: String
+}
+
+enum Tab {
+  case home
+  case settings
+}
+
+final class ItemClient {
+  var timeout = 30
+
+  func fetchItems() async throws -> [Item] {
+    []
+  }
+
+  func count() -> Int {
+    return 3
+  }
+}
+
+func existingTotal(_ values: [Int]) -> Int {
+  values.reduce(0, +)
+}

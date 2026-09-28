@@ -61,6 +61,9 @@ A SwiftSyntax pass over the commit's diff against its first parent.
 | Added or changed code | Allowed body |
 |---|---|
 | Function, initializer, accessor, closure | empty; 1 `return` of an empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`, `.init()`) or an enum case with no payload; a call that forwards to code already on the parent |
+| Initializer | only assigns its own parameters, or §7 empty defaults, to `self`'s stored properties (`self.x = x`); any other expression is behaviour |
+| Function, accessor, closure yielding a value | 1 initializer call whose arguments are each a §7 empty default or a parameter passed through unchanged (`Foo(items: [], name: name)`); an argument with literal content, a call or an operator is behaviour |
+| Existing array literal (command and registration lists) | gains only bare type references or `Type.self` elements; any other change to an existing body is behaviour |
 | Reducer body | returns `.none` for every action, and never mutates state |
 | SwiftUI `body` | `EmptyView()`, or a container of `EmptyView()` |
 | `#Preview` and preview fixtures | none with non-empty sample data |

@@ -1,0 +1,3 @@
+func sum(values: [Int]) -> Int {
+  existingTotal(values + [1])
+}

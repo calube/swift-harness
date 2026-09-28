@@ -1,0 +1,12 @@
+struct Root {
+  static let commands: [Any.Type] = [
+    ListCommand.self,
+    ShowCommand.self,
+  ]
+
+  static var names: [Any.Type] { [ListCommand.self] }
+}
+
+struct ListCommand {}
+
+struct ShowCommand {}

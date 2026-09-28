@@ -39,6 +39,65 @@ public enum BuildScheduler {
     }
   }
 
+  /// A task the app target needs before it compiles, so the budget's no-new-starts phase still
+  /// starts it: the app target is every `.swift` file outside the repository's packages.
+  public struct RequiredTask: Sendable, Equatable {
+    public let taskID: String
+    /// The app-target file behind it: the task's own write-set entry, or, for a dependency, the
+    /// entry of the required task that waits on it.
+    public let appPath: String
+
+    public init(taskID: String, appPath: String) {
+      self.taskID = taskID
+      self.appPath = appPath
+    }
+  }
+
+  /// Every required task in a ledger, found from the repository's package directories.
+  public struct RequiredTasks: Sendable, Equatable {
+    /// Sorted by task id.
+    public let tasks: [RequiredTask]
+
+    /// For a ledger read without a repository, such as a self-test seed.
+    public static let empty = RequiredTasks(tasks: [])
+
+    private init(tasks: [RequiredTask]) {
+      self.tasks = tasks
+    }
+
+    /// `packageDirectories` are repository-relative, as the config's `packages` globs resolve.
+    public init(ledger: Ledger, packageDirectories: [String]) {
+      func isAppFile(_ entry: String) -> Bool {
+        entry.hasSuffix(".swift")
+          && !packageDirectories.contains { entry == $0 || entry.hasPrefix($0 + "/") }
+      }
+      let byID = Dictionary(
+        ledger.tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+      var found: [String: RequiredTask] = [:]
+      var queue: [RequiredTask] = ledger.tasks.sorted { $0.id < $1.id }.compactMap { task in
+        task.writeSet.sorted().first(where: isAppFile).map {
+          RequiredTask(taskID: task.id, appPath: $0)
+        }
+      }
+      // Roots first, so a task that writes the app target itself names its own file; a
+      // dependency then takes the file of the first required task, by id, that waits on it.
+      while !queue.isEmpty {
+        let next = queue.removeFirst()
+        guard found[next.taskID] == nil else { continue }
+        found[next.taskID] = next
+        for dependency in (byID[next.taskID]?.deps ?? []).sorted()
+        where byID[dependency].map({ $0.status != .done }) == true {
+          queue.append(RequiredTask(taskID: dependency, appPath: next.appPath))
+        }
+      }
+      self.tasks = found.values.sorted { $0.taskID < $1.taskID }
+    }
+
+    public func task(_ id: String) -> RequiredTask? {
+      tasks.first { $0.taskID == id }
+    }
+  }
+
   /// Schedules the next tasks to start.
   ///
   /// - A task is ready when it's `pending` and every dependency is `done`; `blocked`,
@@ -53,9 +112,12 @@ public enum BuildScheduler {
   /// - In `.normal` phase, tasks start in that order until `preset.maxParallel - running.count`
   ///   free slots are filled, skipping (without refusing) any task whose write set overlaps a
   ///   running task's or an already-started task's from this same call — the next `build next`
-  ///   call reconsiders it. In `.noNewStarts` or `.cutoff` phase, nothing starts.
+  ///   call reconsiders it. In `.noNewStarts` phase only `required` tasks start, under the same
+  ///   slot and overlap rules, so the budget never skips a task the app target needs to compile.
+  ///   In `.cutoff` phase nothing starts.
   public static func next(
-    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date
+    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
+    required: RequiredTasks
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
     let phase = budgetPhase(preset: preset, startedAt: startedAt, now: now)
@@ -84,10 +146,10 @@ public enum BuildScheduler {
     }
 
     var toStart: [String] = []
-    if phase == .normal {
+    if phase != .cutoff {
       var freeSlots = max(0, preset.maxParallel - running.count)
       var reservedWriteSets: [[String]] = running.compactMap { byID[$0]?.writeSet }
-      for task in ordered {
+      for task in ordered where phase == .normal || required.task(task.id) != nil {
         guard freeSlots > 0 else { break }
         guard !reservedWriteSets.contains(where: { WriteSet.overlaps($0, task.writeSet) }) else {
           continue

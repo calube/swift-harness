@@ -39,6 +39,7 @@ struct RuleIndexTests {
       DiffCoverage.ruleID, DiffCoverage.uncoveredRuleID, DiffCoverage.noDataRuleID,
       T1Presence.ruleID, CoverageCheck.summaryRuleID, ImpactAnalysis.ruleID,
     ]
+    let surface = [SurfaceCheck.behaviourRuleID, SurfaceCheck.summaryRuleID]
     let mutation = [
       MutationRules.survivedRuleID, MutationRules.killedRuleID, MutationRules.unviableRuleID,
       MutationRules.noEvidenceRuleID, MutationRules.bareEquivalentRuleID,
@@ -78,9 +79,10 @@ struct RuleIndexTests {
       SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID,
     ]
+    let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     return Set(
-      sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
-        + changedTests + coverage + mutation + judge + harness + environment)
+      buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
+        + changedTests + coverage + mutation + judge + harness + environment + surface)
   }
 
   /// Every backticked rule id in the index section.

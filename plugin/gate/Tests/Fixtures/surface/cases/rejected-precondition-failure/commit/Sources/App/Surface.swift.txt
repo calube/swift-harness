@@ -1,0 +1,3 @@
+func save(_ item: Item) {
+  preconditionFailure()
+}

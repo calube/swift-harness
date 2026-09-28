@@ -1,0 +1,6 @@
+import ComposableArchitecture
+import SwiftUI
+
+#Preview {
+  FeatureView(store: Store(initialState: Feature.State(count: 3)) { Feature() })
+}

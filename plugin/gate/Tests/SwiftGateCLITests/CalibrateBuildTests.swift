@@ -95,6 +95,8 @@ struct CalibrateBuildTests {
     case commitToMain
     /// Cites a gate that ran neither prove nor mutate, as a worker on the old contract would.
     case gateWithoutProof
+    /// Cites a gate that skipped the task gate's impact, coverage and app-build steps.
+    case gateWithoutTaskGateSteps
   }
 
   /// The real envelope from `Judge/claude-result.json` with `result` replaced.
@@ -158,7 +160,10 @@ struct CalibrateBuildTests {
       findings: [])
     try RunStore(worktreeRoot: URL(filePath: worktree)).record(
       report, finishedAt: passedAt, command: "check fast",
-      steps: fixer || misstep == .gateWithoutProof ? nil : ["prove", "mutate"])
+      steps: fixer || misstep == .gateWithoutProof
+        ? nil
+        : misstep == .gateWithoutTaskGateSteps
+          ? ["prove", "mutate"] : ["prove", "mutate", "impact", "coverage", "app-build"])
 
     let task = String(branch.split(separator: "/").last ?? "")
     let taskReturn = TaskReturn(
@@ -292,6 +297,22 @@ struct CalibrateBuildTests {
     #expect(try Self.exitCode(outcome) == 1)
     #expect(
       Self.missed(outcome, question: "return")?.message.contains("gate-missing-proof") == true)
+  }
+
+  @Test(
+    "a worker whose gate skipped the task gate's impact, coverage and app-build steps misses the return label — catches calibration passing a worker check-return would refuse"
+  )
+  func workerWithoutTaskGateStepsFails() async throws {
+    let repository = try Repository(agents: ["build-worker"])
+    defer { repository.remove() }
+
+    let outcome = await Self.run(
+      repository, agent: Self.agent(repository, misstep: .gateWithoutTaskGateSteps))
+
+    #expect(try Self.exitCode(outcome) == 1)
+    let message = Self.missed(outcome, question: "return")?.message ?? ""
+    #expect(message.contains("gate-missing-step"))
+    #expect(!message.contains("gate-missing-proof"))
   }
 
   @Test(

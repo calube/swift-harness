@@ -1,0 +1,4 @@
+struct Callbacks {
+  var onTap: () -> Void = {}
+  var loader: () async -> [Item] = { [] }
+}

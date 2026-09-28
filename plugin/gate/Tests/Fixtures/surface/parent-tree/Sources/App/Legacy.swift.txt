@@ -1,0 +1,3 @@
+func legacy() -> Int {
+  1
+}

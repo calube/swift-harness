@@ -24,8 +24,32 @@ private struct BuildScenario {
     onDesignConflict: .block)
   static let presets = ["default": preset, "interview": preset]
 
+  static let config = """
+    schema = 1
+    xcode = "26.2"
+    app_scheme = "App"
+    packages = ["Packages/*"]
+
+    [simulator]
+    device = "iPhone 17"
+    os = "26.2"
+
+    """
+
   let shared = SharedPlanState()
   var git: FakeGit { shared.git() }
+
+  /// A repository with one package, inside the common dir so `shared.remove()` removes it too.
+  var repository: URL {
+    shared.commonDirectory.appending(path: "repo", directoryHint: .isDirectory)
+  }
+
+  func writeRepository(config: String? = Self.config) throws {
+    try write(repository.appending(path: "Packages/Feed/Package.swift").path, Data())
+    if let config {
+      try write(repository.appending(path: ".swiftgate.toml").path, Data(config.utf8))
+    }
+  }
 
   func layout(_ plan: String = Self.plan) throws -> PlanStateLayout.Plan {
     try PlanStateLayout(commonDirectory: shared.commonDirectory.path).plan(plan)
@@ -58,11 +82,15 @@ private struct BuildScenario {
     }
   }
 
-  func writeLedger(_ statuses: [(String, TaskStatus)], plan: String = Self.plan) throws {
+  func writeLedger(
+    _ statuses: [(String, TaskStatus)], plan: String = Self.plan,
+    writeSets: [String: [String]] = [:]
+  ) throws {
+    try writeRepository()
     let tasks = statuses.map { id, status in
       LedgerTask(
-        id: id, deps: [], writeSet: ["Sources/\(id)/"], gate: .push, tests: [], covers: [],
-        estLines: 10, status: status, worktree: "../\(id)", model: .sonnet)
+        id: id, deps: [], writeSet: writeSets[id] ?? ["Sources/\(id)/"], gate: .push, tests: [],
+        covers: [], estLines: 10, status: status, worktree: "../\(id)", model: .sonnet)
     }
     let ledger = Ledger(
       schemaVersion: 1, resume: "r", maxParallel: 3, tasks: tasks, waves: [tasks.map(\.id)])
@@ -88,7 +116,8 @@ private struct BuildScenario {
   {
     await BuildNextRun.run(
       slug: plan, session: session, git: git,
-      clock: FixedClock(date: Self.startedAt.addingTimeInterval(minutesIn * 60)))
+      clock: FixedClock(date: Self.startedAt.addingTimeInterval(minutesIn * 60)),
+      root: repository)
   }
 
   func finish(session: String? = Self.alice, plan: String = Self.plan) async
@@ -194,8 +223,49 @@ struct BuildLoopCommandTests {
     let json = BuildNextRun.render(result, format: .json)
     let object = try #require(
       try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-    #expect(Set(object.keys) == ["runId", "phase", "toStart", "running", "refused"])
+    #expect(
+      Set(object.keys) == ["runId", "phase", "toStart", "running", "refused", "required"])
     #expect(object["phase"] as? String == "cutoff")
+  }
+
+  @Test(
+    "next past the no-new-starts point starts the task the app target needs and lists why, but not an optional one — catches a RED final gate from a skipped view task"
+  )
+  func nextStartsRequiredPastNoNewStarts() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger(
+      [("views", .pending), ("core", .pending)],
+      writeSets: ["views": ["App/AppView.swift"], "core": ["Packages/Feed/Sources/Core.swift"]])
+    _ = try #require(await scenario.start().report)
+
+    let result = await scenario.next(minutesIn: 80)
+    let report = try #require(result.report, "\(result.message)")
+
+    #expect(report.phase == .noNewStarts)
+    #expect(report.toStart == ["views"])
+    #expect(report.required == [.init(task: "views", appPath: "App/AppView.swift")])
+  }
+
+  @Test(
+    "next without a readable .swiftgate.toml exits 2 naming the config — catches a missing config read as no task being required"
+  )
+  func nextNeedsConfig() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger([("views", .pending)], writeSets: ["views": ["App/AppView.swift"]])
+    _ = try #require(await scenario.start().report)
+    try FileManager.default.removeItem(at: scenario.repository.appending(path: ".swiftgate.toml"))
+
+    let result = await scenario.next(minutesIn: 80)
+
+    #expect(result.verdict == .blocked)
+    #expect(result.report == nil)
+    #expect(result.message.contains(".swiftgate.toml"), "\(result.message)")
   }
 
   @Test(

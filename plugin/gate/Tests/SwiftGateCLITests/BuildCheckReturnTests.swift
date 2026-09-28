@@ -92,10 +92,12 @@ private struct ReturnScenario {
   }
 
   /// Records a gate run in the task worktree's run store through the writer `check` uses. A
-  /// worker's gate runs `prove` and `mutate` by default, as the worker contract asks.
+  /// worker's gate runs `prove`, `mutate` and the task gate's steps by default, as the worker
+  /// contract asks.
   func recordGateRun(
     tier: CheckTier, verdict: Verdict, suffix: UInt32, in checkout: URL? = nil,
-    steps: [String]? = ["prove", "mutate"], proofBases: [String]? = nil
+    steps: [String]? = ["prove", "mutate", "impact", "coverage", "app-build"],
+    proofBases: [String]? = nil
   ) throws -> String {
     let runID = RunID.make(startedAt: Self.finishedAt, suffix: suffix)
     let report = try RunReport(
@@ -350,12 +352,12 @@ struct BuildCheckReturnTests {
     let report = try await scenario.check(
       scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
 
-    #expect(report.findings.map(\.rule) == [.gateMissingProof])
+    #expect(report.findings.map(\.rule) == [.gateMissingProof, .gateMissingStep])
     #expect(report.verdict.exitCode == 1)
   }
 
   @Test(
-    "an unproved GREEN worker gate fails under a per-task preset and passes under a final one — catches a preset that silently skips proof"
+    "an unproved GREEN worker gate that skipped app-build fails proof only under a per-task preset, and the missing step under both — catches a preset that silently skips proof or the task gate's steps"
   )
   func proofRequirementFollowsThePresetsTaskProof() async throws {
     let perTask = try await ReturnScenario(taskProof: .perTask)
@@ -370,9 +372,100 @@ struct BuildCheckReturnTests {
     let finalReport = try await final.check(
       final.returnValue(gate: .init(tier: .push, verdict: .green, runID: finalRun)))
 
-    #expect(perTaskReport.findings.map(\.rule) == [.gateMissingProof])
-    #expect(finalReport.findings == [])
+    #expect(perTaskReport.findings.map(\.rule) == [.gateMissingProof, .gateMissingStep])
+    #expect(finalReport.findings.map(\.rule) == [.gateMissingStep])
+  }
+
+  @Test(
+    "a worker's GREEN return citing a push run that never ran --app-build fails naming app-build, and a fixer's merge gate without it passes — catches a worker that skips the task gate's new steps"
+  )
+  func workerGateWithoutAppBuildFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let workerRun = try scenario.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: ["prove", "mutate"])
+    let (fix, commit) = try await scenario.cutFixWorktree()
+    let fixRun = try scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
+
+    let worker = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: workerRun)))
+    let fixer = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: fixRun),
+        review: nil),
+      fix: true)
+
+    #expect(worker.findings.map(\.rule) == [.gateMissingStep])
+    #expect(worker.findings.first?.message.contains("app-build") == true)
+    #expect(worker.findings.first?.message.contains(workerRun) == true)
+    #expect(worker.verdict.exitCode == 1)
+    #expect(fixer.findings == [], "\(fixer.findings)")
+    #expect(fixer.verdict == .green)
+  }
+
+  @Test(
+    "a fast run recorded before steps were recorded fails a worker's GREEN return with one finding per missing step — catches an old run passing silently, or missing steps lumped into one"
+  )
+  func runWithoutRecordedStepsNamesEachMissingStep() async throws {
+    let scenario = try await ReturnScenario(ledgerGate: .fast, taskProof: .final)
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .fast, verdict: .green, suffix: 1, steps: nil)
+
+    let report = try await scenario.check(
+      scenario.returnValue(gate: .init(tier: .fast, verdict: .green, runID: runID)))
+
+    #expect(report.findings.map(\.rule) == [.gateMissingStep, .gateMissingStep, .gateMissingStep])
+    let named = report.findings.map { finding in
+      ["impact", "coverage", "app-build"].filter { finding.message.contains("`\($0)`") }
+    }
+    #expect(named == [["impact"], ["coverage"], ["app-build"]])
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "a worker run with every task gate step passes under either task_proof, counting the steps its tier already runs — catches a push run refused for the impact and coverage push runs anyway"
+  )
+  func runWithEveryStepPasses() async throws {
+    let perTask = try await ReturnScenario(taskProof: .perTask)
+    defer { perTask.remove() }
+    let perTaskRun = try perTask.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: ["prove", "mutate", "app-build"])
+    let perTaskReport = try await perTask.check(
+      perTask.returnValue(gate: .init(tier: .push, verdict: .green, runID: perTaskRun)))
+
+    let final = try await ReturnScenario(taskProof: .final)
+    defer { final.remove() }
+    let finalRun = try final.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: ["app-build"])
+    let skipped = try final.recordGateRun(tier: .push, verdict: .green, suffix: 2, steps: nil)
+    let finalReport = try await final.check(
+      final.returnValue(gate: .init(tier: .push, verdict: .green, runID: finalRun)))
+    let skippedReport = try await final.check(
+      final.returnValue(gate: .init(tier: .push, verdict: .green, runID: skipped)))
+
+    #expect(perTaskReport.findings == [], "\(perTaskReport.findings)")
+    #expect(perTaskReport.verdict == .green)
+    #expect(finalReport.findings == [], "\(finalReport.findings)")
     #expect(finalReport.verdict == .green)
+    #expect(skippedReport.findings.map(\.rule) == [.gateMissingStep])
+  }
+
+  @Test(
+    "the steps check-return requires are exactly the flags the build task workflow tells a worker to pass — catches the workflow and the check drifting apart"
+  )
+  func requiredStepsMatchTheWorkflow() throws {
+    let workflow = URL(filePath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .deletingLastPathComponent().appending(path: "workflows/build-task.js")
+    let source = try String(contentsOf: workflow, encoding: .utf8)
+    let line = try #require(
+      source.split(separator: "\n").first { $0.hasPrefix("const TASK_GATE_STEPS = ") })
+    let quoted = try #require(line.split(separator: "'").dropFirst().first)
+
+    #expect(
+      quoted.split(separator: " ").map(String.init)
+        == TaskReturnCheck.taskGateSteps.map { "--\($0.rawValue)" })
   }
 
   @Test(
@@ -577,12 +670,12 @@ struct BuildCheckReturnTests {
     }
     func evidence(
       branchExists: Bool = true, commit: TaskReturnEvidence.CommitState = .onBranch,
-      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green),
+      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green, steps: ["app-build"]),
       status: TaskStatusReport? = nil
     ) -> TaskReturnEvidence {
       TaskReturnEvidence(
         branch: "p/t", branchExists: branchExists, commits: ["abc1": commit], gateRun: run,
-        taskGate: .push, taskStatus: status)
+        taskGate: .push, taskStatus: status, taskGateStepsRequired: true)
     }
     func rules(_ r: TaskReturn, _ e: TaskReturnEvidence) -> [TaskReturnFinding.Rule] {
       TaskReturnCheck.findings(r, evidence: e).map(\.rule)
@@ -599,7 +692,13 @@ struct BuildCheckReturnTests {
     #expect(rules(taskReturn(.readyToMerge, review: nil), evidence()) == [.reviewMissing])
     #expect(
       rules(taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green)))
-        == [.gateTierMismatch, .gateBelowTaskGate])
+        == [
+          .gateTierMismatch, .gateMissingStep, .gateMissingStep, .gateMissingStep,
+          .gateBelowTaskGate,
+        ])
+    #expect(
+      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: .push, verdict: .green)))
+        == [.gateMissingStep])
     #expect(
       rules(
         taskReturn(.gateRed, gate: .init(tier: .push, verdict: .green, runID: "r1"), review: nil),

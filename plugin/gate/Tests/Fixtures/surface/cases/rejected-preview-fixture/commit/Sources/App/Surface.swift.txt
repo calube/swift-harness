@@ -1,0 +1,3 @@
+extension Item {
+  static let preview = Item(name: "Milk")
+}
