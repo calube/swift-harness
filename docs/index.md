@@ -23,6 +23,7 @@ page or through an area index below.
 | Building sub-project 2 (design & plan workflows): tasks, waves, merge points | [`plans/2026-09-25-design-plan-workflows-plan.md`](plans/2026-09-25-design-plan-workflows-plan.md) |
 | Building sub-project 5 (the build executor, `/build` and `/ship`): tasks, waves, merge points | [`plans/2026-09-26-build-executor-plan.md`](plans/2026-09-26-build-executor-plan.md), design [`designs/2026-09-26-build-executor-design.md`](designs/2026-09-26-build-executor-design.md), interfaces [`handoffs/subproject-5-interfaces.md`](handoffs/subproject-5-interfaces.md) |
 | Building the fast modes (`surface-check`, `/sprint`): tasks, waves, merge points | [`plans/2026-09-27-fast-modes-plan.md`](plans/2026-09-27-fast-modes-plan.md), design [`designs/2026-09-27-fast-modes-design.md`](designs/2026-09-27-fast-modes-design.md), [ADR 0003](adrs/0003-ship-may-skip-the-design-step.md) |
+| Tracing a ship speed research change to its design, ADR or plan task | [`designs/2026-09-27-speed-research-coverage-design.md`](designs/2026-09-27-speed-research-coverage-design.md), [ADR 0004](adrs/0004-proof-and-mutation-may-run-once-in-the-final-gate.md) |
 | Understanding how the Foundation build was sequenced | [`plans/2026-09-24-foundation-plan.md`](plans/2026-09-24-foundation-plan.md) — temporary: `docs/plans/` is committed only until sub-project 2's own (uncommitted) ledger exists |
 
 ## The framework in 30 seconds
