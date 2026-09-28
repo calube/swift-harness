@@ -53,9 +53,12 @@ recommended first. Never work around a halt by hand. The reference lists the opt
 4. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
-5. Read `<plans>/<slug>/build/<run>/run.json` for the preset, `<plans>/<slug>/plan.json` for the
-   design doc, and start the cutoff timer when `timeBudgetMin` isn't 0
-   ([time budget](references/event-loop.md#time-budget)).
+5. Read `<plans>/<slug>/build/<run>/run.json` for the preset, and start the cutoff timer when
+   `timeBudgetMin` isn't 0 ([time budget](references/event-loop.md#time-budget)).
+6. Read `<plans>/<slug>/plan.json` for the plan's source and surface. `"source": "specPage"` marks a
+   spec page plan: its page is `<plans>/<slug>/<specPage.path>`. Any other plan builds from the
+   design doc in `design`. Keep `surfaceCommit` as the plan surface, or `null` when the key is
+   absent: every worker gets it ([launch](references/event-loop.md#launch)).
 
 ## 2. Start ready tasks
 
@@ -66,8 +69,10 @@ At `no-new-starts`, `toStart` holds only those [required tasks](references/event
 For each task in `toStart`:
 
 1. `"$SG" worktree create <slug> <task> --session <session> --json`. Keep `worktree` and `branch`.
-2. Build the worker's pack:
-   `"$SG" context-pack --role worker --design <doc> --ledger <plans>/<slug>/ledger.json --task-id <task> --build-run <run>`.
+2. Build the worker's pack ([worker pack](references/event-loop.md#worker-pack)): for a design
+   plan,
+   `"$SG" context-pack --role worker --design <doc> --ledger <plans>/<slug>/ledger.json --task-id <task> --build-run <run>`;
+   for a spec page plan, `--spec-page <page>` in place of `--design <doc>`.
 3. `"$SG" ledger set <slug> <task> in-progress --session <session> --json`.
 4. Launch `workflows/build-task.js` with the Workflow tool, in the background, with the
    [args](references/event-loop.md#launch) the task and preset give. Keep the task id the tool

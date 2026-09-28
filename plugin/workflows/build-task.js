@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) verifier and test-quality in parallel, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate", taskProof: "per-task"|"final", reviewers?}. Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate", taskProof: "per-task"|"final", planSurface: <sha>|null, reviewers?}. Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review only: verifier and test-quality in parallel' },
@@ -50,6 +50,11 @@ const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
 const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface']
 
+// A spec page plan's sections a design conflict may cite; such a plan has no design to cite.
+const SPEC_PAGE_SECTIONS = ['slices', 'surface', 'modules']
+// `plan.json`'s `surfaceCommit`: a hex sha, never a ref name that could move.
+const SHA = /^[0-9a-f]{7,40}$/
+
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
 const stringArray = value => Array.isArray(value) && value.every(nonEmptyString)
 
@@ -81,6 +86,14 @@ function validateArgs(a) {
   if (!TASK_PROOFS.includes(a.taskProof)) {
     invalid(`taskProof must be one of ${TASK_PROOFS.join(', ')}, got ${JSON.stringify(a.taskProof)}`)
   }
+  // Required even when null, so a skill that forgets the plan's surface fails here, not at the final gate.
+  if (a.planSurface !== null && !(typeof a.planSurface === 'string' && SHA.test(a.planSurface))) {
+    invalid(
+      a.planSurface === undefined
+        ? "planSurface is required: plan.json's surfaceCommit, or null when the plan has none"
+        : `planSurface must be a commit sha or null, got ${JSON.stringify(a.planSurface)}`,
+    )
+  }
   let reviewers = a.review === 'full' ? REVIEWERS : []
   if (a.reviewers !== undefined) {
     if (a.review !== 'full') invalid('reviewers is only valid with review "full"')
@@ -110,7 +123,10 @@ const DESIGN_CONFLICT_SCHEMA = {
   additionalProperties: false,
   properties: {
     kind: { type: 'string', enum: ['design-conflict'] },
-    section: { type: 'string', description: 'the design section anchor, e.g. decision' },
+    section:
+      A.planSurface === null
+        ? { type: 'string', description: 'the design section anchor, e.g. decision' }
+        : { type: 'string', enum: SPEC_PAGE_SECTIONS, description: 'the spec page section whose split or surface is wrong' },
     ids: { type: 'array', items: { type: 'string' } },
     claim: { type: 'string' },
     evidence: {
@@ -202,6 +218,9 @@ function workerDefect(r) {
   }
   if (r.outcome === 'design-conflict') {
     if (!r.designConflict || typeof r.designConflict !== 'object') return 'a design-conflict return carries no designConflict report'
+    if (A.planSurface !== null && !SPEC_PAGE_SECTIONS.includes(r.designConflict.section)) {
+      return `its designConflict section ${JSON.stringify(r.designConflict.section)} isn't a spec page section (${SPEC_PAGE_SECTIONS.join(', ')})`
+    }
     return null
   }
   if (r.designConflict !== null) return `a ${r.outcome} return carries a designConflict report`
@@ -262,17 +281,35 @@ function reviewFinding(f) {
   return out
 }
 
+const proofSteps = A.taskProof === 'per-task' ? '--prove --mutate ' : ''
+const finalProofNote = A.taskProof === 'per-task' ? '' : " The build's final ready gate proves and mutates every task at once."
+
+// A plan with a surface on main: every worker proves at it, and a stub for API it lacks follows it
+// as a second proof base, so the final gate can prove each task's stub in merge order.
+const taskGateLines = () =>
+  A.planSurface === null
+    ? [
+        `Task gate: swiftgate check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS}, ` +
+          `plus --proof-base <surface commit> when the task adds API.${finalProofNote}`,
+      ]
+    : [
+        `Task gate: swiftgate check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS} --proof-base ${A.planSurface}, ` +
+          `plus --proof-base <stub sha> after it once you commit a stub.${finalProofNote}`,
+        `Plan surface: ${A.planSurface}, already on main. It holds the plan's API as stubs, so write no surface commit of your own. ` +
+          'When a test needs API the plan surface lacks, commit that API alone as a stub, check it with ' +
+          '`swiftgate surface-check <stub sha>` until GREEN, and return its sha as surfaceCommit; with no stub, surfaceCommit is null. ' +
+          'A new target or product in a Package.swift is never a stub: return a design conflict instead.',
+        `Design conflict: this plan's source is a spec page, so the report names a spec page section: ${SPEC_PAGE_SECTIONS.map(x => `\`${x}\``).join(', ').replace(/, ([^,]*)$/, ' or $1')}, ` +
+          'and its ids are the slice-… ids it invalidates.',
+      ]
+
 const brief = () =>
   [
     `Task: ${A.task} (plan ${A.plan}).`,
     `Worktree: ${A.worktree}, branch ${A.branch}, already checked out.`,
     `Write set: ${A.writeSet.join(', ')}.`,
     `Task proof: ${A.taskProof}.`,
-    A.taskProof === 'per-task'
-      ? `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate ${TASK_GATE_STEPS}, ` +
-        'plus --proof-base <surface commit> when the task adds API.'
-      : `Task gate: swiftgate check --tier ${A.taskGate} --base main ${TASK_GATE_STEPS}, ` +
-        "plus --proof-base <surface commit> when the task adds API. The build's final ready gate proves and mutates every task at once.",
+    ...taskGateLines(),
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')

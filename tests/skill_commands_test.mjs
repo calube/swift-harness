@@ -147,13 +147,17 @@ export function scanSkills(skillsDir, help, labelRoot = skillsDir) {
 // research-lane` exits 2 without these flags; design-research.js throws without these args.
 const REQUIRED_PACK_FLAGS = {
   'research-lane': ['--key', '--design', '--pin'],
-  worker: ['--design', '--ledger', '--task-id'],
+  worker: ['--ledger', '--task-id'],
+}
+// Flag groups a call must carry exactly one of: a worker pack reads its plan's design or its spec page.
+const ONE_OF_PACK_FLAGS = {
+  worker: [['--design', '--spec-page']],
 }
 const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
 // A research launch names the registered workflow, or a copy of its script.
 const isResearchCall = call => call.includes('swift-harness-design-research') || call.includes('design-research.js')
 // build-task.js throws unless each of these is present (`reviewers` is optional).
-const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:']
+const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:', 'planSurface:']
 // The PreToolUse guard denies these without the caller's own literal `--session`.
 const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'worktree create']
 
@@ -170,6 +174,12 @@ export function requiredCallProblems(files) {
       const role = words[words.indexOf('--role') + 1]
       for (const flag of REQUIRED_PACK_FLAGS[role] ?? []) {
         if (!words.includes(flag)) problems.push(`${file}:${line}: context-pack --role ${role} lacks ${flag}`)
+      }
+      for (const group of ONE_OF_PACK_FLAGS[role] ?? []) {
+        const present = group.filter(flag => words.includes(flag))
+        if (present.length !== 1) {
+          problems.push(`${file}:${line}: context-pack --role ${role} needs exactly one of ${group.join(', ')}`)
+        }
       }
     }
     for (const match of text.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)) {
@@ -508,6 +518,41 @@ const tests = {
     ]) assert.ok(has(path, flag), `the build skill never runs \`swiftgate ${path} ${flag}\``)
     const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
+  },
+
+  'the build skill packs a spec page plan\'s workers with --spec-page and hands plan.json\'s surfaceCommit to every worker — catches a worker proving at the wrong base or packed from a design the plan lacks'() {
+    const files = buildSkillFiles()
+    const { resolved } = scanSkills(join(root, 'skills/build'), help, root)
+    const packs = resolved.filter(r => r.path === 'context-pack' && r.flags.includes('--build-run'))
+    assert.ok(packs.some(r => r.flags.includes('--spec-page') && !r.flags.includes('--design')), 'no worker pack reads a spec page')
+    assert.ok(packs.some(r => r.flags.includes('--design') && !r.flags.includes('--spec-page')), 'no worker pack reads a design')
+    const all = Object.values(files).join('\n')
+    const [launch] = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].filter(m => m[0].includes('build-task.js')).map(m => m[0])
+    assert.match(launch ?? '', /planSurface: "<plan\.json's surfaceCommit, or null>"/)
+    const skill = files['skills/build/SKILL.md']
+    assert.match(skill, /`surfaceCommit`/, 'the build skill never reads the plan surface from plan.json')
+    assert.match(skill, /"source": "specPage"/, 'the build skill never tells a spec page plan from a design plan')
+
+    assert.deepEqual(requiredCallProblems({
+      'x.md': [
+        '```bash',
+        '"$SG" context-pack --role worker --ledger l.json --task-id t --build-run r',
+        '"$SG" context-pack --role worker --design d.md --spec-page p.md --ledger l.json --task-id t',
+        '"$SG" context-pack --role worker --spec-page p.md --ledger l.json --task-id t',
+        '```',
+        '```',
+        'Workflow({',
+        '  scriptPath: "${CLAUDE_PLUGIN_ROOT}/workflows/build-task.js",',
+        '  args: { task: "t", plan: "p", worktree: "w", branch: "b", writeSet: [], taskGate: "fast", tests: [],',
+        '    contextPack: "c", model: "opus", review: "gate", taskProof: "final" }',
+        '})',
+        '```',
+      ].join('\n'),
+    }), [
+      'x.md:2: context-pack --role worker needs exactly one of --design, --spec-page',
+      'x.md:3: context-pack --role worker needs exactly one of --design, --spec-page',
+      'x.md:7: build-task Workflow call lacks planSurface',
+    ])
   },
 
   'the ship skill runs its preflight, hands the preset to each step and reports the build — catches a preflight check or the build hand-off dropped'() {
