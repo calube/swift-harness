@@ -259,4 +259,97 @@ struct BuildPresetConfigTests {
       try JSONDecoder().decode(BuildPreset.self, from: unknown)
     }
   }
+
+  @Test(
+    "a preset with design_tier none and on_design_conflict block loads as the none design step — catches a config that rejects the design-free value"
+  )
+  func designTierNoneLoads() throws {
+    let config = try ConfigSchema.config(
+      from: root(
+        withDefaultPreset: [
+          "design_tier": .string("none"), "on_design_conflict": .string("block"),
+        ]))
+    #expect(config.buildPresets["default"]?.designTier == BuildPreset.DesignStep.none)
+  }
+
+  @Test(
+    "design_tier none with on_design_conflict amend fails naming both keys — catches a design-free build told to amend a design it doesn't have"
+  )
+  func designTierNoneNeedsBlock() {
+    let input = root(
+      withDefaultPreset: ["design_tier": .string("none"), "on_design_conflict": .string("amend")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      guard let issues = (error as? ConfigValidationError)?.issues, issues.count == 1 else {
+        return false
+      }
+      let message = issues[0].description
+      return issues[0].path == "build.presets.default.on_design_conflict"
+        && message.contains("amend")
+        && message.contains("build.presets.default.design_tier")
+    }
+  }
+
+  @Test(
+    "an unknown design_tier names itself and lists none with every design tier — catches none missing from the accepted values"
+  )
+  func unknownDesignTierNamesItself() {
+    let input = root(withDefaultPreset: ["design_tier": .string("nothing")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .unknownEnumValue(
+          path: "build.presets.default.design_tier", value: "nothing",
+          allowed: ["quick", "standard", "deep", "sketch", "none"])
+      ]
+    }
+  }
+
+  @Test(
+    "run.json with design tier none, and one written with a design tier, each decode and re-encode byte for byte — catches none lost in a run record or older runs reading differently"
+  )
+  func runJSONDesignStepRoundTrips() throws {
+    let designFree = BuildRunRecord(
+      runID: "20260928T120000Z-0a1b2c3d", plan: "2026-09-28-queue",
+      startedAt: Date(timeIntervalSince1970: 1_790_000_000), presetName: "fast",
+      preset: BuildPreset(
+        designTier: .none, maxParallel: 2, review: .gate, taskGate: .tier(.push),
+        mergeGate: .push, workerModel: .opus, timeBudgetMin: 40, stopStartsBeforeMin: 8,
+        onDesignConflict: .block, taskProof: .final))
+    let encoded = try BuildRunJSON.encode(designFree)
+    #expect(String(decoding: encoded, as: UTF8.self).contains(#""designTier" : "none""#))
+    let decoded = try BuildRunJSON.decode(encoded)
+    #expect(decoded == designFree)
+    #expect(try BuildRunJSON.encode(decoded) == encoded)
+
+    let older = Data(Self.olderRunJSON.utf8)
+    let olderRecord = try BuildRunJSON.decode(older)
+    #expect(olderRecord.preset.designTier == .design(.standard))
+    #expect(try BuildRunJSON.encode(olderRecord) == older)
+  }
+
+  private static let olderRunJSON = """
+    {
+      "plan" : "2026-09-26-search",
+      "preset" : {
+        "designTier" : "standard",
+        "maxParallel" : 3,
+        "mergeGate" : "push",
+        "onDesignConflict" : "amend",
+        "review" : "full",
+        "stopStartsBeforeMin" : 0,
+        "taskGate" : "ledger",
+        "taskProof" : "per-task",
+        "timeBudgetMin" : 0,
+        "workerModel" : "tagged"
+      },
+      "presetName" : "default",
+      "runId" : "20260926T120000Z-0a1b2c3d",
+      "schemaVersion" : 1,
+      "startedAt" : "2026-09-26T12:00:00Z"
+    }
+
+    """
 }

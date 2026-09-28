@@ -317,10 +317,17 @@ public enum ConfigSchema {
     let mergeGate: CheckTier = readEnum(&reader, table, "merge_gate", at: path) ?? .push
     let workerModel: BuildPreset.WorkerModel =
       readEnum(&reader, table, "worker_model", at: path) ?? .tagged
-    let onDesignConflict: BuildPreset.OnDesignConflict =
-      readEnum(&reader, table, "on_design_conflict", at: path) ?? .amend
+    let readConflict: BuildPreset.OnDesignConflict? =
+      readEnum(&reader, table, "on_design_conflict", at: path)
     let taskProof: BuildPreset.TaskProof =
       readEnum(&reader, table, "task_proof", at: path) ?? .perTask
+    // With no design there is nothing to amend, so a conflict can only block.
+    if designTier == .none, let readConflict, readConflict != .block {
+      reader.issues.append(
+        .outOfRange(
+          path: Reader.join(path, "on_design_conflict"), value: readConflict.rawValue,
+          allowed: "block, since \(Reader.join(path, "design_tier")) is \"none\""))
+    }
     return BuildPreset(
       designTier: designTier,
       maxParallel: reader.integer(table, "max_parallel", at: path, required: true) ?? 0,
@@ -328,7 +335,7 @@ public enum ConfigSchema {
       timeBudgetMin: reader.integer(table, "time_budget_min", at: path, required: true) ?? 0,
       stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
         ?? 0,
-      onDesignConflict: onDesignConflict, taskProof: taskProof)
+      onDesignConflict: readConflict ?? .amend, taskProof: taskProof)
   }
 
   /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both
