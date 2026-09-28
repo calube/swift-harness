@@ -437,3 +437,25 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Gates.** Integration push + prove GREEN (run 20260928T221246Z-5849051e), 28 of 28 proven at the merged surface
   `11786a6`. Wave 9's mutate on main was BLOCKED once (its baseline failed a load-sensitive test while 3 workers built),
   then RED on 4 survivors under the build lock (run 20260928T205737Z-fd2c99ed), fixed in `bd27a93`.
+
+## Fast-modes wave 11 (plan-lint and the build side for spec pages)
+
+- **plan-lint on a spec-page plan.** `swiftgate plan-lint <slug>` exits 0 or 1; 2 when the page is unconfirmed (the
+  message names `swiftgate plan confirm <slug>`), unreadable, not UTF-8 or malformed. Every slice id is a coverage item
+  (`plan-lint.uncovered-requirement`), `tests` ids must be slice ids (`plan-lint.unknown-test`), and a `Tier: T3`
+  slice under a `fast` task is `gate-too-weak`. `plan-lint.spec-page-moved` (major) fires when the page's sha differs
+  from the approval; the file is the page's absolute path, and the moved page is still linted as it stands. Slices
+  count toward `max_tests_per_task`. Domain: `PlanLintGraph.allFindings(specPage:pagePath:ledger:ledgerPath:graph:workerPacks:bounds:)`.
+  `design-decomposer.md` names the new rule; design calibration re-ran GREEN.
+- **Proof bases.** `build proof-bases <slug>` lists the plan's `surfaceCommit` first, then each merged task's surface in
+  merge order, each sha once (duplicates drop even with no plan surface). JSON keys unchanged. An unreadable `plan.json`
+  exits 2; a missing one keeps the task surfaces and names the missing path.
+- **Workers on the plan surface.** `build-task.js` requires `planSurface` (a sha matching `/^[0-9a-f]{7,40}$/`, or
+  `null`; missing throws `build-task: planSurface is required`). With a sha, workers write no surface of their own and
+  gate with `--proof-base <planSurface>`, adding `--proof-base <stub sha>` for a stub they commit through
+  `surface-check`; their return `surfaceCommit` is that stub, never the plan surface. A design conflict's section must
+  be `slices`, `surface` or `modules`. `null` keeps today's prompt and schema byte for byte. The build skill reads
+  `surfaceCommit` from plan.json and packs spec-page workers with `--spec-page`. Build calibration re-ran GREEN.
+- **Gates.** Integration push + prove GREEN (run 20260928T230639Z-da6e2f53), 17 of 17 proven at the merged surface
+  `8fea618`. Mutate for waves 10 and 11 waits for the shim deadline fix: its flake failed mutate's unmutated baseline
+  twice (runs 20260928T205530Z-a55b34f5 and 20260928T221558Z-10ce1539).
