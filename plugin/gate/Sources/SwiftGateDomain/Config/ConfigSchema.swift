@@ -310,7 +310,7 @@ public enum ConfigSchema {
         "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
         "time_budget_min", "stop_starts_before_min", "on_design_conflict", "task_proof",
       ])
-    let designTier: DesignTier =
+    let designTier: BuildPreset.DesignStep =
       readEnum(&reader, table, "design_tier", at: path) ?? .standard
     let review: BuildPreset.Review = readEnum(&reader, table, "review", at: path) ?? .full
     let taskGate = readTaskGate(&reader, table, at: path)
