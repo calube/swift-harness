@@ -104,8 +104,8 @@ The capture pipes stderr through `sed "s#$D#/FIXTURE#g"` for both; `status` is t
 
 `SwiftTest/emptied-target.{stdout,stderr,status}` is a package whose library target lost every
 source file, as a package added since the merge base looks once `prove` reverts its sources.
-`XUnitProbe` has no product, and without one SwiftPM reports a missing module in the tests instead,
-so the capture adds a `Probe` library product to a copy and deletes its `Sources`, from the
+`XUnitProbe` has no product, and with no product SwiftPM reports a missing module in the tests
+instead, so the capture adds a `Probe` library product to a copy and deletes its `Sources`, from the
 repository root:
 
 ```
@@ -113,8 +113,8 @@ W=$(mktemp -d) && mkdir -p "$W/XUnitProbe" && rsync -a --exclude .build plugin/g
 for f in stdout stderr status; do sed "s#$W#/FIXTURE#g" "$W/emptied-target.$f" > plugin/gate/Tests/Fixtures/SwiftTest/emptied-target.$f; done
 ```
 
-SwiftPM refuses the manifest before building: `status` is `1`, `stdout` is empty, no xUnit report
-is written, and stderr ends `error: 'xunitprobe': target 'Probe' referenced in product 'Probe' is
+SwiftPM refuses the manifest before building: `status` is `1`, `stdout` is empty, SwiftPM writes no
+xUnit report, and stderr ends `error: 'xunitprobe': target 'Probe' referenced in product 'Probe' is
 empty` (Swift 6.2).
 
 ## Mutation (`mutate`)
