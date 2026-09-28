@@ -1055,3 +1055,25 @@ against that subcommand's help. A later skill that names a missing command or fl
   94 s ($0.26).
 - **Machine:** one ready tier at a time is still enforced by hand until `ready-tier-runs-one-at-a-time-and-cleans-up`
   lands; a single mutate alone drove load to 264 (75 processes).
+
+## Hardening wave 1
+
+- **Plan-lint:** `plan-lint.write-set-unresolved` (major, file = the task id, exit 1) for a not-done task's
+  write-set entry under a package's `Sources/<Name>/` or `Tests/<Name>/` whose module neither the module graph nor
+  the design declares. `PlanLintGraph.resolveWriteSet(_:graph:design:packageDirectories:)`
+  is the one resolver: plan-lint and context-pack's worker path both call it.
+- **Hook cache:** `<root>/.harness/hook-state/plan-lock-cache-<session>.json`, keys `schemaVersion` (1), `checkout`,
+  `gitEntry{path, stamp}`, `commonDirectory`, `commonDirectoryStamp`. It caches only the git common dir; the guard
+  reads lock files and every `plan.json` fresh on each call. The guard trusts an entry while the checkout path, its
+  `.git` entry and the common dir stay unchanged; anything else, or an unreadable file, is a miss that asks git and
+  rewrites the entry.
+  The session id must be ASCII `[A-Za-z0-9._-]`, 1 to 128 characters, not starting with `.`; any other id turns the
+  cache off, with a hook note. Measured hook CPU: 28.7 ms before, 8.6 ms after.
+- **Review telemetry:** `review.json`'s `telemetry` key must be present, relative to the directory holding `review.json`
+  (`review-telemetry.json`); an absolute or `~` path fails decoding.
+- **Review dedupe:** defects merge on file and canonical category, standards violations on file and rule, chaining
+  within 3 lines. A cluster of rule-less defects then joins the in-reach violations of its category when they all
+  cite 1 rule; a rule-less copy never absorbs a ruled finding.
+- **Gate:** integration push + prove GREEN (run 20260928T031838Z-f403ce52, 34 of 34 proven); push GREEN on merged
+  main (20260928T032239Z-fdd77f1f). Mutate ran with speed wave 3 and fast-modes wave 1 (subproject-5 interfaces
+  note): RED on 2 survivors in those waves' code, fixed in the next wave.

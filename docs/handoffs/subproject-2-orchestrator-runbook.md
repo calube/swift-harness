@@ -268,3 +268,19 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **A new required config key breaks every existing config.** Grep the repo and tell peer sessions whose repos
   define the table before merging.
 
+
+## Lessons from the overnight run (2026-09-27)
+
+- **Keep old tests byte-identical.** A mechanical call-site edit to an old test, such as removing a default argument,
+  makes prove count the test as changed, and it fails as not proven. Add a test-local helper that supplies the new
+  argument and leave the old test's text alone.
+- **When `main` moves while an integration branch waits, rebuild the proof base.** Merge `main` into the integration
+  branch. Build a new proof base: the wave's surface commits merged with current `main`. Then merge that proof base
+  into the integration branch too. Prove needs the base to be an ancestor of HEAD and reports `prove.no-evidence`
+  otherwise.
+- **One mutate can cover 2 waves merged back to back.** Run `mutate --base <main before the first merge>`. It took 52
+  minutes at `--jobs 2` with 4 workers building.
+- **Tests that run `hook stop` leak builds.** A test that runs the shim's `hook stop` in a temp repo can leave its
+  cold `swift-build` running with ppid 1. The watchdog catches it as an orphan; kill the whole tree.
+- **A worker that stops at its write-set boundary is right.** It proposes the rule instead of editing a file
+  outside its write set. Widen the write set in a fix round when no other branch owns the files.

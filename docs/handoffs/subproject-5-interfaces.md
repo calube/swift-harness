@@ -260,3 +260,44 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Gate.** Integration push + prove GREEN at proof base `002f4ae` (run 20260928T004518Z-a6412b52, 34 of 34 new
   tests proven, 1848 passed); push GREEN on merged main (20260928T004921Z-29fbdfb9); mutate GREEN, every mutant
   killed (20260928T005205Z-44c7bf80, 37 min at `--jobs 2` under worker load).
+
+## Speed wave 3 and fast-modes wave 1
+
+- **The budget keeps the app compiling.** `BuildScheduler.RequiredTask(taskID:appPath:)` and
+  `BuildScheduler.RequiredTasks(ledger:packageDirectories:)` (`.empty` for a ledger with no repository; `task(_:)`
+  looks 1 up). A task counts as required when a write-set entry is a `.swift` path outside every `packages`
+  directory; its not-done dependencies count too, carrying that entry as their `appPath`.
+  `BuildScheduler.next(…, required:)` takes the set with no default: in the no-new-starts phase only required tasks
+  start, under the usual slot and overlap rules, and at cutoff nothing starts. `build next --json` adds
+  `required: [{task, appPath}]` for tasks not yet done, and exits 2 when it can't read `.swiftgate.toml` or its
+  `packages` globs. `LedgerRender.BuildView(…, required: .known(_) | .unknown(reason:))`: a required task's row reads
+  "Required: the app target needs it to compile (<path>)", and `.unknown` prints "Tasks the app target needs are
+  unknown: <reason>".
+- **check-return requires the task gate's steps.** `build-return.gate-missing-step` (exit 1).
+  `TaskReturnEvidence(taskGateStepsRequired:)` has no default: the CLI passes `!fix`, and `BuildCalibrationRunner`
+  passes `role == .worker`. `TaskReturnCheck.taskGateSteps = [.impact, .coverage, .appBuild]`;
+  `GateRun.missingSteps(of:)` returns the steps the run's tier doesn't run and its recorded history steps don't name.
+  No tier counts as running `app-build`, and a run that isn't a `check --tier` run, or has no recorded steps and a
+  tier that runs none of them, misses every step. All 22 `build-return.*` ids are in the rule index.
+- **`swiftgate surface-check <commit> [--json]`.** Diffs the commit against its first parent and judges every added
+  or changed body in its Swift files. Exit 0 GREEN, 1 on any `surface-check.behaviour` finding (major), 2 when it
+  can't read the commit or its parent; `surface-check.summary` is a nit. The SwiftSyntax scan is
+  `plugin/gate/Sources/SwiftGateRules/Surface/SurfaceBodyScan.swift`; the commit reader is an adapter. Beyond the
+  §3.2 table and §7's empty defaults it accepts 3 shapes. An `init` may assign its own parameters or empty defaults to
+  stored properties. A value may be 1 initializer call whose arguments are each an empty default or a parameter
+  passed through. A change may add a bare type reference (or `Type.self`) to an existing array literal. Wave 2 broadens the accepted stub shapes.
+- **Sprint state.** `<git common dir>/swift-harness/plans/sprint.json`, written under the plan index lock
+  (`PlanIndexStore.lockName`) by atomic rename. `SprintStore.locate(git:)`, `read() -> SprintRun?`,
+  `apply(SprintEvent) -> SprintRun`. `SprintEvent`: `start(slug:specPage:baseCommit:sliceCount:)`,
+  `surface(commit:)`, `slice(_:gateRun:)`, `finish(gateRun:)`; `SprintTransition.apply` checks order first
+  (start, surface, slices 1 to n, finish; a finished sprint accepts only a new start). JSON keys (`schemaVersion` 1):
+  `slug`, `specPage`, `branch` (`sprint/<slug>`), `baseCommit`, `surfaceCommit?`,
+  `slices[{number, status: pending|passed, gateRun?}]`, `finalGateRun?`,
+  `step{name: started|surfaced|slicing|finished, slice?}`; unknown keys fail decoding. `SprintStoreError`:
+  `commonDirectory`, `lock`, `transition(SprintTransitionError)`, `malformed(path:_:)`, `io(operation:path:reason:)`;
+  every case leaves `sprint.json` as it was. `SprintTransitionError`: `outOfOrder(attempted:expected:)`,
+  `invalidSlug`, `invalidSpecPage`, `invalidCommit`, `invalidGateRun`, `invalidSliceCount`.
+- **Gate.** Integration push + prove GREEN at proof base `053723f` (run 20260928T033209Z-08328281, 57 of 57 new
+  tests proven); push GREEN on merged main (20260928T033942Z-663c5f3d). Mutate over this wave and hardening wave 1
+  together is RED (20260928T034623Z-e2a26931, 52 min at `--jobs 2`) on 2 survivors: `SprintStore.swift`'s
+  `unlink(staging)` and a `>` boundary in `SurfaceBodyScan.swift`. The next wave fixes both.

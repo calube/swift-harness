@@ -7,7 +7,7 @@ Next action: wave 10, interview-rehearsal-runs. The user must be present: they a
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
-Speed milestone (2026-09-27, the user's pick): the "Speed" section's speed waves 1–3 run before waves 10–11; the sub-project 2 orchestrator drives them. Speed wave 1 merged 2026-09-27 (push, prove and mutate GREEN); wave 2 is running.
+Speed milestone (2026-09-27, the user's pick): the "Speed" section's speed waves 1–3 run before waves 10–11; the sub-project 2 orchestrator drives them. Speed waves 1–3 merged 2026-09-27/28 (push and prove GREEN each; mutate GREEN for waves 1–2, RED on 2 survivors for wave 3, fixed in the next wave).
 Open items: the rehearsal fixture under evals/ needs the evals session's agreement; the acceptance runs need the user; every `ready` run is BLOCKED until sub-project 2 fixes mutate's baseline (interfaces note, "Review fix wave 1"), which gates waves 10–11.
 Shared checkout: the sub-project 2 orchestrator and the evals session also merge into local main. Message them before merging, and run the push tier before every commit.
 Progress: git log. Update this header at every wave merge.
