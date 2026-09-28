@@ -6,6 +6,7 @@ The long form of the build skill's steps. `<slug>`, `<preset>`, `<session>`, `<p
 Contents:
 
 - [State this skill keeps](#state-this-skill-keeps)
+- [Worker pack](#worker-pack): what `context-pack --role worker` derives itself
 - [Launch](#launch): the workflow's args
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
@@ -29,6 +30,24 @@ from `<plans>/<slug>/build/<run>/run.json`, the running set from `build next`.
 
 `<plans>` must stay repo-relative when a command takes it as a path: `context-pack` refuses an
 absolute path. From the main checkout's toplevel, `git rev-parse --git-common-dir` prints `.git`.
+
+## Worker pack
+
+Build it with exactly the flags the skill's step names:
+
+```
+"$SG" context-pack --role worker --design <doc> --ledger <plans>/<slug>/ledger.json --task-id <task> --build-run <run>
+```
+
+Never pass `--module-kind`: the command refuses it for a worker. It reads the task's write set
+against the repo's module graph (`.swiftgate.toml`'s packages) and packs the standards sections for
+every module kind the write set touches. A test target counts as the module it tests. The
+standards are the repo's `docs/standards.md` plus `docs/testing-playbook.md`, else the harness
+plugin's; `--standards` overrides that.
+
+A write-set entry in no module and no package, or a write set naming no module at all, exits 1
+with `context-pack.module-kind-unknown` and the entry. It never writes a pack without standards.
+That halts the task: the plan's write set is wrong, so tell the user which entry.
 
 ## Launch
 
