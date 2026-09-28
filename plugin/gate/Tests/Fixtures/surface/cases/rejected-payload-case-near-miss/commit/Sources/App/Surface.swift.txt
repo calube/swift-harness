@@ -1,0 +1,21 @@
+extension LoadState {
+  static func make(_ items: [Item]) -> LoadState {
+    .idle
+  }
+}
+
+func failed() -> ExitStatus {
+  .exited(1)
+}
+
+func reloaded(items: [Item]) -> LoadState {
+  .loaded(items.reversed())
+}
+
+func fresh() -> LoadState {
+  .make([])
+}
+
+func done() -> ExitStatus {
+  .exited(0)
+}

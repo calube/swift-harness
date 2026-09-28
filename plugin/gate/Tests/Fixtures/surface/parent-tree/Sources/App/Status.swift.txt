@@ -1,0 +1,9 @@
+enum ExitStatus: Equatable {
+  case exited(Int32)
+  case signalled(Int32)
+}
+
+enum LoadState {
+  case idle
+  case loaded([Item])
+}

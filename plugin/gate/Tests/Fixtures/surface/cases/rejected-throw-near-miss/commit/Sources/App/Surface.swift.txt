@@ -1,0 +1,29 @@
+enum LoadError: Error {
+  case notImplemented
+  case failed(String)
+}
+
+func load() throws -> [Item] {
+  _ = 0
+  throw LoadError.notImplemented
+}
+
+func save() throws {
+  throw LoadError.failed("the disk is full and the retry budget is spent, so the load stops here now")
+}
+
+func saveLong() throws {
+  throw LoadError.failed("the disk is full and the retry budget is spent, so the load stops here now!")
+}
+
+func reset() throws {
+  throw makeError()
+}
+
+func makeError() -> LoadError {
+  .notImplemented
+}
+
+func stop() throws {
+  throw LoadError.notImplemented
+}

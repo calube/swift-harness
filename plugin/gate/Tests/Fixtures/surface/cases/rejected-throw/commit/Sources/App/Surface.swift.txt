@@ -1,3 +1,0 @@
-func load() throws -> [Item] {
-  throw CancellationError()
-}

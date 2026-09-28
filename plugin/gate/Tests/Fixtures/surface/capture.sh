@@ -109,6 +109,18 @@ struct ListCommand {}
 struct ShowCommand {}
 EOF
 
+cat > Sources/App/Status.swift <<'EOF'
+enum ExitStatus: Equatable {
+  case exited(Int32)
+  case signalled(Int32)
+}
+
+enum LoadState {
+  case idle
+  case loaded([Item])
+}
+EOF
+
 cat > Sources/App/Legacy.swift <<'EOF'
 func legacy() -> Int {
   1
@@ -456,6 +468,88 @@ struct AddCommand {}
 EOF
 record allowed-registration
 
+begin allowed-throw-only
+cat > Sources/App/Surface.swift <<'EOF'
+enum LoadError: Error {
+  case notImplemented
+  case failed(String)
+}
+
+extension ItemClient {
+  func load() throws -> [Item] {
+    throw CancellationError()
+  }
+
+  func save(_ item: Item) throws {
+    throw LoadError.notImplemented
+  }
+
+  func reset() throws(LoadError) {
+    throw .notImplemented
+  }
+
+  func retry(reason: String) throws(LoadError) {
+    throw .failed(reason)
+  }
+}
+EOF
+record allowed-throw-only
+
+begin allowed-empty-payload-case
+cat > Sources/App/Surface.swift <<'EOF'
+enum Phase {
+  case waiting(String)
+}
+
+extension ItemClient {
+  func run() -> ExitStatus {
+    .exited(0)
+  }
+
+  func stopped() -> ExitStatus {
+    ExitStatus.signalled(0)
+  }
+
+  func state() -> LoadState {
+    return .loaded([])
+  }
+
+  func state(items: [Item]) -> LoadState {
+    .loaded(items)
+  }
+
+  func phase(named name: String) -> Phase {
+    .waiting(name)
+  }
+}
+
+struct Loader {
+  var makeState: ([Item]) -> LoadState = { items in .loaded(items) }
+}
+EOF
+record allowed-empty-payload-case
+
+begin allowed-returns-unchanged
+cat > Sources/App/Surface.swift <<'EOF'
+struct Limits {
+  var runsImpact: Bool
+  var steps: [Int]
+
+  func runsImpact(with steps: Set<Int>) -> Bool {
+    runsImpact
+  }
+
+  var extraSteps: [Int] {
+    return self.steps
+  }
+
+  func echo(_ value: Int) -> Int {
+    return value
+  }
+}
+EOF
+record allowed-returns-unchanged
+
 # Rejected shapes: each looks like a stub but carries behaviour, and must fail.
 
 begin rejected-array-of-init
@@ -539,13 +633,95 @@ func save(_ item: Item) {
 EOF
 record rejected-precondition-failure
 
-begin rejected-throw
+begin rejected-throw-near-miss
 cat > Sources/App/Surface.swift <<'EOF'
+enum LoadError: Error {
+  case notImplemented
+  case failed(String)
+}
+
 func load() throws -> [Item] {
-  throw CancellationError()
+  _ = 0
+  throw LoadError.notImplemented
+}
+
+func save() throws {
+  throw LoadError.failed("the disk is full and the retry budget is spent, so the load stops here now")
+}
+
+func saveLong() throws {
+  throw LoadError.failed("the disk is full and the retry budget is spent, so the load stops here now!")
+}
+
+func reset() throws {
+  throw makeError()
+}
+
+func makeError() -> LoadError {
+  .notImplemented
+}
+
+func stop() throws {
+  throw LoadError.notImplemented
 }
 EOF
-record rejected-throw
+record rejected-throw-near-miss
+
+begin rejected-payload-case-near-miss
+cat > Sources/App/Surface.swift <<'EOF'
+extension LoadState {
+  static func make(_ items: [Item]) -> LoadState {
+    .idle
+  }
+}
+
+func failed() -> ExitStatus {
+  .exited(1)
+}
+
+func reloaded(items: [Item]) -> LoadState {
+  .loaded(items.reversed())
+}
+
+func fresh() -> LoadState {
+  .make([])
+}
+
+func done() -> ExitStatus {
+  .exited(0)
+}
+EOF
+record rejected-payload-case-near-miss
+
+begin rejected-returns-near-miss
+cat > Sources/App/Surface.swift <<'EOF'
+struct Inner {
+  var b: Int
+}
+
+struct Flags {
+  var runsImpact: Bool
+  var x: Bool
+  var a: Inner
+
+  func both() -> Bool {
+    return runsImpact && x
+  }
+
+  func nested() -> Int {
+    return self.a.b
+  }
+
+  func member() -> Int {
+    a.b
+  }
+
+  func only() -> Bool {
+    runsImpact
+  }
+}
+EOF
+record rejected-returns-near-miss
 
 begin rejected-setter-stores
 cat > Sources/App/Surface.swift <<'EOF'

@@ -219,15 +219,8 @@ struct SurfaceCheckCommandTests {
       [SurfaceRejected("save(_:)", .traps(callee: "preconditionFailure"), line: 1)]
     ),
     (
-      "rejected-throw",
-      [SurfaceRejected("load()", .notAStub(excerpt: "throw CancellationError()"), line: 1)]
-    ),
-    (
       "rejected-setter-stores",
-      [
-        SurfaceRejected("Settings.title.get", .notAStub(excerpt: "storage"), line: 5),
-        SurfaceRejected("Settings.title.set", .notAStub(excerpt: "storage = newValue"), line: 6),
-      ]
+      [SurfaceRejected("Settings.title.set", .notAStub(excerpt: "storage = newValue"), line: 6)]
     ),
     (
       "rejected-init-assigns-computed",
