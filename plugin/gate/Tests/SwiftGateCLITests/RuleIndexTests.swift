@@ -64,7 +64,7 @@ struct RuleIndexTests {
       PushDocGates.blockedRuleID, PushDocGates.summaryRuleID, CalibrationFreshness.staleRuleID,
       CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
       CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
-      "plugin-validate.summary",
+      "plugin-validate.summary", PlanLintGraph.writeSetUnresolvedRuleID,
     ]
     let environment = [
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,

@@ -218,9 +218,9 @@ struct WorkerPackSources: Sendable {
     case .failure(let failure): return .failure(failure)
     case .success(let value): standardsSource = value
     }
-    let touched = PlanLintGraph.modulesTouched(writeSet: task.writeSet, graph: graph)
-    let kinds = graph.modules.filter { touched.contains($0.name) }.sorted { $0.name < $1.name }
-      .map(\.kind)
+    let kinds = PlanLintGraph.resolveWriteSet(
+      task.writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path)
+    ).kinds
     return .success(
       WorkerInputs(
         task: task, design: design, designSource: designSource, claims: claimsSource,

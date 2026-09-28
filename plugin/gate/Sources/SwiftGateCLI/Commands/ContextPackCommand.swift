@@ -173,6 +173,10 @@ enum ContextPackRun {
       self.message = ContextPackRun.describe(error)
       self.isViolation = true
     }
+    init(violationMessage: String) {
+      self.message = violationMessage
+      self.isViolation = true
+    }
   }
 
   static func run(
@@ -775,12 +779,21 @@ enum ContextPackRun {
     case .success(let loaded): graph = loaded
     case .failure(let failure): return .failure(failure)
     }
-    let kinds: [ModuleKind]
-    do throws(ContextPackError) {
-      kinds = try WorkerModuleKinds.kinds(writeSet: task.writeSet, graph: graph)
-    } catch {
-      return .failure(GatherFailure(violation: error))
+    // The same resolution plan-lint sizes the task with, so a module the design plans (not in
+    // the graph yet) brings its kind's standards, and a misspelt one halts instead of reading
+    // as a docs-only task.
+    let resolution = PlanLintGraph.resolveWriteSet(
+      task.writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path))
+    if let entry = resolution.unresolved.first {
+      return .failure(
+        GatherFailure(
+          violationMessage:
+            "\(PlanLintGraph.writeSetUnresolvedRuleID): task `\(task.id)`'s write-set entry "
+            + "`\(entry)` names a module directory that no module in the graph or the design's "
+            + "Module kinds table answers to: correct the path, or add the module to the "
+            + "design's Module kinds table"))
     }
+    let kinds = ModuleKind.allCases.filter(Set(resolution.kinds).contains)
 
     let standards: ContextSource
     if kinds.isEmpty {

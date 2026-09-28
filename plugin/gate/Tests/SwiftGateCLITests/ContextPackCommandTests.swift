@@ -428,6 +428,65 @@ struct ContextPackCommandTests {
     #expect(!repository.packExists(".harness/context-pack/worker-worker-task.md"))
   }
 
+  /// The fixture design with `OrderQueueEngine`, a module no package has yet, in its Module
+  /// kinds table as an engine.
+  private func designPlanningAnEngine(in repository: Repository) throws -> String {
+    let row = "| OrderQueueCore | library | pure queue model, no I/O |\n"
+    #expect(designFixtureText.contains(row))
+    return try repository.write(
+      designFixtureText.replacingOccurrences(
+        of: row, with: row + "| OrderQueueEngine | engine | replays the queue, no I/O |\n"),
+      at: "docs/checkout/designs/offline-order-queue.md")
+  }
+
+  @Test(
+    "a task creating a module the design's Module kinds table names gets that kind's standards — catches a new module's worker pack built with none"
+  )
+  func workerPackCarriesADesignDeclaredModulesKind() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    var options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueEngine/Replay.swift"], in: repository)
+    options.design = try designPlanningAnEngine(in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ARCHITECTURE-SECTION"))
+    #expect(text.contains("ENGINE-SECTION"))
+    #expect(!text.contains("No module kinds in this task's write set"))
+  }
+
+  @Test(
+    "a write-set entry under a module directory nothing names is the named violation and writes no pack — catches a misspelt module read as a docs-only task"
+  )
+  func workerPackRefusesAnUnresolvedEntry() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    var options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueEngin/Replay.swift"], in: repository)
+    options.design = try designPlanningAnEngine(in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .violation(let message) = outcome else {
+      Issue.record("expected .violation, got \(outcome)")
+      return
+    }
+    #expect(message.contains(PlanLintGraph.writeSetUnresolvedRuleID))
+    #expect(message.contains("Sample/Sources/OrderQueueEngin/Replay.swift"))
+    #expect(message.contains("worker-task"))
+    #expect(!repository.packExists(".harness/context-pack/worker-worker-task.md"))
+  }
+
   @Test(
     "a worker pack refuses --module-kind, since kinds come from the write set — catches the caller choosing the standards"
   )
