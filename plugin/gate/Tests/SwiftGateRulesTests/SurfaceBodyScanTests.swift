@@ -150,4 +150,19 @@ struct SurfaceBodyScanTests {
       SurfaceBodyScan.judge(fileCase, parent: SurfaceParentIndex(functions: [], types: []))
         .map(\.outcome) == [.stub(.emptyPayloadCase)])
   }
+
+  @Test(
+    "a throw of a case on a nested error type, `Outer.Inner.case`, passes as a throw-only stub — catches a qualified type name rejected as behaviour"
+  )
+  func throwOfNestedTypeCaseIsStub() {
+    let change = Self.added(
+      """
+      enum LoadError: Error { enum Network: Error { case offline } }
+      func load() throws { throw LoadError.Network.offline }
+      """)
+
+    #expect(
+      SurfaceBodyScan.judge(change, parent: SurfaceParentIndex(functions: [], types: []))
+        .map(\.outcome) == [.stub(.throwsError)])
+  }
 }
