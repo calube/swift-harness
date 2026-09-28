@@ -10,5 +10,6 @@ One file per design doc. Status here is a summary; each doc's own RESUME header 
 | [2026-09-27-fast-modes-design.md](2026-09-27-fast-modes-design.md) | Approved; plan in [`../plans/2026-09-27-fast-modes-plan.md`](../plans/2026-09-27-fast-modes-plan.md) | Surface commits and `surface-check`, a sprint skill, a design-free ship path |
 | [2026-09-27-speed-research-coverage-design.md](2026-09-27-speed-research-coverage-design.md) | Approved; tasks in the sub-project 2 hardening wave | Where each ship speed research change lives; host-compiled views and a stale-session check |
 | [2026-09-28-simulator-qa-design.md](2026-09-28-simulator-qa-design.md) | Approved 2026-09-28; decision record [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | Sub-project 3: `swiftgate sim`, dependency scenarios, the QA skill driving `agent-device`, screenshot and accessibility-tree evidence |
+| [2026-09-28-agentic-profiling-design.md](2026-09-28-agentic-profiling-design.md) | Approved 2026-09-28; decisions in its §2 and §12 | Sub-project 4: `swiftgate profile` and `leaks` over xctrace and `footprint`, Simulator only, report-only findings |
 
 See [`../index.md`](../index.md) for the full doc router.
