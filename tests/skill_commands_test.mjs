@@ -286,6 +286,77 @@ function sprintMachineSteps() {
   }
 }
 
+// A run history line with the keys a captured `check ready` run wrote. `sprint slice` and
+// `sprint finish` read its command, verdict, headCommit and proofBases.
+function gateRecord(runID, tier, headCommit, proofBases) {
+  const record = {
+    command: `check ${tier}`, durationMilliseconds: 1000, findingCount: 0, finishedAt: '2026-01-01T00:00:00Z',
+    headCommit, runID, schemaVersion: 1,
+    tiers: [{ durationMilliseconds: 500, testCounts: null, tier: 'T0', verdict: 'GREEN' }], verdict: 'GREEN',
+  }
+  if (proofBases) record.proofBases = proofBases
+  return JSON.stringify(record) + '\n'
+}
+
+// Walks the skill's own path through the real sprint commands in a temp repository: start, the
+// surface, an extra stub commit for an API the surface missed, slice 1, then finish with a ready
+// run proved at `proofBases(surface, extra)`. Returns finish's JSON report, exit code and whether
+// `main` moved to the branch HEAD.
+function sprintWalk(proofBases) {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'skill-commands-walk-'))
+  const env = {
+    ...process.env, LLVM_PROFILE_FILE: join(dir, 'walk-%p.profraw'),
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+  const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
+  const sg = args => {
+    try {
+      return { code: 0, report: JSON.parse(run(binary, [...args, '--json'])) }
+    } catch (error) {
+      return { code: error.status, report: JSON.parse(error.stdout) }
+    }
+  }
+  const history = join(dir, '.harness/runs/history.jsonl')
+  const record = line => writeFileSync(history, line, { flag: 'a' })
+  const source = join(dir, 'Sources/Core/Core.swift')
+  const commit = (text, message) => {
+    writeFileSync(source, text, { flag: 'a' })
+    run('git', ['commit', '-qam', message])
+    return run('git', ['rev-parse', 'HEAD']).trim()
+  }
+  try {
+    mkdirSync(join(dir, 'Sources/Core'), { recursive: true })
+    mkdirSync(join(dir, '.harness/runs'), { recursive: true })
+    writeFileSync(join(dir, '.gitignore'), '.harness/\n')
+    writeFileSync(source, 'public func base() -> Int { 1 }\n')
+    writeFileSync(join(dir, 'page.md'), '# page\n')
+    run('git', ['init', '-q', '-b', 'main'])
+    run('git', ['add', '-A'])
+    run('git', ['commit', '-qm', 'init'])
+    record(gateRecord('20260101T000000Z-0000aaaa', 'push', run('git', ['rev-parse', 'HEAD']).trim()))
+    const steps = [sg(['sprint', 'start', 'walk', '--spec-page', 'page.md', '--slices', '1'])]
+    run('git', ['switch', '-q', 'sprint/walk'])
+    const surface = commit('public func step() -> Int { 0 }\n', 'surface')
+    steps.push(sg(['sprint', 'surface', surface]))
+    const extra = commit('public func last() -> Int { 0 }\n', 'extra stub')
+    steps.push(sg(['surface-check', extra]))
+    writeFileSync(source, 'public func base() -> Int { 1 }\npublic func step() -> Int { 2 }\npublic func last() -> Int { 3 }\n')
+    run('git', ['commit', '-qam', 'slice 1'])
+    const head = run('git', ['rev-parse', 'HEAD']).trim()
+    record(gateRecord('20260101T000001Z-0000bbbb', 'push', head))
+    steps.push(sg(['sprint', 'slice', '1', '--gate', '20260101T000001Z-0000bbbb']))
+    assert.deepEqual(steps.map(s => [s.report.verdict, s.code]), Array(4).fill(['GREEN', 0]),
+      steps.map(s => s.report.message).join('\n'))
+    record(gateRecord('20260101T000002Z-0000cccc', 'ready', head, proofBases(surface, extra)))
+    const finish = sg(['sprint', 'finish', '--gate', '20260101T000002Z-0000cccc'])
+    return { ...finish, mainMoved: run('git', ['rev-parse', 'main']).trim() === head }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 // The `## <n>.` step heading a line falls under, or null outside a numbered step.
 function stepNumberAt(text, line) {
   let number = null
@@ -400,6 +471,15 @@ const tests = {
     const text = markdownFiles(sprintDir).map(path => readFileSync(path, 'utf8')).join('\n')
     assert.ok(/AskUserQuestion/.test(text), 'the sprint skill never confirms a spec page with AskUserQuestion')
     assert.ok(!/sprint\.json/.test(text) || /never edit[^.]*sprint\.json/i.test(text), 'the sprint skill names sprint.json without forbidding edits to it')
+  },
+
+  'sprint finish accepts the skill\'s extra stub commit as a second proof base and still needs the surface — catches the skill\'s missed-API path ending in a refusal'() {
+    const accepted = sprintWalk((surface, extra) => [surface, extra])
+    assert.deepEqual([accepted.code, accepted.report.verdict, accepted.mainMoved], [0, 'GREEN', true], accepted.report.message)
+    const refused = sprintWalk((_, extra) => [extra])
+    assert.deepEqual([refused.code, refused.report.rule, refused.mainMoved], [1, 'sprint.gate-proof-base', false], refused.report.message)
+    const finishStep = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8').split('\n## 6. Finish\n')[1] ?? ''
+    assert.ok(/--proof-base <surface>`[^]*--proof-base <sha>`[^]*oldest first/.test(finishStep), 'the finish step never adds an extra stub commit as a later proof base')
   },
 
   'a sprint skill out of the machine\'s order or missing a gate fails and names it — catches the sprint order check passing anything'() {
