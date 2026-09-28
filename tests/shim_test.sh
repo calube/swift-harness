@@ -43,7 +43,7 @@ reap() {
 deadline_note="$work.deadline"
 cleanup() {
   local status=$?
-  trap - EXIT TERM INT HUP
+  trap - EXIT
   kill "$watchdog" 2>/dev/null || true
   reap || true
   rm -rf "$work"
@@ -65,10 +65,18 @@ cleanup() {
   fi
   exit "$status"
 }
-trap cleanup EXIT
-trap 'exit 143' TERM
-trap 'exit 130' INT
-trap 'exit 129' HUP
+# At the deadline the watchdog's pkill ends the foreground command, so set -e can start cleanup
+# before the watchdog's own TERM lands. Bash 3.2 then runs that TERM inside cleanup: exiting there,
+# or taking the default action once the trap is reset, cuts cleanup short before it reaps or
+# reports the deadline. So a signal that lands once cleanup has begun is ignored.
+stop() {
+  [ -n "${cleaning:-}" ] && return 0
+  exit "$1"
+}
+trap 'cleaning=1; cleanup' EXIT
+trap 'stop 143' TERM
+trap 'stop 130' INT
+trap 'stop 129' HUP
 
 # The watchdog bounds the run with its own deadline, under the 600s the Swift test harness gives
 # it, and reaps what the test started if the test dies without running its EXIT trap (SIGKILL).
