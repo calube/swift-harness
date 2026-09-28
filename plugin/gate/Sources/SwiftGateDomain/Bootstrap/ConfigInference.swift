@@ -94,7 +94,7 @@ public struct InferredConfig: Sendable, Equatable {
   }
 
   /// Fills the template's `{{XCODE}}`, `{{APP_SCHEME}}`, `{{PACKAGES}}`, `{{DEVICE}}` and `{{OS}}`.
-  public func render(template: String) -> String {
+  public func render(template: String, profile: String? = nil) -> String {
     let packageList =
       packages.isEmpty
       ? "[\(quoted(Self.placeholder))]" : "[\(packages.map(quoted).joined(separator: ", "))]"
