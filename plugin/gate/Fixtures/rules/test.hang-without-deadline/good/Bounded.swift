@@ -26,3 +26,8 @@ enum BoundedShapes {
   static let interpolatedDeadline =
     "let deadline = DispatchTime.now() + .seconds(\(90))\nwhile true { spin() }\n"
 }
+
+@Test("a script that ends in sleep infinity is reported — catches a leaked process")
+func namesTheShapeInItsDisplayName() {
+  #expect(BoundedShapes.briefSleep.contains("sleep 5"))
+}

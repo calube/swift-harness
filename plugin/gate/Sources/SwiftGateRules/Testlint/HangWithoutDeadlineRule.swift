@@ -13,6 +13,8 @@ struct HangWithoutDeadlineRule: FileRule {
 
   func check(_ unit: SourceUnit, context: RuleContext) -> [RuleViolation] {
     unit.tree.descendants(of: StringLiteralExprSyntax.self).compactMap { literal in
+      // An attribute argument, like a `@Test` display name, is never written out.
+      guard !Self.isAttributeArgument(literal) else { return nil }
       let text = Self.content(of: literal)
       guard let shape = HangScan.foreverShape(in: text), !HangScan.setsDeadline(text) else {
         return nil
@@ -26,6 +28,16 @@ struct HangWithoutDeadlineRule: FileRule {
         failureScenario:
           "prove and mutate revert the fix and leave a spinning process behind on every run")
     }
+  }
+
+  private static func isAttributeArgument(_ literal: StringLiteralExprSyntax) -> Bool {
+    var node = literal.parent
+    while let current = node {
+      if current.is(AttributeSyntax.self) { return true }
+      if current.is(CodeBlockSyntax.self) || current.is(MemberBlockSyntax.self) { return false }
+      node = current.parent
+    }
+    return false
   }
 
   /// The literal's text as the written-out file sees it: escapes decoded, each interpolation

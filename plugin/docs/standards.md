@@ -520,7 +520,7 @@ let store = TestStore(initialState: CheckoutFeature.State()) { CheckoutFeature()
 **U5. Views compile on the host.**
 - **Do:** keep a UI module's views compiling on the macOS host; wrap only the iOS-only modifiers or types in `#if os(iOS)`.
 - **Tell:** a UI file whose every declaration sits inside `#if os(iOS)` or `#if canImport(UIKit)`, with nothing in a `#else`. It builds as an empty module on the host, so only the app build or T3 finds its compile errors.
-- **Enforced by:** `arch` `arch.ui-host-compiled`, reported at the `#if`. A file that can't compile on the host at all carries `// swiftgate:allow arch.ui-host-compiled — <reason>` on that `#if` line · **Source:** [Conditional compilation block](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/statements/#Conditional-Compilation-Block): a branch whose condition is false isn't compiled. Incident: none yet.
+- **Enforced by:** `arch` `arch.ui-host-compiled`, reported at the `#if`. A file that can't compile on the host at all carries `// swiftgate:allow arch.ui-host-compiled — <reason>` on that `#if` line · **Source:** [Conditional compilation block](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/statements/#Conditional-Compilation-Block): the compiler skips a branch whose condition is false. Incident: none yet.
 
 ## 7. Accessibility
 

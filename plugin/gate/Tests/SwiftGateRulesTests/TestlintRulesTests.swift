@@ -171,7 +171,7 @@ struct TestlintRulesTests {
   }
 
   @Test(
-    "a loop with a break, return or exit, a finite sleep, and any literal that sets its own deadline (Date, deadline, DispatchTime, time.time(), timeout N, alarm, withTimeout) pass beside a bare spin that fails — catches the rule flagging fixtures that end by themselves"
+    "a loop with a break, return or exit, a finite sleep, and any literal that sets its own deadline (Date, deadline, DispatchTime, time.time(), timeout N, alarm, withTimeout) pass, and so does a test display name naming a shape, beside a bare spin that fails — catches the rule flagging fixtures that end by themselves"
   )
   func hangWithoutDeadlineBounded() throws {
     #expect(try lines("test.hang-without-deadline", "good/Bounded.swift") == [])
