@@ -176,8 +176,10 @@ public enum SurfaceCheck {
   static func describe(_ behaviour: SurfaceBehaviour) -> String {
     switch behaviour {
     case .notAStub(let excerpt):
-      "isn't an allowed stub (`\(excerpt)`): a surface body is empty, returns 1 empty default "
-        + "or payload-free case, or forwards to code the parent declares"
+      "isn't an allowed stub (`\(excerpt)`): a surface body is empty; returns 1 empty default, "
+        + "payload-free case, enum case built from empty defaults and parameters, or parameter or "
+        + "property of `self` unchanged; only throws such an error value; or forwards to code the "
+        + "parent declares"
     case .traps(let callee):
       "calls `\(callee)`: a trapping stub fails every test for a reason other than the missing "
         + "behaviour"
