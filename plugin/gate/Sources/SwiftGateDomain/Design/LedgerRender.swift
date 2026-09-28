@@ -42,11 +42,19 @@ public enum LedgerRender {
     public let taskGates: [String: TaskReturn.Gate]
     public let mergeGates: [String: BuildEvent.Gate]
     public let finalGate: BuildEvent.Gate?
+    public let required: Required
+
+    /// Which tasks the app target needs, or why the page can't say.
+    public enum Required: Sendable, Equatable {
+      case known(BuildScheduler.RequiredTasks)
+      case unknown(reason: String)
+    }
 
     public init(
       runID: String, presetName: String, timeBudgetMin: Int, totalWallMilliseconds: Int?,
-      taskGates: [String: TaskReturn.Gate], log: BuildEventLog
+      taskGates: [String: TaskReturn.Gate], log: BuildEventLog, required: Required
     ) {
+      self.required = required
       self.runID = runID
       self.presetName = presetName
       self.timeBudgetMin = timeBudgetMin

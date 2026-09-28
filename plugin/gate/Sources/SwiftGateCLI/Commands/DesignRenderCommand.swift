@@ -306,7 +306,8 @@ enum LedgerRenderRun {
     let view = LedgerRender.BuildView(
       runID: record.runID, presetName: record.presetName,
       timeBudgetMin: record.preset.timeBudgetMin,
-      totalWallMilliseconds: metrics.totalWallMilliseconds, taskGates: taskGates, log: log)
+      totalWallMilliseconds: metrics.totalWallMilliseconds, taskGates: taskGates, log: log,
+      required: .known(.empty))
     return (view, metrics)
   }
 

@@ -62,7 +62,9 @@ struct LedgerRenderTests {
         at: startedAt.addingTimeInterval(minutes * 60)))
   }
 
-  static func buildView() -> LedgerRender.BuildView {
+  static func buildView(required: LedgerRender.BuildView.Required = .known(.empty))
+    -> LedgerRender.BuildView
+  {
     LedgerRender.BuildView(
       runID: "20260927T183225Z-b36f002c", presetName: "interview", timeBudgetMin: 38,
       totalWallMilliseconds: 1_415_000,
@@ -76,7 +78,8 @@ struct LedgerRenderTests {
               stage: .final, tier: .ready, verdict: .red, runID: "run-final",
               at: startedAt.addingTimeInterval(20 * 60))),
         ],
-        damage: []))
+        damage: []),
+      required: required)
   }
 
   @Test(
