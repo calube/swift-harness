@@ -165,10 +165,12 @@ struct DesignRenderCommand: AsyncParsableCommand {
       + "capabilities. Exit 0 written, 1 when design-lint finds a gating problem (nothing is "
       + "written), 2 when the doc, its claims or the output can't be read or written.\n"
       + "With --ledger <plan>: reads the plan's shared state and the design at its designSha, "
-      + "then writes .harness/design-render/<plan>-ledger.html: the task DAG, the wave timeline, "
-      + "the requirement × task coverage matrix and the predicted overhead share. Exit 0 "
+      + "or a spec-page plan's page at its confirmed pageSha, then writes "
+      + ".harness/design-render/<plan>-ledger.html: the task DAG, the wave timeline, the "
+      + "requirement (or slice) × task coverage matrix and the predicted overhead share. Exit 0 "
       + "written, 2 when the plan state, its designSha or the design at that revision can't be "
-      + "read.")
+      + "read, or when a spec page is unconfirmed, unreadable, malformed or changed since its "
+      + "confirmation.")
 
   @Argument(help: "The repo-relative design doc to render. Omit when --ledger names a plan.")
   var doc: String?
@@ -241,35 +243,26 @@ enum LedgerRenderRun {
       return .blocked("plan `\(slug)`: \(describe(error))")
     }
 
-    guard let planDesign = plan.designSource else {
-      return .blocked(
-        "plan `\(slug)` is a spec-page plan: the ledger page renders against a design, and this "
-          + "plan has none")
-    }
-    guard let designSha = planDesign.designSha else {
-      return .blocked(
-        "plan `\(slug)` has no designSha yet (claimed, not drafted): there is no design to "
-          + "render a ledger page against")
-    }
-    let found: DesignAtSha.Found?
-    do {
-      found = try await DesignAtSha.find(designSha: designSha, path: planDesign.design, git: git)
-    } catch {
-      return .blocked("plan `\(slug)`: can't walk the history of `\(planDesign.design)`: \(error)")
-    }
-    guard let found else {
-      return .blocked(
-        "plan `\(slug)`: no committed revision of `\(planDesign.design)` has designSha \(designSha)"
-      )
+    let source: LedgerRender.Source
+    switch plan.source {
+    case .design(let planDesign):
+      switch await designSource(slug: slug, planDesign: planDesign, git: git) {
+      case .success(let found): source = found
+      case .failure(let refusal): return .blocked(refusal.message)
+      }
+    case .specPage(let pageSource):
+      switch specPageSource(slug: slug, pageSource: pageSource, store: store) {
+      case .success(let found): source = found
+      case .failure(let refusal): return .blocked(refusal.message)
+      }
     }
 
-    let design = DesignDocument(markdown: .parse(found.text))
     var notes: [String] = []
     let build = await buildView(slug: slug, ledger: ledger, root: root, git: git, notes: &notes)
     let page = LedgerRender.page(
       .init(
-        slug: slug, ledger: ledger, design: design, designSha: designSha,
-        buildMetrics: build?.metrics, build: build?.view))
+        slug: slug, ledger: ledger, source: source, buildMetrics: build?.metrics,
+        build: build?.view))
     let path = outputPath(for: slug)
     let outputURL = root.appending(path: path, directoryHint: .notDirectory)
     do {
@@ -279,8 +272,93 @@ enum LedgerRenderRun {
     } catch {
       return .blocked("can't write \(path): \(error.localizedDescription)")
     }
-    return .written(
-      path: path, designSha: designSha, capabilities: page.capabilityDeclaration, notes: notes)
+    switch source {
+    case .design(_, let designSha):
+      return .written(
+        path: path, designSha: designSha, capabilities: page.capabilityDeclaration, notes: notes)
+    case .specPage(_, let pageSha):
+      return .writtenFromSpecPage(
+        path: path, pageSha: pageSha, capabilities: page.capabilityDeclaration, notes: notes)
+    }
+  }
+
+  /// Why a plan's source can't be rendered; the command exits 2 with it.
+  struct Refusal: Error, Equatable {
+    let message: String
+  }
+
+  /// The design at the plan's `designSha`, walked from committed history.
+  private static func designSource(
+    slug: String, planDesign: PlanFile.DesignSource, git: any Git
+  ) async -> Result<LedgerRender.Source, Refusal> {
+    guard let designSha = planDesign.designSha else {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)` has no designSha yet (claimed, not drafted): there is no "
+            + "design to render a ledger page against"))
+    }
+    let found: DesignAtSha.Found?
+    do {
+      found = try await DesignAtSha.find(designSha: designSha, path: planDesign.design, git: git)
+    } catch {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`: can't walk the history of `\(planDesign.design)`: \(error)"))
+    }
+    guard let found else {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`: no committed revision of `\(planDesign.design)` has "
+            + "designSha \(designSha)"))
+    }
+    return .success(.design(DesignDocument(markdown: .parse(found.text)), designSha: designSha))
+  }
+
+  /// The spec page in the plan's directory, only when its bytes still hash to the `pageSha` its
+  /// confirmation names: the page is never committed, so the sha is the only trace of what was
+  /// confirmed.
+  private static func specPageSource(
+    slug: String, pageSource: PlanFile.SpecPageSource, store: PlanStateStore
+  ) -> Result<LedgerRender.Source, Refusal> {
+    guard let approval = pageSource.approval else {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`'s spec page isn't confirmed yet, so no pageSha names the page "
+            + "to render: confirm it with `swiftgate plan confirm \(slug)` first"))
+    }
+    let path = store.specPageFile(pageSource)
+    let bytes: Data
+    do {
+      bytes = try Data(contentsOf: URL(filePath: path))
+    } catch {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`: can't read its spec page `\(path)`: "
+            + error.localizedDescription))
+    }
+    let pageSha = SpecPageCheck.pageSha(bytes)
+    guard pageSha == approval.pageSha else {
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`: its spec page has pageSha \(pageSha), but the confirmed "
+            + "pageSha is \(approval.pageSha); the page changed after its confirmation. Confirm "
+            + "it again with `swiftgate plan confirm \(slug)`"))
+    }
+    guard let text = String(data: bytes, encoding: .utf8) else {
+      return .failure(Refusal(message: "plan `\(slug)`: its spec page `\(path)` isn't UTF-8"))
+    }
+    switch SpecPage.parse(text) {
+    case .parsed(let page):
+      return .success(.specPage(page, pageSha: pageSha))
+    case .malformed(let problems):
+      let listed = problems.map { problem in
+        problem.line.map { "line \($0): \(problem.message)" } ?? problem.message
+      }
+      return .failure(
+        Refusal(
+          message: "plan `\(slug)`: its spec page `\(path)` doesn't parse: "
+            + listed.joined(separator: "; ")))
+    }
   }
 
   /// The plan's newest build run, as the page shows it: `nil` before any run. A run that can't be

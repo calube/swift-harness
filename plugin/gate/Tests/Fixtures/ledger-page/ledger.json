@@ -1,0 +1,30 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : ["req-offline-orders-survive-app-kill", "test-queued-order-survives-relaunch"],
+      "deps" : [],
+      "estLines" : 120,
+      "gate" : "fast",
+      "id" : "queue-core",
+      "status" : "done",
+      "tests" : ["test-queued-order-survives-relaunch"],
+      "worktree" : "../app-queue-core",
+      "writeSet" : ["Sample/Sources/Core/"]
+    },
+    {
+      "covers" : [],
+      "deps" : ["queue-core"],
+      "estLines" : 60,
+      "gate" : "push",
+      "id" : "queue-ui",
+      "status" : "pending",
+      "tests" : [],
+      "worktree" : "../app-queue-ui",
+      "writeSet" : ["Sample/Sources/UI/"]
+    }
+  ],
+  "waves" : [["queue-core"], ["queue-ui"]]
+}
