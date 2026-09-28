@@ -3,14 +3,95 @@
 # silently; an uncached rebuild on every call would blow the <1s hook budget.
 set -euo pipefail
 
+# Every process this test starts, the shims' detached builds included, joins one process group
+# that the test leads, so it can reap them all however it ends. A caller without job control
+# would otherwise put the test in its own group.
+if [ "$(ps -o pgid= -p $$ | tr -d ' ')" != "$$" ] && [ -z "${SHIM_TEST_REGROUPED:-}" ]; then
+  SHIM_TEST_REGROUPED=1 exec perl -e 'setpgrp(0, 0); exec @ARGV or die "exec: $!\n"' bash "$0" "$@"
+fi
+
 repo_src="$(cd "$(dirname "$0")/.." && pwd -P)"
-work="$(mktemp -d)"
+# The shim resolves its own directory with `pwd -P`, so its build names the physical path
+# (/private/var on macOS, where mktemp answers /var). Taking that spelling here is what lets every
+# path pattern below reach the build.
+work="$(cd "$(mktemp -d)" && pwd -P)"
 # $work is a fresh, unique mktemp directory, so anything matched by its path below can only ever
 # be this run's own processes — never a process outside this test.
-trap '
-  pkill -f "$work" >/dev/null 2>&1 || true
+
+# Kills every other member of this test's process group and every process naming $work (a
+# compiler job runs in a group of its own), TERM first, then KILL. Runs from the test itself or
+# from its watchdog, which passes its own pid, so both are spared. The group is only this test's
+# once it leads it; a watchdog whose test has died still finds the group under the test's pid.
+reap() {
+  local spared="${1:-$$}" signal member
+  for signal in TERM KILL; do
+    if [ "$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')" = "$$" ] || ! kill -0 $$ 2>/dev/null; then
+      for member in $(ps -axo pid=,pgid= | awk -v group=$$ -v spared="$spared" \
+        '$2 == group && $1 != group && $1 != spared { print $1 }'); do
+        kill -"$signal" "$member" 2>/dev/null || true
+      done
+    fi
+    pkill -"$signal" -f "$work/" >/dev/null 2>&1 || true
+    for _ in $(seq 1 25); do
+      pgrep -f "$work/" >/dev/null 2>&1 || return 0
+      sleep 0.2
+    done
+  done
+  return 1
+}
+
+deadline_note="$work.deadline"
+cleanup() {
+  local status=$?
+  trap - EXIT TERM INT HUP
+  kill "$watchdog" 2>/dev/null || true
+  reap || true
   rm -rf "$work"
-' EXIT
+  if [ -f "$deadline_note" ]; then
+    echo "FAIL: shim_test passed its ${SHIM_TEST_DEADLINE_SECONDS:-540}s deadline and was stopped" >&2
+    rm -f "$deadline_note"
+    status=1
+  fi
+  # A bounded look for anything this run started that is still alive once it has ended.
+  local stray=""
+  for _ in $(seq 1 25); do
+    stray="$(pgrep -fl "$work/" 2>/dev/null || true)"
+    [ -n "$stray" ] || break
+    sleep 0.2
+  done
+  if [ -n "$stray" ]; then
+    echo "FAIL: process(es) still running under $work after the test ended: $stray" >&2
+    status=1
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
+
+# The watchdog bounds the run with its own deadline, under the 600s the Swift test harness gives
+# it, and reaps what the test started if the test dies without running its EXIT trap (SIGKILL).
+# A foreground build would hold off the test's TERM trap until it finished, so the watchdog stops
+# everything under $work first.
+(
+  trap - EXIT TERM INT HUP
+  end=$((SECONDS + ${SHIM_TEST_DEADLINE_SECONDS:-540}))
+  while kill -0 $$ 2>/dev/null; do
+    if [ "$SECONDS" -ge "$end" ]; then
+      : >"$deadline_note"
+      pkill -TERM -f "$work/" >/dev/null 2>&1 || true
+      kill -TERM $$ 2>/dev/null || true
+      exit 0
+    fi
+    sleep 1
+  done
+  reap "$(exec sh -c 'echo $PPID')" || true
+  rm -rf "$work"
+) </dev/null >/dev/null 2>&1 &
+watchdog=$!
+# Killed on exit by design, so the shell has no job to report as terminated.
+disown "$watchdog"
 
 mkdir -p "$work/repo/plugin"
 cp -R "$repo_src/plugin/bin" "$repo_src/plugin/templates" "$work/repo/plugin/"
