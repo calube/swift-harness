@@ -227,6 +227,13 @@ enum DesignStatsRun {
     let cacheReport = DesignMetrics.cacheHitRate(
       claims: cacheLoaded.claims, verdicts: cacheLoaded.verdicts)
 
+    let unmeasured = phasesLoaded.records.count { $0.tokens == nil }
+    if unmeasured > 0 {
+      notes.append(
+        "\(unmeasured) phase record(s) have unmeasured tokens; token totals leave them out and "
+          + "count them as unmeasured")
+    }
+
     for (lane, count) in laneReport.unknownLaneClaimCounts.sorted(by: { $0.key < $1.key }) {
       notes.append("\(count) claim(s) name an unrecognised lane `\(lane)`")
     }
@@ -239,7 +246,7 @@ enum DesignStatsRun {
       reviewerPrecision: reviewerRows.map(DesignStatsReport.ReviewerRow.init),
       phaseTotals: phaseTotals.map(DesignStatsReport.PhaseRow.init),
       agentTotals: agentTotals.map(DesignStatsReport.AgentRow.init),
-      unmeasuredPhaseRecords: 0,
+      unmeasuredPhaseRecords: unmeasured,
       nonDraftWallShare: RateJSON(nonDraftWall), overheadShare: overhead.share,
       estimateError: DesignStatsReport.EstimateErrorRow(estimateErrorReport),
       probes: DesignStatsReport.ProbeRow(probeReport),
@@ -274,13 +281,13 @@ enum DesignStatsRun {
       lines.append("phases:")
       for phase in report.phaseTotals {
         lines.append(
-          "  \(phase.phase.rawValue): runs=\(phase.runs) tokens=\(tokens(phase.tokens)) "
+          "  \(phase.phase.rawValue): runs=\(phase.runs) tokens=\(tokens(phase.tokens))\(unmeasured(phase.unmeasuredRuns)) "
             + "cost=\(cost(phase.costUSD)) wall=\(ReportRenderer.duration(phase.wallMilliseconds))")
       }
       lines.append("agents:")
       for agent in report.agentTotals {
         lines.append(
-          "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(tokens(agent.tokens)) "
+          "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(tokens(agent.tokens))\(unmeasured(agent.unmeasuredRuns)) "
             + "cost=\(cost(agent.costUSD)) wall=\(ReportRenderer.duration(agent.wallMilliseconds))")
       }
       lines.append(
@@ -307,6 +314,10 @@ enum DesignStatsRun {
 
   private static func tokens(_ tokens: Int?) -> String {
     tokens.map(String.init) ?? "n/a"
+  }
+
+  private static func unmeasured(_ runs: Int) -> String {
+    runs == 0 ? "" : " unmeasured=\(runs)"
   }
 
   private static func cost(_ costUSD: Double?) -> String {

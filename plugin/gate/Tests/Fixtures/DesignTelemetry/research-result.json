@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "status": "complete",
+  "tier": "standard",
+  "mode": "research",
+  "lanes": [
+    {
+      "lane": "codebase",
+      "status": "researched",
+      "claims": [
+        {
+          "id": "ev-codebase-finding-first",
+          "lane": "codebase",
+          "text": "codebase relies on Effect.run",
+          "citation": {
+            "kind": "probe",
+            "loc": "probes/ev-codebase-finding-first.swift",
+            "pin": "swift-composable-architecture@1.26.2"
+          },
+          "status": "new"
+        }
+      ],
+      "probes": [
+        {
+          "claimId": "ev-codebase-finding-first",
+          "swift": "import ComposableArchitecture\nlet _ = Effect<Int>.run { _ in }"
+        }
+      ],
+      "needsDecision": [],
+      "dropped": []
+    },
+    {
+      "lane": "apple-docs",
+      "status": "researched",
+      "claims": [
+        {
+          "id": "ev-apple-docs-finding-first",
+          "lane": "apple-docs",
+          "text": "apple-docs relies on Effect.run",
+          "citation": {
+            "kind": "probe",
+            "loc": "probes/ev-apple-docs-finding-first.swift",
+            "pin": "swift-composable-architecture@1.26.2"
+          },
+          "status": "new"
+        }
+      ],
+      "probes": [
+        {
+          "claimId": "ev-apple-docs-finding-first",
+          "swift": "import ComposableArchitecture\nlet _ = Effect<Int>.run { _ in }"
+        }
+      ],
+      "needsDecision": [],
+      "dropped": []
+    },
+    {
+      "lane": "packages",
+      "status": "researched",
+      "claims": [
+        {
+          "id": "ev-packages-finding-first",
+          "lane": "packages",
+          "text": "packages relies on Effect.run",
+          "citation": {
+            "kind": "probe",
+            "loc": "probes/ev-packages-finding-first.swift",
+            "pin": "swift-composable-architecture@1.26.2"
+          },
+          "status": "new"
+        }
+      ],
+      "probes": [
+        {
+          "claimId": "ev-packages-finding-first",
+          "swift": "import ComposableArchitecture\nlet _ = Effect<Int>.run { _ in }"
+        }
+      ],
+      "needsDecision": [],
+      "dropped": []
+    },
+    {
+      "lane": "prior-decisions",
+      "status": "researched",
+      "claims": [
+        {
+          "id": "ev-prior-decisions-finding-first",
+          "lane": "prior-decisions",
+          "text": "prior-decisions relies on Effect.run",
+          "citation": {
+            "kind": "probe",
+            "loc": "probes/ev-prior-decisions-finding-first.swift",
+            "pin": "swift-composable-architecture@1.26.2"
+          },
+          "status": "new"
+        }
+      ],
+      "probes": [
+        {
+          "claimId": "ev-prior-decisions-finding-first",
+          "swift": "import ComposableArchitecture\nlet _ = Effect<Int>.run { _ in }"
+        }
+      ],
+      "needsDecision": [],
+      "dropped": []
+    }
+  ],
+  "needsDecision": [],
+  "unusedAnswers": [],
+  "telemetry": {
+    "outputTokens": 12508,
+    "agents": [
+      {
+        "label": "research:codebase",
+        "returned": true
+      },
+      {
+        "label": "research:apple-docs",
+        "returned": true
+      },
+      {
+        "label": "research:packages",
+        "returned": true
+      },
+      {
+        "label": "research:prior-decisions",
+        "returned": true
+      }
+    ],
+    "unavailable": [
+      "per-agent tokens and durations: the Workflow script API reports no usage per agent call",
+      "input tokens and USD cost: the Workflow script API reports neither"
+    ]
+  }
+}

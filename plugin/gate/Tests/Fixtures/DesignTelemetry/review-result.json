@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "tier": "standard",
+  "status": "complete",
+  "ran": [
+    "evidence-auditor",
+    "standards-reviewer",
+    "challenger"
+  ],
+  "carried": [],
+  "reviews": [
+    {
+      "schemaVersion": 1,
+      "reviewer": "evidence-auditor",
+      "status": "reviewed",
+      "findings": [
+        {
+          "location": {
+            "anchor": "decision"
+          },
+          "severity": "major",
+          "category": "unsupported-decision",
+          "title": "Decision rests on an unverified claim",
+          "failure_scenario": "The queue flushes offline orders twice when the reducer restarts mid-send.",
+          "evidence": "Decision bullet cites ev-packages-effect-run-cancellable, which the pack marks refuted.",
+          "fix": "Cite a supported claim or move the bullet to Risks.",
+          "kind": "defect",
+          "verified": true,
+          "verification_note": "traced in the pack"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "reviewer": "standards-reviewer",
+      "status": "reviewed",
+      "findings": [
+        {
+          "location": {
+            "anchor": "decision"
+          },
+          "severity": "major",
+          "category": "unsupported-decision",
+          "title": "Decision rests on an unverified claim",
+          "failure_scenario": "The queue flushes offline orders twice when the reducer restarts mid-send.",
+          "evidence": "Decision bullet cites ev-packages-effect-run-cancellable, which the pack marks refuted.",
+          "fix": "Cite a supported claim or move the bullet to Risks.",
+          "kind": "defect",
+          "verified": true,
+          "verification_note": "traced in the pack"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "reviewer": "challenger",
+      "status": "reviewed",
+      "findings": [
+        {
+          "location": {
+            "anchor": "decision"
+          },
+          "severity": "major",
+          "category": "unsupported-decision",
+          "title": "Decision rests on an unverified claim",
+          "failure_scenario": "The queue flushes offline orders twice when the reducer restarts mid-send.",
+          "evidence": "Decision bullet cites ev-packages-effect-run-cancellable, which the pack marks refuted.",
+          "fix": "Cite a supported claim or move the bullet to Risks.",
+          "kind": "defect",
+          "verified": true,
+          "verification_note": "traced in the pack"
+        }
+      ]
+    }
+  ],
+  "telemetry": {
+    "outputTokens": 13266,
+    "agents": [
+      {
+        "label": "review:evidence-auditor",
+        "returned": true
+      },
+      {
+        "label": "verify:evidence-auditor",
+        "returned": true
+      },
+      {
+        "label": "review:standards-reviewer",
+        "returned": true
+      },
+      {
+        "label": "verify:standards-reviewer",
+        "returned": true
+      },
+      {
+        "label": "review:challenger",
+        "returned": true
+      },
+      {
+        "label": "verify:challenger",
+        "returned": true
+      }
+    ],
+    "unavailable": [
+      "per-agent tokens and durations: the Workflow script API reports no usage per agent call",
+      "input tokens and USD cost: the Workflow script API reports neither"
+    ]
+  }
+}

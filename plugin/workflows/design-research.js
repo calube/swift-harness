@@ -281,7 +281,22 @@ async function limited(items, fn) {
   return out
 }
 
+// Telemetry holds only what the runtime reports. `budget.spent()` counts output tokens for the
+// whole turn, so its delta across this run is the workflow's output tokens plus any main-loop
+// output produced meanwhile; nothing reports usage per agent call, input tokens or cost.
+function readSpent() {
+  try {
+    return typeof budget !== 'undefined' && budget && typeof budget.spent === 'function' ? budget.spent() : null
+  } catch (e) {
+    return null
+  }
+}
+const spentAtStart = readSpent()
+const agentCalls = []
+
 async function callLane(lane, prompt, label, phaseName) {
+  const call = { label, returned: false }
+  agentCalls.push(call)
   let result
   try {
     result = await agent(prompt, {
@@ -294,6 +309,7 @@ async function callLane(lane, prompt, label, phaseName) {
     return { dead: `lane agent failed: ${error && error.message ? error.message : String(error)}` }
   }
   if (result === null || result === undefined) return { dead: 'lane agent returned no result (died or was skipped)' }
+  call.returned = true
   const defect = defectIn(result, lane.name)
   if (defect) return { dead: `malformed lane result: ${defect}` }
   return withoutPinless(result)
@@ -380,6 +396,19 @@ if (notResearched.length) log(`NOT RESEARCHED: ${notResearched.join(', ')}; the 
 if (unusedAnswers.length) log(`answers no lane asked: ${unusedAnswers.map(q => JSON.stringify(q)).join(', ')}`)
 if (needsDecision.length) log(`${needsDecision.length} decision(s) needed; relaunch with resumeFromRunId and the answers`)
 
+const spentAtEnd = readSpent()
+const telemetry = {
+  outputTokens: spentAtStart === null || spentAtEnd === null ? null : spentAtEnd - spentAtStart,
+  agents: agentCalls,
+  unavailable: [
+    ...(spentAtStart === null || spentAtEnd === null
+      ? ['output tokens: the Workflow runtime gave this script no budget.spent()']
+      : []),
+    'per-agent tokens and durations: the Workflow script API reports no usage per agent call',
+    'input tokens and USD cost: the Workflow script API reports neither',
+  ],
+}
+
 return {
   schemaVersion: 1,
   status: needsDecision.length ? 'needs-decision' : notResearched.length ? 'incomplete' : 'complete',
@@ -389,4 +418,5 @@ return {
   lanes,
   needsDecision,
   unusedAnswers,
+  telemetry,
 }

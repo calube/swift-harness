@@ -45,7 +45,168 @@ enum DesignTelemetryRun {
   }
 
   static func run(options: Options, root: URL, now: Date) -> Outcome {
-    .failed(message: "not implemented")
+    do {
+      return .recorded(try record(options: options, root: root, now: now))
+    } catch {
+      return .failed(message: error.description)
+    }
+  }
+
+  struct Failure: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
+  }
+
+  private static func required(_ value: String?, _ flag: String) throws(Failure) -> String {
+    guard let value, !value.isEmpty else { throw Failure("missing required option '\(flag)'") }
+    return value
+  }
+
+  private static func record(options: Options, root: URL, now: Date) throws(Failure)
+    -> DesignTelemetryReport
+  {
+    let run = try required(options.runDirectory, "--run")
+    let runID = try required(options.runID, "--run-id")
+    let phaseName = try required(options.phase, "--phase")
+    let resultPath = try required(options.workflowResult, "--workflow-result")
+    let startedText = try required(options.startedAt, "--started-at")
+
+    let phase: DesignPlanPhase
+    do {
+      try DesignTelemetry.validateRunID(runID)
+      phase = try DesignTelemetry.phase(named: phaseName)
+    } catch {
+      throw Failure(error.description)
+    }
+    guard let started = parseDate(startedText) else {
+      throw Failure(
+        DesignTelemetryError.invalidStartedAt("`\(startedText)` is not an ISO 8601 time")
+          .description)
+    }
+    let runURL =
+      run.hasPrefix("/")
+      ? URL(filePath: run, directoryHint: .isDirectory)
+      : root.appending(path: run, directoryHint: .isDirectory)
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: runURL.path, isDirectory: &isDirectory),
+      isDirectory.boolValue
+    else {
+      throw Failure("--run `\(run)` is not a directory; the frame step creates it")
+    }
+
+    let data: Data
+    do {
+      data = try Data(contentsOf: URL(filePath: resultPath))
+    } catch {
+      throw Failure(
+        DesignTelemetryError.unreadableResult(
+          "`\(resultPath)` can't be read: \(error.localizedDescription)"
+        ).description)
+    }
+    let workflow: WorkflowTelemetry
+    do {
+      workflow = try DesignTelemetry.decodeResult(data)
+    } catch {
+      throw Failure(error.description)
+    }
+
+    let session = try sessionTranscript(options.session, root: root)
+    let made: (phase: PhaseRecord, telemetry: DesignTelemetryRecord)
+    do {
+      made = try DesignTelemetry.make(
+        runId: runID, phase: phase, startedAt: started, finishedAt: now, workflow: workflow,
+        session: session)
+    } catch {
+      throw Failure(error.description)
+    }
+
+    let telemetryName = try writeTelemetry(made.telemetry, phase: phase, runURL: runURL)
+    let phasesName = "phases.jsonl"
+    try appendLine(made.phase, to: runURL.appending(path: phasesName))
+    let prefix = run.hasSuffix("/") ? String(run.dropLast()) : run
+    return DesignTelemetryReport(
+      phasesFile: "\(prefix)/\(phasesName)",
+      telemetryFile: "\(prefix)/\(DesignTelemetryRecord.directoryName)/\(telemetryName)",
+      phaseRecord: made.phase, telemetry: made.telemetry)
+  }
+
+  private static func parseDate(_ text: String) -> Date? {
+    let plain = ISO8601DateFormatter()
+    let fractional = ISO8601DateFormatter()
+    fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return plain.date(from: text) ?? fractional.date(from: text)
+  }
+
+  /// An unsafe id names no file, so it stops the command; a record that is missing or unreadable
+  /// is a named gap in the telemetry file.
+  private static func sessionTranscript(_ id: String?, root: URL) throws(Failure)
+    -> SessionTranscript
+  {
+    guard let id else { return .notRequested }
+    let store = SessionRecordStore(worktreeRoot: root)
+    do {
+      guard let record = try store.record(sessionID: id) else {
+        return .unreadable(
+          sessionId: id,
+          reason: "no session record at \(SessionRecordStore.directory)/\(id).json")
+      }
+      return .recorded(sessionId: id, transcriptPath: record.transcriptPath)
+    } catch {
+      if case .unsafeSessionID = error { throw Failure("--session: \(error.description)") }
+      return .unreadable(sessionId: id, reason: error.description)
+    }
+  }
+
+  /// `<phase>-<n>.json` with the next free `n`, created without overwriting, so two runs of the
+  /// same phase never share a file.
+  private static func writeTelemetry(
+    _ record: DesignTelemetryRecord, phase: DesignPlanPhase, runURL: URL
+  ) throws(Failure) -> String {
+    let directory = runURL.appending(
+      path: DesignTelemetryRecord.directoryName, directoryHint: .isDirectory)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    do {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      let data = try encoder.encode(record) + Data("\n".utf8)
+      let existing = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+      let prefix = "\(phase.rawValue)-"
+      var next =
+        (existing.compactMap { name -> Int? in
+          guard name.hasPrefix(prefix), name.hasSuffix(".json") else { return nil }
+          return Int(name.dropFirst(prefix.count).dropLast(".json".count))
+        }.max() ?? 0) + 1
+      while true {
+        let name = "\(prefix)\(next).json"
+        do {
+          try data.write(to: directory.appending(path: name), options: .withoutOverwriting)
+          return name
+        } catch let error as CocoaError where error.code == .fileWriteFileExists {
+          next += 1
+        }
+      }
+    } catch {
+      throw Failure("can't write \(directory.path): \(error.localizedDescription)")
+    }
+  }
+
+  private static func appendLine(_ record: PhaseRecord, to url: URL) throws(Failure) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    do {
+      let line = try encoder.encode(record) + Data("\n".utf8)
+      if !FileManager.default.fileExists(atPath: url.path) {
+        try Data().write(to: url, options: .withoutOverwriting)
+      }
+      let handle = try FileHandle(forWritingTo: url)
+      defer { try? handle.close() }
+      try handle.seekToEnd()
+      try handle.write(contentsOf: line)
+    } catch let error as CocoaError where error.code == .fileWriteFileExists {
+      try appendLine(record, to: url)
+    } catch {
+      throw Failure("can't append to \(url.path): \(error.localizedDescription)")
+    }
   }
 }
 

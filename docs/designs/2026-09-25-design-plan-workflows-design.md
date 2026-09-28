@@ -648,17 +648,25 @@ and the critical path is the longest `estLines`-weighted dependency chain.
 
 ## 11. Perf & scale
 
-Figures marked *est.* are estimates, not measurements.
+Every figure names its source. A figure marked *est.* is an estimate: no run measured it.
 
-| Dimension | Figure / behaviour |
-|---|---|
-| Throughput | one standard design ≈ 0.6–1M subagent tokens *est.* (Foundation's 6-agent review measured ≈452k) |
-| Latency tail | p99 wall ≈ 10–15 min *est.*, dominated by the cold probe build; warm DerivedData and the SDK probe cache cut repeats |
-| Fan-out | ≤3 concurrent agents per phase; phases serial; worst case ≈ slowest lane + probe build + claim checker + drafter + slowest reviewer |
-| Failure isolation | dead lane → `NOT RESEARCHED`; dead reviewer → `NOT REVIEWED`; neither can yield `ready`; one probe's failure doesn't fail siblings (per-file verdicts) |
-| Resource accounting | one scratch probe package per worktree; DerivedData per worktree (Foundation §4.4); probes are a build action only, so *expected* no simulator boot and no simulator-cap slot |
-| Backpressure | per-phase agent cap; `index set` FileLock serialises index writes; evidence cache appends locked; no machine-wide agent cap exists |
-| Concurrency correctness | no plan branch, so the index-on-main race is gone; per-plan locks keep sessions to their own ledgers |
+| Dimension | Figure / behaviour | Source |
+|---|---|---|
+| Throughput | 2.0M agent tokens for 2 designs: a standard design stopped at `rethink`, then a deep design through 5 review rounds. A standard design alone: 0.6–1M tokens *est.* | the 2026-09-26 rehearsal's `phases.jsonl` ([e2e report](../e2e-report.md), "§11 against measured") |
+| Review cost | 6 review agents: 50 s wall, about 452k agent tokens | the Foundation review in the [e2e report](../e2e-report.md) |
+| Latency | 78 min wall over 10 turns for both designs, about 30 of them for the standard design. Research lanes took 26 min, and redrafts took most of the rest. No probe build ran cold. The p99 is unmeasured: 1 run has no tail | the 2026-09-26 rehearsal |
+| Cost | $28.35 for the rehearsal session plus 3 `calibrate design` runs. `calibrate design` alone: 23 cases on 11 agents in 133.3 s, $0.97 summed over its cases | the rehearsal; `calibrate design` run `20260928T051607Z-e2e6a092` |
+| Fan-out | ≤3 concurrent agents per phase; phases serial; worst case ≈ slowest lane + probe build + claim checker + drafter + slowest reviewer | design |
+| Failure isolation | dead lane → `NOT RESEARCHED`; dead reviewer → `NOT REVIEWED`; neither can yield `ready`; one probe's failure doesn't fail siblings (per-file verdicts) | design |
+| Resource accounting | one scratch probe package per worktree; DerivedData per worktree (Foundation §4.4); probes are a build action only, so *expected* no simulator boot and no simulator-cap slot | design |
+| Backpressure | per-phase agent cap; `index set` FileLock serialises index writes; evidence cache appends locked; no machine-wide agent cap exists | design |
+| Concurrency correctness | no plan branch, so the index-on-main race is gone; per-plan locks keep sessions to their own ledgers | design |
+
+The rehearsal logged its phase lines by hand. `swiftgate design-telemetry` now records each
+workflow launch: the output tokens the Workflow runtime counted, or `null` and the reason, and
+the launch's own wall time. `stats --design <doc>` totals those lines and counts unmeasured ones
+apart. This checkout's run history holds no design run yet, so no figure above comes from that
+telemetry: `ls .harness/runs | grep -c '^design-'` printed 0 on 2026-09-28.
 
 10× test (10 concurrent designs on one Mac): ≈30 agents at once with no machine-wide cap, and 10
 cold probe builds contend for CPU and memory on a laptop already under memory pressure. That
@@ -720,7 +728,7 @@ amendment).
 | `agent_id` in hook payloads | not yet seen live; the guard also relies on the lock file and env var |
 | Artifact `comments` and `db` capabilities | claude.ai dependency; approval flow breaks if unavailable |
 | No machine-wide agent cap | 10× breaks on memory first (§11) |
-| Estimates | token and wall figures in §11 unmeasured until the §13 run |
+| Estimates | closed: §11 names a source for each figure and marks the 2 left unmeasured (a standard design's own tokens, the p99), which `design-telemetry` records from the next design run on |
 | Mermaid syntax | validated only when `mmdc` is installed; otherwise a broken diagram surfaces at render time |
 | `prose` skill | written fresh, not copied from any existing style guide, so the harness has no external IP dependency |
 | Clarify chain trust | approval survives clarify edits only because `design-diff` re-verifies every link |

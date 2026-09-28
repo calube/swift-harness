@@ -334,6 +334,19 @@ Observed behavior synthesis relies on: 1 user-visible race came back from 4 revi
 `missing-cancellation`, `effect-lifetime` and `missing-edge-case`. So defects merge across a
 3-line window, and the cancellation names share a canonical category.
 
+## DesignTelemetry
+
+| File | Capture |
+|---|---|
+| `DesignTelemetry/research-result.json`, `DesignTelemetry/research-result-no-budget.json` | `DESIGN_TELEMETRY_CAPTURE_DIR=plugin/gate/Tests/Fixtures/DesignTelemetry mise exec node@24 -- node tests/design_research_workflow_test.mjs` |
+| `DesignTelemetry/review-result.json`, `DesignTelemetry/review-result-no-budget.json` | `DESIGN_TELEMETRY_CAPTURE_DIR=plugin/gate/Tests/Fixtures/DesignTelemetry mise exec node@24 -- node tests/design_review_workflow_test.mjs` |
+
+Each file is the return value of the real `workflows/design-research.js` or
+`workflows/design-review.js`, run by the node test's harness. The harness stubs the lane and
+reviewer agents and the runtime's `budget`: each stub call adds a fixed count to
+`budget.spent()`, and the `-no-budget` files ran with no `budget` in scope. So the `telemetry`
+block is the script's own output, and its token counts are the stubs' counts, not a model's.
+
 ## Probe
 
 Apple Swift version 6.2 (swiftlang-6.2.3.3.20 clang-1700.6.3.2), `arm64-apple-macosx26.0`.

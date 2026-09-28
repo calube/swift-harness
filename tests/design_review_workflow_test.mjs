@@ -5,7 +5,7 @@
 // `swiftgate review-synth --design` cannot read.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -103,6 +103,28 @@ async function run(args, behave = {}) {
 }
 
 const reviewOf = (result, name) => result.reviews.find(r => r.reviewer === name)
+
+// The script with the runtime's `budget` in scope. `spent` counts the whole turn's output tokens,
+// so each stub agent call adds its own output to it. Reviewers finish in the reverse of their
+// start order, so a record kept in completion order would come back scrambled.
+const scriptWithBudget = new AsyncFunction('args', 'agent', 'log', 'phase', 'budget', source)
+async function runWithBudget(args, { startSpent = 5000, perCall = 500, behave = {}, budget } = {}) {
+  let spent = startSpent
+  const runtimeBudget = budget ?? { total: null, spent: () => spent, remaining: () => Infinity }
+  const agent = async (prompt, opts) => {
+    if (opts.agentType === VERIFIER) {
+      await delay(4)
+      spent += perCall
+      return confirmAll(findingsInPrompt(prompt))
+    }
+    const reviewer = reviewerOfAgentType[opts.agentType]
+    await delay([30, 20, 5, 1][ALL.indexOf(reviewer)])
+    spent += perCall
+    const fn = behave[reviewer]
+    return fn ? await fn(prompt) : { findings: [finding()] }
+  }
+  return scriptWithBudget(args, agent, () => {}, () => {}, runtimeBudget)
+}
 
 // The per-reviewer file contract `review-synth --design` decodes (DesignReviewJSON), checked
 // strictly: an extra key here means the workflow let agent output through unfiltered.
@@ -530,6 +552,45 @@ const tests = {
       rmSync(bogusRoot, { recursive: true, force: true })
     }
   },
+
+  async 'the return reports the output tokens the budget counted across the round and every reviewer and verifier call in reviewer order — catches design review cost left unrecorded or invented'() {
+    const result = await runWithBudget(baseArgs(), { behave: { challenger: () => null } })
+    assert.equal(result.telemetry.outputTokens, 2500)
+    assert.deepEqual(result.telemetry.agents, [
+      { label: 'review:evidence-auditor', returned: true },
+      { label: 'verify:evidence-auditor', returned: true },
+      { label: 'review:standards-reviewer', returned: true },
+      { label: 'verify:standards-reviewer', returned: true },
+      { label: 'review:challenger', returned: false },
+    ])
+    assert.ok(result.telemetry.unavailable.some(u => /per-agent tokens/.test(u)))
+    assert.ok(!result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
+  },
+
+  async 'with no budget in the runtime the review token count is null and says why — catches a zero standing in for an unknown cost'() {
+    const { result } = await run(baseArgs())
+    assert.equal(result.telemetry.outputTokens, null)
+    assert.ok(result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
+    assert.deepEqual(result.telemetry.agents.map(a => a.label), ['review:evidence-auditor', 'review:standards-reviewer', 'review:challenger'])
+  },
+
+  async 'a reviewer that throws is a telemetry agent that did not return — catches a failed call vanishing from the record'() {
+    const result = await runWithBudget(baseArgs(), { behave: { 'standards-reviewer': () => { throw new Error('agent crashed') } } })
+    const entry = result.telemetry.agents.find(a => a.label === 'review:standards-reviewer')
+    assert.deepEqual(entry, { label: 'review:standards-reviewer', returned: false })
+    assert.equal(result.telemetry.agents.some(a => a.label === 'verify:standards-reviewer'), false)
+  },
+}
+
+// Captures the workflow's return for the gate's design-telemetry fixtures (the command is in
+// plugin/gate/Tests/Fixtures/README.md). Runs only when asked, never as a test.
+if (process.env.DESIGN_TELEMETRY_CAPTURE_DIR) {
+  const dir = process.env.DESIGN_TELEMETRY_CAPTURE_DIR
+  mkdirSync(dir, { recursive: true })
+  const measured = await runWithBudget(baseArgs(), { startSpent: 41020, perCall: 2211 })
+  writeFileSync(join(dir, 'review-result.json'), JSON.stringify(measured, null, 2) + '\n')
+  const { result: unmeasured } = await run(baseArgs())
+  writeFileSync(join(dir, 'review-result-no-budget.json'), JSON.stringify(unmeasured, null, 2) + '\n')
 }
 
 let failed = 0

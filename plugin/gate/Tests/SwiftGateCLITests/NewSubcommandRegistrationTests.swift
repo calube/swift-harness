@@ -123,6 +123,15 @@ struct NewSubcommandRegistrationTests {
     ),
     ("surface-check", ["surface-check", "HEAD"], "surface-check"),
     ("surface-check --json", ["surface-check", "HEAD", "--json"], "surface-check"),
+    (
+      "design-telemetry",
+      [
+        "design-telemetry", "--run", ".harness/runs/design-example", "--run-id",
+        "design-20260928T010000Z", "--phase", "research", "--workflow-result", "result.json",
+        "--started-at", "2026-09-28T01:00:00Z", "--session", "session-123",
+      ],
+      "design-telemetry"
+    ),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -155,6 +164,7 @@ struct NewSubcommandRegistrationTests {
     "module-graph",
     "evidence cache record",
     "surface-check", "surface-check --json",
+    "design-telemetry",
   ]
 
   @Test(

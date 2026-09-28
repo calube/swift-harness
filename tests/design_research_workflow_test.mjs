@@ -4,7 +4,7 @@
 // its siblings down; an answer re-running every lane instead of only the lane that asked it; a lane
 // prompt missing its pin or the design doc; one pinless claim throwing away its whole lane.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -90,6 +90,22 @@ async function run(args, behave = {}) {
 }
 
 const laneOf = (result, name) => result.lanes.find(l => l.lane === name)
+
+// The script with the runtime's `budget` in scope. `spent` counts the whole turn's output tokens,
+// so each stub agent call adds its own output to it.
+const scriptWithBudget = new AsyncFunction('args', 'agent', 'log', 'phase', 'budget', source)
+async function runWithBudget(args, { startSpent = 7000, perCall = 1000, behave = {} } = {}) {
+  let spent = startSpent
+  const budget = { total: null, spent: () => spent, remaining: () => Infinity }
+  const agent = async (prompt, opts) => {
+    const lane = opts.agentType.replace('swift-harness:design-lane-', '')
+    await delay([35, 5, 25, 15][LANES.indexOf(lane)])
+    spent += perCall
+    const fn = behave[lane]
+    return fn ? await fn(prompt) : laneResult(lane)
+  }
+  return scriptWithBudget(args, agent, () => {}, () => {}, budget)
+}
 
 const tests = {
   async 'invalid args fail fast with a named error before any lane runs — catches a silent default researching the wrong thing'() {
@@ -343,12 +359,61 @@ const tests = {
     assert.deepEqual(result.lanes.map(l => l.lane), ['packages'])
   },
 
+  async 'the return reports the output tokens the budget counted across the run and every lane call — catches design research cost left unrecorded or invented'() {
+    const result = await runWithBudget(baseArgs(), { behave: { packages: () => null } })
+    assert.equal(result.telemetry.outputTokens, 4000)
+    assert.deepEqual(result.telemetry.agents, [
+      { label: 'research:codebase', returned: true },
+      { label: 'research:apple-docs', returned: true },
+      { label: 'research:packages', returned: false },
+      { label: 'research:prior-decisions', returned: true },
+    ])
+    assert.ok(result.telemetry.unavailable.some(u => /per-agent tokens/.test(u)))
+    assert.ok(!result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
+  },
+
+  async 'with no budget in the runtime the token count is null and says why — catches a zero standing in for an unknown cost'() {
+    const { result } = await run(baseArgs())
+    assert.equal(result.telemetry.outputTokens, null)
+    assert.ok(result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
+    assert.equal(result.telemetry.agents.length, 4)
+  },
+
+  async 'a budget that throws leaves the token count null with a reason — catches a runtime error sinking the whole research return'() {
+    const budget = { total: null, spent: () => { throw new Error('no budget this turn') }, remaining: () => Infinity }
+    const result = await scriptWithBudget(baseArgs({ lanes: lanes(['codebase']) }), async () => laneResult('codebase'), () => {}, () => {}, budget)
+    assert.equal(result.status, 'complete')
+    assert.equal(result.telemetry.outputTokens, null)
+    assert.ok(result.telemetry.unavailable.some(u => /^output tokens: /.test(u)))
+  },
+
+  async 'answer rounds are telemetry agents of their own — catches a resumed lane call missing from the run\'s record'() {
+    const q = 'Split the queue client per feature?'
+    let asked = false
+    const result = await runWithBudget(baseArgs({ lanes: lanes(['codebase']), answers: [{ question: q, answer: 'Keep one client' }] }), {
+      behave: { codebase: () => { if (asked) return laneResult('codebase'); asked = true; return laneResult('codebase', { needsDecision: [ask(q)] }) } },
+    })
+    assert.equal(result.telemetry.outputTokens, 2000)
+    assert.deepEqual(result.telemetry.agents.map(a => a.label), ['research:codebase', 'answer:codebase:1'])
+  },
+
   async 'the script touches no filesystem, network, clock or randomness — catches a workflow reading packs itself or breaking resume'() {
     const banned = [/\bimport\b/, /\brequire\s*\(/, /\bfetch\s*\(/, /\bprocess\./, /\bnode:/, /readFile|writeFile/,
       /XMLHttpRequest|WebSocket/, /Date\.now|new Date\s*\(|Math\.random/]
     const code = rawSource.replace(/\/\/.*$/gm, '')
     for (const pattern of banned) assert.ok(!pattern.test(code), `script matches ${pattern}`)
   },
+}
+
+// Captures the workflow's return for the gate's design-telemetry fixtures (the command is in
+// plugin/gate/Tests/Fixtures/README.md). Runs only when asked, never as a test.
+if (process.env.DESIGN_TELEMETRY_CAPTURE_DIR) {
+  const dir = process.env.DESIGN_TELEMETRY_CAPTURE_DIR
+  mkdirSync(dir, { recursive: true })
+  const measured = await runWithBudget(baseArgs(), { startSpent: 18250, perCall: 3127 })
+  writeFileSync(join(dir, 'research-result.json'), JSON.stringify(measured, null, 2) + '\n')
+  const { result: unmeasured } = await run(baseArgs({ lanes: lanes(['codebase']) }))
+  writeFileSync(join(dir, 'research-result-no-budget.json'), JSON.stringify(unmeasured, null, 2) + '\n')
 }
 
 let failed = 0
