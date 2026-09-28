@@ -389,3 +389,27 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   `--base main`. The `ready` gate runs in the foreground. `<spec-file>` may sit outside the repository. A new
   `@Dependency` accessor stubs as `get { .init() }` / `set {}`. `plugin/docs/hooks.md` lists the sprint page row.
 - **Gates.** Integration push + prove GREEN (run 20260928T171856Z-96f22392), 14 of 14 proven at proof base `aaf4733`.
+
+## Fast-modes wave 9 (design-free ship foundations)
+
+- **Presets may skip design.** `BuildPreset.designTier: BuildPreset.DesignStep` is `.design(DesignTier)` or `.none`,
+  with shorthands `.quick`, `.standard`, `.deep`, `.sketch`; its raw value is `"none"` or the tier name. Config
+  `design_tier = "none"` needs `on_design_conflict = "block"`, else `outOfRange` at
+  `build.presets.<name>.on_design_conflict`, naming `design_tier`. run.json writes `preset.designTier` as `"none"`.
+  `plan claim --tier none` and `plan set --tier none` exit 2 and write nothing.
+- **Spec page check.** `swiftgate spec-page check <page> --spec <spec-file> [--json]`: exit 0 GREEN, 1 RED, 2 BLOCKED.
+  JSON keys `command`, `verdict`, `message`, `confirm` (`required` | `skippable`), `pageSha`,
+  `slices[{number,id,test,tier,line,quote}]`, `findings`. Rules `spec-page.format`, `spec-page.too-long`,
+  `spec-page.quote-not-in-spec` (major) and `spec-page.summary` (nit). Slice ids are `slice-<n>-<kebab test name>`;
+  `Tier: T2.` or `Tier: T3.` goes before `Spec:`. A quote passes with different whitespace or whole words dropped at
+  either end; curly quotes, a change of case or a cut word fail. Fixtures in `Tests/Fixtures/spec-page/*.txt`.
+- **Plan state records a spec page.** plan.json: `"source":"specPage"`, `"specPage":{"path":"spec-page.md","pageSha"?}`,
+  top-level `"approval":{"pageSha","by":"user"|"spec-quotes","at"}` and `"surfaceCommit"?`. A design plan writes no
+  `source` key. API: `plan.designSource`, `plan.specPageSource`, `PlanFile.seedSpecPage(slug:)`,
+  `PlanStateStore.specPageFile(_:)`. Guard cases `PlanRecord.Design.specPage` and `WrittenDesign.specPage`; a plan's
+  kind can't change. `plan claim --spec-page` with `--design` or `--tier`, and `plan set --tier` on a spec-page plan,
+  exit 2. `plan-lint`, `design-render` and `design-diff --chain` refuse a spec-page plan for now, naming it; later
+  waves replace those refusals. Old tests that read `design`, `designSha`, `approval`, `clarifyChain` or `tier` compile
+  through test-only read-throughs in `PlanFileDesignFields.swift` (one per test target).
+- **Gates.** Integration push + prove GREEN (run 20260928T205246Z-95d9410c), 53 of 53 proven at the merged surface
+  `c569933`. The first run went RED on 5 old tests edited only for the new API; the fix restored them byte-identical.
