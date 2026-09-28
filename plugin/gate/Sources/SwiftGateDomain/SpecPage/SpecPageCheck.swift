@@ -36,7 +36,9 @@ public enum SpecPageCheck {
     let spec = collapsed(spec)
     guard let first = quote.first, let last = quote.last else { return false }
     var from = spec.startIndex
-    while from < spec.endIndex, let match = spec.range(of: quote, range: from..<spec.endIndex) {
+    while from < spec.endIndex,  // swiftgate:equivalent-mutant — an empty range finds nothing
+      let match = spec.range(of: quote, range: from..<spec.endIndex)
+    {
       let startsClean =
         !isWordCharacter(first) || match.lowerBound == spec.startIndex
         || !isWordCharacter(spec[spec.index(before: match.lowerBound)])

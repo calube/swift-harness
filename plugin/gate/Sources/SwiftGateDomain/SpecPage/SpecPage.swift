@@ -144,11 +144,9 @@ struct SpecPageParser {
   private var problems: [SpecPageProblem] = []
 
   init(_ text: String) {
-    lines = text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map {
-      var text = String($0.element)
-      if text.hasSuffix("\r") { text.removeLast() }
-      return Line(number: $0.offset + 1, text: text)
-    }
+    // `\r\n` is 1 Character, so splitting on `"\n"` alone would leave a CRLF page 1 line.
+    lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+      .enumerated().map { Line(number: $0.offset + 1, text: String($0.element)) }
   }
 
   func parse() -> SpecPageParse {
@@ -210,12 +208,14 @@ struct SpecPageParser {
         continue
       }
       let order = Section.allCases.firstIndex(of: section) ?? 0
-      if order < lastOrder, let lastSection {
+      let backwards = order < lastOrder  // swiftgate:equivalent-mutant — equal is a repeat
+      if backwards, let lastSection {
         problem(
           line.number,
           "`## \(name)` comes after `## \(lastSection.rawValue)`; the sections run \(Self.order)")
       }
-      if order > lastOrder {
+      let forwards = order > lastOrder  // swiftgate:equivalent-mutant — equal is a repeat
+      if forwards {
         lastOrder = order
         lastSection = section
       }
