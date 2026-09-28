@@ -375,7 +375,12 @@ final class PlanStateReads: Sendable {
   }
 
   func commonDirectory() async throws(GitError) -> String {
-    guard let cache else { return try await git.commonDirectory() }
+    guard let cache else {
+      record(
+        "swiftgate: this session's id isn't one safe path component, so the plan-lock cache is "
+          + "off and plan state is read fresh on every call.")
+      return try await git.commonDirectory()
+    }
     let git = self.git
     let answer = try await cache.commonDirectory(environment: environment) {
       () async throws(GitError) -> String in try await git.commonDirectory()

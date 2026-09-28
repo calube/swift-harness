@@ -118,6 +118,9 @@ Hook state lives in `.harness/hook-state/` (gitignored, and it writes its own `.
 last GREEN fingerprint, per-session strike counts, and a cached module map keyed by the config and
 package manifests. Deleting the directory is always safe; it only costs re-runs.
 
+`plan-lock-cache-<session>.json` keeps a session's git common dir; the guard still reads locks
+and `plan.json` fresh.
+
 ## First run
 
 The plugin's `bin/swiftgate` builds the gate on first use and again after its sources change. A
