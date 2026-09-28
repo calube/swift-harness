@@ -165,30 +165,91 @@ extension PlanFile: Codable {
     case surfaceCommit, resume
   }
 
+  private enum SpecPageKeys: String, CodingKey {
+    case path, pageSha
+  }
+
+  /// A key that belongs to one source kind only; a file of the other kind that carries it fails.
+  private static let designOnlyKeys: [CodingKeys] = [.design, .designSha, .clarifyChain, .tier]
+
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    let kind: SourceKind
+    if let raw = try container.decodeIfPresent(String.self, forKey: .source) {
+      guard let known = SourceKind(rawValue: raw) else {
+        throw DecodingError.dataCorruptedError(
+          forKey: .source, in: container,
+          debugDescription: "unknown plan source `\(raw)`; expected "
+            + SourceKind.allCases.map { "`\($0.rawValue)`" }.joined(separator: " or "))
+      }
+      kind = known
+    } else {
+      kind = .design
+    }
+
+    let source: Source
+    switch kind {
+    case .design:
+      if container.contains(.specPage) {
+        throw DecodingError.dataCorruptedError(
+          forKey: .specPage, in: container,
+          debugDescription: "a design plan carries `specPage`; a plan has one source")
+      }
+      source = .design(
+        DesignSource(
+          design: try container.decode(String.self, forKey: .design),
+          designSha: try container.decodeIfPresent(String.self, forKey: .designSha),
+          approval: try container.decodeIfPresent(Approval.self, forKey: .approval),
+          clarifyChain: try container.decode([ClarifyChainEntry].self, forKey: .clarifyChain),
+          tier: try container.decodeIfPresent(DesignTier.self, forKey: .tier)))
+    case .specPage:
+      if let key = Self.designOnlyKeys.first(where: container.contains) {
+        throw DecodingError.dataCorruptedError(
+          forKey: key, in: container,
+          debugDescription: "a spec-page plan carries `\(key.stringValue)`, which only a design "
+            + "plan has; a plan has one source")
+      }
+      let page = try container.nestedContainer(keyedBy: SpecPageKeys.self, forKey: .specPage)
+      let path = try page.decode(String.self, forKey: .path)
+      guard path == SpecPageSource.fileName else {
+        throw DecodingError.dataCorruptedError(
+          forKey: .path, in: page,
+          debugDescription: "spec page path `\(path)` must be `\(SpecPageSource.fileName)`, "
+            + "inside the plan's own directory")
+      }
+      source = .specPage(
+        SpecPageSource(
+          path: path, pageSha: try page.decodeIfPresent(String.self, forKey: .pageSha),
+          approval: try container.decodeIfPresent(PageApproval.self, forKey: .approval)))
+    }
     self.init(
       schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
       slug: try container.decode(String.self, forKey: .slug),
-      design: try container.decode(String.self, forKey: .design),
-      designSha: try container.decodeIfPresent(String.self, forKey: .designSha),
-      approval: try container.decodeIfPresent(Approval.self, forKey: .approval),
-      clarifyChain: try container.decode([ClarifyChainEntry].self, forKey: .clarifyChain),
-      tier: try container.decodeIfPresent(DesignTier.self, forKey: .tier),
+      source: source,
+      surfaceCommit: try container.decodeIfPresent(String.self, forKey: .surfaceCommit),
       resume: try container.decode(String.self, forKey: .resume))
   }
 
+  /// A design plan writes no `source` key, so its bytes match a file written before spec pages.
   public func encode(to encoder: any Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(schemaVersion, forKey: .schemaVersion)
     try container.encode(slug, forKey: .slug)
     try container.encode(resume, forKey: .resume)
-    if case .design(let design) = source {
+    try container.encodeIfPresent(surfaceCommit, forKey: .surfaceCommit)
+    switch source {
+    case .design(let design):
       try container.encode(design.design, forKey: .design)
       try container.encodeIfPresent(design.designSha, forKey: .designSha)
       try container.encodeIfPresent(design.approval, forKey: .approval)
       try container.encode(design.clarifyChain, forKey: .clarifyChain)
       try container.encodeIfPresent(design.tier, forKey: .tier)
+    case .specPage(let page):
+      try container.encode(SourceKind.specPage.rawValue, forKey: .source)
+      var nested = container.nestedContainer(keyedBy: SpecPageKeys.self, forKey: .specPage)
+      try nested.encode(page.path, forKey: .path)
+      try nested.encodeIfPresent(page.pageSha, forKey: .pageSha)
+      try container.encodeIfPresent(page.approval, forKey: .approval)
     }
   }
 }

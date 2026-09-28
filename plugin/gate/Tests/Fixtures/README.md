@@ -569,3 +569,20 @@ done
 Between the sides, `ProfileClient` gains the `ProfileClientLive` target and product and 2 test
 targets, `ProfileFeature` gains a test target and `AppFeature` gains a local package dependency and
 its product: `sprint slice` refuses only `ProfileClient`'s change.
+
+## PlanState (`plan.json` written before spec pages)
+
+The `plan.json` files the `swiftgate` on `main` at `9d91bcb` writes, before `plan.json` gained a
+`source`: a design plan's seed from `plan claim --design`, and one that `plan set` then re-scoped.
+They pin that every plan already in plan state decodes as a design plan. Captured in a throwaway
+repository, never this checkout's shared plan state.
+
+```sh
+R=$(mktemp -d)/repo; S=5e0c7a1b-2d3f-4a6b-8c9d-0e1f2a3b4c5d
+mkdir -p $R && cd $R && git init -q -b main && git commit -q --allow-empty -m init
+swiftgate plan claim 2026-09-28-reading-list --session $S --design docs/reading/designs/reading-list.md
+swiftgate plan claim 2026-09-28-saved-search --session $S --design docs/search/designs/saved-search.md --tier quick
+swiftgate plan set 2026-09-28-saved-search --session $S --tier deep --resume 're-scoped to deep; next: research'
+cp .git/swift-harness/plans/2026-09-28-reading-list/plan.json <fixtures>/PlanState/claim-seeded.json
+cp .git/swift-harness/plans/2026-09-28-saved-search/plan.json <fixtures>/PlanState/plan-set-tier-and-resume.json
+```

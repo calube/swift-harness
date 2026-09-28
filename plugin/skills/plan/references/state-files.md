@@ -24,6 +24,33 @@ Path: `<plans>/<slug>/plan.json`. `plan claim` seeds it; the plan skill rewrites
 - `designSha` is the current designSha from `design-diff`. It equals `approval.designSha`, or the
   clarify chain's `endSha`.
 - `approval.at` is the time on the approval record, not the time of this run.
+- `surfaceCommit` is the plan's 1 surface commit, which every task builds on. Leave it out until it
+  lands; keep it as the file had it.
+
+A plan with no design doc names a spec page instead. `plan claim <slug> --session <id> --spec-page`
+seeds it; `--spec-page` never goes with `--design` or `--tier`.
+
+```json
+{
+  "schemaVersion": 1,
+  "slug": "<slug>",
+  "source": "specPage",
+  "specPage": {"path": "spec-page.md", "pageSha": "<sha-256 of the page>"},
+  "approval": {"pageSha": "<confirmed pageSha>", "by": "user", "at": "<ISO-8601 UTC>"},
+  "surfaceCommit": "<sha>",
+  "resume": "<one line>"
+}
+```
+
+- The page is `<plans>/<slug>/spec-page.md`, and `path` is always `spec-page.md`. Only the plan's
+  lock holder writes it.
+- `pageSha` and `approval` are left out until the page is hashed and confirmed. `by` is `user` or
+  `spec-quotes`.
+- A design plan has no `source` key (or `"source": "design"`). A spec-page plan carries none of
+  `design`, `designSha`, `clarifyChain` and `tier`, and a design plan carries no `specPage`; either
+  mix fails decoding.
+- Commands that read a design (`plan-lint`, `design-diff --chain`, `design-render --ledger`,
+  `plan set --tier`) refuse a spec-page plan and name it.
 
 ## `ledger.json`
 
