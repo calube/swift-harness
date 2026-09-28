@@ -50,6 +50,14 @@ public enum SurfaceStubForm: String, Sendable, Equatable, CaseIterable {
   case emptyView
   /// A `#Preview` or preview fixture with no non-empty literal.
   case previewWithoutData
+  /// An initializer that only assigns its own parameters, or empty defaults, to `self`'s stored
+  /// properties.
+  case assignsParameters
+  /// 1 initializer call whose arguments are each an empty default or a parameter passed through.
+  case emptyValue
+  /// An existing array literal that only gains bare type references or `Type.self` elements, as a
+  /// command or registration list does.
+  case registersType
 }
 
 /// Why a judged body is behaviour, not a stub.
