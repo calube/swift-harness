@@ -296,7 +296,9 @@ enum ReviewSynthRun {
     }
     var report: ReviewReport
     do {
-      report = try ReviewSynthesis.synthesize(inputs, baseline: baseline(runDirectory))
+      report = try ReviewSynthesis.synthesize(
+        inputs, baseline: baseline(runDirectory),
+        telemetry: runDirectory.appending(path: ReviewTelemetry.fileName).path)
     } catch {
       throw InputFailure(file: "(inputs)", detail: "\(error)")
     }

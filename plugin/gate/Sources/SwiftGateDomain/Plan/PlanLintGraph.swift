@@ -19,6 +19,7 @@ public enum PlanLintGraph {
   public static let packUnknownTaskRuleID = "plan-lint.pack-unknown-task"
   public static let duplicateTaskIDRuleID = "plan-lint.duplicate-task-id"
   public static let designMovedRuleID = "plan-lint.design-moved"
+  public static let writeSetUnresolvedRuleID = "plan-lint.write-set-unresolved"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -28,27 +29,50 @@ public enum PlanLintGraph {
 
   // MARK: - Module resolution (shared by sizing and the chain check)
 
-  /// Every module `writeSet` touches, found through `graph`'s own path→module lookup — the same
-  /// one `arch` and `design-scope` use, never a second one. A `/`-terminated prefix is looked up
-  /// with the trailing slash dropped, since ``ModuleGraph/module(containingFile:)`` already treats
-  /// a module's own source directory as a prefix of everything *under* it. That lookup alone
-  /// misses the one case where the prefix names a module's root directory exactly (nothing is
-  /// "under" it in the file sense), so a prefix entry falls back to an exact path match against
-  /// `graph.modules` — still the graph's own `path`, not a second lookup function.
-  /// A test target counts as the module it tests (``countedModule(_:graph:)``), so a task that
-  /// writes a module and its own tests touches one module, as the decomposer is told to plan it.
-  public static func modulesTouched(writeSet: [String], graph: ModuleGraph) -> Set<String> {
-    var touched = Set<String>()
+  /// Every module `writeSet` touches: ``resolveWriteSet(_:graph:design:packageDirectories:)``'s
+  /// modules, with the graph's own packages as the package directories.
+  public static func modulesTouched(
+    writeSet: [String], graph: ModuleGraph, design: DesignDocument? = nil
+  ) -> Set<String> {
+    resolveWriteSet(
+      writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path)
+    ).moduleNames
+  }
+
+  /// The one path→module resolution for a task's write set, shared by the module count and the
+  /// worker pack's module-kind standards. An entry is looked up through the graph's own
+  /// ``ModuleGraph/module(containingFile:)``, the lookup `arch` and `design-scope` use. A
+  /// `/`-terminated prefix is looked up with the slash dropped, and falls back to a module whose
+  /// path is exactly that prefix. A test target counts as the module it tests
+  /// (``countedModule(_:graph:)``), so a task that writes a module and its own tests touches one
+  /// module, as the decomposer is told to plan it.
+  public static func resolveWriteSet(
+    _ writeSet: [String], graph: ModuleGraph, design: DesignDocument?,
+    packageDirectories: [String]
+  ) -> WriteSetResolution {
+    var modules: [String: ModuleKind] = [:]
+    func add(_ module: Module) {
+      let counted = countedModule(module, graph: graph)
+      modules[counted] = graph.module(named: counted)?.kind ?? module.kind
+    }
     for entry in writeSet {
       let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
       if let module = graph.module(containingFile: path) {
-        touched.insert(countedModule(module, graph: graph))
+        add(module)
       } else if entry.hasSuffix("/") {
-        touched.formUnion(
-          graph.modules.filter { $0.path == path }.map { countedModule($0, graph: graph) })
+        graph.modules.filter { $0.path == path }.forEach(add)
       }
     }
-    return touched
+    return WriteSetResolution(
+      modules: modules.map { WriteSetResolution.ResolvedModule(name: $0.key, kind: $0.value) },
+      unresolved: [])
+  }
+
+  /// A `major` finding per entry of `resolution.unresolved`, naming `task` and the entry.
+  public static func writeSetUnresolvedFindings(
+    task: LedgerTask, resolution: WriteSetResolution
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
   }
 
   /// The module `module` counts as for spec §9.3's module count. A test target is the module it
@@ -191,12 +215,14 @@ public enum PlanLintGraph {
   /// located at its first task: this many tasks strung end to end through one module is either one
   /// task cut apart for no reason, or a chain that never needed to be one.
   public static func singleDependentChainFindings(
-    ledger: Ledger, graph: ModuleGraph, ledgerPath: String
+    ledger: Ledger, graph: ModuleGraph, ledgerPath: String, design: DesignDocument? = nil
   )
     throws(ReportContractViolation) -> [Finding]
   {
     let modulesByTask = Dictionary(
-      ledger.tasks.map { ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph)) },
+      ledger.tasks.map {
+        ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph, design: design))
+      },
       uniquingKeysWith: { first, second in first.union(second) })
 
     var dependentsOf: [String: Set<String>] = [:]
@@ -354,4 +380,35 @@ public enum PlanLintGraph {
 
     return findings
   }
+}
+
+/// What ``PlanLintGraph/resolveWriteSet(_:graph:design:packageDirectories:)`` found for one write
+/// set: the modules it touches, each with the kind its standards come from, and the entries that
+/// name a module directory no module answers to.
+public struct WriteSetResolution: Sendable, Equatable {
+  public struct ResolvedModule: Sendable, Equatable {
+    /// The module as the module count counts it: a test target is the module it tests.
+    public let name: String
+    public let kind: ModuleKind
+
+    public init(name: String, kind: ModuleKind) {
+      self.name = name
+      self.kind = kind
+    }
+  }
+
+  /// Sorted by name, one per module.
+  public let modules: [ResolvedModule]
+  /// Entries in write-set order.
+  public let unresolved: [String]
+
+  public init(modules: [ResolvedModule], unresolved: [String]) {
+    self.modules = modules.sorted { $0.name < $1.name }
+    self.unresolved = unresolved
+  }
+
+  public var moduleNames: Set<String> { Set(modules.map(\.name)) }
+
+  /// Each module's kind, in module-name order, as the worker pack's anchors take them.
+  public var kinds: [ModuleKind] { modules.map(\.kind) }
 }

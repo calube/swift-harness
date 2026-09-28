@@ -4,6 +4,18 @@ import Testing
 
 @testable import SwiftGateDomain
 
+let reviewTelemetryPath = ".harness/runs/20260927T151548Z-aabadbfd/review-telemetry.json"
+
+extension ReviewSynthesis {
+  /// Synthesis as `review-synth` calls it, with the telemetry path the command names.
+  static func synthesize(
+    _ inputs: [FocusReview],
+    baseline: ReviewBaseline = .unavailable(reason: "no numbered diff was given")
+  ) throws(ReviewContractViolation) -> ReviewReport {
+    try synthesize(inputs, baseline: baseline, telemetry: reviewTelemetryPath)
+  }
+}
+
 @Suite("review-synth: dedupe and verdict rule (spec §9.1–9.2)")
 struct ReviewSynthesisTests {
   static func finding(
