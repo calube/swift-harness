@@ -332,3 +332,11 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   keep what is sound", and check each planner's branch first: a finished plan may only need its merge.
 - **Load after a reboot is Spotlight.** The load average passes 500 for several minutes while `mds` re-indexes, with
   CPU and memory idle. Judge by memory and CPU, not load, in the first 15 minutes.
+- **Run mutate under the build lock.** Its unmutated baseline runs every test once; with workers building beside it, a
+  load-sensitive test fails the baseline and mutate judges nothing (BLOCKED). Holding the lock pauses the workers'
+  builds, not their thinking.
+- **A stub base goes in `--base`, not `--proof-base`.** Proving tests of code already on `main` at a stub branch
+  worked as `check --tier push --prove --base <stub>`; as `--proof-base` nothing proved.
+- **A prompt edit needs its calibration in the same task.** A worker editing a calibrated agent prompt must run
+  `swiftgate calibrate design` (or `build`) under the build lock and commit the record, so allow that one `claude`
+  use in its brief.

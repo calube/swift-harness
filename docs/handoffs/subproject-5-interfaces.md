@@ -413,3 +413,27 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   through test-only read-throughs in `PlanFileDesignFields.swift` (one per test target).
 - **Gates.** Integration push + prove GREEN (run 20260928T205246Z-95d9410c), 53 of 53 proven at the merged surface
   `c569933`. The first run went RED on 5 old tests edited only for the new API; the fix restored them byte-identical.
+
+## Fast-modes wave 10 (confirm, packs and ledger for spec pages)
+
+- **Confirming the page.** `swiftgate plan confirm <slug> --by user|spec-quotes --spec <file> --session <id> [--json]`,
+  as the plan's lock holder. Exit 0 recorded; 1 for `plan-confirm.page-red`, `plan-confirm.needs-user` or not held;
+  2 for a design plan, an unknown `--by`, or anything unreadable. JSON keys `command`, `plan`, `status`
+  (`confirmed` | `refused` | `not-held` | `blocked`), `verdict`, `rule`, `holder`, `by`, `confirm`, `pageSha`,
+  `findings`, `message`; every key is present, absent values are null. Success writes `specPage.pageSha` and top-level
+  `approval {pageSha, by, at}`, and sets the index entry to `approved`, keeping its resume note.
+- **Context packs.** `context-pack --role decomposer|worker --spec-page <path>`: exactly 1 of `--design` and
+  `--spec-page`, else exit 2; `--spec-page` on another role exits 2. A malformed page or an unknown `covers` id exits 1.
+  Pack lines `<slice id>: T<n>`. Domain: `SpecPageSource`, `SpecPageDecomposerInputs`, `SpecPageWorkerInputs`,
+  `ContextPackRoleInputs.specPageDecomposer` and `.specPageWorker`, `ContextPackError.unknownSliceID(_:page:)`,
+  `SpecPageWriteSet.resolve(_:graph:page:packageDirectories:)`. `design-decomposer.md` has a spec-page section;
+  calibration re-ran GREEN (23 cases).
+- **Ledger page.** `design-render --ledger` for a spec-page plan exits 2 when the page is unconfirmed (naming
+  `swiftgate plan confirm <slug>`), unreadable, not UTF-8, doesn't parse, or its sha differs from `approval.pageSha`.
+  `--json` writes `pageSha` in place of `designSha`. The section is "Slice × task coverage", with rows carrying
+  `data-slice`. `LedgerRender.Source` is `.design(DesignDocument, designSha:)` or `.specPage(SpecPage, pageSha:)`.
+- **Spec page parser.** A CRLF page parses: lines split on every newline. The mutation survivors from the wave before
+  have killing tests in `SpecPageEdgeTests.swift`.
+- **Gates.** Integration push + prove GREEN (run 20260928T221246Z-5849051e), 28 of 28 proven at the merged surface
+  `11786a6`. Wave 9's mutate on main was BLOCKED once (its baseline failed a load-sensitive test while 3 workers built),
+  then RED on 4 survivors under the build lock (run 20260928T205737Z-fd2c99ed), fixed in `bd27a93`.
