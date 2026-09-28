@@ -9,5 +9,6 @@ number and title, never by number alone.
 | [0002](0002-consumer-plugin-in-plugin-dir.md) | Consumer plugin lives in `plugin/` |
 | [0003](0003-ship-may-skip-the-design-step.md) | Ship may skip the design step |
 | [0004](0004-proof-and-mutation-may-run-once-in-the-final-gate.md) | Proof and mutation may run once, in the final gate |
+| [0005](0005-simulator-qa-drives-agent-device.md) | Simulator QA drives agent-device |
 
 See [`../index.md`](../index.md) for the full doc router.

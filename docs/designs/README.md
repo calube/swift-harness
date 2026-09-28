@@ -9,5 +9,6 @@ One file per design doc. Status here is a summary; each doc's own RESUME header 
 | [2026-09-26-build-executor-design.md](2026-09-26-build-executor-design.md) | Approved; decisions in [`../handoffs/2026-09-26-subproject-5-brainstorm-decisions.md`](../handoffs/2026-09-26-subproject-5-brainstorm-decisions.md) | Sub-project 5: `/swift-harness:build`, `/swift-harness:ship` and build presets |
 | [2026-09-27-fast-modes-design.md](2026-09-27-fast-modes-design.md) | Approved; plan in [`../plans/2026-09-27-fast-modes-plan.md`](../plans/2026-09-27-fast-modes-plan.md) | Surface commits and `surface-check`, a sprint skill, a design-free ship path |
 | [2026-09-27-speed-research-coverage-design.md](2026-09-27-speed-research-coverage-design.md) | Approved; tasks in the sub-project 2 hardening wave | Where each ship speed research change lives; host-compiled views and a stale-session check |
+| [2026-09-28-simulator-qa-design.md](2026-09-28-simulator-qa-design.md) | Draft; tool choice approved in [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), the rest open for approval | Sub-project 3: `swiftgate sim`, dependency scenarios, the QA skill driving `agent-device`, screenshot and accessibility-tree evidence |
 
 See [`../index.md`](../index.md) for the full doc router.
