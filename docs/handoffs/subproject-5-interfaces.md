@@ -232,3 +232,30 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Merge gate lesson.** Parallel surfaced branches prove together only at a merge of all their surface commits.
 - **Gate.** Integration push + prove GREEN (run 20260927T231704Z-cb69701e, 23 of 23 new tests proven); push GREEN on
   merged main (20260927T232100Z-bc6eec17); mutate GREEN, 16 of 16 killed (20260927T232331Z-47cd38d8).
+
+## Speed wave 2
+
+- **Repository profile.** `[harness] profile = "<name>"` in `.swiftgate.toml` names one of the file's
+  `[build.presets.<name>]` tables; optional, and a repo with no `[harness]` table resolves to `default`. `bootstrap
+  --profile <name>` stamps it into a new config (`default` without the flag) and advises, without rewriting, when an
+  existing config names another. Config loading accepts a profile that names no preset, so hooks and gates never
+  depend on it; `swiftgate doctor` fails it as `doctor.profile` (major). The build and ship skills resolve `<preset>`
+  from `--preset`, then the profile, then `default`, and stop on a name with no preset table. A profile only selects a
+  preset: hooks, test-first rules and the merge gate don't change.
+- **Worker packs carry standards.** `context-pack --role worker` derives module kinds from the task's write set and
+  the repo's module graph, and packs each touched kind's standards anchors (from the repo's standards doc, else the
+  plugin's). It refuses `--module-kind` for the worker role. A write-set entry outside every module (a doc, manifest
+  or fixture) adds no kind; a write set with no module entry gets a standards section saying so. A config naming a
+  kind outside `ModuleKind.allCases` is the error `context-pack.module-kind-unknown` (CLI error text, not a gate
+  finding).
+- **Task gate steps.** `CheckExtraStep` (closed, raw values `prove`, `mutate`, `impact`, `coverage`, `app-build`).
+  `check --impact` and `--coverage` run push's impact and diff-coverage rules below push; `--app-build` compiles the
+  app scheme for a generic simulator through the xcodebuild adapter and judges the result bundle's build results:
+  `app-build.error` (RED, at file and line), `app-build.blocked` (a failed build with no readable results),
+  `app-build.container` (more than one root app container, RED), `app-build.summary`; a repo with no app container
+  notes the step not run. A RED T0 skips coverage and app-build, a RED T1 skips app-build, each with a
+  `swiftgate.not-run` note. Plain `check --tier fast` runs none of them. `build-task.js` passes
+  `TASK_GATE_STEPS = '--impact --coverage --app-build'` to the worker under both `task_proof` modes.
+- **Calibration.** The build calibration record was re-run for the new worker prompt inputs.
+- **Gate.** Integration push + prove GREEN at proof base `002f4ae` (run 20260928T004518Z-a6412b52, 34 of 34 new
+  tests proven, 1848 passed); push GREEN on merged main (20260928T004921Z-29fbdfb9).
