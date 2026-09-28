@@ -1,3 +1,5 @@
+import Foundation
+
 /// `plan-lint`'s whole-ledger checks (spec §9.2, §9.3): the DAG, the stored `waves`, hot files and
 /// the single-dependent-chain warning — everything ``PlanLintCoverage`` can't compute from one task
 /// in isolation because it needs every task's dependencies and write set at once, plus the loaded
@@ -19,6 +21,7 @@ public enum PlanLintGraph {
   public static let packUnknownTaskRuleID = "plan-lint.pack-unknown-task"
   public static let duplicateTaskIDRuleID = "plan-lint.duplicate-task-id"
   public static let designMovedRuleID = "plan-lint.design-moved"
+  public static let writeSetUnresolvedRuleID = "plan-lint.write-set-unresolved"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -28,27 +31,142 @@ public enum PlanLintGraph {
 
   // MARK: - Module resolution (shared by sizing and the chain check)
 
-  /// Every module `writeSet` touches, found through `graph`'s own path→module lookup — the same
-  /// one `arch` and `design-scope` use, never a second one. A `/`-terminated prefix is looked up
-  /// with the trailing slash dropped, since ``ModuleGraph/module(containingFile:)`` already treats
-  /// a module's own source directory as a prefix of everything *under* it. That lookup alone
-  /// misses the one case where the prefix names a module's root directory exactly (nothing is
-  /// "under" it in the file sense), so a prefix entry falls back to an exact path match against
-  /// `graph.modules` — still the graph's own `path`, not a second lookup function.
-  /// A test target counts as the module it tests (``countedModule(_:graph:)``), so a task that
-  /// writes a module and its own tests touches one module, as the decomposer is told to plan it.
-  public static func modulesTouched(writeSet: [String], graph: ModuleGraph) -> Set<String> {
-    var touched = Set<String>()
+  /// Every module `writeSet` touches: ``resolveWriteSet(_:graph:design:packageDirectories:)``'s
+  /// modules, with the graph's own packages as the package directories.
+  public static func modulesTouched(
+    writeSet: [String], graph: ModuleGraph, design: DesignDocument?
+  ) -> Set<String> {
+    resolveWriteSet(
+      writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path)
+    ).moduleNames
+  }
+
+  /// The one path→module resolution for a task's write set, shared by the module count and the
+  /// worker pack's module-kind standards, so the two can't disagree about what a task touches.
+  ///
+  /// An entry is looked up through the graph's own ``ModuleGraph/module(containingFile:)``, the
+  /// lookup `arch` and `design-scope` use. A `/`-terminated entry with no module around it touches
+  /// every module at or under it. A test target counts as the module it tests
+  /// (``countedModule(_:graph:)``), so a task that writes a module and its own tests touches one
+  /// module, as the decomposer is told to plan it.
+  ///
+  /// An entry in no graph module but under a package's `Sources/<Name>/` or `Tests/<Name>/` names a
+  /// module the graph doesn't have yet. It resolves when `design`'s Module kinds table names
+  /// `<Name>` (a module the plan creates), or, for `Tests/<Name>Tests/`, when the graph or that
+  /// table has `<Name>`; otherwise it is unresolved. Anything else in or outside a package (a
+  /// manifest, a doc, a fixture) is not a module entry and resolves to nothing.
+  ///
+  /// - Parameter packageDirectories: repository-relative package directories, `""` for a package
+  ///   at the root.
+  public static func resolveWriteSet(
+    _ writeSet: [String], graph: ModuleGraph, design: DesignDocument?,
+    packageDirectories: [String]
+  ) -> WriteSetResolution {
+    let planned = design.map(plannedModuleKinds) ?? [:]
+    var modules: [String: ModuleKind] = [:]
+    var unresolved: [String] = []
+    func add(_ module: Module) {
+      let counted = countedModule(module, graph: graph)
+      modules[counted] = graph.module(named: counted)?.kind ?? module.kind
+    }
     for entry in writeSet {
       let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
       if let module = graph.module(containingFile: path) {
-        touched.insert(countedModule(module, graph: graph))
-      } else if entry.hasSuffix("/") {
-        touched.formUnion(
-          graph.modules.filter { $0.path == path }.map { countedModule($0, graph: graph) })
+        add(module)
+        continue
+      }
+      if entry.hasSuffix("/") {
+        let under = graph.modules.filter {
+          $0.path == path || ModuleGraph.isInside($0.path, directory: path)
+        }
+        if !under.isEmpty {
+          under.forEach(add)
+          continue
+        }
+      }
+      guard let named = moduleDirectoryName(path, packageDirectories: packageDirectories)
+      else { continue }
+      if let kind = planned[named.name] {
+        modules[named.name] = kind
+      } else if named.isTests, named.name.hasSuffix("Tests"),
+        case let tested = String(named.name.dropLast("Tests".count)), !tested.isEmpty
+      {
+        if let kind = planned[tested] {
+          modules[tested] = kind
+        } else if let module = graph.module(named: tested) {
+          add(module)
+        } else {
+          unresolved.append(entry)
+        }
+      } else {
+        unresolved.append(entry)
       }
     }
-    return touched
+    return WriteSetResolution(
+      modules: modules.map { WriteSetResolution.ResolvedModule(name: $0.key, kind: $0.value) },
+      unresolved: unresolved)
+  }
+
+  /// The `<Name>` of a path under `Sources/<Name>/` or `Tests/<Name>/` in its innermost package
+  /// directory, or `nil` for a path outside every package or elsewhere in one.
+  static func moduleDirectoryName(_ path: String, packageDirectories: [String])
+    -> (name: String, isTests: Bool)?
+  {
+    guard
+      let package = packageDirectories.filter({ ModuleGraph.isInside(path, directory: $0) })
+        .max(by: { $0.count < $1.count })
+    else { return nil }
+    let relative = package.isEmpty ? path : String(path.dropFirst(package.count + 1))
+    let segments = relative.split(separator: "/", omittingEmptySubsequences: false)
+    guard segments.count >= 2, segments[0] == "Sources" || segments[0] == "Tests",
+      !segments[1].isEmpty
+    else { return nil }
+    return (String(segments[1]), segments[0] == "Tests")
+  }
+
+  /// Module name → kind from the design's Module kinds table. A row whose kind isn't a
+  /// ``ModuleKind`` is left out: `design-lint.module-kind-unknown` reports it, and an entry naming
+  /// that module stays unresolved rather than taking a guessed kind.
+  static func plannedModuleKinds(_ design: DesignDocument) -> [String: ModuleKind] {
+    guard let table = design.moduleKinds,
+      let moduleColumn = column("module", in: table), let kindColumn = column("kind", in: table)
+    else { return [:] }
+    var kinds: [String: ModuleKind] = [:]
+    for row in table.rows
+    where row.indices.contains(moduleColumn) && row.indices.contains(kindColumn) {
+      let name = row[moduleColumn].trimmingCharacters(in: CharacterSet(charactersIn: " `"))
+      guard !name.isEmpty,
+        let kind = ModuleKind(rawValue: row[kindColumn].trimmingCharacters(in: .whitespaces))
+      else { continue }
+      kinds[name] = kind
+    }
+    return kinds
+  }
+
+  private static func column(_ name: String, in table: MarkdownDocument.Table) -> Int? {
+    table.header.firstIndex {
+      $0.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(name) == .orderedSame
+    }
+  }
+
+  /// A `major` finding per entry of `resolution.unresolved`, naming `task` and the entry.
+  public static func writeSetUnresolvedFindings(
+    task: LedgerTask, resolution: WriteSetResolution
+  ) throws(ReportContractViolation) -> [Finding] {
+    var findings: [Finding] = []
+    for entry in resolution.unresolved {
+      findings.append(
+        try Finding(
+          ruleID: writeSetUnresolvedRuleID, severity: .major, file: task.id, line: nil,
+          message:
+            "task \(task.id)'s write-set entry `\(entry)` names a module directory that no module "
+            + "in the graph or the design's Module kinds table answers to: correct the path, or "
+            + "add the module to the design's Module kinds table",
+          failureScenario:
+            "the module count and the worker pack's module-kind standards skip the entry, so a "
+            + "task over the module bound, or missing its kind's standards, passes plan-lint"))
+    }
+    return findings
   }
 
   /// The module `module` counts as for spec §9.3's module count. A test target is the module it
@@ -191,12 +309,14 @@ public enum PlanLintGraph {
   /// located at its first task: this many tasks strung end to end through one module is either one
   /// task cut apart for no reason, or a chain that never needed to be one.
   public static func singleDependentChainFindings(
-    ledger: Ledger, graph: ModuleGraph, ledgerPath: String
+    ledger: Ledger, graph: ModuleGraph, ledgerPath: String, design: DesignDocument?
   )
     throws(ReportContractViolation) -> [Finding]
   {
     let modulesByTask = Dictionary(
-      ledger.tasks.map { ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph)) },
+      ledger.tasks.map {
+        ($0.id, modulesTouched(writeSet: $0.writeSet, graph: graph, design: design))
+      },
       uniquingKeysWith: { first, second in first.union(second) })
 
     var dependentsOf: [String: Set<String>] = [:]
@@ -340,8 +460,12 @@ public enum PlanLintGraph {
       findings += try PlanLintCoverage.gateFindings(task: task, testTiers: testTiers)
       findings += try PlanLintCoverage.unknownTestFindings(task: task, design: design)
       findings += try PlanLintCoverage.missingModelFindings(task: task)
+      let resolution = resolveWriteSet(
+        task.writeSet, graph: graph, design: design,
+        packageDirectories: graph.packages.map(\.path))
+      findings += try writeSetUnresolvedFindings(task: task, resolution: resolution)
       findings += try PlanLintCoverage.sizeFindings(
-        task: task, modulesTouched: modulesTouched(writeSet: task.writeSet, graph: graph),
+        task: task, modulesTouched: resolution.moduleNames,
         workerPack: workerPacks[task.id], bounds: bounds)
     }
 
@@ -349,9 +473,40 @@ public enum PlanLintGraph {
     findings += try writeSetOverlapFindings(ledger: ledger, ledgerPath: ledgerPath)
     findings += try hotFileFindings(ledger: ledger, ledgerPath: ledgerPath)
     findings += try singleDependentChainFindings(
-      ledger: ledger, graph: graph, ledgerPath: ledgerPath)
+      ledger: ledger, graph: graph, ledgerPath: ledgerPath, design: design)
     findings += try workerPackFindings(ledger: ledger, workerPacks: workerPacks)
 
     return findings
   }
+}
+
+/// What ``PlanLintGraph/resolveWriteSet(_:graph:design:packageDirectories:)`` found for one write
+/// set: the modules it touches, each with the kind its standards come from, and the entries that
+/// name a module directory no module answers to.
+public struct WriteSetResolution: Sendable, Equatable {
+  public struct ResolvedModule: Sendable, Equatable {
+    /// The module as the module count counts it: a test target is the module it tests.
+    public let name: String
+    public let kind: ModuleKind
+
+    public init(name: String, kind: ModuleKind) {
+      self.name = name
+      self.kind = kind
+    }
+  }
+
+  /// Sorted by name, one per module.
+  public let modules: [ResolvedModule]
+  /// Entries in write-set order.
+  public let unresolved: [String]
+
+  public init(modules: [ResolvedModule], unresolved: [String]) {
+    self.modules = modules.sorted { $0.name < $1.name }
+    self.unresolved = unresolved
+  }
+
+  public var moduleNames: Set<String> { Set(modules.map(\.name)) }
+
+  /// Each module's kind, in module-name order, as the worker pack's anchors take them.
+  public var kinds: [ModuleKind] { modules.map(\.kind) }
 }

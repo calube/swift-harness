@@ -539,4 +539,75 @@ struct PlanLintCommandTests {
     #expect(report.findings.filter(\.severity.failsGate) == [])
     #expect(report.verdict.exitCode == 0)
   }
+
+  @Test(
+    "a write-set entry whose module directory is misspelt exits 1 naming the task and the entry — catches plan-lint passing a task its module count and pack never saw"
+  )
+  func misspeltModuleDirectoryFails() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    let task = LedgerTask(
+      id: "queue-core", deps: [], writeSet: ["Sample/Sources/Cor/Queue.swift"], gate: .fast,
+      tests: ["test-queued-order-survives-relaunch"],
+      covers: ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"],
+      estLines: 120, status: .pending, worktree: "../app-queue-core", model: .sonnet)
+    try await repo.writePlanState(
+      designSha: DesignSha.of(PlanLintRepo.approvedText),
+      ledger: PlanLintRepo.ledger(tasks: [task]))
+
+    let (report, _) = try await repo.lint()
+    let unresolved = report.findings.filter {
+      $0.ruleID == PlanLintGraph.writeSetUnresolvedRuleID
+    }
+    #expect(unresolved.count == 1)
+    #expect(unresolved.first?.file == "queue-core")
+    #expect(unresolved.first?.message.contains("Sample/Sources/Cor/Queue.swift") == true)
+    #expect(report.verdict.exitCode == 1)
+  }
+
+  @Test(
+    "the same write set gives the same modules to the module count and the worker pack, and a module the design's Module kinds table names carries its kind's standards — catches the pack resolving modules its own way"
+  )
+  func countAndPackShareOneResolution() async throws {
+    let repo = try await PlanLintRepo()
+    defer { repo.remove() }
+    let designText =
+      PlanLintRepo.approvedText
+      + "## Module kinds\n\n| Module | Kind | Reason |\n|---|---|---|\n"
+      + "| Store | engine | the queue's pure state |\n"
+    try repo.write(PlanLintRepo.design, designText)
+    try repo.write(
+      PlanLintRepo.standardsPath,
+      PlanLintRepo.standards + "\n## 8. Engine modules\n\nAn engine never touches IO.\n")
+    try await repo.commit("plan a Store engine")
+    let task = LedgerTask(
+      id: "queue-core", deps: [], writeSet: ["Sample/Sources/Core/", "Sample/Sources/Store/"],
+      gate: .fast, tests: ["test-queued-order-survives-relaunch"],
+      covers: ["req-orders-survive-app-kill", "test-queued-order-survives-relaunch"],
+      estLines: 120, status: .pending, worktree: "../app-queue-core", model: .sonnet)
+    try await repo.writePlanState(
+      designSha: DesignSha.of(designText), ledger: PlanLintRepo.ledger(tasks: [task]))
+
+    let (report, run) = try await repo.lint()
+    #expect(run.packFailures == [:])
+    #expect(!report.findings.contains { $0.ruleID == PlanLintGraph.writeSetUnresolvedRuleID })
+    let tooMany = report.findings.first { $0.ruleID == PlanLintCoverage.tooManyModulesRuleID }
+    #expect(tooMany?.message.contains("(Core, Store)") == true)
+
+    let graph = try ModuleGraph(packages: [PlanLintRepo.manifest()])
+    let design = DesignDocument(markdown: .parse(designText))
+    let resolution = PlanLintGraph.resolveWriteSet(
+      task.writeSet, graph: graph, design: design,
+      packageDirectories: [PlanLintRepo.packagePath])
+    #expect(resolution.moduleNames == ["Core", "Store"])
+    let inputs = try WorkerPackSources.gather(designPath: PlanLintRepo.design, root: repo.root)
+      .inputs(
+        task: task, design: design,
+        designSource: ContextSource(label: PlanLintRepo.design, rawText: designText),
+        graph: graph
+      ).get()
+    #expect(inputs.moduleKindAnchors == ContextPackModuleKindAnchors.anchors(for: resolution.kinds))
+    let pack = try ContextPack.build(role: .worker, inputs: .worker(inputs))
+    #expect(pack.slices.flatMap(\.lines).contains { $0.contains("An engine never touches IO.") })
+  }
 }

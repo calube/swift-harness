@@ -1,4 +1,5 @@
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
 import Testing
@@ -195,7 +196,7 @@ struct ReviewSynthRunTests {
   }
 
   @Test(
-    "synth writes review-telemetry.json with the wall time since review-input started, says the tokens are unknown without a workflow result, and names the file — catches a review whose cost nobody can find"
+    "synth writes review-telemetry.json with the wall time since review-input started, says the tokens are unknown without a workflow result, and names the file relative to review.json — catches a review whose cost nobody can find, or a machine path in the report"
   )
   func telemetryWithoutWorkflowResult() throws {
     let started = Date().addingTimeInterval(-120)
@@ -210,9 +211,49 @@ struct ReviewSynthRunTests {
     #expect(telemetry["outputTokens"] == nil)
     let unavailable = try #require(telemetry["unavailable"] as? [String])
     #expect(unavailable.contains { $0.contains("--workflow-result") })
+    #expect(try run.json("review.json")["telemetry"] as? String == "review-telemetry.json")
+    let reportPath = run.directory.appending(path: "review.json").path
     let path = run.directory.appending(path: "review-telemetry.json").path
-    #expect(try run.json("review.json")["telemetry"] as? String == path)
-    #expect(ReviewSummary.render(report, reportPath: "review.json").contains("telemetry: \(path)"))
+    #expect(ReviewSummary.render(report, reportPath: reportPath).contains("telemetry: \(path)"))
+  }
+
+  /// Runs the built `swiftgate review-synth` on `run`'s focus files from `run.root`, as the
+  /// review skill does.
+  static func synthWithBinary(_ run: Run) async throws -> ProcessOutput {
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    return try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: binary,
+        arguments: ["review-synth", "--run-directory", run.directory.path] + run.files.map(\.path),
+        environmentOverlay: [
+          "LLVM_PROFILE_FILE": run.root.appending(path: "swiftgate-%p.profraw").path
+        ],
+        workingDirectory: run.root.path, timeout: .seconds(120)))
+  }
+
+  @Test(
+    "review-synth run as the real binary without --workflow-result writes review.json naming a telemetry file that exists, and when that file can't be written exits 2 and writes no review.json — catches a review.json with no telemetry behind it"
+  )
+  func binaryAlwaysWritesTelemetryFirst() async throws {
+    let run = try Self.run([Self.finding(line: 67)], patch: Self.cleanReset())
+    defer { run.remove() }
+    let output = try await Self.synthWithBinary(run)
+    #expect(output.status == .exited(0), "\(output.stderr.text)")
+    let telemetry = try #require(try run.json("review.json")["telemetry"] as? String)
+    #expect(telemetry == "review-telemetry.json")
+    #expect(FileManager.default.fileExists(atPath: run.directory.appending(path: telemetry).path))
+
+    let blocked = try Self.run([Self.finding(line: 67)], patch: Self.cleanReset())
+    defer { blocked.remove() }
+    try FileManager.default.createDirectory(
+      at: blocked.directory.appending(path: "review-telemetry.json", directoryHint: .isDirectory),
+      withIntermediateDirectories: true)
+    let failed = try await Self.synthWithBinary(blocked)
+    #expect(failed.status == .exited(2))
+    #expect(failed.stderr.text.contains("review-telemetry.json"))
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: blocked.directory.appending(path: "review.json").path))
   }
 
   @Test(

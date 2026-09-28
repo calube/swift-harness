@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -509,5 +510,335 @@ struct NestedProjectDesignTests {
       environment: [:])
     let result = await HookRunner.run(.preToolUse, input: Data(text.utf8)) { _ in dependencies }
     #expect(result.stdout == nil, "\(result.stdout ?? "")")
+  }
+}
+
+/// Counts `git rev-parse --git-common-dir` calls on their way to a real runner, which is how a
+/// test tells a warm plan-lock cache from a fresh read.
+private final class CommonDirectoryCallCounter: ProcessRunner {
+  private let runner: LiveProcessRunner
+  private let calls = Mutex(0)
+
+  init(runner: LiveProcessRunner) { self.runner = runner }
+
+  var count: Int { calls.withLock { $0 } }
+
+  func run(_ invocation: ProcessInvocation) async throws(ProcessRunnerError) -> ProcessOutput {
+    if invocation.arguments.contains("--git-common-dir") { calls.withLock { $0 += 1 } }
+    return try await runner.run(invocation)
+  }
+}
+
+/// A real repository with a linked worktree from `git worktree add`, whose every payload names
+/// the worktree through a symlinked alias, and plan state in the real git common dir.
+private struct CachedGuardScenario {
+  static let environment: [String: String] = [
+    "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+    "HOME": FileManager.default.temporaryDirectory.path,
+    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+  ]
+  static let holder = "session-holder"
+  static let other = "session-other"
+  /// The same length as `designA`, so a repointed `plan.json` keeps its size.
+  static let designC = "docs/counter/designs/online2.md"
+  static let designZ = "docs/zed/designs/zed.md"
+  static let planC = "2026-09-26-zed"
+
+  let base: URL
+  let worktree: URL
+  /// ``worktree`` spelled through a symlink.
+  let aliased: URL
+  let layout: PlanStateLayout
+  let runner = LiveProcessRunner(baseEnvironment: Self.environment)
+  let counter: CommonDirectoryCallCounter
+
+  init() async throws {
+    base = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-cached-guard-\(UUID().uuidString)", directoryHint: .isDirectory)
+      .resolvingSymlinksInPath()
+    let real = base.appending(path: "real", directoryHint: .isDirectory)
+    let alias = base.appending(path: "alias", directoryHint: .isDirectory)
+    let main = real.appending(path: "app", directoryHint: .isDirectory)
+    worktree = real.appending(path: "app-task", directoryHint: .isDirectory)
+    aliased = alias.appending(path: "app-task", directoryHint: .isDirectory)
+    counter = CommonDirectoryCallCounter(runner: runner)
+    for (path, content) in [
+      (ConfigLoader.fileName, ProbeRepository.config), (PlanStateScenario.designA, "# Offline\n"),
+      (PlanStateScenario.designB, "# Search\n"), (Self.designC, "# Online\n"),
+      (Self.designZ, "# Zed\n"),
+    ] {
+      try Self.write(main.appending(path: path).path, content)
+    }
+    try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: real)
+    for arguments in [
+      ["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-q", "-m", "base"],
+      ["worktree", "add", "-q", "-b", "task", worktree.path],
+    ] {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: main.path,
+          timeout: .seconds(30)))
+      #expect(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    }
+    layout = try PlanStateLayout(
+      commonDirectory: try await LiveGit(runner: runner, repositoryRoot: worktree.path)
+        .commonDirectory())
+    for (plan, design) in [
+      (PlanStateScenario.planA, PlanStateScenario.designA),
+      (PlanStateScenario.planB, PlanStateScenario.designB),
+    ] {
+      try writePlanFile(plan, design: design)
+    }
+  }
+
+  func remove() { try? FileManager.default.removeItem(at: base) }
+
+  static func write(_ absolute: String, _ content: String) throws {
+    let url = URL(filePath: absolute)
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(content.utf8).write(to: url)
+  }
+
+  func writePlanFile(_ plan: String, design: String) throws {
+    let file = PlanFile(
+      schemaVersion: 1, slug: plan, design: design, designSha: "3f1c", approval: nil,
+      clarifyChain: [], tier: .standard, resume: "planned")
+    try Self.write(
+      layout.plan(plan).planFile, String(decoding: try PlanFileJSON.encode(file), as: UTF8.self))
+  }
+
+  func claim(_ plan: String, by session: String) throws {
+    try Self.write(try layout.plan(plan).orchestratorLock, session + "\n")
+  }
+
+  func release(_ plan: String) throws {
+    try FileManager.default.removeItem(atPath: try layout.plan(plan).orchestratorLock)
+  }
+
+  func cacheFile(_ session: String) -> URL {
+    worktree.appending(path: ".harness/hook-state/plan-lock-cache-\(session).json")
+  }
+
+  /// A Write of `design` (relative to the checkout) by `session`, as the hook reads it from stdin.
+  func payload(_ design: String, session: String) throws -> Data {
+    var text = try Fixture.text("Hooks/pre-tool-use-write-ledger.json")
+    text = text.replacingOccurrences(
+      of: "\"session_id\": \"\(PlanStateScenario.session)\"",
+      with: "\"session_id\": \(String(decoding: try JSONEncoder().encode(session), as: UTF8.self))")
+    text = text.replacingOccurrences(
+      of: PlanStateScenario.recordedPath, with: "\"\(aliased.path)/\(design)\"")
+    text = text.replacingOccurrences(of: "\"/REPO", with: "\"\(aliased.path)")
+    return Data(text.utf8)
+  }
+
+  /// The hook's `hookSpecificOutput`, or `nil` when it leaves the write to the normal flow.
+  func decide(_ design: String, session: String) async throws -> [String: String]? {
+    let input = try payload(design, session: session)
+    let counter = self.counter
+    let result = await HookRunner.run(.preToolUse, input: input) { root in
+      HookDependencies(
+        git: LiveGit(runner: counter, repositoryRoot: root.path),
+        swiftPM: FakeSwiftPM(serving: []), formatter: FakeSwiftFormatter(),
+        xcode: FixedXcode(version: "26.2"), sweep: PendingOrphanCloneSweep(),
+        commitJudge: DisabledCommitCommentJudge(), environment: [:])
+    }
+    guard let stdout = result.stdout else { return nil }
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: Data(stdout.utf8)) as? [String: Any])
+    return try #require(json["hookSpecificOutput"] as? [String: String])
+  }
+
+  func decision(_ design: String, session: String) async throws -> String? {
+    try await decide(design, session: session)?["permissionDecision"]
+  }
+}
+
+@Suite("PreToolUse guard with a warm plan-lock cache")
+struct PreToolUseGuardCacheTests {
+  fileprivate typealias Scenario = CachedGuardScenario
+
+  @Test(
+    "a lock released and re-acquired by another holder between hook calls decides each next write while git is asked once per session — catches a warm cache letting through a write a fresh lock read denies"
+  )
+  func lockChangesSeenThroughWarmCache() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    let design = PlanStateScenario.designA
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+
+    #expect(try await scenario.decide(design, session: Scenario.holder) == nil)
+    #expect(try await scenario.decide(design, session: Scenario.holder) == nil)
+    try scenario.release(PlanStateScenario.planA)
+    #expect(try await scenario.decision(design, session: Scenario.holder) == "deny")
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.other)
+    #expect(try await scenario.decision(design, session: Scenario.holder) == "deny")
+    #expect(try await scenario.decide(design, session: Scenario.other) == nil)
+    try scenario.release(PlanStateScenario.planA)
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+    #expect(try await scenario.decide(design, session: Scenario.holder) == nil)
+    #expect(try await scenario.decision(design, session: Scenario.other) == "deny")
+
+    #expect(scenario.counter.count == 2)
+  }
+
+  @Test(
+    "the holder of plan A writing plan B's design is denied with a warm cache, claimed or not — catches a cached answer granting one plan's lock over another plan's design"
+  )
+  func crossPlanDeniedWithWarmCache() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+    try scenario.claim(PlanStateScenario.planB, by: Scenario.other)
+
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+    let denied = try await scenario.decide(PlanStateScenario.designB, session: Scenario.holder)
+    #expect(denied?["permissionDecision"] == "deny")
+    #expect(denied?["permissionDecisionReason"]?.contains(PlanStateScenario.planB) == true)
+    try scenario.release(PlanStateScenario.planB)
+    #expect(
+      try await scenario.decision(PlanStateScenario.designB, session: Scenario.holder) == "deny")
+
+    #expect(scenario.counter.count == 1)
+  }
+
+  @Test(
+    "a plan.json repointed to another design of the same size after the cache warms is judged on the new design — catches a cached plan.json design"
+  )
+  func repointedDesignSeen() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+
+    try scenario.writePlanFile(PlanStateScenario.planA, design: Scenario.designC)
+
+    #expect(
+      try await scenario.decision(PlanStateScenario.designA, session: Scenario.holder) == "deny")
+    #expect(try await scenario.decide(Scenario.designC, session: Scenario.holder) == nil)
+    #expect(scenario.counter.count == 1)
+  }
+
+  @Test(
+    "a plan created and claimed after the cache warms owns its design on the next call — catches a cached plans listing"
+  )
+  func planCreatedAfterWarmingSeen() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    #expect(try await scenario.decision(Scenario.designZ, session: Scenario.holder) == "deny")
+
+    try scenario.writePlanFile(Scenario.planC, design: Scenario.designZ)
+    try scenario.claim(Scenario.planC, by: Scenario.holder)
+
+    #expect(try await scenario.decide(Scenario.designZ, session: Scenario.holder) == nil)
+    #expect(scenario.counter.count == 1)
+  }
+
+  @Test(
+    "a corrupt cache file gives the verdict a fresh read gives, with a note naming the file — catches a corrupt cache allowing silently or changing the verdict"
+  )
+  func corruptCacheSameVerdictWithNote() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+    let file = scenario.cacheFile(Scenario.holder)
+
+    try Data("{\"schemaVersion\":".utf8).write(to: file)
+    let denied = try await scenario.decide(PlanStateScenario.designB, session: Scenario.holder)
+    #expect(denied?["permissionDecision"] == "deny")
+    #expect(denied?["permissionDecisionReason"]?.contains(file.lastPathComponent) == true)
+
+    try Data("not json".utf8).write(to: file)
+    let allowed = try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder)
+    #expect(allowed?["permissionDecision"] == nil)
+    #expect(allowed?["additionalContext"]?.contains(file.lastPathComponent) == true)
+
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+    #expect(scenario.counter.count == 3)
+  }
+
+  @Test(
+    "session B never reads session A's cache file — catches one session's cache deciding another's writes"
+  )
+  func sessionsNeverShareCache() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+    try scenario.claim(PlanStateScenario.planB, by: Scenario.other)
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+    try Data("{garbage".utf8).write(to: scenario.cacheFile(Scenario.holder))
+
+    #expect(try await scenario.decide(PlanStateScenario.designB, session: Scenario.other) == nil)
+    #expect(FileManager.default.fileExists(atPath: scenario.cacheFile(Scenario.other).path))
+    #expect(
+      try String(contentsOf: scenario.cacheFile(Scenario.holder), encoding: .utf8) == "{garbage")
+  }
+
+  @Test(
+    "a session id with `/` or `..` names no cache file, reads plan state fresh and says so — catches a session id writing outside the hook-state directory"
+  )
+  func unsafeSessionNamesNoCachePath() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    for session in ["../../escape", "a/b", ".."] {
+      try scenario.claim(PlanStateScenario.planA, by: session)
+      let output = try await scenario.decide(PlanStateScenario.designA, session: session)
+      #expect(output?["permissionDecision"] == nil, "\(session)")
+      #expect(output?["additionalContext"]?.contains("plan-lock cache is off") == true)
+      #expect(
+        try await scenario.decision(PlanStateScenario.designB, session: session) == "deny")
+    }
+    let state = scenario.worktree.appending(path: ".harness")
+    let written = FileManager.default.enumerator(atPath: state.path)?.allObjects as? [String]
+    #expect((written ?? []).allSatisfy { !$0.contains("escape") && !$0.contains("plan-lock") })
+    #expect(!FileManager.default.fileExists(atPath: scenario.base.appending(path: "escape").path))
+  }
+
+  @Test(
+    "12 real hook processes racing on one session's empty cache each decide correctly, across a release and a re-claim, and leave a cache the next call trusts — catches a torn or interleaved cache write"
+  )
+  func racingHookProcessesStayCorrect() async throws {
+    let scenario = try await CachedGuardScenario()
+    defer { scenario.remove() }
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let runner = scenario.runner
+    let profiles = scenario.base.appending(path: "swiftgate-%p.profraw").path
+    try scenario.claim(PlanStateScenario.planA, by: Scenario.holder)
+
+    for round in 0..<3 {
+      if round == 1 { try scenario.release(PlanStateScenario.planA) }
+      if round == 2 { try scenario.claim(PlanStateScenario.planA, by: Scenario.holder) }
+      if round > 0 { try FileManager.default.removeItem(at: scenario.cacheFile(Scenario.holder)) }
+      let inputs = try (0..<12).map { index in
+        let design = index.isMultiple(of: 2) ? PlanStateScenario.designA : PlanStateScenario.designB
+        return (design, try scenario.payload(design, session: Scenario.holder))
+      }
+      let outcomes = try await withThrowingTaskGroup(of: (String, String).self) { group in
+        for (design, input) in inputs {
+          group.addTask {
+            let output = try await runner.run(
+              ProcessInvocation(
+                executable: binary, arguments: ["hook", "pre-tool-use"],
+                environmentOverlay: ["LLVM_PROFILE_FILE": profiles],
+                workingDirectory: scenario.base.path, standardInput: input,
+                timeout: .seconds(60)))
+            return (design, output.stdout.text)
+          }
+        }
+        return try await group.reduce(into: []) { $0.append($1) }
+      }
+      for (design, stdout) in outcomes {
+        let allowed = design == PlanStateScenario.designA && round != 1
+        #expect(
+          stdout.contains("\"deny\"") == !allowed, "round \(round), \(design): \(stdout)")
+        #expect(!stdout.contains("plan-lock cache"), "round \(round): \(stdout)")
+      }
+    }
+
+    #expect(try await scenario.decide(PlanStateScenario.designA, session: Scenario.holder) == nil)
+    #expect(scenario.counter.count == 0)
   }
 }

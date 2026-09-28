@@ -60,6 +60,44 @@ struct HookLatencyCPUBudgetTests {
   }
 
   @Test(
+    "a holder's design-path Write stays under 50ms of CPU time with a warm plan-lock cache even when git is slow — catches the design guard spawning git on every call"
+  )
+  func warmCacheDesignWriteUnderBudget() async throws {
+    let scenario = try PlanStateScenario()
+    defer { scenario.harness.repository.remove() }
+    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
+    let input = try scenario.harness.payload(
+      "pre-tool-use-write-ledger",
+      replacing: [
+        PlanStateScenario.recordedPath:
+          "\"\(scenario.root.path)/\(PlanStateScenario.designA)\""
+      ])
+    let harness = scenario.harness
+    let root = scenario.root
+    func decide() async -> (result: HookResult, milliseconds: Int) {
+      let measured = MeasuredProcessRunner()
+      let dependencies = HookDependencies(
+        git: LiveGit(runner: SlowGitProcessRunner(measured: measured), repositoryRoot: root.path),
+        swiftPM: harness.swiftPM, formatter: harness.formatter, xcode: harness.xcode,
+        sweep: PendingOrphanCloneSweep(), commitJudge: harness.judge, environment: [:])
+      let (result, own) = await Latency.threadCPUMilliseconds {
+        await HookRunner.run(.preToolUse, input: input) { _ in dependencies }
+      }
+      return (result, own + measured.totalChildCPUMilliseconds)
+    }
+    #expect(await decide().result == .silent)
+
+    var results: [HookResult] = []
+    let samples = await Latency.samples {
+      let (result, milliseconds) = await decide()
+      results.append(result)
+      return milliseconds
+    }
+    #expect(results.allSatisfy { $0 == .silent }, "\(results)")
+    #expect(samples.min()! < 50, "warm design-path samples: \(samples)ms, budget: 50ms")
+  }
+
+  @Test(
     "the fast PreToolUse path stays under its CPU-time budget while 4 CPU-burning processes load the machine — catches a wall-clock budget reddening under load with no code change"
   )
   func staysUnderBudgetWhileMachineIsBusy() async throws {
