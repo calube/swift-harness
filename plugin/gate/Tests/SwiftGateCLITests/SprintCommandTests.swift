@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -140,6 +141,52 @@ private struct SprintRepo {
       1, gate: try await gate("check push"), context: context)
     try #require(outcome.refusal == nil, "\(outcome.message)")
     return (context, surface)
+  }
+  /// Writes each file, creating its directories, and commits them all.
+  @discardableResult
+  func commit(files: [String: String], _ message: String) async throws -> String {
+    for (path, text) in files {
+      let url = root.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(text.utf8).write(to: url)
+    }
+    try await git("add", "-A")
+    try await git("commit", "-q", "-m", message)
+    return try await git("rev-parse", "HEAD")
+  }
+
+  /// Started, with a surface of `files` recorded; returns the surface sha.
+  func surfaced(files: [String: String], slices: Int) async throws -> (SprintContext, String) {
+    let context = try await started(slices: slices)
+    let surface = try await commit(files: files, "surface")
+    let outcome = await SprintCommandRun.surface(commit: surface, context: context)
+    try #require(outcome.refusal == nil, "\(outcome.message)")
+    return (context, surface)
+  }
+
+  /// Commits `files` as slice `number` and runs `sprint slice` on a green push gate from the
+  /// surface.
+  func slice(_ number: Int, files: [String: String], context: SprintContext) async throws
+    -> SprintOutcome
+  {
+    try await commit(files: files, "slice \(number)")
+    return await SprintCommandRun.slice(
+      number, gate: try await gate("check push"), context: context)
+  }
+
+  /// The rehearsal's `Packages/<package>/Package.swift`, as its surface or slice 4 committed it.
+  static func rehearsalManifest(_ side: String, _ package: String) throws -> [String: String] {
+    let path = "Packages/\(package)/Package.swift"
+    return [path: try Fixture.text("sprint-manifests/\(side)/\(path).txt")]
+  }
+
+  static func rehearsalManifests(_ side: String, _ packages: String...) throws
+    -> [String: String]
+  {
+    try packages.reduce(into: [:]) { files, package in
+      files.merge(try rehearsalManifest(side, package)) { $1 }
+    }
   }
 }
 
@@ -592,5 +639,135 @@ struct SprintCommandTests {
     #expect(base == surface)
     #expect(fromBase.map(\.path) == ["Sources/App/Feature.swift"])
     #expect(Set(fromMain.map(\.path)) == ["Sources/App/Feature.swift", "Sources/App/Later.swift"])
+  }
+
+  @Test(
+    "slice refuses the rehearsal's slice that adds a Live target and product to a package the surface created, naming both, and exits 1 — catches a slice adding a target the ready gate's prove can't build"
+  )
+  func sliceRefusesTheRehearsalsLiveTarget() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, _) = try await repo.surfaced(
+      files: try SprintRepo.rehearsalManifests(
+        "surface", "AppFeature", "ProfileClient", "ProfileFeature"), slices: 1)
+
+    let outcome = try await repo.slice(
+      1,
+      files: try SprintRepo.rehearsalManifests(
+        "slice", "AppFeature", "ProfileClient", "ProfileFeature"), context: context)
+
+    #expect(outcome.refusal == .targetOutsideSurface, "\(outcome.message)")
+    #expect(outcome.verdict.exitCode == 1)
+    #expect(
+      outcome.message.contains(
+        "Packages/ProfileClient/Package.swift adds target ProfileClientLive and product "
+          + "ProfileClientLive"), "\(outcome.message)")
+    #expect(!outcome.message.contains("ProfileFeature/"), "\(outcome.message)")
+    #expect(!outcome.message.contains("AppFeature/"), "\(outcome.message)")
+    #expect(outcome.message.contains("Amend the surface with a stub"), "\(outcome.message)")
+    #expect(try context.store.read()?.step == .surfaced)
+  }
+
+  @Test(
+    "slice refuses a slice that adds a whole package the surface lacks, naming its targets and products — catches a new manifest skipped because it has no surface version"
+  )
+  func sliceRefusesANewPackage() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, _) = try await repo.surfaced(
+      files: try SprintRepo.rehearsalManifest("surface", "ProfileClient"), slices: 1)
+
+    let outcome = try await repo.slice(
+      1, files: try SprintRepo.rehearsalManifest("surface", "ProfileFeature"), context: context)
+
+    #expect(outcome.refusal == .targetOutsideSurface, "\(outcome.message)")
+    #expect(
+      outcome.message.contains(
+        "Packages/ProfileFeature/Package.swift adds target ProfileCore and product ProfileCore"),
+      "\(outcome.message)")
+  }
+
+  @Test(
+    "a slice that fills declared targets and adds only test targets and dependencies passes, and a later slice adding a target is refused — catches a test target or a filled stub refused"
+  )
+  func sliceFillingDeclaredTargetsPasses() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, _) = try await repo.surfaced(
+      files: try SprintRepo.rehearsalManifests(
+        "surface", "AppFeature", "ProfileClient", "ProfileFeature"), slices: 2)
+
+    var filling = try SprintRepo.rehearsalManifests("slice", "AppFeature", "ProfileFeature")
+    filling["Packages/ProfileFeature/Sources/ProfileCore/Profile.swift"] =
+      "func profile() -> Int {\n  1\n}\n"
+    let first = try await repo.slice(1, files: filling, context: context)
+    let second = try await repo.slice(
+      2, files: try SprintRepo.rehearsalManifest("slice", "ProfileClient"), context: context)
+
+    #expect(first.refusal == nil, "\(first.message)")
+    #expect(second.refusal == .targetOutsideSurface, "\(second.message)")
+    #expect(try context.store.read()?.step == .slicing(1))
+  }
+
+  @Test(
+    "a slice that only reorders a manifest's targets and products passes, and a later slice adding one is refused — catches a reordered list read as new declarations"
+  )
+  func sliceReorderingAManifestPasses() async throws {
+    func manifest(_ products: String, _ targets: String) -> [String: String] {
+      [
+        "Packages/Kit/Package.swift": """
+        // swift-tools-version: 6.2
+        import PackageDescription
+
+        let package = Package(
+          name: "Kit",
+          products: [\(products)],
+          targets: [\(targets)]
+        )
+
+        """
+      ]
+    }
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, _) = try await repo.surfaced(
+      files: manifest(
+        #".library(name: "A", targets: ["A"]), .library(name: "B", targets: ["B"])"#,
+        #".target(name: "A"), .target(name: "B")"#), slices: 2)
+
+    let reordered = try await repo.slice(
+      1,
+      files: manifest(
+        #".library(name: "B", targets: ["B"]), .library(name: "A", targets: ["A"])"#,
+        #".testTarget(name: "BTests"), .target(name: "B"), .target(name: "A")"#),
+      context: context)
+    let added = try await repo.slice(
+      2,
+      files: manifest(
+        #".library(name: "B", targets: ["B"]), .library(name: "A", targets: ["A"])"#,
+        #".target(name: "B"), .target(name: "A"), .target(name: "C")"#), context: context)
+
+    #expect(reordered.refusal == nil, "\(reordered.message)")
+    #expect(added.refusal == .targetOutsideSurface, "\(added.message)")
+    #expect(
+      added.message.contains(": Packages/Kit/Package.swift adds target C. "), "\(added.message)")
+  }
+
+  @Test(
+    "slice refuses a manifest it can't read at HEAD, naming the file and why — catches an unparsable manifest passed as adding nothing"
+  )
+  func sliceRefusesAnUnreadableManifest() async throws {
+    let repo = try await SprintRepo()
+    defer { repo.remove() }
+    let (context, _) = try await repo.surfaced(
+      files: try SprintRepo.rehearsalManifest("surface", "ProfileClient"), slices: 1)
+    let path = "Packages/ProfileClient/Package.swift"
+    let broken = try #require(try SprintRepo.rehearsalManifest("surface", "ProfileClient")[path])
+      .replacingOccurrences(of: "swiftLanguageModes: [.v6]\n)", with: "swiftLanguageModes: [.v6]\n")
+
+    let outcome = try await repo.slice(1, files: [path: broken], context: context)
+
+    #expect(outcome.refusal == .targetOutsideSurface, "\(outcome.message)")
+    #expect(outcome.message.contains("\(path) can't be read at"), "\(outcome.message)")
   }
 }

@@ -125,6 +125,7 @@ command that checks it, and the skill can't advance without it.
 | Every slice passed `push` before the next starts | `sprint slice` refuses a RED, BLOCKED or stale run |
 | A slice's gate measured its diff from the surface | the run's history line records the sha `--base` resolved to; `sprint slice` refuses any other base, or none, with `sprint.gate-base` |
 | The surface has no behaviour | `sprint surface` runs `surface-check` and refuses on any finding |
+| A slice declares no target or product the surface lacks | `sprint slice` reads each `Package.swift` changed since the surface and refuses, with `sprint.target-outside-surface`, a non-test target or product HEAD declares and the surface doesn't, a new package, or a manifest it can't read at either commit; at the surface a new target has no sources, so `prove` could build no test in its package |
 | Every new test fails on an assertion without its code | the final `ready` gate's prove at the surface base; `sprint finish` refuses unless it's GREEN at HEAD |
 | `main` only moves to a green sprint | `sprint finish` fast-forwards and refuses when `main` moved since `start` |
 | A crash loses nothing | state lives in the git common dir with the other plan state; `sprint status` names the next step |

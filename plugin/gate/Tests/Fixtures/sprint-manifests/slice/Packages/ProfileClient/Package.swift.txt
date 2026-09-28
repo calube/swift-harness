@@ -1,0 +1,40 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+  name: "ProfileClient",
+  platforms: [.iOS(.v18), .macOS(.v15)],
+  products: [
+    .library(name: "ProfileClient", targets: ["ProfileClient"]),
+    .library(name: "ProfileClientLive", targets: ["ProfileClientLive"]),
+  ],
+  dependencies: [
+    .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.17.1")
+  ],
+  targets: [
+    .target(
+      name: "ProfileClient",
+      dependencies: [
+        .product(name: "Dependencies", package: "swift-dependencies"),
+        .product(name: "DependenciesMacros", package: "swift-dependencies"),
+      ]
+    ),
+    .target(
+      name: "ProfileClientLive",
+      dependencies: [
+        "ProfileClient",
+        .product(name: "Dependencies", package: "swift-dependencies"),
+      ]
+    ),
+    .testTarget(
+      name: "ProfileClientLiveTests", dependencies: ["ProfileClient", "ProfileClientLive"]),
+    .testTarget(
+      name: "ProfileClientTests",
+      dependencies: [
+        "ProfileClient",
+        .product(name: "Dependencies", package: "swift-dependencies"),
+      ]
+    ),
+  ],
+  swiftLanguageModes: [.v6]
+)

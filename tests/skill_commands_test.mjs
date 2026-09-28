@@ -572,6 +572,11 @@ const tests = {
     ])
   },
 
+  'the sprint skill halts on a slice that declares a target the surface lacks — catches the refusal row dropped or turned into a fix the machine can\'t record'() {
+    const text = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8')
+    assert.ok(/^\| `sprint\.target-outside-surface` \| halt\b/m.test(text), 'no `sprint.target-outside-surface` refusal row that halts')
+  },
+
   'the sprint skill states what its rehearsals hit — catches a lesson line dropped from the page'() {
     // A lesson may wrap across lines, so the patterns read the page with its whitespace collapsed.
     const prose = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8').replace(/\s+/g, ' ')

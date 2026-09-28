@@ -1,0 +1,36 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+  name: "ProfileFeature",
+  platforms: [.iOS(.v18), .macOS(.v15)],
+  products: [
+    .library(name: "ProfileCore", targets: ["ProfileCore"])
+  ],
+  dependencies: [
+    .package(path: "../ProfileClient"),
+    .package(
+      url: "https://github.com/pointfreeco/swift-composable-architecture",
+      exact: "1.26.2",
+      traits: ["ComposableArchitecture2Deprecations"]
+    ),
+  ],
+  targets: [
+    .target(
+      name: "ProfileCore",
+      dependencies: [
+        .product(name: "ProfileClient", package: "ProfileClient"),
+        .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+      ]
+    ),
+    .testTarget(
+      name: "ProfileCoreTests",
+      dependencies: [
+        "ProfileCore",
+        .product(name: "ProfileClient", package: "ProfileClient"),
+        .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+      ]
+    ),
+  ],
+  swiftLanguageModes: [.v6]
+)
