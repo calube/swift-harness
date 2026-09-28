@@ -29,6 +29,9 @@ public struct PlanStateLayout: Sendable, Equatable {
 
   public var indexFile: String { root + "/index.json" }
 
+  /// The directory under ``root`` holding sprint spec pages; no plan may take its name.
+  public static let sprintsDirectoryName = "sprints"
+
   /// - Throws: ``PlanStateLayoutError/invalidPlanName(_:)`` for a name that is not a single path
   ///   component, since it would address another plan's files or the index.
   public func plan(_ name: String) throws(PlanStateLayoutError) -> Plan {

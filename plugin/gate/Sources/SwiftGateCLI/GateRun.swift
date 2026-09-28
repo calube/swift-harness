@@ -22,9 +22,10 @@ enum GateRun {
   /// - Parameters:
   ///   - steps: `ready` steps a lower `check` tier added, recorded in the run's history line.
   ///   - proofBases: the refs `prove` retried at, recorded in the run's history line.
+  ///   - base: the ref `--base` named, resolved to a sha and recorded in the run's history line.
   static func execute(
     root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
-    proofBases: [String]? = nil, git: (any Git)? = nil,
+    proofBases: [String]? = nil, base: String? = nil, git: (any Git)? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)

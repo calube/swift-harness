@@ -132,6 +132,13 @@ public enum ProofRules {
     }
   }
 
+  /// The tests a reverted run leaves for the next proof base to try again.
+  public static func retryable(_ tests: [ChangedTest], in judgement: ChangedTestJudgement)
+    -> [ChangedTest]
+  {
+    compileOnly(tests, in: judgement)
+  }
+
   /// Folds reverted runs, the merge base first and then each proof base. A test's verdict is the
   /// one from the last run that ran it, so a later run's proof replaces an earlier compile-only.
   /// A proof base is an ancestor of the change where the API a test calls already exists without

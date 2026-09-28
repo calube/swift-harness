@@ -61,7 +61,7 @@ public struct RunStore: Sendable {
   /// - Parameter headCommit: the commit `HEAD` was at when the run started, in both.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
-    proofBases: [String]? = nil, headCommit: String? = nil
+    proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil
   ) throws(RunStoreError) {
     let directory = try runDirectory(for: report.runID)
     let reportFile = directory.appending(path: RunLayout.reportFileName)
