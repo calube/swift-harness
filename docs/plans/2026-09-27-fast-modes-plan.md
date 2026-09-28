@@ -64,7 +64,8 @@ The user approved all 3 recommendations on 2026-09-28.
 | 3 | `sprint-skill` | calls every command |
 | 4 | `sprint-rehearsals` | attended: the user runs it on 2 different practice prompts |
 | 5 | `prove-retries-emptied-targets-at-proof-base`, `plan-state-guard-allows-sprint-pages`, `slice-gates-measure-from-the-surface` | defects the rehearsals hit; disjoint write sets; the last waits on a user decision |
-| 6 | `t3-never-clones-a-booted-base`, `surface-check-allows-additive-manifest-edits`, `sprint-skill-rehearsal-lessons` | the first 2 wait on user decisions; the skill text follows the slice-base change |
+| 6 | `t3-never-clones-a-booted-base`, `surface-check-allows-additive-manifest-edits`, `shim-kill-cleanup-test-holds-under-load` | disjoint write sets; the flake fix is a user request (2026-09-28) |
+| 7 | `sprint-skill-rehearsal-lessons` | the skill text follows the slice-base change |
 
 ### `surface-check-command`
 - Deps: none · Gate: push · Model: opus · estLines: 420
@@ -138,3 +139,9 @@ The user approved all 3 recommendations on 2026-09-28.
 - Does: skill-text gaps the rehearsals hit, each 1 line: `<spec-file>` is any readable file path, inside or outside the repository (the run sheet keeps it outside so preflight sees a clean tree); a new `@Dependency` client's `DependencyValues` accessor stubs as `get { .init() }` / `set {}` in the surface and becomes `self[Key.self]` in the slice that tests it; `surface-check` findings take no `swiftgate:allow`: turn the body back into a stub; the `ready` gate runs in the foreground, waiting on its report file in chunks past a tool timeout, never in the background (a headless session that ends its turn kills a background gate, as rehearsal B's did).
 - Not in this task: the 417 s and 499 s `check --tier fast` T1 runs (A, `20260928T122638Z-c69b63e7`, `20260928T123402Z-e8b94f8d`). Their `swift test` logs show builds of 4.75 s and 18.5 s, so a cold build doesn't explain them. Capture a timed trace (per-step wall clock, SwiftPM stderr for `.build` lock waits) on the next rehearsal before drafting a fix.
 - Tests: the skill contract test passes; every command and flag it names exists; the page stays generic (no app shape or prompt text).
+
+### `shim-kill-cleanup-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 80
+- Writes: `tests/shim_kill_cleanup_test.mjs`, and `plugin/bin/swiftgate` only if the root cause is in the shim (then `tests/shim_test.sh` too)
+- Does: the test "a shim test killed outright leaves no process under its temp directory" fails in full push runs at load 40 or more and passes alone ("the shim test ran no shim within 20s"; main runs `20260928T121418Z-3d3de7e5`, and 2 runs on the prove-retry branch). Find why the shim doesn't start within 20 s under load: a fixed wall-clock deadline racing a cold start, or a real shim defect. Replace the fixed deadline with waiting on the real artifact (the shim's process or marker file), bounded by a deadline long enough for a cold shim under load and reported by name when it's exceeded. If the shim itself is slow to spawn, fix the shim instead.
+- Tests: the test passes 10 times in a row under generated load (`timeout`-bounded busy loops on every core, cleaned up by their own deadline), and a shim that never starts still fails with the named deadline, never hangs. Revert the fix and confirm the loaded run goes red.
