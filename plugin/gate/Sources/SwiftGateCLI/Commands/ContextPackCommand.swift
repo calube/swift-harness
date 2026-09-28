@@ -195,6 +195,11 @@ enum ContextPackRun {
           "unknown --role `\(roleRaw)`; expected one of "
           + ContextPackRole.allCases.map(\.rawValue).joined(separator: ", "))
     }
+    if options.specPage != nil, role != .decomposer, role != .worker {
+      return .invalid(
+        message:
+          "--spec-page applies only to --role decomposer and --role worker, not \(role.rawValue)")
+    }
 
     let gathered: Result<Gathered, GatherFailure>
     switch role {
@@ -682,22 +687,72 @@ enum ContextPackRun {
       ))
   }
 
+  /// The plan's source a decomposer or worker pack is cut from: exactly 1 of `--design` and
+  /// `--spec-page`.
+  private enum PlanSource {
+    case design(path: String)
+    case specPage(path: String)
+
+    var path: String {
+      switch self {
+      case .design(let path), .specPage(let path): path
+      }
+    }
+  }
+
+  private static func planSource(_ o: ContextPackGatherInputs) -> Result<PlanSource, GatherFailure>
+  {
+    switch (o.design, o.specPage) {
+    case (let design?, nil): return .success(.design(path: design))
+    case (nil, let page?): return .success(.specPage(path: page))
+    case (_?, _?):
+      return .failure(
+        GatherFailure(
+          "--design and --spec-page both given; a plan's source is its design or its spec page, "
+            + "so give 1"))
+    case (nil, nil):
+      return .failure(
+        GatherFailure("missing required option '--design <path>' or '--spec-page <path>'"))
+    }
+  }
+
+  /// Reads and parses the spec page at `path`. A page that breaks the format is refused with every
+  /// problem the parser found, as `spec-page check` reports them.
+  private static func readSpecPage(_ path: String, root: URL) -> Result<
+    SpecPageSource, GatherFailure
+  > {
+    let source: ContextSource
+    switch ContextPackFiles.read(label: path, path: path, root: root) {
+    case .success(let s): source = s
+    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+    }
+    switch SpecPage.parse(source.rawText) {
+    case .parsed(let page): return .success(SpecPageSource(page: page, source: source))
+    case .malformed(let problems):
+      let listed = problems.map { problem in
+        problem.line.map { "line \($0): \(problem.message)" } ?? problem.message
+      }
+      return .failure(
+        GatherFailure(
+          violationMessage:
+            "`\(path)` is not a valid spec page (run `swiftgate spec-page check` on it): "
+            + listed.joined(separator: "; ")))
+    }
+  }
+
   private static func gatherDecomposer(_ o: ContextPackGatherInputs, _ root: URL) -> Result<
     Gathered, GatherFailure
   > {
-    guard let designPath = o.design else {
-      return .failure(GatherFailure("missing required option '--design <path>'"))
+    let planSource: PlanSource
+    switch self.planSource(o) {
+    case .success(let source): planSource = source
+    case .failure(let failure): return .failure(failure)
     }
     guard let moduleGraphPath = o.moduleGraph else {
       return .failure(GatherFailure("missing required option '--module-graph <path>'"))
     }
     guard let boundsPath = o.taskSizingBounds else {
       return .failure(GatherFailure("missing required option '--task-sizing-bounds <path>'"))
-    }
-    let design: ContextSource
-    switch ContextPackFiles.read(label: designPath, path: designPath, root: root) {
-    case .success(let s): design = s
-    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
     }
     let moduleGraph: ContextSource
     switch ContextPackFiles.read(label: moduleGraphPath, path: moduleGraphPath, root: root) {
@@ -709,19 +764,40 @@ enum ContextPackRun {
     case .success(let s): bounds = s
     case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
     }
-    return .success(
-      (
-        .decomposer(
-          DecomposerInputs(design: design, moduleGraph: moduleGraph, taskSizingBounds: bounds)), [],
-        nil
-      ))
+    switch planSource {
+    case .specPage(let pagePath):
+      switch readSpecPage(pagePath, root: root) {
+      case .failure(let failure): return .failure(failure)
+      case .success(let specPage):
+        return .success(
+          (
+            .specPageDecomposer(
+              SpecPageDecomposerInputs(
+                specPage: specPage, moduleGraph: moduleGraph, taskSizingBounds: bounds)), [], nil
+          ))
+      }
+    case .design(let designPath):
+      let design: ContextSource
+      switch ContextPackFiles.read(label: designPath, path: designPath, root: root) {
+      case .success(let s): design = s
+      case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+      }
+      return .success(
+        (
+          .decomposer(
+            DecomposerInputs(design: design, moduleGraph: moduleGraph, taskSizingBounds: bounds)),
+          [], nil
+        ))
+    }
   }
 
   private static func gatherWorker(
     _ o: ContextPackGatherInputs, _ root: URL, _ swiftPM: any SwiftPM
   ) async -> Result<Gathered, GatherFailure> {
-    guard let designPath = o.design else {
-      return .failure(GatherFailure("missing required option '--design <path>'"))
+    let planSource: PlanSource
+    switch self.planSource(o) {
+    case .success(let source): planSource = source
+    case .failure(let failure): return .failure(failure)
     }
     guard let ledgerPath = o.ledger else {
       return .failure(GatherFailure("missing required option '--ledger <path>'"))
@@ -735,12 +811,24 @@ enum ContextPackRun {
           "--module-kind doesn't apply to a worker pack: its kinds come from the task's write "
             + "set and the module graph"))
     }
-    let designSource: ContextSource
-    switch ContextPackFiles.read(label: designPath, path: designPath, root: root) {
-    case .success(let s): designSource = s
-    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+    /// The design, or the spec page, the pack is cut from.
+    enum Read {
+      case design(ContextSource, DesignDocument)
+      case specPage(SpecPageSource)
     }
-    let design = DesignDocument(markdown: .parse(designSource.rawText))
+    let read: Read
+    switch planSource {
+    case .design(let designPath):
+      switch ContextPackFiles.read(label: designPath, path: designPath, root: root) {
+      case .success(let s): read = .design(s, DesignDocument(markdown: .parse(s.rawText)))
+      case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+      }
+    case .specPage(let pagePath):
+      switch readSpecPage(pagePath, root: root) {
+      case .success(let specPage): read = .specPage(specPage)
+      case .failure(let failure): return .failure(failure)
+      }
+    }
 
     let ledgerData: Ledger
     switch ContextPackLedger.load(ledgerPath: ledgerPath, root: root) {
@@ -789,16 +877,27 @@ enum ContextPackRun {
     // The same resolution plan-lint sizes the task with, so a module the design plans (not in
     // the graph yet) brings its kind's standards, and a misspelt one halts instead of reading
     // as a docs-only task.
-    let resolution = PlanLintGraph.resolveWriteSet(
-      task.writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path))
+    let resolution: WriteSetResolution
+    let plannedTable: String
+    switch read {
+    case .design(_, let design):
+      resolution = PlanLintGraph.resolveWriteSet(
+        task.writeSet, graph: graph, design: design, packageDirectories: graph.packages.map(\.path))
+      plannedTable = "design's Module kinds table"
+    case .specPage(let specPage):
+      resolution = SpecPageWriteSet.resolve(
+        task.writeSet, graph: graph, page: specPage.page,
+        packageDirectories: graph.packages.map(\.path))
+      plannedTable = "spec page's Modules table"
+    }
     if let entry = resolution.unresolved.first {
       return .failure(
         GatherFailure(
           violationMessage:
             "\(PlanLintGraph.writeSetUnresolvedRuleID): task `\(task.id)`'s write-set entry "
-            + "`\(entry)` names a module directory that no module in the graph or the design's "
-            + "Module kinds table answers to: correct the path, or add the module to the "
-            + "design's Module kinds table"))
+            + "`\(entry)` names a module directory that no module in the graph or the "
+            + "\(plannedTable) answers to: correct the path, or add the module to the "
+            + plannedTable))
     }
     let kinds = ModuleKind.allCases.filter(Set(resolution.kinds).contains)
 
@@ -814,7 +913,7 @@ enum ContextPackRun {
       }
     } else {
       switch WorkerPackSources.gather(
-        designPath: designPath, root: root, harnessRoot: o.harnessRoot
+        designPath: planSource.path, root: root, harnessRoot: o.harnessRoot
       )
       .standards
       {
@@ -825,17 +924,30 @@ enum ContextPackRun {
       }
     }
 
-    return .success(
-      (
-        .worker(
-          WorkerInputs(
-            task: task, design: design, designSource: designSource, claims: claims,
-            citedClaimIDs: o.claimID, standards: standards,
-            moduleKindAnchors: kinds.isEmpty
-              ? [noModuleKindsAnchor] : ContextPackModuleKindAnchors.anchors(for: kinds),
-            dependencyNotes: dependencyNotes)),
-        notes, o.key ?? taskID
-      ))
+    let anchors =
+      kinds.isEmpty ? [noModuleKindsAnchor] : ContextPackModuleKindAnchors.anchors(for: kinds)
+    switch read {
+    case .design(let designSource, let design):
+      return .success(
+        (
+          .worker(
+            WorkerInputs(
+              task: task, design: design, designSource: designSource, claims: claims,
+              citedClaimIDs: o.claimID, standards: standards, moduleKindAnchors: anchors,
+              dependencyNotes: dependencyNotes)),
+          notes, o.key ?? taskID
+        ))
+    case .specPage(let specPage):
+      return .success(
+        (
+          .specPageWorker(
+            SpecPageWorkerInputs(
+              task: task, specPage: specPage, claims: claims, citedClaimIDs: o.claimID,
+              standards: standards, moduleKindAnchors: anchors,
+              touchedModules: resolution.moduleNames, dependencyNotes: dependencyNotes)),
+          notes, o.key ?? taskID
+        ))
+    }
   }
 
   // MARK: - Shared gathering helpers
@@ -987,8 +1099,8 @@ enum ContextPackRun {
     case .unknownModuleKind(let entry?):
       return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in a module with "
         + "no known kind, so its standards can't be packed"
-    case .unknownSliceID:
-      return ""
+    case .unknownSliceID(let id, let page):
+      return "`\(id)` is not a slice id on the spec page `\(page)`"
     case .unknownModuleKind(nil):
       return "context-pack.module-kind-unknown: \(ConfigLoader.fileName) names a module kind "
         + "outside \(ModuleKind.allCases.map(\.rawValue).joined(separator: ", ")), so the "
@@ -1044,7 +1156,10 @@ struct ContextPackCommand: AsyncParsableCommand {
       + "--claim-id (evidence auditor), --design/--standards/--playbook/--standards-anchor "
       + "(standards reviewer), --design/--doc-anchor/--question-set (challenger), --design/"
       + "--module-graph/--task-sizing-bounds (decomposer), --design/--ledger/--task-id/--claims/"
-      + "--standards/--playbook/--build-run (worker) apply. A worker pack's standards are the "
+      + "--standards/--playbook/--build-run (worker) apply. The decomposer and the worker take "
+      + "--spec-page in place of --design when the plan's source is a spec page: exactly 1 of "
+      + "the 2, else exit 2; a page that breaks the spec page format, or a `covers` id that is "
+      + "not a slice id on it, exits 1. A worker pack's standards are the "
       + "anchors for the module kinds its task's write set touches in the module graph; "
       + "--standards defaults to docs/standards.md, else the harness plugin's.")
 

@@ -610,3 +610,18 @@ both are `confirm: skippable`. `recipient-postcode` slice 2 quotes an acceptance
 file wraps over 2 lines, joined onto 1. `shipping-address` marks the delivery note slice
 `Spec: none` (its spec lists no acceptance line for it) and runs to 417 words, over the 400-word
 limit: a real `too-long` page.
+
+## Context packs (`context-pack`)
+
+`context-pack/design-decomposer.pack.txt` is the decomposer pack `swiftgate context-pack` wrote for
+a design before it could read a spec page, so a test can hold a design's pack byte-identical. It
+was captured with the harness at `bfb35b5`, exported whole (`git archive bfb35b5 plugin | tar -x`),
+in an empty directory holding `Fixtures/design/valid.md` as `design.md`:
+
+```sh
+printf 'Sample: OrderQueueCore, OrderQueueFeature\n' > graph.txt
+printf 'est_lines_max = 400\n' > bounds.txt
+<export>/plugin/bin/swiftgate context-pack --role decomposer --design design.md \
+  --module-graph graph.txt --task-sizing-bounds bounds.txt
+cp .harness/context-pack/decomposer.md <fixtures>/context-pack/design-decomposer.pack.txt
+```

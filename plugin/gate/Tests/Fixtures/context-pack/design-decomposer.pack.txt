@@ -1,0 +1,88 @@
+# context-pack: decomposer
+
+## design.md § requirements
+
+```
+## Requirements
+
+- req-offline-queue-drains-on-reconnect: The client resubmits queued orders once connectivity returns.
+- req-queue-survives-app-relaunch: A queued order is still present after the app is force-quit and reopened.
+
+```
+
+## design.md § decision
+
+```
+## Decision
+
+- Client-side queue [ev-tca-effect-run-supports-cancellation]
+
+```
+
+## design.md § architecture
+
+````
+## Architecture
+
+```mermaid
+flowchart TD
+  A[OrderQueueReducer] --> B[SubmitOrderEffect]
+  B --> C[Checkout API]
+```
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant Queue
+  participant API
+  Client->>Queue: enqueue(order)
+  Queue->>API: submit(order)
+```
+
+````
+
+## design.md § module-kinds
+
+```
+## Module kinds
+
+| Module | Kind | Reason |
+|---|---|---|
+| OrderQueueFeature | feature | owns the reducer and queue state |
+| OrderQueueCore | library | pure queue model, no I/O |
+
+```
+
+## design.md § test-plan-by-tier
+
+```
+## Test plan by tier
+
+- test-queued-orders-replay-in-submit-order: a queued order resubmits after reconnect — tier T1
+- test-queue-persists-across-relaunch: a queued order survives a simulated relaunch — tier T2
+
+```
+
+## design.md § risks
+
+```
+## Risks
+
+- The App Store review guidelines allow silent background submission of a queued order; see Open questions.
+- Tail latency: submit retries back off up to 30s under sustained load; needs a longer soak test before launch.
+
+```
+
+## graph.txt
+
+```
+Sample: OrderQueueCore, OrderQueueFeature
+```
+
+## bounds.txt
+
+```
+est_lines_max = 400
+```
+
+Estimated tokens (UTF-8 bytes / 4 — an estimate, not a real tokenizer count): 315
