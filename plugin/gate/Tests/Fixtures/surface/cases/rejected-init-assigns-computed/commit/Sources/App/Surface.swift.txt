@@ -1,0 +1,14 @@
+struct Counter {
+  var count: Int
+  var label: String
+
+  init(count: Int) {
+    self.count = count + 1
+    self.label = ""
+  }
+
+  init(label: String) {
+    self.count = 0
+    self.label = "Count"
+  }
+}

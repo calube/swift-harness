@@ -94,6 +94,21 @@ func describe(_ tab: Tab) -> String {
 }
 EOF
 
+cat > Sources/App/Commands.swift <<'EOF'
+struct Root {
+  static let commands: [Any.Type] = [
+    ListCommand.self,
+    ShowCommand.self,
+  ]
+
+  static var names: [Any.Type] { [ListCommand.self] }
+}
+
+struct ListCommand {}
+
+struct ShowCommand {}
+EOF
+
 cat > Sources/App/Legacy.swift <<'EOF'
 func legacy() -> Int {
   1
@@ -387,6 +402,60 @@ sed -i '' 's/    return 3/    \/\/ The fixed page size.\
     return    3/' Sources/App/Existing.swift
 record allowed-no-new-bodies
 
+begin allowed-init-assigns-parameters
+cat > Sources/App/Surface.swift <<'EOF'
+struct Draft {
+  var name: String
+  var tags: [String]
+
+  init(name: String) {
+    self.name = name
+    self.tags = []
+  }
+}
+EOF
+record allowed-init-assigns-parameters
+
+begin allowed-empty-value
+cat > Sources/App/Surface.swift <<'EOF'
+struct Page {
+  var items: [Item]
+  var title: String
+  var cursor: String?
+
+  static var empty: Page { Page(items: [], title: "", cursor: nil) }
+}
+
+func firstPage(title: String) -> Page {
+  return Page(items: [], title: title, cursor: nil)
+}
+
+struct Pager {
+  var makePage: (String) -> Page = { title in .init(items: [], title: title, cursor: nil) }
+}
+EOF
+record allowed-empty-value
+
+begin allowed-registration
+cat > Sources/App/Commands.swift <<'EOF'
+struct Root {
+  static let commands: [Any.Type] = [
+    ListCommand.self,
+    ShowCommand.self,
+    AddCommand.self,
+  ]
+
+  static var names: [Any.Type] { [ListCommand.self, AddCommand] }
+}
+
+struct ListCommand {}
+
+struct ShowCommand {}
+
+struct AddCommand {}
+EOF
+record allowed-registration
+
 # Rejected shapes: each looks like a stub but carries behaviour, and must fail.
 
 begin rejected-array-of-init
@@ -491,17 +560,63 @@ final class Settings {
 EOF
 record rejected-setter-stores
 
-begin rejected-init-assigns
+begin rejected-init-assigns-computed
 cat > Sources/App/Surface.swift <<'EOF'
-struct Draft {
-  var name: String
+struct Counter {
+  var count: Int
+  var label: String
 
-  init(name: String) {
-    self.name = name
+  init(count: Int) {
+    self.count = count + 1
+    self.label = ""
+  }
+
+  init(label: String) {
+    self.count = 0
+    self.label = "Count"
   }
 }
 EOF
-record rejected-init-assigns
+record rejected-init-assigns-computed
+
+begin rejected-empty-value-near-miss
+cat > Sources/App/Surface.swift <<'EOF'
+struct Page {
+  var items: [Int]
+  var title: String
+}
+
+func firstPage(title: String) -> Page {
+  Page(items: [1], title: title)
+}
+
+func namedPage(title: String) -> Page {
+  Page(items: [], title: title.uppercased())
+}
+
+func markedPage(title: String) -> Page {
+  Page(items: [], title: title + "!")
+}
+EOF
+record rejected-empty-value-near-miss
+
+begin rejected-registration-call
+cat > Sources/App/Commands.swift <<'EOF'
+struct Root {
+  static let commands: [Any.Type] = [
+    ListCommand.self,
+    ShowCommand.self,
+    makeCommand(),
+  ]
+
+  static var names: [Any.Type] { [ListCommand.self, Registry.lookup("add")] }
+}
+
+struct ListCommand {}
+
+struct ShowCommand {}
+EOF
+record rejected-registration-call
 
 begin rejected-forward-new-code
 cat > Sources/App/Surface.swift <<'EOF'

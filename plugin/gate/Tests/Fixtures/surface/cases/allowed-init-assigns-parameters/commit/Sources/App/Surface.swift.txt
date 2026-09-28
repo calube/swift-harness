@@ -1,7 +1,9 @@
 struct Draft {
   var name: String
+  var tags: [String]
 
   init(name: String) {
     self.name = name
+    self.tags = []
   }
 }

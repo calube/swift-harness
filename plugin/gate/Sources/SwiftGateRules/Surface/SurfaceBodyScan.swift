@@ -112,12 +112,16 @@ public enum SurfaceBodyScan {
           SurfaceJudgement(
             file: change.path, line: line, declaration: declaration, outcome: outcome))
       }
-      let judge = Judge(enclosingType: unit.enclosingType, declares: declares)
+      let judge = Judge(
+        enclosingType: unit.enclosingType, parameters: unit.parameters, declares: declares)
       switch unit.kind {
       case .storedValue:
         // An added stored property is surface (§3.1); only a changed existing value is judged.
         if !candidates.isEmpty {
-          add(.behaviour(.changesStoredValue), unit.declaration, unit.line)
+          let registers = candidates.contains { addsRegistrations(unit.node, over: $0.node) }
+          add(
+            registers ? .stub(.registersType) : .behaviour(.changesStoredValue),
+            unit.declaration, unit.line)
         }
       case .previewValue(let expression):
         add(judge.preview(Syntax(expression)), unit.declaration, unit.line)
@@ -133,6 +137,8 @@ public enum SurfaceBodyScan {
               "\(unit.declaration) \(clauseName(clause))",
               after.line(of: Syntax(clause)))
           }
+        } else if candidates.contains(where: { addsRegistrations(unit.node, over: $0.node) }) {
+          add(.stub(.registersType), unit.declaration, unit.line)
         } else {
           add(judge.body(items, context: unit.context), unit.declaration, unit.line)
         }
@@ -161,6 +167,48 @@ public enum SurfaceBodyScan {
     return outermost
   }
 
+  /// Whether `node`'s only change over `previous` is new array elements that are each a bare type
+  /// reference or `Type.self`, as registering a command in an existing list is. Separating commas
+  /// are ignored, since appending to a list without a trailing comma adds one to the old last
+  /// element.
+  private static func addsRegistrations(_ node: Syntax, over previous: Syntax) -> Bool {
+    var known: [String: Int] = [:]
+    for element in previous.arrayElements {
+      known[normalize(Syntax(element.expression)), default: 0] += 1
+    }
+    var added: [ArrayElementSyntax] = []
+    for element in node.arrayElements {
+      let text = normalize(Syntax(element.expression))
+      if let count = known[text], count > 0 {
+        known[text] = count - 1
+      } else {
+        added.append(element)
+      }
+    }
+    guard !added.isEmpty, added.allSatisfy({ isTypeReference($0.expression) }) else {
+      return false
+    }
+    func withoutCommas(_ tokens: some Sequence<TokenSyntax>) -> String {
+      tokens.filter { $0.tokenKind != .comma }.map(\.text).joined(separator: " ")
+    }
+    let remaining = node.tokens(viewMode: .sourceAccurate).filter { token in
+      !added.contains { $0.position <= token.position && token.endPosition <= $0.endPosition }
+    }
+    return withoutCommas(remaining) == withoutCommas(previous.tokens(viewMode: .sourceAccurate))
+  }
+
+  /// `Name`, `Outer.Name` or either followed by `.self`, where each name is capitalized.
+  private static func isTypeReference(_ expression: ExprSyntax) -> Bool {
+    if let reference = expression.as(DeclReferenceExprSyntax.self) {
+      return reference.argumentNames == nil && reference.baseName.text.first?.isUppercase == true
+    }
+    guard let member = expression.as(MemberAccessExprSyntax.self), let base = member.base,
+      member.declName.argumentNames == nil
+    else { return false }
+    let name = member.declName.baseName.text
+    return (name == "self" || name.first?.isUppercase == true) && isTypeReference(base)
+  }
+
   private static func clauseName(_ clause: SwitchCaseSyntax) -> String {
     switch clause.label {
     case .case(let label): "case \(label.caseItems.trimmedDescription)"
@@ -176,6 +224,8 @@ public enum SurfaceBodyScan {
 /// Where a body sits, which picks the stub rules it's held to.
 private enum BodyContext {
   case function
+  /// An `init`, which may also assign its parameters to stored properties.
+  case initializer
   case view
   case reducer
   case preview
@@ -197,10 +247,25 @@ private struct BodyUnit {
   let node: Syntax
   let normalized: String
   let enclosingType: String?
+  /// The enclosing function's, initializer's, subscript's or closure's parameter names.
+  let parameters: Set<String>
   let isTest: Bool
 }
 
 extension Syntax {
+  fileprivate var arrayElements: [ArrayElementSyntax] {
+    final class Finder: SyntaxVisitor {
+      var found: [ArrayElementSyntax] = []
+      override func visit(_ node: ArrayElementSyntax) -> SyntaxVisitorContinueKind {
+        found.append(node)
+        return .visitChildren
+      }
+    }
+    let finder = Finder(viewMode: .sourceAccurate)
+    finder.walk(self)
+    return finder.found
+  }
+
   fileprivate var switchCases: [SwitchCaseSyntax] {
     final class Finder: SyntaxVisitor {
       var found: [SwitchCaseSyntax] = []
@@ -269,6 +334,7 @@ private final class BodyCollector: SyntaxVisitor {
         key: "func \(node.name.text)",
         name: "\(node.name.text)(\(labels(node.signature.parameterClause.parameters)))",
         at: Syntax(node), context: .function, kind: .body(body.statements), node: Syntax(body),
+        parameters: names(node.signature.parameterClause.parameters),
         isTest: isTest || node.name.text.hasPrefix("test"))
     }
     return .skipChildren
@@ -278,7 +344,8 @@ private final class BodyCollector: SyntaxVisitor {
     if let body = node.body {
       add(
         key: "init", name: "init(\(labels(node.signature.parameterClause.parameters)))",
-        at: Syntax(node), context: .function, kind: .body(body.statements), node: Syntax(body))
+        at: Syntax(node), context: .initializer, kind: .body(body.statements), node: Syntax(body),
+        parameters: names(node.signature.parameterClause.parameters))
     }
     return .skipChildren
   }
@@ -296,7 +363,8 @@ private final class BodyCollector: SyntaxVisitor {
     if let block = node.accessorBlock {
       accessors(
         block, key: "subscript", name: "subscript(\(labels(node.parameterClause.parameters)))",
-        at: Syntax(node), context: .function)
+        at: Syntax(node), context: .function,
+        parameters: names(node.parameterClause.parameters))
     }
     return .skipChildren
   }
@@ -327,7 +395,8 @@ private final class BodyCollector: SyntaxVisitor {
         add(
           key: "var \(name).closure\(index)",
           name: closures.count == 1 ? name : "\(name) closure \(index + 1)", at: Syntax(node),
-          context: .function, kind: .body(closure.statements), node: Syntax(closure))
+          context: .function, kind: .body(closure.statements), node: Syntax(closure),
+          parameters: Self.names(closure.signature))
       }
       let masked = value.tokens(viewMode: .sourceAccurate).filter { token in
         !closures.contains { $0.position <= token.position && token.endPosition <= $0.endPosition }
@@ -337,7 +406,7 @@ private final class BodyCollector: SyntaxVisitor {
           key: containerKey("var \(name).value"), declaration: qualified(name),
           line: line(of: Syntax(node)), context: .function, kind: .storedValue, node: Syntax(value),
           normalized: masked.map(\.text).joined(separator: " "), enclosingType: containers.last,
-          isTest: false))
+          parameters: [], isTest: false))
     }
     return .skipChildren
   }
@@ -368,12 +437,13 @@ private final class BodyCollector: SyntaxVisitor {
 
   private func accessors(
     _ block: AccessorBlockSyntax, key: String, name: String, at node: Syntax,
-    context: BodyContext
+    context: BodyContext, parameters: Set<String> = []
   ) {
     switch block.accessors {
     case .getter(let items):
       add(
-        key: key, name: name, at: node, context: context, kind: .body(items), node: Syntax(items))
+        key: key, name: name, at: node, context: context, kind: .body(items), node: Syntax(items),
+        parameters: parameters)
     case .accessors(let list):
       for accessor in list {
         guard let body = accessor.body else { continue }
@@ -381,21 +451,21 @@ private final class BodyCollector: SyntaxVisitor {
         add(
           key: "\(key).\(specifier)", name: "\(name).\(specifier)", at: Syntax(accessor),
           context: specifier == "get" ? context : .function, kind: .body(body.statements),
-          node: Syntax(body))
+          node: Syntax(body), parameters: parameters)
       }
     }
   }
 
   private func add(
     key: String, name: String, at declaration: Syntax, context: BodyContext, kind: BodyUnit.Kind,
-    node: Syntax, isTest: Bool = false, qualify: Bool = true
+    node: Syntax, parameters: Set<String> = [], isTest: Bool = false, qualify: Bool = true
   ) {
     units.append(
       BodyUnit(
         key: qualify ? containerKey(key) : "\(key)#\(previewIndex())",
         declaration: qualify ? qualified(name) : name, line: line(of: declaration),
         context: context, kind: kind, node: node, normalized: SurfaceBodyScan.normalize(node),
-        enclosingType: containers.last, isTest: isTest))
+        enclosingType: containers.last, parameters: parameters, isTest: isTest))
   }
 
   private func previewIndex() -> Int {
@@ -409,6 +479,20 @@ private final class BodyCollector: SyntaxVisitor {
 
   private func qualified(_ name: String) -> String {
     (containers + [name]).joined(separator: ".")
+  }
+
+  /// The names a body refers to its parameters by: the second name when there is one.
+  private func names(_ parameters: FunctionParameterListSyntax) -> Set<String> {
+    Set(parameters.map { ($0.secondName ?? $0.firstName).text }.filter { $0 != "_" })
+  }
+
+  static func names(_ signature: ClosureSignatureSyntax?) -> Set<String> {
+    switch signature?.parameterClause {
+    case .simpleInput(let parameters): Set(parameters.map(\.name.text).filter { $0 != "_" })
+    case .parameterClause(let clause):
+      Set(clause.parameters.map { ($0.secondName ?? $0.firstName).text }.filter { $0 != "_" })
+    case nil: []
+    }
   }
 
   private func labels(_ parameters: FunctionParameterListSyntax) -> String {
@@ -437,6 +521,7 @@ private final class BodyCollector: SyntaxVisitor {
 /// The §3.2 table: the stub rules a body is held to in its context.
 private struct Judge {
   let enclosingType: String?
+  let parameters: Set<String>
   let declares: (String, Bool) -> Bool
 
   static let traps: Set<String> = ["fatalError", "preconditionFailure"]
@@ -445,6 +530,7 @@ private struct Judge {
     if let trap = Self.firstTrap(in: Syntax(items)) { return .behaviour(.traps(callee: trap)) }
     switch context {
     case .function: return stub(items)
+    case .initializer: return initializer(items)
     case .preview: return preview(Syntax(items))
     case .view:
       guard !items.isEmpty else { return .stub(.empty) }
@@ -481,6 +567,57 @@ private struct Judge {
     return .stub(.previewWithoutData)
   }
 
+  /// An `init` is a plain stub, or only assignments `self.x = <parameter or empty default>`. Any
+  /// other right-hand side names the first assignment that holds it.
+  private func initializer(_ items: CodeBlockItemListSyntax) -> SurfaceJudgement.Outcome {
+    let stubbed = stub(items)
+    if case .stub = stubbed { return stubbed }
+    let assignments = items.map { item in (item, Self.selfAssignment(item)) }
+    guard assignments.allSatisfy({ $0.1 != nil }) else { return stubbed }
+    for (item, assigned) in assignments {
+      guard let assigned, assigned.count == 1, let value = assigned.first else {
+        return .behaviour(.notAStub(excerpt: Self.excerpt(item)))
+      }
+      if Self.isEmptyDefault(value) || isParameter(value) { continue }
+      return .behaviour(.notAStub(excerpt: Self.excerpt(item)))
+    }
+    return .stub(.assignsParameters)
+  }
+
+  /// The right-hand side of `self.x = …` as its unfolded sequence elements, or `nil` for any other
+  /// statement.
+  private static func selfAssignment(_ item: CodeBlockItemSyntax) -> [ExprSyntax]? {
+    guard let sequence = value(of: item)?.as(SequenceExprSyntax.self) else { return nil }
+    let elements = Array(sequence.elements)
+    guard elements.count >= 3, elements[1].is(AssignmentExprSyntax.self),
+      let target = elements[0].as(MemberAccessExprSyntax.self),
+      target.base?.as(DeclReferenceExprSyntax.self)?.baseName.tokenKind == .keyword(.self)
+    else { return nil }
+    return Array(elements.dropFirst(2))
+  }
+
+  private func isParameter(_ expression: ExprSyntax) -> Bool {
+    guard let reference = expression.as(DeclReferenceExprSyntax.self) else { return false }
+    return reference.argumentNames == nil && parameters.contains(reference.baseName.text)
+  }
+
+  /// A value built by 1 initializer call (`Type(…)`, `.init(…)`, `Type.init(…)`) whose arguments
+  /// are each an empty default or a parameter passed through unchanged.
+  private func isEmptyValue(_ call: FunctionCallExprSyntax) -> Bool {
+    guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+      call.arguments.allSatisfy({ Self.isEmptyDefault($0.expression) || isParameter($0.expression) }
+      )
+    else { return false }
+    if let reference = call.calledExpression.as(DeclReferenceExprSyntax.self) {
+      return reference.baseName.text.first?.isUppercase == true
+    }
+    guard let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+      member.declName.baseName.text == "init"
+    else { return false }
+    guard let base = member.base else { return true }
+    return base.as(DeclReferenceExprSyntax.self)?.baseName.text.first?.isUppercase == true
+  }
+
   private func stub(_ items: CodeBlockItemListSyntax) -> SurfaceJudgement.Outcome {
     guard let first = items.first else { return .stub(.empty) }
     guard items.count == 1 else { return .behaviour(.notAStub(excerpt: Self.excerpt(first))) }
@@ -495,7 +632,11 @@ private struct Judge {
     let value = Self.unwrapped(expression)
     if Self.isEmptyDefault(value) { return .stub(.emptyDefault) }
     if Self.isPayloadFreeCase(value) { return .stub(.payloadFreeCase) }
-    if let call = value.as(FunctionCallExprSyntax.self) { return forward(call) }
+    if let call = value.as(FunctionCallExprSyntax.self) {
+      let forwarded = forward(call)
+      if forwarded == .stub(.forward) { return forwarded }
+      return isEmptyValue(call) ? .stub(.emptyValue) : forwarded
+    }
     return nil
   }
 

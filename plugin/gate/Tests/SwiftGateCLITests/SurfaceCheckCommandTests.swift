@@ -168,6 +168,21 @@ struct SurfaceCheckCommandTests {
       [SurfaceJudged("Callbacks.onTap", .empty), SurfaceJudged("Callbacks.loader", .emptyDefault)]
     ),
     ("allowed-new-enum-case", [SurfaceJudged("describe(_:short:) case .profile", .emptyDefault)]),
+    (
+      "allowed-init-assigns-parameters",
+      [SurfaceJudged("Draft.init(name:)", .assignsParameters)]
+    ),
+    (
+      "allowed-empty-value",
+      [
+        SurfaceJudged("Page.empty", .emptyValue), SurfaceJudged("firstPage(title:)", .emptyValue),
+        SurfaceJudged("Pager.makePage", .emptyValue),
+      ]
+    ),
+    (
+      "allowed-registration",
+      [SurfaceJudged("Root.commands", .registersType), SurfaceJudged("Root.names", .registersType)]
+    ),
   ]
 
   /// Bodies that look like stubs but carry behaviour, each a real commit that must fail naming
@@ -215,8 +230,37 @@ struct SurfaceCheckCommandTests {
       ]
     ),
     (
-      "rejected-init-assigns",
-      [SurfaceRejected("Draft.init(name:)", .notAStub(excerpt: "self.name = name"), line: 4)]
+      "rejected-init-assigns-computed",
+      [
+        SurfaceRejected(
+          "Counter.init(count:)", .notAStub(excerpt: "self.count = count + 1"), line: 5),
+        SurfaceRejected(
+          "Counter.init(label:)", .notAStub(excerpt: "self.label = \"Count\""), line: 10),
+      ]
+    ),
+    (
+      "rejected-empty-value-near-miss",
+      [
+        SurfaceRejected(
+          "firstPage(title:)", .notAStub(excerpt: "Page(items: [1], title: title)"), line: 6),
+        SurfaceRejected(
+          "namedPage(title:)",
+          .notAStub(excerpt: "Page(items: [], title: title.uppercased())"), line: 10),
+        SurfaceRejected(
+          "markedPage(title:)", .notAStub(excerpt: "Page(items: [], title: title + \"!\")"),
+          line: 14),
+      ]
+    ),
+    (
+      "rejected-registration-call",
+      [
+        SurfaceRejected(
+          "Root.commands", .changesStoredValue, line: 2, file: "Sources/App/Commands.swift"),
+        SurfaceRejected(
+          "Root.names",
+          .notAStub(excerpt: "[ListCommand.self, Registry.lookup(\"add\")]"), line: 8,
+          file: "Sources/App/Commands.swift"),
+      ]
     ),
     (
       "rejected-forward-new-code",
