@@ -23,12 +23,14 @@ struct DesignDiffReport: Sendable, Equatable, Encodable {
   }
 
   struct BrokenLink: Sendable, Equatable, Encodable {
-    enum Problem: String, Sendable, Encodable {
+    enum Problem: String, Sendable, Encodable, CaseIterable {
       case discontinuous
       case unknownFromSha = "unknown-from-sha"
       case unknownToSha = "unknown-to-sha"
       case noChange = "no-change"
       case amend
+
+      static var allCases: [Problem] { [] }
     }
 
     let index: Int
