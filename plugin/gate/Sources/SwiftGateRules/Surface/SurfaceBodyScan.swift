@@ -20,13 +20,15 @@ public struct SurfaceParentIndex: Sendable, Equatable {
   public static func build(_ sources: [String: String]) -> SurfaceParentIndex {
     let collector = DeclaredNames()
     for text in sources.values { collector.walk(Parser.parse(source: text)) }
-    return SurfaceParentIndex(functions: collector.functions, types: collector.types)
+    return SurfaceParentIndex(
+      functions: collector.functions, types: collector.types, cases: collector.cases)
   }
 }
 
 private final class DeclaredNames: SyntaxVisitor {
   var functions: Set<String> = []
   var types: Set<String> = []
+  var cases: Set<String> = []
 
   init() { super.init(viewMode: .sourceAccurate) }
 
@@ -40,6 +42,10 @@ private final class DeclaredNames: SyntaxVisitor {
         functions.insert(name)
       }
     }
+    return .skipChildren
+  }
+  override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+    for element in node.elements { cases.insert(element.name.text) }
     return .skipChildren
   }
   override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -81,8 +87,12 @@ public enum SurfaceBodyScan {
   public static func judge(_ change: SurfaceFileChange, parent: SurfaceParentIndex)
     -> [SurfaceJudgement]
   {
-    scan(change) { name, isType in
-      isType ? parent.types.contains(name) : parent.functions.contains(name)
+    scan(change) { name, kind in
+      switch kind {
+      case .function: parent.functions.contains(name)
+      case .type: parent.types.contains(name)
+      case .enumCase: parent.cases.contains(name)
+      }
     }
   }
 
@@ -91,10 +101,12 @@ public enum SurfaceBodyScan {
   }
 
   private static func scan(
-    _ change: SurfaceFileChange, declares: @escaping (String, Bool) -> Bool
+    _ change: SurfaceFileChange, declares: @escaping (String, DeclaredKind) -> Bool
   ) -> [SurfaceJudgement] {
     guard let text = change.commitText else { return [] }
     let tree = Parser.parse(source: text)
+    let fileNames = DeclaredNames()
+    fileNames.walk(tree)
     let after = BodyCollector(converter: SourceLocationConverter(fileName: change.path, tree: tree))
     after.walk(tree)
     var before: [String: [BodyUnit]] = [:]
@@ -116,7 +128,8 @@ public enum SurfaceBodyScan {
             file: change.path, line: line, declaration: declaration, outcome: outcome))
       }
       let judge = Judge(
-        enclosingType: unit.enclosingType, parameters: unit.parameters, declares: declares)
+        enclosingType: unit.enclosingType, parameters: unit.parameters,
+        fileCases: fileNames.cases, declares: declares)
       switch unit.kind {
       case .storedValue:
         // An added stored property is surface (§3.1); only a changed existing value is judged.
@@ -222,6 +235,13 @@ public enum SurfaceBodyScan {
   static func normalize(_ node: Syntax) -> String {
     node.tokens(viewMode: .sourceAccurate).map(\.text).joined(separator: " ")
   }
+}
+
+/// What a stub asks the parent whether it declares.
+private enum DeclaredKind {
+  case function
+  case type
+  case enumCase
 }
 
 /// Where a body sits, which picks the stub rules it's held to.
@@ -525,7 +545,9 @@ private final class BodyCollector: SyntaxVisitor {
 private struct Judge {
   let enclosingType: String?
   let parameters: Set<String>
-  let declares: (String, Bool) -> Bool
+  /// Enum cases the changed file itself declares, so a new enum's case needs no parent lookup.
+  let fileCases: Set<String>
+  let declares: (String, DeclaredKind) -> Bool
 
   static let traps: Set<String> = ["fatalError", "preconditionFailure"]
 
@@ -627,6 +649,10 @@ private struct Judge {
     if let returned = first.item.as(ReturnStmtSyntax.self), returned.expression == nil {
       return .stub(.empty)
     }
+    if let thrown = first.item.as(ThrowStmtSyntax.self) {
+      return isErrorValue(thrown.expression)
+        ? .stub(.throwsError) : .behaviour(.notAStub(excerpt: Self.excerpt(first)))
+    }
     if let value = Self.value(of: first), let outcome = judgeValue(value) { return outcome }
     return .behaviour(.notAStub(excerpt: Self.excerpt(first)))
   }
@@ -635,12 +661,74 @@ private struct Judge {
     let value = Self.unwrapped(expression)
     if Self.isEmptyDefault(value) { return .stub(.emptyDefault) }
     if Self.isPayloadFreeCase(value) { return .stub(.payloadFreeCase) }
+    if isUnchanged(value) { return .stub(.returnsUnchanged) }
     if let call = value.as(FunctionCallExprSyntax.self) {
       let forwarded = forward(call)
       if forwarded == .stub(.forward) { return forwarded }
-      return isEmptyValue(call) ? .stub(.emptyValue) : forwarded
+      if isEmptyValue(call) { return .stub(.emptyValue) }
+      if isEmptyPayloadCase(call) { return .stub(.emptyPayloadCase) }
+      return forwarded
     }
     return nil
+  }
+
+  /// A parameter, a bare property name, or 1 `self.` access, with no call, operator or longer
+  /// member chain. A bare name can't be told from a computed property by syntax alone.
+  private func isUnchanged(_ value: ExprSyntax) -> Bool {
+    if let reference = value.as(DeclReferenceExprSyntax.self) {
+      guard reference.argumentNames == nil, case .identifier = reference.baseName.tokenKind
+      else { return false }
+      return reference.baseName.text.first?.isUppercase != true
+    }
+    guard let member = value.as(MemberAccessExprSyntax.self), member.declName.argumentNames == nil,
+      case .identifier = member.declName.baseName.tokenKind,
+      member.declName.baseName.text.first?.isUppercase != true,
+      member.base?.as(DeclReferenceExprSyntax.self)?.baseName.tokenKind == .keyword(.self)
+    else { return false }
+    return true
+  }
+
+  /// `.name(…)` or `Type.name(…)` where `name` is a case the parent or this file declares and each
+  /// associated value is an empty default or a parameter passed through; a static function called
+  /// the same way isn't a case.
+  private func isEmptyPayloadCase(_ call: FunctionCallExprSyntax) -> Bool {
+    guard call.trailingClosure == nil, call.additionalTrailingClosures.isEmpty,
+      !call.arguments.isEmpty,
+      call.arguments.allSatisfy({ Self.isEmptyDefault($0.expression) || isParameter($0.expression) }
+      ),
+      let member = call.calledExpression.as(MemberAccessExprSyntax.self),
+      member.declName.argumentNames == nil, Self.isTypeOrOmitted(member.base)
+    else { return false }
+    let name = member.declName.baseName.text
+    guard name != "init" else { return false }
+    return fileCases.contains(name) || declares(name, .enumCase)
+  }
+
+  /// The value of a throw-only stub: a payload-free case with or without its type, an initializer
+  /// call from empty defaults and parameters, or an empty-payload case.
+  private func isErrorValue(_ value: ExprSyntax) -> Bool {
+    if Self.isPayloadFreeCase(value) { return true }
+    if let member = value.as(MemberAccessExprSyntax.self), member.base != nil,
+      member.declName.argumentNames == nil,
+      member.declName.baseName.text.first?.isLowercase == true, Self.isTypeOrOmitted(member.base)
+    {
+      return true
+    }
+    guard let call = value.as(FunctionCallExprSyntax.self) else { return false }
+    return isEmptyValue(call) || isEmptyPayloadCase(call)
+  }
+
+  /// No base (`.name`), or a capitalized type name, possibly qualified (`Outer.Inner`).
+  private static func isTypeOrOmitted(_ base: ExprSyntax?) -> Bool {
+    guard let base else { return true }
+    if let reference = base.as(DeclReferenceExprSyntax.self) {
+      return reference.argumentNames == nil && reference.baseName.text.first?.isUppercase == true
+    }
+    guard let member = base.as(MemberAccessExprSyntax.self), member.base != nil,
+      member.declName.argumentNames == nil,
+      member.declName.baseName.text.first?.isUppercase == true
+    else { return false }
+    return isTypeOrOmitted(member.base)
   }
 
   /// A forward: 1 call with no trailing closure, passing only names and empty defaults, to a
@@ -673,7 +761,8 @@ private struct Judge {
       name = callee
       isType = callee.first?.isUppercase == true
     }
-    return declares(name, isType) ? .stub(.forward) : .behaviour(.forwardsToNewCode(callee: name))
+    return declares(name, isType ? .type : .function)
+      ? .stub(.forward) : .behaviour(.forwardsToNewCode(callee: name))
   }
 
   private static func value(of item: CodeBlockItemSyntax) -> ExprSyntax? {

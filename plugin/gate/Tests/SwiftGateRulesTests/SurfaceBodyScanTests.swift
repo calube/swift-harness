@@ -119,4 +119,35 @@ struct SurfaceBodyScanTests {
         "#Preview: \(SurfaceJudgement.Outcome.behaviour(.traps(callee: "fatalError")))",
       ])
   }
+
+  @Test(
+    "the parent index holds enum case names, a body building a case the file doesn't declare names it so the parent is read, and a case the file declares needs no parent — catches a parent-declared case never looked up, or a new case rejected"
+  )
+  func payloadCasesResolveAgainstParentOrFile() {
+    let index = SurfaceParentIndex.build([
+      "Status.swift": """
+      enum ExitStatus {
+        case exited(Int32), signalled(Int32)
+        case idle
+        func label() -> String {
+          enum Local { case hidden(Int) }
+          return ""
+        }
+      }
+      """
+    ])
+    let parentCase = Self.added("func run() -> ExitStatus { .exited(0) }")
+    let fileCase = Self.added(
+      """
+      enum Phase { case waiting(String) }
+      func phase(name: String) -> Phase { .waiting(name) }
+      """)
+
+    #expect(index.cases == ["exited", "signalled", "idle"])
+    #expect(SurfaceBodyScan.forwardCallees(in: parentCase) == ["exited"])
+    #expect(SurfaceBodyScan.forwardCallees(in: fileCase) == [])
+    #expect(
+      SurfaceBodyScan.judge(fileCase, parent: SurfaceParentIndex(functions: [], types: []))
+        .map(\.outcome) == [.stub(.emptyPayloadCase)])
+  }
 }

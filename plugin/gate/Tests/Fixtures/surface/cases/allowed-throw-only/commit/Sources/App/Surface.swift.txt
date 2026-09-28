@@ -1,0 +1,22 @@
+enum LoadError: Error {
+  case notImplemented
+  case failed(String)
+}
+
+extension ItemClient {
+  func load() throws -> [Item] {
+    throw CancellationError()
+  }
+
+  func save(_ item: Item) throws {
+    throw LoadError.notImplemented
+  }
+
+  func reset() throws(LoadError) {
+    throw .notImplemented
+  }
+
+  func retry(reason: String) throws(LoadError) {
+    throw .failed(reason)
+  }
+}

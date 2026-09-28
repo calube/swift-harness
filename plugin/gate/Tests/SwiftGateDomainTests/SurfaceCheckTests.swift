@@ -46,4 +46,25 @@ struct SurfaceCheckTests {
           outcome: .behaviour(.addsTest))
       ])
   }
+
+  @Test(
+    "a body that isn't a stub is reported with every stub shape it could have taken, the throw-only, empty-payload case and unchanged-return shapes included — catches a finding that steers the author away from an allowed stub"
+  )
+  func notAStubNamesEveryShape() throws {
+    let surface = SurfaceCommit(commit: "c", parent: "p", changes: [], otherPaths: [])
+    let findings = try SurfaceCheck.findings(
+      surface,
+      judgements: [
+        SurfaceJudgement(
+          file: "Sources/App/Surface.swift", line: 2, declaration: "load()",
+          outcome: .behaviour(.notAStub(excerpt: "return items.count")))
+      ])
+
+    #expect(
+      findings.first?.message
+        == "`load()` isn't an allowed stub (`return items.count`): a surface body is empty; "
+        + "returns 1 empty default, payload-free case, enum case built from empty defaults and "
+        + "parameters, or parameter or property of `self` unchanged; only throws such an error "
+        + "value; or forwards to code the parent declares")
+  }
 }

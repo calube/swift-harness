@@ -489,3 +489,10 @@ default, accessors, initializers, `throws`/`async` functions, forwards, reducers
 closure properties and a new enum case's branch. `allowed-no-new-bodies` changes Swift only by a
 deletion and a reformatted body. `rejected-*` cases are the false-positive list: bodies shaped like
 stubs that carry behaviour.
+
+`allowed-throw-only`, `allowed-empty-payload-case` and `allowed-returns-unchanged` hold the 3 stub
+shapes real surface commits use: a body that only throws an error value, an enum case built from
+empty defaults or parameters, and a parameter or property of `self` returned unchanged. Each has a
+near miss that must still fail: `rejected-throw-near-miss`, `rejected-payload-case-near-miss` and
+`rejected-returns-near-miss`. The base tree's `Status.swift` declares the payload enums they
+construct. The same capture command records them.

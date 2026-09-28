@@ -1,0 +1,29 @@
+enum Phase {
+  case waiting(String)
+}
+
+extension ItemClient {
+  func run() -> ExitStatus {
+    .exited(0)
+  }
+
+  func stopped() -> ExitStatus {
+    ExitStatus.signalled(0)
+  }
+
+  func state() -> LoadState {
+    return .loaded([])
+  }
+
+  func state(items: [Item]) -> LoadState {
+    .loaded(items)
+  }
+
+  func phase(named name: String) -> Phase {
+    .waiting(name)
+  }
+}
+
+struct Loader {
+  var makeState: ([Item]) -> LoadState = { items in .loaded(items) }
+}
