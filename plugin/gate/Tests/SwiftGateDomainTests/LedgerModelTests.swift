@@ -4,10 +4,11 @@ import Testing
 
 @Suite("Plan and ledger models")
 struct LedgerModelTests {
+  private static let sampleDesign = "docs/ordering/designs/offline-order-queue.md"
   private static let samplePlan = PlanFile(
     schemaVersion: 1,
     slug: "2026-09-25-offline-order-queue",
-    design: "docs/ordering/designs/offline-order-queue.md",
+    design: sampleDesign,
     designSha: "3f1c",
     approval: PlanFile.Approval(
       decision: .approve, designSha: "3f1c", at: Date(timeIntervalSince1970: 1_790_236_800)),
@@ -116,7 +117,7 @@ struct LedgerModelTests {
   func approvalDecisionRoundTrips() throws {
     for decision in PlanFile.ApprovalDecision.allCases {
       let plan = PlanFile(
-        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.samplePlan.design,
+        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.sampleDesign,
         designSha: "3f1c",
         approval: PlanFile.Approval(
           decision: decision, designSha: "3f1c", at: Date(timeIntervalSince1970: 1_790_236_800)),
@@ -134,7 +135,7 @@ struct LedgerModelTests {
   func planTierRoundTrips() throws {
     for tier in DesignTier.allCases {
       let plan = PlanFile(
-        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.samplePlan.design,
+        schemaVersion: 1, slug: Self.samplePlan.slug, design: Self.sampleDesign,
         designSha: nil, approval: nil, clarifyChain: [], tier: tier, resume: "framing")
       let firstPass = try PlanFileJSON.encode(plan)
       let decoded = try PlanFileJSON.decode(firstPass)

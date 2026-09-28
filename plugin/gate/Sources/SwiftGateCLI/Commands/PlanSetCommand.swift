@@ -83,10 +83,13 @@ enum PlanSetRun {
     } catch {
       return blocked(slug, "\(path) can't be read or decoded, so it was left as it is: \(error)")
     }
+    guard let design = current.designSource else {
+      return blocked(slug, "\(path) isn't a design plan, so it was left as it is")
+    }
     let updated = PlanFile(
-      schemaVersion: current.schemaVersion, slug: current.slug, design: current.design,
-      designSha: current.designSha, approval: current.approval,
-      clarifyChain: current.clarifyChain, tier: parsedTier ?? current.tier,
+      schemaVersion: current.schemaVersion, slug: current.slug, design: design.design,
+      designSha: design.designSha, approval: design.approval,
+      clarifyChain: design.clarifyChain, tier: parsedTier ?? design.tier,
       resume: resume ?? current.resume)
     do {
       // Written beside the old file and renamed over it: a reader sees one whole file or the other.
@@ -96,8 +99,9 @@ enum PlanSetRun {
     }
     return PlanSetReport(
       command: "plan set", plan: slug, status: .updated, verdict: .green, holder: nil,
-      tier: updated.tier, resume: updated.resume,
-      message: "updated plan `\(slug)`: tier \(updated.tier?.rawValue ?? "unset"), resume "
+      tier: updated.designSource?.tier, resume: updated.resume,
+      message:
+        "updated plan `\(slug)`: tier \(updated.designSource?.tier?.rawValue ?? "unset"), resume "
         + "\"\(updated.resume)\"")
   }
 

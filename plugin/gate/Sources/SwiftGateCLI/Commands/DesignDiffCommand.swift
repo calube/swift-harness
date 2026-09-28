@@ -20,6 +20,8 @@ struct DesignDiffReport: Sendable, Equatable, Encodable {
     case unreadable
     case noApproval = "no-approval"
     case gitFailed = "git-failed"
+    /// The plan's source is a spec page, so it has no design and no clarify chain.
+    case noDesign = "no-design"
   }
 
   struct BrokenLink: Sendable, Equatable, Encodable {
@@ -130,27 +132,36 @@ enum DesignDiffRun {
       return blocked(
         .chain, Failure(.unreadable, "can't read plan `\(planPath)`: \(error)"), plan: planPath)
     }
-    guard let approval = plan.approval, approval.decision == .approve else {
+    guard let source = plan.designSource else {
+      return blocked(
+        .chain,
+        Failure(
+          .noDesign,
+          "plan `\(planPath)` is a spec-page plan: it has no design, so there is no clarify "
+            + "chain to verify"),
+        plan: planPath)
+    }
+    guard let approval = source.approval, approval.decision == .approve else {
       var report = blocked(
         .chain,
         Failure(.noApproval, "plan `\(planPath)` records no approval, so no chain can start"),
         plan: planPath)
-      report.design = plan.design
+      report.design = source.design
       return report
     }
 
     let history: DesignHistory
     do {
-      history = try await DesignHistory.load(plan.design, git: git)
+      history = try await DesignHistory.load(source.design, git: git)
     } catch {
       var report = blocked(
-        .chain, Failure(.gitFailed, "can't walk the history of `\(plan.design)`: \(error)"),
+        .chain, Failure(.gitFailed, "can't walk the history of `\(source.design)`: \(error)"),
         plan: planPath)
-      report.design = plan.design
+      report.design = source.design
       return report
     }
 
-    let links = plan.clarifyChain.map { ClarifyChain.Link(fromSha: $0.fromSha, toSha: $0.toSha) }
+    let links = source.clarifyChain.map { ClarifyChain.Link(fromSha: $0.fromSha, toSha: $0.toSha) }
     let verification = ClarifyChain.verify(
       approvedSha: approval.designSha, links: links, revisions: history.textBySha)
     var report: DesignDiffReport
@@ -167,7 +178,7 @@ enum DesignDiffRun {
       report.brokenLink = DesignDiffReport.BrokenLink(broken)
     }
     report.plan = planPath
-    report.design = plan.design
+    report.design = source.design
     report.approvedSha = approval.designSha
     return report
   }
