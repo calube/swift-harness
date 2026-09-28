@@ -129,6 +129,12 @@ export const BUILD_CONTRACTS = {
       '--base main --prove --mutate',
       'no `--prove` or `--mutate`',
       '--impact --coverage --app-build',
+      'A RED gate is the start of the loop, never a reason to return',
+      '"redReason"',
+      '`outside-write-set`',
+      '`no-progress`',
+      '`environment`',
+      'rule id',
     ],
   },
   'build-fixer': {
@@ -215,6 +221,11 @@ export function checkBuildAgentText(fileName, text) {
   return problems
 }
 
+/** The task gate commands a prompt spells out: every backticked `swiftgate check …` span. */
+export function gateCommands(body) {
+  return [...body.matchAll(/`(swiftgate check [^`]*)`/g)].map(m => m[1])
+}
+
 const failsWith = (fileName, text, fragment) => {
   const problems = checkBuildAgentText(fileName, text)
   assert.ok(
@@ -286,6 +297,26 @@ const tests = {
     const statusFence = fences.find(f => f.includes('"report"'))
     assert.ok(statusFence, 'no task-status fence')
     failsWith('build-worker.md', worker.replace(statusFence, statusFence.replace('"claim"', '"summary"')), 'lacks claim')
+  },
+
+  'the worker\'s task gate keeps impact, coverage and the app build, with prove and mutate only under per-task proof — catches a gate the merge gate then fails, or a final preset proving per task'() {
+    const commands = gateCommands(parseFrontmatter(agentText('build-worker')).body)
+    const perTask = commands.filter(c => c.includes('--prove'))
+    const final = commands.filter(c => !c.includes('--prove'))
+    assert.equal(perTask.length, 1, commands.join('\n'))
+    assert.equal(final.length, 1, commands.join('\n'))
+    assert.match(perTask[0], /^swiftgate check --tier <task gate> --base main --prove --mutate --impact --coverage --app-build\b/)
+    assert.match(final[0], /^swiftgate check --tier <task gate> --base main --impact --coverage --app-build\b/)
+    assert.ok(!final[0].includes('--mutate'), final[0])
+  },
+
+  'dropping the loop rule or a red reason fails — catches a worker free to return at its first red run'() {
+    const worker = agentText('build-worker')
+    const drop = (text, fragment) => text.split(fragment).join('')
+    failsWith('build-worker.md', drop(worker, 'A RED gate is the start of the loop, never a reason to return'), 'start of the loop')
+    for (const reason of ['`outside-write-set`', '`no-progress`', '`environment`']) {
+      failsWith('build-worker.md', drop(worker, reason), reason)
+    }
   },
 
   'every verb the guard denies to a subagent is in the forbidden list — catches a guard verb added without the prompt learning it'() {

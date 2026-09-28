@@ -23,6 +23,8 @@ const script = new AsyncFunction('args', 'agent', 'log', source)
 const TASK_RETURN_KEYS = [
   'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
 ]
+// The closed reasons a worker may give for returning gate-red, the one key a worker adds to `TaskReturn`.
+const RED_REASONS = ['outside-write-set', 'no-progress', 'environment']
 // `ReviewFinding`'s JSON keys (D/Review/ReviewSynthesis.swift), which `review.findings` decodes.
 const REVIEW_FINDING_KEYS = [
   'severity', 'category', 'file', 'line', 'title', 'failure_scenario', 'evidence', 'fix', 'verified', 'kind', 'rule',
@@ -62,7 +64,17 @@ const workerReturn = (overrides = {}) => ({
   ...overrides,
 })
 const red = (overrides = {}) =>
-  workerReturn({ outcome: 'gate-red', gate: { tier: 'fast', verdict: 'RED', runId: '20260926T150000Z-0000beef' }, ...overrides })
+  workerReturn({
+    outcome: 'gate-red',
+    gate: { tier: 'fast', verdict: 'RED', runId: '20260926T150000Z-0000beef' },
+    redReason: 'no-progress',
+    ...overrides,
+  })
+// A gate-red return with no redReason key at all.
+const bareRed = (overrides = {}) => {
+  const { redReason, ...rest } = red(overrides)
+  return rest
+}
 const conflict = {
   kind: 'design-conflict',
   section: 'decision',
@@ -193,8 +205,56 @@ const tests = {
     const { schema } = workerCalls[0].opts
     assert.equal(schema.type, 'object')
     assert.deepEqual([...schema.required].sort(), [...TASK_RETURN_KEYS].sort())
-    assert.deepEqual(Object.keys(schema.properties).sort(), [...TASK_RETURN_KEYS].sort())
+    assert.deepEqual(Object.keys(schema.properties).sort(), [...TASK_RETURN_KEYS, 'redReason'].sort())
+    assert.deepEqual(schema.properties.redReason.enum, RED_REASONS)
     assert.equal(schema.additionalProperties, false)
+  },
+
+  async 'a gate-red worker return with no redReason, or an unknown one, is unusable — catches a worker stopping at its first red run unchallenged'() {
+    for (const first of [bareRed(), red({ redReason: 'gave-up' }), red({ redReason: null })]) {
+      const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), {
+        workers: [first, workerReturn({ commits: ['77aa001'] })],
+      })
+      assert.equal(workerCalls.length, 2, JSON.stringify(first))
+      assert.match(workerCalls[1].prompt, /unusable/, 'the fix pass does not learn the return was unusable')
+      assert.match(workerCalls[1].prompt, /redReason/, 'the fix pass does not learn what was wrong')
+      assert.equal(result.outcome, 'ready-to-merge')
+      assertTaskReturn(result, 'gate')
+    }
+    for (const second of [bareRed({ commits: ['77aa001'] }), red({ commits: ['77aa001'], redReason: 'tired' })]) {
+      await assert.rejects(run(baseArgs({ review: 'gate' }), { workers: [red(), second] }), /redReason/)
+    }
+  },
+
+  async 'a redReason on a return that is not gate-red is unusable — catches a reason the workflow would silently drop'() {
+    const withReason = workerReturn({ redReason: 'no-progress' })
+    const { workerCalls } = await run(baseArgs({ review: 'gate' }), { workers: [withReason, workerReturn()] })
+    assert.equal(workerCalls.length, 2)
+    assert.match(workerCalls[1].prompt, /redReason/)
+    await assert.rejects(run(baseArgs({ review: 'gate' }), { workers: [red(), withReason] }), /redReason/)
+  },
+
+  async 'gate-red with no-progress goes to the fix pass with its reason, and the final return carries it in notes — catches the reason lost or a key check-return rejects'() {
+    const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), {
+      workers: [
+        red({ notes: 'swift.test-failure survived 3 fixes' }),
+        red({ commits: ['77aa001'], redReason: 'environment', notes: 'simulator runtime missing' }),
+      ],
+    })
+    assert.equal(workerCalls.length, 2)
+    assert.match(workerCalls[1].prompt, /no-progress/, 'the fix pass is not told why the first attempt stopped')
+    assert.equal(result.outcome, 'gate-red')
+    assert.deepEqual(Object.keys(result).sort(), [...TASK_RETURN_KEYS].sort(), 'redReason leaked into the TaskReturn')
+    assert.match(result.notes, /^simulator runtime missing\nredReason: environment$/)
+    assertTaskReturn(result, 'gate')
+  },
+
+  async 'an unusable gate-red first attempt still hands its commits and surface commit to the final return — catches first-attempt commits dropped from what check-return sees'() {
+    const { result } = await run(baseArgs({ review: 'gate' }), {
+      workers: [bareRed({ surfaceCommit: '3f2a91c' }), workerReturn({ commits: ['77aa001'] })],
+    })
+    assert.deepEqual(result.commits, ['3f2a91c', '77aa001'])
+    assert.equal(result.surfaceCommit, '3f2a91c')
   },
 
   async 'full review runs verifier and test-quality in parallel on the task commits — catches a serial or missing reviewer'() {
