@@ -422,3 +422,97 @@ $28.35 for the session and 3 `calibrate design` runs.
 For the attended run: use an interactive session so publish has the `Artifact` tool. Answer the frame
 with a client module up front, since D2 forces one for persistence. Expect `plan.json`'s tier to
 stay at the first claim.
+
+## Sprint rehearsals (unattended, 2026-09-28)
+
+At the user's request, each run was a headless `claude -p "/swift-harness:sprint <spec file>"`
+(opus, `bypassPermissions`) in a warm copy of the same starter app. The orchestrator answered
+questions through `--resume`.
+
+| Run | Prompt shape | Warm start |
+|---|---|---|
+| A | a form with field validation and on-device persistence | `b324260` |
+| B | a multi-state approval workflow with undo and history | `5f801db` |
+
+### Attempt 1: harness `7b0fa5a`, neither run passed
+
+| Step | A (5 slices) | B (4 slices) |
+|---|---|---|
+| Wall time | 56 min 9 s (12:19:30Z to 13:15:39Z), then a 4-min resume | 49 min 32 s (13:16:23Z to 14:05:55Z) |
+| Preflight | 35 s | 28 s |
+| Spec page | 2 min 7 s; confirm asked (5 slices for 4 acceptance lines), answered "Build this page." | 1 min 12 s; confirm skipped; `guard.plan-state` denied the page write: question 1 |
+| Start | 10 s | 3 s |
+| Surface | 2 min 36 s; `surface-check` RED twice | 32 s; GREEN first time |
+| Slice 1 | 17 min 55 s; fast T1 runs of 417 s and 499 s | 2 min 48 s; push RED `coverage.diff`: question 2 |
+| Later slices | 35 s, 40 s, 19 min 16 s (17 min a stalled model response Claude Code resumed), 23 s | 12 s, 22 s, 18 s |
+| Ready | 10 min 50 s, 2 runs | 14 min 47 s BLOCKED; a background re-run killed when the headless turn ended; 24 min 23 s GREEN in the foreground |
+| Finish | refused `sprint.gate-blocked` | 22 s; `main` fast-forwarded to `7f1a4e6` |
+| Resume | `ready` RED in 171 s; stopped as told | none |
+
+B moved `main`, but 2 extra questions, a `SWIFT_HARNESS_ORCHESTRATOR=1` override and an
+orchestrator-requested re-run fail the pass criteria. Branches: `attempt-1/edit-your-profile`,
+`attempt-1/document-approval-with-undo`.
+
+| Run | Gate | Verdict | Gating rule | Fix the session made |
+|---|---|---|---|---|
+| A `20260928T122319Z-18538cdd` | `surface-check` | RED | 3 `surface-check.behaviour`: the `AppFeature` manifest and the new client's `DependencyValues` accessor | accessor stubbed `get { .init() }` / `set {}` |
+| A `20260928T122336Z-6370b447` | `surface-check` | RED | `surface-check.behaviour` on `Package.swift` | a same-line allow (ignored), then the feature moved to a new package |
+| A `20260928T123342Z-313772c4` | push | RED | `impact.untested-change` | client tests pulled into slice 1 |
+| A `20260928T124229Z-0e8b1067` | push | RED | `coverage.diff` on surface stubs | an extra assertion |
+| A `20260928T130308Z-ab15ea4f` | push | RED | `impact.untested-change` | a root-store wiring test |
+| A `20260928T130410Z-20e79d20` | ready | RED | 2 `mutate.survived`; T3 BLOCKED: `simctl clone` of a booted device (SimError 405) | a boundary test |
+| A `20260928T130947Z-2758ea91` | ready | BLOCKED | T1 `prove.no-evidence`: new targets empty at `main`; T3 as above | none; `finish` refused |
+| A `20260928T164206Z-298fd7a6` | ready | RED | 11 `prove.compile-only`: slice 4 added `ProfileClientLive`, a target the surface lacks | none |
+| B `20260928T131912Z-cc90d5bd` | push | RED | `coverage.diff`, 34 of 53 lines | slice 2's code and test moved into slice 1 |
+| B `20260928T132227Z-1590fe9a` | ready | BLOCKED | T3 `t3.no-evidence`: `simctl` timed out at 60 s | re-run |
+| B `20260928T133858Z-ab18ab21` | ready | **GREEN** | | T3 took 1014 s |
+
+| Defect | Hit by | Fixed by |
+|---|---|---|
+| prove stopped at the merge base when a new package's targets were empty there | A | `prove-retries-emptied-targets-at-proof-base` |
+| `guard.plan-state` read `sprints/` as a plan | B | `plan-state-guard-allows-sprint-pages` |
+| slice push gates measured coverage from `main`, counting surface stubs | A, B | `slice-gates-measure-from-the-surface` |
+| T3 cloned a booted device; `simctl` had a fixed 60 s deadline | A, B | `t3-never-clones-a-booted-base` |
+| `surface-check` judged an added manifest dependency as behaviour | A | `surface-check-allows-additive-manifest-edits` |
+| the skill lacked the accessor stub, the no-allow rule for surface findings, and a foreground `ready` | A, B | `sprint-skill-rehearsal-lessons` |
+| a slice could add a target the surface lacks | A | `sprint-slice-refuses-targets-the-surface-lacks` |
+
+### Attempt 2: harness `7b6d49f`, both runs passed
+
+Both repositories restarted from their warm starts. Neither session asked a question or hit a
+`sprint` refusal. A shared the machine with a mutation-testing worker (load peaks of 300 to 460
+during T3's first boot of a created device), so its times are pessimistic.
+
+| Step | A (4 slices) | B (4 slices) |
+|---|---|---|
+| Wall time | **31 min 45 s** (18:30:52Z to 19:02:37Z), $2.75 | **12 min 28 s** (19:02:50Z to 19:15:18Z), $1.02 |
+| Preflight | 35 s | 31 s |
+| Spec page | 1 min 32 s; no confirm | 26 s; no confirm |
+| Start | 3 s | 3 s |
+| Surface | 51 s; GREEN first time, with the manifest edit | 26 s |
+| Slices | 1 min 46 s, 48 s, 1 min 21 s, 47 s | 51 s, 40 s, 32 s, 39 s |
+| Ready | 23 min 26 s, 5 runs | 7 min 46 s, 2 runs |
+| Finish | 14 s; `main` fast-forwarded to `219f1c3` | 20 s; `main` fast-forwarded to `65de1d9` |
+
+| Run | Gate | Verdict | Gating rule | Fix the session made |
+|---|---|---|---|---|
+| A `20260928T183427Z-ed4ee847` | push, slice 1 | RED | `coverage.diff`, 2 `coverage.no-t1-tests` | the new client's tests moved into slice 1 |
+| A `20260928T183847Z-143bb5c2` | ready, 242 s | RED | 2 `mutate.survived` | a scope test and a boundary test |
+| A `20260928T184308Z-45e3a0dc` | ready, 228 s | BLOCKED | T1 `prove.no-evidence`: no `Package.resolved` in the new package | `swift package resolve`, lockfile committed |
+| A `20260928T184745Z-8193c90c` | ready, 226 s | RED | 2 `prove.compile-only`: an API renamed after the surface | stub commit as a 2nd `--proof-base`, then a restore commit |
+| A `20260928T185421Z-326fe548` | ready, 169 s | RED | `prove.not-proven`: the stub left the accessor real | a 2nd stub-and-restore pair |
+| A `20260928T185738Z-8c24e119` | ready, 272 s | **GREEN** | | |
+| B `20260928T190708Z-a5cdfd07` | ready, 245 s | RED | `mutate.survived`: the child `Scope` removed | a root-store test |
+| B `20260928T191126Z-721744fe` | ready, 208 s | **GREEN** | | |
+
+Other fast-tier REDs were the inner loop at work. No attempt-2 fast T1 run took over 7 s.
+
+### Open findings from the rehearsals
+
+| Finding | Evidence |
+|---|---|
+| Fast-tier runs of 7 to 8 minutes, unexplained | A attempt 1, `20260928T122638Z-c69b63e7` (417 s) and `20260928T123402Z-e8b94f8d` (499 s): SwiftPM builds of 4.75 s and 18.5 s. The next one needs a timed trace |
+| A new package with no `Package.resolved` BLOCKS `ready` | A attempt 2: the working tree resolves on its own, but prove's scratch copy resolves with automatic resolution off (`a resolved file is required`) |
+| A surface API renamed mid-sprint needs a stub-then-restore commit pair to prove | A attempt 2: 4 extra commits and 2 extra `ready` runs; the first pair stubbed too little |
+| The created-device path boots a fresh simulator on every T3 run | with the pinned device booted, each T3 run creates, boots and deletes its own device (41 to 97 s in attempt 2) |
+| `sprint.target-outside-surface` can only halt | its fix rewrites the surface, but `sprint.json` accepts `surface` only straight after `start` |
