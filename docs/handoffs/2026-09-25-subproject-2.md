@@ -1,22 +1,24 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-SUMMARY (2026-09-28 ~04:45, overnight orchestrator). The overnight queue is built and merged on local main; origin/main is
-untouched (never push it without the user). Backup: origin backup/subproject-2-overnight-2026-09-27 (refresh after the
-last merge). Merged tonight, each through push + prove on an integration worktree and push on merged main: speed wave 2;
-speed wave 3 + fast-modes wave 1 (combined); fast-modes waves 2 and 3 (`swiftgate sprint`, `/swift-harness:sprint`);
-hardening waves 1-3 plus `doctor-plugin-changed` (docs/plans/2026-09-27-subproject-2-hardening-plan.md); a shim-test
-leak fix; tests for mutate survivors. Interfaces: docs/handoffs/subproject-5-interfaces.md and
-docs/handoffs/subproject-2-interfaces.md (last sections). Runbook: "Lessons from the overnight run (2026-09-27)".
-In flight at this writing: a worker hardening the tests of `SurfaceBodyScan` and `HangWithoutDeadlineRule` (mutate
-kept sampling new survivors there), then one more `mutate --base 4a54bf8 --jobs 2` on main.
-Waiting for the user: fast-modes wave 4 (sprint rehearsals, attended); design-free ship plan tasks (after rehearsals);
-build-executor waves 10-11; acceptance runs 26-28; sub-projects 3 and 4. Decisions made overnight, approved by the user
-2026-09-28, are in the overnight report (surface-check's extra stub shapes, the sprint extra-stub proof base, the budget's
-required-task rule, the build worker's redReason reading, and evals/ files unwrapped for arch.ui-host-compiled).
-Rules from the user still stand: every worker on opus; build for correctness; one prove on the machine at a time
-(mkdir lock /tmp/swift-harness-speed-prove.lock); watchdog Monitor while workers run; the orchestrator delegates all
-work to workers; keep the harness generic; ready-lock branch stays parked.
+SUMMARY (2026-09-28 morning, for the next orchestrator session). Context was cleared on purpose. The user wants every
+remaining item done TODAY: read docs/handoffs/2026-09-28-day-queue.md next; it is the ordered queue, marks every step
+that needs the user, and lists what was in flight at the clear.
+State: local main holds every overnight merge; origin/main untouched (never push it without the user). Backup branch:
+origin backup/subproject-2-overnight-2026-09-27 (refresh with `git push origin main:refs/heads/backup/subproject-2-overnight-2026-09-27`
+after grepping `git diff origin/main..main` for interview-specific terms).
+Merged overnight, each through push + prove on an integration worktree and push on merged main: speed waves 2-3,
+fast-modes waves 1-3 (`surface-check`, `swiftgate sprint`, `/swift-harness:sprint`), sub-project 2 hardening waves 1-3
+plus `doctor-plugin-changed` (docs/plans/2026-09-27-subproject-2-hardening-plan.md), a shim-test leak fix, and tests
+killing every mutant that survived in the new rules. Interfaces: docs/handoffs/subproject-5-interfaces.md and
+docs/handoffs/subproject-2-interfaces.md (last sections). The user approved all 5 overnight decisions (2026-09-28).
+Rules from the user: every worker on opus; build for correctness (design approval, plan tasks, surface-first workers,
+push + prove merge gate, mutate once on main per wave); the orchestrator delegates ALL work to workers and only
+spawns, reads reports, merges, gates and checkpoints; one prove on the machine at a time (mkdir lock
+/tmp/swift-harness-speed-prove.lock); watchdog Monitor while workers run; keep the harness generic; sub-projects 3 and 4
+are designed WITH the user (they pick the QA/profiling CLIs and MCPs); the ready-lock branch stays parked.
+Read first: this header, docs/handoffs/2026-09-28-day-queue.md, the runbook in full
+(docs/handoffs/subproject-2-orchestrator-runbook.md, including both overnight lesson sections), docs/handoffs/worker-brief.md.
 -->
 
 ## 1. Where things are

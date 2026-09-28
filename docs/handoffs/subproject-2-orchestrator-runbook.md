@@ -291,3 +291,19 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
   reports, say) or move the check to a repository script. Never exempt it.
 - **Parallel waves conflict on shared registration lists.** Waves that both append to `SwiftGate.swift`'s subcommand
   list, `NewSubcommandRegistrationTests` or `RuleIndexTests` conflict every time. Keep both sides, then format-lint.
+
+## Lessons from the overnight run, late (2026-09-28)
+
+- **Mutate samples 30 mutants a run.** New code with weak tests yields new survivors on every run. Don't chase samples:
+  give a worker the whole file for a manual mutation pass (every conditional, boundary and return), with each
+  hand-mutant test run bounded by `timeout 180`, since a mutant can make a loop spin and orphan the test helper.
+- **Tests of code already on `main` need a stub base to prove.** Build a throwaway branch with the code under test
+  stubbed, prove the new tests there, record the run id and delete the branch. Prove at `--base main` can't judge them.
+- **A prove base from before other waves won't compile their tests.** Prove at a base no older than the tests' own
+  dependencies; a stub commit on current `main` works.
+- **One mutate at `--jobs 2` took 46-52 minutes** on this laptop, with or without workers building. Plan a wave's
+  checkpoint around it rather than waiting idle: start the next wave's workers while it runs, and have them wait for
+  it before their first prove.
+- **A worker that proposes a rule at its write-set boundary is right to stop.** Widen the write set in a fix round when
+  no other branch owns the files; don't send it back to improvise.
+
