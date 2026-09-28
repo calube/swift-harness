@@ -38,7 +38,7 @@ architecture advice for small apps is already the standards' engine-module secti
 
 ## 3. Views compile on the host
 
-**Problem.** A UI module whose sources sit wholly inside `#if os(iOS)` (or `#if canImport(UIKit)`) builds as an
+**Problem.** A UI module whose sources all sit inside `#if os(iOS)` (or `#if canImport(UIKit)`) builds as an
 empty module on the macOS host. `check --tier fast`, push and T1 then never type-check its views. Only the app
 build (a task gate step since change 4) or T3 finds its compile errors. Sprint's inner loop and slice gates run
 neither, so a broken view first shows up in the final `ready` gate.
@@ -61,10 +61,10 @@ prompt and omitted a field its return contract had just gained.
 
 **Proposal.** The plugin's `SessionStart` hook records the plugin version and a hash of its `skills/`, `agents/`
 and `workflows/` trees, keyed by the hook input's `session_id`, under `.harness/sessions/`. `swiftgate doctor`
-compares the newest record with the tree on disk. The ship, build and sprint preflights run doctor, so a mismatch
+compares the newest record with the tree on disk. The ship, build and sprint preflights run doctor. A mismatch
 stops them with `doctor.plugin-changed`: "the plugin changed after this session started; start a fresh session."
 Hashing runs once per session start, never in the per-tool-call hooks, so the 50 ms hook budget is untouched.
-Limit: with several sessions in 1 checkout, the newest record can belong to a fresh session while an older one
+Limit: with several sessions in 1 checkout, the newest record can belong to a fresh session while an older session
 still runs stale text; a preflight that knows its own session id should pass it to doctor instead.
 
 **Tests.** A record whose hash differs from the tree is a doctor issue naming both. A matching record passes. No
