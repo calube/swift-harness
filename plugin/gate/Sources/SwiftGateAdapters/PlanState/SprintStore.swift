@@ -17,7 +17,10 @@ public enum SprintStoreError: Error, Sendable, Equatable {
   public var verdict: Verdict { .blocked }
 
   /// The staging file a failed write left behind, or `nil` when it left none.
-  public var leftoverStaging: String? { nil }
+  public var leftoverStaging: String? {
+    if case .stagingLeft(_, _, _, let staging, _) = self { return staging }
+    return nil
+  }
 }
 
 /// The one sprint's `sprint.json` in the plan-state root under the git common dir, shared by
@@ -162,6 +165,13 @@ public struct SprintStore: Sendable {
   private func discarding(_ staging: String, operation: String, path: String, reason: String)
     -> SprintStoreError
   {
-    .io(operation: operation, path: path, reason: reason)
+    let removed = unlink(staging) == 0
+    let removalError = errno
+    guard !removed, removalError != ENOENT else {
+      return .io(operation: operation, path: path, reason: reason)
+    }
+    return .stagingLeft(
+      operation: operation, path: path, reason: reason, staging: staging,
+      removal: String(cString: strerror(removalError)))
   }
 }

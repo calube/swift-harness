@@ -153,22 +153,82 @@ public struct LiveSprintBranches: SprintBranches {
   }
 
   public func currentBranch() async throws(GitWorkspaceError) -> String? {
-    nil
+    let arguments = ["symbolic-ref", "--quiet", "--short", "HEAD"]
+    let output = try await git(arguments)
+    // `--quiet` makes a detached HEAD exit 1 with no diagnostics.
+    guard try Self.yesOrNo(output, arguments) else { return nil }
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   public func checkedOutBranches() async throws(GitWorkspaceError) -> [String] {
-    []
+    let prefix = "branch refs/heads/"
+    return try await succeed(["worktree", "list", "--porcelain"])
+      .split(separator: "\n")
+      .filter { $0.hasPrefix(prefix) }
+      .map { String($0.dropFirst(prefix.count)) }
   }
 
   public func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(branch)
+    try Self.checkRef(commit)
+    _ = try await succeed(["branch", "--no-track", branch, commit])
   }
 
   public func deleteBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(branch)
+    try Self.checkRef(commit)
+    _ = try await succeed(["update-ref", "-d", "refs/heads/\(branch)", commit])
   }
 
   public func fastForward(_ branch: String, from old: String, to new: String)
     async throws(GitWorkspaceError) -> Bool
   {
-    false
+    try Self.checkRef(branch)
+    try Self.checkRef(old)
+    try Self.checkRef(new)
+    let ancestry = ["merge-base", "--is-ancestor", old, new]
+    guard try Self.yesOrNo(try await git(ancestry), ancestry) else { return false }
+    // The old value makes the move compare-and-swap: a commit that landed since fails it.
+    _ = try await succeed([
+      "update-ref", "-m", "sprint finish: fast-forward", "refs/heads/\(branch)", new, old,
+    ])
+    return true
+  }
+
+  private static func checkRef(_ ref: String) throws(GitWorkspaceError) {
+    if ref.isEmpty || ref.hasPrefix("-") { throw .git(.invalidRef(ref)) }
+  }
+
+  /// Exit 0 is yes and exit 1 is no; anything else is git failing to answer.
+  private static func yesOrNo(_ output: ProcessOutput, _ arguments: [String])
+    throws(GitWorkspaceError) -> Bool
+  {
+    switch output.status {
+    case .exited(0): return true
+    case .exited(1): return false
+    default:
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+  }
+
+  private func succeed(_ arguments: [String]) async throws(GitWorkspaceError) -> String {
+    let output = try await git(arguments)
+    guard output.status.isSuccess else {
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+    return output.stdout.text
+  }
+
+  private func git(_ arguments: [String]) async throws(GitWorkspaceError) -> ProcessOutput {
+    do {
+      return try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: repositoryRoot,
+          timeout: timeout))
+    } catch {
+      throw .git(.process(error))
+    }
   }
 }

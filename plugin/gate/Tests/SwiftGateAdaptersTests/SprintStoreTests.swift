@@ -210,6 +210,75 @@ struct SprintStoreTests {
     #expect(error == .lock(.timedOut(waited: .milliseconds(200), capacity: 1)))
     #expect(scenario.contents() == before)
   }
+
+  @Test(
+    "a full volume fails the staged write, leaves sprint.json absent and removes the half-written staging file — catches a partial staging file left beside sprint.json",
+    .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
+  func fullVolumeRemovesStagingFile() async throws {
+    let volume = try FATVolume()
+    defer { volume.detach() }
+    let layout = try PlanStateLayout(commonDirectory: volume.mountPoint.path)
+    try FileManager.default.createDirectory(atPath: layout.root, withIntermediateDirectories: true)
+    // The lock lives off the volume so only the staged write runs out of space.
+    let lockDirectory = try FileSystemConditions.scratchDirectory("sprint-lock")
+    defer { try? FileManager.default.removeItem(at: lockDirectory) }
+    let store = SprintStore(
+      layout: layout,
+      lock: FileCountingLock(
+        directory: lockDirectory, name: PlanIndexStore.lockName, capacity: 1,
+        pollInterval: .milliseconds(2)),
+      timeout: .seconds(30))
+    try volume.fill()
+
+    let error = await #expect(throws: SprintStoreError.self) {
+      try await store.apply(SprintScenario.start(slices: 1))
+    }
+
+    guard case .io(let operation, let path, _) = error else {
+      Issue.record("expected an io error, got \(String(describing: error))")
+      return
+    }
+    #expect(operation == "write")
+    #expect(path.hasPrefix(layout.root + "/.sprint.json."))
+    #expect(error?.leftoverStaging == nil)
+    #expect(FileSystemConditions.contents(of: layout.root).isEmpty)
+    #expect(try store.read() == nil)
+  }
+
+  @Test(
+    "a failed write whose staging file can't be removed names that file in the error and leaves sprint.json as it was — catches a leftover staging file going unreported",
+    .enabled(if: FileSystemConditions.permissionsDeny, "root ignores directory permissions"))
+  func unremovableStagingIsReported() async throws {
+    let scenario = try await SprintScenario()
+    defer { scenario.remove() }
+    try await scenario.store().apply(SprintScenario.start(slices: 2))
+    let before = scenario.contents()
+    let root = scenario.layout.root
+    // A directory that can't be written to can't have its entries unlinked.
+    let crashing = SprintStore(
+      layout: scenario.layout, lock: SprintScenario.lock(scenario.layout), timeout: .seconds(30),
+      beforeRename: { _ in
+        try FileSystemConditions.setMode(0o555, root)
+        throw SimulatedCrash()
+      })
+    defer { try? FileSystemConditions.setMode(0o755, root) }
+
+    let error = await #expect(throws: SprintStoreError.self) {
+      try await crashing.apply(.surface(commit: SprintScenario.surface))
+    }
+    try FileSystemConditions.setMode(0o755, root)
+
+    let leftover = try #require(error?.leftoverStaging)
+    #expect(leftover.hasPrefix(root + "/.sprint.json."))
+    #expect(FileManager.default.fileExists(atPath: leftover))
+    guard case .stagingLeft(let operation, _, _, _, let removal) = error else {
+      Issue.record("expected stagingLeft, got \(String(describing: error))")
+      return
+    }
+    #expect(operation == "stage")
+    #expect(!removal.isEmpty)
+    #expect(scenario.contents() == before)
+  }
 }
 
 private struct SimulatedCrash: Error {}

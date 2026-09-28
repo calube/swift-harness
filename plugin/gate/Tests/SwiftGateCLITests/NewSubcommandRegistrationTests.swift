@@ -123,6 +123,15 @@ struct NewSubcommandRegistrationTests {
     ),
     ("surface-check", ["surface-check", "HEAD"], "surface-check"),
     ("surface-check --json", ["surface-check", "HEAD", "--json"], "surface-check"),
+    (
+      "sprint start",
+      ["sprint", "start", "notes-search", "--spec-page", "spec.md", "--slices", "3"], "start"
+    ),
+    ("sprint surface", ["sprint", "surface", "HEAD"], "surface"),
+    ("sprint slice", ["sprint", "slice", "1", "--gate", "r1"], "slice"),
+    ("sprint finish", ["sprint", "finish", "--gate", "r1"], "finish"),
+    ("sprint status", ["sprint", "status"], "status"),
+    ("sprint status --json", ["sprint", "status", "--json"], "status"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -155,6 +164,8 @@ struct NewSubcommandRegistrationTests {
     "module-graph",
     "evidence cache record",
     "surface-check", "surface-check --json",
+    "sprint start", "sprint surface", "sprint slice", "sprint finish", "sprint status",
+    "sprint status --json",
   ]
 
   @Test(

@@ -40,6 +40,7 @@ struct RuleIndexTests {
       T1Presence.ruleID, CoverageCheck.summaryRuleID, ImpactAnalysis.ruleID,
     ]
     let surface = [SurfaceCheck.behaviourRuleID, SurfaceCheck.summaryRuleID]
+    let sprint = SprintRefusal.allCases.map(\.rawValue)
     let mutation = [
       MutationRules.survivedRuleID, MutationRules.killedRuleID, MutationRules.unviableRuleID,
       MutationRules.noEvidenceRuleID, MutationRules.bareEquivalentRuleID,
@@ -82,7 +83,8 @@ struct RuleIndexTests {
     let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     return Set(
       buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
-        + changedTests + coverage + mutation + judge + harness + environment + surface)
+        + changedTests + coverage + mutation + judge + harness + environment + surface
+        + sprint)
   }
 
   /// Every backticked rule id in the index section.
