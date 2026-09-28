@@ -18,7 +18,7 @@ commands, not this skill, decide what comes next.
 
 | Name | Value |
 |---|---|
-| `<spec-file>` | the argument: a repo-relative file that states what to build |
+| `<spec-file>` | the argument: any readable file that states what to build, inside or outside the repository; one outside it leaves the tree clean for the preflight |
 | `<plans>` | `$(git rev-parse --path-format=absolute --git-common-dir)/swift-harness/plans` |
 | `<slug>` | lowercase letters and digits joined by single hyphens, from the spec's subject |
 | `<page>` | `<plans>/sprints/<slug>.md`, the spec page, as an absolute path |
@@ -65,8 +65,11 @@ duration: the id is the word after `run`. With `--json`, it is the report's `run
 first line, so a long report doesn't hide it:
 
 ```bash
-"$SG" check --tier push --base main > "$TMPDIR/sprint-gate.txt"; head -1 "$TMPDIR/sprint-gate.txt"
+"$SG" check --tier push --base <surface> > "$TMPDIR/sprint-gate.txt"; head -1 "$TMPDIR/sprint-gate.txt"
 ```
+
+A slice's push gate measures from `<surface>`, and `sprint slice` refuses any other base. Only the
+preflight's push gate and `finish`'s `ready` gate take `--base main`.
 
 A slice or finish command reads the run from this checkout's run history, so run the gate in this
 checkout, after the commit it judges.
@@ -89,7 +92,8 @@ checkout, after the commit it judges.
 
 ## 2. Spec page
 
-Read the spec file, then write `<page>` as [`references/spec-page.md`](references/spec-page.md)
+Read the spec file, then write `<page>` yourself, with the Write tool: the plan-state guard lets a
+main session write a sprint page and never a subagent. Write it as [`references/spec-page.md`](references/spec-page.md)
 sets out: at most 400 words, with 1 acceptance test per slice. Keep `<slug>` and `<n>`.
 
 When every slice's `Spec:` quotes an acceptance line the spec file lists, go on without asking.
@@ -109,6 +113,10 @@ change the user asks for and go on; don't ask a second time.
    lists the allowed bodies: empty, 1 empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`,
    `.init()`) or a payload-free enum case, `EmptyView()` for a view body, `.none` from a reducer.
    No test, no trap, no sample data. An existing call path returns what it returned before.
+   A new `@Dependency` client's `DependencyValues` accessor stubs as `get { .init() }` and
+   `set {}`; the slice that tests the client turns it into `self[Key.self]`. The surface may add
+   dependencies, products and targets to an existing `Package.swift`; any other manifest change is
+   behaviour. A `surface-check` finding takes no `swiftgate:allow`: turn the body back into a stub.
 2. `"$SG" check --tier fast --base main` until GREEN: the surface builds and the tests already
    there still pass.
 3. Commit it as the branch's first commit. Keep `<surface>`.
@@ -136,6 +144,8 @@ Then `sprint status --json`: the next slice, or `finish`.
 ## 6. Finish
 
 1. `"$SG" check --tier ready --base main --proof-base <surface>`, once, with its output in a file.
+   Run the ready gate in the foreground; past a tool timeout, wait on its report file in chunks,
+   never in the background: a session that ends its turn kills a background gate.
    Add `--proof-base <sha>` after it for each extra stub commit from step 5, oldest first. It adds
    prove, reach, stress and mutate over everything the sprint added; prove reverts the code to the
    surface and needs each new test to fail on an assertion there. Not GREEN: fix, commit and run
