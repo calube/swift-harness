@@ -317,3 +317,18 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **A headless sprint session can't background its gate.** `claude -p` exits when the turn ends and kills a background
   `ready` run. Tell the session to run the gate in the foreground.
 
+
+## Lessons from the out-of-memory crash (2026-09-28)
+
+- **The laptop ran out of its 64 GB and rebooted.** At the time it held 3 build workers, 2 planners, a research
+  worker driving interactive `claude` sessions, a worker capturing fixtures through several `claude -p` sessions, and a
+  peer rehearsal session. The watchdog watched load and orphans but not memory. It now reports free memory under 25%
+  as well, and the number of `claude` processes.
+- **Serialise heavy work through one machine-wide lock.** Workers wrap every `swift build`, `swift test` and
+  `swiftgate check` in a `mkdir` lock script that clears a stale holder, so parallel workers think in parallel but
+  build one at a time. A worker asks before starting any `claude` session.
+- **Resume from the worktrees.** Background agents die with the machine. Their prompts are in the orchestrator's
+  transcript, and their partial work is in their worktrees. Relaunch each with its prompt plus "read what is there,
+  keep what is sound", and check each planner's branch first: a finished plan may only need its merge.
+- **Load after a reboot is Spotlight.** The load average passes 500 for several minutes while `mds` re-indexes, with
+  CPU and memory idle. Judge by memory and CPU, not load, in the first 15 minutes.
