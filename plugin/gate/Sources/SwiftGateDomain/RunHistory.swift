@@ -47,6 +47,10 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   /// The commit `HEAD` was at when the run started. Absent in records written before it existed,
   /// or when the checkout had no commit to name.
   public let headCommit: String?
+  /// The commit `--base` resolved to when the run started, so a reader can tell what its diff
+  /// was measured from. Absent in records written before it existed, for a command with no
+  /// `--base`, or when the ref named no commit.
+  public var base: String? { nil }
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
