@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "focus": "api-errors",
+  "status": "reviewed",
+  "findings": [
+    {
+      "kind": "defect",
+      "category": "api-misuse",
+      "file": "Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift",
+      "title": "factDismissButtonTapped clears isLoadingFact but leaves the in-flight fact request running, so a dismissed fact shows up again",
+      "fix": "Give the fact request a cancel ID (`.cancellable(id: CancelID.fact)` on the .run at line 49) and have `.factDismissButtonTapped` return `.cancel(id: CancelID.fact)`. Add a TestStore test that sends factButtonTapped, then factDismissButtonTapped, and checks that no factResponse is received.",
+      "line": 67,
+      "end_line": 70,
+      "severity": "major",
+      "severity_rule": "defect-users-hit",
+      "failure_scenario": "User taps Fact (line 48 sets isLoadingFact = true; the .run at 49-56 calls apiClient.randomFact()), then taps Dismiss before the response arrives. Lines 68-69 set fact = nil and isLoadingFact = false and return .none, so nothing cancels the effect. When the request finishes, .factResponse (58-61) sets state.fact to the fetched text without checking anything, and a fact appears on a card the user just dismissed. If the request fails, .factFailed runs and logs an error for a request the UI no longer shows as pending.",
+      "evidence": "CounterFeature.swift:67-70 `case .factDismissButtonTapped: state.fact = nil; state.isLoadingFact = false; return .none`. The .run at 49-56 has no `.cancellable(id:)`. `.factResponse` at 58-61 sets `state.fact = fact` whatever the current state is. The new test (CounterFeatureTests.swift:72-77) only dismisses with no request in flight.",
+      "verified": true,
+      "verification_note": "I read CounterFeature.swift in full along with the diff. The effect has no cancel ID anywhere in the reducer, the dismiss case returns .none, and factResponse sets fact without any guard, so the scenario follows as described. One correction: what shows up is the newly fetched fact, not literally the old one the user dismissed. It is still a fact on a card the user closed. Tapping Fact and then Dismiss while the request runs is ordinary use, so this is defect-users-hit and I raised it from major to blocker."
+    }
+  ]
+}

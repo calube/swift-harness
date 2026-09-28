@@ -275,14 +275,17 @@ struct ReviewInputCommand: AsyncParsableCommand {
 enum ReviewSynthRun {
   static let reportFile = "review.json"
 
+  /// A focus file that breaks the contract, or the telemetry file that couldn't be written.
   struct InputFailure: Error, Sendable, Equatable, CustomStringConvertible {
     let file: String
     let detail: String
     var description: String { "\(file): \(detail)" }
   }
 
-  /// Reads every focus file, files findings against the bundle's numbered diff, writes
-  /// `review.json` and `review-telemetry.json` into `runDirectory`, and returns the report.
+  /// Reads every focus file, writes `review-telemetry.json` into `runDirectory`, then files
+  /// findings against the bundle's numbered diff, writes `review.json` naming the telemetry file,
+  /// and returns the report. A telemetry file that can't be written stops the run before any
+  /// `review.json` exists.
   static func run(
     files: [URL], runDirectory: URL, workflowResult: URL? = nil
   ) throws -> ReviewReport {
@@ -294,23 +297,25 @@ enum ReviewSynthRun {
         throw InputFailure(file: file.path, detail: "\(error)")
       }
     }
-    var report: ReviewReport
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    let telemetryURL = runDirectory.appending(path: ReviewTelemetry.fileName)
+    do {
+      try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+      let telemetry = ReviewTelemetry.make(
+        runID: runDirectory.lastPathComponent, finishedAt: Date(),
+        workflow: workflowTelemetry(workflowResult))
+      try encoder.encode(telemetry).write(to: telemetryURL, options: .atomic)
+    } catch {
+      throw InputFailure(file: telemetryURL.path, detail: "could not be written: \(error)")
+    }
+    let report: ReviewReport
     do {
       report = try ReviewSynthesis.synthesize(
-        inputs, baseline: baseline(runDirectory),
-        telemetry: runDirectory.appending(path: ReviewTelemetry.fileName).path)
+        inputs, baseline: baseline(runDirectory), telemetry: ReviewTelemetry.fileName)
     } catch {
       throw InputFailure(file: "(inputs)", detail: "\(error)")
     }
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-    try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
-    let telemetry = ReviewTelemetry.make(
-      runID: runDirectory.lastPathComponent, finishedAt: Date(),
-      workflow: workflowTelemetry(workflowResult))
-    let telemetryURL = runDirectory.appending(path: ReviewTelemetry.fileName)
-    try encoder.encode(telemetry).write(to: telemetryURL, options: .atomic)
-    report.telemetry = telemetryURL.path
     try encoder.encode(report).write(
       to: runDirectory.appending(path: reportFile), options: .atomic)
     return report
