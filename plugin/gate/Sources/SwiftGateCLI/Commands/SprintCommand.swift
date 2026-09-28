@@ -27,6 +27,7 @@ enum SprintRefusal: String, CaseIterable, Sendable {
   case gateStale = "sprint.gate-stale"
   case gateProofBase = "sprint.gate-proof-base"
   case gateBase = "sprint.gate-base"
+  case targetOutsideSurface = "sprint.target-outside-surface"
   case mainMoved = "sprint.main-moved"
   case notFastForward = "sprint.not-fast-forward"
   case mainCheckedOut = "sprint.main-checked-out"
