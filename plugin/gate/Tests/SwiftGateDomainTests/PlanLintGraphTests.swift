@@ -205,6 +205,111 @@ struct PlanLintGraphTests {
     #expect(touched == ["ModuleA", "ModuleB"])
   }
 
+  // MARK: - Write-set resolution (one resolver for the module count and the worker pack)
+
+  /// A design whose Module kinds table names `rows` as `(module, kind)`.
+  private static func design(moduleKinds rows: [(String, String)]) -> DesignDocument {
+    var text = "# Example\n\n## Module kinds\n\n| Module | Kind | Reason |\n|---|---|---|\n"
+    for (module, kind) in rows {
+      text += "| `\(module)` | \(kind) | planned here |\n"
+    }
+    return DesignDocument(markdown: MarkdownDocument.parse(text))
+  }
+
+  @Test(
+    "a write-set entry with a typo in its module directory fails naming the task and the entry — catches the module count and the pack estimate skipping it"
+  )
+  func typoInModuleDirectoryIsUnresolved() throws {
+    let graph = try Self.graph([("Foo", "Sources/Foo"), ("Bar", "Sources/Bar")])
+    let writeSet = ["Sources/Foo/", "Sources/Baar/Store.swift"]
+    let resolution = PlanLintGraph.resolveWriteSet(
+      writeSet, graph: graph, design: nil, packageDirectories: [""])
+    #expect(resolution.moduleNames == ["Foo"])
+    #expect(resolution.unresolved == ["Sources/Baar/Store.swift"])
+
+    let task = Self.task(id: "store-task", writeSet: writeSet, estLines: 120)
+    let findings = try PlanLintGraph.allFindings(
+      design: Self.design(), designPath: "docs/example/designs/x.md",
+      ledger: Self.ledger(tasks: [task], waves: [["store-task"]]), ledgerPath: "ledger.json",
+      graph: graph, workerPacks: [:], bounds: PlanConfig()
+    ).filter { $0.ruleID == PlanLintGraph.writeSetUnresolvedRuleID }
+    #expect(findings.count == 1)
+    #expect(findings.first?.severity == .major)
+    #expect(findings.first?.file == "store-task")
+    let message = findings.first?.message ?? ""
+    #expect(message.contains("store-task") && message.contains("Sources/Baar/Store.swift"))
+    #expect(message.contains("Module kinds"))
+  }
+
+  @Test(
+    "a new module the design's Module kinds table names resolves with that kind, and its tests count as it — catches a module the plan creates read as a typo or skipped"
+  )
+  func designModuleResolvesWithItsKind() throws {
+    let graph = try Self.graph([("Foo", "Sources/Foo")])
+    let design = Self.design(moduleKinds: [("Queue", "engine")])
+    let resolution = PlanLintGraph.resolveWriteSet(
+      ["Sources/Queue/Queue.swift", "Tests/QueueTests/"], graph: graph, design: design,
+      packageDirectories: [""])
+    #expect(resolution.modules == [.init(name: "Queue", kind: .engine)])
+    #expect(resolution.unresolved == [])
+
+    let tests = PlanLintGraph.resolveWriteSet(
+      ["Tests/FooTests/FooTests.swift"], graph: graph, design: nil, packageDirectories: [""])
+    #expect(tests.moduleNames == ["Foo"])
+    #expect(tests.unresolved == [])
+
+    let task = Self.task(id: "t", writeSet: ["Sources/Foo/", "Sources/Queue/"], estLines: 120)
+    let findings = try PlanLintGraph.allFindings(
+      design: design, designPath: "docs/example/designs/x.md",
+      ledger: Self.ledger(tasks: [task], waves: [["t"]]), ledgerPath: "ledger.json",
+      graph: graph, workerPacks: [:], bounds: PlanConfig())
+    #expect(findings.contains { $0.ruleID == PlanLintCoverage.tooManyModulesRuleID })
+    #expect(!findings.contains { $0.ruleID == PlanLintGraph.writeSetUnresolvedRuleID })
+  }
+
+  @Test(
+    "a doc or manifest entry resolves to no module and raises nothing, while a source entry beside it in the same package is unresolved — catches the line between them drawn at the package instead of its source directories"
+  )
+  func docAndManifestEntriesAreNotModuleEntries() throws {
+    let writeSet = [
+      "docs/designs/x.md", "Package.swift", "README.md", "Pkg/Package.swift",
+      "Pkg/Fixtures/queue.json", "Sources/Foo/Foo.swift",
+    ]
+    let graph = try ModuleGraph(packages: [
+      PackageManifest(
+        name: "Root", path: "",
+        targets: [PackageTarget(name: "Foo", type: .library, path: "Sources/Foo")]),
+      PackageManifest(
+        name: "Pkg", path: "Pkg",
+        targets: [PackageTarget(name: "Engine", type: .library, path: "Pkg/Sources/Engine")]),
+    ])
+    let resolution = PlanLintGraph.resolveWriteSet(
+      writeSet, graph: graph, design: nil, packageDirectories: ["", "Pkg"])
+    #expect(resolution.moduleNames == ["Foo"])
+    #expect(resolution.unresolved == [])
+
+    let task = Self.task(
+      id: "t", writeSet: writeSet + ["Pkg/Sources/Missing/X.swift"], estLines: 120)
+    let findings = try PlanLintGraph.allFindings(
+      design: Self.design(), designPath: "docs/example/designs/x.md",
+      ledger: Self.ledger(tasks: [task], waves: [["t"]]), ledgerPath: "ledger.json",
+      graph: graph, workerPacks: [:], bounds: PlanConfig()
+    ).filter { $0.ruleID == PlanLintGraph.writeSetUnresolvedRuleID }
+    #expect(findings.count == 1)
+    #expect(findings.first?.message.contains("Pkg/Sources/Missing/X.swift") == true)
+  }
+
+  @Test(
+    "a directory entry above several modules touches each of them — catches a package-wide entry counted as no module"
+  )
+  func directoryAboveModulesTouchesEach() throws {
+    let graph = try Self.graph([("Foo", "Sources/Foo"), ("Bar", "Sources/Bar")])
+    let resolution = PlanLintGraph.resolveWriteSet(
+      ["Sources/"], graph: graph, design: nil, packageDirectories: [""])
+    #expect(resolution.moduleNames == ["Bar", "Foo"])
+    #expect(resolution.unresolved == [])
+  }
+
   // MARK: - Worker pack inputs (spec §9.3: a pack must actually have been resolved)
 
   @Test(
@@ -500,5 +605,19 @@ struct PlanLintGraphTests {
     #expect(try gating([dangling, Self.renameFix]) == [PlanLintGraph.missingDependencyRuleID])
     #expect(
       try gating([built, built, Self.renameFix]) == [PlanLintGraph.duplicateTaskIDRuleID])
+  }
+}
+
+/// These suites' plans have no design, so the module-graph checks run with none.
+extension PlanLintGraph {
+  fileprivate static func modulesTouched(writeSet: [String], graph: ModuleGraph) -> Set<String> {
+    modulesTouched(writeSet: writeSet, graph: graph, design: nil)
+  }
+
+  fileprivate static func singleDependentChainFindings(
+    ledger: Ledger, graph: ModuleGraph, ledgerPath: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    try singleDependentChainFindings(
+      ledger: ledger, graph: graph, ledgerPath: ledgerPath, design: nil)
   }
 }
