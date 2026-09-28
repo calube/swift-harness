@@ -410,8 +410,39 @@ public enum LedgerRender {
 
   // MARK: - Slice × task coverage matrix
 
+  /// A spec-page plan's coverage (fast modes §5.2): every slice is a row, keyed by its
+  /// `slice-<n>-…` id in a `data-` attribute only, and shows its number, test name and tier. A
+  /// slice no task `covers` is a visible "Gap" cell, as a design requirement is.
   static func sliceMatrixSection(page: SpecPage, tasks: [LedgerTask]) -> HTMLFragment {
-    section("Slice × task coverage", [])
+    let sortedTasks = tasks.sorted { $0.id < $1.id }
+    let covered = Set(tasks.flatMap(\.covers))
+    let head = HTMLFragment.element(
+      "tr",
+      [.element("th", text: "Slice")] + sortedTasks.map { .element("th", text: $0.id) }
+        + [.element("th", text: "Coverage")])
+    let rows = page.slices.map { slice -> HTMLFragment in
+      let isGap = !covered.contains(slice.id)
+      let cells = sortedTasks.map { task in
+        HTMLFragment.element("td", text: task.covers.contains(slice.id) ? "Covered" : "")
+      }
+      let coverage = HTMLFragment.element(
+        "td", attributes: ["data-gap": isGap ? "true" : "false"],
+        text: isGap ? "Gap: no task covers this" : "Covered")
+      return .element(
+        "tr", attributes: ["data-slice": slice.id],
+        [
+          .element(
+            "th", attributes: ["scope": "row"],
+            text: "\(slice.number). \(slice.testName) · \(slice.tier.rawValue)")
+        ] + cells + [coverage])
+    }
+    return section(
+      "Slice × task coverage",
+      [
+        .element(
+          "div", attributes: ["class": "scroll"],
+          [.element("table", [.element("thead", [head]), .element("tbody", rows)])])
+      ])
   }
 
   // MARK: - Predicted overhead share

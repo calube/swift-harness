@@ -610,3 +610,27 @@ both are `confirm: skippable`. `recipient-postcode` slice 2 quotes an acceptance
 file wraps over 2 lines, joined onto 1. `shipping-address` marks the delivery note slice
 `Spec: none` (its spec lists no acceptance line for it) and runs to 417 words, over the 400-word
 limit: a real `too-long` page.
+
+## Ledger page (`design-render --ledger`)
+
+`ledger-page/design-plan-ledger.html` is the ledger page `swiftgate design-render --ledger` wrote for a
+design plan before a plan could come from a spec page (harness `93ee095`, whose gate sources match
+the change's base). `ledger-page/ledger.json` is its input ledger, written for the capture; the
+design is `DesignSha/lf-proposed.md`. With `SG` the harness's `plugin/bin/swiftgate` and `FX` this
+directory, in a temp directory:
+
+```sh
+git init -q -b main
+mkdir -p docs/designs && cp "$FX/DesignSha/lf-proposed.md" docs/designs/queue.md
+git add -A && git -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm design
+"$SG" plan claim queue-plan --design docs/designs/queue.md --session 0b6f3c2e-7d1a-4e5b-9c8f-1a2b3c4d5e6f
+P="$(git rev-parse --path-format=absolute --git-common-dir)/swift-harness/plans/queue-plan"
+SHA=$(sed '2d' docs/designs/queue.md | git hash-object --stdin)   # the designSha: status line dropped
+python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['designSha']=sys.argv[2]; json.dump(d,open(p,'w'),indent=2)" "$P/plan.json" "$SHA"
+cp "$FX/ledger-page/ledger.json" "$P/ledger.json"
+"$SG" design-render --ledger queue-plan
+cp .harness/design-render/queue-plan-ledger.html "$FX/ledger-page/design-plan-ledger.html"
+```
+
+It printed `designSha 72945ae95766ad279c53f464be8bffbe4e66f9d8`, the `DesignSha/hashes.txt` value
+for `lf.stripped.md`.
