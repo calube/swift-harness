@@ -118,8 +118,10 @@ findings back to the same drafter, at most 2 rounds, then halt and ask.
 
 ## After every phase
 
-Append 1 line per agent run or `swiftgate` phase to `<run>/phases.jsonl`, in the shape the
-reference gives. `"$SG" stats --design <doc>` reads it.
+Record each workflow launch with `"$SG" design-telemetry` as the references show: it appends the
+launch's line to `<run>/phases.jsonl` and writes `<run>/telemetry/<phase>-<n>.json`. Append 1 line
+by hand per Agent tool run or `swiftgate` step, in the shape the reference gives.
+`"$SG" stats --design <doc>` reads the file.
 
 ## Where the draft leaves things
 

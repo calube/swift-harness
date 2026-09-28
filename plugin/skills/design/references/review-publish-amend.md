@@ -125,7 +125,8 @@ under `.harness/context-pack/`. Exit 1 or 2 names the missing input: fix it and 
 
 ### Run
 
-Launch the plugin's registered workflow by name:
+Note the launch time with `date -u +%Y-%m-%dT%H:%M:%SZ`, then launch the plugin's registered
+workflow by name:
 
 ```
 Workflow({
@@ -152,7 +153,13 @@ mkdir -p <run>/workflows && /bin/cp -f "${CLAUDE_PLUGIN_ROOT}/workflows/design-r
 
 If that's refused too, use the Agent tool fallback below and tell the user which launch failed.
 
-Save the whole return to `<run>/review-<r>/workflow.json`.
+Save the whole return to `<run>/review-<r>/workflow.json` and record its telemetry first:
+
+```bash
+"$SG" design-telemetry --run <run> --run-id <design-run> --phase review \
+  --workflow-result <run>/review-<r>/workflow.json --started-at <launch time> --session <id>
+```
+
 Write each entry of its `reviews` array to its own file, `<run>/review-<r>/<reviewer>.json`, as
 returned. Then:
 
@@ -197,7 +204,15 @@ Read `verdict`, `findings`, `rerun`, `notReviewed` and `notResearched` from `des
    Never pass the prior round's full `workflow.json` or an entry for a reviewer `rerun` doesn't
    name: the whole earlier return runs to tens of KB, too big for a headless launch, and the
    workflow rejects `previous` over 16 KB.
-4. Write the returned `reviews[]` entries (one per `rerun` reviewer) to
+4. Save the return to `<run>/review-<r+1>/workflow.json` and record it, with the launch time
+   noted before step 3:
+
+   ```bash
+   "$SG" design-telemetry --run <run> --run-id <design-run> --phase revise \
+     --workflow-result <run>/review-<r+1>/workflow.json --started-at <launch time> --session <id>
+   ```
+
+   Write the returned `reviews[]` entries (one per `rerun` reviewer) to
    `<run>/review-<r+1>/<reviewer>.json`. Run `review-synth` over all the reviewer files: those, plus
    the `carried` reviewers' own files from `<run>/review-<r>/`, passed again unchanged (`review-synth`
    reads a file wherever it lives, so nothing is copied).
@@ -479,8 +494,9 @@ Never amend a `built` design: a new design supersedes it. A `proposed` one takes
 
 For each id with status `stale`, spawn a one-claim lane. Write a brief to
 `<run>/briefs/reresearch-<id>.md`: the claim's text, its citation and the pin that moved. Build
-the pack with the claim's lane as `--key`, as the research phase does, and launch the research
-workflow by name, with the research phase's fallbacks:
+the pack with the claim's lane as `--key`, as the research phase does. Note the launch time with
+`date -u +%Y-%m-%dT%H:%M:%SZ`, and launch the research workflow by name, with the research
+phase's fallbacks:
 
 ```
 Workflow({
@@ -495,6 +511,13 @@ Workflow({
     answers: []
   }
 })
+```
+
+Save the return to `<run>/reresearch-<id>.json` and record it:
+
+```bash
+"$SG" design-telemetry --run <run> --run-id <design-run> --phase amend \
+  --workflow-result <run>/reresearch-<id>.json --started-at <launch time> --session <id>
 ```
 
 Replace the stale claim's line with the returned claim of the same id. Append any new claim, and
@@ -732,7 +755,9 @@ guard refuses the write otherwise.
 
 ## Phase log
 
-Append phase lines as the frame reference shows. This part adds the phases `review`, `revise`,
-`publish`, `amend` and `clarify`. Reviewer lines use `agentRole` `evidence-auditor`,
-`standards-reviewer` or `challenger`. The pre-mortem logs as `challenger`. A redraft logs
-`drafter` under `revise`, and a one-claim lane logs `research-lane` under `amend`.
+Append phase lines as the frame reference shows. `design-telemetry` records each workflow launch:
+`review` for a first round, `revise` for a revise round's reviewers, `amend` for a one-claim lane.
+This part adds the phases `review`, `revise`, `publish`, `amend` and `clarify`. A hand-written
+reviewer line, from the Agent tool fallback, uses `agentRole` `evidence-auditor`,
+`standards-reviewer` or `challenger`; the pre-mortem logs as `challenger`. A redraft logs
+`drafter` under `revise`.

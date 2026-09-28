@@ -320,6 +320,28 @@ const tests = {
     assert.ok(workflowCalls.some(call => call.includes('name: "swift-harness-design-review"')), 'the review workflow is not launched by name')
   },
 
+  'the design skill records every workflow launch with design-telemetry and every flag it needs — catches a launch whose cost is written by hand or not at all'() {
+    const files = designSkillFiles()
+    const { problems, resolved } = scanSkills(join(root, 'skills/design'), help, root)
+    assert.deepEqual(problems, [])
+    const calls = Object.entries(files).flatMap(([file, text]) =>
+      extractInvocations(text).filter(inv => inv.fenced && inv.words[0] === 'design-telemetry').map(inv => ({ file, ...inv })))
+    const required = ['--run', '--run-id', '--phase', '--workflow-result', '--started-at', '--session']
+    for (const call of calls) {
+      for (const flag of required) assert.ok(call.words.includes(flag), `${call.file}:${call.line} design-telemetry lacks ${flag}`)
+      assert.ok(call.words[call.words.indexOf('--run-id') + 1] === '<design-run>', `${call.file}:${call.line} --run-id is not <design-run>`)
+    }
+    const phases = new Set(calls.map(call => call.words[call.words.indexOf('--phase') + 1]))
+    for (const phase of ['research', 'review', 'revise', 'amend']) {
+      assert.ok(phases.has(phase), `no design-telemetry call records --phase ${phase}`)
+    }
+    const all = Object.values(files).join('\n')
+    const launches = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].length
+    assert.ok(calls.length >= launches, `${launches} workflow launches but ${calls.length} design-telemetry calls`)
+    assert.ok(/date -u \+%Y-%m-%dT%H:%M:%SZ/.test(all), 'the skill never notes a launch time for --started-at')
+    assert.ok(!/Log 1 line per lane when the Workflow result/.test(all), 'the phase log still asks for hand-written workflow lines')
+  },
+
   'a call missing a required flag or arg fails and names it — catches the required-call check passing anything'() {
     const problems = requiredCallProblems({
       'x.md': [

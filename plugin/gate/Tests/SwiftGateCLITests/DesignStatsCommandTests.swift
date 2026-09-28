@@ -326,6 +326,61 @@ struct DesignStatsCommandTests {
     #expect(withoutPlan.notes.contains { $0.contains("overhead share excluded") })
   }
 
+  @Test(
+    "stats reads schema 1 and schema 2 phase lines together and counts unmeasured records apart, never adding them as 0 — catches an unknown token count summed as zero"
+  )
+  func unmeasuredPhaseRecordsCountedApart() async throws {
+    let repo = try Repository()
+    defer { repo.remove() }
+    let slug = URL(filePath: Self.design).deletingPathExtension().lastPathComponent
+    let lines = [
+      #"{"schemaVersion":1,"runId":"design-20260925T180000Z","phase":"research","agentRole":"research-lane","lane":"codebase","tokens":48213,"costUSD":null,"wallMilliseconds":212000}"#,
+      #"{"agentRole":"research-lane","costUSD":null,"lane":null,"phase":"research","runId":"design-20260928T010000Z","schemaVersion":2,"tokens":null,"unavailable":["output tokens: the Workflow runtime gave this script no budget.spent()"],"wallMilliseconds":90000}"#,
+      #"{"agentRole":null,"costUSD":null,"lane":null,"phase":"review","runId":"design-20260928T010000Z","schemaVersion":2,"tokens":null,"unavailable":["output tokens: the Workflow runtime gave this script no budget.spent()"],"wallMilliseconds":30000}"#,
+    ]
+    try repo.write(
+      lines.joined(separator: "\n") + "\n",
+      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+
+    let report = await DesignStatsRun.run(
+      options: .init(design: Self.design, plan: nil, cacheHome: try repo.freshCacheHome()),
+      root: repo.root, runner: LiveProcessRunner())
+
+    #expect(report.verdict == .green)
+    #expect(report.unmeasuredPhaseRecords == 2)
+    let research = try #require(report.phaseTotals.first { $0.phase == .research })
+    #expect(research.runs == 2)
+    #expect(research.tokens == 48_213)
+    #expect(research.unmeasuredRuns == 1)
+    #expect(research.wallMilliseconds == 302_000)
+    let review = try #require(report.phaseTotals.first { $0.phase == .review })
+    #expect(review.tokens == nil)
+    #expect(review.unmeasuredRuns == 1)
+    #expect(report.notes.contains { $0.contains("2 phase record(s)") && $0.contains("unmeasured") })
+    let human = DesignStatsRun.render(report, format: .human)
+    #expect(human.contains("review: runs=1 tokens=n/a unmeasured=1"))
+    let json = try Self.jsonObject(report)
+    #expect(json["unmeasuredPhaseRecords"] as? Int == 2)
+  }
+
+  @Test(
+    "a phase line with an unknown key blocks the report naming its line — catches a closed record read as a real one"
+  )
+  func unknownPhaseKeyBlocks() async throws {
+    let repo = try Repository()
+    defer { repo.remove() }
+    let slug = URL(filePath: Self.design).deletingPathExtension().lastPathComponent
+    let path = try repo.write(
+      #"{"schemaVersion":1,"runId":"design-20260925T180000Z","phase":"draft","agentRole":"drafter","tokens":10,"costUSD":null,"wallMilliseconds":5,"model":"opus"}"#
+        + "\n",
+      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+    let report = await DesignStatsRun.run(
+      options: .init(design: Self.design, plan: nil, cacheHome: try repo.freshCacheHome()),
+      root: repo.root, runner: LiveProcessRunner())
+    #expect(report.verdict == .blocked)
+    #expect(report.message.contains("\(path):1"))
+  }
+
   private static func jsonObject(_ report: DesignStatsReport) throws -> [String: Any] {
     let json = DesignStatsRun.render(report, format: .json)
     return try #require(try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])

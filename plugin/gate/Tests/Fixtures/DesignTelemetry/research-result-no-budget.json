@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "status": "complete",
+  "tier": "standard",
+  "mode": "research",
+  "lanes": [
+    {
+      "lane": "codebase",
+      "status": "researched",
+      "claims": [
+        {
+          "id": "ev-codebase-finding-first",
+          "lane": "codebase",
+          "text": "codebase relies on Effect.run",
+          "citation": {
+            "kind": "probe",
+            "loc": "probes/ev-codebase-finding-first.swift",
+            "pin": "swift-composable-architecture@1.26.2"
+          },
+          "status": "new"
+        }
+      ],
+      "probes": [
+        {
+          "claimId": "ev-codebase-finding-first",
+          "swift": "import ComposableArchitecture\nlet _ = Effect<Int>.run { _ in }"
+        }
+      ],
+      "needsDecision": [],
+      "dropped": []
+    }
+  ],
+  "needsDecision": [],
+  "unusedAnswers": [],
+  "telemetry": {
+    "outputTokens": null,
+    "agents": [
+      {
+        "label": "research:codebase",
+        "returned": true
+      }
+    ],
+    "unavailable": [
+      "output tokens: the Workflow runtime gave this script no budget.spent()",
+      "per-agent tokens and durations: the Workflow script API reports no usage per agent call",
+      "input tokens and USD cost: the Workflow script API reports neither"
+    ]
+  }
+}
