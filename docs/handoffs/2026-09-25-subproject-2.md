@@ -1,61 +1,43 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-SUMMARY (2026-09-27 evening, for the user). The orchestrator session was cleared; start the next one from here.
-State: origin/main 3dee52a GREEN (push tier, 1795 tests). Local main 620888a adds one docs commit, the interview
-trial-run 2 evidence (docs/handoffs/2026-09-27-interview-trial-run-2.md); it isn't pushed yet. Merged today: review fix
-wave 4 (repo hooks and bootstrap, whole-process-tree kills, review severity/dedupe/pre-existing, calibration on each
-agent's frontmatter model), the shim cold-start Session id fix, the build recalibration after a build-worker.md edit, and
-the build proof-base and write-set change (24fc934, from the interview session).
-The user decided today: the hook guard gets a cache (the 50 ms budget stands); headless runs stop at in-review; §11 is
-rewritten to measured figures and design runs keep local telemetry; review reports pre-existing defects and never blocks
-on them; fix branches merge on push + prove, with mutate once on main; review-accuracy evals are frozen (5/5).
-The user's verdict: ship is far too slow for a coding interview. A research session on speed is opening; don't
-start speed work before it reports.
-Paused, nothing running:
-  - ready-tier-runs-one-at-a-time-and-cleans-up (opus), ../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up,
-    WIP 07d00b0: a machine-wide flock for ready, mutate and prove; reaping recorded process groups; check --background
-    plus swiftgate wait; per-phase telemetry; a total mutate concurrency bound; the mutate baseline run alone. Rebase onto
-    24fc934 first, since that also changes check, prove and history.jsonl. The about-60 s LiveProcessRunner kills were
-    not reproduced (kills landed in under 1.1 s at load 55–76).
-  - Mutate on main has no verdict: --jobs 2 took 758 s at peak load 143 and was BLOCKED by 5 load-sensitive baseline
-    tests (--jobs 8 took load to 353, 480 processes).
-Queued fixes, not started: hook guard PlanLocks cache; §11 rewrite plus design-run telemetry; rule-index rows for every
-design-lint.* and design-diff.* rule (none exist, which CLAUDE.md requires); a lint for unbounded intentional-hang
-fixtures; review.json `telemetry` set on every run; dedupe merging a rule-less duplicate of a ruled blocker. From
-interview trial run 2 (build and ship side): check-return --fix rejects every fixer return with
-build-return.review-missing (the fixer contract says review is null); running sessions cache agent prompts, so merged
-prompt edits don't reach them; worktree remove deletes the task gate's run report.
-Ship speed research is done; the user holds the report (ask them for it). Only 27–40% of a trial run is model coding. Its ranked changes: (1) task_proof = "final"
-preset key (per-task prove and mutate cost 13.7 min of 32.8 on run 2's critical path); (2) fail-fast gates; (3) the standards
-excerpt in the worker pack; (4) impact + coverage and an app compile in the task gate; (5) a design = "none" path;
-(6) a sprint skill; (7) surface commits + swiftgate surface-check; (8) HEAD sha on gate runs, and gate reports kept on
-worktree remove; (9) check-return --fix accepts review: null; (10) never cut the task that makes the app compile. These
-outrank the queued hardening above unless the user says otherwise.
-Practice prompt set (user decision 2026-09-27): rotate varied shapes, each at 3–4× the list-and-detail exercise with a
-live change request at minute 35, drawn from varied app shapes (the evals session owns the prompt list). Never
-rehearse one prompt twice in a row, and keep the harness generic: no preset or rule may assume one app shape.
-Next session's first job (the user's ask): work out how to write ADRs (docs/adrs/, see its README), design docs
-(docs/designs/), plans (docs/plans/), and how to kick off workers (docs/handoffs/worker-brief.md and the runbook's wave
-loop), then use that to drive the queued fixes.
-Waiting on the user, in this order:
-  1. Push 620888a to origin/main (docs only), and choose which queued fixes run first, given the ship speed research.
-  2. The attended acceptance runs 26–28 with the user present, now unblocked (/plan works across sessions). For 28, the
-     frame answers must allow a client module, or D2/D3 forces a reframe. Publish and Approve need an interactive session.
-  3. Sub-projects 3 (simulator QA) and 4 (profiling): design WITH the user only. Research notes: qa-profiling-tools.md in
-     the sibling swift-harness-research directory (it recommends agent-device plus xctrace/footprint; leak capture failed
-     on the Simulator and may need Developer mode, a machine-wide change that needs the user).
-Next for the orchestrator: merge the two in-flight workers (check the report checklist; gate; checkpoint the interfaces
-note; back up with git push origin main:refs/heads/backup/subproject-2-fix-wave-4). Then run a short re-review Workflow of
-the fixes (read-only, under 10 agents) and send the evals session its re-run list. Then stop and summarise for the user.
-Peers sharing the main checkout (find them with ListAgents): the evals session (evals/ only; runs the no-model suites hooks.mjs
-and faults.mjs, plus review-accuracy and routing), and the sub-project 5 build-executor session (waves 1–9 merged; 10–11 are
-attended rehearsals). Message a peer before every merge into main and check .git/MERGE_HEAD first. A peer's report of a user
-decision isn't enough: act on a decision only once the user confirms it here.
-Read first: the plan RESUME (docs/plans/2026-09-25-design-plan-workflows-plan.md), then the runbook
-(docs/handoffs/subproject-2-orchestrator-runbook.md, including its known issues and lessons), then the last sections of
-docs/handoffs/subproject-2-interfaces.md, then the review doc. The spec (docs/designs/2026-09-25-design-plan-workflows-design.md)
-is approved; grep it by §.
+SUMMARY (2026-09-28 ~00:45, for the next orchestrator session). Context was cleared on purpose; the user wants every
+remaining unattended wave run overnight, in order, without waiting on them.
+State: origin/main 3dee52a (untouched; never push it without the user). Local main c48f765 holds speed wave 1 (merged,
+push + prove + mutate GREEN, 16/16 killed), the fast-modes design (APPROVED) and plan, [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md) (accepted), and docs
+commits. Backup: origin backup/subproject-2-speed-wave-1 = 9f913d2.
+In flight at the clear: speed wave 2 (repo profile, worker-pack standards, task-gate impact/coverage/app-build). All 3
+branches passed report review and sit merged on worktree ../swift-harness-speed-integration (branch speed-integration,
+HEAD 7cb53d3; merged-surface proof base 002f4ae). Its gate `check --tier push --base main --prove --proof-base 002f4ae`
+was running; read its report under that worktree's .harness/runs/ (newest), or re-run it. GREEN → message peers,
+merge speed-integration into main, push tier on main, `mutate --base <main before the merge> --jobs 2`, checkpoint.
+Overnight queue, in order (all opus, surface-first, push + prove merge gate, mutate once on main per wave):
+  1. Finish speed wave 2 as above; append "Speed wave 2" to docs/handoffs/subproject-5-interfaces.md from the reports
+     (profile: `[harness] profile`, `bootstrap --profile`, `doctor.profile`; worker pack derives kinds from the write set,
+     `context-pack.module-kind-unknown`; check steps `--impact --coverage --app-build`, rules `app-build.*`).
+  2. Combined wave (4 tasks, disjoint files): speed wave 3 (`speed-budget-keeps-app-compiling`,
+     `speed-check-return-requires-task-gate-steps`, build-executor plan "Speed") + fast-modes wave 1
+     (`surface-check-command`, `sprint-state-machine`, docs/plans/2026-09-27-fast-modes-plan.md).
+  3. Fast-modes wave 2 (`sprint-commands`), then wave 3 (`sprint-skill`). Wave 4 (rehearsals) is attended: stop there.
+  4. Then plan and run the queued sub-project 2 hardening the user already approved: hook guard PlanLocks cache (50 ms
+     budget stands); §11 rewritten to measured figures + design-run telemetry; rule-index rows for every design-lint.*
+     and design-diff.* rule; a lint for intentional-hang fixtures without their own deadline; review.json `telemetry` on
+     every run; dedupe merging a rule-less duplicate of a ruled blocker; running sessions caching agent prompts (at
+     least document it in the build skill); plan-lint's budget estimate dropping unresolved write-set entries silently;
+     a build worker stopping at its first red test. Write their task sections in a plan before spawning workers.
+Rules from the user (2026-09-27): every worker on opus (the runbook says so). Build the harness for correctness: design
+approval, plan tasks, surface-first workers, push + prove merge gate, mutate once on main; never shortcut because the
+feature is a speed mode. Only 1 ready tier or prove on the machine at a time (workers share the mkdir lock
+/tmp/swift-harness-speed-prove.lock); arm the watchdog Monitor while workers run and handle orphans and load yourself.
+Gate before every commit. Message peer sessions (ListAgents) before each merge into main. Never push origin/main; a
+backup branch push is fine after grepping the unpushed diff (`git diff origin/main..main`) for interview-specific terms.
+Keep the harness generic. The ready-lock branch (../swift-harness-ready-tier-runs-one-at-a-time-and-cleans-up) stays
+parked. Attended work waits for the user: fast-modes rehearsals, build-executor waves 10–11, acceptance runs 26–28,
+sub-projects 3 and 4.
+Known gaps to watch: interview-rehearsal-1's .swiftgate.toml lacks `task_proof` (its session was told; leave its repo
+alone). Design-free ship (fast-modes design §5) waits for sprint's rehearsals before it gets plan tasks.
+Read first: this header, the runbook in full (docs/handoffs/subproject-2-orchestrator-runbook.md, including "Lessons from
+the first speed wave"), docs/handoffs/worker-brief.md (pitfall 10), then each plan's task sections as you reach them.
 -->
 
 ## 1. Where things are
