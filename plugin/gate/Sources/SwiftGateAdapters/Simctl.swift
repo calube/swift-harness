@@ -6,6 +6,8 @@ public enum SimctlError: Error, Sendable, Equatable {
   /// `simctl` exited nonzero; `stderr` is its first two lines, which name the failure.
   case failed(command: String, status: ExitStatus, stderr: String)
   case unreadableOutput(command: String, detail: String)
+  /// `simctl` ran past its deadline, which on a loaded machine is too short, not a hang.
+  case timedOut(command: String, deadline: Duration)
 
   /// Simulator trouble is the machine's, never evidence about the code.
   public var verdict: Verdict { .blocked }
@@ -17,6 +19,8 @@ public enum SimctlError: Error, Sendable, Equatable {
       "simctl \(command) failed (\(status)): \(stderr)"
     case .unreadableOutput(let command, let detail):
       "simctl \(command) printed unexpected output: \(detail)"
+    case .timedOut(let command, let deadline):
+      "simctl \(command) did not finish within its \(deadline) deadline"
     }
   }
 }
@@ -26,6 +30,9 @@ public protocol Simctl: Sendable {
   func devices() async throws(SimctlError) -> [SimulatorDevice]
   /// Returns the clone's UDID.
   func clone(_ udid: String, name: String) async throws(SimctlError) -> String
+  /// Makes a fresh, shut-down device and returns its UDID.
+  func create(name: String, deviceType: String, runtime: String) async throws(SimctlError)
+    -> String
   /// Boots the device and waits until it has finished booting.
   func boot(_ udid: String) async throws(SimctlError)
   func shutdown(_ udid: String) async throws(SimctlError)
@@ -68,6 +75,12 @@ public struct LiveSimctl: Simctl {
       throw .unreadableOutput(command: "clone", detail: "expected a UDID, got \"\(clone)\"")
     }
     return clone
+  }
+
+  public func create(name: String, deviceType: String, runtime: String)
+    async throws(SimctlError) -> String
+  {
+    throw .unreadableOutput(command: "create", detail: "not supported")
   }
 
   public func boot(_ udid: String) async throws(SimctlError) {

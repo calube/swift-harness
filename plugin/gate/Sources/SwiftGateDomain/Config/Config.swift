@@ -314,16 +314,25 @@ public struct Config: Sendable, Equatable {
 
 public struct SimulatorConfig: Sendable, Equatable {
   public static let defaultMaxConcurrent = 2
+  /// A loaded machine (load average 60) took over 60 s to answer `simctl list`.
+  public static let defaultSimctlTimeoutSeconds = 180
+  public static let simctlTimeoutSecondsRange = 30...1800
 
   public let device: String
   public let os: String
   /// Machine-wide cap on concurrent simulator runs across every worktree.
   public let maxConcurrent: Int
+  /// Deadline for each `simctl` call other than booting and installing.
+  public let simctlTimeoutSeconds: Int
 
-  public init(device: String, os: String, maxConcurrent: Int = Self.defaultMaxConcurrent) {
+  public init(
+    device: String, os: String, maxConcurrent: Int = Self.defaultMaxConcurrent,
+    simctlTimeoutSeconds: Int = Self.defaultSimctlTimeoutSeconds
+  ) {
     self.device = device
     self.os = os
     self.maxConcurrent = maxConcurrent
+    self.simctlTimeoutSeconds = simctlTimeoutSeconds
   }
 }
 
