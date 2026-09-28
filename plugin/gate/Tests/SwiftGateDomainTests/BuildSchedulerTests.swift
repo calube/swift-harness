@@ -2,6 +2,17 @@ import Foundation
 import SwiftGateDomain
 import Testing
 
+extension BuildScheduler {
+  /// The scheduling tests that predate required tasks read a ledger with none.
+  fileprivate static func next(
+    ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date
+  ) -> Result {
+    next(
+      ledger: ledger, running: running, preset: preset, startedAt: startedAt, now: now,
+      required: .empty)
+  }
+}
+
 @Suite("Build scheduler (design spec §8.1, §8.5)")
 struct BuildSchedulerTests {
   static func task(
@@ -41,8 +52,7 @@ struct BuildSchedulerTests {
     let ledger = Self.ledger([dep, blocked])
 
     let result = BuildScheduler.next(
-      ledger: ledger, running: [], preset: Self.preset(), startedAt: Self.epoch, now: Self.epoch,
-      required: .empty)
+      ledger: ledger, running: [], preset: Self.preset(), startedAt: Self.epoch, now: Self.epoch)
 
     #expect(!result.toStart.contains("downstream"))
     #expect(result.toStart.contains("dep-unmerged"))
@@ -62,7 +72,7 @@ struct BuildSchedulerTests {
 
     let result = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 10), startedAt: Self.epoch,
-      now: Self.epoch, required: .empty)
+      now: Self.epoch)
 
     #expect(!result.toStart.contains("downstream-of-blocked"))
     #expect(!result.toStart.contains("downstream-of-abandoned"))
@@ -80,7 +90,7 @@ struct BuildSchedulerTests {
 
     let firstResult = BuildScheduler.next(
       ledger: firstCallLedger, running: [], preset: Self.preset(maxParallel: 2),
-      startedAt: Self.epoch, now: Self.epoch, required: .empty)
+      startedAt: Self.epoch, now: Self.epoch)
     #expect(firstResult.toStart == ["task-a"])
 
     let secondCallLedger = Self.ledger([
@@ -88,7 +98,7 @@ struct BuildSchedulerTests {
     ])
     let secondResult = BuildScheduler.next(
       ledger: secondCallLedger, running: [], preset: Self.preset(maxParallel: 2),
-      startedAt: Self.epoch, now: Self.epoch, required: .empty)
+      startedAt: Self.epoch, now: Self.epoch)
     #expect(secondResult.toStart == ["task-b"])
   }
 
@@ -106,7 +116,7 @@ struct BuildSchedulerTests {
 
     let result = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 1), startedAt: Self.epoch,
-      now: Self.epoch, required: .empty)
+      now: Self.epoch)
 
     #expect(result.toStart == ["unlocks-many"])
   }
@@ -123,7 +133,7 @@ struct BuildSchedulerTests {
 
     let taggedResult = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(workerModel: .tagged),
-      startedAt: Self.epoch, now: Self.epoch, required: .empty)
+      startedAt: Self.epoch, now: Self.epoch)
     #expect(taggedResult.toStart.isEmpty)
     #expect(
       taggedResult.refused == [
@@ -133,7 +143,7 @@ struct BuildSchedulerTests {
 
     let forcedResult = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 2, workerModel: .sonnet),
-      startedAt: Self.epoch, now: Self.epoch, required: .empty)
+      startedAt: Self.epoch, now: Self.epoch)
     #expect(forcedResult.toStart.sorted() == ["another-no-model", "task-no-model"])
     #expect(forcedResult.refused.isEmpty)
   }
@@ -150,7 +160,7 @@ struct BuildSchedulerTests {
     func phase(afterSeconds seconds: TimeInterval) -> BudgetPhase {
       BuildScheduler.next(
         ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-        now: Self.epoch.addingTimeInterval(seconds), required: .empty
+        now: Self.epoch.addingTimeInterval(seconds)
       ).phase
     }
 
@@ -169,12 +179,12 @@ struct BuildSchedulerTests {
 
     let noNewStarts = BuildScheduler.next(
       ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch.addingTimeInterval(25 * 60), required: .empty)
+      now: Self.epoch.addingTimeInterval(25 * 60))
     #expect(noNewStarts.toStart.isEmpty)
 
     let cutoff = BuildScheduler.next(
       ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch.addingTimeInterval(30 * 60), required: .empty)
+      now: Self.epoch.addingTimeInterval(30 * 60))
     #expect(cutoff.toStart.isEmpty)
   }
 
@@ -276,7 +286,7 @@ struct BuildSchedulerTests {
 
     let baseline = BuildScheduler.next(
       ledger: Self.ledger(tasks), running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch, required: .empty)
+      now: Self.epoch)
 
     let permutations: [[LedgerTask]] = [
       tasks.reversed(),
@@ -288,7 +298,7 @@ struct BuildSchedulerTests {
     for permuted in permutations {
       let result = BuildScheduler.next(
         ledger: Self.ledger(permuted), running: [], preset: preset, startedAt: Self.epoch,
-        now: Self.epoch, required: .empty)
+        now: Self.epoch)
       #expect(result == baseline)
     }
   }
