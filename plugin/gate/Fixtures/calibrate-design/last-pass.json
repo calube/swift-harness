@@ -84,7 +84,7 @@
         {
           "answered" : "a claim id starting ev-",
           "expected" : "a claim id starting ev-",
-          "probability" : 0.97,
+          "probability" : 0.9,
           "question" : "interval-tag"
         }
       ],
@@ -277,7 +277,7 @@
         {
           "answered" : "it stays bounded, or no story says",
           "expected" : "it stays bounded, or no story says",
-          "probability" : 0.98,
+          "probability" : 0.9693877551020408,
           "question" : "download-concurrency"
         }
       ],
@@ -296,7 +296,7 @@
         {
           "answered" : "it grows with the album's size",
           "expected" : "it grows with the album's size",
-          "probability" : 0.95,
+          "probability" : 0.97,
           "question" : "download-concurrency"
         }
       ],
@@ -330,7 +330,7 @@
       "model" : "opus"
     }
   ],
-  "contentHash" : "4a44a0b5adc2b913d9fee00688cbb8c78a420c32fb3f5b5a0ab5ecc3cdc215ec",
+  "contentHash" : "cfd60a9c02de66124b5734f4ce0c11e61e26b6fc3ba8742ed0b9a4edc1a49897",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -346,6 +346,6 @@
     "plugin/workflows/design-research.js",
     "plugin/workflows/design-review.js"
   ],
-  "passedAt" : "2026-09-27T17:25:29Z",
+  "passedAt" : "2026-09-28T02:36:35Z",
   "schemaVersion" : 2
 }

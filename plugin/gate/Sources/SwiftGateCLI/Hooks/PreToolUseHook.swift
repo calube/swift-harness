@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import Synchronization
 
 /// PreToolUse (spec §8): Bash and Edit/Write guards (< 50ms), and the advisory comment pass on
 /// `git commit` (≤ 20s). A path a Bash command writes is judged exactly as a file tool's path.
@@ -14,6 +15,7 @@ enum PreToolUseHook {
     -> String?
   {
     let home = dependencies.environment["HOME"]
+    let reads = PlanStateReads(root: root, sessionID: payload.sessionID, dependencies: dependencies)
     var writes: [String] = []
     var context: String?
     switch payload.toolName {
@@ -27,10 +29,10 @@ enum PreToolUseHook {
       }
       for path in writtenPaths(command, payload: payload, home: home) {
         if let violation = await writeViolation(
-          path, payload: payload, root: root, dependencies: dependencies)
+          path, payload: payload, root: root, dependencies: dependencies, reads: reads)
         {
           let reason = "this command writes `\(path)`. " + violation.reason
-          return deny(GuardViolation(ruleID: violation.ruleID, reason: reason))
+          return deny(GuardViolation(ruleID: violation.ruleID, reason: reason), note: reads.note)
         }
         writes.append(path)
       }
@@ -40,28 +42,32 @@ enum PreToolUseHook {
     case let tool? where fileTools.contains(tool):
       guard let path = payload.filePath else { break }
       if let violation = await writeViolation(
-        path, payload: payload, root: root, dependencies: dependencies)
+        path, payload: payload, root: root, dependencies: dependencies, reads: reads)
       {
-        return deny(violation)
+        return deny(violation, note: reads.note)
       }
       writes.append(path)
     default:
       break
     }
     guard payload.agentID != nil else {
-      return context.map { HookOutput.context(.preToolUse, $0) }
+      return joined(context, reads.note).map { HookOutput.context(.preToolUse, $0) }
     }
     let resolved = writes.flatMap { ToolPath.resolvedAbsolutes($0, cwd: payload.cwd, home: home) }
-    let checkouts = await RepositoryCheckouts.of(
-      root: root, git: dependencies.git, around: resolved)
+    let checkouts = await RepositoryCheckouts.of(root: root, reads: reads, around: resolved)
     if let violation = SubagentScopeGuard.evaluate(
       writes: resolved, agentType: payload.agentType, checkouts: checkouts)
     {
-      return deny(violation)
+      return deny(violation, note: reads.note)
     }
     return HookOutput.allow(
       "swiftgate: a background agent can't answer a permission prompt, so the hook decides",
-      context: context)
+      context: joined(context, reads.note))
+  }
+
+  private static func joined(_ context: String?, _ note: String?) -> String? {
+    let parts = [context, note].compactMap { $0 }
+    return parts.isEmpty ? nil : parts.joined(separator: "\n\n")
   }
 
   /// The paths a Bash command writes. A copy, move or link into a directory writes each source's
@@ -89,7 +95,8 @@ enum PreToolUseHook {
   /// it. Every guard sees every spelling of the path the write could land on, so a relative,
   /// `..`-bearing or symlinked form is judged like the canonical one.
   static func writeViolation(
-    _ path: String, payload: HookPayload, root: URL, dependencies: HookDependencies
+    _ path: String, payload: HookPayload, root: URL, dependencies: HookDependencies,
+    reads: PlanStateReads
   ) async -> GuardViolation? {
     let environmentValue = dependencies.environment[OrchestratorMarker.environmentVariable]
     let forms = ToolPath.resolvedForms(
@@ -108,7 +115,7 @@ enum PreToolUseHook {
       var planFile: PlanStateLayout.Plan?
       if case .designArtifact(let document) = target {
         target = .designArtifact(document: ToolPath.canonical(document))
-        plans = await PlanLocks.records(root: root, git: dependencies.git)
+        plans = await PlanLocks.records(reads)
       } else if case .planFile(let plan) = target, form.lowercased() == plan.planFile.lowercased() {
         planFile = plan
       }
@@ -123,7 +130,7 @@ enum PreToolUseHook {
         let name = URL(filePath: planFile.directory).lastPathComponent
         if let violation = PlanStateGuard.evaluatePlanFile(
           of: name, writing: writtenDesign(form, payload: payload, root: root),
-          plans: await PlanLocks.records(root: root, git: dependencies.git),
+          plans: await PlanLocks.records(reads),
           environmentValue: environmentValue, agentID: payload.agentID)
         {
           return violation
@@ -146,8 +153,10 @@ enum PreToolUseHook {
     return .named(PlanLocks.resolve(design: file.design, root: root))
   }
 
-  private static func deny(_ violation: GuardViolation) -> String {
-    HookOutput.deny("swiftgate \(violation.ruleID): \(violation.reason)")
+  /// A cache fault's note rides along after the reason; it never changes the decision.
+  private static func deny(_ violation: GuardViolation, note: String? = nil) -> String {
+    let reason = "swiftgate \(violation.ruleID): \(violation.reason)"
+    return HookOutput.deny(note.map { reason + "\n\n" + $0 } ?? reason)
   }
 
   /// Runs on what is staged when the hook fires, so `git add … && git commit` in one command is
@@ -175,10 +184,10 @@ enum PreToolUseHook {
 /// path's own candidate sibling is checked, never a directory listing, so the hook stays fast
 /// however full the parent directory is.
 enum RepositoryCheckouts {
-  static func of(root: URL, git: any Git, around paths: [String]) async
+  static func of(root: URL, reads: PlanStateReads, around paths: [String]) async
     -> SubagentScopeGuard.Checkouts
   {
-    let common = (try? await git.commonDirectory()).map { URL(filePath: $0) }
+    let common = (try? await reads.commonDirectory()).map { URL(filePath: $0) }
     let main = common?.deletingLastPathComponent() ?? root
     let mainPath = ToolPath.canonical(main.path)
     let parent = URL(filePath: mainPath).deletingLastPathComponent().path
@@ -309,8 +318,9 @@ enum PlanLocks {
 
   /// Every plan under the repository's common dir with the design its `plan.json` names. None
   /// when git can't place the common dir, so only the override can allow a design write.
-  static func records(root: URL, git: any Git) async -> [PlanStateGuard.PlanRecord] {
-    guard let common = try? await git.commonDirectory(),
+  static func records(_ reads: PlanStateReads) async -> [PlanStateGuard.PlanRecord] {
+    let root = reads.root
+    guard let common = try? await reads.commonDirectory(),
       let layout = try? PlanStateLayout(commonDirectory: common)
     else { return [] }
     let names = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
@@ -345,5 +355,47 @@ enum PlanLocks {
 
   private static func contents(_ path: String) -> String? {
     try? String(contentsOfFile: path, encoding: .utf8)
+  }
+}
+
+/// One hook call's reads of plan state: the git common dir through the session's
+/// ``PlanLockCache``, and the notes a cache fault leaves for the hook's output.
+final class PlanStateReads: Sendable {
+  let root: URL
+  private let git: any Git
+  private let cache: PlanLockCache?
+  private let environment: [String: String]
+  private let notes = Mutex<[String]>([])
+
+  init(root: URL, sessionID: String, dependencies: HookDependencies) {
+    self.root = root
+    git = dependencies.git
+    environment = dependencies.environment
+    cache = PlanLockCache(worktreeRoot: root, sessionID: sessionID)
+  }
+
+  func commonDirectory() async throws(GitError) -> String {
+    guard let cache else {
+      record(
+        "swiftgate: this session's id isn't one safe path component, so the plan-lock cache is "
+          + "off and plan state is read fresh on every call.")
+      return try await git.commonDirectory()
+    }
+    let git = self.git
+    let answer = try await cache.commonDirectory(environment: environment) {
+      () async throws(GitError) -> String in try await git.commonDirectory()
+    }
+    if let note = answer.note { record(note) }
+    return answer.commonDirectory
+  }
+
+  /// Every distinct note, or `nil` when the cache behaved.
+  var note: String? {
+    let all = notes.withLock { $0 }
+    return all.isEmpty ? nil : all.joined(separator: "\n")
+  }
+
+  private func record(_ note: String) {
+    notes.withLock { if !$0.contains(note) { $0.append(note) } }
   }
 }

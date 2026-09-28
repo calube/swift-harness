@@ -320,6 +320,15 @@ violations dedupe on `rule`, not `category`.
 | `Review/dismiss-race/{api-errors,architecture,concurrency,test-quality}.json` | Verbatim copies of `review-findings/<focus>.json` from the swift-harness-evals `review-dismiss-without-cancel` trial of 2026-09-27 (evals-round-7, `/swift-harness:review` at harness `2f39ae8`). No machine path appears in them. |
 | `Review/dismiss-without-cancel.patch`, `Review/clean-reset.patch` | `examples/SampleApp` copied to a scratch directory, `git init` + commit, then the evals case's `change.patch` applied and committed, then the exact diff `LiveGit.unifiedDiff` runs: `git diff --unified=3 --no-color --no-ext-diff --no-textconv --relative --find-renames --src-prefix=a/ --dst-prefix=b/ HEAD~1 -- .`. Tests render them with `NumberedDiff.render` to get `diff-numbered.txt`. |
 
+| File | Capture |
+|---|---|
+| `Review/dismiss-rule-pair/{concurrency,api-errors}.json` | Verbatim copies of `review-findings/<focus>.json` from the swift-harness-evals `review-dismiss-without-cancel` trial of 2026-09-27 (the review-accuracy confirming run, `/swift-harness:review` at harness `0a99c70`, run `20260927T151548Z-aabadbfd`), taken from that trial's `kept/.harness/runs/<run>/review-findings/`. No machine path appears in them. |
+
+Observed behavior synthesis relies on: the concurrency reviewer filed the dismiss race as a `defect`
+that cites rule `C3`. The api-errors reviewer filed the same race at the same lines and
+`severity_rule` as a `defect` with no rule and another category (`api-misuse`). So a defect may
+carry a rule, and a rule-less copy of a finding must never replace the copy that cites one.
+
 Observed behavior synthesis relies on: 1 user-visible race came back from 4 reviewers at
 `CounterFeature.swift` lines 67, 69, 69 and 70 under the categories `missing-effect-cancellation`,
 `missing-cancellation`, `effect-lifetime` and `missing-edge-case`. So defects merge across a

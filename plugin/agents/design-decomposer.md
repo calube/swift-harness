@@ -174,6 +174,9 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
 - `plan-lint.dag-cycle`: break the cycle; drop the `deps` edge that isn't a real build order.
 - `plan-lint.missing-dependency`: point `deps` at a task you return, or add the missing task.
 - `plan-lint.write-set-overlap`: make the write sets disjoint, or order the 2 tasks with `deps`.
+- `plan-lint.write-set-unresolved`: correct the entry's module directory. A module the plan
+  really creates but the design's Module kinds table doesn't name needs a design amend, so list
+  it under `"unresolved"`.
 - `plan-lint.uncovered-requirement`: add the named `req-…` or `test-…` id to the `covers` of the
   task that delivers it, or add a task for it.
 - `plan-lint.gate-too-weak`: raise `gate` to the tier needed by the tests the task lists in
