@@ -258,4 +258,5 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   `TASK_GATE_STEPS = '--impact --coverage --app-build'` to the worker under both `task_proof` modes.
 - **Calibration.** The build calibration record was re-run for the new worker prompt inputs.
 - **Gate.** Integration push + prove GREEN at proof base `002f4ae` (run 20260928T004518Z-a6412b52, 34 of 34 new
-  tests proven, 1848 passed); push GREEN on merged main (20260928T004921Z-29fbdfb9).
+  tests proven, 1848 passed); push GREEN on merged main (20260928T004921Z-29fbdfb9); mutate GREEN, every mutant
+  killed (20260928T005205Z-44c7bf80, 37 min at `--jobs 2` under worker load).
