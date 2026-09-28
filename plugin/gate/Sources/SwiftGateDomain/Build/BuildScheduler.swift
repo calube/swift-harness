@@ -117,7 +117,7 @@ public enum BuildScheduler {
   ///   In `.cutoff` phase nothing starts.
   public static func next(
     ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
-    required: RequiredTasks = .empty
+    required: RequiredTasks
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
     let phase = budgetPhase(preset: preset, startedAt: startedAt, now: now)
