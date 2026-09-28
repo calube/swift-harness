@@ -24,7 +24,9 @@ Overnight queue, in order (all opus, surface-first, push + prove merge gate, mut
      and design-diff.* rule; a lint for intentional-hang fixtures without their own deadline; review.json `telemetry` on
      every run; dedupe merging a rule-less duplicate of a ruled blocker; running sessions caching agent prompts (at
      least document it in the build skill); plan-lint's budget estimate dropping unresolved write-set entries silently;
-     a build worker stopping at its first red test. Write their task sections in a plan before spawning workers.
+     a build worker stopping at its first red test; plus, approved 2026-09-27, `arch.ui-host-compiled` (major) and the
+     stale-session doctor check that stops ship, build and sprint (docs/designs/2026-09-27-speed-research-coverage-design.md
+     §3, §4). All of it tonight (user, 2026-09-27). Write their task sections in a plan before spawning workers.
 Rules from the user (2026-09-27): every worker on opus (the runbook says so). Build the harness for correctness: design
 approval, plan tasks, surface-first workers, push + prove merge gate, mutate once on main; never shortcut because the
 feature is a speed mode. Only 1 ready tier or prove on the machine at a time (workers share the mkdir lock
