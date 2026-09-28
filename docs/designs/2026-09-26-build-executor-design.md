@@ -162,6 +162,13 @@ A preset table must set every key, so a typo fails `swiftgate doctor` rather tha
 default without warning. `max_parallel` here overrides `[plan] max_parallel` for scheduling only; waves in
 the ledger stay as planned.
 
+A repository says which preset it is optimised for with `[harness] profile = "<name>"`.
+`/swift-harness:build` and `/swift-harness:ship` use `--preset` when given, else the profile, else
+`default`. `swiftgate bootstrap --profile <name>` stamps it, `default` without the flag. The key is
+optional, but a profile naming no `[build.presets.<name>]` table fails `swiftgate doctor`
+(`doctor.profile`). A profile only picks a preset: hooks, test-first rules, escape-hatch rules and
+the merge gate's GREEN requirement are the same under every profile.
+
 `task_proof` says which gate proves and mutates each task's change. Under `per-task` the worker's task
 gate is `check --tier <task_gate> --base main --prove --mutate`, and `build check-return` fails a
 worker's green gate that skipped either. Under `final` the task gate drops `--prove --mutate`,

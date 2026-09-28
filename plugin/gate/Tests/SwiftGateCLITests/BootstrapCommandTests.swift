@@ -241,6 +241,28 @@ struct BootstrapCommandTests {
   }
 
   @Test(
+    "bootstrap --profile interview stamps profile = \"interview\" into a config the gate loads, and no flag stamps default — catches the flag dropped between the command and the stamped file"
+  )
+  func profileIsStamped() async throws {
+    for (profile, expected) in [("interview", "interview"), (nil, "default")] as [(String?, String)]
+    {
+      let sandbox = try Sandbox(
+        copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
+      defer { sandbox.remove() }
+
+      let outcome = await BootstrapRun.run(
+        root: sandbox.repository, apply: true, profile: profile, environment: sandbox.environment)
+
+      #expect(!outcome.failed)
+      let text = try sandbox.state()["repo/\(Config.fileName)"] ?? ""
+      #expect(text.contains("[harness]\nprofile = \"\(expected)\"\n"))
+      let config = try? ConfigLoader().load(repositoryRoot: sandbox.repository)
+      #expect(config?.profile == expected)
+      #expect(config?.buildPresets[expected] != nil)
+    }
+  }
+
+  @Test(
     "missing templates stop bootstrap before anything is written — catches a half-stamped repository from a broken plugin install"
   )
   func missingTemplates() async throws {

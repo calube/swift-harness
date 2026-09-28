@@ -13,10 +13,10 @@ struct DoctorTests {
     xcode: String? = nil, swift: String? = nil, devices: [SimulatorDevice]? = [base],
     freeBytes: Int64? = 500_000_000_000, shim: ShimStatus = .current,
     swiftLint: Bool = true, mmdc: Bool = true, packages: [PackageManifest] = [],
-    resolved: [String: String] = [:], architecture: [Finding] = []
+    resolved: [String: String] = [:], architecture: [Finding] = [], config: Config? = nil
   ) throws -> DoctorFacts {
     DoctorFacts(
-      config: try SampleGraph.config(modules: []),
+      config: try config ?? SampleGraph.config(modules: []),
       xcodeVersionOutput: try xcode ?? Fixture.text("Doctor/xcodebuild-version.txt"),
       swiftVersionOutput: try swift ?? Fixture.text("Doctor/swift-version.txt"),
       devices: devices.map { .success($0) } ?? .failure("simctl could not run"),
@@ -45,6 +45,36 @@ struct DoctorTests {
     #expect(finding.severity == .nit)
     #expect(finding.message.contains("design-lint"))
     #expect(result.verdict == .green)
+  }
+
+  @Test(
+    "a [harness] profile naming no build preset is a RED doctor.profile issue naming the profile and the missing preset, while a defined or absent profile is clean — catches a profile that silently falls back to another preset"
+  )
+  func profileNamingNoPresetIsAnIssue() throws {
+    let preset = BuildPreset(
+      designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger, mergeGate: .push,
+      workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend,
+      taskProof: .perTask)
+    func config(profile: String?) throws -> Config {
+      try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        buildPresets: ["default": preset, "fast": preset], profile: profile)
+    }
+
+    let result = Doctor.evaluate(try facts(config: config(profile: "interview")))
+    let finding = try #require(result.findings.first { $0.ruleID == Doctor.profileRuleID })
+    #expect(finding.severity == .major)
+    #expect(result.verdict == .red)
+    #expect(finding.file == Config.fileName)
+    #expect(finding.message.contains("profile \"interview\""))
+    #expect(finding.message.contains("[build.presets.interview]"))
+    #expect(finding.message.contains("default, fast"))
+
+    for profile in ["fast", nil] {
+      let clean = Doctor.evaluate(try facts(config: config(profile: profile)))
+      #expect(!ids(clean).contains(Doctor.profileRuleID))
+    }
   }
 
   @Test("a healthy machine is GREEN with no findings — catches doctor crying wolf")

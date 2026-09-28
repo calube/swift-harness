@@ -17,7 +17,11 @@ tells the binary where the templates are.
    the git toplevel. If the project sits inside a larger repository, run it from the project
    directory; bootstrap then leaves `lefthook.yml` alone, says how to wire the toplevel one, and
    does not run `lefthook install`.
-2. Run `"$SG" bootstrap`. The first call after a plugin update builds swiftgate, which can take a
+2. Run `"$SG" bootstrap`. When the user says what the repository is optimised for, such as
+   interview practice, run `"$SG" bootstrap --profile <name>` instead, where `<name>` is a
+   `[build.presets.<name>]` table the template stamps (`default` or `interview`), and keep the
+   flag for the apply. The profile only picks the preset `/swift-harness:build` and
+   `/swift-harness:ship` use without `--preset`. The first call after a plugin update builds swiftgate, which can take a
    few minutes; let it finish in the foreground. Exit status 2 here means BLOCKED before any
    preview (templates not found, or not run through the plugin shim): report it and stop.
 3. Read the output. It starts with `bootstrap: N to write, …` and then has:
@@ -48,7 +52,8 @@ Never run `--apply` without an explicit **Apply**.
 
 ## 3. Apply
 
-1. Run `"$SG" bootstrap --apply`. It prints `bootstrap: applied N change(s)` and one line per change.
+1. Run `"$SG" bootstrap --apply`, or `"$SG" bootstrap --apply --profile <name>` when the preview
+   used one. It prints `bootstrap: applied N change(s)` and one line per change.
 2. Exit status 2 means BLOCKED: a template is missing, a write failed, or `lefthook install`
    failed. Output starting `bootstrap: applied partly, then failed:` lists what was already
    written. That is the installation or the file system, not the code: report both and stop;

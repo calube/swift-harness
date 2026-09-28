@@ -255,6 +255,15 @@ public enum Doctor {
 
     check.findings += facts.architectureFindings
 
+    if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
+      let defined = facts.config.buildPresets.keys.sorted()
+      check.fail(
+        profileRuleID, configFile,
+        "[harness] profile \"\(profile)\" names no [build.presets.\(profile)] table (defined: "
+          + (defined.isEmpty ? "none" : defined.joined(separator: ", "))
+          + "); add that preset or name a defined one")
+    }
+
     for hazard in hazards where ToolVersion(pin) < hazard.xcode {
       for (identity, minimum) in hazard.requirements {
         guard let resolved = facts.resolvedVersions[identity],
