@@ -148,9 +148,10 @@ enum PreToolUseHook {
     else { return .unknown }
     let current = try? String(contentsOfFile: planFile, encoding: .utf8)
     guard let text = write.result(over: current),
-      let file = try? PlanFileJSON.decode(Data(text.utf8)),
-      let source = file.designSource, !source.design.isEmpty
+      let file = try? PlanFileJSON.decode(Data(text.utf8))
     else { return .unreadable }
+    guard let source = file.designSource else { return .specPage }
+    guard !source.design.isEmpty else { return .unreadable }
     return .named(PlanLocks.resolve(design: source.design, root: root))
   }
 
@@ -329,10 +330,14 @@ enum PlanLocks {
       guard let plan = try? layout.plan(name) else { return nil }
       let design: PlanStateGuard.PlanRecord.Design
       if let data = FileManager.default.contents(atPath: plan.planFile),
-        let file = try? PlanFileJSON.decode(data), let source = file.designSource,
-        !source.design.isEmpty
+        let file = try? PlanFileJSON.decode(data)
       {
-        design = .named(resolve(design: source.design, root: root))
+        if let source = file.designSource {
+          design =
+            source.design.isEmpty ? .unreadable : .named(resolve(design: source.design, root: root))
+        } else {
+          design = .specPage
+        }
       } else {
         design = .unreadable
       }

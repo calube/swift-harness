@@ -434,8 +434,18 @@ public enum PlanStateGuard {
         "the written plan.json doesn't decode as a plan file, so its plan would lose its design. "
           + "Keep plan.json valid.")
     case .specPage:
-      return nil
+      guard case .named(let kept) = current else { return nil }
+      return violation(
+        "plan.json names \(kept) as the design of plan `\(plan)`; a write may not turn it into a "
+          + "spec-page plan and drop its design. A spec-page plan is a different plan: claim it with "
+          + "`swiftgate plan claim <slug> --session <id> --spec-page`.")
     case .named(let design):
+      if current == .specPage {
+        return violation(
+          "plan `\(plan)` is a spec-page plan; a write may not give it the design \(design). A "
+            + "design is a different plan: claim it with "
+            + "`swiftgate plan claim <slug> --session <id> --design <doc>`.")
+      }
       if case .named(let kept) = current {
         guard kept != design else { return nil }
         return violation(

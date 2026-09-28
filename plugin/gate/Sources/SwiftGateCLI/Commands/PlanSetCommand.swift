@@ -83,14 +83,25 @@ enum PlanSetRun {
     } catch {
       return blocked(slug, "\(path) can't be read or decoded, so it was left as it is: \(error)")
     }
-    guard let design = current.designSource else {
-      return blocked(slug, "\(path) isn't a design plan, so it was left as it is")
+    let source: PlanFile.Source
+    switch current.source {
+    case .design(let design):
+      source = .design(
+        PlanFile.DesignSource(
+          design: design.design, designSha: design.designSha, approval: design.approval,
+          clarifyChain: design.clarifyChain, tier: parsedTier ?? design.tier))
+    case .specPage(let page):
+      guard parsedTier == nil else {
+        return blocked(
+          slug,
+          "plan `\(slug)` is a spec-page plan, which has no design tier; plan.json was left as it is"
+        )
+      }
+      source = .specPage(page)
     }
     let updated = PlanFile(
-      schemaVersion: current.schemaVersion, slug: current.slug, design: design.design,
-      designSha: design.designSha, approval: design.approval,
-      clarifyChain: design.clarifyChain, tier: parsedTier ?? design.tier,
-      resume: resume ?? current.resume)
+      schemaVersion: current.schemaVersion, slug: current.slug, source: source,
+      surfaceCommit: current.surfaceCommit, resume: resume ?? current.resume)
     do {
       // Written beside the old file and renamed over it: a reader sees one whole file or the other.
       try PlanFileJSON.encode(updated).write(to: URL(filePath: path), options: .atomic)

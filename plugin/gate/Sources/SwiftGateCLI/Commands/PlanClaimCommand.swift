@@ -46,6 +46,12 @@ enum PlanLockRun {
     tier: String? = nil, root: URL? = nil, git: any Git
   ) async -> PlanLockReport {
     let command = "plan claim"
+    if specPage, design != nil || tier != nil {
+      return blocked(
+        command, slug,
+        "--spec-page seeds a plan whose source is a spec page, with no design doc or tier: pass "
+          + "it without --design and --tier")
+    }
     if let design, !PlanFile.isValidDesignPath(design) {
       return blocked(
         command, slug,
@@ -66,11 +72,11 @@ enum PlanLockRun {
     case .success(let value): located = value
     }
     let lock = located.lock
-    if design == nil, !lock.hasPlanFile {
+    if design == nil, !specPage, !lock.hasPlanFile {
       return blocked(
         command, slug,
-        "`\(slug)` is a new plan: --design is required, so the edit guard can tie the design doc "
-          + "to it")
+        "`\(slug)` is a new plan: --design or --spec-page is required, so the edit guard can tie "
+          + "its source to it")
     }
     // Every claim that may seed a plan.json runs its ownership check, lock and seed under one
     // repository-wide lock, so two new plans can't both pass the check for the same doc.
@@ -112,11 +118,18 @@ enum PlanLockRun {
         command, slug, .heldByOther, .red, holder, file, heldByOtherMessage(slug, holder))
     case .claimed, .alreadyHeld:
       var seeded = ""
-      if let design, !lock.hasPlanFile {
+      let seed: (file: PlanFile, names: String)? =
+        if let design {
+          (PlanFile.seed(slug: slug, design: design, tier: parsedTier), design)
+        } else if specPage {
+          (PlanFile.seedSpecPage(slug: slug), "a spec page, \(PlanFile.SpecPageSource.fileName)")
+        } else {
+          nil
+        }
+      if let seed, !lock.hasPlanFile {
         do {
-          let data = try PlanFileJSON.encode(
-            PlanFile.seed(slug: slug, design: design, tier: parsedTier))
-          if try lock.seedPlanFile(data) { seeded = "; seeded plan.json for \(design)" }
+          let data = try PlanFileJSON.encode(seed.file)
+          if try lock.seedPlanFile(data) { seeded = "; seeded plan.json for \(seed.names)" }
         } catch let error as PlanLockError {
           return blocked(command, slug, "claimed, but seeding plan.json failed: \(describe(error))")
         } catch {
