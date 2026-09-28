@@ -634,3 +634,18 @@ cp .harness/design-render/queue-plan-ledger.html "$FX/ledger-page/design-plan-le
 
 It printed `designSha 72945ae95766ad279c53f464be8bffbe4e66f9d8`, the `DesignSha/hashes.txt` value
 for `lf.stripped.md`.
+
+## Context packs (`context-pack`)
+
+`context-pack/design-decomposer.pack.txt` is the decomposer pack `swiftgate context-pack` wrote for
+a design before it could read a spec page, so a test can hold a design's pack byte-identical. The
+capture ran the harness at `bfb35b5`, exported whole (`git archive bfb35b5 plugin | tar -x`), in an
+empty directory holding `Fixtures/design/valid.md` as `design.md`:
+
+```sh
+printf 'Sample: OrderQueueCore, OrderQueueFeature\n' > graph.txt
+printf 'est_lines_max = 400\n' > bounds.txt
+<export>/plugin/bin/swiftgate context-pack --role decomposer --design design.md \
+  --module-graph graph.txt --task-sizing-bounds bounds.txt
+cp .harness/context-pack/decomposer.md <fixtures>/context-pack/design-decomposer.pack.txt
+```

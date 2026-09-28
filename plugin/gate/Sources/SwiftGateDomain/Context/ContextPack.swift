@@ -604,6 +604,10 @@ public enum ContextPackRoleInputs: Sendable {
   case challenger(ChallengerInputs)
   case decomposer(DecomposerInputs)
   case worker(WorkerInputs)
+  /// The decomposer's pack when the plan's source is a spec page, not a design.
+  case specPageDecomposer(SpecPageDecomposerInputs)
+  /// A worker's pack when the plan's source is a spec page, not a design.
+  case specPageWorker(SpecPageWorkerInputs)
 
   public var role: ContextPackRole {
     switch self {
@@ -613,8 +617,8 @@ public enum ContextPackRoleInputs: Sendable {
     case .evidenceAuditor: return .evidenceAuditor
     case .standardsReviewer: return .standardsReviewer
     case .challenger: return .challenger
-    case .decomposer: return .decomposer
-    case .worker: return .worker
+    case .decomposer, .specPageDecomposer: return .decomposer
+    case .worker, .specPageWorker: return .worker
     }
   }
 }
@@ -638,6 +642,8 @@ extension ContextPack {
     case .challenger(let i): return try challengerPack(i)
     case .decomposer(let i): return try decomposerPack(i)
     case .worker(let i): return try workerPack(i)
+    case .specPageDecomposer(let i): return try specPageDecomposerPack(i)
+    case .specPageWorker(let i): return try specPageWorkerPack(i)
     }
   }
 
@@ -682,20 +688,33 @@ extension ContextPack {
           sourceLabel: inputs.designSource.label))
     }
 
+    slices.append(
+      contentsOf: try workerTail(
+        claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
+        moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    return ContextPack(role: .worker, slices: slices)
+  }
+
+  /// What every worker pack ends with, whatever its plan's source: the cited claims, the standards
+  /// anchors for its module kinds, and its dependencies' task-return notes.
+  private static func workerTail(
+    claims: ContextSource, citedClaimIDs: [String], standards: ContextSource,
+    moduleKindAnchors: [String], dependencyNotes: [DependencyReturnNotes]
+  ) throws -> [ContextPackSlice] {
+    var slices: [ContextPackSlice] = []
     let cited = ClaimLineFilter.lines(
-      in: MarkdownAnchorSlicer.rawLines(inputs.claims.rawText)
-    ) { inputs.citedClaimIDs.contains($0.id) }
+      in: MarkdownAnchorSlicer.rawLines(claims.rawText)
+    ) { citedClaimIDs.contains($0.id) }
     if !cited.isEmpty {
-      slices.append(ContextPackSlice(sourceLabel: inputs.claims.label, anchor: nil, lines: cited))
+      slices.append(ContextPackSlice(sourceLabel: claims.label, anchor: nil, lines: cited))
     }
 
     slices.append(
-      contentsOf: try MarkdownAnchorSlicer.slice(
-        anchors: inputs.moduleKindAnchors, from: inputs.standards))
+      contentsOf: try MarkdownAnchorSlicer.slice(anchors: moduleKindAnchors, from: standards))
 
-    if !inputs.dependencyNotes.isEmpty {
+    if !dependencyNotes.isEmpty {
       var noteLines: [String] = []
-      for dependency in inputs.dependencyNotes {
+      for dependency in dependencyNotes {
         guard let notes = dependency.notes else {
           throw ContextPackError.missingDependencyReturn(task: dependency.taskID)
         }
@@ -706,8 +725,7 @@ extension ContextPack {
         ContextPackSlice(
           sourceLabel: "Notes from the tasks this one depends on", anchor: nil, lines: noteLines))
     }
-
-    return ContextPack(role: .worker, slices: slices)
+    return slices
   }
 
   /// The order a worker pack's dependency-notes section lists a task's `deps` in (spec §5.3): the
@@ -885,26 +903,155 @@ extension ContextPack {
 }
 
 extension ContextPack {
-  /// The decomposer's pack for a spec page.
+  /// The decomposer's pack for a spec page: its Modules, Surface and Slices sections verbatim, each
+  /// slice's coverage id with its tier, the module graph and the task-sizing bounds. The goal and
+  /// out-of-scope sections stay out, as a design's prose does.
   public static func specPageDecomposerPack(_ inputs: SpecPageDecomposerInputs) throws
     -> ContextPack
   {
-    ContextPack(role: .decomposer, slices: [])
+    let specPage = inputs.specPage
+    var slices = try MarkdownAnchorSlicer.slice(
+      anchors: ["modules", "surface", "slices"], from: specPage.source)
+    slices.append(sliceIDs(specPage.page.slices, source: specPage.source))
+    slices.append(ContextPackSlice(inputs.moduleGraph))
+    slices.append(ContextPackSlice(inputs.taskSizingBounds))
+    return ContextPack(role: .decomposer, slices: slices)
   }
 
-  /// A worker's pack for a spec page.
+  /// A worker's pack for a spec page: its ledger entry, the slices it `covers` byte for byte, the
+  /// page's Surface section, the Modules rows for the modules its write set touches, then what
+  /// every worker pack ends with. A `covers` id the page has no slice for fails loudly.
   public static func specPageWorkerPack(_ inputs: SpecPageWorkerInputs) throws -> ContextPack {
-    ContextPack(role: .worker, slices: [])
+    let specPage = inputs.specPage
+    let source = specPage.source
+    let lines = MarkdownAnchorSlicer.rawLines(source.rawText)
+    var slices: [ContextPackSlice] = [
+      ContextPackSlice(
+        sourceLabel: "ledger task entry: \(inputs.task.id)", anchor: nil,
+        lines: MarkdownAnchorSlicer.rawLines(try encodeTaskEntry(inputs.task)))
+    ]
+
+    var covered: [SpecPage.Slice] = []
+    for id in inputs.task.covers where !covered.contains(where: { $0.id == id }) {
+      guard let slice = specPage.page.slices.first(where: { $0.id == id }) else {
+        throw ContextPackError.unknownSliceID(id, page: source.label)
+      }
+      covered.append(slice)
+    }
+    if !covered.isEmpty { slices.append(sliceIDs(covered, source: source)) }
+    for slice in covered {
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: source.label, anchor: slice.id,
+          lines: sliceLines(slice, of: specPage.page, in: lines)))
+    }
+
+    slices.append(
+      try MarkdownAnchorSlicer.slice(
+        anchor: "surface", of: MarkdownDocument.parse(source.rawText), rawText: source.rawText,
+        sourceLabel: source.label))
+    if let rows = try moduleRows(touching: inputs.touchedModules, of: source) {
+      slices.append(rows)
+    }
+
+    slices.append(
+      contentsOf: try workerTail(
+        claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
+        moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    return ContextPack(role: .worker, slices: slices)
+  }
+
+  /// `<slice id>: <tier>` per slice: the ids a ledger task's `covers` names and the tier its gate
+  /// must reach.
+  private static func sliceIDs(_ slices: [SpecPage.Slice], source: ContextSource)
+    -> ContextPackSlice
+  {
+    ContextPackSlice(
+      sourceLabel: "\(source.label) slice ids and tiers", anchor: nil,
+      lines: slices.map { "\($0.id): \($0.tier.rawValue)" })
+  }
+
+  /// The page lines `slice` spans: its numbered line and every line up to the next slice or
+  /// section, without the blank lines that end it.
+  private static func sliceLines(_ slice: SpecPage.Slice, of page: SpecPage, in lines: [String])
+    -> [String]
+  {
+    let start = slice.line - 1
+    let next = page.slices.first { $0.line > slice.line }.map { $0.line - 1 } ?? lines.count
+    var end = start + 1
+    while end < next, !lines[end].hasPrefix("## ") { end += 1 }
+    while end > start + 1, lines[end - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+      end -= 1
+    }
+    return Array(lines[start..<end])
+  }
+
+  /// The Modules section's heading, table header and the rows naming a module in `touched`, or
+  /// `nil` when the write set touches none of the page's modules.
+  private static func moduleRows(touching touched: Set<String>, of source: ContextSource) throws
+    -> ContextPackSlice?
+  {
+    let section = try MarkdownAnchorSlicer.slice(
+      anchor: "modules", of: MarkdownDocument.parse(source.rawText), rawText: source.rawText,
+      sourceLabel: source.label)
+    let table = section.lines.filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix("|") }
+    let rows = table.dropFirst(2).filter { row in
+      touched.contains(SpecPageWriteSet.moduleName(inRow: row))
+    }
+    guard !rows.isEmpty, let heading = section.lines.first else { return nil }
+    return ContextPackSlice(
+      sourceLabel: source.label, anchor: "modules",
+      lines: [heading] + Array(table.prefix(2)) + rows)
   }
 }
 
-/// Resolves a worker's write set when a spec page is the plan's source.
+/// The modules a worker's write set touches when a spec page is the plan's source: the graph's
+/// modules as ``PlanLintGraph/resolveWriteSet(_:graph:design:packageDirectories:)`` finds them,
+/// and a module the plan creates when the page's Modules table names it.
 public enum SpecPageWriteSet {
+  /// An entry under a package's `Sources/<Name>/` resolves when the page names `<Name>`, one
+  /// under `Tests/<Name>Tests/` when it names `<Name>`; any other entry the graph can't place
+  /// stays unresolved, never a guessed kind.
   public static func resolve(
     _ writeSet: [String], graph: ModuleGraph, page: SpecPage, packageDirectories: [String]
   ) -> WriteSetResolution {
-    PlanLintGraph.resolveWriteSet(
+    let resolved = PlanLintGraph.resolveWriteSet(
       writeSet, graph: graph, design: nil, packageDirectories: packageDirectories)
+    var planned: [String: ModuleKind] = [:]
+    for module in page.modules where planned[moduleName(module.name)] == nil {
+      planned[moduleName(module.name)] = module.kind
+    }
+    var modules = resolved.modules
+    var unresolved: [String] = []
+    for entry in resolved.unresolved {
+      let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
+      let named = PlanLintGraph.moduleDirectoryName(path, packageDirectories: packageDirectories)
+      let tested = named.flatMap { named -> String? in
+        guard named.isTests, named.name.hasSuffix("Tests") else { return nil }
+        return String(named.name.dropLast("Tests".count))
+      }
+      if let name = named?.name, let kind = planned[name] {
+        modules.append(WriteSetResolution.ResolvedModule(name: name, kind: kind))
+      } else if let tested, let kind = planned[tested] {
+        modules.append(WriteSetResolution.ResolvedModule(name: tested, kind: kind))
+      } else {
+        unresolved.append(entry)
+      }
+    }
+    var seen: Set<String> = []
+    return WriteSetResolution(
+      modules: modules.filter { seen.insert($0.name).inserted }, unresolved: unresolved)
+  }
+
+  /// A Modules row's module name, without the backticks a page may put around it.
+  static func moduleName(inRow row: String) -> String {
+    var row = row.trimmingCharacters(in: .whitespaces)
+    if row.hasPrefix("|") { row.removeFirst() }
+    return moduleName(String(row.prefix { $0 != "|" }))
+  }
+
+  private static func moduleName(_ cell: String) -> String {
+    cell.trimmingCharacters(in: CharacterSet(charactersIn: " `"))
   }
 }
 
