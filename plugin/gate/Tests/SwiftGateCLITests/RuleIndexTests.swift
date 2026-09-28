@@ -25,7 +25,8 @@ struct RuleIndexTests {
     let simulator = [
       FlowCoverage.unmappedRuleID, FlowCoverage.maxFlowsRuleID, FlowCoverage.untestedFlowRuleID,
       SimulatorTestCheck.appContainerRuleID, TestRetryConfiguration.ruleID,
-      SnapshotReferences.recordedRuleID,
+      SnapshotReferences.recordedRuleID, AppBuild.errorRuleID, AppBuild.blockedRuleID,
+      AppBuild.containerRuleID, AppBuild.summaryRuleID,
     ]
     let changedTests = [
       ProofRules.notProvenRuleID, ProofRules.compileOnlyRuleID, ProofRules.crashedRuleID,
@@ -69,7 +70,8 @@ struct RuleIndexTests {
       Doctor.xcodePinRuleID, Doctor.toolchainRuleID, Doctor.simulatorRuleID, Doctor.diskRuleID,
       Doctor.shimRuleID, Doctor.swiftLintRuleID, Doctor.mermaidCLIRuleID,
       Doctor.issueReportingRuleID,
-      Doctor.upgradeHazardRuleID, BashGuard.rawXcodebuildRuleID, BashGuard.simctlAllRuleID,
+      Doctor.upgradeHazardRuleID, Doctor.profileRuleID, BashGuard.rawXcodebuildRuleID,
+      BashGuard.simctlAllRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,

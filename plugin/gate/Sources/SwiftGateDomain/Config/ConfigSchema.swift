@@ -15,7 +15,7 @@ public enum ConfigSchema {
       in: root, at: "",
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
-        "budgets", "clients", "modules", "judge", "docs", "plan", "build", "exclude",
+        "budgets", "clients", "modules", "judge", "docs", "plan", "build", "harness", "exclude",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -39,6 +39,7 @@ public enum ConfigSchema {
     let docs = readDocs(&reader, root)
     let plan = readPlan(&reader, root)
     let buildPresets = readBuild(&reader, root)
+    let profile = readHarness(&reader, root)
 
     // A key that failed to read was replaced by a placeholder; rule violations on that placeholder
     // (or anything under it) would only restate the read issue.
@@ -52,7 +53,7 @@ public enum ConfigSchema {
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      exclude: exclude
+      profile: profile, exclude: exclude
     ).filter { !restatesReadIssue($0) }
     let issues = reader.issues + invariantIssues
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
@@ -61,7 +62,7 @@ public enum ConfigSchema {
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      exclude: exclude)
+      profile: profile, exclude: exclude)
   }
 
   private static func readSimulator(_ reader: inout Reader, _ root: [String: ConfigValue])
@@ -260,6 +261,17 @@ public enum ConfigSchema {
         ?? defaults.maxTestsPerTask,
       workerPackTokenBudget: reader.integer(table, "worker_pack_token_budget", at: path)
         ?? defaults.workerPackTokenBudget)
+  }
+
+  /// `[harness] profile`. Whether it names a defined preset is `doctor`'s check, not a load
+  /// error, so a bad profile never stops a hook or gate from reading the config.
+  private static func readHarness(_ reader: inout Reader, _ root: [String: ConfigValue])
+    -> String?
+  {
+    let path = "harness"
+    guard let table = reader.table(root, path, at: "") else { return nil }
+    reader.rejectUnknownKeys(in: table, at: path, allowed: ["profile"])
+    return reader.string(table, "profile", at: path)
   }
 
   private static func readBuild(_ reader: inout Reader, _ root: [String: ConfigValue])

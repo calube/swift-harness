@@ -127,6 +127,7 @@ public enum Doctor {
   public static let mermaidCLIRuleID = "doctor.mmdc"
   public static let issueReportingRuleID = "doctor.issue-reporting"
   public static let upgradeHazardRuleID = "doctor.upgrade-hazard"
+  public static let profileRuleID = "doctor.profile"
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.
@@ -253,6 +254,15 @@ public enum Doctor {
     }
 
     check.findings += facts.architectureFindings
+
+    if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
+      let defined = facts.config.buildPresets.keys.sorted()
+      check.fail(
+        profileRuleID, configFile,
+        "[harness] profile \"\(profile)\" names no [build.presets.\(profile)] table (defined: "
+          + (defined.isEmpty ? "none" : defined.joined(separator: ", "))
+          + "); add that preset or name a defined one")
+    }
 
     for hazard in hazards where ToolVersion(pin) < hazard.xcode {
       for (identity, minimum) in hazard.requirements {

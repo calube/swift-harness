@@ -97,6 +97,10 @@ public enum ContextPackError: Error, Sendable, Equatable {
   /// couldn't be read or decoded under the given build run — never rendered as a thin pack that
   /// silently drops one dependency's notes.
   case missingDependencyReturn(task: String)
+  /// A worker's write-set entry lies in a module the graph gives no kind, so the standards that go
+  /// with it can't be known. `nil` when the module graph itself couldn't be built because the
+  /// repository's config names a module kind outside ``ModuleKind``.
+  case unknownModuleKind(writeSetEntry: String?)
 }
 
 /// A labelled raw text a pack can slice from — a frame-answers transcript, a lane brief, a
@@ -817,5 +821,32 @@ extension ContextPack {
     slices.append(ContextPackSlice(inputs.moduleGraph))
     slices.append(ContextPackSlice(inputs.taskSizingBounds))
     return ContextPack(role: .decomposer, slices: slices)
+  }
+}
+
+/// The module kinds a worker's write set touches, read from the repository's module graph so a
+/// worker never chooses the standards it is held to.
+public enum WorkerModuleKinds {
+  /// Each entry is a file or, with a trailing `/`, a directory. A test target counts as the module
+  /// it tests, as `plan-lint` counts it, so an engine's tests get the engine standards. An entry
+  /// outside every module (a doc, a manifest, a fixture) adds no kind, so the result is empty for
+  /// a write set with no module entries.
+  public static func kinds(writeSet: [String], graph: ModuleGraph) throws(ContextPackError)
+    -> [ModuleKind]
+  {
+    var kinds = Set<ModuleKind>()
+    for entry in writeSet {
+      let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
+      var modules: [Module] = graph.module(containingFile: path).map { [$0] } ?? []
+      if modules.isEmpty, entry.hasSuffix("/") {
+        modules = graph.modules.filter { $0.path == path || $0.path.hasPrefix(path + "/") }
+      }
+      for module in modules {
+        guard let counted = graph.module(named: PlanLintGraph.countedModule(module, graph: graph))
+        else { throw .unknownModuleKind(writeSetEntry: entry) }
+        kinds.insert(counted.kind)
+      }
+    }
+    return ModuleKind.allCases.filter(kinds.contains)
   }
 }

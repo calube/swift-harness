@@ -28,6 +28,9 @@ public protocol Xcodebuild: Sendable {
   /// Runs the request and writes its combined output to `logPath`.
   func test(_ request: XcodebuildTestRequest, logPath: String) async throws(XcodebuildError)
     -> XcodebuildTestRun
+  /// Runs `xcodebuild build` and writes its combined output to `logPath`.
+  func build(_ request: AppBuild.Request, logPath: String) async throws(XcodebuildError)
+    -> ExitStatus
   /// `xcodebuild -version` output.
   func version() async throws(XcodebuildError) -> String
 }
@@ -60,6 +63,24 @@ public struct LiveXcodebuild: Xcodebuild {
     // The log is a diagnostic; failing to write it must not change the verdict.
     try? Data(log.utf8).write(to: URL(filePath: logPath))
     return XcodebuildTestRun(status: output.status)
+  }
+
+  public func build(_ request: AppBuild.Request, logPath: String)
+    async throws(XcodebuildError) -> ExitStatus
+  {
+    let output: ProcessOutput
+    do {
+      output = try await runner.run(
+        ProcessInvocation(
+          executable: "/usr/bin/xcrun", arguments: ["xcodebuild"] + request.arguments,
+          timeout: testTimeout))
+    } catch {
+      throw .runner(error)
+    }
+    let log = output.stdout.text + "\n--- stderr ---\n" + output.stderr.text
+    // The log is a diagnostic; failing to write it must not change the verdict.
+    try? Data(log.utf8).write(to: URL(filePath: logPath))
+    return output.status
   }
 
   public func version() async throws(XcodebuildError) -> String {

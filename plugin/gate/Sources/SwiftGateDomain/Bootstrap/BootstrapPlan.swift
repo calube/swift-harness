@@ -77,12 +77,14 @@ public struct BootstrapInputs: Sendable {
   public var shimPath: String
   /// The plugin's `bin/swiftgate`, which the stable path must lead to.
   public var shimTarget: String
+  /// `--profile`: the `[harness] profile` a created config names. `nil` when not given.
+  public var profile: String?
 
   public init(
     root: String, existing: [String: ExistingEntry], templates: HarnessTemplates,
     config: ConfigState, inferred: InferredConfig, swiftLintInstalled: Bool,
     lefthookInstalled: Bool, git: GitState, registry: RegistryState, registryPath: String,
-    shim: ShimStatus, shimPath: String, shimTarget: String
+    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil
   ) {
     self.root = root
     self.existing = existing
@@ -97,6 +99,7 @@ public struct BootstrapInputs: Sendable {
     self.shim = shim
     self.shimPath = shimPath
     self.shimTarget = shimTarget
+    self.profile = profile
   }
 }
 
@@ -347,9 +350,12 @@ public enum BootstrapPlanner {
   static func config(_ inputs: BootstrapInputs) -> StampChange {
     switch inputs.config {
     case .absent:
-      return .create(inputs.inferred.render(template: inputs.templates.config))
+      return .create(
+        inputs.inferred.render(template: inputs.templates.config, profile: inputs.profile))
     case .loaded(let config):
-      let drift = inputs.inferred.drift(from: config) + missingManagedFiles(config)
+      let drift =
+        inputs.inferred.drift(from: config) + missingManagedFiles(config)
+        + profileDrift(config, asked: inputs.profile)
       return drift.isEmpty
         ? .unchanged
         : .untouched(
@@ -364,6 +370,11 @@ public enum BootstrapPlanner {
   /// without being named — which is true for every bootstrapped repository — so an upgraded
   /// config missing the key leaves docs-lint (and so pre-push) red with no visible cause. Bootstrap
   /// never edits `[docs]` (it may be deliberately pruned), so this only names the gap.
+  private static func profileDrift(_ config: Config, asked: String?) -> [String] {
+    guard let asked, asked != config.profileName else { return [] }
+    return ["[harness] profile is \"\(config.profileName)\"; --profile asked for \"\(asked)\""]
+  }
+
   private static func missingManagedFiles(_ config: Config) -> [String] {
     let required = [Paths.docsIndex, Paths.agents]
     let missing = required.filter { !config.docs.managedFiles.contains($0) }

@@ -101,6 +101,13 @@ struct ContextPackCommandTests {
             name: "OrderQueueFeature", type: .library,
             path: "\(Self.modulePackagePath)/Sources/OrderQueueFeature",
             targetDependencies: ["OrderQueueCore"]),
+          PackageTarget(
+            name: "OrderQueueClient", type: .library,
+            path: "\(Self.modulePackagePath)/Sources/OrderQueueClient"),
+          PackageTarget(
+            name: "OrderQueueClientLive", type: .library,
+            path: "\(Self.modulePackagePath)/Sources/OrderQueueClientLive",
+            targetDependencies: ["OrderQueueClient"]),
         ])
       return FakeSwiftPM(serving: [manifest])
     }
@@ -183,9 +190,11 @@ struct ContextPackCommandTests {
     defer { repository.remove() }
     let designPath = try repository.write(
       designFixtureText, at: "docs/checkout/designs/offline-order-queue.md")
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write("## 2. Architecture\n\nCore holds logic.\n", at: "docs/standards.md")
     let task = LedgerTask(
-      id: "task-1", deps: [], writeSet: ["Packages/A/"], gate: .push, tests: [], covers: [],
-      estLines: 40, status: .pending, worktree: "../a-task-1")
+      id: "task-1", deps: [], writeSet: ["Sample/Sources/OrderQueueCore/"], gate: .push,
+      tests: [], covers: [], estLines: 40, status: .pending, worktree: "../a-task-1")
     let ledgerData = try LedgerJSON.encode(
       Ledger(schemaVersion: 1, resume: "resume", maxParallel: 3, tasks: [task], waves: [["task-1"]])
     )
@@ -198,7 +207,7 @@ struct ContextPackCommandTests {
     options.taskID = task.id
 
     let outcome = await ContextPackRun.run(
-      role: "worker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -206,6 +215,7 @@ struct ContextPackCommandTests {
     #expect(written.notes.contains { $0.contains("--claims not given") })
     let text = try repository.packText(written.relativePath)
     #expect(text.contains("--claims not given"))
+    #expect(text.contains("Core holds logic."))
   }
 
   // MARK: - Worker: the fixture task's expected sections
@@ -228,10 +238,11 @@ struct ContextPackCommandTests {
     let standardsPath = try repository.write(
       "## 2. Architecture\n\nCore modules hold logic, features own screens.\n",
       at: "docs/standards.md")
+    let swiftPM = try repository.seedModuleGraph()
 
     let task = LedgerTask(
       id: "offline-queue-core-reducer", deps: [],
-      writeSet: ["Packages/OrderQueue/Sources/OrderQueueCore/"], gate: .push,
+      writeSet: ["Sample/Sources/OrderQueueCore/"], gate: .push,
       tests: ["test-queued-orders-replay-in-submit-order"],
       covers: [
         "req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order",
@@ -251,11 +262,10 @@ struct ContextPackCommandTests {
     options.taskID = task.id
     options.claims = claimsPath
     options.claimID = ["ev-cited"]
-    options.moduleKind = ["feature"]
     options.standards = standardsPath
 
     let outcome = await ContextPackRun.run(
-      role: "worker", options: options, root: repository.root, swiftPM: Self.unusedSwiftPM)
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
     guard case .written(let written) = outcome else {
       Issue.record("expected .written, got \(outcome)")
       return
@@ -273,6 +283,253 @@ struct ContextPackCommandTests {
     #expect(text.contains("Core modules hold logic, features own screens."))
     // Every worker gets the Decision section, covered or not.
     #expect(text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
+  }
+
+  // MARK: - Worker: standards for the write set's module kinds
+
+  /// One section per standards anchor a module kind can pull in, each with a sentinel line, so a
+  /// test can see exactly which sections a pack carries.
+  private static let sectionedStandards = """
+    ## 2. Architecture
+
+    ARCHITECTURE-SECTION
+
+    ## 3. Dependencies and clients
+
+    CLIENTS-SECTION
+
+    ## 6. SwiftUI performance
+
+    RENDER-SECTION
+
+    ## 8. Engine modules
+
+    ENGINE-SECTION
+    """
+
+  /// A one-task ledger at `ledger.json` whose task writes `writeSet` and covers nothing.
+  private static func writeLedger(
+    writeSet: [String], in repository: Repository, taskID: String = "worker-task"
+  ) throws -> String {
+    let task = LedgerTask(
+      id: taskID, deps: [], writeSet: writeSet, gate: .push, tests: [], covers: [],
+      estLines: 40, status: .pending, worktree: "../app-\(taskID)")
+    let data = try LedgerJSON.encode(
+      Ledger(schemaVersion: 1, resume: "resume", maxParallel: 3, tasks: [task], waves: [[taskID]]))
+    return try repository.write(String(decoding: data, as: UTF8.self), at: "ledger.json")
+  }
+
+  private func workerOptions(writeSet: [String], in repository: Repository) throws
+    -> ContextPackGatherInputs
+  {
+    var options = ContextPackGatherInputs()
+    options.design = try repository.write(
+      designFixtureText, at: "docs/checkout/designs/offline-order-queue.md")
+    options.ledger = try Self.writeLedger(writeSet: writeSet, in: repository)
+    options.taskID = "worker-task"
+    return options
+  }
+
+  @Test(
+    "a task writing a Core and a Live module gets exactly those kinds' standards, with no flag naming them — catches a pack with no standards"
+  )
+  func workerPackCarriesTheWriteSetKindsStandards() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: [
+        "Sample/Sources/OrderQueueCore/Queue.swift", "Sample/Sources/OrderQueueClientLive/",
+      ],
+      in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ARCHITECTURE-SECTION"))
+    #expect(text.contains("CLIENTS-SECTION"))
+    #expect(!text.contains("RENDER-SECTION"))
+    #expect(!text.contains("ENGINE-SECTION"))
+  }
+
+  @Test(
+    "a Core module file plus a doc gets exactly the Core kind's standards — catches a code task that also edits a doc halted or over-packed"
+  )
+  func workerPackIgnoresADocBesideACoreModule() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueCore/Queue.swift", "docs/standards.md"], in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("ARCHITECTURE-SECTION"))
+    #expect(!text.contains("CLIENTS-SECTION"))
+    #expect(!text.contains("RENDER-SECTION"))
+    #expect(!text.contains("ENGINE-SECTION"))
+  }
+
+  @Test(
+    "a docs-only write set builds a pack whose standards section says it has no module kinds — catches a docs task halted, or an empty section"
+  )
+  func docsOnlyWorkerPackSaysItHasNoModuleKinds() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: ["docs/guide.md", "Sample/Package.swift"], in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("No module kinds in this task's write set; no standards excerpt."))
+    #expect(!text.contains("ARCHITECTURE-SECTION"))
+  }
+
+  @Test(
+    "an entry inside a module whose configured kind is unknown is the named violation and writes no pack — catches a silently thin pack"
+  )
+  func workerPackRefusesAnUnknownModuleKind() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    let config = try repository.packText(ConfigLoader.fileName)
+    try repository.write(
+      config + "\n[[modules]]\nname = \"OrderQueueCore\"\nkind = \"widget\"\n",
+      at: ConfigLoader.fileName)
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    let options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueCore/Queue.swift"], in: repository)
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .violation(let message) = outcome else {
+      Issue.record("expected .violation, got \(outcome)")
+      return
+    }
+    #expect(message.contains("context-pack.module-kind-unknown"))
+    #expect(!repository.packExists(".harness/context-pack/worker-worker-task.md"))
+  }
+
+  @Test(
+    "a worker pack refuses --module-kind, since kinds come from the write set — catches the caller choosing the standards"
+  )
+  func workerPackRefusesAModuleKindFlag() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    try repository.write(Self.sectionedStandards, at: "docs/standards.md")
+    var options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueCore/"], in: repository)
+    options.moduleKind = ["engine"]
+    options.standards = "docs/standards.md"
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains("--module-kind"))
+    #expect(!repository.packExists(".harness/context-pack/worker-worker-task.md"))
+  }
+
+  @Test(
+    "with no standards doc in the repository the pack uses the harness plugin's — catches a consumer repo's pack losing its standards"
+  )
+  func workerPackFallsBackToTheHarnessStandards() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    let harness = try Repository()
+    defer { harness.remove() }
+    try harness.write(Self.sectionedStandards, at: "docs/standards.md")
+    var options = try workerOptions(
+      writeSet: ["Sample/Sources/OrderQueueClientLive/"], in: repository)
+    options.harnessRoot = harness.root
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("CLIENTS-SECTION"))
+  }
+
+  @Test(
+    "the sample app's widest task, with the harness standards and playbook, stays under the worker budget — catches a pack that outgrows a worker"
+  )
+  func sampleAppWorkerPackStaysUnderBudget() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let packages = "examples/SampleApp/Packages"
+    for name in Fixture.samplePackages {
+      try repository.write("// swift-tools-version: 6.2\n", at: "\(packages)/\(name)/Package.swift")
+    }
+    try repository.write(
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "SampleApp"
+      packages = ["\(packages)/*"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+
+      [[modules]]
+      name = "GameEngine"
+      kind = "engine"
+      reason = "a pure step function"
+      """, at: ConfigLoader.fileName)
+    let swiftPM = FakeSwiftPM { directory throws(SwiftPMError) in
+      let name = String(directory.split(separator: "/").last ?? "")
+      do {
+        return try PackageManifest(
+          describeJSON: Fixture.describe(name), repositoryRoot: Fixture.repositoryRoot)
+      } catch {
+        throw .unparseableOutput(command: "describe", detail: "\(error)")
+      }
+    }
+    var options = try workerOptions(
+      writeSet: [
+        "\(packages)/CounterFeature/Sources/CounterCore/",
+        "\(packages)/CounterFeature/Sources/CounterUI/",
+        "\(packages)/GameEngine/Sources/GameEngine/",
+        "\(packages)/APIClient/Sources/APIClientLive/",
+      ],
+      in: repository)
+    options.harnessRoot = Fixture.checkoutRoot
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let written) = outcome else {
+      Issue.record("expected .written, got \(outcome)")
+      return
+    }
+    let text = try repository.packText(written.relativePath)
+    #expect(text.contains("§ 3-dependencies-and-clients"))
+    #expect(text.contains("§ 8-engine-modules"))
+    #expect(written.tokens <= PlanConfig.defaultWorkerPackTokenBudget)
   }
 
   // MARK: - Research lane: all 5 spec §5.10 parts, plus the evidence reuse cache

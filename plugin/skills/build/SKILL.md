@@ -22,7 +22,7 @@ The long form of every step, the halt options and the resume rules are in
 | Name | Value |
 |---|---|
 | `<slug>` | the plan slug: the argument, or the plan the SessionStart context lists as `planned` or `building` |
-| `<preset>` | `--preset <name>`, else `default`; a name `.swiftgate.toml` defines under `[build.presets]` |
+| `<preset>` | `--preset <name>`; else the `profile` key of `[harness]` in `.swiftgate.toml`; else `default`. When `.swiftgate.toml` has no `[build.presets.<preset>]` table, stop and list the names it defines; never fall back to another preset |
 | `<session>` | the `Session id: <id>` line of the SessionStart context. Absent: stop, never invent one |
 | `<plans>` | `$(git rev-parse --git-common-dir)/swift-harness/plans` |
 | `<run>` | the `runId` that `build start` or `build next` prints |

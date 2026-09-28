@@ -128,6 +128,7 @@ export const BUILD_CONTRACTS = {
       'surface commit',
       '--base main --prove --mutate',
       'no `--prove` or `--mutate`',
+      '--impact --coverage --app-build',
     ],
   },
   'build-fixer': {
