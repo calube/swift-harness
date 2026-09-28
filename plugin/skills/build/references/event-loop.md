@@ -260,8 +260,9 @@ When the timer fires, or any `build next` reports `phase` `cutoff`:
 
 Only 1 `ready` tier runs at a time on this machine. Wait for the others in the foreground first.
 Then pass every merged task's surface commit as a proof base, so a test of API that `main` lacked
-before the build is proven where that API first existed without its behavior. A plan with a plan
-surface proves at it first, then at each task's stub:
+before the build is proven where that API first existed without its behavior. `build proof-bases`
+prints `plan.json`'s `surfaceCommit` first when the plan has one, then each merged task's return
+`surfaceCommit` in merge order, each sha once:
 
 ```bash
 until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done
