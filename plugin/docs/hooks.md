@@ -7,7 +7,7 @@ each one calls the same code as the `swiftgate` command it names.
 
 | Event | What it does | Budget |
 |---|---|---|
-| SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). | < 1s |
+| SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). Records which plugin the session loaded ([Session records](#session-records)). | < 1s |
 | PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. Paths it writes go through the Edit/Write guard ([Bash writes](#bash-writes)). On `git commit`, adds `swiftgate comments --staged` findings as advisory context. | < 50ms |
 | PreToolUse (Edit/Write) | Denies hand edits to `__Snapshots__/`, `Package.resolved`, `.xcresult` bundles, and a plan's `orchestrator.lock`. Plan state and design artifacts are writable only by the orchestrating session (below). | < 50ms |
 | PreToolUse (subagent) | Decides every Bash, Edit, Write, WebFetch and WebSearch call a subagent makes with an explicit allow or deny, never the prompt ([Subagents never prompt](#subagents-never-prompt)). | < 50ms |
@@ -120,6 +120,17 @@ package manifests. Deleting the directory is always safe; it only costs re-runs.
 
 `plan-lock-cache-<session>.json` keeps a session's git common dir; the guard still reads locks
 and `plan.json` fresh.
+
+### Session records
+
+A running session keeps the prompts it loaded at start. SessionStart writes
+`sessions/<session id>.json`: `schemaVersion` (1), `sessionId`, `recordedAt`, `pluginRoot`
+(`CLAUDE_PLUGIN_ROOT`), `pluginVersion`, `treeHash` and an optional `transcriptPath`.
+`treeHash` is a SHA-256 over the plugin version and each file's path and bytes under `skills/`,
+`agents/` and `workflows/`; `swiftgate doctor` recomputes it at `pluginRoot`. Reading fails on
+an unknown key or version. The hook writes only a safe file-name session id, by atomic rename,
+and keeps the newest 20 records. A compacted session keeps its start record. A failed write
+becomes a `Session record not written` line in the session context.
 
 ## First run
 

@@ -74,7 +74,8 @@ public struct HookPayload: Sendable, Equatable {
       toolName: wire.toolName, command: wire.toolInput?.command,
       filePath: wire.toolInput?.filePath ?? wire.toolInput?.notebookPath,
       stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
-      fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType)
+      fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType,
+      transcriptPath: wire.transcriptPath)
   }
 
   private struct Wire: Decodable {
@@ -135,6 +136,7 @@ public struct HookPayload: Sendable, Equatable {
     let agentID: String?
     let agentType: String?
     let source: String?
+    let transcriptPath: String?
 
     enum CodingKeys: String, CodingKey {
       case sessionID = "session_id"
@@ -146,6 +148,7 @@ public struct HookPayload: Sendable, Equatable {
       case agentID = "agent_id"
       case agentType = "agent_type"
       case source
+      case transcriptPath = "transcript_path"
     }
   }
 }

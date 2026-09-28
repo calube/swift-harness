@@ -4,8 +4,8 @@ import SwiftGateAdapters
 import SwiftGateDomain
 
 /// SessionStart (spec §8, < 1s): the module map with kinds, the Xcode pin against the selected
-/// Xcode, RESUME summaries of active plans, the plugin's reference docs path, and the orphan-clone
-/// sweep.
+/// Xcode, RESUME summaries of active plans, the plugin's reference docs path, the orphan-clone
+/// sweep, and the record of which plugin this session loaded.
 enum SessionStartHook {
   static let moduleMapCache = "module-map.json"
 
@@ -38,6 +38,7 @@ enum SessionStartHook {
       }
     }
     if let swept = await dependencies.sweep.sweep() { notes.append(swept) }
+    notes += recordSession(payload, root: root, environment: dependencies.environment)
 
     let inputs = SessionContext.Inputs(
       projectName: root.lastPathComponent, sessionID: payload.sessionID, modules: modules,
@@ -66,6 +67,51 @@ enum SessionStartHook {
       return .unavailable(reason: "\(standards) does not exist")
     }
     return .found(directory: docs.path)
+  }
+
+  /// Records the plugin tree this session loaded, for `doctor` to compare later. Only here:
+  /// hashing on a per-tool-call hook would spend its budget on every call.
+  /// - Returns: lines for the session context when the record wasn't written or pruned.
+  static func recordSession(
+    _ payload: HookPayload, root: URL, environment: [String: String], now: Date = Date()
+  ) -> [String] {
+    let failed = { (reason: String) in
+      [
+        "Session record not written, so `swiftgate doctor` can't tell whether the plugin "
+          + "changed after this session started: \(reason)"
+      ]
+    }
+    guard let pluginRoot = environment[pluginRootVariable], pluginRoot.hasPrefix("/") else {
+      return failed("\(pluginRootVariable) is not set to an absolute path in the hook environment")
+    }
+    let store = SessionRecordStore(worktreeRoot: root)
+    do throws(SessionRecordStoreError) {
+      // Compaction keeps the running process, and with it the prompts it loaded at start.
+      if payload.source == "compact", try store.record(sessionID: payload.sessionID) != nil {
+        return []
+      }
+    } catch {
+      return failed(error.description)
+    }
+    let pluginURL = URL(filePath: pluginRoot, directoryHint: .isDirectory).standardizedFileURL
+    let tree: PluginTree
+    do throws(PluginTreeError) {
+      tree = try PluginTree.read(root: pluginURL)
+    } catch {
+      return failed(error.description)
+    }
+    do throws(SessionRecordError) {
+      let record = try SessionRecord(
+        sessionId: payload.sessionID, recordedAt: now, pluginRoot: pluginURL.path,
+        pluginVersion: tree.version, treeHash: tree.hash, transcriptPath: payload.transcriptPath)
+      do throws(SessionRecordStoreError) {
+        return try store.write(record)
+      } catch {
+        return failed(error.description)
+      }
+    } catch {
+      return failed(error.description)
+    }
   }
 
   private static func describe(_ outcome: StaticCheckOutcome) -> String {
