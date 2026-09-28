@@ -298,7 +298,7 @@ and `P/agents/build-worker.md`.
 |---|---|---|
 | 1 | `speed-task-proof-final`, `speed-fixer-return-and-gate-provenance`, `speed-fail-fast-gates` | now |
 | 2 | `speed-repo-profile`, `speed-worker-pack-standards`, `speed-task-gate-impact-coverage-app-build` | wave 1 merged and mutated on `main` |
-| 3 | `speed-budget-keeps-app-compiling`; then the design-free path, the sprint skill and surface commits, after a design section the user approves | wave 2 merged |
+| 3 | `speed-budget-keeps-app-compiling`, `speed-check-return-requires-task-gate-steps` (alongside fast modes wave 1, whose files don't overlap) | wave 2 merged |
 
 Speed wave 2 merge points: `speed-task-gate-impact-coverage-app-build` alone edits `P/workflows/build-task.js`,
 `P/agents/build-worker.md` and `C/Commands/CheckCommand.swift`; `speed-worker-pack-standards` alone edits
@@ -329,4 +329,10 @@ commit first and proves its tests at it with `--proof-base`.
 - Writes: `D/Build/BuildScheduler.swift`, `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, their tests
 - Does: the time budget's no-new-starts cutoff never drops a task that the app target needs to compile: such a task counts as required and starts even past the cutoff, and the ledger page says why.
 - Tests: past the cutoff, a required task still starts and an optional one doesn't — catches a RED final gate from a skipped view task · the reason shows on the ledger page.
+
+### `speed-check-return-requires-task-gate-steps`
+- Deps: speed wave 2 · Gate: push · Model: opus · estLines: 120
+- Writes: `D/Build/TaskReturn.swift`, `C/Commands/BuildCheckReturnCommand.swift`, their tests
+- Does: a worker's green return must cite a gate run that ran the task gate's impact, coverage and app-build steps, as `build-task.js` tells the worker to. A run without them fails `check-return` with a finding naming the missing step. A fixer's merge gate is exempt, as it is for proof.
+- Tests: a worker's green return citing a run without `--app-build` fails, naming the step: this catches a worker that skips the new checks. The same run passes for a fixer. A run with every step passes.
 
