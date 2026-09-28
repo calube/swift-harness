@@ -29,6 +29,4 @@ public enum DesignLintRule: String, Sendable, CaseIterable {
   case mermaidSyntax = "design-lint.mermaid-syntax"
   case sectionWordBudget = "design-lint.section-word-budget"
   case documentWordBudget = "design-lint.document-word-budget"
-
-  public static var allCases: [DesignLintRule] { [] }
 }
