@@ -332,7 +332,7 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Staging leftovers.** `SprintStoreError.stagingLeft(operation:path:reason:staging:removal:)` is a failed write
   that left its staging file beside `sprint.json` behind, unable to delete it; `leftoverStaging` names it. It reports as
   `sprint.state-io`, naming the file to delete. `sprint.json` is unchanged in every `SprintStoreError` case.
-- **`surface-check` accepts 3 more stubs** (orchestrator decision 2026-09-27, pending the user's confirmation). New
+- **`surface-check` accepts 3 more stubs** (orchestrator decision 2026-09-27, approved by the user 2026-09-28). New
   `SurfaceStubForm` cases. `throwsError`: only a `throw` of a payload-free case, an initializer call or an
   empty-payload case. `emptyPayloadCase`: an enum case the parent or the same file declares, built with each
   associated value an empty default or a parameter passed through (`.exited(0)`, `.loaded(items)`).
