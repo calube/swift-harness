@@ -1,7 +1,7 @@
 # Fast modes: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Wave 1 merged 2026-09-28 with speed wave 3 (push and prove GREEN; mutate RED on 2 survivors, fixed in the next wave; interfaces note docs/handoffs/subproject-5-interfaces.md). Waves 2 and 3 merged 2026-09-28 (interfaces note "Fast-modes waves 2 and 3"; mutate running). Wave 4 (`sprint-rehearsals`) ran 2026-09-28 unattended at the user's request: both runs stopped short of a GREEN `ready` on harness defects, so waves 5 and 6 fix them and the rehearsals run again. The user approved the 3 "Rehearsal fix decisions" on 2026-09-28. Waves 5-7 merged 2026-09-28 (interfaces note "Fast-modes wave 5", "Fast-modes waves 6 and 7"). Wave 8 is building. Then one mutate covering waves 5-8, then both rehearsals re-run from their warm starting commits (user decision), then `docs/e2e-report.md`.
+Status: IN PROGRESS. Wave 1 merged 2026-09-28 with speed wave 3 (push and prove GREEN; mutate RED on 2 survivors, fixed in the next wave; interfaces note docs/handoffs/subproject-5-interfaces.md). Waves 2 and 3 merged 2026-09-28 (interfaces note "Fast-modes waves 2 and 3"; mutate running). Wave 4 (`sprint-rehearsals`) ran 2026-09-28 unattended at the user's request: both runs stopped short of a GREEN `ready` on harness defects, so waves 5 and 6 fix them and the rehearsals run again. The user approved the 3 "Rehearsal fix decisions" on 2026-09-28. Waves 5-8 merged 2026-09-28 (interfaces note "Fast-modes wave 5", "Fast-modes waves 6 and 7"). Wave 8 is building. Then one mutate covering waves 5-8, then both rehearsals re-run from their warm starting commits (user decision), then `docs/e2e-report.md`.
 Spec: docs/designs/2026-09-27-fast-modes-design.md (approved 2026-09-27). Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md).
 Scope: surface commits (`swiftgate surface-check`) and sprint. Design-free ship waits for sprint's rehearsals and gets its own plan tasks then.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec by §.
@@ -55,6 +55,67 @@ The user approved all 3 recommendations on 2026-09-28. Later that day, after reh
 | Where a slice's push gate measures from | Spec §4.1 step 4 and §4.2 name no base; the skill says `--base main`, so coverage.diff counts surface stubs later slices fill (B: 34/53, 64%) | Slice push gates run `--base <surface>`; the final `ready` stays `--base main`, so every changed line since `main` is still covered once | user (spec §4.1/§4.2 change) |
 | Whether `surface-check` judges `Package.swift` | A's surface added a dependency to the existing `AppFeature` manifest; `let package = Package(…)` read as `changesStoredValue`; prove already treats manifests as keep-the-change input | A manifest's added array elements (`.package(path:)`, `.product(name:package:)`, `.target`, `.testTarget`, `.library`) are allowed stubs; any other manifest change stays behaviour. Amend the §3.2 table | user (spec §3.2 change) |
 
+### Design-free ship: what exists, and what §5 needs that doesn't
+
+The sprint rehearsals are done: attempt 2 (harness `7b6d49f`) passed both runs (`docs/e2e-report.md`),
+so §1's "design-free ship waits for sprint's rehearsal results" is met.
+
+| §5 needs | Today | Gap |
+|---|---|---|
+| `design_tier = "none"` in a preset | `DesignTier` = `quick`/`standard`/`deep`/`sketch`, shared by config, `plan claim --tier`, `plan set --tier`, the design skill and docs-lint front matter | a value only a preset can hold |
+| Spec page (§5.2) | sprint's format in `P/skills/sprint/references/spec-page.md`; the skill judges "every slice quotes the spec" in prose | no parser, no mechanical confirm-skip check |
+| A plan with no design | `PlanFile.design` is required; `plan claim` needs `--design`; `plan-lint` exits 2 without `designSha`; `context-pack --role decomposer/worker` need `--design`; `design-render --ledger` reads the design at `designSha`; the decomposer prompt speaks `req-…`/`test-…` ids | a second plan source everywhere the design is read |
+| Surface "on `main`" | sprint commits its surface on `sprint/<slug>`; `SprintCommand` has a fast-forward helper; `surface-check` exists | no command that lands a surface on `main` and records it for a plan |
+| `surfaceCommit` "set to the 1 surface" per ledger task | `surfaceCommit` lives on `TaskReturn` (per worker, must be an ancestor of the task branch); ledger tasks have no such field; `build proof-bases` lists each merged return's surface | a plan-level surface the proof bases and workers use |
+| Workers build on 1 surface | `build-task.js` tells each worker to write its own surface commit when it adds API | a worker told not to, and what it does when API is missing |
+| New target outside the surface | `sprint.target-outside-surface` (`D/Sprint/SliceManifests.swift`, `SwiftGateRules/Surface/ManifestDeclarationsReader.swift`) | the same refusal at `build check-return` |
+
+### Design-free ship decisions
+
+The user approved every recommendation below on 2026-09-28 (D0: build it; the attended rehearsal wave is the go/no-go).
+
+§5 and [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md) are silent or ambiguous on each of these. Tasks that wait are named.
+
+| # | Question | Evidence | Recommendation | Waits |
+|---|---|---|---|---|
+| D0 | Build design-free ship now, or measure first? | Sprint attempt 2: 12 min 28 s (B) and 31 min 45 s (A, 23 min of it `ready` re-runs). Design-free ship adds worktrees, workers and merge gates (a push gate per merge, 19 s warm to 79 s cold) to buy parallel slices. Nothing measures whether parallel slices beat 1 model's pace for a 4-slice spec | Build it: the ADR is accepted, and only a rehearsal can answer the speed question. Keep `design-free-ship-rehearsals` as the go/no-go, timed against sprint on the same prompts | all |
+| D1 | Is `none` a `DesignTier` case? | §9 says `design_tier` "adds `none`". `DesignTier` also feeds `plan claim --tier`, `plan set --tier`, `/swift-harness:design --tier` and docs-lint's front-matter tier; `design-scope` returns only quick/standard/deep | No. A preset-only type (`BuildPreset.DesignStep`: `.design(DesignTier)` or `.none`) parses `design_tier = "none"`, so `design --tier none`, a design doc with `tier: none` and `design-scope` can't produce it by construction. §9's key-level wording still holds | `presets-may-skip-design` |
+| D2 | What is [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md)'s "explicit flag"? | ADR: "Only a preset or an explicit flag selects it"; ship takes only `--preset` | `--preset <name>` naming a `none` preset is the flag. No `ship --no-design`: 1 way in, and the profile default comes free | `ship-runs-without-design` |
+| D3 | Which template preset, if any, gets `none`? | Template: `default` = `standard`, `interview` = `sketch` | No template change in this plan. Rehearsals use a repo-local preset. After they pass, the user picks: flip `interview` to `none`, or add a generic preset | follow-up after `design-free-ship-rehearsals` |
+| D4 | Where does ship's spec page live, and what names the plan? | §5.2: "in plan state". Sprint pages are `<plans>/sprints/<slug>.md` (any main session, no lock). A plan's own directory is writable only by its lock holder (`PlanStateGuard.Target.planFile`) | `<plans>/<slug>/spec-page.md`, under the plan's lock, so no guard change. `plan.json` gets a closed `source`: `design(…)` or `specPage(path)`; a schema-1 file with `design` still decodes as a design plan | `plan-state-records-a-spec-page-source` |
+| D5 | Is "every slice maps to an acceptance test the spec lists" checked by `swiftgate` or by the skill? | Sprint judges it in prose from each slice's `Spec: "<quote>"` / `none`; brief rule "never re-implement a check" | `swiftgate spec-page check` decides: every `Spec:` quote must appear verbatim in the spec file; it prints `confirm: required|skippable`. Sprint keeps its prose for now; adopting the command in sprint is a separate follow-up | `spec-page-check`, `spec-page-confirmation-binds-the-page` |
+| D6 | What does the confirm bind to? | The page is in plan state, never committed, so it can change after the confirm with no trace. A design's approval binds `designSha` and `plan-lint.design-moved` catches a later edit | `plan confirm` records `{pageSha, by: user|spec-quotes, at}`; `by: spec-quotes` is refused unless the check says skippable. `plan-lint.spec-page-moved` fails a page whose sha differs | `spec-page-confirmation-binds-the-page`, `plan-lint-covers-spec-page-tests` |
+| D7 | What ids and tiers does `plan-lint` coverage read from a spec page? | Coverage uses `req-…`/`test-…` ids and each test's tier (T0-T3) for the minimum task gate. The page has test names and no tier | Each slice is 1 coverage item, id `slice-<n>-<kebab test name>`; its tier is T1 unless the slice line adds an optional `Tier: T2` or `Tier: T3` (backward compatible with sprint pages). The final `ready` gate still runs T3 | `spec-page-check`, `plan-lint-covers-spec-page-tests`, `context-packs-read-spec-pages` |
+| D8 | Who writes the surface, and how does it reach `main`? | §5.1 step 2: "the surface commit and `surface-check` on `main`". §6: every merge into `main` passes the merge gate GREEN. A surface committed straight onto `main` that then fails leaves `main` dirty | The main session writes it on `surface/<slug>` from `main`, runs the preset's merge gate there, then `swiftgate plan surface <slug> <sha> --gate <run id>` runs `surface-check`, checks the gate's `headCommit`, fast-forwards `main` and records the sha | `ship-surface-lands-on-main`, `ship-runs-without-design` |
+| D9 | Where does "the 1 surface" live? | §5.1 step 3 says each ledger task has `surfaceCommit`; §3.3 says it "already exists per task", but it exists on `TaskReturn`, not on ledger tasks | Once, in `plan.json` (`surfaceCommit`). Ledger tasks stay as they are, so no copy can disagree. `build proof-bases` puts it first and drops duplicates | `plan-state-records-a-spec-page-source`, `build-proof-bases-start-at-the-plan-surface`, `workers-build-on-the-plan-surface` |
+| D10 | "Each with a write set disjoint from the others": all tasks, or within a wave? | Sprint pages order slices so each builds on the ones before it; `plan-schedule` already splits overlapping write sets into waves | Within a wave, as `plan-schedule` does today; deps between slices stay allowed. No new lint rule | `plan-lint-covers-spec-page-tests`, `ship-runs-without-design` |
+| D11 | What does a worker do when its test needs API the surface lacks? | Sprint (§3.3, user-approved 2026-09-28): an extra stub commit that passes `surface-check`, proved oldest first. Rehearsal A attempt 2 needed 2 stub-and-restore pairs for a renamed API | The same: the worker commits the missing API alone as a stub, reports it as its return's `surfaceCommit`, and the final gate proves at the plan surface, then each task's stub in merge order. A new target or product is refused at `check-return` (`build-return.target-outside-surface`) | `workers-build-on-the-plan-surface`, `check-return-refuses-targets-the-plan-surface-lacks` |
+| D12 | What is a design conflict when there is no design? | `on_design_conflict = "amend"` runs `/swift-harness:design --amend`, which needs a design doc | A preset with `design_tier = "none"` must set `on_design_conflict = "block"`; any other value fails config loading, naming both keys. A worker's conflict cites a spec page section (`slices`, `surface`, `modules`) | `presets-may-skip-design`, `workers-build-on-the-plan-surface` |
+| D13 | Surface before or after decomposition? | §5.1 orders page, surface, plan | Keep §5.1's order: the decomposer reads the surface's files and may put stub files in task write sets (a task fills the stubs it owns) | `ship-runs-without-design` |
+
+Spec corrections the recommendations imply: §5.1 step 3 (surface recorded on the plan, not per ledger
+task), §5.2 (page path, optional `Tier:`), §3.3 (worker stub commits in a build). They go in
+`ship-runs-without-design`'s write set.
+
+### Merge points for the design-free ship waves
+
+| File | Edited only by |
+|---|---|
+| `C/SwiftGate.swift`, `TC/NewSubcommandRegistrationTests.swift` | `spec-page-check` |
+| `C/Commands/PlanCommand.swift` (subcommand list) | `spec-page-confirmation-binds-the-page`, then `ship-surface-lands-on-main` |
+| `D/Plan/PlanFile.swift` | `plan-state-records-a-spec-page-source` (it adds every new field, with `approval` for a page, as surface) |
+| `plugin/docs/standards.md` rule id index | `spec-page-check`, then `spec-page-confirmation-binds-the-page`, then `plan-lint-covers-spec-page-tests`, then `ship-surface-lands-on-main`, then `check-return-refuses-targets-the-plan-surface-lacks` (1 per wave) |
+| `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md` | `workers-build-on-the-plan-surface` |
+| `P/skills/ship/SKILL.md`, `P/skills/plan/SKILL.md`, the fast-modes spec | `ship-runs-without-design` |
+
+### Design-free ship risks
+
+- **The plan pipeline is design-shaped end to end.** `plan.json`, the edit guard, `plan-lint`, both context packs, the ledger page and the decomposer prompt all read the design. `plan-state-records-a-spec-page-source` changes a type 7 readers decode; every live plan's `plan.json` must still decode, and its first test says so.
+- **Rehearsal findings carry over and grow with parallel workers.** Open in `docs/e2e-report.md`: a new package without `Package.resolved` BLOCKS `ready` (prove's scratch copy won't resolve); a surface API renamed mid-build needs stub-and-restore commits; created-device T3 boots cost 41-97 s per run. Parallel workers renaming the same surface API is likelier than 1 sprint doing it. None has a task here; the first is worth a task before the rehearsals.
+- **Speed is unproven.** Each merge runs a push gate on `main` in series; for a 4-slice spec that may cost what parallelism saves (D0).
+- **Standards index churn.** 5 tasks add rows across 5 waves; the merge-point table keeps it to 1 per wave.
+- **Skill routing.** Changing ship's description or steps can move routing in the evals session's sets; tell that session before `ship-runs-without-design` merges.
+
 ## Wave map
 
 | Wave | Tasks | Why |
@@ -67,6 +128,12 @@ The user approved all 3 recommendations on 2026-09-28. Later that day, after reh
 | 6 | `t3-never-clones-a-booted-base`, `surface-check-allows-additive-manifest-edits`, `shim-kill-cleanup-test-holds-under-load` | disjoint write sets; the flake fix is a user request (2026-09-28) |
 | 7 | `sprint-skill-rehearsal-lessons` | the skill text follows the slice-base change |
 | 8 | `sprint-slice-refuses-targets-the-surface-lacks` | user decision 2026-09-28: catch a new target at the slice, not at the final gate |
+| 9 | `presets-may-skip-design`, `spec-page-check`, `plan-state-records-a-spec-page-source` | independent foundations: config, the page, plan state |
+| 10 | `spec-page-confirmation-binds-the-page`, `context-packs-read-spec-pages`, `ledger-page-renders-spec-page-plans` | each reads the page and the new plan source |
+| 11 | `plan-lint-covers-spec-page-tests`, `build-proof-bases-start-at-the-plan-surface`, `workers-build-on-the-plan-surface` | plan-lint needs the confirm's sha; the build side needs only the plan's `surfaceCommit` |
+| 12 | `ship-surface-lands-on-main`, `shim-deadline-test-holds-under-load` | `shim-deadline-test-holds-under-load` too (a second flake in the shim deadline family, main run `20260928T193538Z-6929a7c9`); its own standards rows and `PlanCommand.swift`; needs the confirm |
+| 13 | `check-return-refuses-targets-the-plan-surface-lacks`, `ship-runs-without-design` | the skill names every command, so it lands after them |
+| 14 | `design-free-ship-rehearsals` | attended; go/no-go (D0) |
 
 ### `surface-check-command`
 - Deps: none · Gate: push · Model: opus · estLines: 420
@@ -152,3 +219,87 @@ The user approved all 3 recommendations on 2026-09-28. Later that day, after reh
 - Writes: `C/Commands/SprintCommand.swift`, the `D/Sprint/` file holding `SprintRefusal`, a manifest-reading helper in `A/` if one doesn't exist (reuse the surface scan's `Package.swift` parsing; never write a second parser), `TC/SprintCommandTests.swift`, `TD/` tests for the rule, `plugin/gate/Tests/Fixtures/` (captured manifests), the fixtures README, `plugin/docs/standards.md` (rule index row), `P/skills/sprint/SKILL.md` (the refusal row only), `tests/skill_commands_test.mjs` (its row), the fast-modes spec's §4.2 refusal table
 - Does: a slice commit that adds a target or product to any `Package.swift`, or adds a new `Package.swift`, that the surface commit doesn't declare, can't be proven: at the surface its sources are empty, SwiftPM refuses the package, and every test in it and its dependents is `prove.compile-only` at the final `ready` gate (rehearsal A, run `20260928T164206Z-298fd7a6`, 11 findings, 50 minutes after the slice). `sprint slice` compares the declared targets and products at the slice's HEAD with those at the surface and refuses with a new rule `sprint.target-outside-surface` (exit 1), naming each package and target and the fix: amend the surface with a stub target, rebuild the slices on it. Slices that only fill declared targets pass.
 - Tests: in a temp repo, a slice that adds a `…Live` target to a package the surface created is refused, naming it (catches the rehearsal case); one adding a whole new package is refused; one filling only declared targets passes; a slice that only reorders a manifest passes. Remove the check and confirm the first test goes red.
+
+### `presets-may-skip-design`
+- Deps: none · Gate: push · Model: opus · estLines: 200 · Decisions: D1, D12
+- Writes: `D/Build/BuildPreset.swift`, `D/Config/ConfigSchema.swift`, `D/Build/BuildRun.swift`, `C/Commands/SelfTestCommand.swift` (its preset literal only), `TD/` config and build-run tests
+- Does: build executor §5.1 as §9 corrects it. `design_tier` parses into a closed preset-only type: `none`, or one of `DesignTier`'s cases. `run.json`'s `preset.designTier` round-trips `none`, and a run.json written before this change reads as it did. A preset with `none` and any `on_design_conflict` but `block` fails config loading, naming both keys. `DesignTier`, `plan claim --tier`, `plan set --tier` and `design-scope` are unchanged, so none of them can produce `none`.
+- Tests: a preset with `design_tier = "none"` and `on_design_conflict = "block"` loads (catches a config that rejects the new value). With `"amend"` it fails naming both keys. `plan claim --tier none` and `plan set --tier none` still exit 2. An unknown value (`"nothing"`) fails naming itself. A run.json with `none` round-trips byte-stable. Remove the conflict check and confirm its test goes red.
+
+### `spec-page-check`
+- Deps: none · Gate: push · Model: opus · estLines: 380 · Decisions: D5, D7
+- Writes: `D/SpecPage/SpecPage.swift`, `D/SpecPage/SpecPageCheck.swift`, `C/Commands/SpecPageCommand.swift`, `C/SwiftGate.swift`, `TC/NewSubcommandRegistrationTests.swift`, `plugin/gate/Tests/Fixtures/spec-page/` (the 2 rehearsal pages, copied as the sessions wrote them), the fixtures README, `P/skills/sprint/references/spec-page.md` (the optional `Tier:` token only), `plugin/docs/standards.md` (rule index rows), their tests
+- Does: §5.2. `swiftgate spec-page check <page> --spec <spec-file> [--json]` parses the page into a closed `SpecPage` (title, spec path, goal, modules table, surface list, numbered slices each with 1 test name, an optional `Tier: T2|T3`, and a `Spec:` quote or `none`; out of scope). Findings: `spec-page.format` (a section missing or out of order, a slice without exactly 1 test, a repeated test name), `spec-page.too-long` (over 400 words), `spec-page.quote-not-in-spec` (a quote that isn't verbatim in the spec file). It prints `confirm: required` when any slice says `none`, else `skippable`, the slice ids (`slice-<n>-<kebab test name>`) and `pageSha` (sha-256 of the bytes). Exit 0 GREEN, 1 RED, 2 when the page or spec can't be read. Rule `spec-page.summary` is a nit.
+- Tests: both rehearsal pages pass and report `skippable` (catches a parser tighter than the pages the sprint skill writes). A quote with 1 changed word is `quote-not-in-spec`, naming the slice. A slice with 2 tests, a missing `## Surface` and a 401-word page each fail naming themselves. 1 `none` slice makes `confirm: required`. An unreadable spec file exits 2, never GREEN. Loosen the verbatim match to case-insensitive and confirm the near-miss test goes red.
+
+### `plan-state-records-a-spec-page-source`
+- Deps: none · Gate: push · Model: opus · estLines: 320 · Decisions: D4, D9
+- Writes: `D/Plan/PlanFile.swift`, `C/Commands/PlanClaimCommand.swift`, `C/Commands/PlanSetCommand.swift` (keeps the new fields), `A/PlanState/PlanStateStore.swift`, `A/PlanState/PlanLock.swift` (decode only), `D/Hooks/Guards.swift` (`PlanRecord.Design` gains a no-design case), `C/Hooks/PreToolUseHook.swift` (its reading of that case), `C/Commands/DesignDiffCommand.swift` (refuses a spec-page plan's `--chain`), `P/skills/plan/references/state-files.md` (the new shape), their tests
+- Does: `plan.json` gains a closed `source`: `design` (today's `design`, `designSha`, `clarifyChain`, `tier`) or `specPage` (`path` = `<plans>/<slug>/spec-page.md`, `pageSha?`), a page `approval` (`pageSha`, `by`: `user` | `spec-quotes`, `at`), and `surfaceCommit?`. A schema-1 file with `design` decodes unchanged. `plan claim <slug> --spec-page` seeds a spec-page plan; `--design` and `--spec-page` together exit 2. The edit guard treats a spec-page plan as owning no design doc, and still lets only its lock holder write `spec-page.md`. Every command that needs a design (`design-diff --chain`, `evidence`) refuses a spec-page plan, naming it, instead of reading `design` as empty.
+- Tests: every `plan.json` in the repo's own plan-state fixtures decodes as before (catches a break to live plans). A spec-page plan round-trips byte-stable. An unknown `source` or `by` fails decoding naming itself. `plan claim --spec-page` then a lock holder's Write to `<plans>/<slug>/spec-page.md` is allowed; another session's is denied; a subagent's is denied. `pageSha` absent reads as `nil`, never `""`. Run against a temp repo's common dir only.
+
+### `spec-page-confirmation-binds-the-page`
+- Deps: spec-page-check, plan-state-records-a-spec-page-source · Gate: push · Model: opus · estLines: 240 · Decisions: D5, D6
+- Writes: `C/Commands/PlanConfirmCommand.swift`, `C/Commands/PlanCommand.swift`, `plugin/docs/standards.md` (rule index rows), their tests
+- Does: §5.1 step 1, §7 "Confirming the spec page". `swiftgate plan confirm <slug> --by user|spec-quotes --spec <spec-file> --session <id> [--json]`, as the plan's lock holder: runs the spec page check on `<plans>/<slug>/spec-page.md`, refuses a RED page (`plan-confirm.page-red`) and `--by spec-quotes` when the check says `confirm: required` (`plan-confirm.needs-user`), then writes the approval with the page's sha and sets the index to `approved`. Exit 0 recorded, 1 refused, 2 unreadable.
+- Tests: `--by spec-quotes` on a page with a `none` slice is refused (catches the skill skipping the confirm on its own reading). `--by user` on the same page is recorded with its sha. A RED page is refused under either `--by`. A session without the lock exits 1. A design plan is refused, naming it. Remove the `needs-user` check and confirm its test goes red.
+
+### `context-packs-read-spec-pages`
+- Deps: spec-page-check, plan-state-records-a-spec-page-source · Gate: push · Model: opus · estLines: 300 · Decision: D7
+- Writes: `C/Commands/ContextPackCommand.swift`, `D/Context/ContextPack.swift`, `P/agents/design-decomposer.md` (the spec-page input and its ids), their tests
+- Does: `context-pack --role decomposer --spec-page <path>` and `--role worker --spec-page <path>` stand in for `--design`, exactly 1 of the 2. The decomposer pack carries the page's modules, surface and slices verbatim, with each slice's id and tier. A worker pack carries the slices its task `covers`, the surface list, the modules rows its write set touches and the standards anchors as today. A `covers` id the page doesn't have is exit 1, as an unknown design id is. No summarising.
+- Tests: a worker pack for a task covering `slice-2-…` holds slice 2's text byte for byte and no other slice (catches a pack that summarises or leaks slices). An unknown slice id exits 1 naming it. Both flags together exit 2. A design pack is byte-identical to before.
+
+### `ledger-page-renders-spec-page-plans`
+- Deps: spec-page-check, plan-state-records-a-spec-page-source · Gate: push · Model: opus · estLines: 180
+- Writes: `C/Commands/DesignRenderCommand.swift` (the `--ledger` path only), `D/Design/LedgerRender.swift`, their tests
+- Does: `design-render --ledger <plan>` for a spec-page plan reads the page at the confirmed `pageSha`, and the coverage matrix is slice × task. A page whose sha differs from the approval exits 2, naming both shas. A design plan renders as before.
+- Tests: a spec-page plan's page shows each slice's row and the task covering it (catches rendering an empty matrix). A changed page exits 2. A design plan's page is byte-identical to before.
+
+### `plan-lint-covers-spec-page-tests`
+- Deps: spec-page-confirmation-binds-the-page, context-packs-read-spec-pages · Gate: push · Model: opus · estLines: 300 · Decisions: D6, D7, D10
+- Writes: `C/Commands/PlanLintCommand.swift`, `D/Plan/PlanLintCoverage.swift`, `D/Plan/PlanLintGraph.swift`, `plugin/docs/standards.md` (rule index rows), their tests
+- Does: §9's plan-lint correction. For a spec-page plan, `plan-lint` reads the page at the approval's `pageSha` instead of a design: every slice id is a coverage item (`plan-lint.uncovered-requirement`), `tests` ids must be slice ids (`plan-lint.unknown-test`), each task's gate is at least its slices' tier's minimum, and worker packs are built with `--spec-page`. A page whose sha differs from the approval is `plan-lint.spec-page-moved` (gating). A plan with no approval yet exits 2. Write-set disjointness stays per wave (D10).
+- Tests: a ledger missing 1 slice is `uncovered-requirement` naming it (catches reading coverage from nowhere). A page edited after the confirm is `spec-page-moved`. A `Tier: T3` slice under a `fast` task is a gate finding. A design plan lints exactly as before. Remove the sha comparison and confirm its test goes red.
+
+### `build-proof-bases-start-at-the-plan-surface`
+- Deps: plan-state-records-a-spec-page-source · Gate: push · Model: opus · estLines: 140 · Decision: D9, D11
+- Writes: `C/Commands/BuildProofBasesCommand.swift`, `TC/BuildProofBasesCommandTests.swift`
+- Does: §3.3 for a build. `build proof-bases <slug>` puts the plan's `surfaceCommit` first when `plan.json` has one, then each merged task's return `surfaceCommit` in merge order, each sha once. A plan without one prints what it prints today.
+- Tests: a plan surface plus 2 merged returns naming it and 1 naming a later stub prints the surface, then the stub, once each (catches a missing or repeated base). No plan surface: output unchanged. An unreadable `plan.json` exits 2, never an empty list.
+
+### `workers-build-on-the-plan-surface`
+- Deps: plan-state-records-a-spec-page-source · Gate: push · Model: opus · estLines: 200 · Decisions: D11, D12
+- Writes: `P/workflows/build-task.js`, `tests/build_task_workflow_test.mjs`, `P/agents/build-worker.md`, `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, `tests/skill_commands_test.mjs` (its build rows)
+- Does: `build-task.js` takes a required `planSurface` arg (a sha or `null`). With a sha, the worker writes no surface of its own, runs its task gate with `--proof-base <planSurface>`, and when its test needs API the surface lacks commits that API alone as a stub, checks it with `swiftgate surface-check <sha>`, and returns it as `surfaceCommit`. A `design-conflict` names a spec page section. The build skill reads `surfaceCommit` from `plan.json` and passes it, and builds worker packs with `--spec-page` for a spec-page plan. `null` keeps today's prompt byte for byte.
+- Tests: a missing `planSurface` arg throws `build-task: …` (catches a skill that forgets it). With a sha, the prompt names it as the proof base and forbids a new surface; with `null`, the prompt equals today's. The skill contract test passes.
+
+### `ship-surface-lands-on-main`
+- Deps: spec-page-confirmation-binds-the-page · Gate: push · Model: opus · estLines: 320 · Decision: D8
+- Writes: `C/Commands/PlanSurfaceCommand.swift`, `C/Commands/PlanCommand.swift`, `A/Build/GitWorkspace.swift` (reuse the fast-forward; no second copy), `plugin/docs/standards.md` (rule index rows), their tests
+- Does: §5.1 step 2 under §6. `swiftgate plan surface <slug> <sha> --gate <run id> --session <id> [--json]`, as the lock holder of a confirmed spec-page plan: `<sha>`'s parent must be `main`'s HEAD; `surface-check` on it must be GREEN; the gate run must be GREEN at the preset's `merge_gate` tier or above with `headCommit` equal to `<sha>`. Then it fast-forwards `main` to `<sha>` (refusing while another worktree has `main` checked out) and records `surfaceCommit`. Refusals exit 1 as `plan-surface.<reason>` (`not-confirmed`, `not-on-main`, `behaviour`, `gate-red`, `gate-stale`, `gate-tier`, `main-checked-out`, `already-recorded`); unreadable state exits 2.
+- Tests: in a temp repo with real commits, each refusal fires: a surface with a body, a stale gate, a RED gate, a parent that isn't `main`, an unconfirmed page, a second surface. The happy path moves `main` and records the sha. Remove the `surface-check` step and confirm its test goes red.
+
+### `check-return-refuses-targets-the-plan-surface-lacks`
+- Deps: build-proof-bases-start-at-the-plan-surface, workers-build-on-the-plan-surface · Gate: push · Model: opus · estLines: 200 · Decision: D11
+- Writes: `C/Commands/BuildCheckReturnCommand.swift`, `D/Build/TaskReturn.swift`, `TC/BuildCheckReturnCommandTests.swift`, `TD/` rule tests, `plugin/gate/Tests/Fixtures/` (captured manifests, reusing the sprint ones where they fit), the fixtures README, `plugin/docs/standards.md` (rule index row)
+- Does: the parallel form of `sprint.target-outside-surface`. For a plan with a `surfaceCommit`, `check-return` compares every `Package.swift` the task branch changed with the plan surface, through `SliceManifests` and `ManifestDeclarationsReader` (no second parser), and fails `build-return.target-outside-surface` for a non-test target or product the surface lacks, a new package, or a manifest it can't read, naming each and the fix (a design conflict: the surface needs a stub target).
+- Tests: a task branch adding a `…Live` target to a package the surface created fails naming it (catches rehearsal A's slice 4 shape in parallel). A branch filling only declared targets passes. A plan with no surface is unchanged. Remove the check and confirm the first test goes red.
+
+### `ship-runs-without-design`
+- Deps: every task above except `check-return-refuses-targets-the-plan-surface-lacks` · Gate: push · Model: opus · estLines: 320 · Decisions: D2, D8, D10, D13
+- Writes: `P/skills/ship/SKILL.md`, `P/skills/plan/SKILL.md`, `tests/skill_commands_test.mjs` (ship and plan rows), `tests/preset_profile_skills_test.mjs` if it pins ship's steps, the fast-modes spec §3.3, §5.1, §5.2, the build executor spec §3.1 and §5.1 (the §9 corrections), `docs/index.md` only if a router row changes
+- Does: §5.1. Ship reads the preset's `design_tier`; at `none`, after preflight: claim with `plan claim --spec-page`, write `<plans>/<slug>/spec-page.md` (sprint's format), `spec-page check`, ask once with `AskUserQuestion` only when it says `required`, `plan confirm`; write the surface on `surface/<slug>`, run the merge gate, `plan surface`; then `/swift-harness:plan` and `/swift-harness:build` as today. The plan skill's spec-page path skips the designSha approval and evidence steps (the confirm replaces them) and packs the decomposer with `--spec-page`. The resume list names the spec-page commands. "Never skip a step" becomes "never skip a step the preset runs". Every other tier runs as before. Generic: no app shape, prompt or preset value in the text.
+- Tests: the skill contract test: every command and flag named exists. Ship's `none` steps follow the order the commands enforce. The page stays generic. `claude plugin validate --strict` passes.
+
+### `design-free-ship-rehearsals`
+- Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
+- Writes: `docs/e2e-report.md`
+- Does: attended. The user runs `/swift-harness:ship <spec> --preset <a repo-local none preset>` on 2 practice prompts of different app shapes, not the last ones sprint used, in a warm starter repo, timed with `stats --build`. The report records wall time per step, every refusal and halt, the final gate's verdict, and the same prompts' sprint times for comparison. It ends with the user's D3 choice.
+- Tests: both runs end with `main` at a GREEN `ready` gate proved at the plan surface, with no manual step except the spec-page confirm.
+
+### `shim-deadline-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 60
+- Writes: the `tests/*_test.mjs` file holding "a shim test past its deadline stops, fails naming the deadline, and leaves no process behind", and `plugin/bin/swiftgate` only if the root cause is in the shim
+- Does: that test failed in a full push run on `main` at load 22 ("the shim test did not say it hit its deadline"; run `20260928T193538Z-6929a7c9`) and passed twice alone. Find the root cause with a timed trace, as `shim-kill-cleanup-test-holds-under-load` did for its sibling, and wait on the real artifact under a named deadline.
+- Tests: the test passes 10 times in a row under bounded generated load, and a shim that never reaches its deadline message still fails by name. Revert the fix and confirm the loaded run goes red.
