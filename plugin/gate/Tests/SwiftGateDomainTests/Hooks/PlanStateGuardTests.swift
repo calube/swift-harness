@@ -251,3 +251,78 @@ struct DesignOwnershipTests {
         == EditGuard.planStateRuleID)
   }
 }
+
+@Suite("Sprint spec pages under the plan-state root")
+struct SprintPageGuardTests {
+  static let plans = "/r/.git/swift-harness/plans"
+  static let sprints = plans + "/" + PlanStateLayout.sprintsDirectoryName
+
+  /// The guard's verdict on a write, judged as the hook judges it: classify the path, read the
+  /// locks its scope names from `locks`, then evaluate. A path outside plan state is `nil`.
+  static func judge(
+    _ path: String, isDirectory: Bool = false, locks: [String: String] = [:],
+    environmentValue: String? = nil, sessionID: String = "session-a", agentID: String? = nil
+  ) -> (classified: Bool, violation: GuardViolation?) {
+    guard let target = PlanStateGuard.target(ofResolvedPath: path, isDirectory: isDirectory)
+    else { return (false, nil) }
+    let held: [String] =
+      switch PlanStateGuard.lockScope(of: target) {
+      case .none: []
+      case .plan(let plan): locks[plan.directory].map { [$0] } ?? []
+      case .everyPlan: Array(locks.values)
+      }
+    let violation = PlanStateGuard.evaluate(
+      target, locks: held, environmentValue: environmentValue, sessionID: sessionID,
+      agentID: agentID)
+    return (true, violation)
+  }
+
+  @Test(
+    "a main session with no claim writes a sprint page, in any letter case, and a subagent is denied it even with the override and another plan's lock — catches the sprints directory read as a plan whose lock no sprint holds, or workers rewriting the spec a sprint builds from",
+    arguments: [
+      sprints + "/login-flow.md", "/r/.git/Swift-Harness/PLANS/Sprints/Login-Flow.MD",
+    ])
+  func pageWritableByMainSessionOnly(path: String) throws {
+    #expect(Self.judge(path).violation == nil, "\(path)")
+    let feed = try PlanStateLayout(commonDirectory: "/r/.git").plan("2026-09-24-feed")
+    let subagent = Self.judge(
+      path, locks: [feed.directory: "session-a"], environmentValue: "1", agentID: "worker")
+    #expect(subagent.violation?.ruleID == EditGuard.planStateRuleID, "\(path)")
+  }
+
+  @Test(
+    "anything under sprints but a page directly in it is denied to everyone, holder and override included — catches the page allowance widening to nested paths, other files or the directory itself",
+    arguments: [
+      (sprints + "/login-flow/notes.md", false), (sprints + "/login-flow.json", false),
+      (sprints + "/.md", false), (sprints, true), (sprints, false),
+    ])
+  func otherSprintPathsDenied(path: String, isDirectory: Bool) {
+    #expect(
+      PlanStateGuard.target(ofResolvedPath: path, isDirectory: isDirectory) == .malformedPlanPath,
+      "\(path)")
+    let verdict = Self.judge(
+      path, isDirectory: isDirectory, locks: [Self.sprints: "session-a"], environmentValue: "1")
+    #expect(verdict.violation?.ruleID == EditGuard.planStateRuleID, "\(path)")
+  }
+
+  @Test(
+    "no plan may be named sprints in any letter case, and a page-shaped file inside a real plan still needs that plan's lock — catches a claimed plan's lock deciding the sprint pages, or the page allowance leaking to plan directories"
+  )
+  func sprintsIsNoPlanAndPlansKeepTheirLocks() throws {
+    let layout = try PlanStateLayout(commonDirectory: "/r/.git")
+    for name in ["sprints", "Sprints", "SPRINTS"] {
+      #expect(throws: PlanStateLayoutError.invalidPlanName(name)) {
+        _ = try layout.plan(name)
+      }
+    }
+    #expect(try layout.plan("sprints-2026").directory == Self.plans + "/sprints-2026")
+    let feed = try layout.plan("2026-09-24-feed")
+    for path in [feed.directory + "/sprints/login-flow.md", feed.directory + "/login-flow.md"] {
+      #expect(PlanStateGuard.target(ofResolvedPath: path) == .planFile(feed), "\(path)")
+      #expect(Self.judge(path).violation?.ruleID == EditGuard.planStateRuleID, "\(path)")
+      #expect(Self.judge(path, locks: [feed.directory: "session-a"]).violation == nil, "\(path)")
+    }
+    let other = Self.plans + "/sprints-2026/login-flow.md"
+    #expect(Self.judge(other).violation?.ruleID == EditGuard.planStateRuleID)
+  }
+}

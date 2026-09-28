@@ -206,6 +206,34 @@ struct BashWriteGuardTests {
   }
 
   @Test(
+    "a main session holding no plan writes a sprint page through Bash, a subagent is denied it, and a nested path, a non-page file and another plan's files stay denied — catches the sprint skill's shell write refused, or the allowance widening"
+  )
+  func sprintPageThroughBash() async throws {
+    var scenario = try await BashWriteScenario()
+    defer { scenario.remove() }
+    let sprints = scenario.layout.root + "/" + PlanStateLayout.sprintsDirectoryName
+    let page = sprints + "/login-flow.md"
+
+    for command in [
+      "printf '# Login flow\\n' > \(page)",
+      "cat /tmp/page.md | tee \(page)",
+      "cp -f /tmp/page.md \(page)",
+    ] {
+      #expect(try await scenario.decision(command) == nil, "\(command)")
+    }
+    try scenario.claim(PlanStateScenario.planB, by: PlanStateScenario.session)
+    for command in [
+      "echo x > \(sprints)/login-flow/notes.md",
+      "echo '{}' > \(sprints)/login-flow.json",
+      "echo '{}' > \(scenario.ledgerA)",
+    ] {
+      #expect(try await scenario.decision(command) == "deny", "\(command)")
+    }
+    scenario.environment = [OrchestratorMarker.environmentVariable: "1"]
+    #expect(try await scenario.decision("echo x > \(page)", subagent: true) == "deny")
+  }
+
+  @Test(
     "the lock holder writes its own plan state and design through Bash as through Write, and not another plan's — catches the guard locking out the orchestrator, or a holder of plan A writing plan B"
   )
   func holderWritesOwnPlan() async throws {
