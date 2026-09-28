@@ -132,6 +132,7 @@ struct NewSubcommandRegistrationTests {
     ("sprint finish", ["sprint", "finish", "--gate", "r1"], "finish"),
     ("sprint status", ["sprint", "status"], "status"),
     ("sprint status --json", ["sprint", "status", "--json"], "status"),
+    (
       "design-telemetry",
       [
         "design-telemetry", "--run", ".harness/runs/design-example", "--run-id",
