@@ -5,12 +5,18 @@ import Foundation
 /// and the predicted overhead share. Reuses ``ArtifactPageShell`` and ``HTMLEscape``: no second
 /// shell or escaper for a second kind of rendered page.
 public enum LedgerRender {
+  /// What the plan was decomposed from, at the revision its approval names.
+  public enum Source: Sendable, Equatable {
+    /// The design at the plan's `designSha` (spec §5.4): never the working tree.
+    case design(DesignDocument, designSha: String)
+    /// The spec page whose bytes hash to the confirmed `pageSha`.
+    case specPage(SpecPage, pageSha: String)
+  }
+
   public struct Input: Sendable, Equatable {
     public let slug: String
     public let ledger: Ledger
-    /// The design at the plan's `designSha` (spec §5.4): never the working tree.
-    public let design: DesignDocument
-    public let designSha: String
+    public let source: Source
     /// This plan's build run metrics, when one exists; `nil` renders the wave timeline exactly as
     /// it did before durations existed.
     public let buildMetrics: BuildMetrics.Report?
@@ -18,15 +24,23 @@ public enum LedgerRender {
     public let build: BuildView?
 
     public init(
-      slug: String, ledger: Ledger, design: DesignDocument, designSha: String,
-      buildMetrics: BuildMetrics.Report? = nil, build: BuildView? = nil
+      slug: String, ledger: Ledger, source: Source, buildMetrics: BuildMetrics.Report? = nil,
+      build: BuildView? = nil
     ) {
       self.slug = slug
       self.ledger = ledger
-      self.design = design
-      self.designSha = designSha
+      self.source = source
       self.buildMetrics = buildMetrics
       self.build = build
+    }
+
+    public init(
+      slug: String, ledger: Ledger, design: DesignDocument, designSha: String,
+      buildMetrics: BuildMetrics.Report? = nil, build: BuildView? = nil
+    ) {
+      self.init(
+        slug: slug, ledger: ledger, source: .design(design, designSha: designSha),
+        buildMetrics: buildMetrics, build: build)
     }
   }
 
@@ -88,14 +102,25 @@ public enum LedgerRender {
     let tasks = input.ledger.tasks
     let schedule = PlanSchedule.schedule(tasks: tasks, maxParallel: input.ledger.maxParallel)
 
+    let revision: String
+    let matrix: HTMLFragment
+    switch input.source {
+    case .design(let design, let designSha):
+      revision = designSha
+      matrix = matrixSection(design: design, tasks: tasks)
+    case .specPage(let specPage, let pageSha):
+      revision = pageSha
+      matrix = sliceMatrixSection(page: specPage, tasks: tasks)
+    }
+
     let body: [HTMLFragment] =
-      [header(slug: input.slug, designSha: input.designSha)]
+      [header(slug: input.slug, designSha: revision)]
       + (input.build.map { [buildSection($0)] } ?? []) + [
         dagSection(tasks: tasks),
         waveSection(
           ledger: input.ledger, schedule: schedule, buildMetrics: input.buildMetrics,
           build: input.build),
-        matrixSection(design: input.design, tasks: tasks),
+        matrix,
         overheadSection(tasks: tasks, schedule: schedule),
       ]
 
@@ -381,6 +406,12 @@ public enum LedgerRender {
           "div", attributes: ["class": "scroll"],
           [.element("table", [.element("thead", [head]), .element("tbody", rows)])])
       ])
+  }
+
+  // MARK: - Slice × task coverage matrix
+
+  static func sliceMatrixSection(page: SpecPage, tasks: [LedgerTask]) -> HTMLFragment {
+    section("Slice × task coverage", [])
   }
 
   // MARK: - Predicted overhead share
