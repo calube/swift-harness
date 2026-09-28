@@ -22,6 +22,7 @@ public enum PlanLintGraph {
   public static let duplicateTaskIDRuleID = "plan-lint.duplicate-task-id"
   public static let designMovedRuleID = "plan-lint.design-moved"
   public static let writeSetUnresolvedRuleID = "plan-lint.write-set-unresolved"
+  public static let specPageMovedRuleID = "plan-lint.spec-page-moved"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -432,6 +433,17 @@ public enum PlanLintGraph {
     ]
   }
 
+  // MARK: - Spec page drift
+
+  /// A `major` finding when the spec page's bytes no longer hash to the `pageSha` its confirmation
+  /// bound. The page lives in plan state and is never committed, so that sha is the only trace of
+  /// what was confirmed.
+  public static func specPageMovedFindings(
+    pagePath: String, pageSha: String, confirmedPageSha: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
+  }
+
   // MARK: - Entry point
 
   /// Runs every `plan-lint` rule family in one pass: ``PlanLintCoverage``'s coverage, gate-strength,
@@ -477,6 +489,18 @@ public enum PlanLintGraph {
     findings += try workerPackFindings(ledger: ledger, workerPacks: workerPacks)
 
     return findings
+  }
+}
+
+extension PlanLintGraph {
+  /// ``allFindings(design:designPath:ledger:ledgerPath:graph:workerPacks:bounds:)`` for a plan
+  /// whose source is a spec page: its slices are the coverage items and set each task's gate, and
+  /// its Modules table places the modules the plan creates.
+  public static func allFindings(
+    specPage: SpecPage, pagePath: String, ledger: Ledger, ledgerPath: String,
+    graph: ModuleGraph, workerPacks: [String: ContextPack], bounds: PlanConfig
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
   }
 }
 
