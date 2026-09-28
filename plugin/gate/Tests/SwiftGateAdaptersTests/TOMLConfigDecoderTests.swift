@@ -287,6 +287,27 @@ struct TOMLConfigDecoderTests {
   }
 
   @Test(
+    "simctl_timeout_seconds sets the simctl deadline inside 30...1800 and is an error outside it — catches a loaded machine stuck on a 60 s deadline, or a zero deadline that fails every call"
+  )
+  func simctlTimeoutRange() throws {
+    func simulator(_ seconds: Int) -> String {
+      Self.minimal.replacingOccurrences(
+        of: "os = \"26.2\"\n", with: "os = \"26.2\"\nsimctl_timeout_seconds = \(seconds)\n")
+    }
+    #expect(try decoder.decode(Self.minimal).simulator.simctlTimeoutSeconds == 180)
+    for accepted in [30, 600, 1800] {
+      #expect(try decoder.decode(simulator(accepted)).simulator.simctlTimeoutSeconds == accepted)
+    }
+    for rejected in [0, 29, 1801] {
+      #expect(
+        issues(simulator(rejected)) == [
+          .outOfRange(
+            path: "simulator.simctl_timeout_seconds", value: "\(rejected)", allowed: "30...1800")
+        ])
+    }
+  }
+
+  @Test(
     "max_workers below one is an error — catches a config that would run mutants with no worker"
   )
   func maxWorkersRange() {

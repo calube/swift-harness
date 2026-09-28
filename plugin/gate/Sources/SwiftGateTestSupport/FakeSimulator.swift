@@ -88,7 +88,8 @@ public struct FakeXcresultReader: XcresultReader {
 }
 
 /// An in-memory `simctl` over a device list. Clones and creates add shut-down devices, boot and
-/// shutdown change a device's state, delete removes it, and every call is recorded.
+/// shutdown change a device's state, delete removes it, and every call is recorded. Like
+/// CoreSimulator, it refuses to clone a device that is not shut down.
 public final class FakeSimctl: Simctl {
   public enum Call: Sendable, Equatable {
     case devices
@@ -127,6 +128,7 @@ public final class FakeSimctl: Simctl {
     try state.withLock { state throws(SimctlError) in
       state.calls.append(.clone(udid: udid, name: name))
       let source = try Self.device(udid, in: state.devices, command: "clone")
+      guard source.state == "Shutdown" else { throw Self.cloneRefusal }
       return Self.add(
         name: name, runtime: source.runtimeIdentifier, deviceType: source.deviceTypeIdentifier,
         to: &state)
@@ -184,6 +186,17 @@ public final class FakeSimctl: Simctl {
             deviceTypeIdentifier: device.deviceTypeIdentifier)
       }
     }
+  }
+
+  /// `simctl clone` of a booted device, as `Simctl/clone-booted` recorded it.
+  private static var cloneRefusal: SimctlError {
+    let stderr = (try? Fixture.text("Simctl/clone-booted.stderr")) ?? "no clone-booted fixture"
+    let status =
+      (try? Fixture.text("Simctl/clone-booted.status"))
+      .flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 1
+    let summary = stderr.split(whereSeparator: \.isNewline).prefix(2)
+      .map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
+    return .failed(command: "clone", status: .exited(status), stderr: summary)
   }
 
   /// An unknown device fails the way `Simctl/delete-missing` recorded it.

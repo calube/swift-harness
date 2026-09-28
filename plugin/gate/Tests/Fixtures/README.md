@@ -205,6 +205,19 @@ of an all-zero UDID. The scratch path is replaced with `/SCRATCH`.
 - An unknown device exits 148 with `Invalid device: <udid>`.
 - `bootstatus -b` boots the device and exits once it has finished booting.
 
+`plugin/gate/Fixtures/simctl/capture-booted-base.sh` (run from anywhere) captures
+`Simctl/{clone-booted,create,list-devices-booted-base}.{stdout,stderr,status}`. It creates a
+throwaway `swiftgate capture base` (iPhone 17, iOS 26.2), boots it with `bootstatus -b`, then records
+`clone <base> swift-harness-<pid>-booted`, `create swift-harness-<pid>-created
+com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-2`, and
+`list devices --json` while the base runs and the created device exists. On exit it shuts down
+and deletes only the devices it made.
+
+- `simctl clone` of a booted device exits 149 with `SimError` code 405, `Unable to clone device in
+  current state: Booted`, and makes nothing.
+- `simctl create` prints only the new UDID. The device list gives each device's
+  `deviceTypeIdentifier`.
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's

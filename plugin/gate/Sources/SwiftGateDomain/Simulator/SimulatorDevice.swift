@@ -95,7 +95,11 @@ public enum SimulatorSelection {
   public static func provision(from base: SimulatorDevice)
     throws(SimulatorSelectionError) -> SimulatorProvision
   {
-    .clone(baseUDID: base.udid)
+    if base.state == "Shutdown" { return .clone(baseUDID: base.udid) }
+    guard let deviceType = base.deviceTypeIdentifier else {
+      throw .baseDeviceTypeUnknown(udid: base.udid, state: base.state)
+    }
+    return .create(deviceType: deviceType, runtime: base.runtimeIdentifier)
   }
 
   /// The pinned device clones are made from: available, named exactly `config.device`, on the

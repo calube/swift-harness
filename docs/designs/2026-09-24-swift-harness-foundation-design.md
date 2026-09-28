@@ -117,8 +117,10 @@ No check logic lives anywhere else. A hook or skill that re-implements a check i
 - **DerivedData:** `swiftgate` passes a per-worktree `-derivedDataPath` (under the worktree's
   `.harness/`), never the shared global path.
 - **Simulators:** each simulator-tier run clones the pinned base device (`simctl clone`), uses it,
-  and deletes it. A machine-wide file lock caps concurrent simulator runs (default 2; configurable).
-  Runs beyond the cap queue.
+  and deletes it. `simctl clone` refuses a booted device, and another session or tool may be using a
+  booted base, so the harness never shuts it down. It makes a fresh device of the base's type and
+  runtime instead (`simctl create`), named, locked and swept like a clone. A machine-wide file
+  lock caps concurrent simulator runs (default 2; configurable). Runs beyond the cap queue.
 - **Orphans:** SessionStart and every `swiftgate` start sweep clones whose owning PID is dead.
 - **Disk:** `swiftgate gc` prunes stale per-worktree DerivedData and run artifacts.
 - **10× check:** the sim cap queues (acceptable, visible in `stats`); disk from per-worktree
@@ -185,6 +187,7 @@ packages = ["Packages/*"]
 device = "iPhone 17"                # pinned for snapshot determinism
 os = "26.x"
 max_concurrent = 2
+simctl_timeout_seconds = 180        # per simctl call; 30...1800
 
 [pyramid]
 diff_coverage_min = 0.90            # changed Core/Client/Live lines covered by T1 alone

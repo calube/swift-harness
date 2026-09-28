@@ -125,6 +125,13 @@ public struct Config: Sendable, Equatable {
         .outOfRange(
           path: "simulator.max_concurrent", value: "\(simulator.maxConcurrent)", allowed: ">= 1"))
     }
+    let simctlTimeouts = SimulatorConfig.simctlTimeoutSecondsRange
+    if !simctlTimeouts.contains(simulator.simctlTimeoutSeconds) {
+      issues.append(
+        .outOfRange(
+          path: SimulatorConfig.simctlTimeoutKey, value: "\(simulator.simctlTimeoutSeconds)",
+          allowed: "\(simctlTimeouts.lowerBound)...\(simctlTimeouts.upperBound)"))
+    }
 
     if !(0...1).contains(pyramid.diffCoverageMin) {
       issues.append(
@@ -317,6 +324,7 @@ public struct SimulatorConfig: Sendable, Equatable {
   /// A loaded machine (load average 60) took over 60 s to answer `simctl list`.
   public static let defaultSimctlTimeoutSeconds = 180
   public static let simctlTimeoutSecondsRange = 30...1800
+  public static let simctlTimeoutKey = "simulator.simctl_timeout_seconds"
 
   public let device: String
   public let os: String

@@ -20,7 +20,8 @@ public enum SimctlError: Error, Sendable, Equatable {
     case .unreadableOutput(let command, let detail):
       "simctl \(command) printed unexpected output: \(detail)"
     case .timedOut(let command, let deadline):
-      "simctl \(command) did not finish within its \(deadline) deadline"
+      "simctl \(command) did not finish within \(deadline.components.seconds) s; on a loaded "
+        + "machine raise \(SimulatorConfig.simctlTimeoutKey) in .swiftgate.toml"
     }
   }
 }
@@ -80,7 +81,12 @@ public struct LiveSimctl: Simctl {
   public func create(name: String, deviceType: String, runtime: String)
     async throws(SimctlError) -> String
   {
-    throw .unreadableOutput(command: "create", detail: "not supported")
+    let output = try await simctl(["create", name, deviceType, runtime], timeout: timeouts.quick)
+    let created = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard UUID(uuidString: created) != nil else {
+      throw .unreadableOutput(command: "create", detail: "expected a UDID, got \"\(created)\"")
+    }
+    return created
   }
 
   public func boot(_ udid: String) async throws(SimctlError) {
@@ -125,6 +131,8 @@ public struct LiveSimctl: Simctl {
       output = try await runner.run(
         ProcessInvocation(
           executable: "/usr/bin/xcrun", arguments: ["simctl"] + arguments, timeout: timeout))
+    } catch .timedOut {
+      throw .timedOut(command: arguments.first ?? "", deadline: timeout)
     } catch {
       throw .runner(error)
     }
@@ -143,6 +151,7 @@ public struct LiveSimctl: Simctl {
       let name: String
       let state: String
       let isAvailable: Bool?
+      let deviceTypeIdentifier: String?
     }
     let list: List
     do {
@@ -154,7 +163,7 @@ public struct LiveSimctl: Simctl {
       devices.map {
         SimulatorDevice(
           udid: $0.udid, name: $0.name, runtimeIdentifier: runtime, state: $0.state,
-          isAvailable: $0.isAvailable ?? false)
+          isAvailable: $0.isAvailable ?? false, deviceTypeIdentifier: $0.deviceTypeIdentifier)
       }
     }
   }

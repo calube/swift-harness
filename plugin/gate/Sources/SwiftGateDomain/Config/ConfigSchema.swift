@@ -72,12 +72,15 @@ public enum ConfigSchema {
     guard let table = reader.table(root, path, at: "", required: true) else {
       return SimulatorConfig(device: "", os: "")
     }
-    reader.rejectUnknownKeys(in: table, at: path, allowed: ["device", "os", "max_concurrent"])
+    reader.rejectUnknownKeys(
+      in: table, at: path, allowed: ["device", "os", "max_concurrent", "simctl_timeout_seconds"])
     return SimulatorConfig(
       device: reader.string(table, "device", at: path, required: true) ?? "",
       os: reader.string(table, "os", at: path, required: true) ?? "",
       maxConcurrent: reader.integer(table, "max_concurrent", at: path)
-        ?? SimulatorConfig.defaultMaxConcurrent)
+        ?? SimulatorConfig.defaultMaxConcurrent,
+      simctlTimeoutSeconds: reader.integer(table, "simctl_timeout_seconds", at: path)
+        ?? SimulatorConfig.defaultSimctlTimeoutSeconds)
   }
 
   private static func readPyramid(_ reader: inout Reader, _ root: [String: ConfigValue])
