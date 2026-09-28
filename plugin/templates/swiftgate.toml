@@ -48,6 +48,12 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # [plan]
 # max_parallel = 3
 
+# What this repository is optimised for: the `[build.presets.<name>]` table `/swift-harness:build`
+# and `/swift-harness:ship` use when given no --preset. It only picks a preset; hooks, test-first
+# rules and the merge gate stay the same. `swiftgate doctor` fails a profile naming no preset.
+[harness]
+profile = {{PROFILE}}
+
 # Named `build` presets (design spec §5.1). Every key is required: a typo fails `swiftgate doctor`
 # rather than falling back to a default without warning.
 [build.presets.default]

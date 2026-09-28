@@ -289,6 +289,53 @@ struct BootstrapPlanTests {
   }
 
   @Test(
+    "a created config names --profile as its [harness] profile, and default without the flag — catches bootstrap stamping a profile other than the one asked for"
+  )
+  func createdConfigNamesProfile() {
+    var inputs = Self.inputs()
+    inputs.templates = HarnessTemplates(
+      agents: Self.templates.agents, config: "[harness]\nprofile = {{PROFILE}}\n",
+      swiftFormat: Self.templates.swiftFormat, swiftLint: Self.templates.swiftLint,
+      lefthook: Self.templates.lefthook, gitignore: Self.templates.gitignore,
+      docsIndex: Self.templates.docsIndex)
+    #expect(
+      change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
+        == .create("[harness]\nprofile = \"default\"\n"))
+    inputs.profile = "interview"
+    #expect(
+      change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
+        == .create("[harness]\nprofile = \"interview\"\n"))
+  }
+
+  @Test(
+    "an existing config whose profile differs from --profile is left alone with advice naming both, and one that matches is current — catches --profile silently ignored on an existing repository"
+  )
+  func existingConfigProfileDrift() throws {
+    func config(profile: String?) throws -> Config {
+      try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        docs: DocsConfig(managedFiles: [
+          BootstrapPlanner.Paths.docsIndex, BootstrapPlanner.Paths.agents,
+        ]), profile: profile)
+    }
+    var inputs = Self.inputs(config: .loaded(try config(profile: nil)))
+    inputs.profile = "interview"
+    guard case .untouched(let advice) = change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
+    else {
+      Issue.record("expected the config to be left alone with advice")
+      return
+    }
+    #expect(advice.contains("[harness] profile is \"default\""))
+    #expect(advice.contains("--profile asked for \"interview\""))
+
+    inputs.config = .loaded(try config(profile: "interview"))
+    #expect(change(BootstrapPlanner.plan(inputs), ".swiftgate.toml") == .unchanged)
+    inputs.profile = nil
+    #expect(change(BootstrapPlanner.plan(inputs), ".swiftgate.toml") == .unchanged)
+  }
+
+  @Test(
     "AGENTS.md keeps the team's text and only the managed block is added or refreshed — catches bootstrap deleting a repository's own agent instructions"
   )
   func agentsBlock() {

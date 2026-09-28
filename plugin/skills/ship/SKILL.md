@@ -5,7 +5,7 @@ description: This skill should be used to take a spec file all the way to merged
 
 # Ship
 
-`/swift-harness:ship <spec-file> --preset <name>` runs 3 existing skills in order: design, plan and
+`/swift-harness:ship <spec-file> [--preset <name>]` runs 3 existing skills in order: design, plan and
 build. Invoking it is the user's opt-in to all 3, and to the agents each one spends. This skill adds
 a preflight and a report. Every other step is the named skill, run as that skill says.
 
@@ -16,7 +16,7 @@ a preflight and a report. Every other step is the named skill, run as that skill
 | Name | Value |
 |---|---|
 | `<spec-file>` | the argument: a repo-relative file that states what to build, such as a README |
-| `<preset>` | `--preset <name>`, else `default` |
+| `<preset>` | `--preset <name>`; else the `profile` key of `[harness]` in `.swiftgate.toml`; else `default` |
 | `<design_tier>` | the `design_tier` key of `[build.presets.<preset>]` in `.swiftgate.toml` |
 | `<plan>` | the plan the design skill reports, `<YYYY-MM-DD>-<slug>` |
 | `<run>` | the build run id the build skill reports |

@@ -58,7 +58,7 @@ public struct Config: Sendable, Equatable {
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      exclude: exclude)
+      profile: profile, exclude: exclude)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     self.xcode = xcode
     self.appScheme = appScheme
@@ -100,7 +100,7 @@ public struct Config: Sendable, Equatable {
     xcode: String, appScheme: String, packages: [String], simulator: SimulatorConfig,
     pyramid: PyramidConfig, flows: [Flow], mutation: MutationConfig, budgets: Budgets,
     clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, docs: DocsConfig,
-    plan: PlanConfig, buildPresets: [String: BuildPreset], exclude: [String]
+    plan: PlanConfig, buildPresets: [String: BuildPreset], profile: String?, exclude: [String]
   ) -> [ConfigIssue] {
     var issues: [ConfigIssue] = []
     func requireText(_ value: String, _ path: String) {
@@ -307,6 +307,7 @@ public struct Config: Sendable, Equatable {
             allowed: "<= \(path).time_budget_min"))
       }
     }
+    if let profile { requireText(profile, "harness.profile") }
     return issues
   }
 }
