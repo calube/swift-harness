@@ -127,6 +127,7 @@ public enum Doctor {
   public static let mermaidCLIRuleID = "doctor.mmdc"
   public static let issueReportingRuleID = "doctor.issue-reporting"
   public static let upgradeHazardRuleID = "doctor.upgrade-hazard"
+  public static let profileRuleID = "doctor.profile"
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.

@@ -52,11 +52,7 @@ enum CheckRun {
     }
   }
 
-  /// A `ready` step a lower tier can add: a build task's gate proves and mutates its own change.
-  enum ExtraStep: String, Sendable, CaseIterable {
-    case prove
-    case mutate
-  }
+  typealias ExtraStep = CheckExtraStep
 
   /// - Parameters:
   ///   - extraSteps: `ready` steps to run at a lower tier; `ready` runs them anyway.
@@ -700,6 +696,17 @@ struct CheckCommand: AsyncParsableCommand {
   @Flag(help: "Also run mutate below the ready tier, which runs it anyway.")
   var mutate = false
 
+  @Flag(help: "Also run impact below the push tier, which runs it anyway.")
+  var impact = false
+
+  @Flag(help: "Also judge diff coverage below the push tier, which runs it anyway.")
+  var coverage = false
+
+  @Flag(
+    name: .customLong("app-build"),
+    help: "Also compile the app scheme for a generic simulator, which the host build can't.")
+  var appBuild = false
+
   @Option(
     name: .customLong("proof-base"),
     help: ArgumentHelp(
@@ -709,12 +716,17 @@ struct CheckCommand: AsyncParsableCommand {
 
   @OptionGroup var output: OutputOptions
 
-  func run() async throws {
-    let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    // `ready` runs both anyway, so they are extra only below it.
+  /// The asked-for steps `tier` doesn't already run, in declaration order.
+  var extraSteps: [CheckRun.ExtraStep] {
     var steps: [CheckRun.ExtraStep] = []
     if prove, tier != .ready { steps.append(.prove) }
     if mutate, tier != .ready { steps.append(.mutate) }
+    return steps
+  }
+
+  func run() async throws {
+    let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    let steps = extraSteps
     try await GateRun.execute(
       root: root, format: output.format, command: "check \(tier.rawValue)",
       steps: steps.isEmpty ? nil : steps.map(\.rawValue),

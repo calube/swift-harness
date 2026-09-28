@@ -77,12 +77,14 @@ public struct BootstrapInputs: Sendable {
   public var shimPath: String
   /// The plugin's `bin/swiftgate`, which the stable path must lead to.
   public var shimTarget: String
+  /// `--profile`: the `[harness] profile` a created config names. `nil` when not given.
+  public var profile: String?
 
   public init(
     root: String, existing: [String: ExistingEntry], templates: HarnessTemplates,
     config: ConfigState, inferred: InferredConfig, swiftLintInstalled: Bool,
     lefthookInstalled: Bool, git: GitState, registry: RegistryState, registryPath: String,
-    shim: ShimStatus, shimPath: String, shimTarget: String
+    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil
   ) {
     self.root = root
     self.existing = existing
@@ -97,6 +99,7 @@ public struct BootstrapInputs: Sendable {
     self.shim = shim
     self.shimPath = shimPath
     self.shimTarget = shimTarget
+    self.profile = profile
   }
 }
 

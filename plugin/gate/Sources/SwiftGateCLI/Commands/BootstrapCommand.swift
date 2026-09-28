@@ -23,7 +23,8 @@ enum BootstrapRun {
     let failed: Bool
   }
 
-  static func survey(root: URL, environment: Environment) async throws(BootstrapError)
+  static func survey(root: URL, profile: String?, environment: Environment)
+    async throws(BootstrapError)
     -> BootstrapInputs
   {
     let templates = try BootstrapFiles.templates(harnessRoot: environment.harnessRoot)
@@ -48,13 +49,16 @@ enum BootstrapRun {
       lefthookInstalled: environment.lefthookInstalled, git: await git,
       registry: BootstrapFiles.registryState(path: registryPath), registryPath: registryPath,
       shim: HarnessFiles.shimStatus(linkPath: shimPath, harnessRoot: environment.harnessRoot.path),
-      shimPath: shimPath, shimTarget: environment.harnessRoot.appending(path: "bin/swiftgate").path)
+      shimPath: shimPath, shimTarget: environment.harnessRoot.appending(path: "bin/swiftgate").path,
+      profile: profile)
   }
 
-  static func run(root: URL, apply: Bool, environment: Environment) async -> Outcome {
+  static func run(root: URL, apply: Bool, profile: String? = nil, environment: Environment) async
+    -> Outcome
+  {
     let inputs: BootstrapInputs
     do throws(BootstrapError) {
-      inputs = try await survey(root: root, environment: environment)
+      inputs = try await survey(root: root, profile: profile, environment: environment)
     } catch {
       return Outcome(
         plan: nil, text: "bootstrap: \(error)", failed: true)
@@ -115,6 +119,11 @@ struct BootstrapCommand: AsyncParsableCommand {
   @Flag(help: "Write the changes. Without it, print what would change and write nothing.")
   var apply = false
 
+  @Option(
+    help:
+      "The build preset a new .swiftgate.toml names as its [harness] profile (default: default).")
+  var profile: String?
+
   func run() async throws {
     let environment = ProcessInfo.processInfo.environment
     guard let harnessRoot = environment["SWIFTGATE_HARNESS_ROOT"] else {
@@ -127,7 +136,7 @@ struct BootstrapCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let path = environment["PATH"] ?? ""
     let outcome = await BootstrapRun.run(
-      root: root, apply: apply,
+      root: root, apply: apply, profile: profile,
       environment: BootstrapRun.Environment(
         home: URL(filePath: environment["HOME"] ?? NSHomeDirectory(), directoryHint: .isDirectory),
         harnessRoot: URL(filePath: harnessRoot, directoryHint: .isDirectory),

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A repository's `.swiftgate.toml`, validated. Every instance satisfies the cross-field rules in
-/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:exclude:)``;
+/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:docs:plan:buildPresets:profile:exclude:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
 public struct Config: Sendable, Equatable {
   /// Where the config lives, relative to the repository root.
@@ -29,6 +29,9 @@ public struct Config: Sendable, Equatable {
   /// Named `[build.presets.<name>]` tables, keyed by preset name. Empty when a repository
   /// declares no `build` section.
   public let buildPresets: [String: BuildPreset]
+  /// `[harness] profile`: the ``buildPresets`` entry a repository is optimised for, used when a
+  /// build names no preset. `nil` when the repository doesn't say.
+  public let profile: String?
   /// Repository-relative directories that whole-repository checks skip, such as fixtures that
   /// violate the rules on purpose.
   public let exclude: [String]
@@ -48,6 +51,7 @@ public struct Config: Sendable, Equatable {
     docs: DocsConfig = DocsConfig(),
     plan: PlanConfig = PlanConfig(),
     buildPresets: [String: BuildPreset] = [:],
+    profile: String? = nil,
     exclude: [String] = []
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
@@ -70,8 +74,15 @@ public struct Config: Sendable, Equatable {
     self.docs = docs
     self.plan = plan
     self.buildPresets = buildPresets
+    self.profile = profile
     self.exclude = exclude
   }
+
+  /// The preset a repository with no `[harness] profile` builds with.
+  public static let defaultProfile = "default"
+
+  /// The preset name a build uses when it is given none.
+  public var profileName: String { profile ?? Self.defaultProfile }
 
   public func module(named name: String) -> ModuleOverride? {
     modules.first { $0.name == name }
