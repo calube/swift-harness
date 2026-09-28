@@ -37,6 +37,11 @@ public struct PlanStateStore: Sendable {
     }
   }
 
+  /// The absolute path of a spec-page plan's page, inside this plan's directory.
+  public func specPageFile(_ source: PlanFile.SpecPageSource) -> String {
+    plan.directory + "/" + source.path
+  }
+
   public func ledger() throws(PlanStateStoreError) -> Ledger {
     let data = try read(plan.ledgerFile)
     do {

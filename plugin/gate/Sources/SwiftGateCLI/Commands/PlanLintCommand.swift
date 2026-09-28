@@ -33,30 +33,36 @@ enum PlanLintRun {
       return blocked("plan `\(slug)`: \(describe(error))")
     }
 
-    guard let designSha = plan.designSha else {
+    guard let planDesign = plan.designSource else {
+      return blocked(
+        "plan `\(slug)` is a spec-page plan: plan-lint reads a design's test plan, and this plan "
+          + "has no design")
+    }
+    guard let designSha = planDesign.designSha else {
       return blocked(
         "plan `\(slug)` has no designSha yet (claimed, not drafted): there is no design to lint "
           + "against")
     }
     let found: DesignAtSha.Found?
     do {
-      found = try await DesignAtSha.find(designSha: designSha, path: plan.design, git: git)
+      found = try await DesignAtSha.find(designSha: designSha, path: planDesign.design, git: git)
     } catch {
-      return blocked("plan `\(slug)`: can't walk the history of `\(plan.design)`: \(error)")
+      return blocked("plan `\(slug)`: can't walk the history of `\(planDesign.design)`: \(error)")
     }
     guard let found else {
       return blocked(
-        "plan `\(slug)`: no committed revision of `\(plan.design)` has designSha \(designSha)")
+        "plan `\(slug)`: no committed revision of `\(planDesign.design)` has designSha \(designSha)"
+      )
     }
     let moved: [Finding]
     do {
-      moved = try await designMovedFindings(plan: plan, designSha: designSha, git: git)
+      moved = try await designMovedFindings(plan: planDesign, designSha: designSha, git: git)
     } catch let error as ReportContractViolation {
       return blocked("plan-lint: \(error)")
     } catch {
-      return blocked("plan `\(slug)`: can't read `\(plan.design)` at HEAD: \(error)")
+      return blocked("plan `\(slug)`: can't read `\(planDesign.design)` at HEAD: \(error)")
     }
-    let designSource = ContextSource(label: plan.design, rawText: found.text)
+    let designSource = ContextSource(label: planDesign.design, rawText: found.text)
     let design = DesignDocument(markdown: .parse(found.text))
 
     let config: Config
@@ -75,7 +81,7 @@ enum PlanLintRun {
     }
 
     let sources = WorkerPackSources.gather(
-      designPath: plan.design, root: root, harnessRoot: harnessRoot)
+      designPath: planDesign.design, root: root, harnessRoot: harnessRoot)
     var workerPacks: [String: ContextPack] = [:]
     var packFailures: [String: String] = [:]
     // A done task is never handed to a worker again, and its covers may name ids an amend has
@@ -94,7 +100,7 @@ enum PlanLintRun {
 
     do throws(ReportContractViolation) {
       let findings = try PlanLintGraph.allFindings(
-        design: design, designPath: plan.design, ledger: ledger,
+        design: design, designPath: planDesign.design, ledger: ledger,
         ledgerPath: store.plan.ledgerFile, graph: graph, workerPacks: workerPacks,
         bounds: config.plan)
       return Result(
@@ -108,7 +114,9 @@ enum PlanLintRun {
   /// The committed doc at HEAD against `designSha` (spec §5.4). HEAD, not the working tree: the
   /// verdict must not depend on uncommitted edits. The clarify chain is verified only when HEAD
   /// has moved, since it's the one thing that can still vouch for the new revision.
-  private static func designMovedFindings(plan: PlanFile, designSha: String, git: any Git)
+  private static func designMovedFindings(
+    plan: PlanFile.DesignSource, designSha: String, git: any Git
+  )
     async throws -> [Finding]
   {
     let headSha = try await git.contents(of: [plan.design], at: "HEAD")[plan.design].map(

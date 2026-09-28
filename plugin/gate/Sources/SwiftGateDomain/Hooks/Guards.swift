@@ -289,6 +289,8 @@ public enum PlanStateGuard {
       case named(String)
       /// `plan.json` is missing or doesn't decode; the plan owns no design.
       case unreadable
+      /// `plan.json` names a spec page as the plan's source; the plan owns no design.
+      case specPage
     }
 
     public let name: String
@@ -404,6 +406,8 @@ public enum PlanStateGuard {
     case named(String)
     /// The written content doesn't decode as a plan file.
     case unreadable
+    /// The written content is a spec-page plan, which names no design.
+    case specPage
     /// The content can't be known before the write, as with a shell command.
     case unknown
   }
@@ -429,6 +433,8 @@ public enum PlanStateGuard {
       return violation(
         "the written plan.json doesn't decode as a plan file, so its plan would lose its design. "
           + "Keep plan.json valid.")
+    case .specPage:
+      return nil
     case .named(let design):
       if case .named(let kept) = current {
         guard kept != design else { return nil }

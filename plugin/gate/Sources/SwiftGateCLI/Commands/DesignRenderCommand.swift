@@ -239,20 +239,26 @@ enum LedgerRenderRun {
       return .blocked("plan `\(slug)`: \(describe(error))")
     }
 
-    guard let designSha = plan.designSha else {
+    guard let planDesign = plan.designSource else {
+      return .blocked(
+        "plan `\(slug)` is a spec-page plan: the ledger page renders against a design, and this "
+          + "plan has none")
+    }
+    guard let designSha = planDesign.designSha else {
       return .blocked(
         "plan `\(slug)` has no designSha yet (claimed, not drafted): there is no design to "
           + "render a ledger page against")
     }
     let found: DesignAtSha.Found?
     do {
-      found = try await DesignAtSha.find(designSha: designSha, path: plan.design, git: git)
+      found = try await DesignAtSha.find(designSha: designSha, path: planDesign.design, git: git)
     } catch {
-      return .blocked("plan `\(slug)`: can't walk the history of `\(plan.design)`: \(error)")
+      return .blocked("plan `\(slug)`: can't walk the history of `\(planDesign.design)`: \(error)")
     }
     guard let found else {
       return .blocked(
-        "plan `\(slug)`: no committed revision of `\(plan.design)` has designSha \(designSha)")
+        "plan `\(slug)`: no committed revision of `\(planDesign.design)` has designSha \(designSha)"
+      )
     }
 
     let design = DesignDocument(markdown: .parse(found.text))

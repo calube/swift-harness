@@ -42,8 +42,8 @@ enum PlanLockRun {
   ///   resolving them against its worktree toplevel, so a symlinked alias names the same doc;
   ///   `nil` compares them as spelled.
   static func claim(
-    slug: String, session: String?, design: String? = nil, tier: String? = nil,
-    root: URL? = nil, git: any Git
+    slug: String, session: String?, design: String? = nil, specPage: Bool = false,
+    tier: String? = nil, root: URL? = nil, git: any Git
   ) async -> PlanLockReport {
     let command = "plan claim"
     if let design, !PlanFile.isValidDesignPath(design) {
@@ -246,7 +246,7 @@ enum PlanLockRun {
             "\(plan.planFile) can't be read, so it can't be ruled out as the owner of "
               + "\(design): \(error)"))
       }
-      if key(file.design) == wanted { return .success(name) }
+      if let source = file.designSource, key(source.design) == wanted { return .success(name) }
     }
     return .success(nil)
   }
@@ -332,6 +332,12 @@ struct PlanClaimCommand: AsyncParsableCommand {
         + "new plan: it seeds plan.json, which is how the edit guard ties the doc to this plan."))
   var design: String?
 
+  @Flag(
+    help: ArgumentHelp(
+      "Seed a new plan whose source is a spec page, <plans>/<slug>/\(PlanFile.SpecPageSource.fileName), "
+        + "instead of a design doc. Not with --design or --tier."))
+  var specPage = false
+
   @Option(
     help: ArgumentHelp(
       "The design's tier, recorded in a seeded plan.json.",
@@ -344,7 +350,8 @@ struct PlanClaimCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let report = await PlanLockRun.claim(
-      slug: slug, session: session, design: design, tier: tier, root: root, git: git)
+      slug: slug, session: session, design: design, specPage: specPage, tier: tier, root: root,
+      git: git)
     Console.write(PlanLockRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
