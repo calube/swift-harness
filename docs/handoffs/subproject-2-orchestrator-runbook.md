@@ -307,3 +307,13 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **A worker that proposes a rule at its write-set boundary is right to stop.** Widen the write set in a fix round when
   no other branch owns the files; don't send it back to improvise.
 
+## Lessons from the sprint rehearsals (2026-09-28)
+
+- **A watchdog must not contain the patterns workers wait on.** A Monitor whose command line held
+  `swiftgate-mutate-self-` and `check --tier ready` matched the workers' `pgrep -f` waits, so every waiting prove
+  blocked. Put the watchdog in a script file and build those strings from pieces.
+- **Three workers plus an integration gate saturate the laptop.** Load 70-178 failed timing-sensitive tests in two
+  integration runs, so prove never ran. Re-run exactly the failed tests, then run `swiftgate prove` on its own.
+- **A headless sprint session can't background its gate.** `claude -p` exits when the turn ends and kills a background
+  `ready` run. Tell the session to run the gate in the foreground.
+

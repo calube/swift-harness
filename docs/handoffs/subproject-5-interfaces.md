@@ -347,3 +347,24 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   main RED (20260928T053831Z-66eb5be1) only on the `RepositoryScriptTests.shim` load flake; that test passed when
   re-run alone. Wave 3 integration GREEN (20260928T060653Z-b0d8b1c8); push on merged main GREEN
   (20260928T061215Z-fd24c4d0). Mutate: running.
+
+## Fast-modes wave 5 (sprint rehearsal fixes)
+
+- **Prove retries emptied targets.** `ProofRules.retryable(_ tests:in judgement:) -> [ChangedTest]` returns the tests
+  with a compile-only or no-evidence finding, or every test on a package-level no-evidence; each is retried at the
+  next `--proof-base`. `ProofRules.combine` takes a test's findings and blocked flag from the last attempt that ran
+  it. With no proof base left, `target '…' referenced in product '…' is empty` is `prove.compile-only`, never
+  BLOCKED. Fixture: `SwiftTest/emptied-target`.
+- **Sprint pages under plan state.** `PlanStateGuard.Target.sprintPage` (lock scope `.none`): a main session may
+  write a `.md` file directly under `<plans>/sprints/`; a subagent never may, even with a lock or the override.
+  Anything else under `sprints/` is denied. `PlanStateLayout.sprintsDirectoryName = "sprints"`; `layout.plan(_:)`
+  throws `.invalidPlanName` for it in any letter case, and `KnownIdSources` skips the directory.
+  `plugin/docs/hooks.md` doesn't mention sprint pages yet.
+- **Slice gates measure from the surface.** `RunHistoryRecord.base: String?`: history JSON key `base`, the sha
+  `--base` resolved to, left out when unresolved and `nil` on older lines. `GateRun.execute(..., base: String?)`.
+  `sprint slice` requires `record.base == surfaceCommit`, after the stale check, else `sprint.gate-base` (exit 1).
+  `finish` still takes a `ready` run at `--base main`. The skill's "Gate run ids" example still says `--base main`.
+- **Gates.** Integration push + prove RED twice on load-only tests at load 70-178 (seed and build-check tests on a
+  60 s `git` timeout, then `MutationOrphanTests.timeoutTakesTheProcessTreeDown` and the shim tests). Every one
+  passed re-run alone; standalone prove GREEN (run 20260928T164005Z-aaa5df2c) at proof base `416348d`. Merged as a
+  fast-forward to the integration branch.
