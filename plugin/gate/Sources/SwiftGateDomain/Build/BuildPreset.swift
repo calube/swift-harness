@@ -3,7 +3,7 @@
 /// never a silent default, so a typo fails `swiftgate doctor` instead of picking an unnoticed
 /// behavior.
 public struct BuildPreset: Sendable, Equatable {
-  public let designTier: DesignTier
+  public let designTier: DesignStep
   /// Overrides `[plan] max_parallel` for scheduling only; ledger waves stay as planned.
   public let maxParallel: Int
   public let review: Review
@@ -22,7 +22,7 @@ public struct BuildPreset: Sendable, Equatable {
   /// `taskProof` defaults to the stricter mode for callers built before the key existed; the
   /// config reader still requires it.
   public init(
-    designTier: DesignTier,
+    designTier: DesignStep,
     maxParallel: Int,
     review: Review,
     taskGate: TaskGate,
@@ -43,6 +43,35 @@ public struct BuildPreset: Sendable, Equatable {
     self.stopStartsBeforeMin = stopStartsBeforeMin
     self.onDesignConflict = onDesignConflict
     self.taskProof = taskProof
+  }
+
+  /// What ship runs before the plan: a design at one of ``DesignTier``'s tiers, or `none`, where
+  /// a 1-page spec replaces the design (fast modes spec §5, ADR 0003). Only a preset holds it, so
+  /// `plan claim --tier`, `plan set --tier`, a design doc's tier and `design-scope`, which all
+  /// speak ``DesignTier``, can't produce `none`.
+  public enum DesignStep: Sendable, Hashable, RawRepresentable, CaseIterable {
+    case design(DesignTier)
+    case none
+
+    /// Spelled like the config value, so a preset literal reads as its `design_tier`.
+    public static let quick: Self = .design(.quick)
+    public static let standard: Self = .design(.standard)
+    public static let deep: Self = .design(.deep)
+    public static let sketch: Self = .design(.sketch)
+
+    public static var allCases: [Self] { DesignTier.allCases.map(Self.design) }
+
+    public init?(rawValue: String) {
+      guard let tier = DesignTier(rawValue: rawValue) else { return nil }
+      self = .design(tier)
+    }
+
+    public var rawValue: String {
+      switch self {
+      case .design(let tier): tier.rawValue
+      case .none: "none"
+      }
+    }
   }
 
   /// `full`: verifier + test-quality per task. `gate`: the task gate only.
