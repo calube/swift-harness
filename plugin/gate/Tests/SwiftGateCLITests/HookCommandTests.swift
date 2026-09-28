@@ -625,3 +625,164 @@ struct HookRecordingTests {
     #expect(recorded.stderr?.contains(HookRecorder.environmentKey) == true)
   }
 }
+
+/// SessionStart's record of the plugin a session loaded, against a plugin-shaped copy of this
+/// checkout's prompt trees in a temp dir.
+@Suite("SessionStart session record")
+struct SessionStartRecordTests {
+  static let sessionID = "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f"
+  static let notWritten = "Session record not written"
+
+  /// The plugin manifest and prompt trees copied from this checkout, so hashing costs what it
+  /// costs on the real plugin.
+  struct CopiedPlugin {
+    let root: URL
+
+    init() throws {
+      root = FileManager.default.temporaryDirectory
+        .appending(path: "swiftgate-plugin-copy-\(UUID().uuidString)", directoryHint: .isDirectory)
+        .resolvingSymlinksInPath()
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      for tree in [".claude-plugin", "skills", "agents", "workflows", "docs"] {
+        try FileManager.default.copyItem(
+          at: Fixture.checkoutRoot.appending(path: tree), to: root.appending(path: tree))
+      }
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: root) }
+  }
+
+  static func harness(plugin: CopiedPlugin) throws -> HookHarness {
+    var harness = try HookHarness()
+    harness.environment = ["CLAUDE_PLUGIN_ROOT": plugin.root.path]
+    return harness
+  }
+
+  static func context(_ harness: HookHarness, _ result: HookResult) throws -> String {
+    let output = try #require(try harness.json(result)["hookSpecificOutput"] as? [String: String])
+    return try #require(output["additionalContext"])
+  }
+
+  static func store(_ harness: HookHarness) -> SessionRecordStore {
+    SessionRecordStore(worktreeRoot: harness.root)
+  }
+
+  @Test(
+    "SessionStart records the session's plugin root, version, tree hash and transcript path, fastest of 5 under 1s of CPU with a real plugin tree, and no per-tool-call hook writes one — catches a session whose loaded prompts doctor can't check, or hashing on every tool call"
+  )
+  func recordsThePlugin() async throws {
+    let plugin = try CopiedPlugin()
+    defer { plugin.remove() }
+
+    var recorded: [Bool] = []
+    let samples = try await Latency.samples {
+      let timed = try Self.harness(plugin: plugin)
+      defer { timed.repository.remove() }
+      let (_, milliseconds) = try await timed.run(.sessionStart, "session-start")
+      recorded.append(try Self.store(timed).record(sessionID: Self.sessionID) != nil)
+      return milliseconds
+    }
+    #expect(recorded == Array(repeating: true, count: samples.count))
+    #expect(samples.min()! < 1000, "sessionStart samples: \(samples)ms, budget: 1000ms")
+
+    let harness = try Self.harness(plugin: plugin)
+    defer { harness.repository.remove() }
+    _ = try await harness.run(.preToolUse, "pre-tool-use-bash-allowed")
+    _ = try await harness.run(
+      .postToolUse, "post-tool-use-edit-swift", replacing: HookCommandTests.editedFile)
+    #expect(!FileManager.default.fileExists(atPath: Self.store(harness).directoryURL.path))
+
+    let before = Date()
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let record = try #require(try Self.store(harness).record(sessionID: Self.sessionID))
+    #expect(record.treeHash == (try PluginTree.hash(root: plugin.root)))
+    #expect(record.pluginRoot == plugin.root.path)
+    #expect(record.pluginVersion == (try PluginTree.read(root: plugin.root).version))
+    #expect(record.transcriptPath == "/HOME/.claude/projects/-REPO/\(Self.sessionID).jsonl")
+    #expect(record.recordedAt >= before.addingTimeInterval(-1))
+    #expect(!(try Self.context(harness, result)).contains(Self.notWritten))
+  }
+
+  @Test(
+    "a compacted session keeps the record from its start while a resumed one records the tree it reloads — catches a compaction hiding a plugin change from doctor"
+  )
+  func compactKeepsResumeRewrites() async throws {
+    let plugin = try CopiedPlugin()
+    defer { plugin.remove() }
+    let harness = try Self.harness(plugin: plugin)
+    defer { harness.repository.remove() }
+    _ = try await harness.run(.sessionStart, "session-start")
+    let started = try #require(try Self.store(harness).record(sessionID: Self.sessionID))
+
+    let agent = plugin.root.appending(path: "agents/build-worker.md")
+    try Data((try String(contentsOf: agent, encoding: .utf8) + "\nA new rule.\n").utf8)
+      .write(to: agent)
+    _ = try await harness.run(
+      .sessionStart, "session-start", replacing: ["\"startup\"": "\"compact\""])
+    #expect(try Self.store(harness).record(sessionID: Self.sessionID) == started)
+
+    _ = try await harness.run(.sessionStart, "session-start-resume")
+    let resumed = try #require(try Self.store(harness).record(sessionID: Self.sessionID))
+    #expect(resumed.treeHash != started.treeHash)
+    #expect(resumed.treeHash == (try PluginTree.hash(root: plugin.root)))
+  }
+
+  @Test(
+    "a session id of '../x', '/', '..' or empty writes no record anywhere and says so in the context — catches a hostile or missing id naming a file outside the records directory",
+    arguments: ["../x", "/", "..", ""])
+  func unsafeIdWritesNothing(id: String) async throws {
+    let plugin = try CopiedPlugin()
+    defer { plugin.remove() }
+    let harness = try Self.harness(plugin: plugin)
+    defer { harness.repository.remove() }
+
+    let (result, _) = try await harness.run(
+      .sessionStart, "session-start",
+      replacing: ["\"session_id\": \"\(Self.sessionID)\"": "\"session_id\": \"\(id)\""])
+
+    let context = try Self.context(harness, result)
+    #expect(context.contains(Self.notWritten), "\(context)")
+    let written = (FileManager.default.subpaths(atPath: harness.root.path) ?? [])
+      .filter { $0.hasSuffix(".json") && $0.hasPrefix(".harness/") && !$0.hasSuffix("map.json") }
+    #expect(written.isEmpty, "\(written)")
+    #expect(!FileManager.default.fileExists(atPath: harness.root.appending(path: "x.json").path))
+    #expect(result.exitCode == 0)
+  }
+
+  @Test(
+    "an unwritable records directory, a missing CLAUDE_PLUGIN_ROOT or a plugin with no manifest puts a line naming why in the session context, and the session still starts — catches a record silently not written",
+    arguments: ["unwritable", "no plugin root", "no manifest"])
+  func failureIsANote(problem: String) async throws {
+    let plugin = try CopiedPlugin()
+    defer { plugin.remove() }
+    var harness = try Self.harness(plugin: plugin)
+    let sessions = Self.store(harness).directoryURL
+    defer {
+      _ = chmod(sessions.path, 0o700)
+      harness.repository.remove()
+    }
+    let reason: String
+    switch problem {
+    case "unwritable":
+      guard geteuid() != 0 else { return }
+      try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+      #expect(chmod(sessions.path, 0o500) == 0)
+      reason = sessions.path
+    case "no plugin root":
+      harness.environment = [:]
+      reason = "CLAUDE_PLUGIN_ROOT"
+    default:
+      try FileManager.default.removeItem(at: plugin.root.appending(path: ".claude-plugin"))
+      reason = "plugin.json"
+    }
+
+    let (result, _) = try await harness.run(.sessionStart, "session-start")
+
+    let context = try Self.context(harness, result)
+    let line = context.split(separator: "\n").first { $0.contains(Self.notWritten) }
+    #expect(line?.contains(reason) == true, "\(context)")
+    #expect(context.contains("Session id: \(Self.sessionID)"))
+    #expect(result.exitCode == 0)
+  }
+}
