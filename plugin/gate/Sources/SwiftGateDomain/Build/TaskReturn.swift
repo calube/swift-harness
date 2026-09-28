@@ -256,7 +256,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     /// The steps of `required` this run never ran: its tier doesn't run them and its recorded
     /// steps don't name them. A run that isn't a `check --tier` run ran none of them.
     public func missingSteps(of required: [CheckExtraStep]) -> [CheckExtraStep] {
-      []
+      guard let tier else { return required }
+      return required.filter { !$0.isRun(by: tier) && !steps.contains($0.rawValue) }
     }
 
     public static func tier(ofCommand command: String?) -> CheckTier? {
@@ -296,7 +297,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
-    taskGateStepsRequired: Bool = false
+    taskGateStepsRequired: Bool
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -318,7 +319,7 @@ public enum TaskReturnCheck {
   public static let designConflictKind = "design-conflict"
   /// The steps the build task workflow's gate adds to every worker's task gate, in the order its
   /// flags are named.
-  public static let taskGateSteps: [CheckExtraStep] = []
+  public static let taskGateSteps: [CheckExtraStep] = [.impact, .coverage, .appBuild]
 
   /// `fast` < `push` < `ready`: each tier runs everything the one before it does.
   public static func covers(_ tier: CheckTier, _ required: CheckTier) -> Bool {
@@ -469,6 +470,15 @@ public enum TaskReturnCheck {
             message:
               "gate run \(gate.runID) ran neither prove nor mutate over the change; a task gate "
               + "runs `swiftgate check --tier <task gate> --base main --prove --mutate`"))
+      }
+      if evidence.taskGateStepsRequired {
+        findings += run.missingSteps(of: taskGateSteps).map { step in
+          .init(
+            rule: .gateMissingStep,
+            message:
+              "gate run \(gate.runID) never ran the task gate's `\(step.rawValue)` step; a task "
+              + "gate runs `swiftgate check --tier <task gate> --base main --\(step.rawValue)`")
+        }
       }
       if !(run.tier.map { covers($0, evidence.taskGate) } ?? false) {
         findings.append(

@@ -133,7 +133,7 @@ enum BuildCheckReturnRun {
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
       explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
-      surfaceCommit: surface, reviewRequired: !fix)
+      surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix)
   }
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
@@ -274,7 +274,8 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
     discussion:
       "Checks that each commit is on the task's branch <plan>/<task>, that the gate run is in "
       + "the task worktree's run history with the claimed tier and verdict (GREEN at the task "
-      + "gate or above for ready-to-merge and review-blocked), and that designConflict matches "
+      + "gate or above for ready-to-merge and review-blocked, and for a worker having run the "
+      + "task gate's impact, coverage and app-build steps), and that designConflict matches "
       + "the worktree's .harness/task-status.json. Re-runs nothing and writes nothing. Exits 0 "
       + "when every claim holds, 1 for any finding, and 2 when the return or plan state can't "
       + "be read.")

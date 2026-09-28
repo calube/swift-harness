@@ -413,7 +413,8 @@ struct Sandbox {
     }
     let evidence = TaskReturnEvidence(
       branch: branch, branchExists: tip != nil, commits: commits, gateRun: gateRun,
-      taskGate: gate, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: surface)
+      taskGate: gate, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: surface,
+      taskGateStepsRequired: taskGateStepsRequired)
     var problems = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       .filter { $0.rule != .reviewMissing }.map { "\($0.rule.rawValue): \($0.message)" }
     if taskReturn.task != taskID {

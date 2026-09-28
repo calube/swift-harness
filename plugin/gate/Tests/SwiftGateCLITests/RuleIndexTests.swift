@@ -78,8 +78,9 @@ struct RuleIndexTests {
       SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID,
     ]
+    let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     return Set(
-      sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
+      buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
         + changedTests + coverage + mutation + judge + harness + environment)
   }
 

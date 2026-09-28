@@ -40,7 +40,7 @@ struct RunProvenanceTests {
   }
 
   @Test(
-    "a green return with no review is a review-missing finding only when review is required — catches a fixer's return refused, or a worker's passed without review"
+    "a green return with no review and no app-build step fails review and the step only for a worker — catches a fixer's return refused, or a worker's passed without review or the task gate's steps"
   )
   func reviewRequiredOnlyForWorkers() {
     let taskReturn = TaskReturn(
@@ -51,17 +51,17 @@ struct RunProvenanceTests {
       TaskReturnEvidence(
         branch: "p/fix-t", branchExists: true, commits: ["abc1": .onBranch],
         gateRun: .init(tier: .push, verdict: .green), taskGate: .push, taskStatus: nil,
-        reviewRequired: reviewRequired)
+        reviewRequired: reviewRequired, taskGateStepsRequired: reviewRequired)
     }
 
     #expect(TaskReturnCheck.findings(taskReturn, evidence: evidence(reviewRequired: false)) == [])
     #expect(
       TaskReturnCheck.findings(taskReturn, evidence: evidence(reviewRequired: true)).map(\.rule)
-        == [.reviewMissing])
+        == [.gateMissingStep, .reviewMissing])
   }
 
   @Test(
-    "a surface commit the gate run never proved at passes when proof isn't required and fails when it is — catches a check that ignores a preset whose task gate skips prove"
+    "a surface commit the gate run never proved at, from a run without app-build, passes a fixer and fails a per-task worker on both — catches a check that ignores a preset whose task gate skips prove, or the worker's skipped step"
   )
   func surfaceProofBaseOnlyWhenProofRequired() {
     let taskReturn = TaskReturn(
@@ -73,12 +73,13 @@ struct RunProvenanceTests {
       TaskReturnEvidence(
         branch: "p/t", branchExists: true, commits: ["abc1": .onBranch, "def2": .onBranch],
         gateRun: .init(tier: .push, verdict: .green, steps: ["prove", "mutate"]),
-        taskGate: .push, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: .onBranch)
+        taskGate: .push, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: .onBranch,
+        taskGateStepsRequired: proofRequired)
     }
 
     #expect(TaskReturnCheck.findings(taskReturn, evidence: evidence(proofRequired: false)) == [])
     #expect(
       TaskReturnCheck.findings(taskReturn, evidence: evidence(proofRequired: true)).map(\.rule)
-        == [.surfaceCommitNotProofBase])
+        == [.gateMissingStep, .surfaceCommitNotProofBase])
   }
 }
