@@ -44,6 +44,13 @@ public enum LedgerRender {
     public let finalGate: BuildEvent.Gate?
     public let required: Required
 
+    func requiredTask(_ id: String) -> BuildScheduler.RequiredTask? {
+      switch required {
+      case .known(let tasks): tasks.task(id)
+      case .unknown: nil
+      }
+    }
+
     /// Which tasks the app target needs, or why the page can't say.
     public enum Required: Sendable, Equatable {
       case known(BuildScheduler.RequiredTasks)
@@ -128,7 +135,20 @@ public enum LedgerRender {
           text:
             "Build run \(build.runID), preset \(build.presetName). Wall time \(wall)\(budget)."),
         .element("p", [final]),
-      ])
+      ]
+        + requiredUnknown(build.required))
+  }
+
+  static func requiredUnknown(_ required: BuildView.Required) -> [HTMLFragment] {
+    switch required {
+    case .known: []
+    case .unknown(let reason):
+      [
+        .element(
+          "p", attributes: ["class": "cite"],
+          text: "Tasks the app target needs are unknown: \(reason)")
+      ]
+    }
   }
 
   /// A gate's name and tier, its verdict as a badge whose text says it (not colour alone), and
@@ -235,7 +255,8 @@ public enum LedgerRender {
                   wave.map {
                     taskListItem(
                       id: $0, status: statusByID[$0], wallMilliseconds: durationByID[$0],
-                      taskGate: build?.taskGates[$0], mergeGate: build?.mergeGates[$0])
+                      taskGate: build?.taskGates[$0], mergeGate: build?.mergeGates[$0],
+                      required: build?.requiredTask($0))
                   })
               ]),
           ])
@@ -267,7 +288,8 @@ public enum LedgerRender {
   /// duration chip only when given, so a page built without build metrics is unchanged.
   static func taskListItem(
     id: String, status: TaskStatus?, wallMilliseconds: Int? = nil,
-    taskGate: TaskReturn.Gate? = nil, mergeGate: BuildEvent.Gate? = nil
+    taskGate: TaskReturn.Gate? = nil, mergeGate: BuildEvent.Gate? = nil,
+    required: BuildScheduler.RequiredTask? = nil
   ) -> HTMLFragment {
     let statusValue = status?.rawValue ?? "unknown"
     var children: [HTMLFragment] = [.element("span", attributes: ["class": "task-id"], text: id)]
@@ -292,6 +314,15 @@ public enum LedgerRender {
       children.append(
         gateChip(
           "Merge gate", tier: mergeGate.tier, verdict: mergeGate.verdict, runID: mergeGate.runID))
+    }
+    if let required {
+      children.append(
+        .element(
+          "span", attributes: ["class": "required"],
+          [
+            .text("Required: the app target needs it to compile ("),
+            .element("code", text: required.appPath), .text(")"),
+          ]))
     }
     return .element("li", attributes: ["data-status": statusValue], children)
   }

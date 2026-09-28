@@ -223,8 +223,49 @@ struct BuildLoopCommandTests {
     let json = BuildNextRun.render(result, format: .json)
     let object = try #require(
       try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
-    #expect(Set(object.keys) == ["runId", "phase", "toStart", "running", "refused"])
+    #expect(
+      Set(object.keys) == ["runId", "phase", "toStart", "running", "refused", "required"])
     #expect(object["phase"] as? String == "cutoff")
+  }
+
+  @Test(
+    "next past the no-new-starts point starts the task the app target needs and lists why, but not an optional one — catches a RED final gate from a skipped view task"
+  )
+  func nextStartsRequiredPastNoNewStarts() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger(
+      [("views", .pending), ("core", .pending)],
+      writeSets: ["views": ["App/AppView.swift"], "core": ["Packages/Feed/Sources/Core.swift"]])
+    _ = try #require(await scenario.start().report)
+
+    let result = await scenario.next(minutesIn: 80)
+    let report = try #require(result.report, "\(result.message)")
+
+    #expect(report.phase == .noNewStarts)
+    #expect(report.toStart == ["views"])
+    #expect(report.required == [.init(task: "views", appPath: "App/AppView.swift")])
+  }
+
+  @Test(
+    "next without a readable .swiftgate.toml exits 2 naming the config — catches a missing config read as no task being required"
+  )
+  func nextNeedsConfig() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger([("views", .pending)], writeSets: ["views": ["App/AppView.swift"]])
+    _ = try #require(await scenario.start().report)
+    try FileManager.default.removeItem(at: scenario.repository.appending(path: ".swiftgate.toml"))
+
+    let result = await scenario.next(minutesIn: 80)
+
+    #expect(result.verdict == .blocked)
+    #expect(result.report == nil)
+    #expect(result.message.contains(".swiftgate.toml"), "\(result.message)")
   }
 
   @Test(

@@ -55,7 +55,10 @@ recommended first. Never work around a halt by hand. The reference lists the opt
 
 ## 2. Start ready tasks
 
-`"$SG" build next <slug> --session <session> --json` gives `phase`, `toStart`, `running` and `refused`.
+`"$SG" build next <slug> --session <session> --json` gives `phase`, `toStart`, `running`, `refused`
+and `required`. Run it from the main checkout's toplevel: it reads `.swiftgate.toml`'s `packages` to find
+the tasks the app target needs, and exits 2 when it can't, so fix the config rather than go on.
+At `no-new-starts`, `toStart` holds only those [required tasks](references/event-loop.md#time-budget).
 For each task in `toStart`:
 
 1. `"$SG" worktree create <slug> <task> --session <session> --json`. Keep `worktree` and `branch`.
