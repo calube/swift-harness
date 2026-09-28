@@ -614,9 +614,9 @@ limit: a real `too-long` page.
 ## Context packs (`context-pack`)
 
 `context-pack/design-decomposer.pack.txt` is the decomposer pack `swiftgate context-pack` wrote for
-a design before it could read a spec page, so a test can hold a design's pack byte-identical. It
-was captured with the harness at `bfb35b5`, exported whole (`git archive bfb35b5 plugin | tar -x`),
-in an empty directory holding `Fixtures/design/valid.md` as `design.md`:
+a design before it could read a spec page, so a test can hold a design's pack byte-identical. The
+capture ran the harness at `bfb35b5`, exported whole (`git archive bfb35b5 plugin | tar -x`), in an
+empty directory holding `Fixtures/design/valid.md` as `design.md`:
 
 ```sh
 printf 'Sample: OrderQueueCore, OrderQueueFeature\n' > graph.txt

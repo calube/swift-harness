@@ -51,6 +51,22 @@ struct ContextPackSpecPageTests {
   }
 
   @Test(
+    "the page's last slice stops at its own line, before the blank line and the next section — catches a slice that runs into Out of scope"
+  )
+  func lastSliceStopsAtTheSection() throws {
+    let text = try SpecPageFixture.page("task-status")
+    let specPage = try Self.source(text)
+    let last = try #require(specPage.page.slices.last)
+
+    let pack = try ContextPack.specPageWorkerPack(Self.workerInputs(specPage, covers: [last.id]))
+
+    let lines = text.components(separatedBy: "\n")
+    let packed = try #require(pack.slices.first { $0.anchor == last.id })
+    #expect(lines[last.line].isEmpty)
+    #expect(packed.lines == [lines[last.line - 1]])
+  }
+
+  @Test(
     "a slice id covered twice goes into the worker pack once, and one the page lacks throws naming it and the page — catches a silently thin or padded pack"
   )
   func coversAreCheckedAgainstThePage() throws {
