@@ -240,6 +240,181 @@ const buildSkillFiles = () =>
     markdownFiles(join(root, 'skills/build')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
   )
 
+// The sprint state that follows `step` (`start`, `surface`, `slice <n>`, `finish`), as sprint.json
+// holds it, for a 2-slice sprint at `sha`.
+function sprintStateAfter(step, sha) {
+  const gateRun = '20260101T000000Z-0000abcd'
+  const passed = step === 'finish' ? 2 : /^slice (\d+)$/.exec(step)?.[1] ?? 0
+  const slices = [1, 2].map(number =>
+    number <= Number(passed) ? { number, status: 'passed', gateRun } : { number, status: 'pending' })
+  const state = {
+    schemaVersion: 1, slug: 'demo', specPage: 'spec-page.md', branch: 'sprint/demo', baseCommit: sha, slices,
+    step: step === 'start' ? { name: 'started' } : step === 'surface' ? { name: 'surfaced' }
+      : step === 'finish' ? { name: 'finished' } : { name: 'slicing', slice: Number(passed) },
+  }
+  if (step !== 'start') state.surfaceCommit = sha
+  if (step === 'finish') state.finalGateRun = gateRun
+  return state
+}
+
+// Walks the real state machine through `sprint status --json` in a temp repository: records each
+// `next` and `nextCommand`, then writes the state that step leaves, until the machine asks for a
+// new `start`. The order comes from the binary, never from this test.
+function sprintMachineSteps() {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'skill-commands-sprint-'))
+  try {
+    const run = (file, args) => execFileSync(file, args, {
+      encoding: 'utf8', cwd: dir, env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'status-%p.profraw') },
+    })
+    run('git', ['init', '-q', '-b', 'main'])
+    run('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init'])
+    const sha = run('git', ['rev-parse', 'HEAD']).trim()
+    const plans = join(dir, '.git/swift-harness/plans')
+    mkdirSync(plans, { recursive: true })
+    const steps = []
+    for (;;) {
+      const status = JSON.parse(run(binary, ['sprint', 'status', '--json']))
+      if (steps.length && status.next === 'start') return steps
+      assert.ok(steps.length < 10, `the machine never returns to start: ${steps.map(s => s.next).join(', ')}`)
+      steps.push({ next: status.next, command: status.nextCommand.replace(/^swiftgate\s+/, '').split(/\s+/) })
+      writeFileSync(join(plans, 'sprint.json'), JSON.stringify(sprintStateAfter(status.next, sha)))
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+// A run history line with the keys a captured `check ready` run wrote. `sprint slice` and
+// `sprint finish` read its command, verdict, headCommit and proofBases.
+function gateRecord(runID, tier, headCommit, proofBases) {
+  const record = {
+    command: `check ${tier}`, durationMilliseconds: 1000, findingCount: 0, finishedAt: '2026-01-01T00:00:00Z',
+    headCommit, runID, schemaVersion: 1,
+    tiers: [{ durationMilliseconds: 500, testCounts: null, tier: 'T0', verdict: 'GREEN' }], verdict: 'GREEN',
+  }
+  if (proofBases) record.proofBases = proofBases
+  return JSON.stringify(record) + '\n'
+}
+
+// Walks the skill's own path through the real sprint commands in a temp repository: start, the
+// surface, an extra stub commit for an API the surface missed, slice 1, then finish with a ready
+// run proved at `proofBases(surface, extra)`. Returns finish's JSON report, exit code and whether
+// `main` moved to the branch HEAD.
+function sprintWalk(proofBases) {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'skill-commands-walk-'))
+  const env = {
+    ...process.env, LLVM_PROFILE_FILE: join(dir, 'walk-%p.profraw'),
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+  const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
+  const sg = args => {
+    try {
+      return { code: 0, report: JSON.parse(run(binary, [...args, '--json'])) }
+    } catch (error) {
+      return { code: error.status, report: JSON.parse(error.stdout) }
+    }
+  }
+  const history = join(dir, '.harness/runs/history.jsonl')
+  const record = line => writeFileSync(history, line, { flag: 'a' })
+  const source = join(dir, 'Sources/Core/Core.swift')
+  const commit = (text, message) => {
+    writeFileSync(source, text, { flag: 'a' })
+    run('git', ['commit', '-qam', message])
+    return run('git', ['rev-parse', 'HEAD']).trim()
+  }
+  try {
+    mkdirSync(join(dir, 'Sources/Core'), { recursive: true })
+    mkdirSync(join(dir, '.harness/runs'), { recursive: true })
+    writeFileSync(join(dir, '.gitignore'), '.harness/\n')
+    writeFileSync(source, 'public func base() -> Int { 1 }\n')
+    writeFileSync(join(dir, 'page.md'), '# page\n')
+    run('git', ['init', '-q', '-b', 'main'])
+    run('git', ['add', '-A'])
+    run('git', ['commit', '-qm', 'init'])
+    record(gateRecord('20260101T000000Z-0000aaaa', 'push', run('git', ['rev-parse', 'HEAD']).trim()))
+    const steps = [sg(['sprint', 'start', 'walk', '--spec-page', 'page.md', '--slices', '1'])]
+    run('git', ['switch', '-q', 'sprint/walk'])
+    const surface = commit('public func step() -> Int { 0 }\n', 'surface')
+    steps.push(sg(['sprint', 'surface', surface]))
+    const extra = commit('public func last() -> Int { 0 }\n', 'extra stub')
+    steps.push(sg(['surface-check', extra]))
+    writeFileSync(source, 'public func base() -> Int { 1 }\npublic func step() -> Int { 2 }\npublic func last() -> Int { 3 }\n')
+    run('git', ['commit', '-qam', 'slice 1'])
+    const head = run('git', ['rev-parse', 'HEAD']).trim()
+    record(gateRecord('20260101T000001Z-0000bbbb', 'push', head))
+    steps.push(sg(['sprint', 'slice', '1', '--gate', '20260101T000001Z-0000bbbb']))
+    assert.deepEqual(steps.map(s => [s.report.verdict, s.code]), Array(4).fill(['GREEN', 0]),
+      steps.map(s => s.report.message).join('\n'))
+    record(gateRecord('20260101T000002Z-0000cccc', 'ready', head, proofBases(surface, extra)))
+    const finish = sg(['sprint', 'finish', '--gate', '20260101T000002Z-0000cccc'])
+    return { ...finish, mainMoved: run('git', ['rev-parse', 'main']).trim() === head }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+// The `## <n>.` step heading a line falls under, or null outside a numbered step.
+function stepNumberAt(text, line) {
+  let number = null
+  for (const [index, row] of text.split('\n').entries()) {
+    if (index + 1 > line) break
+    const heading = /^## (?:(\d+)\.\s|\S)/.exec(row)
+    if (heading) number = heading[1] ? Number(heading[1]) : null
+  }
+  return number
+}
+
+/**
+ * Problems with how a sprint skill's `SKILL.md` text follows the machine's `steps`: each step's
+ * command, with its flags, under a numbered step heading in the machine's order; a push gate
+ * before each slice is recorded and a ready gate proved at the surface before finish; and a
+ * `sprint status --json` to read the next step from.
+ */
+export function sprintSkillProblems(text, steps) {
+  const problems = []
+  const invocations = extractInvocations(text)
+  const firstLineOf = path => invocations.find(inv => inv.words.slice(0, path.length).join(' ') === path.join(' '))?.line
+  const order = [...new Set(steps.map(s => s.command.slice(0, 2).join(' ')))]
+  let previous = 0
+  for (const path of order) {
+    const line = firstLineOf(path.split(' '))
+    if (!line) { problems.push(`never runs \`swiftgate ${path}\``); continue }
+    const step = stepNumberAt(text, line)
+    if (step === null) problems.push(`first runs \`swiftgate ${path}\` outside a numbered step (line ${line})`)
+    else if (step <= previous) problems.push(`runs \`swiftgate ${path}\` in step ${step}, not after step ${previous}`)
+    else previous = step
+  }
+  for (const { next, command } of steps) {
+    const flags = command.filter(word => word.startsWith('--'))
+    const path = command.slice(0, 2).join(' ')
+    const complete = invocations.some(inv =>
+      inv.words.slice(0, 2).join(' ') === path && flags.every(flag => inv.words.some(w => flagOf(w) === flag)))
+    if (!complete) problems.push(`never runs \`swiftgate ${path}\` with ${flags.join(' ')} for ${next}`)
+  }
+  const tierAt = (tier, extra = []) => invocations.filter(inv =>
+    inv.words[0] === 'check' && inv.words.join(' ').includes(`--tier ${tier}`)
+    && extra.every(flag => inv.words.some(w => flagOf(w) === flag))).map(inv => inv.line)
+  const gateBefore = (tier, extra, path) => {
+    const at = firstLineOf(path.split(' '))
+    if (!at) return
+    const section = stepNumberAt(text, at)
+    if (!tierAt(tier, extra).some(line => line < at && stepNumberAt(text, line) === section)) {
+      problems.push(`step ${section} runs \`swiftgate ${path}\` without a \`check --tier ${tier}${extra.map(f => ` ${f}`).join('')}\` before it`)
+    }
+  }
+  gateBefore('push', ['--base'], 'sprint slice')
+  gateBefore('ready', ['--base', '--proof-base'], 'sprint finish')
+  if (!tierAt('fast').length) problems.push('never runs `swiftgate check --tier fast` as the inner loop')
+  if (!invocations.some(inv => inv.words.join(' ').startsWith('sprint status') && inv.words.includes('--json'))) {
+    problems.push('never reads `swiftgate sprint status --json`')
+  }
+  return problems
+}
+
 const tests = {
   'the build skill names every command of its loop with the flags the CLI requires — catches a loop step dropped or a guarded call made without --session'() {
     const files = buildSkillFiles()
@@ -283,6 +458,50 @@ const tests = {
     ]) assert.ok(step.test(all), `the ship skill never runs ${step.source}`)
     const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
+  },
+
+  'the sprint skill runs each sprint step in the state machine\'s order with a gate before each record — catches a step dropped, reordered, run without its flags or recorded without its gate'() {
+    const sprintDir = join(root, 'skills/sprint')
+    assert.ok(existsSync(join(sprintDir, 'SKILL.md')), 'no sprint skill')
+    const { problems } = scanSkills(sprintDir, help, root)
+    assert.deepEqual(problems, [])
+    const steps = sprintMachineSteps()
+    assert.deepEqual(steps.map(s => s.next.replace(/\d+$/, 'n')), ['start', 'surface', 'slice n', 'slice n', 'finish'])
+    assert.deepEqual(sprintSkillProblems(readFileSync(join(sprintDir, 'SKILL.md'), 'utf8'), steps), [])
+    const text = markdownFiles(sprintDir).map(path => readFileSync(path, 'utf8')).join('\n')
+    assert.ok(/AskUserQuestion/.test(text), 'the sprint skill never confirms a spec page with AskUserQuestion')
+    assert.ok(!/sprint\.json/.test(text) || /never edit[^.]*sprint\.json/i.test(text), 'the sprint skill names sprint.json without forbidding edits to it')
+  },
+
+  'sprint finish accepts the skill\'s extra stub commit as a second proof base and still needs the surface — catches the skill\'s missed-API path ending in a refusal'() {
+    const accepted = sprintWalk((surface, extra) => [surface, extra])
+    assert.deepEqual([accepted.code, accepted.report.verdict, accepted.mainMoved], [0, 'GREEN', true], accepted.report.message)
+    const refused = sprintWalk((_, extra) => [extra])
+    assert.deepEqual([refused.code, refused.report.rule, refused.mainMoved], [1, 'sprint.gate-proof-base', false], refused.report.message)
+    const finishStep = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8').split('\n## 6. Finish\n')[1] ?? ''
+    assert.ok(/--proof-base <surface>`[^]*--proof-base <sha>`[^]*oldest first/.test(finishStep), 'the finish step never adds an extra stub commit as a later proof base')
+  },
+
+  'a sprint skill out of the machine\'s order or missing a gate fails and names it — catches the sprint order check passing anything'() {
+    const steps = [
+      { next: 'start', command: ['sprint', 'start', '<slug>', '--spec-page', '<path>', '--slices', '<n>'] },
+      { next: 'surface', command: ['sprint', 'surface', '<surface sha>'] },
+      { next: 'slice 1', command: ['sprint', 'slice', '1', '--gate', '<push run id>'] },
+      { next: 'finish', command: ['sprint', 'finish', '--gate', '<ready run id>'] },
+    ]
+    const skill = [
+      '## Driving', '`swiftgate sprint status --json`.',
+      '## 1. Start', '`swiftgate sprint start <slug> --spec-page <page> --slices <n> --json`',
+      '## 2. Slices', '`swiftgate check --tier fast --base main`', '`swiftgate sprint slice <n> --json`',
+      '## 3. Surface', '`swiftgate sprint surface <sha> --json`',
+      '## 4. Finish', '`swiftgate check --tier ready --base main`', '`swiftgate sprint finish --gate <id> --json`',
+    ].join('\n')
+    assert.deepEqual(sprintSkillProblems(skill, steps), [
+      'runs `swiftgate sprint slice` in step 2, not after step 3',
+      'never runs `swiftgate sprint slice` with --gate for slice 1',
+      'step 2 runs `swiftgate sprint slice` without a `check --tier push --base` before it',
+      'step 4 runs `swiftgate sprint finish` without a `check --tier ready --base --proof-base` before it',
+    ])
   },
 
   'the design skill\'s sketch path lints, synthesizes no review and records the approval — catches the sketch branch skipping a gate'() {
