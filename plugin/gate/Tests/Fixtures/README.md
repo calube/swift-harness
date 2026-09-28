@@ -458,21 +458,25 @@ Copy `hashes.txt` back. The loop printed no `MISMATCH`: every committed blob equ
 
 ## Surface (`surface-check`)
 
-git 2.50.1 (Apple Git-155). `surface/capture.sh` builds a temp repository, commits a base tree, then
-commits each case on its own branch from that base, and records what `LiveSurfaceCommitReader`
-consumes: `surface/cases/<case>/changed.txt` is `git diff --name-only --no-renames <base> <case>`,
-and `surface/cases/<case>/{parent,commit}/<path>.txt` is `git show <rev>:<path>` of each changed
-Swift path on each side that holds it. `surface/parent-tree/<path>.txt` is every Swift file in the
-base tree, the input to `parentSwiftSources`. The case bodies are inputs, written in the script;
-every recorded file is git's output. Swift text carries a `.txt` suffix so no Swift tool lints or
-builds it.
+git 2.50.1 (Apple Git-155). `surface/capture.sh` builds a temp repository and commits a base tree.
+It then commits each case on its own branch from that base and records what
+`LiveSurfaceCommitReader` consumes:
+
+- `surface/cases/<case>/changed.txt` is `git diff --name-only --no-renames <base> <case>`.
+- `surface/cases/<case>/{parent,commit}/<path>.txt` is `git show <rev>:<path>` of each changed
+  Swift path on each side that holds it.
+- `surface/parent-tree/<path>.txt` is every Swift file in the base tree, the input to
+  `parentSwiftSources`.
+
+The case bodies are inputs, written in the script; every recorded file is git's output. Swift text
+carries a `.txt` suffix so no Swift tool lints or builds it.
 
 ```sh
 plugin/gate/Tests/Fixtures/surface/capture.sh
 ```
 
-`allowed-*` cases are the false-negative list (each allowed stub form: empty, each empty default,
-a payload-free case, accessors, initializers, `throws`/`async`, forwards, reducers, views,
-previews, closure properties, a new enum case's branch, and a commit whose only Swift changes are a
-deletion and a reformatted body); `rejected-*` cases are the false-positive list (bodies shaped
-like stubs that carry behaviour).
+`allowed-*` cases are the false-negative list: each allowed stub form, including every empty
+default, accessors, initializers, `throws`/`async` functions, forwards, reducers, views, previews,
+closure properties and a new enum case's branch. `allowed-no-new-bodies` changes Swift only by a
+deletion and a reformatted body. `rejected-*` cases are the false-positive list: bodies shaped like
+stubs that carry behaviour.
