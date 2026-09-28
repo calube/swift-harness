@@ -328,6 +328,7 @@ commit first and proves its tests at it with `--proof-base`.
 - Deps: speed wave 2 · Gate: push · Model: opus · estLines: 120
 - Writes: `D/Build/BuildScheduler.swift`, `P/skills/build/SKILL.md`, `P/skills/build/references/event-loop.md`, their tests
 - Does: the time budget's no-new-starts cutoff never drops a task that the app target needs to compile: such a task counts as required and starts even past the cutoff, and the ledger page says why.
+- Decision (orchestrator, approved by the user 2026-09-28): a task counts as required when a write-set entry is a `.swift` path outside every package directory, plus its not-done dependencies.
 - Tests: past the cutoff, a required task still starts and an optional one doesn't — catches a RED final gate from a skipped view task · the reason shows on the ledger page.
 
 ### `speed-check-return-requires-task-gate-steps`

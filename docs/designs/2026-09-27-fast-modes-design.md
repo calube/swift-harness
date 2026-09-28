@@ -41,7 +41,7 @@ results.
 | Decision | Proposed | Section |
 |---|---|---|
 | Surface commits are checked, not trusted | `swiftgate surface-check` fails any added body that isn't a stub | §3 |
-| One proof base per build | every test in a build proves at the surface commit, or at the extra stub commit that added its missing API | §3.3 |
+| One proof base per build | every test in a build proves at the surface commit, or at the extra stub commit that added its missing API (approved by the user 2026-09-28) | §3.3 |
 | Sprint is its own skill | `/swift-harness:sprint <spec>`; the main session builds; fast tier inner loop | §4 |
 | Ship may skip design | `design_tier = "none"` in a preset; a 1-page spec plus 1 confirm replaces design and plan | §5, [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md) |
 | The quality floor is fixed | test-first, escape-hatch reasons, green merge gates and a final `ready` gate in every mode | §6 |
@@ -63,9 +63,9 @@ A SwiftSyntax pass over the commit's diff against its first parent.
 | Function, initializer, accessor, closure | empty; 1 `return` of an empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`, `.init()`) or an enum case with no payload; a call that forwards to code already on the parent |
 | Initializer | only assigns its own parameters, or §7 empty defaults, to `self`'s stored properties (`self.x = x`); any other expression is behaviour |
 | Function, accessor, closure yielding a value | 1 initializer call whose arguments are each a §7 empty default or a parameter passed through unchanged (`Foo(items: [], name: name)`); an argument with literal content, a call or an operator is behaviour |
-| Function, initializer, accessor, closure (orchestrator decision 2026-09-27, pending the user's confirmation) | only `throw` of an error value, with no other statement: a payload-free case (`SomeError.notImplemented`, `.notImplemented`), an initializer call or an enum case each as this table allows them (`CancellationError()`, `.failed(reason)`); a thrown call to a non-initializer, or literal content, is behaviour |
-| Function, accessor, closure yielding a value (orchestrator decision 2026-09-27, pending the user's confirmation) | 1 enum case the parent or the same file declares, constructed with each associated value a §7 empty default or a parameter passed through (`.exited(0)`, `.loaded([])`, `.loaded(items)`); literal content (`.exited(1)`), a call, an operator or a static function that isn't a case is behaviour |
-| Function, accessor, closure yielding a value (orchestrator decision 2026-09-27, pending the user's confirmation) | a parameter or a property of `self` returned unchanged (`return runsImpact`, `return value`, `return self.steps`); an operator, a call or a member chain past 1 `self.` access (`self.a.b`, `a.b`) is behaviour |
+| Function, initializer, accessor, closure (orchestrator decision 2026-09-27, approved by the user 2026-09-28) | only `throw` of an error value, with no other statement: a payload-free case (`SomeError.notImplemented`, `.notImplemented`), an initializer call or an enum case each as this table allows them (`CancellationError()`, `.failed(reason)`); a thrown call to a non-initializer, or literal content, is behaviour |
+| Function, accessor, closure yielding a value (orchestrator decision 2026-09-27, approved by the user 2026-09-28) | 1 enum case the parent or the same file declares, constructed with each associated value a §7 empty default or a parameter passed through (`.exited(0)`, `.loaded([])`, `.loaded(items)`); literal content (`.exited(1)`), a call, an operator or a static function that isn't a case is behaviour |
+| Function, accessor, closure yielding a value (orchestrator decision 2026-09-27, approved by the user 2026-09-28) | a parameter or a property of `self` returned unchanged (`return runsImpact`, `return value`, `return self.steps`); an operator, a call or a member chain past 1 `self.` access (`self.a.b`, `a.b`) is behaviour |
 | Existing array literal (command and registration lists) | gains only bare type references or `Type.self` elements; any other change to an existing body is behaviour |
 | Reducer body | returns `.none` for every action, and never mutates state |
 | SwiftUI `body` | `EmptyView()`, or a container of `EmptyView()` |
@@ -86,8 +86,8 @@ The build records the surface commit on the run (`surfaceCommit`, which already 
 every `prove` as `--proof-base`. A worker no longer rewrites finished code into stubs to make a base: trial run 2's
 list worker spent 8 commits doing that.
 
-A sprint slice can find that its test needs an API the surface lacks (orchestrator decision 2026-09-28, pending the
-user's confirmation). The recorded surface stays as it is: the slice commits the missing API alone as an extra stub
+A sprint slice can find that its test needs an API the surface lacks (orchestrator decision 2026-09-28, approved by
+the user 2026-09-28). The recorded surface stays as it is: the slice commits the missing API alone as an extra stub
 that passes `surface-check`. The sprint's final `ready` gate then proves at the surface and at every extra stub,
 oldest first, with 1 `--proof-base` each.
 

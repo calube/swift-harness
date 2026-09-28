@@ -11,8 +11,8 @@ docs/handoffs/subproject-2-interfaces.md (last sections). Runbook: "Lessons from
 In flight at this writing: a worker hardening the tests of `SurfaceBodyScan` and `HangWithoutDeadlineRule` (mutate
 kept sampling new survivors there), then one more `mutate --base 4a54bf8 --jobs 2` on main.
 Waiting for the user: fast-modes wave 4 (sprint rehearsals, attended); design-free ship plan tasks (after rehearsals);
-build-executor waves 10-11; acceptance runs 26-28; sub-projects 3 and 4. Decisions made overnight that the user should
-confirm are in the overnight report (surface-check's extra stub shapes, the sprint extra-stub proof base, the budget's
+build-executor waves 10-11; acceptance runs 26-28; sub-projects 3 and 4. Decisions made overnight, approved by the user
+2026-09-28, are in the overnight report (surface-check's extra stub shapes, the sprint extra-stub proof base, the budget's
 required-task rule, the build worker's redReason reading, and evals/ files unwrapped for arch.ui-host-compiled).
 Rules from the user still stand: every worker on opus; build for correctness; one prove on the machine at a time
 (mkdir lock /tmp/swift-harness-speed-prove.lock); watchdog Monitor while workers run; the orchestrator delegates all
