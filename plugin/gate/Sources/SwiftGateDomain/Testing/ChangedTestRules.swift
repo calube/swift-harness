@@ -132,34 +132,86 @@ public enum ProofRules {
     }
   }
 
-  /// The tests a reverted run leaves for the next proof base to try again.
+  /// The tests a reverted run leaves for the next proof base to try again: each compile-only or
+  /// unreported test, and every test when the run left no evidence for the package as a whole. A
+  /// package added since the merge base has no source file there, so SwiftPM refuses its manifest
+  /// before building; the proof base, where the surface's stubs exist, can still load it.
   public static func retryable(_ tests: [ChangedTest], in judgement: ChangedTestJudgement)
     -> [ChangedTest]
   {
-    compileOnly(tests, in: judgement)
+    let noEvidence = judgement.findings.filter { $0.ruleID == noEvidenceRuleID }
+    if noEvidence.contains(where: { finding in !tests.contains { isAbout($0, finding) } }) {
+      return tests
+    }
+    return tests.filter { test in
+      judgement.findings.contains { finding in
+        (finding.ruleID == compileOnlyRuleID || finding.ruleID == noEvidenceRuleID)
+          && isAbout(test, finding)
+      }
+    }
   }
 
-  /// Folds reverted runs, the merge base first and then each proof base. A test's verdict is the
-  /// one from the last run that ran it, so a later run's proof replaces an earlier compile-only.
+  /// Folds reverted runs, the merge base first and then each proof base. A test's verdict and
+  /// blocked flag are the ones from the last run that ran it, so a later run's proof replaces an
+  /// earlier compile-only or no-evidence, and a finding about the whole package lasts only while
+  /// a test it covers was run nowhere later.
   /// A proof base is an ancestor of the change where the API a test calls already exists without
   /// its behavior, so a test that fails there on an assertion checks that behavior.
   public static func combine(_ attempts: [RevertedAttempt])
     -> (judgement: ChangedTestJudgement, proven: [ChangedTest], provenAtProofBase: Int)
   {
     var findings: [Finding] = []
+    var blocked = false
     var proven: [ChangedTest] = []
     var provenAtProofBase = 0
     for (index, attempt) in attempts.enumerated() {
       let retried = Set(attempts.dropFirst(index + 1).flatMap(\.tests))
-      findings += attempt.judgement.findings.filter { finding in
-        !retried.contains { isAbout($0, finding) }
+      let final = attempt.tests.filter { !retried.contains($0) }
+      for finding in attempt.judgement.findings {
+        let about = attempt.tests.filter { isAbout($0, finding) }
+        guard about.isEmpty ? !final.isEmpty : about.contains(where: final.contains) else {
+          continue
+        }
+        guard finding.ruleID == noEvidenceRuleID else {
+          findings.append(finding)
+          continue
+        }
+        let emptied = emptiedTargets(in: finding.message)
+        if about.isEmpty, !emptied.isEmpty {
+          findings += emptiedTargetFindings(final, emptied)
+        } else {
+          findings.append(finding)
+          blocked = true
+        }
       }
       let kept = attempt.proven.filter { !retried.contains($0) }
       proven += kept
       if index > 0 { provenAtProofBase += kept.count }
     }
-    let blocked = attempts.contains { $0.judgement.verdict == .blocked }
     return (ChangedTestJudgement(findings: findings, blocked: blocked), proven, provenAtProofBase)
+  }
+
+  /// SwiftPM's refusal of a manifest whose target has no source file, one per emptied target.
+  private static func emptiedTargets(in message: String) -> [String] {
+    message.matches(of: /target '[^']+' referenced in product '[^']+' is empty/)
+      .map { String(message[$0.range]) }
+  }
+
+  /// With no proof base left, an emptied target means the tests call API the change adds: a code
+  /// change fixes it (commit the API first), so it is compile-only, not an environment failure.
+  private static func emptiedTargetFindings(_ tests: [ChangedTest], _ emptied: [String])
+    -> [Finding]
+  {
+    var builder = JudgementBuilder()
+    for test in tests {
+      builder.gate(
+        compileOnlyRuleID, test,
+        "not proven: compile-only. With the source change reverted the package of \(test.id) "
+          + "does not load (\(emptied.joined(separator: "; "))); it must fail on an assertion. "
+          + "Commit the API it calls first with bodies that do nothing yet, and pass that commit "
+          + "as --proof-base")
+    }
+    return builder.findings
   }
 
   private static func isAbout(_ test: ChangedTest, _ finding: Finding) -> Bool {

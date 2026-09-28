@@ -1,0 +1,2 @@
+warning: 'xunitprobe': Source files for target Probe should be located under 'Sources/Probe', 'Sources', or a custom sources path can be set with the 'path' property in Package.swift
+error: 'xunitprobe': target 'Probe' referenced in product 'Probe' is empty

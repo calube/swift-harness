@@ -102,6 +102,21 @@ mkdir -p "$D/Dep2" && (cd "$D/Dep2" && git init -q -b main && printf '// swift-t
 The capture pipes stderr through `sed "s#$D#/FIXTURE#g"` for both; `status` is the exit code (`1`),
 `stdout` is empty, and neither writes an xUnit report.
 
+`SwiftTest/emptied-target.{stdout,stderr,status}` is a package whose library target lost every
+source file, as a package added since the merge base looks once `prove` reverts its sources.
+`XUnitProbe` has no product, and without one SwiftPM reports a missing module in the tests instead,
+so the capture adds a `Probe` library product to a copy and deletes its `Sources`, from the
+repository root:
+
+```
+W=$(mktemp -d) && mkdir -p "$W/XUnitProbe" && rsync -a --exclude .build plugin/gate/Fixtures/swifttest/XUnitProbe/ "$W/XUnitProbe/" && sed -i '' 's/  platforms: \[.macOS(.v15)\],/&\n  products: [.library(name: "Probe", targets: ["Probe"])],/' "$W/XUnitProbe/Package.swift" && /bin/rm -rf "$W/XUnitProbe/Sources" && (cd "$W/XUnitProbe" && swift test --parallel --xunit-output "$W/emptied-target.xml" --filter 'ProbeTests\.Pass' >"$W/emptied-target.stdout" 2>"$W/emptied-target.stderr"; echo "$?" >"$W/emptied-target.status")
+for f in stdout stderr status; do sed "s#$W#/FIXTURE#g" "$W/emptied-target.$f" > plugin/gate/Tests/Fixtures/SwiftTest/emptied-target.$f; done
+```
+
+SwiftPM refuses the manifest before building: `status` is `1`, `stdout` is empty, no xUnit report
+is written, and stderr ends `error: 'xunitprobe': target 'Probe' referenced in product 'Probe' is
+empty` (Swift 6.2).
+
 ## Mutation (`mutate`)
 
 `LiveMutationToolchainTests` replays the `SwiftTest` captures above: `swift test --skip-build`

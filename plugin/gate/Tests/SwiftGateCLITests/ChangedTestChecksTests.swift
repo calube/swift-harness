@@ -172,6 +172,84 @@ struct ChangedTestChecksTests {
       })
   }
 
+  /// An environment whose scratch trees replay `scenarios` in order, the last one repeating.
+  private func environment(
+    _ setup: Setup, scratch: FakeScratchWorktrees, reverted scenarios: [String]
+  )
+    throws -> ChangedTestChecks.Environment
+  {
+    let trees = try scenarios.map { try ProbeRepository.swiftPM(replaying: $0) }
+    let made = Mutex(0)
+    return ChangedTestChecks.Environment(
+      root: setup.repository.root, git: setup.git,
+      swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), scratch: scratch,
+      scratchSwiftPM: { _ in
+        made.withLock { count in
+          defer { count += 1 }
+          return trees[min(count, trees.count - 1)]
+        }
+      })
+  }
+
+  @Test(
+    "a package whose target is emptied at the merge base is retried at the proof base, where its tests fail on an assertion and are proven — catches a proof base tried only for compile-only tests"
+  )
+  func emptiedTargetProvenAtProofBase() async throws {
+    let setup = try Setup(ancestors: ["surface"])
+    defer { setup.remove() }
+    let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+
+    let judgement = await ChangedTestChecks.prove(
+      try environment(setup, scratch: scratch, reverted: ["emptied-target", "reverted"]),
+      graph: try setup.graph(), base: "origin/main", proofBases: ["surface"],
+      context: setup.repository.context())
+
+    #expect(judgement.verdict == .green)
+    #expect(scratch.requests.map(\.revertTo) == ["base", "surface"])
+    #expect(!judgement.findings.contains { $0.ruleID == ProofRules.noEvidenceRuleID })
+    #expect(
+      judgement.findings.map(\.message).contains {
+        $0.hasPrefix(
+          "prove: 2 of 2 new or changed host tests fail on an assertion with the source change "
+            + "reverted, 2 of them at a proof base")
+      })
+  }
+
+  @Test(
+    "a package whose target is emptied at the merge base with no proof base is RED compile-only, never BLOCKED — catches a missing surface commit read as an environment failure"
+  )
+  func emptiedTargetWithoutProofBase() async throws {
+    let setup = try Setup()
+    defer { setup.remove() }
+
+    let judgement = try await prove(
+      setup,
+      setup.environment(
+        main: try ProbeRepository.swiftPM(replaying: "pass"),
+        reverted: try ProbeRepository.swiftPM(replaying: "emptied-target")))
+
+    #expect(judgement.verdict == .red)
+    #expect(judgement.findings.filter { $0.ruleID == ProofRules.compileOnlyRuleID }.count == 2)
+    #expect(!judgement.findings.contains { $0.ruleID == ProofRules.noEvidenceRuleID })
+  }
+
+  @Test(
+    "an environment failure at the merge base and again at the proof base is BLOCKED — catches the retry forgiving a broken environment"
+  )
+  func environmentFailureAtEveryBase() async throws {
+    let setup = try Setup(ancestors: ["surface"])
+    defer { setup.remove() }
+    let scratch = FakeScratchWorktrees(root: Setup.recordedRoot)
+
+    let judgement = await ChangedTestChecks.prove(
+      try environment(setup, scratch: scratch, reverted: ["stale-module-cache"]),
+      graph: try setup.graph(), base: "origin/main", proofBases: ["surface"],
+      context: setup.repository.context())
+
+    #expect(judgement.verdict == .blocked)
+    #expect(scratch.requests.map(\.revertTo) == ["base", "surface"])
+  }
+
   @Test(
     "a proof base that isn't an ancestor of HEAD is BLOCKED and builds nothing — catches a proof against code the change never went through"
   )
