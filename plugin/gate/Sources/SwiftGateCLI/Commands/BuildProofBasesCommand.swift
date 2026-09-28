@@ -7,14 +7,15 @@ struct BuildProofBasesReport: Sendable, Equatable, Encodable {
   let command: String
   let plan: String
   let runId: String
-  /// Each merged task's surface commit, in the order the tasks reached `main`.
+  /// The plan's surface commit when `plan.json` records one, then each merged task's surface
+  /// commit in the order the tasks reached `main`, each sha once.
   let proofBases: [String]
   /// `proofBases` as `check` arguments: `--proof-base <sha>` each.
   let arguments: String
 }
 
 /// The final gate's proof bases: `prove` retries a test that only fails to compile at the merge
-/// base at the surface commit of the task that added the API it calls.
+/// base at the plan's surface, then at the surface commit of the task that added the API it calls.
 enum BuildProofBasesRun {
   static func run(slug: String, git: any Git) async -> BuildLoopResult<BuildProofBasesReport> {
     let command = "build proof-bases"
@@ -39,7 +40,18 @@ enum BuildProofBasesRun {
     guard log.damage.isEmpty else {
       return .blocked(command, slug, "\(store.layout.eventsFile) is damaged: \(log.damage)")
     }
-    var proofBases: [String] = []
+    let planSurface: String?
+    var notes: [String] = []
+    do throws(PlanStateStoreError) {
+      planSurface = try PlanStateStore(plan: plan).planFile().surfaceCommit
+    } catch .missing(let path) {
+      // A run's merged returns still name every task surface, so only the plan's is unknown.
+      planSurface = nil
+      notes.append("\(path) is missing, so no plan surface leads the list")
+    } catch {
+      return .blocked(command, slug, "reading the plan's surface commit: \(error)")
+    }
+    var proofBases: [String] = planSurface.map { [$0] } ?? []
     for task in log.mergedTasks {
       let path = store.layout.directory + "/returns/\(task).json"
       let taskReturn: TaskReturn
@@ -49,7 +61,9 @@ enum BuildProofBasesRun {
         return .blocked(
           command, slug, "merged task `\(task)` has no readable stored return at \(path): \(error)")
       }
-      if let surface = taskReturn.surfaceCommit { proofBases.append(surface) }
+      if let surface = taskReturn.surfaceCommit, !proofBases.contains(surface) {
+        proofBases.append(surface)
+      }
     }
     let arguments = proofBases.map { "--proof-base \($0)" }.joined(separator: " ")
     return BuildLoopResult(
@@ -58,7 +72,8 @@ enum BuildProofBasesRun {
         command: command, plan: slug, runId: store.runID, proofBases: proofBases,
         arguments: arguments),
       holder: nil,
-      message: proofBases.isEmpty ? "no merged task has a surface commit" : arguments)
+      message: ([proofBases.isEmpty ? "no merged task has a surface commit" : arguments] + notes)
+        .joined(separator: "; "))
   }
 
   static func render(_ result: BuildLoopResult<BuildProofBasesReport>, format: OutputFormat)
@@ -73,11 +88,14 @@ enum BuildProofBasesRun {
 struct BuildProofBasesCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "proof-bases",
-    abstract: "Print the final gate's --proof-base arguments: each merged task's surface commit.",
+    abstract:
+      "Print the final gate's --proof-base arguments: the plan's surface, then each merged "
+      + "task's surface commit.",
     discussion:
-      "Reads the plan's newest build run: the tasks its merges left on main, in merge order, and "
-      + "each one's stored return. Pass the output to `swiftgate check --tier ready`. Exits 0, or "
-      + "2 when the run, its event log or a merged task's stored return can't be read.")
+      "Reads plan.json's surfaceCommit, then the plan's newest build run: the tasks its merges "
+      + "left on main, in merge order, and each one's stored return. Each sha appears once. Pass "
+      + "the output to `swiftgate check --tier ready`. Exits 0, or 2 when plan.json, the run, its "
+      + "event log or a merged task's stored return can't be read.")
 
   @Argument(help: "The plan's slug.")
   var plan: String
