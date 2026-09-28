@@ -68,10 +68,11 @@ public enum SimulatorTestEvidenceRules {
     case runner
   }
 
-  /// A run whose result bundle could not be read at all.
+  /// A run that left no result bundle to judge; `reason` names what failed first (the simulator,
+  /// `xcodebuild` or `xcresulttool`), so it is reported as is.
   public static func unreadable(tier: Tier, reason: String) -> SimulatorTestOutcome {
     var judge = SimulatorJudgement(tier: tier, targets: [], sources: [], root: "")
-    judge.block("the result bundle could not be read: \(reason)")
+    judge.block(reason)
     return judge.outcome
   }
 

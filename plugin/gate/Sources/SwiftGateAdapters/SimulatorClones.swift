@@ -11,9 +11,10 @@ public enum SimulatorCloneError: Error, Sendable, Equatable {
   public var verdict: Verdict { .blocked }
 }
 
-/// Spec §4.4: each simulator-tier run clones the pinned base device, uses it, and deletes it,
-/// holding one slot of a machine-wide counting lock for the clone's whole lifetime so at most
-/// `simulator.max_concurrent` clones exist at once across every session.
+/// Spec §4.4: each simulator-tier run clones the pinned base device (or, when the base is booted,
+/// creates a fresh device like it), uses it, and deletes it, holding one slot of a machine-wide
+/// counting lock for the clone's whole lifetime so at most `simulator.max_concurrent` clones exist
+/// at once across every session.
 public struct SimulatorClones: Sendable {
   private let simctl: any Simctl
   private let lock: any CountingLock
@@ -42,7 +43,9 @@ public struct SimulatorClones: Sendable {
   /// The production wiring: `xcrun simctl` and the machine-wide `sim` lock.
   public static func live(config: SimulatorConfig, runner: any ProcessRunner) -> SimulatorClones {
     SimulatorClones(
-      simctl: LiveSimctl(runner: runner),
+      simctl: LiveSimctl(
+        runner: runner,
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simctlTimeoutSeconds))),
       lock: FileCountingLock(name: "sim", capacity: config.maxConcurrent), config: config)
   }
 
@@ -106,9 +109,20 @@ public struct SimulatorClones: Sendable {
     } catch {
       throw .selection(error)
     }
+    let provision: SimulatorProvision
+    do {
+      provision = try SimulatorSelection.provision(from: base)
+    } catch {
+      throw .selection(error)
+    }
+    // A created device carries the same owner-PID name as a clone, so the same sweep finds it.
     let name = SimulatorCloneName.make(ownerPID: ownerPID, token: makeToken())
     let udid = try await simctlCall { () async throws(SimctlError) in
-      try await simctl.clone(base.udid, name: name)
+      switch provision {
+      case .clone(let baseUDID): try await simctl.clone(baseUDID, name: name)
+      case .create(let deviceType, let runtime):
+        try await simctl.create(name: name, deviceType: deviceType, runtime: runtime)
+      }
     }
     return SimulatorDevice(
       udid: udid, name: name, runtimeIdentifier: base.runtimeIdentifier, state: "Shutdown",

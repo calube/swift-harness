@@ -245,6 +245,203 @@ struct SimulatorClonesTests {
   }
 }
 
+/// The base device is booted: another session or tool may be using it, and `simctl clone`
+/// refuses it. Recorded by `gate/Fixtures/simctl/capture-booted-base.sh`.
+@Suite("SimulatorClones with a booted base device")
+struct SimulatorClonesBootedBaseTests {
+  private static let bootedBase = "29A6A05A-7F0E-431C-B890-5622565A0DF7"
+  private static let recordedCreate = "14F876A3-3768-48BD-8168-AEB4D1EA9BDC"
+  private static let iPhone17 = "com.apple.CoreSimulator.SimDeviceType.iPhone-17"
+  private static let ios262 = "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  private static let config = SimulatorConfig(
+    device: "swiftgate capture base", os: "26.2", maxConcurrent: 1)
+
+  private static func recorded(_ name: String) -> ProcessOutput {
+    let stdout = (try? Fixture.data("Simctl/\(name).stdout")) ?? Data()
+    let stderr = (try? Fixture.data("Simctl/\(name).stderr")) ?? Data()
+    let status =
+      (try? Fixture.text("Simctl/\(name).status"))
+      .flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 1
+    return ProcessOutput(
+      status: .exited(status), stdout: CapturedStream(bytes: stdout),
+      stderr: CapturedStream(bytes: stderr), elapsed: .zero)
+  }
+
+  private static func answer(_ invocation: ProcessInvocation) -> ProcessOutput {
+    let recordings = [
+      "list": "list-devices-booted-base", "clone": "clone-booted", "create": "create",
+      "bootstatus": "bootstatus", "shutdown": "shutdown", "delete": "delete",
+    ]
+    return recorded(recordings[invocation.arguments.dropFirst().first ?? ""] ?? "missing")
+  }
+
+  private static func base(_ state: String) -> SimulatorDevice {
+    SimulatorDevice(
+      udid: "BASE", name: "iPhone 17", runtimeIdentifier: ios262, state: state, isAvailable: true,
+      deviceTypeIdentifier: iPhone17)
+  }
+
+  private static func lock() -> (FileCountingLock, URL) {
+    let directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-sim-lock-\(UUID().uuidString)", directoryHint: .isDirectory)
+    return (FileCountingLock(directory: directory, name: "sim", capacity: 2), directory)
+  }
+
+  private static func clones(
+    _ simctl: any Simctl, lock: FileCountingLock, ownerPID: Int32 = 4242,
+    config: SimulatorConfig = SimulatorClonesBootedBaseTests.config,
+    alive: @escaping @Sendable (Int32) -> Bool = { _ in true }
+  ) -> SimulatorClones {
+    SimulatorClones(
+      simctl: simctl, lock: lock, config: config, ownerPID: ownerPID, isAlive: alive,
+      makeToken: { "tok" }, lockTimeout: .seconds(5))
+  }
+
+  @Test(
+    "the fake simctl refuses to clone a booted device with the error simctl recorded — catches a fake that accepts any clone, which let a booted base BLOCK every T3"
+  )
+  func fakeRefusesBootedClone() async throws {
+    let live = LiveSimctl(runner: FakeProcessRunner { Self.answer($0) })
+    let recordedError = await #expect(throws: SimctlError.self) {
+      try await live.clone(Self.bootedBase, name: "swift-harness-1-x")
+    }
+    let fake = FakeSimctl(devices: [Self.base("Booted")])
+
+    let fakeError = await #expect(throws: SimctlError.self) {
+      try await fake.clone("BASE", name: "swift-harness-1-x")
+    }
+
+    #expect(fakeError != nil && fakeError == recordedError)
+    #expect(fakeError?.message.contains("Unable to clone device in current state: Booted") == true)
+    #expect(fake.currentDevices.map(\.udid) == ["BASE"])
+  }
+
+  @Test(
+    "with the base booted the run gets a created device of the base's type and runtime and the base is never shut down, and with it shut down the base is cloned — catches the harness shutting down a simulator another session is using"
+  )
+  func bootedBaseCreates() async throws {
+    let config = SimulatorConfig(device: "iPhone 17", os: "26.2")
+    let (lock, directory) = Self.lock()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let booted = FakeSimctl(devices: [Self.base("Booted")])
+
+    let seen = try await Self.clones(booted, lock: lock, config: config).withClone { $0 }
+
+    #expect(seen.udid != "BASE" && seen.name == "swift-harness-4242-tok")
+    #expect(
+      booted.calls.contains(
+        .create(name: "swift-harness-4242-tok", deviceType: Self.iPhone17, runtime: Self.ios262)))
+    #expect(!booted.calls.contains { if case .clone = $0 { true } else { false } })
+    #expect(!booted.calls.contains(.shutdown("BASE")))
+    #expect(booted.currentDevices.map(\.udid) == ["BASE"])
+    #expect(booted.currentDevices.first?.state == "Booted")
+
+    let shutDown = FakeSimctl(devices: [Self.base("Shutdown")])
+    _ = try await Self.clones(shutDown, lock: lock, config: config).withClone { $0 }
+    #expect(shutDown.calls.contains(.clone(udid: "BASE", name: "swift-harness-4242-tok")))
+    #expect(!shutDown.calls.contains { if case .create = $0 { true } else { false } })
+  }
+
+  @Test(
+    "against recorded simctl a booted base means create, boot, then shut down and delete the created device only — catches simctl create run with the wrong arguments"
+  )
+  func recordedCreateLifecycle() async throws {
+    let runner = FakeProcessRunner { Self.answer($0) }
+    let (lock, directory) = Self.lock()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let seen = try await Self.clones(LiveSimctl(runner: runner), lock: lock).withClone { $0 }
+
+    #expect(seen.udid == Self.recordedCreate)
+    #expect(
+      runner.invocations.map { Array($0.arguments.dropFirst()) } == [
+        ["list", "devices", "--json"],
+        ["create", "swift-harness-4242-tok", Self.iPhone17, Self.ios262],
+        ["bootstatus", Self.recordedCreate, "-b"],
+        ["shutdown", Self.recordedCreate],
+        ["delete", Self.recordedCreate],
+      ])
+  }
+
+  @Test(
+    "a created device whose owner died is swept like a clone, and the booted base is left alone — catches created devices piling up after a crashed session"
+  )
+  func createdDeviceIsSwept() async throws {
+    let fake = FakeSimctl(devices: [Self.base("Booted")])
+    let (lock, directory) = Self.lock()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let config = SimulatorConfig(device: "iPhone 17", os: "26.2")
+
+    let swept = try await Self.clones(fake, lock: lock, config: config).withClone { created in
+      let deleted = try await Self.clones(
+        fake, lock: lock, ownerPID: 5000, config: config, alive: { $0 != 4242 }
+      ).sweepOrphans()
+      return (created.udid, deleted)
+    }
+
+    #expect(swept.1 == [swept.0])
+    #expect(fake.calls.contains { if case .create = $0 { true } else { false } })
+    #expect(fake.currentDevices.map(\.udid) == ["BASE"])
+    #expect(!fake.calls.contains(.shutdown("BASE")) && !fake.calls.contains(.delete("BASE")))
+
+    let recorded = FakeProcessRunner { Self.answer($0) }
+    let deleted = try await Self.clones(
+      LiveSimctl(runner: recorded), lock: lock, alive: { _ in false }
+    )
+    .sweepOrphans()
+    #expect(deleted == [Self.recordedCreate])
+    #expect(!recorded.invocations.contains { $0.arguments.contains(Self.bootedBase) })
+  }
+
+  /// Answers every call as if simctl took 90 s: a timeout shorter than that expires first.
+  private static func slowSimctl() -> FakeProcessRunner {
+    FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      guard invocation.timeout >= .seconds(90) else {
+        throw .timedOut(
+          executable: invocation.executable, after: invocation.timeout,
+          stdout: CapturedStream(), stderr: CapturedStream())
+      }
+      return Self.answer(invocation)
+    }
+  }
+
+  @Test(
+    "a simctl call that takes 90 s on a loaded machine finishes inside the default deadline — catches a 60 s deadline BLOCKING T3 under load"
+  )
+  func slowSimctlFinishes() async throws {
+    let runner = Self.slowSimctl()
+    let clones = SimulatorClones.live(
+      config: SimulatorConfig(device: "iPhone 17", os: "26.2"), runner: runner)
+
+    _ = try await clones.sweepOrphans()
+
+    let list = try #require(runner.invocations.first)
+    #expect(list.arguments == ["simctl", "list", "devices", "--json"])
+    #expect(list.timeout == .seconds(180))
+  }
+
+  @Test(
+    "a simctl call past the configured deadline is BLOCKED and the finding names the deadline and its config key — catches a timeout reported as a raw process error"
+  )
+  func deadlineNamed() async throws {
+    let clones = SimulatorClones.live(
+      config: SimulatorConfig(device: "iPhone 17", os: "26.2", simctlTimeoutSeconds: 60),
+      runner: Self.slowSimctl())
+
+    let error = await #expect(throws: SimulatorCloneError.self) {
+      try await clones.sweepOrphans()
+    }
+
+    guard case .simctl(let simctl) = error else {
+      Issue.record("expected a simctl error, got \(String(describing: error))")
+      return
+    }
+    #expect(simctl == .timedOut(command: "list", deadline: .seconds(60)))
+    #expect(simctl.message.contains("within 60 s"))
+    #expect(simctl.message.contains("simulator.simctl_timeout_seconds"))
+  }
+}
+
 /// One real clone → boot → delete against the machine's simulators. Opt-in, because it needs the
 /// pinned runtime installed and takes tens of seconds: `SWIFTGATE_SIMULATOR_TESTS=1 swift test`.
 @Suite(

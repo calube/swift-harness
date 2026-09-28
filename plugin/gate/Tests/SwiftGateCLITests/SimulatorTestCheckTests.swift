@@ -142,6 +142,26 @@ struct SimulatorTestCheckTests {
   }
 
   @Test(
+    "a simulator that could not be made is BLOCKED with simctl's own reason and no mention of a result bundle — catches a refused clone misreported as an unreadable result bundle"
+  )
+  func notRunNamesSimctl() async throws {
+    let repository = try SimulatorRepository()
+    defer { repository.remove() }
+    let refusal =
+      "An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, "
+      + "code=405): Unable to clone device in current state: Booted"
+
+    let parts = try await t2(
+      repository, FakeXcodebuild(), scenario: "pass",
+      devices: FakeDevices(
+        failure: .simctl(.failed(command: "clone", status: .exited(149), stderr: refusal))))
+
+    #expect(try report(parts).verdict == .blocked)
+    #expect(
+      parts.findings.map(\.message) == ["simctl clone failed (exited(149)): \(refusal)"])
+  }
+
+  @Test(
     "a package scheme that retries failures makes T2 RED — catches a flake passing on its retry"
   )
   func retryScheme() async throws {

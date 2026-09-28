@@ -76,6 +76,42 @@ struct SimulatorSelectionTests {
   }
 
   @Test(
+    "a shut-down base is cloned, and a booted one is replaced by a fresh device of its type and runtime — catches cloning a booted base, which simctl refuses, BLOCKING every T3"
+  )
+  func provision() throws {
+    func base(_ state: String) -> SimulatorDevice {
+      SimulatorDevice(
+        udid: "BASE", name: "iPhone 17", runtimeIdentifier: Self.ios262, state: state,
+        isAvailable: true, deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17")
+    }
+
+    #expect(try SimulatorSelection.provision(from: base("Shutdown")) == .clone(baseUDID: "BASE"))
+    for state in ["Booted", "Booting", "Shutting Down"] {
+      #expect(
+        try SimulatorSelection.provision(from: base(state))
+          == .create(
+            deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17", runtime: Self.ios262))
+    }
+  }
+
+  @Test(
+    "a booted base whose device type is unknown is BLOCKED and says why — catches creating a device of a guessed type"
+  )
+  func provisionWithoutDeviceType() {
+    let base = SimulatorDevice(
+      udid: "BASE", name: "iPhone 17", runtimeIdentifier: Self.ios262, state: "Booted",
+      isAvailable: true)
+
+    let error = #expect(throws: SimulatorSelectionError.self) {
+      try SimulatorSelection.provision(from: base)
+    }
+
+    #expect(error == .baseDeviceTypeUnknown(udid: "BASE", state: "Booted"))
+    #expect(error?.verdict == .blocked)
+    #expect(error?.message.contains("BASE is Booted") == true)
+  }
+
+  @Test(
     "only clones whose owner is dead are orphans — catches the sweep deleting a clone a live session is using"
   )
   func orphans() {
