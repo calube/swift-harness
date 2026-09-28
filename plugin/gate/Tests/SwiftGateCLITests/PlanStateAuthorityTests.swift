@@ -266,8 +266,7 @@ struct PlanStateAuthorityTests {
       AuthorityRepository.planB, AuthorityRepository.bob, design: AuthorityRepository.designB,
       in: repo.linked)
     let seed = try repo.planFile(AuthorityRepository.planA)
-    let seedDesign = try #require(seed.designSource)
-    #expect(seedDesign.tier == .quick)
+    #expect(seed.tier == .quick)
     #expect(seed.resume == "framing")
     let set = ["plan", "set", AuthorityRepository.planA]
 
@@ -279,26 +278,25 @@ struct PlanStateAuthorityTests {
     #expect(rescoped.exit == 0, "\(rescoped.stdout)")
     #expect(try rescoped.json["status"] as? String == "updated")
     let updated = try repo.planFile(AuthorityRepository.planA)
-    #expect(updated.designSource?.tier == .deep)
+    #expect(updated.tier == .deep)
     #expect(updated.resume == "re-scoped to deep; next: research")
     #expect(
       updated
         == PlanFile(
-          schemaVersion: seed.schemaVersion, slug: seed.slug, design: seedDesign.design,
-          designSha: seedDesign.designSha, approval: seedDesign.approval,
-          clarifyChain: seedDesign.clarifyChain,
+          schemaVersion: seed.schemaVersion, slug: seed.slug, design: seed.design,
+          designSha: seed.designSha, approval: seed.approval, clarifyChain: seed.clarifyChain,
           tier: .deep, resume: "re-scoped to deep; next: research"))
 
     let resumeOnly = try await repo.swiftgate(
       set + ["--session", AuthorityRepository.alice, "--resume", "drafting"], in: repo.main)
     #expect(resumeOnly.exit == 0, "\(resumeOnly.stdout)")
-    #expect(try repo.planFile(AuthorityRepository.planA).designSource?.tier == .deep)
+    #expect(try repo.planFile(AuthorityRepository.planA).tier == .deep)
     #expect(try repo.planFile(AuthorityRepository.planA).resume == "drafting")
 
     let toSketch = try await repo.swiftgate(
       set + ["--session", AuthorityRepository.alice, "--tier", "sketch"], in: repo.linked)
     #expect(toSketch.exit == 0, "plan set --tier sketch: \(toSketch.stdout)")
-    #expect(try repo.planFile(AuthorityRepository.planA).designSource?.tier == .sketch)
+    #expect(try repo.planFile(AuthorityRepository.planA).tier == .sketch)
 
     let before = repo.contents(try repo.layout.plan(AuthorityRepository.planA).planFile)
     for (arguments, exit) in [

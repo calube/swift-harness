@@ -278,11 +278,10 @@ struct PlanClaimCommandTests {
     #expect(await scenario.claim(LockScenario.alice, tier: "deep").status == .claimed)
     let seed = try #require(try scenario.planFile())
     #expect(seed.slug == LockScenario.plan)
-    let design = try #require(seed.designSource)
-    #expect(design.design == LockScenario.design)
-    #expect(design.designSha == nil)
-    #expect(design.approval == nil)
-    #expect(design.tier == .deep)
+    #expect(seed.design == LockScenario.design)
+    #expect(seed.designSha == nil)
+    #expect(seed.approval == nil)
+    #expect(seed.tier == .deep)
     #expect(try PlanFileJSON.decode(try PlanFileJSON.encode(seed)) == seed)
 
     let again = await scenario.claim(LockScenario.alice, design: "docs/other/designs/other.md")
@@ -297,7 +296,7 @@ struct PlanClaimCommandTests {
 
     let report = await scenario.claim(LockScenario.alice, tier: "sketch")
     #expect(report.status == .claimed)
-    #expect(try scenario.planFile()?.designSource?.tier == .sketch)
+    #expect(try scenario.planFile()?.tier == .sketch)
   }
 
   @Test(
