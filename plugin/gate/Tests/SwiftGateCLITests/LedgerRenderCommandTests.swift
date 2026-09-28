@@ -233,4 +233,60 @@ struct LedgerRenderCommandTests {
       #expect(html.contains(text), "page lacks \(text)")
     }
   }
+
+  @Test(
+    "with a build run the page names each task the app target needs from the repository's packages, and without a config says it can't — catches the page guessing no task is required"
+  )
+  func pageShowsRequiredTasks() async throws {
+    let repo = try await LedgerRenderRepo()
+    defer { repo.remove() }
+    let views = LedgerTask(
+      id: "app-views", deps: ["queue-core"], writeSet: ["App/AppView.swift"], gate: .fast,
+      tests: [], covers: [], estLines: 40, status: .pending, worktree: "../app-views")
+    try await repo.writePlanState(
+      designSha: DesignSha.of(LedgerRenderRepo.approvedText),
+      ledger: LedgerRenderRepo.ledger(
+        tasks: [LedgerRenderRepo.task(), views], waves: [["queue-core"], ["app-views"]]))
+    let preset = BuildPreset(
+      designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
+      workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
+    _ = try await BuildRunStore.create(
+      plan: LedgerRenderRepo.slug, presetName: "interview", preset: preset,
+      startedAt: Date(timeIntervalSince1970: 1_790_000_000), git: repo.git, suffix: 7)
+
+    guard case .written(_, _, _, let notes) = await repo.renderLedger() else {
+      Issue.record("expected the page written without a config")
+      return
+    }
+    #expect(notes.contains { $0.contains(".swiftgate.toml") }, "\(notes)")
+    #expect(
+      try String(contentsOf: repo.outputURL, encoding: .utf8).contains(
+        "Tasks the app target needs are unknown"))
+
+    try repo.write(
+      ".swiftgate.toml",
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "App"
+      packages = ["Sample"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+
+      """)
+    try repo.write("Sample/Package.swift", "")
+    _ = await repo.renderLedger()
+
+    let html = try String(contentsOf: repo.outputURL, encoding: .utf8)
+    for text in [
+      "Required: the app target needs it to compile (<code>App/AppView.swift</code>)",
+      "Required: the app target needs it to compile", "queue-core",
+    ] {
+      #expect(html.contains(text), "page lacks \(text)")
+    }
+    #expect(html.components(separatedBy: "Required: the app target").count == 3)
+    #expect(!html.contains("are unknown"))
+  }
 }

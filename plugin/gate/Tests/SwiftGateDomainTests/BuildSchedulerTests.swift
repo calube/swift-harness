@@ -41,7 +41,8 @@ struct BuildSchedulerTests {
     let ledger = Self.ledger([dep, blocked])
 
     let result = BuildScheduler.next(
-      ledger: ledger, running: [], preset: Self.preset(), startedAt: Self.epoch, now: Self.epoch)
+      ledger: ledger, running: [], preset: Self.preset(), startedAt: Self.epoch, now: Self.epoch,
+      required: .empty)
 
     #expect(!result.toStart.contains("downstream"))
     #expect(result.toStart.contains("dep-unmerged"))
@@ -61,7 +62,7 @@ struct BuildSchedulerTests {
 
     let result = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 10), startedAt: Self.epoch,
-      now: Self.epoch)
+      now: Self.epoch, required: .empty)
 
     #expect(!result.toStart.contains("downstream-of-blocked"))
     #expect(!result.toStart.contains("downstream-of-abandoned"))
@@ -79,7 +80,7 @@ struct BuildSchedulerTests {
 
     let firstResult = BuildScheduler.next(
       ledger: firstCallLedger, running: [], preset: Self.preset(maxParallel: 2),
-      startedAt: Self.epoch, now: Self.epoch)
+      startedAt: Self.epoch, now: Self.epoch, required: .empty)
     #expect(firstResult.toStart == ["task-a"])
 
     let secondCallLedger = Self.ledger([
@@ -87,7 +88,7 @@ struct BuildSchedulerTests {
     ])
     let secondResult = BuildScheduler.next(
       ledger: secondCallLedger, running: [], preset: Self.preset(maxParallel: 2),
-      startedAt: Self.epoch, now: Self.epoch)
+      startedAt: Self.epoch, now: Self.epoch, required: .empty)
     #expect(secondResult.toStart == ["task-b"])
   }
 
@@ -105,7 +106,7 @@ struct BuildSchedulerTests {
 
     let result = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 1), startedAt: Self.epoch,
-      now: Self.epoch)
+      now: Self.epoch, required: .empty)
 
     #expect(result.toStart == ["unlocks-many"])
   }
@@ -122,7 +123,7 @@ struct BuildSchedulerTests {
 
     let taggedResult = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(workerModel: .tagged),
-      startedAt: Self.epoch, now: Self.epoch)
+      startedAt: Self.epoch, now: Self.epoch, required: .empty)
     #expect(taggedResult.toStart.isEmpty)
     #expect(
       taggedResult.refused == [
@@ -132,7 +133,7 @@ struct BuildSchedulerTests {
 
     let forcedResult = BuildScheduler.next(
       ledger: ledger, running: [], preset: Self.preset(maxParallel: 2, workerModel: .sonnet),
-      startedAt: Self.epoch, now: Self.epoch)
+      startedAt: Self.epoch, now: Self.epoch, required: .empty)
     #expect(forcedResult.toStart.sorted() == ["another-no-model", "task-no-model"])
     #expect(forcedResult.refused.isEmpty)
   }
@@ -149,7 +150,7 @@ struct BuildSchedulerTests {
     func phase(afterSeconds seconds: TimeInterval) -> BudgetPhase {
       BuildScheduler.next(
         ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-        now: Self.epoch.addingTimeInterval(seconds)
+        now: Self.epoch.addingTimeInterval(seconds), required: .empty
       ).phase
     }
 
@@ -168,13 +169,90 @@ struct BuildSchedulerTests {
 
     let noNewStarts = BuildScheduler.next(
       ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch.addingTimeInterval(25 * 60))
+      now: Self.epoch.addingTimeInterval(25 * 60), required: .empty)
     #expect(noNewStarts.toStart.isEmpty)
 
     let cutoff = BuildScheduler.next(
       ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch.addingTimeInterval(30 * 60))
+      now: Self.epoch.addingTimeInterval(30 * 60), required: .empty)
     #expect(cutoff.toStart.isEmpty)
+  }
+
+  // MARK: - Tasks the app target needs
+
+  static let packages = ["Packages/Feed", "Packages/Posts"]
+
+  @Test(
+    "a task writing a .swift file outside every package is required, and so is each not-done task it depends on — catches the app target read as package code, or a required task left waiting on an optional dependency"
+  )
+  func requiredTasksFollowTheAppTarget() {
+    let ledger = Self.ledger([
+      Self.task(
+        id: "done-core", writeSet: ["Packages/Feed/Sources/Feed/Feed.swift"], status: .done),
+      Self.task(
+        id: "posts-core", deps: ["done-core"],
+        writeSet: ["Packages/Posts/Sources/Posts/Posts.swift"]),
+      Self.task(
+        id: "app-views", deps: ["posts-core"],
+        writeSet: ["Packages/Posts/Sources/PostsUI/List.swift", "App/AppView.swift"]),
+      Self.task(id: "feed-only", writeSet: ["Packages/Feed/Sources/Feed/More.swift"]),
+      Self.task(id: "docs-only", writeSet: ["docs/notes.md", "App/"]),
+      Self.task(id: "prefix-lookalike", writeSet: ["Packages/FeedExtras/Extra.swift"]),
+    ])
+
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+
+    #expect(
+      required.tasks == [
+        .init(taskID: "app-views", appPath: "App/AppView.swift"),
+        .init(taskID: "posts-core", appPath: "App/AppView.swift"),
+        .init(taskID: "prefix-lookalike", appPath: "Packages/FeedExtras/Extra.swift"),
+      ])
+  }
+
+  @Test(
+    "past the no-new-starts point a required task still starts and an optional one doesn't, and at cutoff neither does — catches a RED final gate from a skipped view task"
+  )
+  func requiredTaskStartsPastNoNewStarts() {
+    let ledger = Self.ledger([
+      Self.task(id: "app-views", writeSet: ["App/AppView.swift"], estLines: 10),
+      Self.task(id: "optional-core", writeSet: ["Packages/Feed/Sources/Feed/Feed.swift"]),
+    ])
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+    let preset = Self.preset(timeBudgetMin: 30, stopStartsBeforeMin: 5)
+
+    let noNewStarts = BuildScheduler.next(
+      ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
+      now: Self.epoch.addingTimeInterval(26 * 60), required: required)
+
+    #expect(noNewStarts.phase == .noNewStarts)
+    #expect(noNewStarts.toStart == ["app-views"])
+
+    let cutoff = BuildScheduler.next(
+      ledger: ledger, running: [], preset: preset, startedAt: Self.epoch,
+      now: Self.epoch.addingTimeInterval(30 * 60), required: required)
+    #expect(cutoff.phase == .cutoff)
+    #expect(cutoff.toStart.isEmpty)
+  }
+
+  @Test(
+    "past the no-new-starts point required tasks still fill only free slots and skip write-set overlaps — catches the exemption also bypassing capacity"
+  )
+  func requiredTasksRespectSlotsAndOverlap() {
+    let ledger = Self.ledger([
+      Self.task(id: "running-app", writeSet: ["App/Root.swift"], status: .inProgress),
+      Self.task(id: "app-overlap", writeSet: ["App/Root.swift"]),
+      Self.task(id: "app-a", writeSet: ["App/A.swift"]),
+      Self.task(id: "app-b", writeSet: ["App/B.swift"]),
+    ])
+    let required = BuildScheduler.RequiredTasks(ledger: ledger, packageDirectories: Self.packages)
+
+    let result = BuildScheduler.next(
+      ledger: ledger, running: ["running-app"],
+      preset: Self.preset(maxParallel: 2, timeBudgetMin: 30, stopStartsBeforeMin: 5),
+      startedAt: Self.epoch, now: Self.epoch.addingTimeInterval(26 * 60), required: required)
+
+    #expect(result.toStart == ["app-a"])
   }
 
   // MARK: - Determinism
@@ -198,7 +276,7 @@ struct BuildSchedulerTests {
 
     let baseline = BuildScheduler.next(
       ledger: Self.ledger(tasks), running: [], preset: preset, startedAt: Self.epoch,
-      now: Self.epoch)
+      now: Self.epoch, required: .empty)
 
     let permutations: [[LedgerTask]] = [
       tasks.reversed(),
@@ -210,7 +288,7 @@ struct BuildSchedulerTests {
     for permuted in permutations {
       let result = BuildScheduler.next(
         ledger: Self.ledger(permuted), running: [], preset: preset, startedAt: Self.epoch,
-        now: Self.epoch)
+        now: Self.epoch, required: .empty)
       #expect(result == baseline)
     }
   }

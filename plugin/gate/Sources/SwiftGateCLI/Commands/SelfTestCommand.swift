@@ -979,7 +979,10 @@ struct BuildSeedChecks: Sendable {
   var loadConfig: @Sendable (_ text: String) -> ConfigLoadError?
 
   static let live = BuildSeedChecks(
-    schedule: { BuildScheduler.next(ledger: $0, running: $1, preset: $2, startedAt: $3, now: $4) },
+    schedule: {
+      BuildScheduler.next(
+        ledger: $0, running: $1, preset: $2, startedAt: $3, now: $4, required: .empty)
+    },
     setStatus: { plan, task, status in
       do throws(LedgerWriterError) {
         try await LedgerWriter(plan: plan).update(task: task, .status(status))

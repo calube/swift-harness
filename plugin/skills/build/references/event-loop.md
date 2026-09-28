@@ -215,7 +215,15 @@ last tool call. Options:
 With `timeBudgetMin` 0 there is no budget. Otherwise, right after `build start`, start a timer: a
 Bash `/bin/sleep <seconds left until startedAt + timeBudgetMin>` with `run_in_background`, which
 wakes the loop when it exits. `build next` stops listing new starts on its own once `phase` is
-`no-new-starts`.
+`no-new-starts`, except for required tasks.
+
+A task is required when its write set names a `.swift` file outside every package directory that
+`.swiftgate.toml`'s `packages` globs match: that file is in the app target, and skipping the
+task can leave the final gate's app build RED. Every not-done task it depends on is required too.
+`build next` lists them as `required: [{task, appPath}]`, and at `no-new-starts` it still starts
+them, within free slots and without write-set overlap. At `cutoff` nothing starts. Start a listed
+task as usual. The ledger page shows "Required: the app target needs it to compile (`<appPath>`)"
+on each one, or says why it can't tell.
 
 When the timer fires, or any `build next` reports `phase` `cutoff`:
 
