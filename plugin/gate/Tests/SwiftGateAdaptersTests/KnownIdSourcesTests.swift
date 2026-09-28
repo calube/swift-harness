@@ -138,6 +138,9 @@ struct KnownIdSourcesTests {
 
     let loaded = await KnownIdSources.load(root: repo.root, git: repo.adapter)
 
+    #expect(throws: PlanStateLayoutError.invalidPlanName(PlanStateLayout.sprintsDirectoryName)) {
+      _ = try layout.plan(PlanStateLayout.sprintsDirectoryName)
+    }
     #expect(loaded.ids == ["search-debounce-task"])
     #expect(loaded.unreadable.isEmpty, "\(loaded.unreadable)")
   }

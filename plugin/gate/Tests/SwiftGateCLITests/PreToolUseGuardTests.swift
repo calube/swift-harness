@@ -400,42 +400,30 @@ struct SprintPageWriteTests {
   }
 
   @Test(
-    "a main session holding no plan writes <plans>/sprints/<slug>.md with Write, and a subagent is denied it even with a lock and the override — catches the sprint skill's page write refused, or workers editing it"
+    "a main session holding no plan writes <plans>/sprints/<slug>.md with Write, a subagent is denied it even with a lock and the override, and a nested path, a non-page file, the sprints directory and a plan's files stay denied — catches the sprint skill's page write refused, workers editing it, or the allowance widening"
   )
   func pageWritableByMainSessionOnly() async throws {
     var scenario = try PlanStateScenario()
     defer { scenario.harness.repository.remove() }
-    let page = Self.sprints(scenario) + "/login-flow.md"
+    let sprints = Self.sprints(scenario)
+    let page = sprints + "/login-flow.md"
 
     #expect(try await scenario.decision(page) == nil)
     #expect(try await scenario.toolDecision(page, writing: "# Login flow\n") == nil)
 
-    try scenario.claim(PlanStateScenario.planA, by: PlanStateScenario.session)
-    scenario.harness.environment = [OrchestratorMarker.environmentVariable: "1"]
-    #expect(try await scenario.decision(page, subagent: true) == "deny")
-  }
-
-  @Test(
-    "a nested path, a non-page file and the sprints directory's own name are denied to the main session, and a plan's files still need its lock — catches the page allowance widening past pages or unlocking plans"
-  )
-  func onlyPagesAllowed() async throws {
-    let scenario = try PlanStateScenario()
-    defer { scenario.harness.repository.remove() }
     try FileManager.default.createDirectory(
-      atPath: Self.sprints(scenario) + "/existing", withIntermediateDirectories: true)
+      atPath: sprints + "/existing", withIntermediateDirectories: true)
     try scenario.claim(PlanStateScenario.planB, by: PlanStateScenario.session)
     let planA = try scenario.layout.plan(PlanStateScenario.planA)
-
     for path in [
-      Self.sprints(scenario) + "/login-flow/notes.md",
-      Self.sprints(scenario) + "/login-flow.json",
-      Self.sprints(scenario) + "/existing",
-      Self.sprints(scenario),
-      planA.directory + "/sprints/login-flow.md",
-      planA.ledgerFile,
+      sprints + "/login-flow/notes.md", sprints + "/login-flow.json", sprints + "/existing",
+      sprints, planA.directory + "/sprints/login-flow.md", planA.ledgerFile,
     ] {
       #expect(try await scenario.decision(path) == "deny", "\(path)")
     }
+
+    scenario.harness.environment = [OrchestratorMarker.environmentVariable: "1"]
+    #expect(try await scenario.decision(page, subagent: true) == "deny")
   }
 
   @Test(
