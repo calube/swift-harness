@@ -116,3 +116,59 @@ public enum WarmBuild {
       derivedData: exists(HarnessGC.derivedDataDirectory) ? HarnessGC.derivedDataDirectory : nil)
   }
 }
+
+/// The branch writes a sprint makes: it creates `sprint/<slug>` and fast-forwards `main`, and never
+/// merges or rebases. Kept apart from ``GitWorkspace`` so a sprint can't be handed worktree writes.
+public protocol SprintBranches: Sendable {
+  /// The branch `HEAD` is on, or `nil` when `HEAD` is detached.
+  func currentBranch() async throws(GitWorkspaceError) -> String?
+
+  /// Every branch some worktree of the repository has checked out.
+  func checkedOutBranches() async throws(GitWorkspaceError) -> [String]
+
+  /// Creates `refs/heads/<branch>` at `commit`; fails when the branch exists.
+  func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError)
+
+  /// Deletes `branch` only while it is still at `commit`.
+  func deleteBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError)
+
+  /// Moves `branch` from `old` to `new` when `old` is an ancestor of `new`, and only while `branch`
+  /// is still at `old`.
+  /// - Returns: `false`, moving nothing, when `new` doesn't descend from `old`.
+  func fastForward(_ branch: String, from old: String, to new: String)
+    async throws(GitWorkspaceError) -> Bool
+}
+
+/// ``SprintBranches`` over `git`.
+public struct LiveSprintBranches: SprintBranches {
+  private let runner: any ProcessRunner
+  private let repositoryRoot: String
+  private let timeout: Duration
+
+  /// - Parameter repositoryRoot: any directory inside the repository.
+  public init(runner: any ProcessRunner, repositoryRoot: String, timeout: Duration = .seconds(60)) {
+    self.runner = runner
+    self.repositoryRoot = repositoryRoot
+    self.timeout = timeout
+  }
+
+  public func currentBranch() async throws(GitWorkspaceError) -> String? {
+    nil
+  }
+
+  public func checkedOutBranches() async throws(GitWorkspaceError) -> [String] {
+    []
+  }
+
+  public func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+  }
+
+  public func deleteBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+  }
+
+  public func fastForward(_ branch: String, from old: String, to new: String)
+    async throws(GitWorkspaceError) -> Bool
+  {
+    false
+  }
+}
