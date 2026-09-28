@@ -121,8 +121,8 @@ enum ChangedTestChecks {
 
   // MARK: - prove
 
-  /// - Parameter proofBases: ancestors of HEAD, oldest first, where a test that only fails to
-  ///   compile at the merge base is tried again.
+  /// - Parameter proofBases: ancestors of HEAD, oldest first, where a test that fails to compile
+  ///   or to load its package at an earlier base is tried again.
   static func prove(
     _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
     context: GateRun.Context
@@ -234,7 +234,7 @@ enum ChangedTestChecks {
       pending = []
       for (package, attempt) in tried {
         attempts[package.packagePath, default: []].append(attempt)
-        let retry = ProofRules.compileOnly(package.tests, in: attempt.judgement)
+        let retry = ProofRules.retryable(package.tests, in: attempt.judgement)
         if !retry.isEmpty { pending.append(package.narrowed(to: retry)) }
       }
     }

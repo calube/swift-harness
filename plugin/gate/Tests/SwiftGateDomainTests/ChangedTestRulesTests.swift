@@ -163,6 +163,67 @@ struct ChangedTestRulesTests {
   }
 
   @Test(
+    "a reverted run that loaded no package is retried in full at the next proof base, and compile-only tests alone otherwise — catches a package emptied at the merge base never tried where its stubs exist"
+  )
+  func noEvidenceRunIsRetried() throws {
+    let emptied = try attempt("mergebase", "emptied-target", tests)
+    let compileOnly = try attempt("mergebase", "compile-only", [tests[0]])
+    let proven = try attempt("mergebase", "reverted", tests)
+
+    #expect(emptied.judgement.verdict == .blocked)
+    #expect(ProofRules.retryable(tests, in: emptied.judgement) == tests)
+    #expect(ProofRules.retryable(tests, in: compileOnly.judgement) == [tests[0]])
+    #expect(ProofRules.retryable(tests, in: proven.judgement).isEmpty)
+  }
+
+  @Test(
+    "a merge base with no evidence and a proof base that proves every test is GREEN with no finding — catches a stale blocked flag or package-level finding outliving the retry"
+  )
+  func blockedMergeBaseThenProvenAtProofBase() throws {
+    let combined = ProofRules.combine([
+      try attempt("mergebase", "emptied-target", tests),
+      try attempt("surface", "reverted", tests),
+    ])
+
+    #expect(combined.judgement.verdict == .green)
+    #expect(combined.judgement.findings.isEmpty)
+    #expect(combined.proven == tests)
+    #expect(combined.provenAtProofBase == 2)
+  }
+
+  @Test(
+    "a target emptied at the last base tried is RED compile-only per test, pointing at --proof-base, never BLOCKED — catches a missing surface commit read as an environment failure"
+  )
+  func emptiedTargetWithNoProofBaseLeft() throws {
+    let combined = ProofRules.combine([try attempt("mergebase", "emptied-target", tests)])
+
+    #expect(combined.judgement.verdict == .red)
+    #expect(
+      combined.judgement.findings.map(\.ruleID)
+        == Array(repeating: ProofRules.compileOnlyRuleID, count: 2))
+    #expect(combined.judgement.findings.map(\.line) == tests.map(\.line))
+    #expect(
+      combined.judgement.findings.allSatisfy {
+        $0.message.contains("target 'Probe' referenced in product 'Probe' is empty")
+          && $0.message.contains("pass that commit as --proof-base")
+      })
+  }
+
+  @Test(
+    "an environment failure at the merge base and at every proof base stays BLOCKED — catches a retry that forgives a broken environment"
+  )
+  func environmentFailureAtEveryBase() throws {
+    let combined = ProofRules.combine([
+      try attempt("mergebase", "stale-module-cache", tests),
+      try attempt("surface", "stale-module-cache", tests),
+    ])
+
+    #expect(combined.judgement.verdict == .blocked)
+    #expect(combined.judgement.findings.map(\.ruleID) == [ProofRules.noEvidenceRuleID])
+    #expect(combined.proven.isEmpty)
+  }
+
+  @Test(
     "a test whose own declaration compiles, blocked by another test's compile error, is not proven with that cause named — catches one new-API test blamed on every test"
   )
   func compileBlockedByAnotherTest() throws {
