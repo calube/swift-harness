@@ -174,6 +174,20 @@ const tests = {
     }
   },
 
+  async 'every worker prompt\'s task gate turns on impact, coverage and the app build under both task proofs — catches a task gate that passes what the merge gate then fails'() {
+    const behave = { workers: [red(), workerReturn()] }
+    for (const [taskProof, gate] of [
+      ['per-task', 'swiftgate check --tier fast --base main --prove --mutate --impact --coverage --app-build'],
+      ['final', 'swiftgate check --tier fast --base main --impact --coverage --app-build'],
+    ]) {
+      const { workerCalls } = await run(baseArgs({ review: 'gate', taskProof }), behave)
+      assert.equal(workerCalls.length, 2)
+      for (const { prompt } of workerCalls) {
+        assert.ok(prompt.includes(gate), `a ${taskProof} worker prompt lacks ${gate}:\n${prompt}`)
+      }
+    }
+  },
+
   async 'the worker schema requires exactly TaskReturn keys — catches a schema drifting from the type check-return decodes'() {
     const { workerCalls } = await run(baseArgs({ review: 'gate' }))
     const { schema } = workerCalls[0].opts

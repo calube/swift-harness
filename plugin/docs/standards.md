@@ -646,6 +646,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `t2.test-failed`, `t2.crashed`, `t2.build-failed`, `t2.skip-without-reason`, `t2.no-tests`, `t2.no-evidence`, `t2.runner` | playbook P3 |
 | `t3.test-failed`, `t3.crashed`, `t3.build-failed`, `t3.skip-without-reason`, `t3.no-tests`, `t3.no-evidence`, `t3.runner` | playbook P3 |
 | `t3.unmapped-flow`, `t3.flow-untested`, `t3.max-flows`, `t3.app-container` | playbook P11 |
+| `app-build.error`, `app-build.blocked`, `app-build.container`, `app-build.summary` | `check --app-build`: a compile error in the app scheme's generic simulator build is RED, a failed build with no readable build results is BLOCKED, more than one root app container is RED |
 | `sim.retry-configured` | playbook P3 (a retried test hides a flake) |
 | `snapshots.recorded` | playbook P4 (`snapshots record`) |
 | `impact.untested-change` | playbook P9 |
