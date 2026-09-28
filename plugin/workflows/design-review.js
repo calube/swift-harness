@@ -337,16 +337,36 @@ function verifyPrompt(reviewer, findings) {
   )
 }
 
+// Telemetry holds only what the runtime reports. `budget.spent()` counts output tokens for the
+// whole turn, so its delta across this run is the workflow's output tokens plus any main-loop
+// output produced meanwhile; nothing reports usage per agent call, input tokens or cost.
+function readSpent() {
+  try {
+    return typeof budget !== 'undefined' && budget && typeof budget.spent === 'function' ? budget.spent() : null
+  } catch (e) {
+    return null
+  }
+}
+const spentAtStart = readSpent()
+const agentCalls = []
+async function tracked(label, call) {
+  const entry = { label, returned: false }
+  agentCalls.push(entry)
+  const result = await call()
+  entry.returned = result != null
+  return result
+}
+
 async function review(reviewer) {
   let result
   try {
-    result = await agent(reviewPrompt(reviewer), {
+    result = await tracked(`review:${reviewer}`, () => agent(reviewPrompt(reviewer), {
       agentType: AGENT_TYPES[reviewer],
       model: 'opus',
       label: `review:${reviewer}`,
       phase: 'Review',
       schema: REVIEW_SCHEMA,
-    })
+    }))
   } catch (error) {
     return notReviewed(reviewer, `reviewer agent failed: ${failure(error)}`)
   }
@@ -358,12 +378,12 @@ async function review(reviewer) {
 
   let verified
   try {
-    verified = await agent(verifyPrompt(reviewer, findings), {
+    verified = await tracked(`verify:${reviewer}`, () => agent(verifyPrompt(reviewer, findings), {
       agentType: 'swift-harness:verifier',
       label: `verify:${reviewer}`,
       phase: 'Verify',
       schema: VERIFY_SCHEMA,
-    })
+    }))
   } catch (error) {
     return notReviewed(reviewer, `verifier failed; findings unverified: ${failure(error)}`)
   }
@@ -404,6 +424,23 @@ const incomplete = reviews.some(r => r.status !== 'reviewed')
 if (carried.length) log(`carried forward from an earlier round, unchanged on disk: ${carried.join(', ')}`)
 if (unreviewed.length) log(`NOT REVIEWED: ${unreviewed.join(', ')}; the design cannot be ready`)
 
+const spentAtEnd = readSpent()
+const agentOrder = entry => {
+  const [stage, reviewer] = entry.label.split(':')
+  return REVIEWERS.indexOf(reviewer) * 2 + (stage === 'verify' ? 1 : 0)
+}
+const telemetry = {
+  outputTokens: spentAtStart === null || spentAtEnd === null ? null : spentAtEnd - spentAtStart,
+  agents: [...agentCalls].sort((a, b) => agentOrder(a) - agentOrder(b)),
+  unavailable: [
+    ...(spentAtStart === null || spentAtEnd === null
+      ? ['output tokens: the Workflow runtime gave this script no budget.spent()']
+      : []),
+    'per-agent tokens and durations: the Workflow script API reports no usage per agent call',
+    'input tokens and USD cost: the Workflow script API reports neither',
+  ],
+}
+
 return {
   schemaVersion: 1,
   tier,
@@ -411,4 +448,5 @@ return {
   ran: toRun,
   carried,
   reviews,
+  telemetry,
 }

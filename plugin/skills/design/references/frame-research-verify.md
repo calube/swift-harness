@@ -218,7 +218,8 @@ fix it and rerun. Never hand a lane a pack you wrote yourself.
 
 ### Run
 
-Tell the user how many lanes start. Then launch the plugin's registered workflow by name:
+Tell the user how many lanes start. Note the launch time with `date -u +%Y-%m-%dT%H:%M:%SZ`,
+then launch the plugin's registered workflow by name:
 
 ```
 Workflow({
@@ -247,7 +248,16 @@ place of `name`. If that's refused as well, use the Agent tool fallback below an
 which launch failed.
 
 Keep the `runId` from the tool result. The script returns `status`, an entry per lane, the merged
-`needsDecision` list and `unusedAnswers`.
+`needsDecision` list, `unusedAnswers` and `telemetry`. Save the whole return to
+`<run>/research-<n>.json`, `<n>` counting this design run's research launches from 1, and record
+it before anything else:
+
+```bash
+"$SG" design-telemetry --run <run> --run-id <design-run> --phase research \
+  --workflow-result <run>/research-<n>.json --started-at <launch time> --session <id>
+```
+
+Exit 2 names a bad option or an unreadable return: fix it and rerun.
 
 - `needs-decision`: ask, record, relaunch (below).
 - `incomplete`: a lane came back `not-researched` with a reason. Tell the user, then ask whether to
@@ -266,7 +276,8 @@ Keep the `runId` from the tool result. The script returns `status`, an entry per
    `answer` claim with that lane.
 4. Relaunch the way the run launched (the same `name`, or the same `scriptPath`) and the same args, `answers` holding every research answer
    so far as `{question, answer}`, plus `resumeFromRunId: "<that runId>"`. Answered lanes rerun
-   from their cached first call; the others replay unchanged.
+   from their cached first call; the others replay unchanged. Note the launch time first, and
+   record the relaunch with `design-telemetry` as the first launch was.
 5. Repeat until the status isn't `needs-decision`. A non-empty `unusedAnswers` means a question
    text changed. Tell the user rather than dropping it.
 
@@ -422,17 +433,22 @@ When the draft passes:
 
 ## Phase log
 
-Append 1 line to `<run>/phases.jsonl` per agent run and per `swiftgate` step:
+A workflow launch records its own line: `design-telemetry` appends a schema 2 line to
+`<run>/phases.jsonl` with the output tokens the workflow counted, or `null` and the reason when it
+counted none, and the wall time from `--started-at`. It also writes
+`<run>/telemetry/<phase>-<n>.json` with the workflow's agent calls and this session's transcript
+path. Never write a workflow launch's line by hand.
+
+Append 1 line to `<run>/phases.jsonl` per Agent tool run and per `swiftgate` step:
 
 ```json
-{"schemaVersion":1,"runId":"design-20260925T180000Z","phase":"research","agentRole":"research-lane","lane":"codebase","tokens":48213,"costUSD":null,"wallMilliseconds":212000}
+{"schemaVersion":1,"runId":"design-20260925T180000Z","phase":"verify","agentRole":"claim-checker","lane":null,"tokens":48213,"costUSD":null,"wallMilliseconds":212000}
 ```
 
 - `runId`: `<design-run>`.
 - `phase`: `frame`, `research`, `verify` or `draft` here.
 - `agentRole`: `research-lane`, `claim-checker` or `drafter`, or `null` for a `swiftgate` step.
-- `lane`: set only with `research-lane`. Log 1 line per lane when the Workflow result reports lanes
-  apart, else 1 line with `lane: null`.
-- `tokens` and `wallMilliseconds`: from the tool result's usage figures. A `swiftgate` step logs
-  `tokens: 0` and its run time.
+- `lane`: set only with `research-lane`, for a lane the Agent tool fallback ran.
+- `tokens` and `wallMilliseconds`: from the Agent tool result's usage figures. A `swiftgate` step
+  logs `tokens: 0` and its run time.
 - `costUSD`: the reported cost, or `null` when the tool reports none. Never `0` as a stand-in.

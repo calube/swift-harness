@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "tier": "standard",
+  "status": "complete",
+  "ran": [
+    "evidence-auditor",
+    "standards-reviewer",
+    "challenger"
+  ],
+  "carried": [],
+  "reviews": [
+    {
+      "schemaVersion": 1,
+      "reviewer": "evidence-auditor",
+      "status": "reviewed",
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "reviewer": "standards-reviewer",
+      "status": "reviewed",
+      "findings": []
+    },
+    {
+      "schemaVersion": 1,
+      "reviewer": "challenger",
+      "status": "reviewed",
+      "findings": []
+    }
+  ],
+  "telemetry": {
+    "outputTokens": null,
+    "agents": [
+      {
+        "label": "review:evidence-auditor",
+        "returned": true
+      },
+      {
+        "label": "review:standards-reviewer",
+        "returned": true
+      },
+      {
+        "label": "review:challenger",
+        "returned": true
+      }
+    ],
+    "unavailable": [
+      "output tokens: the Workflow runtime gave this script no budget.spent()",
+      "per-agent tokens and durations: the Workflow script API reports no usage per agent call",
+      "input tokens and USD cost: the Workflow script API reports neither"
+    ]
+  }
+}

@@ -51,7 +51,8 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
   struct PhaseRow: Sendable, Equatable, Encodable {
     let phase: DesignPlanPhase
     let runs: Int
-    let tokens: Int
+    let tokens: Int?
+    let unmeasuredRuns: Int
     let costUSD: Double?
     let wallMilliseconds: Int
 
@@ -59,6 +60,7 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
       phase = totals.key
       runs = totals.runs
       tokens = totals.tokens
+      unmeasuredRuns = totals.unmeasuredRuns
       costUSD = totals.costUSD
       wallMilliseconds = totals.wallMilliseconds
     }
@@ -67,7 +69,8 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
   struct AgentRow: Sendable, Equatable, Encodable {
     let agentRole: ContextPackRole
     let runs: Int
-    let tokens: Int
+    let tokens: Int?
+    let unmeasuredRuns: Int
     let costUSD: Double?
     let wallMilliseconds: Int
 
@@ -75,6 +78,7 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
       agentRole = totals.key
       runs = totals.runs
       tokens = totals.tokens
+      unmeasuredRuns = totals.unmeasuredRuns
       costUSD = totals.costUSD
       wallMilliseconds = totals.wallMilliseconds
     }
@@ -138,6 +142,8 @@ struct DesignStatsReport: Sendable, Equatable, Encodable {
   let reviewerPrecision: [ReviewerRow]
   let phaseTotals: [PhaseRow]
   let agentTotals: [AgentRow]
+  /// Phase records whose tokens no tool reported, across every phase: counted, never summed as 0.
+  let unmeasuredPhaseRecords: Int
   let nonDraftWallShare: RateJSON
   /// Spec §9.3's overhead share from the `--plan` ledger; `nil` without a plan or a schedule.
   let overheadShare: Double?
@@ -221,6 +227,13 @@ enum DesignStatsRun {
     let cacheReport = DesignMetrics.cacheHitRate(
       claims: cacheLoaded.claims, verdicts: cacheLoaded.verdicts)
 
+    let unmeasured = phasesLoaded.records.count { $0.tokens == nil }
+    if unmeasured > 0 {
+      notes.append(
+        "\(unmeasured) phase record(s) have unmeasured tokens; token totals leave them out and "
+          + "count them as unmeasured")
+    }
+
     for (lane, count) in laneReport.unknownLaneClaimCounts.sorted(by: { $0.key < $1.key }) {
       notes.append("\(count) claim(s) name an unrecognised lane `\(lane)`")
     }
@@ -233,6 +246,7 @@ enum DesignStatsRun {
       reviewerPrecision: reviewerRows.map(DesignStatsReport.ReviewerRow.init),
       phaseTotals: phaseTotals.map(DesignStatsReport.PhaseRow.init),
       agentTotals: agentTotals.map(DesignStatsReport.AgentRow.init),
+      unmeasuredPhaseRecords: unmeasured,
       nonDraftWallShare: RateJSON(nonDraftWall), overheadShare: overhead.share,
       estimateError: DesignStatsReport.EstimateErrorRow(estimateErrorReport),
       probes: DesignStatsReport.ProbeRow(probeReport),
@@ -267,13 +281,13 @@ enum DesignStatsRun {
       lines.append("phases:")
       for phase in report.phaseTotals {
         lines.append(
-          "  \(phase.phase.rawValue): runs=\(phase.runs) tokens=\(phase.tokens) "
+          "  \(phase.phase.rawValue): runs=\(phase.runs) tokens=\(tokens(phase.tokens))\(unmeasured(phase.unmeasuredRuns)) "
             + "cost=\(cost(phase.costUSD)) wall=\(ReportRenderer.duration(phase.wallMilliseconds))")
       }
       lines.append("agents:")
       for agent in report.agentTotals {
         lines.append(
-          "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(agent.tokens) "
+          "  \(agent.agentRole.rawValue): runs=\(agent.runs) tokens=\(tokens(agent.tokens))\(unmeasured(agent.unmeasuredRuns)) "
             + "cost=\(cost(agent.costUSD)) wall=\(ReportRenderer.duration(agent.wallMilliseconds))")
       }
       lines.append(
@@ -298,6 +312,14 @@ enum DesignStatsRun {
     return String(format: "%.1f%% (%d/%d)", value * 100, rate.numerator, rate.denominator)
   }
 
+  private static func tokens(_ tokens: Int?) -> String {
+    tokens.map(String.init) ?? "n/a"
+  }
+
+  private static func unmeasured(_ runs: Int) -> String {
+    runs == 0 ? "" : " unmeasured=\(runs)"
+  }
+
   private static func cost(_ costUSD: Double?) -> String {
     costUSD.map { String(format: "$%.2f", $0) } ?? "n/a"
   }
@@ -307,7 +329,8 @@ enum DesignStatsRun {
     return DesignStatsReport(
       verdict: .blocked, design: options.design, plan: options.plan, claimLanes: [],
       unknownLaneClaimCounts: [:], escapeRate: zero, reviewerPrecision: [], phaseTotals: [],
-      agentTotals: [], nonDraftWallShare: zero, overheadShare: nil, estimateError: .empty,
+      agentTotals: [], unmeasuredPhaseRecords: 0, nonDraftWallShare: zero, overheadShare: nil,
+      estimateError: .empty,
       probes: DesignStatsReport.ProbeRow(
         ProbeFailReport(total: 0, failed: 0, failRate: Rate(numerator: 0, denominator: 0))),
       cache: DesignStatsReport.CacheRow(

@@ -27,7 +27,6 @@ let package = Package(
         .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
       ]
     ),
-    // iOS-only: sources are compiled out on macOS so `swift test` on the host stays Core-only.
     .target(
       name: "CounterUI",
       dependencies: [
