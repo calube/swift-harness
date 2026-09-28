@@ -277,17 +277,6 @@ struct ReviewSynthesisTests {
     #expect(report.findings.count == 2)
   }
 
-  @Test(
-    "a defect and a rule violation with the same category stay separate — catches a verified defect absorbed into a standards finding"
-  )
-  func defectAndViolationNotMerged() throws {
-    let defect = Self.finding(
-      .major, category: "logic-in-live-client", file: "Sources/FactClientLive/Live.swift")
-    let report = try ReviewSynthesis.synthesize(
-      Self.inputs(Self.reviewed(.architecture, [defect, Self.violation(.major)])))
-    #expect(report.findings.count == 2)
-  }
-
   @Test("output order is independent of input order — catches a nondeterministic review.json")
   func deterministicOrder() throws {
     let findings = [
@@ -335,7 +324,8 @@ struct ReviewSynthesisTests {
     #expect(lines.contains { $0.contains("NOT REVIEWED: swiftui") })
     #expect(lines.contains { $0.hasPrefix("pre-existing check unavailable: ") })
     #expect(lines.filter { $0.hasPrefix("[major]") || $0.contains(". [major]") }.count == 10)
-    #expect(lines.last?.contains("15 more") == true)
+    #expect(lines.dropLast().last?.contains("15 more") == true)
+    #expect(lines.last == "telemetry: \(reviewTelemetryPath)")
   }
 
   @Test(
@@ -455,6 +445,28 @@ struct ReviewSynthesisTests {
       Self.inputs(Self.reviewed(.architecture, [Self.violation(.blocker)])))
     let summary = ReviewSummary.render(report, reportPath: "review.json")
     #expect(summary.contains("[blocker] architecture/logic-in-live-client (D7)"))
+  }
+
+  @Test(
+    "a report records the telemetry path synthesis was given, even with no focus results, the summary names it, and a review.json without telemetry fails decoding naming the key — catches a review whose cost file is missing or a report written outside review-synth"
+  )
+  func telemetryIsAlwaysPresent() throws {
+    for inputs in [Self.inputs(), []] {
+      let report = try ReviewSynthesis.synthesize(inputs)
+      #expect(report.telemetry == reviewTelemetryPath)
+      #expect(
+        ReviewSummary.render(report, reportPath: "review.json").contains(
+          "telemetry: \(reviewTelemetryPath)"))
+
+      var object = try #require(
+        try JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any])
+      object["telemetry"] = nil
+      let written = try JSONSerialization.data(withJSONObject: object)
+      let error = #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(ReviewReport.self, from: written)
+      }
+      #expect(String(describing: error).contains("telemetry"))
+    }
   }
 
   @Test(

@@ -239,8 +239,9 @@ public struct ReviewReport: Sendable, Equatable, Codable {
   public let notApplicable: [ReviewFocus]
   /// Why the pre-existing check didn't run, when it didn't; every finding then counts.
   public let baselineUnavailable: String?
-  /// The run's telemetry file, set by the command that wrote it.
-  public var telemetry: String?
+  /// The run's telemetry file. Required: `review-synth` writes it before the report, so a
+  /// `review.json` without it didn't come from `review-synth`.
+  public let telemetry: String
 }
 
 /// `review-synth`: deterministic dedupe and verdict (spec §9.2 step 4). No judgment happens here;
@@ -306,7 +307,9 @@ public enum ReviewSynthesis {
           continue
         }
         kept.append(
-          Candidate(finding: enforcingRule(finding), focus: focus, preExisting: preExisting))
+          Candidate(
+            finding: enforcingRule(finding), focus: focus, preExisting: preExisting,
+            sequence: kept.count))
       }
     }
 
@@ -327,7 +330,7 @@ public enum ReviewSynthesis {
       dropped: dropped.sorted { order($0.finding) < order($1.finding) },
       unmatched: unmatched.sorted { order($0.finding) < order($1.finding) },
       notReviewed: notReviewed, notApplicable: notApplicable,
-      baselineUnavailable: baselineUnavailable, telemetry: nil)
+      baselineUnavailable: baselineUnavailable, telemetry: telemetry)
   }
 
   /// The verify step's drop rule, shared by code and design review so the two can't drift.
@@ -376,12 +379,16 @@ public enum ReviewSynthesis {
     let finding: ReviewFinding
     let focus: ReviewFocus
     let preExisting: Bool
+    /// Position in the order the focuses reported their findings.
+    let sequence: Int
   }
 
   /// Defects merge on file and canonical category, standards violations on file and rule:
   /// category is free text each reviewer invents, while the rule id is shared vocabulary. Within
   /// that, findings chain into one while each starts within ``dedupeWindow`` lines of the lines
-  /// covered so far; findings with no line merge only with each other.
+  /// covered so far; findings with no line merge only with each other. A cluster of defects that
+  /// cite no rule then joins the violations of its canonical category in reach, when they all
+  /// cite one rule: a reviewer outside the rule's lens reports the same code without the rule.
   private struct GroupKey: Hashable {
     enum Identity: Hashable {
       case defect(category: String)
@@ -423,7 +430,55 @@ public enum ReviewSynthesis {
       }
       if !current.isEmpty { clusters.append(current) }
     }
-    return clusters.map(merged).sorted { order($0.finding) < order($1.finding) }
+    return absorbingRuleLessDefects(clusters).map(merged).sorted {
+      order($0.finding) < order($1.finding)
+    }
+  }
+
+  private static func absorbingRuleLessDefects(_ clusters: [[Candidate]]) -> [[Candidate]] {
+    var result = clusters
+    for index in clusters.indices where isRuleLessDefects(clusters[index]) {
+      let defects = clusters[index]
+      let category = canonicalCategory(defects[0].finding.category)
+      let targets = result.indices.filter { target in
+        guard let head = result[target].first else { return false }
+        return head.finding.effectiveKind == .standardsViolation
+          && head.finding.file == defects[0].finding.file
+          && result[target].contains { canonicalCategory($0.finding.category) == category }
+          && inReach(result[target], defects)
+      }
+      let rules = Set(targets.map { GroupKey(result[$0][0].finding) })
+      guard rules.count == 1, let first = targets.first else { continue }
+      result[first] = (targets.flatMap { result[$0] } + defects).sorted {
+        clusterOrder($0) < clusterOrder($1)
+      }
+      for target in targets.dropFirst() { result[target] = [] }
+      result[index] = []
+    }
+    return result.filter { !$0.isEmpty }
+  }
+
+  private static func isRuleLessDefects(_ cluster: [Candidate]) -> Bool {
+    cluster.allSatisfy { $0.finding.effectiveKind == .defect && !$0.finding.citesRule }
+  }
+
+  /// Two clusters are in reach when their line spans lie within ``dedupeWindow`` of each other;
+  /// clusters with no line reach only each other.
+  private static func inReach(_ lhs: [Candidate], _ rhs: [Candidate]) -> Bool {
+    switch (span(lhs), span(rhs)) {
+    case (nil, nil): true
+    case (let lhs?, let rhs?):
+      rhs.lowerBound <= lhs.upperBound + dedupeWindow
+        && lhs.lowerBound <= rhs.upperBound + dedupeWindow
+    default: false
+    }
+  }
+
+  private static func span(_ cluster: [Candidate]) -> ClosedRange<Int>? {
+    let ranges = cluster.compactMap(\.finding.lineRange)
+    guard let lower = ranges.map(\.lowerBound).min(), let upper = ranges.map(\.upperBound).max()
+    else { return nil }
+    return lower...upper
   }
 
   private static func merged(_ cluster: [Candidate]) -> ReviewReport.Merged {
@@ -437,22 +492,43 @@ public enum ReviewSynthesis {
     for candidate in [lead] + cluster where !evidence.contains(candidate.finding.evidence) {
       evidence.append(candidate.finding.evidence)
     }
+    // Whichever copy leads, a copy citing a rule names the finding's kind and rule, a standards
+    // violation first: a rule-less copy must never erase the rule another reviewer cited.
+    let cited = cluster.filter(\.finding.citesRule).min { lhs, rhs in
+      (citedOrder(lhs), lhs.finding.severity.rank, clusterOrder(lhs))
+        < (citedOrder(rhs), rhs.finding.severity.rank, clusterOrder(rhs))
+    }
+    let kind = cited?.finding.kind ?? lead.finding.kind
     let category =
-      lead.finding.effectiveKind == .defect
+      (kind ?? .defect) == .defect
       ? canonicalCategory(lead.finding.category) : lead.finding.category
+    // The lead comes first so it keeps its own severity rule unless another copy's is stronger.
+    let severityRule = ([lead] + cluster).compactMap(\.finding.severityRule).min {
+      $0.severity.rank < $1.severity.rank
+    }
     return ReviewReport.Merged(
-      finding: lead.finding.with(
-        severity: lead.finding.severity, category: category,
-        evidence: evidence.joined(separator: "\n---\n")),
+      finding: ReviewFinding(
+        severity: lead.finding.severity, category: category, file: lead.finding.file,
+        line: lead.finding.line, title: lead.finding.title,
+        failureScenario: lead.finding.failureScenario,
+        evidence: evidence.joined(separator: "\n---\n"), fix: lead.finding.fix,
+        verified: lead.finding.verified, kind: kind, rule: cited?.finding.rule ?? lead.finding.rule,
+        verificationNote: lead.finding.verificationNote, unmatched: lead.finding.unmatched,
+        endLine: lead.finding.endLine,
+        severityRule: severityRule),
       focuses: Set(cluster.map(\.focus)).sorted(),
       lines: Set(cluster.compactMap(\.finding.line)).sorted())
+  }
+
+  private static func citedOrder(_ candidate: Candidate) -> Int {
+    candidate.finding.effectiveKind == .standardsViolation ? 0 : 1
   }
 
   private static func clusterOrder(_ candidate: Candidate) -> ClusterKey {
     let range = candidate.finding.lineRange
     return ClusterKey(
       lower: range?.lowerBound ?? 0, upper: range?.upperBound ?? 0, focus: candidate.focus,
-      title: candidate.finding.title)
+      title: candidate.finding.title, sequence: candidate.sequence)
   }
 
   private struct ClusterKey: Comparable {
@@ -460,9 +536,11 @@ public enum ReviewSynthesis {
     let upper: Int
     let focus: ReviewFocus
     let title: String
+    let sequence: Int
 
     static func < (lhs: Self, rhs: Self) -> Bool {
-      (lhs.lower, lhs.upper, lhs.focus, lhs.title) < (rhs.lower, rhs.upper, rhs.focus, rhs.title)
+      (lhs.lower, lhs.upper, lhs.focus, lhs.title, lhs.sequence)
+        < (rhs.lower, rhs.upper, rhs.focus, rhs.title, rhs.sequence)
     }
   }
 
@@ -539,7 +617,7 @@ public enum ReviewSummary {
         "PRE-EXISTING (not counted toward the verdict): \(report.preExisting.count) — "
           + shown.joined(separator: "; ") + more)
     }
-    if let telemetry = report.telemetry { tail.append("telemetry: \(telemetry)") }
+    tail.append("telemetry: \(report.telemetry)")
 
     // Each listed finding takes two lines; one more line closes the list.
     let room = max(0, (maxLines - head.count - tail.count - 1) / 2)

@@ -85,12 +85,17 @@ telemetry file then says the tokens are unavailable.
 It drops findings without a failure scenario, standards violations that cite no rule, and
 findings the verifier refuted, and lists `unmatched` findings (which keep the verdict off
 `merge`). It raises a finding to the severity its `severity_rule` states. It merges same-kind
-findings in a file whose lines are within 3 of each other. It files findings on code the diff
-didn't add or change (read from `review-input/diff-numbered.txt`) as pre-existing, outside the
-verdict. It then applies the verdict rule, writes `review.json` and `review-telemetry.json` (wall
-time since `review-input` started, and the workflow's reported output tokens and agent calls),
-and prints at most 30 lines. Exit 2 means an input broke the contract: fix the file you wrote,
+findings in a file whose lines are within 3 of each other, and a rule-less defect into the one
+nearby rule its category matches. It files findings on code the diff didn't add or change (read
+from `review-input/diff-numbered.txt`) as pre-existing, outside the verdict. It writes
+`review-telemetry.json` first (wall time since `review-input` started, and the workflow's reported
+output tokens and agent calls), then applies the verdict rule, writes `review.json` naming that
+file in `telemetry`, and prints at most 30 lines. Exit 2 means an input broke the contract or the
+telemetry file couldn't be written, and no `review.json` was written: fix the file you wrote,
 don't hand-edit the verdict.
+
+`review.json` only ever comes from `review-synth`. Never write or edit it yourself, not even to
+record a verdict after a failed run: a `review.json` without `telemetry` fails to decode.
 
 ## 4. Report
 
