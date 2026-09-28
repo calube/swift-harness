@@ -139,6 +139,49 @@ import Testing
 }
 EOF
 
+mkdir -p Packages/AppFeature
+cat > Packages/AppFeature/Package.swift <<'EOF'
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+  name: "AppFeature",
+  platforms: [.iOS(.v18), .macOS(.v15)],
+  products: [
+    .library(name: "AppCore", targets: ["AppCore"]),
+    .library(name: "AppUI", targets: ["AppUI"]),
+  ],
+  dependencies: [
+    .package(path: "../APIClient"),
+    .package(path: "../LogClient"),
+    .package(
+      url: "https://github.com/pointfreeco/swift-composable-architecture",
+      exact: "1.26.2"
+    ),
+  ],
+  targets: [
+    .target(
+      name: "AppCore",
+      dependencies: [
+        .product(name: "APIClient", package: "APIClient"),
+        .product(name: "LogClient", package: "LogClient"),
+        .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+      ],
+      swiftSettings: [.define("APP_CORE")]
+    ),
+    .target(
+      name: "AppUI",
+      dependencies: [
+        "AppCore",
+        .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+      ]
+    ),
+    .testTarget(name: "AppUITests", dependencies: ["AppUI"]),
+  ],
+  swiftLanguageModes: [.v6]
+)
+EOF
+
 git add -A
 git commit -q -m base
 BASE=$(git rev-parse HEAD)
@@ -919,3 +962,72 @@ sed -i '' 's/^}$/\
   @Test func describesSettings() {}\
 }/' Tests/AppTests/FeatureTests.swift
 record rejected-test-in-existing-file
+
+# Package manifests: an existing manifest may only gain dependencies, products and targets.
+
+begin allowed-manifest-local-package
+mkdir -p Packages/ProfileClient
+cat > Packages/ProfileClient/Package.swift <<'EOF'
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+  name: "ProfileClient",
+  platforms: [.iOS(.v18), .macOS(.v15)],
+  products: [
+    .library(name: "ProfileClient", targets: ["ProfileClient"])
+  ],
+  targets: [
+    .target(name: "ProfileClient")
+  ]
+)
+EOF
+sed -i '' 's|    .package(path: "../LogClient"),|    .package(path: "../LogClient"),\
+    .package(path: "../ProfileClient"),|' Packages/AppFeature/Package.swift
+sed -i '' 's|        .product(name: "LogClient", package: "LogClient"),|        .product(name: "LogClient", package: "LogClient"),\
+        .product(name: "ProfileClient", package: "ProfileClient"),|' Packages/AppFeature/Package.swift
+sed -i '' 's|    .testTarget(name: "AppUITests", dependencies: \["AppUI"\]),|    .testTarget(name: "AppUITests", dependencies: ["AppUI"]),\
+    .target(\
+      name: "ProfileFeature",\
+      dependencies: [.product(name: "ProfileClient", package: "ProfileClient")]\
+    ),|' Packages/AppFeature/Package.swift
+record allowed-manifest-local-package
+
+begin allowed-manifest-products-and-targets
+sed -i '' 's|    .library(name: "AppUI", targets: \["AppUI"\]),|    .library(name: "AppUI", targets: ["AppUI"]),\
+    .library(name: "Settings", targets: ["Settings"]),|' Packages/AppFeature/Package.swift
+sed -i '' 's|      exact: "1.26.2"|      exact: "1.26.2"\
+    ),\
+    .package(\
+      url: "https://github.com/pointfreeco/swift-dependencies",\
+      exact: "1.9.2"|' Packages/AppFeature/Package.swift
+sed -i '' 's|    .testTarget(name: "AppUITests", dependencies: \["AppUI"\]),|    .testTarget(name: "AppUITests", dependencies: ["AppUI", "Settings"]),\
+    .target(name: "Settings", dependencies: ["AppCore"]),\
+    .testTarget(name: "SettingsTests", dependencies: ["Settings"]),|' Packages/AppFeature/Package.swift
+record allowed-manifest-products-and-targets
+
+begin rejected-manifest-removed-dependency
+sed -i '' '/    .package(path: "..\/APIClient"),/d' Packages/AppFeature/Package.swift
+record rejected-manifest-removed-dependency
+
+begin rejected-manifest-changed-element
+sed -i '' 's|      exact: "1.26.2"|      exact: "1.27.0"|' Packages/AppFeature/Package.swift
+record rejected-manifest-changed-element
+
+begin rejected-manifest-swift-settings
+sed -i '' 's|      swiftSettings: \[.define("APP_CORE")\]|      swiftSettings: [.define("APP_CORE"), .unsafeFlags(["-Onone"])]|' \
+  Packages/AppFeature/Package.swift
+record rejected-manifest-swift-settings
+
+begin rejected-manifest-platform
+sed -i '' 's|  platforms: \[.iOS(.v18), .macOS(.v15)\],|  platforms: [.iOS(.v17), .macOS(.v15)],|' \
+  Packages/AppFeature/Package.swift
+record rejected-manifest-platform
+
+begin rejected-manifest-tools-version
+sed -i '' 's|^// swift-tools-version: 6.2$|// swift-tools-version: 6.1|' Packages/AppFeature/Package.swift
+record rejected-manifest-tools-version
+
+begin rejected-manifest-new-statement
+printf '\npackage.targets.append(.target(name: "Extra"))\n' >> Packages/AppFeature/Package.swift
+record rejected-manifest-new-statement

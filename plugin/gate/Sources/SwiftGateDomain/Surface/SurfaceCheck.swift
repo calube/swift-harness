@@ -203,8 +203,9 @@ public enum SurfaceCheck {
         + "already on the parent"
     case .changesStoredValue:
       "changes an existing stored value: a surface leaves existing behaviour unchanged"
-    case .changesManifest:
-      ""
+    case .changesManifest(let excerpt):
+      "changes the package manifest (`\(excerpt)`): a surface only adds dependencies, products "
+        + "and targets to an existing manifest's lists, and removes or changes nothing"
     case .addsTest:
       "adds a test: a surface commit adds no tests; they follow it"
     }

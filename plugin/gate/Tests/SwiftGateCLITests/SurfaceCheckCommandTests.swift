@@ -183,6 +183,8 @@ struct SurfaceCheckCommandTests {
       "allowed-registration",
       [SurfaceJudged("Root.commands", .registersType), SurfaceJudged("Root.names", .registersType)]
     ),
+    ("allowed-manifest-local-package", [SurfaceJudged("package", .extendsManifest)]),
+    ("allowed-manifest-products-and-targets", [SurfaceJudged("package", .extendsManifest)]),
   ]
 
   /// Bodies that look like stubs but carry behaviour, each a real commit that must fail naming
@@ -354,7 +356,53 @@ struct SurfaceCheckCommandTests {
           file: "Tests/AppTests/FeatureTests.swift")
       ]
     ),
+    (
+      "rejected-manifest-removed-dependency",
+      [
+        SurfaceRejected(
+          "package", .changesManifest(excerpt: ".package(path: \"../APIClient\")"), line: 11,
+          file: manifest)
+      ]
+    ),
+    (
+      "rejected-manifest-changed-element",
+      [
+        SurfaceRejected(
+          "package", .changesManifest(excerpt: "exact: \"1.27.0\""), line: 16, file: manifest)
+      ]
+    ),
+    (
+      "rejected-manifest-swift-settings",
+      [
+        SurfaceRejected(
+          "package", .changesManifest(excerpt: ".unsafeFlags([\"-Onone\"])"), line: 27,
+          file: manifest)
+      ]
+    ),
+    (
+      "rejected-manifest-platform",
+      [SurfaceRejected("package", .changesManifest(excerpt: ".iOS(.v17)"), line: 6, file: manifest)]
+    ),
+    (
+      "rejected-manifest-tools-version",
+      [
+        SurfaceRejected(
+          "package", .changesManifest(excerpt: "// swift-tools-version: 6.1"), line: 1,
+          file: manifest)
+      ]
+    ),
+    (
+      "rejected-manifest-new-statement",
+      [
+        SurfaceRejected(
+          "package",
+          .changesManifest(excerpt: "package.targets.append(.target(name: \"Extra\"))"), line: 41,
+          file: manifest)
+      ]
+    ),
   ]
+
+  static let manifest = "Packages/AppFeature/Package.swift"
 
   private static func run(_ name: String) async throws -> (
     judgements: [SurfaceJudgement], report: RunReport
@@ -407,6 +455,41 @@ struct SurfaceCheckCommandTests {
       #expect(finding.line == expected.line)
       #expect(finding.message.contains("`\(expected.declaration)`"), "\(finding.message)")
     }
+  }
+
+  @Test(
+    "a surface that links a new local package into an existing manifest and adds a target passes, and the new package's own manifest is judged nothing — catches the whole `Package(…)` value refused as a changed stored value"
+  )
+  func manifestGainingALocalPackagePasses() async throws {
+    let (judgements, report) = try await Self.run("allowed-manifest-local-package")
+
+    #expect(
+      judgements == [
+        SurfaceJudgement(
+          file: Self.manifest, line: 14, declaration: "package", outcome: .stub(.extendsManifest))
+      ])
+    #expect(report.verdict == .green, "\(report.findings.map(\.message))")
+    let summary = try #require(
+      report.findings.first { $0.ruleID == SurfaceCheck.summaryRuleID })
+    #expect(
+      summary.message
+        == "1 added or changed bodies judged across 2 changed Swift files: 1 allowed stubs, "
+        + "0 behaviour; 0 non-Swift paths not judged")
+  }
+
+  @Test(
+    "a manifest change past added list elements says what changed and that a surface only adds dependencies, products and targets — catches a finding that leaves the session guessing which line to undo"
+  )
+  func manifestFindingNamesTheChange() async throws {
+    let (_, report) = try await Self.run("rejected-manifest-changed-element")
+
+    let finding = try #require(
+      report.findings.first { $0.ruleID == SurfaceCheck.behaviourRuleID })
+    #expect(
+      finding.message
+        == "`package` changes the package manifest (`exact: \"1.27.0\"`): a surface only adds "
+        + "dependencies, products and targets to an existing manifest's lists, and removes or "
+        + "changes nothing")
   }
 
   @Test(

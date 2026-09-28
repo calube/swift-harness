@@ -104,6 +104,9 @@ public enum SurfaceBodyScan {
     _ change: SurfaceFileChange, declares: @escaping (String, DeclaredKind) -> Bool
   ) -> [SurfaceJudgement] {
     guard let text = change.commitText else { return [] }
+    if ManifestDiff.isManifest(change.path), let parentText = change.parentText {
+      return ManifestDiff.judge(path: change.path, parentText: parentText, commitText: text)
+    }
     let tree = Parser.parse(source: text)
     let fileNames = DeclaredNames()
     fileNames.walk(tree)
@@ -241,6 +244,214 @@ public enum SurfaceBodyScan {
 
   static func normalize(_ node: Syntax) -> String {
     node.tokens(viewMode: .sourceAccurate).map(\.text).joined(separator: " ")
+  }
+}
+
+/// An existing `Package.swift` read against its parent token by token, where only the lists
+/// labelled `dependencies`, `products` and `targets` may gain elements (fast modes §3.2). Trivia
+/// and the commas between list elements are ignored; the tools-version comment is not.
+private enum ManifestDiff {
+  struct Change {
+    let excerpt: String
+    let node: Syntax
+  }
+
+  static let listLabels: Set<String> = ["dependencies", "products", "targets"]
+  /// The `PackageDescription` factories a manifest declares a package, product, target or target
+  /// dependency with.
+  static let declarations: Set<String> = [
+    "package", "product", "target", "testTarget", "executableTarget", "macro", "plugin",
+    "binaryTarget", "systemLibrary", "library", "executable", "byName",
+  ]
+
+  static func isManifest(_ path: String) -> Bool {
+    path.split(separator: "/").last == "Package.swift"
+  }
+
+  static func judge(path: String, parentText: String, commitText: String) -> [SurfaceJudgement] {
+    let tree = Parser.parse(source: commitText)
+    let converter = SourceLocationConverter(fileName: path, tree: tree)
+    func judgement(_ outcome: SurfaceJudgement.Outcome, _ node: Syntax?) -> [SurfaceJudgement] {
+      let line = node.map { converter.location(for: $0.positionAfterSkippingLeadingTrivia).line }
+      return [
+        SurfaceJudgement(file: path, line: line ?? 1, declaration: "package", outcome: outcome)
+      ]
+    }
+    let oldVersion = toolsVersion(parentText)
+    let newVersion = toolsVersion(commitText)
+    if oldVersion != newVersion {
+      return judgement(
+        .behaviour(.changesManifest(excerpt: newVersion ?? oldVersion ?? "")), nil)
+    }
+    var added: [Syntax] = []
+    let parentTree = Syntax(Parser.parse(source: parentText))
+    if let change = compare(parentTree, Syntax(tree), context: Syntax(tree), added: &added) {
+      return judgement(.behaviour(.changesManifest(excerpt: change.excerpt)), change.node)
+    }
+    guard let first = added.min(by: { $0.position < $1.position }) else { return [] }
+    return judgement(.stub(.extendsManifest), first)
+  }
+
+  /// The first line, when it is the `swift-tools-version` comment SwiftPM reads.
+  private static func toolsVersion(_ text: String) -> String? {
+    let line = text.prefix { $0 != "\n" }.trimmingTrailingWhitespace
+    return line.hasPrefix("//") && line.lowercased().contains("swift-tools-version")
+      ? line : nil
+  }
+
+  /// `nil` when `new` is `old` with only allowed list elements added, which land in `added`.
+  /// `context` is the innermost argument, list element or statement holding `new`, which a
+  /// change is reported by.
+  static func compare(_ old: Syntax, _ new: Syntax, context: Syntax, added: inout [Syntax])
+    -> Change?
+  {
+    if let oldToken = old.as(TokenSyntax.self), let newToken = new.as(TokenSyntax.self) {
+      return oldToken.text == newToken.text ? nil : Change(excerpt: excerpt(context), node: context)
+    }
+    guard old.kind == new.kind else { return Change(excerpt: excerpt(context), node: context) }
+    if let oldList = old.as(ArrayElementListSyntax.self),
+      let newList = new.as(ArrayElementListSyntax.self)
+    {
+      return compareLists(Array(oldList), Array(newList), in: newList, added: &added)
+    }
+    let oldChildren = Array(old.children(viewMode: .sourceAccurate))
+    let newChildren = Array(new.children(viewMode: .sourceAccurate))
+    for (oldChild, newChild) in zip(oldChildren, newChildren) {
+      let inner = isContext(newChild) ? newChild : context
+      if let change = compare(oldChild, newChild, context: inner, added: &added) { return change }
+    }
+    if newChildren.count > oldChildren.count {
+      let extra = newChildren[oldChildren.count]
+      return Change(excerpt: excerpt(extra), node: extra)
+    }
+    if oldChildren.count > newChildren.count {
+      return Change(excerpt: excerpt(oldChildren[newChildren.count]), node: context)
+    }
+    return nil
+  }
+
+  /// Aligns the lists by the longest run of pairs that compare equal once additions are allowed,
+  /// so a removed or changed element is told apart from the ones around it.
+  private static func compareLists(
+    _ old: [ArrayElementSyntax], _ new: [ArrayElementSyntax], in list: ArrayElementListSyntax,
+    added: inout [Syntax]
+  ) -> Change? {
+    var memo: [Int: Bool] = [:]
+    func matches(_ i: Int, _ j: Int) -> Bool {
+      let key = i * new.count + j
+      if let known = memo[key] { return known }
+      var scratch: [Syntax] = []
+      let result =
+        compare(
+          Syntax(old[i].expression), Syntax(new[j].expression),
+          context: Syntax(new[j].expression), added: &scratch) == nil
+      memo[key] = result
+      return result
+    }
+    var longest = Array(repeating: Array(repeating: 0, count: new.count + 1), count: old.count + 1)
+    for i in old.indices.reversed() {
+      for j in new.indices.reversed() {
+        let paired = matches(i, j) ? longest[i + 1][j + 1] + 1 : 0
+        longest[i][j] = max(paired, longest[i + 1][j], longest[i][j + 1])
+      }
+    }
+    var pairs: [(old: Int, new: Int)] = []
+    var unmatchedOld: [Int] = []
+    var unmatchedNew: [Int] = []
+    var i = 0
+    var j = 0
+    while i < old.count || j < new.count {
+      if i == old.count {
+        unmatchedNew.append(j)
+        j += 1
+      } else if j == new.count {
+        unmatchedOld.append(i)
+        i += 1
+      } else if matches(i, j), longest[i][j] == longest[i + 1][j + 1] + 1 {
+        pairs.append((i, j))
+        i += 1
+        j += 1
+      } else if longest[i + 1][j] >= longest[i][j + 1] {
+        unmatchedOld.append(i)
+        i += 1
+      } else {
+        unmatchedNew.append(j)
+        j += 1
+      }
+    }
+    for pair in pairs {
+      _ = compare(
+        Syntax(old[pair.old].expression), Syntax(new[pair.new].expression),
+        context: Syntax(new[pair.new].expression), added: &added)
+    }
+    // An unmatched old element and an unmatched new one built the same way in the same gap
+    // between aligned pairs are 1 element changed: comparing the two names the changed argument.
+    func changed(old oldIndex: Int, new newIndex: Int) -> Change? {
+      guard head(old[oldIndex].expression) == head(new[newIndex].expression) else { return nil }
+      var scratch: [Syntax] = []
+      return compare(
+        Syntax(old[oldIndex].expression), Syntax(new[newIndex].expression),
+        context: Syntax(new[newIndex].expression), added: &scratch)
+    }
+    func sameGap(old oldIndex: Int, new newIndex: Int) -> Bool {
+      pairs.allSatisfy { ($0.old < oldIndex) == ($0.new < newIndex) }
+    }
+    let labelled = list.parent?.parent?.as(LabeledExprSyntax.self)?.label?.text
+    let isDeclarationList = labelled.map(listLabels.contains) ?? false
+    for index in unmatchedNew {
+      let expression = new[index].expression
+      guard isDeclarationList, isDeclaration(expression) else {
+        for oldIndex in unmatchedOld where sameGap(old: oldIndex, new: index) {
+          if let change = changed(old: oldIndex, new: index) { return change }
+        }
+        return Change(excerpt: excerpt(Syntax(expression)), node: Syntax(expression))
+      }
+      added.append(Syntax(new[index]))
+    }
+    guard let removed = unmatchedOld.first else { return nil }
+    for index in unmatchedNew where sameGap(old: removed, new: index) {
+      if let change = changed(old: removed, new: index) { return change }
+    }
+    return Change(
+      excerpt: excerpt(Syntax(old[removed].expression)), node: list.parent ?? Syntax(list))
+  }
+
+  /// A target name string without interpolation, or a `.package`, `.product`, `.target` or
+  /// other declaration factory call.
+  private static func isDeclaration(_ expression: ExprSyntax) -> Bool {
+    if let string = expression.as(StringLiteralExprSyntax.self) {
+      return string.segments.allSatisfy {
+        if case .stringSegment = $0 { return true }
+        return false
+      }
+    }
+    guard let call = expression.as(FunctionCallExprSyntax.self),
+      let member = call.calledExpression.as(MemberAccessExprSyntax.self), member.base == nil
+    else { return false }
+    return declarations.contains(member.declName.baseName.text)
+  }
+
+  private static func head(_ expression: ExprSyntax) -> String? {
+    expression.as(FunctionCallExprSyntax.self)?.calledExpression.trimmedDescription
+  }
+
+  /// A labelled argument (`exact: "1.2.0"`) or a statement; an unlabelled argument such as
+  /// `.v18` says too little on its own, so its call is reported instead.
+  private static func isContext(_ node: Syntax) -> Bool {
+    node.as(LabeledExprSyntax.self)?.label != nil || node.is(CodeBlockItemSyntax.self)
+  }
+
+  private static func excerpt(_ node: Syntax) -> String {
+    var collapsed = node.trimmedDescription.split(whereSeparator: \.isWhitespace).joined(
+      separator: " ")
+    if collapsed.hasSuffix(",") { collapsed.removeLast() }
+    return collapsed.count > 100 ? String(collapsed.prefix(100)) + "…" : collapsed
+  }
+}
+
+extension Substring {
+  fileprivate var trimmingTrailingWhitespace: String {
+    String(self[..<(lastIndex { !$0.isWhitespace }.map(index(after:)) ?? startIndex)])
   }
 }
 
