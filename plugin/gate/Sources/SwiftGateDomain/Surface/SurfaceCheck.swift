@@ -58,6 +58,14 @@ public enum SurfaceStubForm: String, Sendable, Equatable, CaseIterable {
   /// An existing array literal that only gains bare type references or `Type.self` elements, as a
   /// command or registration list does.
   case registersType
+  /// Only a `throw` of an error value: a payload-free case, an initializer call or an empty-payload
+  /// case, each as the other stub forms allow them.
+  case throwsError
+  /// An enum case the repository declares, constructed with each associated value an empty
+  /// default or a parameter passed through (`.exited(0)`, `.loaded(items)`).
+  case emptyPayloadCase
+  /// A parameter or a property of `self` returned unchanged (`value`, `self.limit`).
+  case returnsUnchanged
 }
 
 /// Why a judged body is behaviour, not a stub.
@@ -168,8 +176,10 @@ public enum SurfaceCheck {
   static func describe(_ behaviour: SurfaceBehaviour) -> String {
     switch behaviour {
     case .notAStub(let excerpt):
-      "isn't an allowed stub (`\(excerpt)`): a surface body is empty, returns 1 empty default "
-        + "or payload-free case, or forwards to code the parent declares"
+      "isn't an allowed stub (`\(excerpt)`): a surface body is empty; returns 1 empty default, "
+        + "payload-free case, enum case built from empty defaults and parameters, or parameter or "
+        + "property of `self` unchanged; only throws such an error value; or forwards to code the "
+        + "parent declares"
     case .traps(let callee):
       "calls `\(callee)`: a trapping stub fails every test for a reason other than the missing "
         + "behaviour"

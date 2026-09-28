@@ -9,8 +9,18 @@ public enum SprintStoreError: Error, Sendable, Equatable {
   case transition(SprintTransitionError)
   case malformed(path: String, SprintRunJSONError)
   case io(operation: String, path: String, reason: String)
+  /// `operation` failed as ``io(operation:path:reason:)`` does, and its staging file beside
+  /// `sprint.json` couldn't be removed either: `removal` says why, and `staging` is left to delete.
+  case stagingLeft(
+    operation: String, path: String, reason: String, staging: String, removal: String)
 
   public var verdict: Verdict { .blocked }
+
+  /// The staging file a failed write left behind, or `nil` when it left none.
+  public var leftoverStaging: String? {
+    if case .stagingLeft(_, _, _, let staging, _) = self { return staging }
+    return nil
+  }
 }
 
 /// The one sprint's `sprint.json` in the plan-state root under the git common dir, shared by
@@ -113,13 +123,12 @@ public struct SprintStore: Sendable {
     do {
       try beforeRename(staging)
     } catch {
-      unlink(staging)
-      throw .io(operation: "stage", path: staging, reason: String(describing: error))
+      throw discarding(
+        staging, operation: "stage", path: staging, reason: String(describing: error))
     }
     guard rename(staging, path) == 0 else {
-      let reason = String(cString: strerror(errno))
-      unlink(staging)
-      throw .io(operation: "rename", path: path, reason: reason)
+      throw discarding(
+        staging, operation: "rename", path: path, reason: String(cString: strerror(errno)))
     }
   }
 
@@ -145,9 +154,24 @@ public struct SprintStore: Sendable {
       try handle.synchronize()
       try handle.close()
     } catch {
-      unlink(staging)
-      throw .io(operation: "write", path: staging, reason: error.localizedDescription)
+      throw discarding(
+        staging, operation: "write", path: staging, reason: error.localizedDescription)
     }
     return staging
+  }
+
+  /// The error for a failed `operation` once its staging file is removed; the only place a staging
+  /// file is cleaned up, so one that can't be removed is always named.
+  private func discarding(_ staging: String, operation: String, path: String, reason: String)
+    -> SprintStoreError
+  {
+    let removed = unlink(staging) == 0
+    let removalError = errno
+    guard !removed, removalError != ENOENT else {
+      return .io(operation: operation, path: path, reason: reason)
+    }
+    return .stagingLeft(
+      operation: operation, path: path, reason: reason, staging: staging,
+      removal: String(cString: strerror(removalError)))
   }
 }

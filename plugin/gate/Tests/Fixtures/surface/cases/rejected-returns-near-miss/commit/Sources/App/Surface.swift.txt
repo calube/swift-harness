@@ -1,0 +1,25 @@
+struct Inner {
+  var b: Int
+}
+
+struct Flags {
+  var runsImpact: Bool
+  var x: Bool
+  var a: Inner
+
+  func both() -> Bool {
+    return runsImpact && x
+  }
+
+  func nested() -> Int {
+    return self.a.b
+  }
+
+  func member() -> Int {
+    a.b
+  }
+
+  func only() -> Bool {
+    runsImpact
+  }
+}

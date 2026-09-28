@@ -47,7 +47,7 @@ The runbook applies as written, with these changes:
 | Wave | Tasks | Why |
 |---|---|---|
 | 1 | `surface-check-command`, `sprint-state-machine` | independent: a new command, and a pure state model |
-| 2 | `sprint-commands` | needs both |
+| 2 | `sprint-commands`, `surface-check-accepts-stub-shapes` | needs both; the stub shapes touch only the surface scan, not `sprint-commands`' files |
 | 3 | `sprint-skill` | calls every command |
 | 4 | `sprint-rehearsals` | attended: the user runs it on 2 different practice prompts |
 
@@ -56,6 +56,12 @@ The runbook applies as written, with these changes:
 - Writes: `D/Surface/SurfaceCheck.swift`, `A/Surface/SurfaceCommitReader.swift`, `C/Commands/SurfaceCheckCommand.swift`, `C/SwiftGate.swift`, `TC/NewSubcommandRegistrationTests.swift`, `plugin/gate/Tests/Fixtures/surface/` (captured), the fixtures README, `plugin/docs/standards.md` (rule index rows), their tests
 - Does: §3.2: `swiftgate surface-check <commit> [--json]`. Over the commit's diff against its first parent, every added or changed body must be an allowed stub (§3.2 table, with §7's empty-defaults answer), including an initializer that only assigns its parameters or empty defaults, a value built by 1 initializer call from empty defaults and pass-through parameters, and bare type references or `Type.self` added to an existing array literal. Any other body, `fatalError`, `preconditionFailure`, non-empty preview data or an added test file is `surface-check.behaviour` (major) naming the file and declaration. Exit 0 GREEN, 1 RED, 2 when the reader can't load the commit. A summary note `surface-check.summary`.
 - Tests: 1 captured commit per allowed body passes, and 1 per rejected shape fails naming its declaration. A stub returning non-empty sample data fails: this catches a surface holding real values. A `fatalError` stub fails. An added test file fails. A commit whose parent the reader can't load exits 2, never GREEN. Each rule id is in the standards rule index.
+
+### `surface-check-accepts-stub-shapes`
+- Deps: surface-check-command · Gate: push · Model: opus · estLines: 260
+- Writes: `plugin/gate/Sources/SwiftGateRules/Surface/SurfaceBodyScan.swift`, `D/Surface/SurfaceCheck.swift`, `plugin/gate/Tests/Fixtures/surface/` (captured), the fixtures README, their tests, spec §3.2's table
+- Does: §3.2, orchestrator decision 2026-09-27 within §7 (only non-empty sample data is behaviour), pending the user's confirmation. `surface-check` also allows exactly 3 stub shapes real surface commits use, each as narrowly as possible: (1) a body whose only statement is `throw` of an error value: a payload-free case (`SomeError.notImplemented`, `.notImplemented`), an initializer call from empty defaults and parameters (`CancellationError()`), or an empty-payload case as in (2); (2) an enum case the parent or the same file declares, constructed with each associated value a §7 empty default or a parameter passed through (`.exited(0)`, `.loaded([])`, `.loaded(items)`), returned or yielded; (3) a parameter or a property of `self` returned unchanged (`return runsImpact`, `return value`, `return self.steps`), with no operator, call or member chain past 1 `self.` access. New stub forms `throwsError`, `emptyPayloadCase`, `returnsUnchanged`; the parent index gains enum case names. Everything else stays `surface-check.behaviour`: a `switch`, `if`/`guard`, closure calls, operators, non-empty literals, calls to non-initializers, a static function called like a case.
+- Tests: 1 captured commit per shape passes as its own form, and 1 captured near miss per shape fails naming each declaration (`throw` after a statement or of `.failed("disk")` or `makeError()`; `.exited(1)`, `.loaded(items.reversed())`, `.make([])`; `return runsImpact && x`, `return self.a.b`, `a.b`). Loosening each rule turns its near-miss test red. A case the parent declares makes the check read the parent; a case the same file declares doesn't need it. `swiftgate surface-check` is run read-only on the repo's real surface commits and each verdict reported.
 
 ### `sprint-state-machine`
 - Deps: none · Gate: push · Model: opus · estLines: 300
