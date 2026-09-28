@@ -1,7 +1,7 @@
 # swift-harness: ship speed research, coverage and remaining changes
 
 <!-- RESUME
-Status: PROPOSED 2026-09-27; §3 and §4 need the user's approval before they get plan tasks.
+Status: APPROVED 2026-09-27 by the user (§6): §3 and §4 become plan tasks in the sub-project 2 hardening wave.
 Why: the ship speed research after interview trial run 2 ranked 10 harness changes and a few side findings. This doc
 maps every one of them to the design, ADR and plan task that carries it, and proposes the 2 that nothing covers yet.
 Read first: §2 (the map), then §3 and §4.
@@ -27,8 +27,8 @@ each trial run was model coding.
 | 8 | every gate run records HEAD; `worktree remove` keeps reports | plan task `speed-fixer-return-and-gate-provenance` | merged |
 | 9 | `check-return --fix` accepts `review: null` | plan task `speed-fixer-return-and-gate-provenance` | merged |
 | 10 | the budget cutoff never drops a task the app needs to compile | plan task `speed-budget-keeps-app-compiling` | queued |
-| — | a running session keeps the agent prompts it loaded (finding 6) | the sub-project 2 hardening documents it; §4 proposes a check | proposed |
-| — | views that only compile for iOS escape every host tier (finding 7) | §3 | proposed |
+| — | a running session keeps the agent prompts it loaded (finding 6) | §4: a doctor check that stops ship, build and sprint | approved; hardening wave |
+| — | views that only compile for iOS escape every host tier (finding 7) | §3 | approved; hardening wave |
 | — | a module added mid-session trips the resolved-file pin | §5: measured, no change | closed |
 
 Outside the harness, and so not designed here: the warm starter repo and its morning checks, bringing in a
@@ -78,10 +78,10 @@ only dependency is a local `path:` package, both pass `swift test --only-use-ver
 `.swiftgate.toml` edits, so a session can add modules without a harness change. Only a new remote dependency needs
 `swift package resolve`, which the rule's message already names.
 
-## 6. Open questions for the user
+## 6. Decisions from the user (2026-09-27)
 
-| Question | Proposed answer |
+| Question | Answer |
 |---|---|
-| Approve §3 and §4 for plan tasks? | yes, as 2 tasks in the next hardening wave |
+| Approve §3 and §4 for plan tasks? | yes, both in the sub-project 2 hardening wave |
 | `arch.ui-host-compiled` severity | major |
-| Should §4's mismatch stop ship, or only warn? | stop: a stale prompt breaks the contracts every later step relies on |
+| Should §4's mismatch stop ship, or only warn? | stop |
