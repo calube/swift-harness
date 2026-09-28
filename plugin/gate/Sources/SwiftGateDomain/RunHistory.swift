@@ -50,11 +50,11 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   /// The commit `--base` resolved to when the run started, so a reader can tell what its diff
   /// was measured from. Absent in records written before it existed, for a command with no
   /// `--base`, or when the ref named no commit.
-  public var base: String? { nil }
+  public let base: String?
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
-    proofBases: [String]? = nil, headCommit: String? = nil
+    proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil
   ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
@@ -67,6 +67,7 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.steps = steps
     self.proofBases = proofBases
     self.headCommit = headCommit
+    self.base = base
   }
 }
 

@@ -196,6 +196,7 @@ enum SprintCommandRun {
       }
       let head = try await branchHead(current, context)
       try requireGreen(record, at: head, current)
+      try requireSurfaceBase(record, current)
       let run = try await apply(.slice(number, gateRun: gate), context)
       return (run, "slice \(number) passed at \(head) with \(tier.rawValue) run \(gate)")
     }
@@ -396,6 +397,23 @@ enum SprintCommandRun {
         "run \(record.runID) ran at \(record.headCommit ?? "an unrecorded commit"), but "
           + "\(run.branch) is at \(head); re-run the gate at HEAD and pass its id")
     }
+  }
+
+  /// A slice's diff is measured from the surface, so a stub a later slice fills isn't judged
+  /// uncovered in this one. `finish` measures from `main`, covering the whole sprint once.
+  private static func requireSurfaceBase(_ record: RunHistoryRecord, _ run: SprintRun)
+    throws(Refused)
+  {
+    guard let surface = run.surfaceCommit else {
+      throw Refused(.outOfOrder, "no surface is recorded; run `\(nextCommand(.surface))` first")
+    }
+    guard record.base != surface else { return }
+    throw Refused(
+      .gateBase,
+      "run \(record.runID) measured its diff from "
+        + (record.base ?? "no recorded base")
+        + ", not the sprint's surface \(surface); run `swiftgate check --tier push --base "
+        + "\(surface)` at HEAD and pass its id")
   }
 
   private static func requireGreenMain(_ base: String, _ context: SprintContext) throws(Refused) {
@@ -672,7 +690,8 @@ struct SprintSliceCommand: AsyncParsableCommand {
     commandName: "slice", abstract: "Record a slice that passed its push gate at the branch HEAD.",
     discussion:
       "Reads the run from this checkout's run history: it must be a GREEN `check --tier push` or "
-      + "`ready` run whose HEAD was the sprint branch's HEAD.")
+      + "`ready` run whose HEAD was the sprint branch's HEAD and whose `--base` was the sprint's "
+      + "surface.")
 
   @Argument(help: "The slice's number on the spec page, from 1.")
   var number: Int

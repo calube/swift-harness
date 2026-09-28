@@ -287,14 +287,15 @@ function sprintMachineSteps() {
 }
 
 // A run history line with the keys a captured `check ready` run wrote. `sprint slice` and
-// `sprint finish` read its command, verdict, headCommit and proofBases.
-function gateRecord(runID, tier, headCommit, proofBases) {
+// `sprint finish` read its command, verdict, headCommit, proofBases and base.
+function gateRecord(runID, tier, headCommit, proofBases, base) {
   const record = {
     command: `check ${tier}`, durationMilliseconds: 1000, findingCount: 0, finishedAt: '2026-01-01T00:00:00Z',
     headCommit, runID, schemaVersion: 1,
     tiers: [{ durationMilliseconds: 500, testCounts: null, tier: 'T0', verdict: 'GREEN' }], verdict: 'GREEN',
   }
   if (proofBases) record.proofBases = proofBases
+  if (base) record.base = base
   return JSON.stringify(record) + '\n'
 }
 
@@ -345,7 +346,11 @@ function sprintWalk(proofBases) {
     writeFileSync(source, 'public func base() -> Int { 1 }\npublic func step() -> Int { 2 }\npublic func last() -> Int { 3 }\n')
     run('git', ['commit', '-qam', 'slice 1'])
     const head = run('git', ['rev-parse', 'HEAD']).trim()
-    record(gateRecord('20260101T000001Z-0000bbbb', 'push', head))
+    const mainBase = run('git', ['rev-parse', 'main']).trim()
+    record(gateRecord('20260101T000003Z-0000dddd', 'push', head, null, mainBase))
+    const fromMain = sg(['sprint', 'slice', '1', '--gate', '20260101T000003Z-0000dddd'])
+    assert.deepEqual([fromMain.code, fromMain.report.rule], [1, 'sprint.gate-base'], fromMain.report.message)
+    record(gateRecord('20260101T000001Z-0000bbbb', 'push', head, null, surface))
     steps.push(sg(['sprint', 'slice', '1', '--gate', '20260101T000001Z-0000bbbb']))
     assert.deepEqual(steps.map(s => [s.report.verdict, s.code]), Array(4).fill(['GREEN', 0]),
       steps.map(s => s.report.message).join('\n'))
@@ -395,9 +400,13 @@ export function sprintSkillProblems(text, steps) {
       inv.words.slice(0, 2).join(' ') === path && flags.every(flag => inv.words.some(w => flagOf(w) === flag)))
     if (!complete) problems.push(`never runs \`swiftgate ${path}\` with ${flags.join(' ')} for ${next}`)
   }
+  // A flag written `--base <surface>` must be followed by that word; a bare flag by anything.
   const tierAt = (tier, extra = []) => invocations.filter(inv =>
     inv.words[0] === 'check' && inv.words.join(' ').includes(`--tier ${tier}`)
-    && extra.every(flag => inv.words.some(w => flagOf(w) === flag))).map(inv => inv.line)
+    && extra.every(flag => {
+      const [name, value] = flag.split(' ')
+      return inv.words.some((w, i) => flagOf(w) === name && (!value || inv.words[i + 1] === value))
+    })).map(inv => inv.line)
   const gateBefore = (tier, extra, path) => {
     const at = firstLineOf(path.split(' '))
     if (!at) return
@@ -406,7 +415,7 @@ export function sprintSkillProblems(text, steps) {
       problems.push(`step ${section} runs \`swiftgate ${path}\` without a \`check --tier ${tier}${extra.map(f => ` ${f}`).join('')}\` before it`)
     }
   }
-  gateBefore('push', ['--base'], 'sprint slice')
+  gateBefore('push', ['--base <surface>'], 'sprint slice')
   gateBefore('ready', ['--base', '--proof-base'], 'sprint finish')
   if (!tierAt('fast').length) problems.push('never runs `swiftgate check --tier fast` as the inner loop')
   if (!invocations.some(inv => inv.words.join(' ').startsWith('sprint status') && inv.words.includes('--json'))) {
@@ -542,8 +551,19 @@ const tests = {
     assert.deepEqual(sprintSkillProblems(skill, steps), [
       'runs `swiftgate sprint slice` in step 2, not after step 3',
       'never runs `swiftgate sprint slice` with --gate for slice 1',
-      'step 2 runs `swiftgate sprint slice` without a `check --tier push --base` before it',
+      'step 2 runs `swiftgate sprint slice` without a `check --tier push --base <surface>` before it',
       'step 4 runs `swiftgate sprint finish` without a `check --tier ready --base --proof-base` before it',
+    ])
+    const fromMain = [
+      '## Driving', '`swiftgate sprint status --json`.',
+      '## 1. Start', '`swiftgate sprint start <slug> --spec-page <page> --slices <n> --json`',
+      '## 2. Surface', '`swiftgate sprint surface <sha> --json`',
+      '## 3. Slices', '`swiftgate check --tier fast --base main`', '`swiftgate check --tier push --base main`',
+      '`swiftgate sprint slice <n> --gate <id> --json`',
+      '## 4. Finish', '`swiftgate check --tier ready --base main --proof-base <surface>`', '`swiftgate sprint finish --gate <id> --json`',
+    ].join('\n')
+    assert.deepEqual(sprintSkillProblems(fromMain, steps), [
+      'step 3 runs `swiftgate sprint slice` without a `check --tier push --base <surface>` before it',
     ])
   },
 

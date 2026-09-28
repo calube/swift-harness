@@ -47,6 +47,7 @@ machine wins.
 | `sprint.out-of-order` | none: run `sprint status --json` and do the step `next` names |
 | `sprint.gate-red`, `sprint.gate-blocked` | fix the gate's findings, commit, run the gate again at HEAD, pass its new id |
 | `sprint.gate-stale` | a commit landed after the gate ran: run the gate again at HEAD, pass its new id |
+| `sprint.gate-base` | run `check --tier push --base <surface>` at HEAD, pass its new id |
 | `sprint.gate-tier`, `sprint.gate-not-ready`, `sprint.gate-proof-base` | run the gate with the tier and flags this skill gives for the step, pass its new id |
 | `sprint.surface-behaviour` | turn each body it names back into a stub, `git commit --amend`, pass the new sha |
 | `sprint.wrong-branch` | `git switch` to the branch the message names |
@@ -124,8 +125,10 @@ For slice `<k>`, the number in `next`, in the page's order:
 2. Write the code. Loop on `"$SG" check --tier fast --base main` until GREEN. Fix every gating
    finding; an escape hatch carries a same-line `swiftgate:allow <rule> — <reason>`.
 3. Commit the test and the code.
-4. `"$SG" check --tier push --base main`, with its output in a file. Not GREEN: fix, commit and
-   run it again. Keep its `<run id>`.
+4. `"$SG" check --tier push --base <surface>`, with its output in a file, `<surface>` being
+   `sprint.surfaceCommit` from `sprint status --json`. Its diff coverage then counts only lines
+   changed since the surface, not stubs a later slice fills. Not GREEN: fix, commit and run it
+   again. Keep its `<run id>`.
 5. `"$SG" sprint slice <k> --gate <run id> --json`.
 
 Then `sprint status --json`: the next slice, or `finish`.
