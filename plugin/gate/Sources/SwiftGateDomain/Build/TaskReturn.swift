@@ -206,6 +206,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case surfaceCommitOffBranch = "build-return.surface-commit-off-branch"
     case surfaceCommitNotProofBase = "build-return.surface-commit-not-proof-base"
     case outsideWriteSetUnexplained = "build-return.outside-write-set-unexplained"
+    case gateMissingStep = "build-return.gate-missing-step"
   }
 
   public let rule: Rule
@@ -252,6 +253,12 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     }
 
     /// The tier of a run history `command` such as `check push`; `nil` for any other command.
+    /// The steps of `required` this run never ran: its tier doesn't run them and its recorded
+    /// steps don't name them. A run that isn't a `check --tier` run ran none of them.
+    public func missingSteps(of required: [CheckExtraStep]) -> [CheckExtraStep] {
+      []
+    }
+
     public static func tier(ofCommand command: String?) -> CheckTier? {
       guard let command, command.hasPrefix("check ") else { return nil }
       return CheckTier(rawValue: String(command.dropFirst("check ".count)))
@@ -280,12 +287,16 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let reviewRequired: Bool
   /// Where the return's `surfaceCommit` is, when it names one.
   public let surfaceCommit: CommitState?
+  /// A worker's green gate must run every one of ``TaskReturnCheck/taskGateSteps``, under either
+  /// `task_proof`; a fixer's merge gate need not.
+  public let taskGateStepsRequired: Bool
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
-    surfaceCommit: CommitState? = nil, reviewRequired: Bool = true
+    surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
+    taskGateStepsRequired: Bool = false
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -298,12 +309,16 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.proofRequired = proofRequired
     self.reviewRequired = reviewRequired
     self.surfaceCommit = surfaceCommit
+    self.taskGateStepsRequired = taskGateStepsRequired
   }
 }
 
 /// Spec §5.3: a return that claims more than git and the run store show fails. Re-runs nothing.
 public enum TaskReturnCheck {
   public static let designConflictKind = "design-conflict"
+  /// The steps the build task workflow's gate adds to every worker's task gate, in the order its
+  /// flags are named.
+  public static let taskGateSteps: [CheckExtraStep] = []
 
   /// `fast` < `push` < `ready`: each tier runs everything the one before it does.
   public static func covers(_ tier: CheckTier, _ required: CheckTier) -> Bool {
