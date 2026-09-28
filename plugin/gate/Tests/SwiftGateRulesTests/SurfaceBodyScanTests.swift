@@ -165,4 +165,52 @@ struct SurfaceBodyScanTests {
       SurfaceBodyScan.judge(change, parent: SurfaceParentIndex(functions: [], types: []))
         .map(\.outcome) == [.stub(.throwsError)])
   }
+
+  private static let manifest = """
+    // swift-tools-version: 6.2
+    import PackageDescription
+
+    let package = Package(
+      name: "App",
+      targets: [
+        .target(name: "App", swiftSettings: [.unsafeFlags(["-Osize"])]),
+        .testTarget(name: "AppTests", dependencies: ["App"]),
+      ]
+    )
+    """
+
+  private static func manifestChange(_ commitText: String) -> [SurfaceJudgement.Outcome] {
+    SurfaceBodyScan.judge(
+      SurfaceFileChange(path: "Package.swift", parentText: manifest, commitText: commitText),
+      parent: SurfaceParentIndex(functions: [], types: [])
+    )
+    .map(\.outcome)
+  }
+
+  @Test(
+    "a manifest that only gains a comment, blank lines or a trailing comma judges nothing — catches a formatting touch refused as a manifest change"
+  )
+  func reformattedManifestJudgesNothing() {
+    let reformatted = Self.manifest
+      .replacingOccurrences(
+        of: "import PackageDescription\n", with: "import PackageDescription\n\n// App.\n"
+      )
+      .replacingOccurrences(of: "dependencies: [\"App\"]", with: "dependencies: [\"App\",]")
+
+    #expect(reformatted != Self.manifest)
+    #expect(Self.manifestChange(reformatted) == [])
+  }
+
+  @Test(
+    "a string added to a list outside dependencies, products and targets is a manifest change, while a target name added to a dependencies list is a stub — catches a new compiler flag passing as a target name"
+  )
+  func stringOutsideTheTargetListsIsBehaviour() {
+    let flag = Self.manifest.replacingOccurrences(
+      of: "[\"-Osize\"]", with: "[\"-Osize\", \"-Ounchecked\"]")
+    let dependency = Self.manifest.replacingOccurrences(
+      of: "dependencies: [\"App\"]", with: "dependencies: [\"App\", \"Support\"]")
+
+    #expect(Self.manifestChange(flag) == [.behaviour(.changesManifest(excerpt: "\"-Ounchecked\""))])
+    #expect(Self.manifestChange(dependency) == [.stub(.extendsManifest)])
+  }
 }

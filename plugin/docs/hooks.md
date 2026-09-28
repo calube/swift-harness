@@ -49,6 +49,7 @@ Who may write:
 | `swift-harness/plans/index.json` | a session holding any plan's lock |
 | a design doc, or a file in its `<doc>.evidence/` | the session holding the lock of the one plan whose `plan.json` `design` names that doc; nobody while two plans name it |
 | a plan's `plan.json` | its lock holder, by Write or Edit (never Bash), keeping `design`; a missing or unreadable one may name a doc no other plan names |
+| a sprint page, a `.md` file directly in `swift-harness/plans/sprints/` | any main session, with no lock; never a subagent, and nothing else under `sprints/` |
 | `orchestrator.lock`, and the `claim.lock.*` and `index.lock.*` files in the plans root | nobody; only `swiftgate plan claim`, `plan release` and `index set` write them |
 
 `SWIFT_HARNESS_ORCHESTRATOR=1` in the session's environment allows every row except the last. A

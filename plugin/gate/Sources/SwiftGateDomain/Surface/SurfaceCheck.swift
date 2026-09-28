@@ -66,6 +66,10 @@ public enum SurfaceStubForm: String, Sendable, Equatable, CaseIterable {
   case emptyPayloadCase
   /// A parameter or a property of `self` returned unchanged (`value`, `self.limit`).
   case returnsUnchanged
+  /// An existing `Package.swift` whose only change is new elements in its `dependencies`,
+  /// `products` and `targets` lists: a package, product, target or product declaration, or a
+  /// target name.
+  case extendsManifest
 }
 
 /// Why a judged body is behaviour, not a stub.
@@ -84,6 +88,9 @@ public enum SurfaceBehaviour: Sendable, Equatable {
   case forwardsToNewCode(callee: String)
   /// An existing stored property whose value the commit changes.
   case changesStoredValue
+  /// An existing `Package.swift` changed by more than added dependencies, products and targets;
+  /// `excerpt` is the first change found.
+  case changesManifest(excerpt: String)
   /// An added test file, or an added test in a changed one.
   case addsTest
 }
@@ -196,6 +203,9 @@ public enum SurfaceCheck {
         + "already on the parent"
     case .changesStoredValue:
       "changes an existing stored value: a surface leaves existing behaviour unchanged"
+    case .changesManifest(let excerpt):
+      "changes the package manifest (`\(excerpt)`): a surface only adds dependencies, products "
+        + "and targets to an existing manifest's lists, and removes or changes nothing"
     case .addsTest:
       "adds a test: a surface commit adds no tests; they follow it"
     }

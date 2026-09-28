@@ -425,6 +425,28 @@ export function sprintSkillProblems(text, steps) {
 }
 
 /**
+ * Problems with where a sprint skill's gates measure from: a push gate after the preflight that
+ * isn't `--base <surface>` (`sprint slice` refuses it with `sprint.gate-base`), a ready gate that
+ * isn't `--base main` (`finish` needs every line since `main` covered), and a refusal table
+ * without the `sprint.gate-base` row.
+ */
+export function sprintGateBaseProblems(text) {
+  const problems = []
+  const baseOf = inv => inv.words[inv.words.findIndex(w => flagOf(w) === '--base') + 1]
+  for (const inv of extractInvocations(text)) {
+    if (inv.words[0] !== 'check') continue
+    const tier = inv.words[inv.words.indexOf('--tier') + 1]
+    const base = inv.words.some(w => flagOf(w) === '--base') ? baseOf(inv) : null
+    if (tier === 'push' && stepNumberAt(text, inv.line) !== 1 && base !== '<surface>') {
+      problems.push(`line ${inv.line}: a push gate after the preflight measures from ${base ?? 'no base'}, not <surface>`)
+    }
+    if (tier === 'ready' && base !== 'main') problems.push(`line ${inv.line}: the ready gate measures from ${base ?? 'no base'}, not main`)
+  }
+  if (!/^\| `sprint\.gate-base` \|[^\n]*--base <surface>/m.test(text)) problems.push('no `sprint.gate-base` refusal row with its `--base <surface>` fix')
+  return problems
+}
+
+/**
  * Problems with how a skill's `SKILL.md` text runs doctor before it starts work: under the
  * `heading` section, a `doctor --session` call, and a stop on `doctor.plugin-changed` telling the
  * user to start a fresh session. A running session keeps the prompts it loaded at start, so only
@@ -532,6 +554,40 @@ const tests = {
     assert.deepEqual([refused.code, refused.report.rule, refused.mainMoved], [1, 'sprint.gate-proof-base', false], refused.report.message)
     const finishStep = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8').split('\n## 6. Finish\n')[1] ?? ''
     assert.ok(/--proof-base <surface>`[^]*--proof-base <sha>`[^]*oldest first/.test(finishStep), 'the finish step never adds an extra stub commit as a later proof base')
+  },
+
+  'the sprint skill measures slice gates from the surface and the ready gate from main — catches a slice gate example that sprint slice refuses'() {
+    assert.deepEqual(sprintGateBaseProblems(readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8')), [])
+    const wrong = [
+      '| `sprint.gate-red` | fix |',
+      '```bash', '"$SG" check --tier push --base main > out', '```',
+      '## 1. Preflight', '`"$SG" check --tier push --base main`',
+      '## 5. Slices', '`"$SG" check --tier push --base <surface>`',
+      '## 6. Finish', '`"$SG" check --tier ready --base <surface> --proof-base <surface>`',
+    ].join('\n')
+    assert.deepEqual(sprintGateBaseProblems(wrong), [
+      'line 3: a push gate after the preflight measures from main, not <surface>',
+      'line 10: the ready gate measures from <surface>, not main',
+      'no `sprint.gate-base` refusal row with its `--base <surface>` fix',
+    ])
+  },
+
+  'the sprint skill states what its rehearsals hit — catches a lesson line dropped from the page'() {
+    // A lesson may wrap across lines, so the patterns read the page with its whitespace collapsed.
+    const prose = readFileSync(join(root, 'skills/sprint/SKILL.md'), 'utf8').replace(/\s+/g, ' ')
+    const { problems, resolved } = scanSkills(join(root, 'skills/sprint'), help, root)
+    assert.deepEqual(problems, [])
+    for (const [path, flag] of [['surface-check', null], ['sprint status', '--json'], ['check', '--proof-base']]) {
+      assert.ok(resolved.some(r => r.path === path && (!flag || r.flags.includes(flag))), `the sprint skill never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
+    }
+    for (const [lesson, pattern] of [
+      ['a spec file may sit outside the repository', /`<spec-file>` \|[^|]*outside the repository/],
+      ['a new dependency accessor stubs as `.init()` and a no-op setter', /`get \{ \.init\(\) \}` and `set \{\}`[^.]*`self\[Key\.self\]`/],
+      ['a surface may add to an existing Package.swift', /add dependencies, products and targets to an existing `Package\.swift`/],
+      ['a surface-check finding takes no swiftgate:allow', /`surface-check` finding takes no `swiftgate:allow`/],
+      ['the ready gate runs in the foreground', /ready gate in the foreground[^.]*never in the background/],
+      ['the main session writes the spec page itself', /plan-state guard lets a main session write a sprint page and never a subagent/],
+    ]) assert.ok(pattern.test(prose), `the sprint skill never says ${lesson}`)
   },
 
   'a sprint skill out of the machine\'s order or missing a gate fails and names it — catches the sprint order check passing anything'() {

@@ -7,15 +7,19 @@ public struct SimulatorDevice: Sendable, Equatable {
   /// `Shutdown`, `Booted`, `Creating`, …
   public let state: String
   public let isAvailable: Bool
+  /// `com.apple.CoreSimulator.SimDeviceType.iPhone-17`; `nil` when the list did not say.
+  public let deviceTypeIdentifier: String?
 
   public init(
-    udid: String, name: String, runtimeIdentifier: String, state: String, isAvailable: Bool
+    udid: String, name: String, runtimeIdentifier: String, state: String, isAvailable: Bool,
+    deviceTypeIdentifier: String? = nil
   ) {
     self.udid = udid
     self.name = name
     self.runtimeIdentifier = runtimeIdentifier
     self.state = state
     self.isAvailable = isAvailable
+    self.deviceTypeIdentifier = deviceTypeIdentifier
   }
 
   /// `iOS` and `26.2` for `com.apple.CoreSimulator.SimRuntime.iOS-26-2`.
@@ -53,6 +57,9 @@ public enum SimulatorCloneName {
 public enum SimulatorSelectionError: Error, Sendable, Equatable {
   /// No available device with the configured name on the configured iOS runtime.
   case baseDeviceNotFound(device: String, os: String, installedRuntimes: [String])
+  /// The base device is not shut down, so it cannot be cloned, and the device list did not name
+  /// its device type, so a fresh device like it cannot be created either.
+  case baseDeviceTypeUnknown(udid: String, state: String)
 
   /// A missing device or runtime is the machine's setup, not the code.
   public var verdict: Verdict { .blocked }
@@ -64,12 +71,37 @@ public enum SimulatorSelectionError: Error, Sendable, Equatable {
       return
         "no available \"\(device)\" simulator on iOS \(os) (installed iOS runtimes: \(installed)); "
         + "create one with `xcrun simctl create` or change [simulator] in .swiftgate.toml"
+    case .baseDeviceTypeUnknown(let udid, let state):
+      return
+        "the base simulator \(udid) is \(state), so it cannot be cloned, and simctl did not "
+        + "report its device type, so no device like it can be created"
     }
   }
 }
 
+/// How a run's device is made from the base device.
+public enum SimulatorProvision: Sendable, Equatable {
+  /// `simctl clone <baseUDID> <name>`: only a shut-down device can be cloned.
+  case clone(baseUDID: String)
+  /// `simctl create <name> <deviceType> <runtime>`: a fresh device like the base.
+  case create(deviceType: String, runtime: String)
+}
+
 /// Pure choices over a device list; the `Simctl` adapter supplies the list.
 public enum SimulatorSelection {
+  /// A shut-down base is cloned. Any other base may be in use by another session or tool, and
+  /// `simctl clone` refuses it, so a fresh device of the same type and runtime is created instead;
+  /// the harness never shuts down a device it did not make.
+  public static func provision(from base: SimulatorDevice)
+    throws(SimulatorSelectionError) -> SimulatorProvision
+  {
+    if base.state == "Shutdown" { return .clone(baseUDID: base.udid) }
+    guard let deviceType = base.deviceTypeIdentifier else {
+      throw .baseDeviceTypeUnknown(udid: base.udid, state: base.state)
+    }
+    return .create(deviceType: deviceType, runtime: base.runtimeIdentifier)
+  }
+
   /// The pinned device clones are made from: available, named exactly `config.device`, on the
   /// iOS runtime whose version is exactly `config.os`, and never itself a harness clone. Several
   /// matches are equivalent for determinism, so the lowest UDID is chosen to keep it stable.

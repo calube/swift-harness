@@ -6,6 +6,8 @@ public enum SimctlError: Error, Sendable, Equatable {
   /// `simctl` exited nonzero; `stderr` is its first two lines, which name the failure.
   case failed(command: String, status: ExitStatus, stderr: String)
   case unreadableOutput(command: String, detail: String)
+  /// `simctl` ran past its deadline, which on a loaded machine is too short, not a hang.
+  case timedOut(command: String, deadline: Duration)
 
   /// Simulator trouble is the machine's, never evidence about the code.
   public var verdict: Verdict { .blocked }
@@ -17,6 +19,9 @@ public enum SimctlError: Error, Sendable, Equatable {
       "simctl \(command) failed (\(status)): \(stderr)"
     case .unreadableOutput(let command, let detail):
       "simctl \(command) printed unexpected output: \(detail)"
+    case .timedOut(let command, let deadline):
+      "simctl \(command) did not finish within \(deadline.components.seconds) s; on a loaded "
+        + "machine raise \(SimulatorConfig.simctlTimeoutKey) in .swiftgate.toml"
     }
   }
 }
@@ -26,6 +31,9 @@ public protocol Simctl: Sendable {
   func devices() async throws(SimctlError) -> [SimulatorDevice]
   /// Returns the clone's UDID.
   func clone(_ udid: String, name: String) async throws(SimctlError) -> String
+  /// Makes a fresh, shut-down device and returns its UDID.
+  func create(name: String, deviceType: String, runtime: String) async throws(SimctlError)
+    -> String
   /// Boots the device and waits until it has finished booting.
   func boot(_ udid: String) async throws(SimctlError)
   func shutdown(_ udid: String) async throws(SimctlError)
@@ -70,6 +78,17 @@ public struct LiveSimctl: Simctl {
     return clone
   }
 
+  public func create(name: String, deviceType: String, runtime: String)
+    async throws(SimctlError) -> String
+  {
+    let output = try await simctl(["create", name, deviceType, runtime], timeout: timeouts.quick)
+    let created = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard UUID(uuidString: created) != nil else {
+      throw .unreadableOutput(command: "create", detail: "expected a UDID, got \"\(created)\"")
+    }
+    return created
+  }
+
   public func boot(_ udid: String) async throws(SimctlError) {
     _ = try await simctl(["bootstatus", udid, "-b"], timeout: timeouts.boot)
   }
@@ -112,6 +131,8 @@ public struct LiveSimctl: Simctl {
       output = try await runner.run(
         ProcessInvocation(
           executable: "/usr/bin/xcrun", arguments: ["simctl"] + arguments, timeout: timeout))
+    } catch .timedOut {
+      throw .timedOut(command: arguments.first ?? "", deadline: timeout)
     } catch {
       throw .runner(error)
     }
@@ -130,6 +151,7 @@ public struct LiveSimctl: Simctl {
       let name: String
       let state: String
       let isAvailable: Bool?
+      let deviceTypeIdentifier: String?
     }
     let list: List
     do {
@@ -141,7 +163,7 @@ public struct LiveSimctl: Simctl {
       devices.map {
         SimulatorDevice(
           udid: $0.udid, name: $0.name, runtimeIdentifier: runtime, state: $0.state,
-          isAvailable: $0.isAvailable ?? false)
+          isAvailable: $0.isAvailable ?? false, deviceTypeIdentifier: $0.deviceTypeIdentifier)
       }
     }
   }
