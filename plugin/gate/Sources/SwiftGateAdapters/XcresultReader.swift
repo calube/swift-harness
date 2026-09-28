@@ -35,6 +35,9 @@ public enum XcresultReadError: Error, Sendable, Equatable {
 /// `get build-results`, schema 0.1.0). The only Xcode-version-sensitive adapter (spec §5.2).
 public protocol XcresultReader: Sendable {
   func read(bundlePath: String) async throws(XcresultReadError) -> XcresultContents
+  /// `xcresulttool get build-results` alone, for a bundle `xcodebuild build` wrote: it holds no
+  /// test tree.
+  func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data
 }
 
 public struct LiveXcresultReader: XcresultReader {
@@ -56,6 +59,10 @@ public struct LiveXcresultReader: XcresultReader {
       testResults: tests.stdout.bytes,
       buildResults: build.status.isSuccess ? build.stdout.bytes : nil
     )
+  }
+
+  public func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data {
+    Data()
   }
 
   private func xcresulttool(_ arguments: [String]) async throws(XcresultReadError)
