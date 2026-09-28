@@ -1,0 +1,26 @@
+{
+  "actionTitle" : "Build \"SampleApp\"",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "undefined_arch",
+    "deviceId" : "dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder",
+    "deviceName" : "Any iOS Simulator Device",
+    "modelName" : "Apple device",
+    "osVersion" : "",
+    "platform" : "iOS Simulator"
+  },
+  "endTime" : 1790554551.57,
+  "errorCount" : 0,
+  "errors" : [
+
+  ],
+  "startTime" : 1790554518.646,
+  "status" : "succeeded",
+  "warningCount" : 0,
+  "warnings" : [
+
+  ]
+}

@@ -62,7 +62,11 @@ public struct LiveXcresultReader: XcresultReader {
   }
 
   public func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data {
-    Data()
+    let build = try await xcresulttool(["get", "build-results", "--path", bundlePath])
+    guard build.status.isSuccess else {
+      throw .failed(status: build.status, stderr: Self.firstLine(build.stderr.text))
+    }
+    return build.stdout.bytes
   }
 
   private func xcresulttool(_ arguments: [String]) async throws(XcresultReadError)

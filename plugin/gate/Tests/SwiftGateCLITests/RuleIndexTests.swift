@@ -25,7 +25,8 @@ struct RuleIndexTests {
     let simulator = [
       FlowCoverage.unmappedRuleID, FlowCoverage.maxFlowsRuleID, FlowCoverage.untestedFlowRuleID,
       SimulatorTestCheck.appContainerRuleID, TestRetryConfiguration.ruleID,
-      SnapshotReferences.recordedRuleID,
+      SnapshotReferences.recordedRuleID, AppBuild.errorRuleID, AppBuild.blockedRuleID,
+      AppBuild.containerRuleID, AppBuild.summaryRuleID,
     ]
     let changedTests = [
       ProofRules.notProvenRuleID, ProofRules.compileOnlyRuleID, ProofRules.crashedRuleID,

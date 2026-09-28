@@ -52,14 +52,21 @@ public enum CheckExtraStep: String, Sendable, CaseIterable {
   public func isRun(by tier: CheckTier) -> Bool {
     switch self {
     case .prove, .mutate: tier == .ready
-    case .impact, .coverage, .appBuild: false
+    case .impact: tier.runsImpact
+    case .coverage: tier.runsCoverage
+    // No tier compiles the app scheme on its own: T3 builds it only when flows are declared.
+    case .appBuild: false
     }
   }
 }
 
 extension CheckTier {
-  public func runsImpact(with steps: Set<CheckExtraStep>) -> Bool { runsImpact }
-  public func runsCoverage(with steps: Set<CheckExtraStep>) -> Bool { runsCoverage }
+  public func runsImpact(with steps: Set<CheckExtraStep>) -> Bool {
+    runsImpact || steps.contains(.impact)
+  }
+  public func runsCoverage(with steps: Set<CheckExtraStep>) -> Bool {
+    runsCoverage || steps.contains(.coverage)
+  }
 }
 
 /// The `app-build` step: `xcodebuild build` of the app scheme for a generic simulator, judged from
@@ -89,7 +96,23 @@ public enum AppBuild {
       self.resultBundlePath = resultBundlePath
     }
 
-    public var arguments: [String] { [] }
+    /// A generic destination needs no simulator clone: compiling is all the step asks.
+    public var arguments: [String] {
+      var arguments = ["build", "-quiet"]
+      switch container {
+      case .package: break
+      case .project(let path): arguments += ["-project", path]
+      case .workspace(let path): arguments += ["-workspace", path]
+      }
+      return arguments + [
+        "-scheme", scheme,
+        "-destination", "generic/platform=iOS Simulator",
+        "-derivedDataPath", derivedDataPath,
+        "-resultBundlePath", resultBundlePath,
+        "-skipMacroValidation",
+        "-onlyUsePackageVersionsFromResolvedFile",
+      ]
+    }
   }
 
   /// - Parameters:
@@ -99,7 +122,51 @@ public enum AppBuild {
   public static func judge(
     scheme: String, succeeded: Bool, buildResults: Data?, repositoryRoot: String
   ) throws(ReportContractViolation) -> ChangedTestJudgement {
-    .empty
+    let parsed = buildResults.flatMap { try? XcresultBuildResults.parse($0) }
+    let errors = parsed?.errors ?? []
+    if succeeded && errors.isEmpty {
+      return ChangedTestJudgement(
+        findings: [
+          try finding(
+            summaryRuleID, .nit, file: ".", line: nil,
+            "app build: scheme \(scheme) compiled for the iOS Simulator")
+        ], blocked: false)
+    }
+    guard !errors.isEmpty else {
+      let why =
+        parsed == nil
+        ? "its result bundle has no readable build results" : "its build results name no error"
+      return ChangedTestJudgement(
+        findings: [
+          try finding(
+            blockedRuleID, .minor, file: ".", line: nil,
+            "app build of scheme \(scheme) failed and \(why), so it can't say what broke; "
+              + "read the xcodebuild log beside the run report")
+        ], blocked: true)
+    }
+    let root = repositoryRoot.hasSuffix("/") ? repositoryRoot : repositoryRoot + "/"
+    // xcodebuild blames `/var/…` for a root whose real path is `/private/var/…`.
+    let prefixes = [root] + (root.hasPrefix("/private/") ? [String(root.dropFirst(8))] : [])
+    return ChangedTestJudgement(
+      findings: try errors.map { error throws(ReportContractViolation) in
+        let relative = error.file.flatMap { file in
+          prefixes.first { file.hasPrefix($0) }.map { String(file.dropFirst($0.count)) }
+        }
+        let message =
+          relative == nil && error.file != nil
+          ? "\(error.message) (in \(error.file ?? ""))" : error.message
+        return try finding(
+          errorRuleID, .major, file: relative ?? ".", line: relative == nil ? nil : error.line,
+          "app build of scheme \(scheme): \(message)")
+      }, blocked: false)
+  }
+
+  private static func finding(
+    _ ruleID: String, _ severity: Severity, file: String, line: Int?, _ message: String
+  ) throws(ReportContractViolation) -> Finding {
+    try Finding(
+      ruleID: ruleID, severity: severity, file: file, line: line, message: message,
+      failureScenario: nil)
   }
 }
 

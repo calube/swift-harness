@@ -68,7 +68,19 @@ public struct LiveXcodebuild: Xcodebuild {
   public func build(_ request: AppBuild.Request, logPath: String)
     async throws(XcodebuildError) -> ExitStatus
   {
-    .exited(0)
+    let output: ProcessOutput
+    do {
+      output = try await runner.run(
+        ProcessInvocation(
+          executable: "/usr/bin/xcrun", arguments: ["xcodebuild"] + request.arguments,
+          timeout: testTimeout))
+    } catch {
+      throw .runner(error)
+    }
+    let log = output.stdout.text + "\n--- stderr ---\n" + output.stderr.text
+    // The log is a diagnostic; failing to write it must not change the verdict.
+    try? Data(log.utf8).write(to: URL(filePath: logPath))
+    return output.status
   }
 
   public func version() async throws(XcodebuildError) -> String {

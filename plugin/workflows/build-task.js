@@ -34,6 +34,9 @@ const TIERS = ['fast', 'push', 'ready']
 const VERDICTS = ['GREEN', 'RED', 'BLOCKED']
 const MODELS = ['sonnet', 'opus']
 const REVIEW_MODES = ['full', 'gate']
+// Every task gate judges impact and diff coverage over its change and compiles the app target, so
+// what the merge gate would catch after a merge, and a view the host build compiles out, fail here.
+const TASK_GATE_STEPS = '--impact --coverage --app-build'
 // The preset's `task_proof`: per-task gates prove and mutate; final leaves both to the build's final ready gate.
 const TASK_PROOFS = ['per-task', 'final']
 const REVIEWERS = ['verifier', 'test-quality']
@@ -240,9 +243,9 @@ const brief = () =>
     `Write set: ${A.writeSet.join(', ')}.`,
     `Task proof: ${A.taskProof}.`,
     A.taskProof === 'per-task'
-      ? `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate, ` +
+      ? `Task gate: swiftgate check --tier ${A.taskGate} --base main --prove --mutate ${TASK_GATE_STEPS}, ` +
         'plus --proof-base <surface commit> when the task adds API.'
-      : `Task gate: swiftgate check --tier ${A.taskGate} --base main, ` +
+      : `Task gate: swiftgate check --tier ${A.taskGate} --base main ${TASK_GATE_STEPS}, ` +
         "plus --proof-base <surface commit> when the task adds API. The build's final ready gate proves and mutates every task at once.",
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,

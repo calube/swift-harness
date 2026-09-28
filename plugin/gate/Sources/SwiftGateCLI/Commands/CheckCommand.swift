@@ -5,7 +5,8 @@ import SwiftGateDomain
 import SwiftGateRules
 
 /// `check --tier`: composes the T0 checks, T1, and at push and above impact, coverage and
-/// presence (spec §5.1). The config and module graph are loaded once and shared by every step.
+/// presence (spec §5.1), plus any extra steps a build task's gate asks for below the tier that
+/// runs them. The config and module graph are loaded once and shared by every step.
 enum CheckRun {
   static let notRunRuleID = "swiftgate.not-run"
 
@@ -55,7 +56,7 @@ enum CheckRun {
   typealias ExtraStep = CheckExtraStep
 
   /// - Parameters:
-  ///   - extraSteps: `ready` steps to run at a lower tier; `ready` runs them anyway.
+  ///   - extraSteps: steps to run at a tier that doesn't already run them.
   ///   - proofBases: ancestors of HEAD, oldest first, where `prove` retries a compile-only test.
   static func run(
     root: URL, tier: CheckTier, base: String, extraSteps: Set<ExtraStep> = [],
@@ -81,8 +82,9 @@ enum CheckRun {
     // T0 finishes in well under a second, so it runs before T1 rather than beside it: the arch
     // check's `dump-package` would otherwise wait on the package lock T1's build holds.
     let t0 = try await runT0(
-      root: root, swiftPM: swiftPM, git: git, formatter: dependencies.formatter, tier: tier,
-      base: base, config: config, scopes: scopes, changed: changed)
+      root: root, swiftPM: swiftPM, git: git, formatter: dependencies.formatter,
+      impact: tier.runsImpact(with: extraSteps), base: base, config: config, scopes: scopes,
+      changed: changed)
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
@@ -114,10 +116,20 @@ enum CheckRun {
         parts.findings.append(pinBlockedFinding)
       } else {
         let t1 = try await runT1(
-          root: root, swiftPM: swiftPM, git: git, tier: tier, base: base, config: config,
+          root: root, swiftPM: swiftPM, git: git, tier: tier,
+          coverage: tier.runsCoverage(with: extraSteps), base: base, config: config,
           graph: graph, changed: changed, context: context)
         var t1Tier = t1.tier
         parts.findings += t1.findings
+        // Before the scratch-tree steps: an app compile is cheaper than a proof and needs none.
+        if extraSteps.contains(.appBuild) {
+          let built = try await afterT1("app build", t1Tier) {
+            try await AppBuildCheck.run(
+              root: root, config: config, context: context, dependencies: dependencies.simulator)
+          }
+          t1Tier = built.tier
+          parts.findings += built.findings
+        }
         let environment = dependencies.changedTests
         // Reach first (each test alone), then stress, then prove, whose scratch tree builds
         // from cold.
@@ -205,10 +217,10 @@ enum CheckRun {
   /// Runs `stage` unless T1 is already RED, when the verdict is settled and the stage's scratch
   /// builds would only repeat the failure.
   private static func afterT1(
-    _ stage: String, _ t1: TierResult, _ run: () async -> ChangedTestJudgement
+    _ stage: String, _ t1: TierResult, _ run: () async throws -> ChangedTestJudgement
   ) async throws -> (tier: TierResult, findings: [Finding]) {
     guard t1.verdict != .red else { return (t1, [try note("\(stage) not run: T1 is RED")]) }
-    let judgement = await run()
+    let judgement = try await run()
     return (try t1.merging(judgement.verdict), judgement.findings)
   }
 
@@ -217,6 +229,8 @@ enum CheckRun {
     tier: CheckTier, extraSteps: Set<ExtraStep>, judges: Bool
   ) -> [String] {
     var stages = ["T1"]
+    if extraSteps.contains(.coverage) && !tier.runsCoverage { stages.append("coverage") }
+    if extraSteps.contains(.appBuild) { stages.append("app build") }
     if tier == .ready {
       stages += ["reach", "stress", "prove"]
     } else if extraSteps.contains(.prove) {
@@ -237,7 +251,7 @@ enum CheckRun {
 
   private static func runT0(
     root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
-    tier: CheckTier, base: String, config: Config?, scopes: ResolvedScopes,
+    impact: Bool, base: String, config: Config?, scopes: ResolvedScopes,
     changed: Result<[String], BlockedReason>
   ) async throws -> T0Result {
     let (outcomes, milliseconds) = await GateRun.timed { () async -> [StaticCheckOutcome] in
@@ -253,7 +267,7 @@ enum CheckRun {
         await FormatCheck.run(
           changed: changed, root: root, excluded: config?.exclude ?? [], formatter: formatter),
       ]
-      if tier.runsImpact {
+      if impact {
         outcomes.append(
           await ImpactCheck.run(root: root, git: git, base: base, scopes: scopes.resolver))
       }
@@ -263,8 +277,8 @@ enum CheckRun {
   }
 
   private static func runT1(
-    root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, base: String,
-    config: Config, graph: ModuleGraph, changed: Result<[String], BlockedReason>,
+    root: URL, swiftPM: any SwiftPM, git: any Git, tier: CheckTier, coverage: Bool,
+    base: String, config: Config, graph: ModuleGraph, changed: Result<[String], BlockedReason>,
     context: GateRun.Context
   ) async throws -> HostTestCheck.Result {
     let plan: TierPlan
@@ -278,8 +292,8 @@ enum CheckRun {
     }
     let t1 = try await HostTestCheck.run(
       HostTestCheck.selections(plan: plan, graph: graph), root: root, swiftPM: swiftPM,
-      outputDirectory: context.directory, readCoverage: tier.runsCoverage)
-    guard tier.runsCoverage else { return t1 }
+      outputDirectory: context.directory, readCoverage: coverage)
+    guard coverage else { return t1 }
 
     // Coverage is judged from the T1 run above: its exports are reused, never re-run.
     switch await CoverageCheck.addedLines(git: git, base: base) {
@@ -674,6 +688,70 @@ enum CalibrationFreshness {
   }
 }
 
+/// The `app-build` step: compiles the app scheme for a generic simulator, so a platform view the
+/// host build compiles out still fails the gate of the change that broke it. A repository with no
+/// app container has nothing to compile and gets a note, never a pass that claims a build.
+enum AppBuildCheck {
+  static let directory = "app-build"
+
+  static func run(
+    root: URL, config: Config, context: GateRun.Context,
+    dependencies: SimulatorTestCheck.Dependencies
+  ) async throws(ReportContractViolation) -> ChangedTestJudgement {
+    let entries = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+    let containerPath: String
+    switch AppContainer.choose(among: entries) {
+    case .failure(.none):
+      return ChangedTestJudgement(
+        findings: [
+          try Finding(
+            ruleID: CheckRun.notRunRuleID, severity: .nit, file: ".", line: nil,
+            message: "app build not run: no .xcworkspace or .xcodeproj at the repository root",
+            failureScenario: nil)
+        ], blocked: false)
+    case .failure(let error):
+      return ChangedTestJudgement(
+        findings: [
+          try Finding(
+            ruleID: AppBuild.containerRuleID, severity: .major, file: ".", line: nil,
+            message: error.message, failureScenario: nil)
+        ], blocked: false)
+    case .success(let path): containerPath = path
+    }
+    let absolute = root.appending(path: containerPath).path
+    let output = context.directory.appending(path: directory, directoryHint: .isDirectory)
+    let bundle = output.appending(path: "\(config.appScheme).xcresult")
+    let derivedData = root.appending(
+      path: HarnessGC.derivedDataDirectory, directoryHint: .isDirectory
+    )
+    .appending(path: directory, directoryHint: .isDirectory)
+    try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    try? FileManager.default.createDirectory(at: derivedData, withIntermediateDirectories: true)
+    // `xcodebuild` refuses to overwrite a bundle, and an old one must never stand in for this run.
+    try? FileManager.default.removeItem(at: bundle)
+    let request = AppBuild.Request(
+      container: containerPath.hasSuffix(".xcworkspace")
+        ? .workspace(path: absolute) : .project(path: absolute),
+      scheme: config.appScheme, derivedDataPath: derivedData.path, resultBundlePath: bundle.path)
+    let status: ExitStatus
+    do throws(XcodebuildError) {
+      status = try await dependencies.xcodebuild.build(
+        request, logPath: output.appending(path: "xcodebuild.log").path)
+    } catch {
+      return ChangedTestJudgement(
+        findings: [
+          try Finding(
+            ruleID: AppBuild.blockedRuleID, severity: .minor, file: ".", line: nil,
+            message: "app build not run: \(error.message)", failureScenario: nil)
+        ], blocked: true)
+    }
+    let results = try? await dependencies.reader.readBuildResults(bundlePath: bundle.path)
+    return try AppBuild.judge(
+      scheme: config.appScheme, succeeded: status.isSuccess, buildResults: results,
+      repositoryRoot: CanonicalPath.of(root))
+  }
+}
+
 extension CheckTier: ExpressibleByArgument {}
 
 struct CheckCommand: AsyncParsableCommand {
@@ -718,10 +796,17 @@ struct CheckCommand: AsyncParsableCommand {
 
   /// The asked-for steps `tier` doesn't already run, in declaration order.
   var extraSteps: [CheckRun.ExtraStep] {
-    var steps: [CheckRun.ExtraStep] = []
-    if prove, tier != .ready { steps.append(.prove) }
-    if mutate, tier != .ready { steps.append(.mutate) }
-    return steps
+    CheckRun.ExtraStep.allCases.filter { step in
+      let asked =
+        switch step {
+        case .prove: prove
+        case .mutate: mutate
+        case .impact: impact
+        case .coverage: coverage
+        case .appBuild: appBuild
+        }
+      return asked && !step.isRun(by: tier)
+    }
   }
 
   func run() async throws {

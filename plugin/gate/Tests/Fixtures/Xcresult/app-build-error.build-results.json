@@ -1,0 +1,31 @@
+{
+  "actionTitle" : "Build \"SampleApp\"",
+  "analyzerWarningCount" : 0,
+  "analyzerWarnings" : [
+
+  ],
+  "destination" : {
+    "architecture" : "undefined_arch",
+    "deviceId" : "dvtdevice-DVTiOSDeviceSimulatorPlaceholder-iphonesimulator:placeholder",
+    "deviceName" : "Any iOS Simulator Device",
+    "modelName" : "Apple device",
+    "osVersion" : "",
+    "platform" : "iOS Simulator"
+  },
+  "endTime" : 1790554559.772,
+  "errorCount" : 1,
+  "errors" : [
+    {
+      "className" : "DVTTextDocumentLocation",
+      "issueType" : "Swift Compiler Error",
+      "message" : "Cannot convert value of type 'String' to specified type 'Int'",
+      "sourceURL" : "file:///SCRATCH/SampleApp/App/SampleApp.swift#EndingColumnNumber=27&EndingLineNumber=22&StartingColumnNumber=27&StartingLineNumber=22&Timestamp=812247353.781546"
+    }
+  ],
+  "startTime" : 1790554553.773,
+  "status" : "failed",
+  "warningCount" : 0,
+  "warnings" : [
+
+  ]
+}
