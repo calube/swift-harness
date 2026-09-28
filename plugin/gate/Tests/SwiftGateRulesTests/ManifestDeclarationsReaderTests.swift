@@ -100,4 +100,43 @@ struct ManifestDeclarationsReaderTests {
       #expect(!reason.isEmpty, "\(label)")
     }
   }
+
+  @Test(
+    "a manifest with no `Package(…)` call, or with 2, is unreadable and the reason counts the calls — catches the first of several calls read as the whole manifest"
+  )
+  func packageCallsAreCounted() {
+    let header = "// swift-tools-version: 6.2\nimport PackageDescription\n\n"
+    let one = "Package(name: \"A\", targets: [.target(name: \"A\")])"
+    #expect(
+      ManifestDeclarationsReader.read(header + "let name = \"A\"\n")
+        == .unreadable("it has no `Package(…)` call"))
+    #expect(
+      ManifestDeclarationsReader.read(header + "let a = \(one)\nlet package = \(one)\n")
+        == .unreadable("it has 2 `Package(…)` calls"))
+  }
+
+  @Test(
+    "a later change reached through `package.products` is unreadable and named, while one through `package.dependencies` leaves the declarations read — catches a products append missed, or any member access refused"
+  )
+  func onlyDeclarationListsChangedLaterAreRefused() {
+    let package = """
+      // swift-tools-version: 6.2
+      import PackageDescription
+
+      let package = Package(
+        name: "A",
+        products: [.library(name: "A", targets: ["A"])],
+        targets: [.target(name: "A")]
+      )
+
+      """
+    #expect(
+      ManifestDeclarationsReader.read(
+        package + "package.products.append(.library(name: \"B\", targets: [\"A\"]))\n")
+        == .unreadable("`package.products` changes a list after `Package(…)`"))
+    #expect(
+      ManifestDeclarationsReader.read(
+        package + "package.dependencies.append(.package(path: \"../B\"))\n")
+        == Self.declared(["A"], ["A"]))
+  }
 }
