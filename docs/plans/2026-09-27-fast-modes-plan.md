@@ -47,7 +47,7 @@ The runbook applies as written, with these changes:
 
 ### Rehearsal fix decisions
 
-The user approved all 3 recommendations on 2026-09-28.
+The user approved all 3 recommendations on 2026-09-28. Later that day, after rehearsal A's `ready` gate went RED on 11 `prove.compile-only` findings (slice 4 added the `…Live` target of a package new since `main`, with no stub in the surface), the user chose to refuse such a slice at `sprint slice`, and to re-run both rehearsals from their warm starting commits once waves 6-8 merge.
 
 | Decision | Evidence | Recommendation | Needs |
 |---|---|---|---|
@@ -66,6 +66,7 @@ The user approved all 3 recommendations on 2026-09-28.
 | 5 | `prove-retries-emptied-targets-at-proof-base`, `plan-state-guard-allows-sprint-pages`, `slice-gates-measure-from-the-surface` | defects the rehearsals hit; disjoint write sets; the last waits on a user decision |
 | 6 | `t3-never-clones-a-booted-base`, `surface-check-allows-additive-manifest-edits`, `shim-kill-cleanup-test-holds-under-load` | disjoint write sets; the flake fix is a user request (2026-09-28) |
 | 7 | `sprint-skill-rehearsal-lessons` | the skill text follows the slice-base change |
+| 8 | `sprint-slice-refuses-targets-the-surface-lacks` | user decision 2026-09-28: catch a new target at the slice, not at the final gate |
 
 ### `surface-check-command`
 - Deps: none · Gate: push · Model: opus · estLines: 420
@@ -145,3 +146,9 @@ The user approved all 3 recommendations on 2026-09-28.
 - Writes: `tests/shim_kill_cleanup_test.mjs`, and `plugin/bin/swiftgate` only if the root cause is in the shim (then `tests/shim_test.sh` too)
 - Does: the test "a shim test killed outright leaves no process under its temp directory" fails in full push runs at load 40 or more and passes alone ("the shim test ran no shim within 20s"; main runs `20260928T121418Z-3d3de7e5`, and 2 runs on the prove-retry branch). Find why the shim doesn't start within 20 s under load: a fixed wall-clock deadline racing a cold start, or a real shim defect. Replace the fixed deadline with waiting on the real artifact (the shim's process or marker file), bounded by a deadline long enough for a cold shim under load and reported by name when it's exceeded. If the shim itself is slow to spawn, fix the shim instead.
 - Tests: the test passes 10 times in a row under generated load (`timeout`-bounded busy loops on every core, cleaned up by their own deadline), and a shim that never starts still fails with the named deadline, never hangs. Revert the fix and confirm the loaded run goes red.
+
+### `sprint-slice-refuses-targets-the-surface-lacks`
+- Deps: slice-gates-measure-from-the-surface, surface-check-allows-additive-manifest-edits · Gate: push · Model: opus · estLines: 200
+- Writes: `C/Commands/SprintCommand.swift`, the `D/Sprint/` file holding `SprintRefusal`, a manifest-reading helper in `A/` if one doesn't exist (reuse the surface scan's `Package.swift` parsing; never write a second parser), `TC/SprintCommandTests.swift`, `TD/` tests for the rule, `plugin/gate/Tests/Fixtures/` (captured manifests), the fixtures README, `plugin/docs/standards.md` (rule index row), `P/skills/sprint/SKILL.md` (the refusal row only), `tests/skill_commands_test.mjs` (its row), the fast-modes spec's §4.2 refusal table
+- Does: a slice commit that adds a target or product to any `Package.swift`, or adds a new `Package.swift`, that the surface commit doesn't declare, can't be proven: at the surface its sources are empty, SwiftPM refuses the package, and every test in it and its dependents is `prove.compile-only` at the final `ready` gate (rehearsal A, run `20260928T164206Z-298fd7a6`, 11 findings, 50 minutes after the slice). `sprint slice` compares the declared targets and products at the slice's HEAD with those at the surface and refuses with a new rule `sprint.target-outside-surface` (exit 1), naming each package and target and the fix: amend the surface with a stub target, rebuild the slices on it. Slices that only fill declared targets pass.
+- Tests: in a temp repo, a slice that adds a `…Live` target to a package the surface created is refused, naming it (catches the rehearsal case); one adding a whole new package is refused; one filling only declared targets passes; a slice that only reorders a manifest passes. Remove the check and confirm the first test goes red.
