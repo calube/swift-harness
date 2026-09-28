@@ -54,7 +54,10 @@ struct ContextPackOptions: ParsableArguments {
   var standards: String?
   @Option(help: "Path to docs/testing-playbook.md, appended to --standards.")
   var playbook: String?
-  @Option(help: "A module kind in scope, mapped to its standards anchors. Repeatable.")
+  @Option(
+    help:
+      "A module kind in scope, mapped to its standards anchors (drafter). Repeatable. A worker pack derives its kinds from the write set."
+  )
   var moduleKind: [String] = []
   @Option(help: "A standards/playbook anchor to include verbatim (standards reviewer). Repeatable.")
   var standardsAnchor: [String] = []
@@ -160,7 +163,16 @@ enum ContextPackRun {
   /// `String` only because `Result`'s failure type must conform to `Error`.
   private struct GatherFailure: Error, Sendable, Equatable {
     let message: String
-    init(_ message: String) { self.message = message }
+    /// The domain refused the inputs (exit 1), rather than an input being bad or unreadable.
+    let isViolation: Bool
+    init(_ message: String) {
+      self.message = message
+      self.isViolation = false
+    }
+    init(violation error: ContextPackError) {
+      self.message = ContextPackRun.describe(error)
+      self.isViolation = true
+    }
   }
 
   static func run(
@@ -182,11 +194,13 @@ enum ContextPackRun {
     case .standardsReviewer: gathered = gatherStandardsReviewer(options, root)
     case .challenger: gathered = gatherChallenger(options, root)
     case .decomposer: gathered = gatherDecomposer(options, root)
-    case .worker: gathered = gatherWorker(options, root)
+    case .worker: gathered = await gatherWorker(options, root, swiftPM)
     }
 
     let (inputs, notes, roleKey): Gathered
     switch gathered {
+    case .failure(let failure) where failure.isViolation:
+      return .violation(message: failure.message)
     case .failure(let failure): return .invalid(message: failure.message)
     case .success(let value): (inputs, notes, roleKey) = value
     }
@@ -357,6 +371,40 @@ enum ContextPackRun {
         GatherFailure("`\(frameAnswers.label)` is not a valid frame-answers file: \(error)"))
     }
 
+    let graph: ModuleGraph
+    switch await loadModuleGraph(root: root, swiftPM: swiftPM) {
+    case .success(let loaded): graph = loaded
+    case .failure(let failure): return .failure(failure)
+    }
+
+    do throws(DesignScopeValidationError) {
+      _ = try DesignScope.deriveFacts(answers: answers, graph: graph)
+    } catch {
+      return .failure(GatherFailure("\(error)"))
+    }
+    return .success(answers.touchedModules)
+  }
+
+  /// A write set with no module entries (docs, fixtures) still gets a standards section, one that
+  /// says why it holds no excerpt, so a reader never takes an empty section for a lost one.
+  private static let noModuleKindsAnchor = "no-module-kinds"
+  private static let noModuleKindsStandards = ContextSource(
+    label: "standards",
+    rawText:
+      "## No module kinds\n\nNo module kinds in this task's write set; no standards excerpt.\n")
+
+  private static func configLoadError(root: URL) -> ConfigLoadError? {
+    do throws(ConfigLoadError) {
+      _ = try ConfigLoader().load(repositoryRoot: root)
+      return nil
+    } catch {
+      return error
+    }
+  }
+
+  private static func loadModuleGraph(root: URL, swiftPM: any SwiftPM) async -> Result<
+    ModuleGraph, GatherFailure
+  > {
     let config: Config
     switch StaticCheckInputs.loadConfig(root: root) {
     case .success(let loaded?): config = loaded
@@ -366,19 +414,12 @@ enum ContextPackRun {
     case .failure(let failure):
       return .failure(GatherFailure(configFailureMessage(failure.outcome)))
     }
-    let graph: ModuleGraph
     do {
-      graph = try await ModuleGraphLoader(swiftPM: swiftPM, root: root).load(config: config)
+      return .success(
+        try await ModuleGraphLoader(swiftPM: swiftPM, root: root).load(config: config))
     } catch {
       return .failure(GatherFailure("can't load the module graph: \(error)"))
     }
-
-    do throws(DesignScopeValidationError) {
-      _ = try DesignScope.deriveFacts(answers: answers, graph: graph)
-    } catch {
-      return .failure(GatherFailure("\(error)"))
-    }
-    return .success(answers.touchedModules)
   }
 
   private static func configFailureMessage(_ outcome: StaticCheckOutcome) -> String {
@@ -665,9 +706,9 @@ enum ContextPackRun {
       ))
   }
 
-  private static func gatherWorker(_ o: ContextPackGatherInputs, _ root: URL) -> Result<
-    Gathered, GatherFailure
-  > {
+  private static func gatherWorker(
+    _ o: ContextPackGatherInputs, _ root: URL, _ swiftPM: any SwiftPM
+  ) async -> Result<Gathered, GatherFailure> {
     guard let designPath = o.design else {
       return .failure(GatherFailure("missing required option '--design <path>'"))
     }
@@ -676,6 +717,12 @@ enum ContextPackRun {
     }
     guard let taskID = o.taskID else {
       return .failure(GatherFailure("missing required option '--task-id <id>'"))
+    }
+    guard o.moduleKind.isEmpty else {
+      return .failure(
+        GatherFailure(
+          "--module-kind doesn't apply to a worker pack: its kinds come from the task's write "
+            + "set and the module graph"))
     }
     let designSource: ContextSource
     switch ContextPackFiles.read(label: designPath, path: designPath, root: root) {
@@ -716,35 +763,59 @@ enum ContextPackRun {
       }
     }
 
-    switch moduleKindAnchors(o.moduleKind) {
-    case .failure(let message): return .failure(message)
-    case .success(let anchors):
-      let standards: ContextSource
-      if anchors.isEmpty {
-        standards = ContextSource(label: "standards", rawText: "")
-      } else {
-        guard let standardsPath = o.standards else {
-          return .failure(
-            GatherFailure("missing required option '--standards <path>' (--module-kind given)"))
-        }
-        switch readStandardsAndPlaybook(
-          standardsPath: standardsPath, playbookPath: o.playbook, root: root)
-        {
-        case .success(let s): standards = s
-        case .failure(let message): return .failure(message)
-        }
-      }
-
-      return .success(
-        (
-          .worker(
-            WorkerInputs(
-              task: task, design: design, designSource: designSource, claims: claims,
-              citedClaimIDs: o.claimID, standards: standards, moduleKindAnchors: anchors,
-              dependencyNotes: dependencyNotes)),
-          notes, o.key ?? taskID
-        ))
+    if case .invalid(let validation)? = configLoadError(root: root),
+      validation.issues.contains(where: {
+        if case .unknownModuleKind = $0 { return true } else { return false }
+      })
+    {
+      return .failure(GatherFailure(violation: .unknownModuleKind(writeSetEntry: nil)))
     }
+    let graph: ModuleGraph
+    switch await loadModuleGraph(root: root, swiftPM: swiftPM) {
+    case .success(let loaded): graph = loaded
+    case .failure(let failure): return .failure(failure)
+    }
+    let kinds: [ModuleKind]
+    do throws(ContextPackError) {
+      kinds = try WorkerModuleKinds.kinds(writeSet: task.writeSet, graph: graph)
+    } catch {
+      return .failure(GatherFailure(violation: error))
+    }
+
+    let standards: ContextSource
+    if kinds.isEmpty {
+      standards = noModuleKindsStandards
+    } else if let standardsPath = o.standards {
+      switch readStandardsAndPlaybook(
+        standardsPath: standardsPath, playbookPath: o.playbook, root: root)
+      {
+      case .success(let s): standards = s
+      case .failure(let message): return .failure(message)
+      }
+    } else {
+      switch WorkerPackSources.gather(
+        designPath: designPath, root: root, harnessRoot: o.harnessRoot
+      )
+      .standards
+      {
+      case .success(let s?): standards = s
+      case .success(nil):
+        return .failure(GatherFailure("no standards doc for worker packs"))
+      case .failure(let failure): return .failure(GatherFailure(failure.message))
+      }
+    }
+
+    return .success(
+      (
+        .worker(
+          WorkerInputs(
+            task: task, design: design, designSource: designSource, claims: claims,
+            citedClaimIDs: o.claimID, standards: standards,
+            moduleKindAnchors: kinds.isEmpty
+              ? [noModuleKindsAnchor] : ContextPackModuleKindAnchors.anchors(for: kinds),
+            dependencyNotes: dependencyNotes)),
+        notes, o.key ?? taskID
+      ))
   }
 
   // MARK: - Shared gathering helpers
@@ -875,7 +946,7 @@ enum ContextPackRun {
     try Data(text.utf8).write(to: url)
   }
 
-  private static func describe(_ error: ContextPackError) -> String {
+  static func describe(_ error: ContextPackError) -> String {
     switch error {
     case .missingAnchor(let anchor, let source):
       return "missing anchor `\(anchor)` in `\(source)`"
@@ -893,9 +964,13 @@ enum ContextPackRun {
       return "role mismatch: expected \(expected.rawValue), got \(actual.rawValue)"
     case .missingDependencyReturn(let task):
       return "no task return for dependency `\(task)`: run `swiftgate build check-return` first"
-    case .unknownModuleKind(let entry):
-      return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in no module of "
-        + "the module graph, so its standards can't be packed"
+    case .unknownModuleKind(let entry?):
+      return "context-pack.module-kind-unknown: write-set entry `\(entry)` is in a module with "
+        + "no known kind, so its standards can't be packed"
+    case .unknownModuleKind(nil):
+      return "context-pack.module-kind-unknown: \(ConfigLoader.fileName) names a module kind "
+        + "outside \(ModuleKind.allCases.map(\.rawValue).joined(separator: ", ")), so the "
+        + "task's standards can't be packed"
     }
   }
 
@@ -947,15 +1022,20 @@ struct ContextPackCommand: AsyncParsableCommand {
       + "--claim-id (evidence auditor), --design/--standards/--playbook/--standards-anchor "
       + "(standards reviewer), --design/--doc-anchor/--question-set (challenger), --design/"
       + "--module-graph/--task-sizing-bounds (decomposer), --design/--ledger/--task-id/--claims/"
-      + "--module-kind/--standards/--build-run (worker) apply.")
+      + "--standards/--playbook/--build-run (worker) apply. A worker pack's standards are the "
+      + "anchors for the module kinds its task's write set touches in the module graph; "
+      + "--standards defaults to docs/standards.md, else the harness plugin's.")
 
   @OptionGroup var packOptions: ContextPackOptions
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    var options = packOptions.gatherInputs
+    options.harnessRoot = ProcessInfo.processInfo.environment[SelfTestCommand.harnessRootVariable]
+      .map { URL(filePath: $0, directoryHint: .isDirectory) }
     let outcome = await ContextPackRun.run(
-      role: packOptions.role, options: packOptions.gatherInputs, root: root,
+      role: packOptions.role, options: options, root: root,
       swiftPM: ScopeResolution.liveSwiftPM(root: root))
     switch outcome {
     case .written(let written):
