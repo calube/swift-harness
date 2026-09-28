@@ -34,6 +34,25 @@ struct AppBuildAdapterTests {
   }
 
   @Test(
+    "an xcodebuild that can't launch is a BLOCKED error, never an exit status — catches a missing toolchain read as a failed or passing build"
+  )
+  func buildThatCannotLaunch() async throws {
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      throw .launchFailed(executable: invocation.executable, reason: "not found")
+    }
+    let request = AppBuild.Request(
+      container: .project(path: "/r/App.xcodeproj"), scheme: "App", derivedDataPath: "/d",
+      resultBundlePath: "/b.xcresult")
+
+    let error = await #expect(throws: XcodebuildError.self) {
+      try await LiveXcodebuild(runner: runner).build(request, logPath: "/nonexistent/build.log")
+    }
+
+    #expect(error?.verdict == .blocked)
+    #expect(error?.message.contains("not found") == true)
+  }
+
+  @Test(
     "a build bundle is read with build-results alone, and a missing one is a BLOCKED read error — catches the app build asking a build-only bundle for a test tree"
   )
   func readBuildResults() async throws {

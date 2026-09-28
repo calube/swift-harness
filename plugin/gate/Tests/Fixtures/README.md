@@ -150,12 +150,12 @@ The repository path becomes `/REPO`, the clone's name `swift-harness-PID-TOKEN` 
 `CLONE-UDID`. It shows XCUITest cases under a `UI test bundle` node, identified
 `<Class>/<method>()`.
 
-`Xcresult/app-build-{pass,error}.build-results.json` are captured by
-`plugin/gate/Fixtures/xcresult/capture-app-build.sh`: a scratch git copy of `examples/SampleApp`
+`plugin/gate/Fixtures/xcresult/capture-app-build.sh` captures
+`Xcresult/app-build-{pass,error}.build-results.json`: a scratch git copy of `examples/SampleApp`
 runs `swiftgate check --tier fast --base HEAD --app-build` as committed (`pass`, GREEN), then again
 with a commit that adds `static let broken: Int = "not a number"` to `App/SampleApp.swift`
-(`error`, RED, `--base HEAD~1`). Each is read back with `xcrun xcresulttool get build-results`
-from the run's `app-build/SampleApp.xcresult`. The scratch path becomes `/SCRATCH`, in both its
+(`error`, RED, `--base HEAD~1`). The script reads each back with
+`xcrun xcresulttool get build-results` from the run's `app-build/SampleApp.xcresult`. The scratch path becomes `/SCRATCH`, in both its
 `/private/var` and its `/var` spelling: xcodebuild blames files under `/var`. A generic
 `iOS Simulator` build bundle holds build results and no test tree.
 
