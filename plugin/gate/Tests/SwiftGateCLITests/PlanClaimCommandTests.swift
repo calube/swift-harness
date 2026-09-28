@@ -300,6 +300,27 @@ struct PlanClaimCommandTests {
   }
 
   @Test(
+    "none is a design step only a preset takes: plan claim --tier none and plan set --tier none are blocked and write nothing — catches the design-free value leaking into a plan's design tier"
+  )
+  func tierNoneIsPresetOnly() async throws {
+    let scenario = LockScenario()
+    defer { scenario.shared.remove() }
+    #expect(BuildPreset.DesignStep(rawValue: "none") == BuildPreset.DesignStep.none)
+
+    let claim = await scenario.claim(LockScenario.alice, tier: "none")
+    #expect(claim.verdict == .blocked)
+    #expect(scenario.planStateFiles().isEmpty)
+
+    #expect(await scenario.claim(LockScenario.alice).status == .claimed)
+    let before = try scenario.planFile()
+    let set = await PlanSetRun.run(
+      slug: LockScenario.plan, session: LockScenario.alice, tier: "none", resume: nil,
+      git: scenario.git)
+    #expect(set.verdict == .blocked)
+    #expect(try scenario.planFile() == before)
+  }
+
+  @Test(
     "an unknown --tier names all four accepted tiers — catches sketch missing from the documented and accepted list"
   )
   func unknownTierMessageListsAllFourTiers() async throws {

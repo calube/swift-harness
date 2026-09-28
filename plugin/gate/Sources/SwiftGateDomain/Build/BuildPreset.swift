@@ -59,11 +59,16 @@ public struct BuildPreset: Sendable, Equatable {
     public static let deep: Self = .design(.deep)
     public static let sketch: Self = .design(.sketch)
 
-    public static var allCases: [Self] { DesignTier.allCases.map(Self.design) }
+    public static var allCases: [Self] { DesignTier.allCases.map(Self.design) + [.none] }
 
     public init?(rawValue: String) {
-      guard let tier = DesignTier(rawValue: rawValue) else { return nil }
-      self = .design(tier)
+      if rawValue == "none" {
+        self = .none
+      } else if let tier = DesignTier(rawValue: rawValue) {
+        self = .design(tier)
+      } else {
+        return nil
+      }
     }
 
     public var rawValue: String {
