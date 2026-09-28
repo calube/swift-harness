@@ -310,6 +310,10 @@ public enum Doctor {
 
     check.findings += facts.architectureFindings
 
+    if let session = facts.pluginSession {
+      check.findings += pluginSessionFindings(session)
+    }
+
     if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
       let defined = facts.config.buildPresets.keys.sorted()
       check.fail(
@@ -340,7 +344,43 @@ public enum Doctor {
   /// Whether the session still runs the plugin text on disk: a running session keeps the skills
   /// and agent prompts it loaded at start, so a plugin change reaches only new sessions.
   public static func pluginSessionFindings(_ facts: PluginSessionFacts) -> [Finding] {
-    []
+    var check = DoctorJudgement()
+    for record in facts.unreadable {
+      check.fail(
+        sessionRecordRuleID, record.path,
+        "session record \(record.path) can't be read (\(record.reason)), so doctor can't tell "
+          + "whether the plugin changed after that session started; delete it and start a "
+          + "fresh session")
+    }
+    guard let recorded = facts.recorded else {
+      if facts.unreadable.isEmpty {
+        let whose = facts.sessionID.map { "for session \($0) " } ?? ""
+        check.warn(
+          sessionRecordRuleID, .nit,
+          "no session record \(whose)under \(facts.directory), so doctor can't tell whether the "
+            + "plugin changed after this session started; the SessionStart hook writes one")
+      }
+      return check.findings
+    }
+    let record = recorded.record
+    let root = record.pluginRoot
+    let restart = "the plugin changed after this session started; start a fresh session"
+    let loaded =
+      "session \(record.sessionId) loaded version \(record.pluginVersion), tree "
+      + record.treeHash
+    switch recorded.current {
+    case .tree(let version, let hash) where hash != record.treeHash:
+      check.fail(
+        pluginChangedRuleID, root,
+        "\(restart) (\(loaded); \(root) now holds version \(version), tree \(hash))")
+    case .tree: break
+    case .rootMissing:
+      check.fail(pluginChangedRuleID, root, "\(restart) (\(loaded); \(root) no longer exists)")
+    case .unreadable(let reason):
+      check.fail(
+        pluginChangedRuleID, root, "\(restart) (\(loaded); \(root) can't be hashed: \(reason))")
+    }
+    return check.findings
   }
 
   private static func gibibytes(_ bytes: Int64) -> String {

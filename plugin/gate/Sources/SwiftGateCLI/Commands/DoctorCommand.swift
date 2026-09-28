@@ -12,12 +12,6 @@ enum DoctorRun {
   static func run(
     root: URL, sessionID: String?, swiftPM: any SwiftPM, runner: any ProcessRunner
   ) async throws -> GateRunParts {
-    try await run(root: root, swiftPM: swiftPM, runner: runner)
-  }
-
-  static func run(root: URL, swiftPM: any SwiftPM, runner: any ProcessRunner) async throws
-    -> GateRunParts
-  {
     let (result, milliseconds) = try await GateRun.timed { () async throws -> DoctorResult in
       let config: Config
       switch StaticCheckInputs.loadConfig(root: root) {
@@ -28,7 +22,8 @@ enum DoctorRun {
       case .success(let loaded?): config = loaded
       }
       return Doctor.evaluate(
-        await facts(root: root, config: config, swiftPM: swiftPM, runner: runner))
+        await facts(
+          root: root, config: config, sessionID: sessionID, swiftPM: swiftPM, runner: runner))
     }
     let tier = try TierResult(
       tier: .t0, verdict: result.verdict, durationMilliseconds: milliseconds, testCounts: nil)
@@ -36,7 +31,8 @@ enum DoctorRun {
   }
 
   private static func facts(
-    root: URL, config: Config, swiftPM: any SwiftPM, runner: any ProcessRunner
+    root: URL, config: Config, sessionID: String?, swiftPM: any SwiftPM,
+    runner: any ProcessRunner
   ) async -> DoctorFacts {
     async let xcode = try? LiveXcodebuild(runner: runner).version()
     async let swift = output(runner, ["swift", "--version"])
@@ -55,7 +51,48 @@ enum DoctorRun {
       resolvedVersions: HarnessFiles.resolvedVersions(
         root: root, packageDirectories: packages.map(\.path)),
       architectureFindings: architecture,
-      mermaidCLIInstalled: HarnessFiles.isOnPath("mmdc", path: environment["PATH"] ?? ""))
+      mermaidCLIInstalled: HarnessFiles.isOnPath("mmdc", path: environment["PATH"] ?? ""),
+      pluginSession: pluginSession(root: root, sessionID: sessionID))
+  }
+
+  /// `sessionID`'s record, or else the newest, and the tree at its `pluginRoot` now. With an id,
+  /// only that session's file counts: another session's record says nothing about this one.
+  private static func pluginSession(root: URL, sessionID: String?) -> PluginSessionFacts {
+    let store = SessionRecordStore(worktreeRoot: root)
+    let record: SessionRecord?
+    var unreadable: [UnreadableSessionRecord] = []
+    if let sessionID {
+      do {
+        record = try store.record(sessionID: sessionID)
+      } catch {
+        record = nil
+        let path =
+          (try? store.file(sessionID: sessionID).path) ?? SessionRecordStore.directory
+        unreadable.append(UnreadableSessionRecord(path: path, reason: error.description))
+      }
+    } else {
+      let scan = store.scan()
+      record = scan.newest
+      unreadable = scan.unreadable.map { UnreadableSessionRecord(path: $0.path, reason: $0.reason) }
+    }
+    return PluginSessionFacts(
+      sessionID: sessionID, recorded: record.map { recorded($0) }, unreadable: unreadable,
+      directory: SessionRecordStore.directory)
+  }
+
+  private static func recorded(_ record: SessionRecord) -> RecordedPluginSession {
+    let root = URL(filePath: record.pluginRoot, directoryHint: .isDirectory)
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: root.path, isDirectory: &isDirectory),
+      isDirectory.boolValue
+    else { return RecordedPluginSession(record: record, current: .rootMissing) }
+    do {
+      let tree = try PluginTree.read(root: root)
+      return RecordedPluginSession(
+        record: record, current: .tree(version: tree.version, hash: tree.hash))
+    } catch {
+      return RecordedPluginSession(record: record, current: .unreadable(reason: error.description))
+    }
   }
 
   /// The package manifests and the architecture findings doctor repeats. A graph that cannot be
@@ -133,7 +170,8 @@ struct DoctorCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     try await GateRun.execute(root: root, format: output.format, command: "doctor") { _ in
       try await DoctorRun.run(
-        root: root, swiftPM: ScopeResolution.liveSwiftPM(root: root), runner: LiveProcessRunner())
+        root: root, sessionID: session, swiftPM: ScopeResolution.liveSwiftPM(root: root),
+        runner: LiveProcessRunner())
     }
   }
 }
