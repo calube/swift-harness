@@ -56,6 +56,19 @@ public enum PlanLintCoverage {
     return findings
   }
 
+  /// Every slice id `page` defines that no task's `covers` names, in page order. Each slice is
+  /// one coverage item: a spec page has no requirements apart from its slices' acceptance tests.
+  public static func uncoveredSliceIDs(page: SpecPage, tasks: [LedgerTask]) -> [String] {
+    []
+  }
+
+  /// One `major` ``uncoveredRuleID`` finding per id ``uncoveredSliceIDs(page:tasks:)`` returns.
+  public static func coverageFindings(
+    page: SpecPage, tasks: [LedgerTask], pagePath: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
+  }
+
   // MARK: - Test tier → minimum gate (spec §9.2, Foundation's tier composition)
 
   public static let weakGateRuleID = "plan-lint.gate-too-weak"
@@ -112,6 +125,20 @@ public enum PlanLintCoverage {
     ]
   }
 
+  /// Slice id → the slice's tier: T1 unless its line names `Tier: T2` or `Tier: T3`. A repeated
+  /// id keeps its first tier.
+  public static func sliceTiers(page: SpecPage) -> [String: Tier] {
+    [:]
+  }
+
+  /// ``gateFindings(task:testTiers:)`` for a spec-page plan: a task owns every slice its `tests`
+  /// or `covers` names, since every coverage item on a page is a slice with one test.
+  public static func sliceGateFindings(
+    task: LedgerTask, sliceTiers: [String: Tier]
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
+  }
+
   public static let unknownTestRuleID = "plan-lint.unknown-test"
 
   /// One `major` finding per `tests` id the design's test plan doesn't define: a misspelled id
@@ -131,6 +158,13 @@ public enum PlanLintCoverage {
             + "task's gate"))
     }
     return findings
+  }
+
+  /// One `major` ``unknownTestRuleID`` finding per `tests` id that isn't a slice id on `page`.
+  public static func unknownTestFindings(task: LedgerTask, page: SpecPage)
+    throws(ReportContractViolation) -> [Finding]
+  {
+    []
   }
 
   // MARK: - Model tag (spec §5.2: the decomposer tags every task sonnet or opus)
