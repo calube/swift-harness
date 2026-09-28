@@ -213,4 +213,125 @@ struct SurfaceBodyScanTests {
     #expect(Self.manifestChange(flag) == [.behaviour(.changesManifest(excerpt: "\"-Ounchecked\""))])
     #expect(Self.manifestChange(dependency) == [.stub(.extendsManifest)])
   }
+
+  private static func manifestChange(from parentText: String, to commitText: String)
+    -> [SurfaceJudgement.Outcome]
+  {
+    SurfaceBodyScan.judge(
+      SurfaceFileChange(path: "Package.swift", parentText: parentText, commitText: commitText),
+      parent: SurfaceParentIndex(functions: [], types: [])
+    )
+    .map(\.outcome)
+  }
+
+  @Test(
+    "a manifest that drops its tools-version line is a manifest change naming the line it lost — catches the dropped line reported as an empty excerpt"
+  )
+  func droppedToolsVersionNamesTheOldLine() {
+    let dropped = Self.manifest.replacingOccurrences(of: "// swift-tools-version: 6.2\n", with: "")
+
+    #expect(dropped != Self.manifest)
+    #expect(
+      Self.manifestChange(dropped)
+        == [.behaviour(.changesManifest(excerpt: "// swift-tools-version: 6.2"))])
+  }
+
+  @Test(
+    "a manifest that loses a statement, or a call's last argument, is a manifest change naming what it lost — catches a removal passing as a manifest that judges nothing, or named by an empty excerpt"
+  )
+  func removalNamesWhatWasLost() {
+    let appended = Self.manifest + "\npackage.targets.append(.target(name: \"Extra\"))\n"
+    let argumentDropped = Self.manifest.replacingOccurrences(
+      of: ".testTarget(name: \"AppTests\", dependencies: [\"App\"])",
+      with: ".testTarget(name: \"AppTests\")")
+
+    #expect(
+      Self.manifestChange(from: appended, to: Self.manifest)
+        == [
+          .behaviour(
+            .changesManifest(excerpt: "package.targets.append(.target(name: \"Extra\"))"))
+        ])
+    #expect(argumentDropped != Self.manifest)
+    #expect(
+      Self.manifestChange(argumentDropped)
+        == [.behaviour(.changesManifest(excerpt: "dependencies: [\"App\"]"))])
+  }
+
+  @Test(
+    "an interpolated target name added to a dependencies list is a manifest change — catches a computed name passing as a declared target"
+  )
+  func interpolatedDependencyIsBehaviour() {
+    let interpolated = Self.manifest.replacingOccurrences(
+      of: "dependencies: [\"App\"]", with: "dependencies: [\"App\", \"\\(name)\"]")
+
+    #expect(
+      Self.manifestChange(interpolated)
+        == [.behaviour(.changesManifest(excerpt: "\"\\(name)\""))])
+  }
+
+  @Test(
+    "a target name replaced by a product, or renamed, is a manifest change naming the old name or the changed argument — catches a replacement named by its new element, or an excerpt keeping the argument's comma"
+  )
+  func replacedElementNamesWhatChanged() {
+    let product = Self.manifest.replacingOccurrences(
+      of: "dependencies: [\"App\"]",
+      with: "dependencies: [.product(name: \"App\", package: \"Support\")]")
+    let renamed = Self.manifest.replacingOccurrences(
+      of: ".target(name: \"App\",", with: ".target(name: \"Apps\",")
+
+    #expect(Self.manifestChange(product) == [.behaviour(.changesManifest(excerpt: "\"App\""))])
+    #expect(renamed != Self.manifest)
+    #expect(
+      Self.manifestChange(renamed) == [.behaviour(.changesManifest(excerpt: "name: \"Apps\""))])
+  }
+
+  @Test(
+    "2 target names swapped in a dependencies list are a manifest change naming the one that moved later — catches the named element flipping with the alignment's tie-break"
+  )
+  func swappedDependenciesNameTheFirst() {
+    let parent = Self.manifest.replacingOccurrences(
+      of: "dependencies: [\"App\"]", with: "dependencies: [\"App\", \"Support\"]")
+    let swapped = Self.manifest.replacingOccurrences(
+      of: "dependencies: [\"App\"]", with: "dependencies: [\"Support\", \"App\"]")
+
+    #expect(
+      Self.manifestChange(from: parent, to: swapped)
+        == [.behaviour(.changesManifest(excerpt: "\"App\""))])
+  }
+
+  @Test(
+    "a changed statement outside any labelled argument is named by the statement, cut to 100 characters — catches the whole file reported, or a long excerpt emptied"
+  )
+  func changedStatementIsNamedAndCut() {
+    let changed = Self.manifest.replacingOccurrences(of: "let package", with: "var package")
+
+    #expect(
+      Self.manifestChange(changed)
+        == [
+          .behaviour(
+            .changesManifest(
+              excerpt:
+                "var package = Package( name: \"App\", targets: [ .target(name: \"App\", "
+                + "swiftSettings: [.unsafeFlags([\"-…"))
+        ])
+  }
+
+  @Test(
+    "an excerpt of exactly 100 characters is kept whole and one of 101 is cut with an ellipsis — catches the cut moving off its boundary"
+  )
+  func excerptCutsAfter100Characters() {
+    func flag(_ length: Int) -> String {
+      "\"-D" + String(repeating: "X", count: length - 4) + "\""
+    }
+    func added(_ flag: String) -> String {
+      Self.manifest.replacingOccurrences(of: "[\"-Osize\"]", with: "[\"-Osize\", \(flag)]")
+    }
+
+    #expect(flag(100).count == 100)
+    #expect(
+      Self.manifestChange(added(flag(100))) == [.behaviour(.changesManifest(excerpt: flag(100)))])
+    #expect(
+      Self.manifestChange(added(flag(101)))
+        == [.behaviour(.changesManifest(excerpt: String(flag(101).prefix(100)) + "…"))])
+  }
 }
