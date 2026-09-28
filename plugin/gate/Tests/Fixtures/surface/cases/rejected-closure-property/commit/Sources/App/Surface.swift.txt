@@ -1,0 +1,3 @@
+struct Formatters {
+  var format: (Int) -> String = { "\($0)" }
+}

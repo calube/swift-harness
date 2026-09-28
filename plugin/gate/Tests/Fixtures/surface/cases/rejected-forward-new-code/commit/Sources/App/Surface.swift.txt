@@ -1,0 +1,7 @@
+func sum() -> Int {
+  helper()
+}
+
+func helper() -> Int {
+  0
+}

@@ -1,0 +1,8 @@
+final class Settings {
+  private var storage = ""
+
+  var title: String {
+    get { storage }
+    set { storage = newValue }
+  }
+}

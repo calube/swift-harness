@@ -1,0 +1,9 @@
+import Testing
+
+@testable import App
+
+@Suite struct FeatureTests {
+  @Test func describesHome() {
+    #expect(describe(.home) == "Home")
+  }
+}

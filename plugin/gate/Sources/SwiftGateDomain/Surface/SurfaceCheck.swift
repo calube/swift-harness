@@ -108,22 +108,86 @@ public enum SurfaceCheck {
   public static let behaviourRuleID = "surface-check.behaviour"
   public static let summaryRuleID = "surface-check.summary"
 
-  /// Whether `path` is a Swift test source.
+  /// Whether `path` is a Swift test source: a `*Tests.swift` or `*Test.swift` file, or any Swift
+  /// file under a directory named `Tests` or ending in `Tests`.
   public static func isTestFile(_ path: String) -> Bool {
-    false
+    guard path.hasSuffix(".swift") else { return false }
+    var components = path.split(separator: "/")
+    let name = components.removeLast()
+    return name.hasSuffix("Tests.swift") || name.hasSuffix("Test.swift")
+      || components.contains { $0.hasSuffix("Tests") }
   }
 
   /// Judges every changed Swift file: an added test file whole, every other file through `scan`.
+  /// A deleted file holds no body to judge.
   public static func judge(
     _ surface: SurfaceCommit, scan: (SurfaceFileChange) -> [SurfaceJudgement]
   ) -> [SurfaceJudgement] {
-    []
+    surface.changes.flatMap { change -> [SurfaceJudgement] in
+      guard change.commitText != nil else { return [] }
+      if change.parentText == nil, isTestFile(change.path) {
+        let name = change.path.split(separator: "/").last.map(String.init) ?? change.path
+        return [
+          SurfaceJudgement(
+            file: change.path, line: nil, declaration: name, outcome: .behaviour(.addsTest))
+        ]
+      }
+      return scan(change)
+    }
   }
 
   /// One major finding per behaviour, and a summary note.
   public static func findings(_ surface: SurfaceCommit, judgements: [SurfaceJudgement])
     throws(ReportContractViolation) -> [Finding]
   {
-    []
+    var findings: [Finding] = []
+    var stubs = 0
+    for judgement in judgements {
+      switch judgement.outcome {
+      case .stub: stubs += 1
+      case .behaviour(let behaviour):
+        findings.append(
+          try Finding(
+            ruleID: behaviourRuleID, severity: .major, file: judgement.file, line: judgement.line,
+            message: "`\(judgement.declaration)` \(describe(behaviour))",
+            failureScenario: nil))
+      }
+    }
+    let other = surface.otherPaths.count
+    findings.append(
+      try Finding(
+        ruleID: summaryRuleID, severity: .nit, file: ".", line: nil,
+        message:
+          "\(judgements.count) added or changed bodies judged across \(surface.changes.count) "
+          + "changed Swift files: \(stubs) allowed stubs, \(judgements.count - stubs) behaviour; "
+          + "\(other) non-Swift \(other == 1 ? "path" : "paths") not judged",
+        failureScenario: nil))
+    return findings
+  }
+
+  static func describe(_ behaviour: SurfaceBehaviour) -> String {
+    switch behaviour {
+    case .notAStub(let excerpt):
+      "isn't an allowed stub (`\(excerpt)`): a surface body is empty, returns 1 empty default "
+        + "or payload-free case, or forwards to code the parent declares"
+    case .traps(let callee):
+      "calls `\(callee)`: a trapping stub fails every test for a reason other than the missing "
+        + "behaviour"
+    case .sampleData(let literal):
+      "holds sample data (`\(literal)`): previews and preview fixtures in a surface hold no "
+        + "non-empty literal"
+    case .reducerWork(let excerpt):
+      "does reducer work (`\(excerpt)`): a surface reducer returns `.none` for every action and "
+        + "never mutates state"
+    case .viewContent(let excerpt):
+      "renders content (`\(excerpt)`): a surface view's body is `EmptyView()` or a container of it"
+    case .forwardsToNewCode(let callee):
+      "forwards to `\(callee)`, which the parent doesn't declare: a forwarding stub calls code "
+        + "already on the parent"
+    case .changesStoredValue:
+      "changes an existing stored value: a surface leaves existing behaviour unchanged"
+    case .addsTest:
+      "adds a test: a surface commit adds no tests; they follow it"
+    }
   }
 }

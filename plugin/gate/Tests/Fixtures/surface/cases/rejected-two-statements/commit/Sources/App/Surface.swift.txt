@@ -1,0 +1,4 @@
+func total() -> Int {
+  let base = 0
+  return base
+}

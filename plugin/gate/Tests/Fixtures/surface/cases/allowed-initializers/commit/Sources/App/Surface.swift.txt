@@ -1,0 +1,13 @@
+struct Draft {
+  var name: String = ""
+
+  init() {}
+
+  init(name: String) {}
+}
+
+extension Item {
+  init(title: String) {
+    self.init(name: title)
+  }
+}

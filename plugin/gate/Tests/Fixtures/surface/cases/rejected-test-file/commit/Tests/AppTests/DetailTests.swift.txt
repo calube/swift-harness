@@ -1,0 +1,7 @@
+import Testing
+
+@testable import App
+
+@Suite struct DetailTests {
+  @Test func appears() {}
+}
