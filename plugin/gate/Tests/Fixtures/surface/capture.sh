@@ -1031,3 +1031,122 @@ record rejected-manifest-tools-version
 begin rejected-manifest-new-statement
 printf '\npackage.targets.append(.target(name: "Extra"))\n' >> Packages/AppFeature/Package.swift
 record rejected-manifest-new-statement
+
+# Dependency accessors: a new `DependencyValues` accessor may stub as `.init()` and a no-op setter,
+# or be wired to its key's slot for a key type the commit or the base declares.
+
+# The client file of a real surface commit, byte for byte, with its accessor stubbed.
+write_list_client() {
+  mkdir -p Packages/ShoppingListClient/Sources/ShoppingListClient
+  cat > Packages/ShoppingListClient/Sources/ShoppingListClient/ShoppingListClient.swift <<'EOF'
+import Dependencies
+import DependenciesMacros
+import Foundation
+
+public struct ShoppingItem: Codable, Equatable, Identifiable, Sendable {
+  public let id: UUID
+  public var name: String
+  public var quantity: Int
+  public var isBought: Bool
+
+  public init(id: UUID, name: String, quantity: Int = 1, isBought: Bool = false) {
+    self.id = id
+    self.name = name
+    self.quantity = quantity
+    self.isBought = isBought
+  }
+}
+
+@DependencyClient
+public struct ShoppingListClient: Sendable {
+  public var load: @Sendable () throws -> [ShoppingItem]
+  public var save: @Sendable (_ items: [ShoppingItem]) throws -> Void
+}
+
+extension ShoppingListClient: TestDependencyKey {
+  public static let testValue = ShoppingListClient()
+  public static let previewValue = ShoppingListClient()
+}
+
+extension DependencyValues {
+  public var shoppingListClient: ShoppingListClient {
+    get { .init() }
+    set {}
+  }
+}
+EOF
+}
+
+begin allowed-dependency-accessor-stub
+write_list_client
+record allowed-dependency-accessor-stub
+
+begin allowed-dependency-accessor-wired
+write_list_client
+sed -i '' -e 's/    get { .init() }/    get { self[ShoppingListClient.self] }/' \
+  -e 's/    set {}/    set { self[ShoppingListClient.self] = newValue }/' \
+  Packages/ShoppingListClient/Sources/ShoppingListClient/ShoppingListClient.swift
+record allowed-dependency-accessor-wired
+
+begin allowed-dependency-accessor-keys
+cat > Sources/App/ProfileClient.swift <<'EOF'
+struct ProfileClient: Sendable {
+  var load: @Sendable () async throws -> String
+}
+EOF
+cat > Sources/App/Dependencies.swift <<'EOF'
+import Dependencies
+
+extension DependencyValues {
+  var itemClient: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = newValue }
+  }
+
+  var profileClient: ProfileClient {
+    get { return self[ProfileClient.self] }
+    set { self[ProfileClient.self] = newValue }
+  }
+}
+EOF
+record allowed-dependency-accessor-keys
+
+begin rejected-dependency-accessor-near-miss
+cat > Sources/App/Dependencies.swift <<'EOF'
+import Dependencies
+
+extension DependencyValues {
+  var mappedClient: ItemClient {
+    get { self[ItemClient.self].configured() }
+    set { self[ItemClient.self] = newValue }
+  }
+
+  var fixedTimeout: Int {
+    get { 30 }
+    set {}
+  }
+
+  var resetClient: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = .init() }
+  }
+
+  var renamedClient: ItemClient {
+    get { self[ItemClient.self] }
+    set(client) { self[ItemClient.self] = client }
+  }
+
+  var unknownClient: UnknownClient {
+    get { self[UnknownClient.self] }
+    set { self[UnknownClient.self] = newValue }
+  }
+}
+
+struct Store {
+  var client: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = newValue }
+  }
+}
+EOF
+record rejected-dependency-accessor-near-miss

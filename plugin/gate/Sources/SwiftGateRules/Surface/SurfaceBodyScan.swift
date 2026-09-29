@@ -79,7 +79,7 @@ public enum SurfaceBodyScan {
     in change: SurfaceFileChange, commitTypes: Set<String> = []
   ) -> Set<String> {
     let asked = CalleeLog()
-    _ = scan(change) { name, _ in
+    _ = scan(change, commitTypes: commitTypes) { name, _ in
       asked.names.insert(name)
       return false
     }
@@ -89,13 +89,15 @@ public enum SurfaceBodyScan {
   /// Every type the commit's Swift files declare, which a wired `DependencyValues` accessor may
   /// key on beside the parent's.
   public static func declaredTypes(in changes: [SurfaceFileChange]) -> Set<String> {
-    []
+    let collector = DeclaredNames()
+    for text in changes.compactMap(\.commitText) { collector.walk(Parser.parse(source: text)) }
+    return collector.types
   }
 
   public static func judge(
     _ change: SurfaceFileChange, parent: SurfaceParentIndex, commitTypes: Set<String> = []
   ) -> [SurfaceJudgement] {
-    scan(change) { name, kind in
+    scan(change, commitTypes: commitTypes) { name, kind in
       switch kind {
       case .function: parent.functions.contains(name)
       case .type: parent.types.contains(name)
@@ -109,7 +111,8 @@ public enum SurfaceBodyScan {
   }
 
   private static func scan(
-    _ change: SurfaceFileChange, declares: @escaping (String, DeclaredKind) -> Bool
+    _ change: SurfaceFileChange, commitTypes: Set<String>,
+    declares: @escaping (String, DeclaredKind) -> Bool
   ) -> [SurfaceJudgement] {
     guard let text = change.commitText else { return [] }
     if ManifestDiff.isManifest(change.path), let parentText = change.parentText {
@@ -140,7 +143,7 @@ public enum SurfaceBodyScan {
       }
       let judge = Judge(
         enclosingType: unit.enclosingType, parameters: unit.parameters,
-        fileCases: fileNames.cases, declares: declares)
+        fileCases: fileNames.cases, commitTypes: commitTypes, declares: declares)
       switch unit.kind {
       case .storedValue:
         // An added stored property is surface (§3.1); only a changed existing value is judged.
@@ -166,6 +169,8 @@ public enum SurfaceBodyScan {
           }
         } else if candidates.contains(where: { addsRegistrations(unit.node, over: $0.node) }) {
           add(.stub(.registersType), unit.declaration, unit.line)
+        } else if let wiring = judge.dependencyAccessor(items, accessor: unit.accessor) {
+          add(wiring, unit.declaration, unit.line)
         } else {
           add(judge.body(items, context: unit.context), unit.declaration, unit.line)
         }
@@ -505,6 +510,14 @@ private struct BodyUnit {
   /// The enclosing function's, initializer's, subscript's or closure's parameter names.
   let parameters: Set<String>
   let isTest: Bool
+  /// Which accessor of a property or subscript the body is; `nil` for any other body.
+  var accessor: AccessorRole? = nil
+}
+
+/// A property's getter, shorthand or spelled out, or its setter.
+private enum AccessorRole {
+  case get
+  case set
 }
 
 extension Syntax {
@@ -698,29 +711,37 @@ private final class BodyCollector: SyntaxVisitor {
     case .getter(let items):
       add(
         key: key, name: name, at: node, context: context, kind: .body(items), node: Syntax(items),
-        parameters: parameters)
+        parameters: parameters, accessor: .get)
     case .accessors(let list):
       for accessor in list {
         guard let body = accessor.body else { continue }
         let specifier = accessor.accessorSpecifier.text
+        let role: AccessorRole? =
+          switch specifier {
+          case "get": .get
+          case "set": .set
+          default: nil
+          }
         add(
           key: "\(key).\(specifier)", name: "\(name).\(specifier)", at: Syntax(accessor),
           context: specifier == "get" ? context : .function, kind: .body(body.statements),
-          node: Syntax(body), parameters: parameters)
+          node: Syntax(body), parameters: parameters, accessor: role)
       }
     }
   }
 
   private func add(
     key: String, name: String, at declaration: Syntax, context: BodyContext, kind: BodyUnit.Kind,
-    node: Syntax, parameters: Set<String> = [], isTest: Bool = false, qualify: Bool = true
+    node: Syntax, parameters: Set<String> = [], isTest: Bool = false, qualify: Bool = true,
+    accessor: AccessorRole? = nil
   ) {
     units.append(
       BodyUnit(
         key: qualify ? containerKey(key) : "\(key)#\(previewIndex())",
         declaration: qualify ? qualified(name) : name, line: line(of: declaration),
         context: context, kind: kind, node: node, normalized: SurfaceBodyScan.normalize(node),
-        enclosingType: containers.last, parameters: parameters, isTest: isTest))
+        enclosingType: containers.last, parameters: parameters, isTest: isTest,
+        accessor: accessor))
   }
 
   private func previewIndex() -> Int {
@@ -779,9 +800,54 @@ private struct Judge {
   let parameters: Set<String>
   /// Enum cases the changed file itself declares, so a new enum's case needs no parent lookup.
   let fileCases: Set<String>
+  /// Types any Swift file of the commit declares, which a wired dependency accessor may key on.
+  let commitTypes: Set<String>
   let declares: (String, DeclaredKind) -> Bool
 
   static let traps: Set<String> = ["fatalError", "preconditionFailure"]
+  static let dependencyValues: Set<String> = ["DependencyValues", "Dependencies.DependencyValues"]
+
+  /// A `DependencyValues` getter that is exactly `self[Key.self]`, or a setter that is exactly
+  /// `self[Key.self] = newValue`: wiring a new client's accessor holds no behaviour of its own, and
+  /// a consumer's test can only inject a client through it. `nil` for any other body, which the
+  /// body rules judge, so `get { .init() }` and `set {}` still pass.
+  func dependencyAccessor(_ items: CodeBlockItemListSyntax, accessor: AccessorRole?)
+    -> SurfaceJudgement.Outcome?
+  {
+    guard let accessor, let enclosingType, Self.dependencyValues.contains(enclosingType),
+      items.count == 1, let value = items.first.flatMap(Self.value(of:))
+    else { return nil }
+    let slot: ExprSyntax
+    switch accessor {
+    case .get: slot = value
+    case .set:
+      guard let sequence = value.as(SequenceExprSyntax.self) else { return nil }
+      let elements = Array(sequence.elements)
+      guard elements.count == 3, elements[1].is(AssignmentExprSyntax.self),
+        let assigned = elements[2].as(DeclReferenceExprSyntax.self),
+        assigned.argumentNames == nil, assigned.baseName.text == "newValue"
+      else { return nil }
+      slot = elements[0]
+    }
+    guard let key = Self.dependencyKey(slot) else { return nil }
+    return commitTypes.contains(key) || declares(key, .type)
+      ? .stub(.wiresDependency) : .behaviour(.undeclaredDependencyKey(key: key))
+  }
+
+  /// `Key` in `self[Key.self]` or `self[Outer.Key.self]`: 1 unlabelled argument naming a type's
+  /// metatype, subscripted on `self`.
+  private static func dependencyKey(_ expression: ExprSyntax) -> String? {
+    guard let subscripted = expression.as(SubscriptCallExprSyntax.self),
+      subscripted.calledExpression.as(DeclReferenceExprSyntax.self)?.baseName.tokenKind
+        == .keyword(.self),
+      subscripted.trailingClosure == nil, subscripted.additionalTrailingClosures.isEmpty,
+      subscripted.arguments.count == 1, let argument = subscripted.arguments.first,
+      argument.label == nil, let metatype = argument.expression.as(MemberAccessExprSyntax.self),
+      metatype.declName.baseName.tokenKind == .keyword(.self), let type = metatype.base,
+      isTypeOrOmitted(type)
+    else { return nil }
+    return type.trimmedDescription.split(separator: ".").last.map(String.init)
+  }
 
   func body(_ items: CodeBlockItemListSyntax, context: BodyContext) -> SurfaceJudgement.Outcome {
     if let trap = Self.firstTrap(in: Syntax(items)) { return .behaviour(.traps(callee: trap)) }

@@ -1,0 +1,3 @@
+struct ProfileClient: Sendable {
+  var load: @Sendable () async throws -> String
+}

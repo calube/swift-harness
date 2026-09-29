@@ -10,15 +10,18 @@ enum SurfaceCheckRun {
     async throws(SurfaceReadError) -> (SurfaceCommit, [SurfaceJudgement])
   {
     let surface = try await reader.read(commit)
+    let commitTypes = SurfaceBodyScan.declaredTypes(in: surface.changes)
     let callees = surface.changes.reduce(into: Set<String>()) {
-      $0.formUnion(SurfaceBodyScan.forwardCallees(in: $1))
+      $0.formUnion(SurfaceBodyScan.forwardCallees(in: $1, commitTypes: commitTypes))
     }
     // The parent's whole tree is parsed only when some body could forward into it.
     let parent =
       callees.isEmpty
       ? SurfaceParentIndex(functions: [], types: [])
       : SurfaceParentIndex.build(try await reader.parentSwiftSources(of: surface))
-    let judgements = SurfaceCheck.judge(surface) { SurfaceBodyScan.judge($0, parent: parent) }
+    let judgements = SurfaceCheck.judge(surface) {
+      SurfaceBodyScan.judge($0, parent: parent, commitTypes: commitTypes)
+    }
     return (surface, judgements)
   }
 
