@@ -818,14 +818,16 @@ export function surfaceBaselineProblems(skill) {
 /**
  * Walks the build skill's start on a plan with a surface, through the real binary, in a temp
  * repository where `main` just moved to a surface commit that adds the host-testable module
- * `Feed` with no test target. `extra` adds 1 more red: `old-module`, a module `Legacy` with no
- * tests that `main` held before the surface, which the surface touches too; `uncovered-change`, a
- * commit on `main` after the surface that adds `Core` code its new test doesn't run. Runs the skill's green-main
+ * `Feed` with no test target. 2 more reds sit beside it: a module `Legacy` with no tests that
+ * `main` held before the surface, which the surface touches too, and a commit on `main` after the
+ * surface that adds `Core` code its new test doesn't run. 1 gate run gives all 3 findings, so each
+ * set the start decides on comes from a real run. Runs the skill's green-main
  * line, then decides as its `rule` (from `surfaceBaselineRule`, null for none) says, running the
- * rule's git commands. Returns the gate's verdict, its gating findings as `rule file`, and
- * `baseline` (every finding taken without asking) or `halt`.
+ * rule's git commands. Returns the gate's verdict, its gating findings as `rule file`, and the
+ * decision, `baseline` (every finding taken without asking) or `halt`, on `Feed`'s finding alone
+ * (`alone`), on all of them (`all`), and on `Feed`'s beside each other one (`beside`, by that one).
  */
-function surfaceBaselineWalk(gates, rule, extra) {
+function surfaceBaselineWalk(gates, rule) {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
   const dir = mkdtempSync(join(tmpdir(), 'skill-commands-baseline-'))
@@ -849,7 +851,7 @@ function surfaceBaselineWalk(gates, rule, extra) {
     'schema = 1', 'xcode = "26.2"', 'app_scheme = "App"', 'packages = ["Packages/*"]', '',
     '[simulator]', 'device = "iPhone 17"', 'os = "26.2"', ...names.map(module),
   ].join('\n')
-  const before = extra === 'old-module' ? ['Core', 'Legacy'] : ['Core']
+  const before = ['Core', 'Legacy']
   try {
     write('.gitignore', '.harness/\n.build/\n')
     write('.swiftgate.toml', config(before))
@@ -857,7 +859,7 @@ function surfaceBaselineWalk(gates, rule, extra) {
     write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n')
     write('Packages/Core/Tests/CoreTests/CoreTests.swift',
       'import Testing\n@testable import Core\n\n@Test("base is one — catches a changed base") func baseIsOne() { #expect(base() == 1) }\n')
-    if (extra === 'old-module') write('Packages/Core/Sources/Legacy/Legacy.swift', 'public func legacy() -> Int { 2 }\n')
+    write('Packages/Core/Sources/Legacy/Legacy.swift', 'public func legacy() -> Int { 2 }\n')
     run('git', ['init', '-q', '-b', 'main'])
     run('git', ['add', '-A'])
     run('git', ['commit', '-qm', 'init'])
@@ -865,18 +867,16 @@ function surfaceBaselineWalk(gates, rule, extra) {
     write('.swiftgate.toml', config([...before, 'Feed']))
     write('Packages/Core/Package.swift', manifest([...before, 'Feed']))
     write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 0 }\n}\n')
-    if (extra === 'old-module') write('Packages/Core/Sources/Legacy/Later.swift', 'public func later() -> Int { 0 }\n')
+    write('Packages/Core/Sources/Legacy/Later.swift', 'public func later() -> Int { 0 }\n')
     run('git', ['add', '-A'])
     run('git', ['commit', '-qm', 'surface'])
     const surface = run('git', ['rev-parse', 'HEAD']).trim()
     const surfaceCheck = JSON.parse(run(binary, ['surface-check', surface, '--json']))
     assert.equal(surfaceCheck.verdict, 'GREEN', 'the walk\'s surface is not all stubs')
-    if (extra === 'uncovered-change') {
-      write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n\npublic func extra(_ value: Int) -> Int {\n  value * 3\n}\n')
-      writeFileSync(join(dir, 'Packages/Core/Tests/CoreTests/CoreTests.swift'),
-        '\n@Test("base stays positive — catches a negated base") func baseIsPositive() { #expect(base() > 0) }\n', { flag: 'a' })
-      run('git', ['commit', '-qam', 'later'])
-    }
+    write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n\npublic func extra(_ value: Int) -> Int {\n  value * 3\n}\n')
+    writeFileSync(join(dir, 'Packages/Core/Tests/CoreTests/CoreTests.swift'),
+      '\n@Test("base stays positive — catches a negated base") func baseIsPositive() { #expect(base() > 0) }\n', { flag: 'a' })
+    run('git', ['commit', '-qam', 'later'])
     const greenMain = gates.find(g => g.kind === 'green-main')
     assert.ok(greenMain, 'the skill has no green-main line for a plan with a surface')
     const args = greenMain.words.map(w => (w === '<merge_gate>' ? 'push' : w === '<surfaceCommit>' ? surface : w))
@@ -895,8 +895,11 @@ function surfaceBaselineWalk(gates, rule, extra) {
     }
     const addedBySurface = finding => rule !== null && finding.rule === rule.rule
       && git(rule.changed, finding.file) !== '' && git(rule.before, finding.file) === ''
-    const decision = gating.length === 0 ? 'green' : gating.every(addedBySurface) ? 'baseline' : 'halt'
-    return { verdict: report.verdict, gating: gating.map(f => `${f.rule} ${f.file}`), decision }
+    const decide = findings => (findings.length === 0 ? 'green' : findings.every(addedBySurface) ? 'baseline' : 'halt')
+    const name = f => `${f.rule} ${f.file}`
+    const feed = gating.filter(f => f.file === 'Packages/Core/Sources/Feed')
+    const beside = Object.fromEntries(gating.filter(f => !feed.includes(f)).map(f => [name(f), decide([...feed, f])]))
+    return { verdict: report.verdict, gating: gating.map(name), alone: decide(feed), all: decide(gating), beside }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -1434,12 +1437,13 @@ const tests = {
     const rule = surfaceBaselineRule(skill)
     assert.equal(rule.rule, 'coverage.no-t1-tests')
     const gates = buildGatesFor(files, { surfaceCommit: '<surfaceCommit>' }).filter(gate => gate.file === 'skills/build/SKILL.md')
-    const walks = [null, 'uncovered-change', 'old-module'].map(extra => [extra, surfaceBaselineWalk(gates, rule, extra)])
-    assert.deepEqual(walks.map(([extra, walk]) => [extra, walk.verdict, walk.gating, walk.decision]), [
-      [null, 'RED', ['coverage.no-t1-tests Packages/Core/Sources/Feed'], 'baseline'],
-      ['uncovered-change', 'RED', ['coverage.diff .', 'coverage.no-t1-tests Packages/Core/Sources/Feed'], 'halt'],
-      ['old-module', 'RED', ['coverage.no-t1-tests Packages/Core/Sources/Feed', 'coverage.no-t1-tests Packages/Core/Sources/Legacy'], 'halt'],
-    ])
+    const walk = surfaceBaselineWalk(gates, rule)
+    assert.deepEqual([walk.verdict, walk.gating], ['RED', [
+      'coverage.diff .', 'coverage.no-t1-tests Packages/Core/Sources/Feed', 'coverage.no-t1-tests Packages/Core/Sources/Legacy',
+    ]])
+    assert.deepEqual([walk.alone, walk.all, walk.beside], ['baseline', 'halt', {
+      'coverage.diff .': 'halt', 'coverage.no-t1-tests Packages/Core/Sources/Legacy': 'halt',
+    }])
   },
 
   'the surface baseline check names a missing rule, a command without its placeholders, no halt for other findings, a silent report, a final gate that takes the baseline and an exact-baseline merge gate — catches a check that passes anything'() {
