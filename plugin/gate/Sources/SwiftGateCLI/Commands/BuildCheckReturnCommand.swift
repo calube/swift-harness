@@ -19,8 +19,9 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
-/// newest build run, git, and the task worktree's run store and `task-status.json`; writes
-/// nothing and re-runs nothing. The judgement itself is ``TaskReturnCheck``.
+/// newest build run, git, and the task worktree's run store and `task-status.json`, and re-runs
+/// no gate. Under a plan surface it builds the task's new and changed host tests at the proof
+/// bases in scratch trees it removes. The judgement itself is ``TaskReturnCheck``.
 enum BuildCheckReturnRun {
   static let command = "build check-return"
   static let taskStatusFile = ".harness/task-status.json"
@@ -115,6 +116,7 @@ enum BuildCheckReturnRun {
     var outside: [String] = []
     var surface: TaskReturnEvidence.CommitState?
     var manifests: PlanSurfaceManifests?
+    var testBuild: ProofBaseTestBuild?
     let planSurface = try planSurfaceCommit(store, warnings: &warnings)
     if let branchTip {
       for commit in taskReturn.commits {
@@ -127,6 +129,12 @@ enum BuildCheckReturnRun {
       if let planSurface {
         manifests = try await surfaceManifests(
           changed, surface: planSurface, tip: branchTip, git: git)
+        if changed.contains(where: { $0.hasSuffix(".swift") }) {
+          testBuild = try await testsAtProofBases(
+            plan: slug, planSurface: planSurface,
+            stub: surface == .onBranch ? taskReturn.surfaceCommit : nil, tip: branchTip,
+            worktree: worktree, git: git, warnings: &warnings)
+        }
       }
       outside = WriteSet.outside(changed, writeSet: task.writeSet)
       if !outside.isEmpty {
@@ -141,7 +149,114 @@ enum BuildCheckReturnRun {
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
       explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
       surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
-      planSurface: manifests)
+      planSurface: manifests, testBuild: testBuild)
+  }
+
+  /// Builds the host tests the task branch adds or changes, in scratch trees of its tip, with the
+  /// production source it changed since the plan surface reverted to each proof base in turn:
+  /// the plan surface, each merged task's stub the branch holds, then the return's own stub.
+  /// `nil` when the branch changes no host test or no production source.
+  private static func testsAtProofBases(
+    plan slug: String, planSurface: String, stub: String?, tip: String, worktree: URL,
+    git: any Git, warnings: inout [String]
+  ) async throws(Blocked) -> ProofBaseTestBuild? {
+    let worktreeGit = LiveGit(runner: LiveProcessRunner(), repositoryRoot: worktree.path)
+    let head: String?
+    let worktreeHead: String?
+    do {
+      head = try await git.revision("HEAD")
+      worktreeHead = try await worktreeGit.revision("HEAD")
+    } catch {
+      throw Blocked("reading HEAD: \(error)")
+    }
+    guard let head else { throw Blocked("this checkout has no HEAD to measure the task from") }
+    guard worktreeHead == tip else {
+      throw Blocked(
+        "the task worktree \(worktree.path) is at \(worktreeHead ?? "no commit"), not its branch "
+          + "tip \(tip), so its tests can't be built as the branch holds them")
+    }
+    let swiftPM = ScopeResolution.liveSwiftPM(root: worktree)
+    let graph: ModuleGraph
+    switch await ConfiguredRepository.load(root: worktree, swiftPM: swiftPM, command: command) {
+    case .failed(let outcome):
+      warnings.append(
+        "the task worktree's module graph can't be loaded (\(outcome)), so its tests weren't "
+          + "built at the proof bases")
+      return nil
+    case .loaded(let loaded): graph = loaded.graph
+    }
+    let environment = ChangedTestChecks.Environment.live(
+      root: worktree, git: worktreeGit, swiftPM: swiftPM)
+    let selection: ChangedTestChecks.Selection
+    switch await ChangedTestChecks.select(environment, graph: graph, base: head) {
+    case .failure(let reason): throw Blocked("selecting the task's tests: \(reason.text)")
+    case .success(let found): selection = found
+    }
+    guard !selection.packages.isEmpty else { return nil }
+    let proofBases = try await proofBases(
+      plan: slug, planSurface: planSurface, stub: stub, tip: tip, git: git)
+    let prefix: String
+    let reverted: [String]
+    do throws(GitError) {
+      prefix = try await worktreeGit.workingDirectoryPrefix()
+      reverted =
+        ChangedTestChecks.partition(
+          try await worktreeGit.changedFiles(from: planSurface, to: tip), prefix: prefix,
+          graph: graph
+        ).reverted
+    } catch {
+      throw Blocked("listing the task branch's changes since the plan surface: \(error)")
+    }
+    guard !reverted.isEmpty else { return nil }
+    let output = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: output) }
+    let builds:
+      [(package: ChangedTestChecks.PackageTests, base: String, outcome: ProofBaseTestBuild.Outcome)]
+    do throws(ScratchWorktreeError) {
+      builds = try await ChangedTestChecks.buildAtProofBases(
+        environment, selection: selection, revision: tip, reverted: reverted,
+        proofBases: proofBases, prefix: prefix, output: output)
+    } catch {
+      throw Blocked("building the task's tests at the proof bases: scratch worktree: \(error)")
+    }
+    var uncompiled: [ProofBaseTestBuild.UncompiledFile] = []
+    for build in builds {
+      switch build.outcome {
+      case .compiled: break
+      case .testsDontCompile(let files): uncompiled += files
+      case .noEvidence(let reason):
+        warnings.append(
+          "the tests of \(build.package.packagePath) say nothing at proof base \(build.base) "
+            + "(\(reason)); the final gate's prove judges them")
+      }
+    }
+    return ProofBaseTestBuild(proofBases: proofBases, uncompiled: uncompiled)
+  }
+
+  /// `build proof-bases`' list that the task branch holds, then the return's stub.
+  private static func proofBases(
+    plan slug: String, planSurface: String, stub: String?, tip: String, git: any Git
+  ) async throws(Blocked) -> [String] {
+    let listed = await BuildProofBasesRun.run(slug: slug, git: git)
+    guard let report = listed.report, listed.verdict == .green else {
+      throw Blocked("listing the plan's proof bases: \(listed.message)")
+    }
+    var bases: [String] = []
+    do throws(GitError) {
+      for base in [planSurface] + report.proofBases + (stub.map { [$0] } ?? [])
+      where !bases.contains(base) {
+        if try await git.isAncestor(base, of: tip) { bases.append(base) }
+      }
+    } catch {
+      throw Blocked("reading the proof bases' ancestry: \(error)")
+    }
+    guard bases.first == planSurface else {
+      throw Blocked(
+        "the plan surface \(planSurface) isn't an ancestor of the task branch, so its tests "
+          + "can't be built there")
+    }
+    return bases
   }
 
   /// `plan.json`'s `surfaceCommit`. A plan claimed before plan state had a `plan.json` has no
@@ -322,9 +437,13 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
       + "the task worktree's run history with the claimed tier and verdict (GREEN at the task "
       + "gate or above for ready-to-merge and review-blocked, and for a worker having run the "
       + "task gate's impact, coverage and app-build steps), and that designConflict matches "
-      + "the worktree's .harness/task-status.json. Re-runs nothing and writes nothing. Exits 0 "
-      + "when every claim holds, 1 for any finding, and 2 when the return or plan state can't "
-      + "be read.")
+      + "the worktree's .harness/task-status.json. For a plan with a surface commit it also "
+      + "checks the task's manifests against that surface, and builds the host tests the branch "
+      + "adds or changes with its production source reverted to each proof base (the plan "
+      + "surface, merged tasks' stubs, the return's surfaceCommit) in scratch worktrees it "
+      + "removes: a test file that compiles at none is build-return.test-needs-stub. Re-runs no "
+      + "gate. Exits 0 when every claim holds, 1 for any finding, and 2 when the return or plan "
+      + "state can't be read.")
 
   @Argument(help: "Path to the task's return JSON file.")
   var file: String

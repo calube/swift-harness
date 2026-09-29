@@ -363,7 +363,28 @@ public struct ProofBaseTestBuild: Sendable, Equatable {
   /// - Parameter testDirectories: the package's test target directories; a compile error
   ///   outside them means the reverted tree itself doesn't build.
   public static func outcome(of run: SelectedTestRun, testDirectories: [String]) -> Outcome {
-    .compiled
+    switch run {
+    case .reported, .crashed:
+      return .compiled
+    case .noEvidence(let reason):
+      return .noEvidence(reason)
+    case .buildFailed(let errors):
+      if let outside = errors.first(where: { error in
+        !testDirectories.contains { error.file == $0 || error.file.hasPrefix($0 + "/") }
+      }) {
+        return .noEvidence("the code under test doesn't build: \(located(outside))")
+      }
+      var files: [UncompiledFile] = []
+      for error in errors where !files.contains(where: { $0.file == error.file }) {
+        files.append(UncompiledFile(file: error.file, error: located(error)))
+      }
+      return files.isEmpty
+        ? .noEvidence("the build failed and named no error") : .testsDontCompile(files)
+    }
+  }
+
+  private static func located(_ error: Finding) -> String {
+    (error.line.map { "\(error.file):\($0)" } ?? error.file) + ": \(error.message)"
   }
 }
 
@@ -400,7 +421,24 @@ public enum TaskReturnCheck {
     commitFindings(taskReturn, evidence) + gateFindings(taskReturn, evidence)
       + reviewFindings(taskReturn, evidence) + designConflictFindings(taskReturn, evidence)
       + writeSetFindings(taskReturn, evidence) + surfaceFindings(taskReturn, evidence)
-      + manifestFindings(evidence)
+      + manifestFindings(evidence) + testBuildFindings(evidence)
+  }
+
+  /// A test the task adds or changes must compile at the proof bases the final gate's `prove`
+  /// retries it at, or that gate can only judge it compile-only, after the task has merged.
+  private static func testBuildFindings(_ evidence: TaskReturnEvidence) -> [TaskReturnFinding] {
+    guard let build = evidence.testBuild else { return [] }
+    let bases = build.proofBases.joined(separator: ", ")
+    return build.uncompiled.map { file in
+      TaskReturnFinding(
+        rule: .testNeedsStub,
+        message:
+          "\(file.file) doesn't compile with the task's production source reverted to the proof "
+          + "bases (\(bases)): \(file.error). It calls API none of them declares, so the final "
+          + "gate's prove can only judge it compile-only. Commit that API alone as a stub (bodies "
+          + "that do nothing yet), check it with `swiftgate surface-check <stub sha>`, prove at it "
+          + "with `--proof-base <stub sha>`, and return it as `surfaceCommit`")
+    }
   }
 
   /// A task may fill the targets the plan surface declares but never declare one: at the surface

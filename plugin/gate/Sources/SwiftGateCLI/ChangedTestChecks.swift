@@ -166,20 +166,7 @@ enum ChangedTestChecks {
     } catch {
       return .blocked(ProofRules.noEvidenceRuleID, "git: \(error)")
     }
-    // Production source is reverted; tests, manifests, resources and config keep the change. A
-    // path outside the module graph (no Package.swift target claims it) is production input too
-    // when it's data the harness ships and its own commands read — a stamped template, a
-    // self-test seed — so it reverts alongside the Swift sources instead of silently keeping the
-    // change under test.
-    var reverted: [String] = []
-    var copied: [String] = []
-    for path in changed {
-      guard path.hasPrefix(prefix) else { continue }
-      let relative = String(path.dropFirst(prefix.count))
-      let module = graph.module(containingFile: relative)
-      let isProduction = module.map { !isTestModule($0) } ?? isProductionResource(relative)
-      if isProduction { reverted.append(path) } else { copied.append(path) }
-    }
+    let (reverted, copied) = partition(changed, prefix: prefix, graph: graph)
     guard !reverted.isEmpty else {
       return .note(
         "prove: no production source changed since \(base), so there is nothing to revert")
@@ -202,26 +189,18 @@ enum ChangedTestChecks {
         revision: "HEAD", revertTo: revertTo, copiedPaths: copied, revertedPaths: reverted)
       let tried: [(PackageTests, ProofRules.RevertedAttempt)]
       do throws(ScratchWorktreeError) {
-        tried = try await environment.scratch.withScratchTree(request) { toplevel in
-          let root = prefix.isEmpty ? toplevel : toplevel.appending(path: prefix)
-          let swiftPM = environment.scratchSwiftPM(root)
-          var tried: [(PackageTests, ProofRules.RevertedAttempt)] = []
-          for package in pending {
-            let run = await runOnce(
-              package, swiftPM: swiftPM, root: root,
-              output: output.appending(path: index == 0 ? "reverted" : "reverted-\(index)"),
-              coverage: false)
-            let result = ProofRules.judgeReverted(
-              package.tests, run: run.run, testDirectories: package.testDirectories)
-            tried.append(
-              (
-                package,
-                ProofRules.RevertedAttempt(
-                  base: revertTo, tests: package.tests, judgement: result.judgement,
-                  proven: result.proven)
-              ))
-          }
-          return tried
+        tried = try await runReverted(
+          environment, pending, request: request, prefix: prefix,
+          output: output.appending(path: index == 0 ? "reverted" : "reverted-\(index)")
+        ).map { package, run in
+          let result = ProofRules.judgeReverted(
+            package.tests, run: run, testDirectories: package.testDirectories)
+          return (
+            package,
+            ProofRules.RevertedAttempt(
+              base: revertTo, tests: package.tests, judgement: result.judgement,
+              proven: result.proven)
+          )
         }
       } catch {
         return SummarizedJudgement(
@@ -253,6 +232,74 @@ enum ChangedTestChecks {
         "\(proven) of \(total) new or changed host tests fail on an assertion with "
         + "the source change reverted"
         + (provenAtProofBase > 0 ? ", \(provenAtProofBase) of them at a proof base" : ""))
+  }
+
+  /// Splits toplevel-relative `changed` paths into the production source `prove` reverts and the
+  /// rest, which keeps the change: tests, manifests, resources and config. A path outside the
+  /// module graph (no Package.swift target claims it) is production input too when it's data the
+  /// harness ships and its own commands read — a stamped template, a self-test seed — so it
+  /// reverts alongside the Swift sources instead of silently keeping the change under test.
+  static func partition(_ changed: [String], prefix: String, graph: ModuleGraph)
+    -> (reverted: [String], copied: [String])
+  {
+    var reverted: [String] = []
+    var copied: [String] = []
+    for path in changed {
+      guard path.hasPrefix(prefix) else { continue }
+      let relative = String(path.dropFirst(prefix.count))
+      let module = graph.module(containingFile: relative)
+      let isProduction = module.map { !isTestModule($0) } ?? isProductionResource(relative)
+      if isProduction { reverted.append(path) } else { copied.append(path) }
+    }
+    return (reverted, copied)
+  }
+
+  /// Runs each package's selected tests in one scratch tree made for `request`: the step every
+  /// reverted run of `prove` takes, and the one `build check-return` builds a task's tests with.
+  static func runReverted(
+    _ environment: Environment, _ packages: [PackageTests], request: ScratchTreeRequest,
+    prefix: String, output: URL
+  ) async throws(ScratchWorktreeError) -> [(PackageTests, SelectedTestRun)] {
+    try await environment.scratch.withScratchTree(request) { toplevel in
+      let root = prefix.isEmpty ? toplevel : toplevel.appending(path: prefix)
+      let swiftPM = environment.scratchSwiftPM(root)
+      var runs: [(PackageTests, SelectedTestRun)] = []
+      for package in packages {
+        let run = await runOnce(
+          package, swiftPM: swiftPM, root: root, output: output, coverage: false)
+        runs.append((package, run.run))
+      }
+      return runs
+    }
+  }
+
+  /// Builds and runs `selection`'s tests with `reverted` restored to each of `proofBases` in
+  /// turn, trying a package again at the next base only while its tests fail to build. Returns
+  /// each package's outcome at the last base it was tried at.
+  static func buildAtProofBases(
+    _ environment: Environment, selection: Selection, revision: String, reverted: [String],
+    proofBases: [String], prefix: String, output: URL
+  ) async throws(ScratchWorktreeError) -> [(
+    package: PackageTests, base: String, outcome: ProofBaseTestBuild.Outcome
+  )] {
+    var last: [String: (package: PackageTests, base: String, outcome: ProofBaseTestBuild.Outcome)] =
+      [:]
+    var pending = selection.packages
+    for (index, base) in proofBases.enumerated() where !pending.isEmpty {
+      let request = ScratchTreeRequest(
+        revision: revision, revertTo: base, copiedPaths: [], revertedPaths: reverted,
+        seededBuildDirectories: pending.map { prefix + $0.packagePath })
+      let runs = try await runReverted(
+        environment, pending, request: request, prefix: prefix,
+        output: output.appending(path: "base-\(index)"))
+      pending = []
+      for (package, run) in runs {
+        let outcome = ProofBaseTestBuild.outcome(of: run, testDirectories: package.testDirectories)
+        last[package.packagePath] = (package, base, outcome)
+        if outcome != .compiled { pending.append(package) }
+      }
+    }
+    return selection.packages.compactMap { last[$0.packagePath] }
   }
 
   private static func isTestModule(_ module: Module) -> Bool {
