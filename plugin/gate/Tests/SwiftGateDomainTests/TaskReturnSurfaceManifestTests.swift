@@ -76,9 +76,14 @@ struct TaskReturnSurfaceManifestTests {
   }
 
   @Test(
-    "a plan with no surface commit, or a branch that changed no manifest, adds no finding — catches a plan built without a plan surface refused"
+    "the same undeclared target is a finding only when the plan has a surface commit, and a branch that changed no manifest is quiet — catches a plan built without a plan surface refused"
   )
   func noSurfaceOrNoManifestIsQuiet() {
+    let added = SliceManifest(
+      path: "Packages/A/Package.swift", atSurface: Self.declared(["A"], []),
+      atHead: Self.declared(["A", "ALive"], []))
+
+    #expect(Self.findings([added]).map(\.rule) == [.targetOutsideSurface])
     #expect(Self.findings(nil) == [])
     #expect(Self.findings([]) == [])
   }

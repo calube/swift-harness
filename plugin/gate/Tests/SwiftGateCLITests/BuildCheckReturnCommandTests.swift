@@ -217,7 +217,7 @@ struct BuildCheckReturnCommandTests {
   }
 
   @Test(
-    "a task branch that fills declared targets and adds only test targets and dependencies passes — catches a filled stub or a test target refused"
+    "a task branch that fills declared targets and adds only test targets and dependencies passes, and the same branch then adding a Live target fails — catches a filled stub or a test target refused"
   )
   func fillingDeclaredTargetsPasses() async throws {
     let scenario = try await SurfaceReturnScenario(
@@ -228,10 +228,13 @@ struct BuildCheckReturnCommandTests {
     files["Packages/ProfileFeature/Sources/ProfileCore/Profile.swift"] =
       "func profile() -> Int {\n  1\n}\n"
 
-    let report = try await scenario.checkTask(files: files)
+    let filled = try await scenario.checkTask(files: files)
+    let added = try await scenario.checkTask(
+      files: try SurfaceReturnScenario.manifests("slice", "ProfileClient"))
 
-    #expect(report.verdict == .green, "\(report.message) \(report.findings)")
-    #expect(report.findings == [])
+    #expect(filled.verdict == .green, "\(filled.message) \(filled.findings)")
+    #expect(filled.findings == [])
+    #expect(added.findings.map(\.rule) == [.targetOutsideSurface], "\(added.findings)")
   }
 
   @Test(
