@@ -613,6 +613,160 @@ function nonGenericWords() {
   return [...presets, ...titles]
 }
 
+// The build skill's gates on `main`, named by the tier word their line carries: the start's
+// green-main check, each merge gate, and the final `ready` gate.
+const BUILD_GATE_KINDS = { '<merge_gate>': 'green-main', '<mergeGate>': 'merge', ready: 'final' }
+// The build skill's gate lines on `main` as they were before a plan could carry a surface, per
+// file in order. A plan without a surface runs exactly these.
+const BUILD_GATE_LINES_WITHOUT_SURFACE = {
+  'skills/build/SKILL.md': ['check --tier <merge_gate>', 'check --tier <mergeGate>', 'check --tier ready'],
+  'skills/build/references/event-loop.md': ['check --tier <mergeGate>', 'check --tier ready <the --proof-base arguments it printed>'],
+}
+
+// Every `check` line in the build skill's `files` ({relative path: markdown}) that one of its gates
+// on `main` runs: {file, line, kind, words, base}, where `base` is the word after `--base` or null.
+function buildGateLines(files) {
+  const lines = []
+  for (const [file, text] of Object.entries(files)) {
+    for (const inv of extractInvocations(text)) {
+      if (inv.words[0] !== 'check') continue
+      const kind = BUILD_GATE_KINDS[inv.words[inv.words.indexOf('--tier') + 1]]
+      if (!kind) continue
+      const at = inv.words.findIndex(w => flagOf(w) === '--base')
+      lines.push({ file, line: inv.line, kind, words: inv.words, base: at < 0 ? null : inv.words[at + 1] ?? '' })
+    }
+  }
+  return lines
+}
+
+/**
+ * The gate lines a build of `plan` (its plan.json) runs on `main`, by kind, from the skill's
+ * `files`: with a `surfaceCommit`, the lines measuring from it, with the sha filled in; without,
+ * the lines that name no base.
+ */
+function buildGatesFor(files, plan) {
+  const surfaced = typeof plan.surfaceCommit === 'string'
+  return buildGateLines(files)
+    .filter(gate => (gate.base !== null) === surfaced)
+    .map(gate => ({ ...gate, words: gate.words.map(w => (w === '<surfaceCommit>' ? plan.surfaceCommit : w)) }))
+}
+
+/**
+ * Problems with where the build skill's gates on `main` measure from: a gate line with a base
+ * other than `<surfaceCommit>`; a file whose no-base lines differ from the lines before a plan
+ * could carry a surface; a no-base line with no `--base <surfaceCommit>` twin in the same file; no
+ * `<surfaceCommit>` row in the names table; and a green-main check that runs before step 1 reads
+ * the plan surface from plan.json.
+ */
+export function buildGateBaseProblems(files) {
+  const problems = []
+  const gates = buildGateLines(files)
+  for (const gate of gates) {
+    if (gate.base !== null && gate.base !== '<surfaceCommit>') {
+      problems.push(`${gate.file}:${gate.line}: the ${gate.kind} gate measures from ${gate.base || 'nothing'}, not <surfaceCommit>`)
+    }
+  }
+  for (const [file, expected] of Object.entries(BUILD_GATE_LINES_WITHOUT_SURFACE)) {
+    const plain = gates.filter(gate => gate.file === file && gate.base === null)
+    const found = plain.map(gate => gate.words.join(' '))
+    if (JSON.stringify(found) !== JSON.stringify(expected)) {
+      problems.push(`${file}: a plan without a surface runs ${JSON.stringify(found)}, not ${JSON.stringify(expected)}`)
+    }
+    for (const gate of plain) {
+      const twin = gates.some(other => other.file === file && other.kind === gate.kind && other.base === '<surfaceCommit>'
+        && other.words.filter((w, i, all) => flagOf(w) !== '--base' && flagOf(all[i - 1] ?? '') !== '--base').join(' ') === gate.words.join(' '))
+      if (!twin) problems.push(`${file}:${gate.line}: the ${gate.kind} gate has no \`--base <surfaceCommit>\` form for a plan with a surface`)
+    }
+  }
+  const skill = files['skills/build/SKILL.md'] ?? ''
+  if (!/^\| `<surfaceCommit>` \|[^\n]*`surfaceCommit`/m.test(skill)) problems.push('no `<surfaceCommit>` row in the names table')
+  const [start] = numberedSections(skill, /^## 1\. Start\b/)
+  const greenMain = gates.find(gate => gate.file === 'skills/build/SKILL.md' && gate.kind === 'green-main')
+  const readsSurface = (start?.lines ?? []).findIndex(row => /plan\.json/.test(row) && /surface/.test(row))
+  if (greenMain && (readsSurface < 0 || start.firstLine + readsSurface > greenMain.line)) {
+    problems.push('the green-main check runs before step 1 reads the plan surface from plan.json')
+  }
+  return problems
+}
+
+/**
+ * Runs the build skill's green-main and merge gate lines for a plan (`gates`, from
+ * `buildGatesFor`) through the real binary in a temp repository where `main` just moved to a
+ * surface commit that adds an untested module, as `plan surface` leaves it, and `origin/main` is
+ * still the commit before it. The merge gate runs after a task commit that changes that module
+ * with no test. The module is `host_testable = false`, so impact is the only rule its new
+ * untested code trips at push. Returns each run's kind, verdict and gating rules.
+ */
+function buildGateWalk(gates) {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'skill-commands-build-gates-'))
+  const env = {
+    ...process.env, LLVM_PROFILE_FILE: join(dir, 'gate-%p.profraw'),
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+  const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
+  const write = (path, text) => {
+    mkdirSync(dirname(join(dir, path)), { recursive: true })
+    writeFileSync(join(dir, path), text)
+  }
+  const manifest = extra => [
+    '// swift-tools-version: 6.0', 'import PackageDescription', '', 'let package = Package(', '  name: "Core",',
+    `  products: [.library(name: "Core", targets: ["Core"])${extra ? ', .library(name: "Feed", targets: ["Feed"])' : ''}],`,
+    '  targets: [', '    .target(name: "Core"),', ...(extra ? ['    .target(name: "Feed", dependencies: ["Core"]),'] : []),
+    '    .testTarget(name: "CoreTests", dependencies: ["Core"]),', '  ]', ')', '',
+  ].join('\n')
+  const module = (name, extra) => ['', '[[modules]]', `name = "${name}"`, 'kind = "library"', ...extra, 'reason = "plain value helpers"', ''].join('\n')
+  const config = [
+    'schema = 1', 'xcode = "26.2"', 'app_scheme = "App"', 'packages = ["Packages/*"]', '',
+    '[simulator]', 'device = "iPhone 17"', 'os = "26.2"', module('Core', []),
+  ].join('\n')
+  const gate = (kind, words) => {
+    const args = words.map(w => (w === '<merge_gate>' || w === '<mergeGate>' ? 'push' : w))
+    assert.ok(!args.some(w => /^<.*>$/.test(w)), `the walk has no value for a word of \`${words.join(' ')}\``)
+    let out
+    try {
+      out = run(binary, [...args, '--json'])
+    } catch (error) {
+      out = error.stdout
+    }
+    const report = JSON.parse(out)
+    const gating = report.findings.filter(f => f.severity === 'blocker' || f.severity === 'major').map(f => `${f.rule} ${f.file}`)
+    return { kind, verdict: report.verdict, gating }
+  }
+  try {
+    write('.gitignore', '.harness/\n.build/\n')
+    write('.swiftgate.toml', config)
+    write('Packages/Core/Package.swift', manifest(false))
+    write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n')
+    write('Packages/Core/Tests/CoreTests/CoreTests.swift',
+      'import Testing\n@testable import Core\n\n@Test("base is one — catches a changed base") func baseIsOne() { #expect(base() == 1) }\n')
+    run('git', ['init', '-q', '-b', 'main'])
+    run('git', ['add', '-A'])
+    run('git', ['commit', '-qm', 'init'])
+    run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    write('.swiftgate.toml', config + module('Feed', ['host_testable = false']))
+    write('Packages/Core/Package.swift', manifest(true))
+    write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 0 }\n}\n')
+    run('git', ['add', '-A'])
+    run('git', ['commit', '-qm', 'surface'])
+    const surface = run('git', ['rev-parse', 'HEAD']).trim()
+    const fill = words => words.map(w => (w === '<surfaceCommit>' ? surface : w))
+    const surfaceCheck = gate('surface-check', ['surface-check', surface])
+    assert.equal(surfaceCheck.verdict, 'GREEN', `the walk's surface is not all stubs: ${surfaceCheck.gating.join(', ')}`)
+    const results = []
+    const greenMain = gates.find(g => g.kind === 'green-main')
+    const merge = gates.find(g => g.kind === 'merge')
+    if (greenMain) results.push(gate('green-main', fill(greenMain.words)))
+    write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 3 }\n}\n')
+    run('git', ['commit', '-qam', 'task'])
+    if (merge) results.push(gate('merge', fill(merge.words)))
+    return { surface, results }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 const tests = {
   'ship, build and sprint run doctor with the session id at their preflight and stop on doctor.plugin-changed — catches a session running stale prompts past its preflight'() {
     for (const [skill, heading] of [['ship', '## 1. Preflight'], ['sprint', '## 1. Preflight'], ['build', '## 1. Start']]) {
@@ -1086,6 +1240,57 @@ const tests = {
       const found = words.filter(word => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(body))
       assert.deepEqual(found, [], `the ${name} name ${found.join(', ')}`)
     }
+  },
+
+  'the build skill measures its green-main, merge and final gates from plan.json\'s surfaceCommit when the plan has one, and runs its old lines when it has none — catches a surfaced plan\'s main judged from origin/main'() {
+    const files = buildSkillFiles()
+    assert.deepEqual(buildGateBaseProblems(files), [])
+    const sha = '0123456789abcdef0123456789abcdef01234567'
+    const surfaced = buildGatesFor(files, { surfaceCommit: sha }).filter(gate => gate.file === 'skills/build/SKILL.md')
+    assert.deepEqual(surfaced.map(gate => gate.kind), ['green-main', 'merge', 'final'])
+    for (const gate of surfaced) {
+      assert.equal(gate.words[gate.words.indexOf('--base') + 1], sha, `the ${gate.kind} gate: ${gate.words.join(' ')}`)
+    }
+    const plain = buildGatesFor(files, {})
+    for (const [file, expected] of Object.entries(BUILD_GATE_LINES_WITHOUT_SURFACE)) {
+      assert.deepEqual(plain.filter(gate => gate.file === file).map(gate => gate.words.join(' ')), expected, file)
+    }
+    const { problems } = scanSkills(join(root, 'skills/build'), help, root)
+    assert.deepEqual(problems, [])
+  },
+
+  'the build skill\'s green-main check is GREEN through the real binary on main right after a surface that adds an untested module, and its merge gate still judges the task — catches a build stopped by the surface it builds on'() {
+    const files = buildSkillFiles()
+    const surfaced = buildGateWalk(buildGatesFor(files, { surfaceCommit: '<surfaceCommit>' }).filter(gate => gate.file === 'skills/build/SKILL.md'))
+    assert.deepEqual(surfaced.results.map(r => [r.kind, r.verdict]), [['green-main', 'GREEN'], ['merge', 'RED']],
+      surfaced.results.map(r => r.gating.join(', ')).join('\n'))
+    assert.deepEqual(surfaced.results[1].gating, ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift'])
+    const plain = buildGateWalk(buildGatesFor(files, {}).filter(gate => gate.file === 'skills/build/SKILL.md'))
+    assert.deepEqual(plain.results.map(r => [r.kind, r.verdict, r.gating]), [
+      ['green-main', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
+      ['merge', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
+    ], 'the old lines no longer reproduce the surface\'s RED green-main check')
+  },
+
+  'the build gate base check names a surfaced line without its base, a changed old line, a base other than the surface, a missing names row and a green-main check before the plan read — catches a check that passes anything'() {
+    const skill = [
+      '| Name | Value |', '|---|---|', '| `<slug>` | the plan |', '',
+      '## 1. Start', '', '1. `"$SG" check --tier <merge_gate>`; with a plan surface, `"$SG" check --tier <merge_gate> --base main`.',
+      '2. Read `plan.json` for the plan surface.', '',
+      '## 3. On each completion', '', '4. `"$SG" check --tier <mergeGate> --json` on main.', '',
+      '## 4. Finish', '', '1. `"$SG" check --tier ready`; with a plan surface, `"$SG" check --tier ready --base <surfaceCommit>`.',
+    ].join('\n')
+    const loop = ['`"$SG" check --tier <mergeGate>` or `"$SG" check --tier <mergeGate> --base <surfaceCommit>`.',
+      '```', '"$SG" check --tier ready <the --proof-base arguments it printed>', '```'].join('\n')
+    assert.deepEqual(buildGateBaseProblems({ 'skills/build/SKILL.md': skill, 'skills/build/references/event-loop.md': loop }), [
+      'skills/build/SKILL.md:7: the green-main gate measures from main, not <surfaceCommit>',
+      'skills/build/SKILL.md: a plan without a surface runs ["check --tier <merge_gate>","check --tier <mergeGate> --json","check --tier ready"], not ["check --tier <merge_gate>","check --tier <mergeGate>","check --tier ready"]',
+      'skills/build/SKILL.md:7: the green-main gate has no `--base <surfaceCommit>` form for a plan with a surface',
+      'skills/build/SKILL.md:12: the merge gate has no `--base <surfaceCommit>` form for a plan with a surface',
+      'skills/build/references/event-loop.md:3: the final gate has no `--base <surfaceCommit>` form for a plan with a surface',
+      'no `<surfaceCommit>` row in the names table',
+      'the green-main check runs before step 1 reads the plan surface from plan.json',
+    ])
   },
 }
 

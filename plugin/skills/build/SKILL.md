@@ -27,6 +27,7 @@ The long form of every step, the halt options and the resume rules are in
 | `<plans>` | `$(git rev-parse --git-common-dir)/swift-harness/plans` |
 | `<run>` | the `runId` that `build start` or `build next` prints |
 | `<returns>` | `<plans>/<slug>/build/<run>/returns/` |
+| `<surfaceCommit>` | `plan.json`'s `surfaceCommit`: the plan surface, when the plan has one (step 1) |
 
 ## Halt and ask
 
@@ -44,21 +45,27 @@ recommended first. Never work around a halt by hand. The reference lists the opt
    non-zero exit: quote its findings as `rule: message` and stop.
 2. `"$SG" plan claim <slug> --session <session> --json`. Exit 1 names the session that holds the
    plan: halt.
-3. Unless the index is already `building` (a resume), check that `main` is green:
-   `"$SG" check --tier <merge_gate>`, with the preset's `merge_gate` from `.swiftgate.toml`. Not
+3. Read `<plans>/<slug>/plan.json` for the plan's source and surface. `"source": "specPage"` marks a
+   spec page plan: its page is `<plans>/<slug>/<specPage.path>`. Any other plan builds from the
+   design doc in `design`. Keep `surfaceCommit` as the plan surface, or `null` when the key is
+   absent: every worker gets it ([launch](references/event-loop.md#launch)), and every gate this
+   skill runs on `main` measures from it.
+4. Unless the index is already `building` (a resume), check that `main` is green:
+   `"$SG" check --tier <merge_gate>`, with the preset's `merge_gate` from `.swiftgate.toml`; with a
+   plan surface, `"$SG" check --tier <merge_gate> --base <surfaceCommit>`. Not
    GREEN: halt, and quote the findings as `rule: message`. Options: **stop** (Recommended) so
    `main` gets fixed first, or **go on** with these findings as the baseline. With a baseline, a
    later merge gate passes when its gating findings are exactly the baseline's. Every merge gate
    runs on `main`, so a finding already there would read as the task's fault.
-4. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
+5. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
-5. Read `<plans>/<slug>/build/<run>/run.json` for the preset, and start the cutoff timer when
+6. Read `<plans>/<slug>/build/<run>/run.json` for the preset, and start the cutoff timer when
    `timeBudgetMin` isn't 0 ([time budget](references/event-loop.md#time-budget)).
-6. Read `<plans>/<slug>/plan.json` for the plan's source and surface. `"source": "specPage"` marks a
-   spec page plan: its page is `<plans>/<slug>/<specPage.path>`. Any other plan builds from the
-   design doc in `design`. Keep `surfaceCommit` as the plan surface, or `null` when the key is
-   absent: every worker gets it ([launch](references/event-loop.md#launch)).
+
+A plan surface is on `main` before the build starts, and its stubs add API no test covers yet.
+Measuring from it judges what the tasks change on top of it. Workers' task gates keep
+`--base main` ([launch](references/event-loop.md#launch)).
 
 ## 2. Start ready tasks
 
@@ -95,7 +102,8 @@ Handle notices one at a time: merges run in completion order.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
 4. `"$SG" build merge <slug> <task> --session <session> --json`, then
-   `"$SG" check --tier <mergeGate>` on main, then record it for the ledger page:
+   `"$SG" check --tier <mergeGate>` on main (with a plan surface,
+   `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
    gate whose gating findings are exactly the step 1 baseline counts as GREEN.
@@ -114,7 +122,8 @@ Go back to step 2.
 When `build next` reports nothing to start and nothing running, or at the cutoff:
 
 1. Wait for the machine's other `ready` runs, then run `"$SG" build proof-bases <slug>` and
-   `"$SG" check --tier ready` with the `--proof-base` arguments it prints
+   `"$SG" check --tier ready` (with a plan surface, `"$SG" check --tier ready --base <surfaceCommit>`)
+   with the `--proof-base` arguments it prints
    ([final gate](references/event-loop.md#final-gate)). Record it with
    `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`
    and republish the ledger page. Not GREEN: halt.

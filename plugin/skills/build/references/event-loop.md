@@ -130,7 +130,9 @@ start from a return this skill skipped.
 ## Conflict or red main
 
 The merge gate is the preset's `mergeGate`. Run it on `main` after every clean merge:
-`"$SG" check --tier <mergeGate>`.
+`"$SG" check --tier <mergeGate>`, or `"$SG" check --tier <mergeGate> --base <surfaceCommit>` for a
+plan with a surface. From `origin/main`, the surface's stubs would read as untested changes in
+every merge; from the surface, the gate judges what the merged tasks changed on top of it.
 
 When the user chose **go on** at the start's green-main check, compare the gate's gating findings
 with that baseline by `rule`, `file` and `message`. The same set counts as GREEN. Anything new is a
@@ -154,7 +156,8 @@ and give it:
 - both returns: this task's, and that of the task it collides with, read from `<returns>`. For a
   conflict, that's the merged task whose `writeSet` holds a conflicted file; otherwise, or when none
   does, the task merged last;
-- the merge gate tier.
+- the merge gate tier, and `--base <surfaceCommit>` for a plan with a surface, so its gate in the
+  fix worktree measures from where `main`'s gates do.
 
 Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
@@ -268,6 +271,12 @@ prints `plan.json`'s `surfaceCommit` first when the plan has one, then each merg
 until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done
 "$SG" build proof-bases <slug>
 "$SG" check --tier ready <the --proof-base arguments it printed>
+```
+
+For a plan with a surface, the last line measures from it, as every merge gate did:
+
+```bash
+"$SG" check --tier ready --base <surfaceCommit> <the --proof-base arguments it printed>
 ```
 
 `build proof-bases` exits 2 when a merged task has no stored return: halt, since the final gate
