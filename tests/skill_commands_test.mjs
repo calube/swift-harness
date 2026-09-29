@@ -478,6 +478,34 @@ function doctorPreflightProblems(text, heading) {
   return problems
 }
 
+// Every `rm` or `mv` a markdown text runs as a shell command without `command ` or `/bin/` before
+// it, as `<line>: <code>`. Code means a fenced block or an inline code span; a command starts a
+// line, or follows `&&`, `||`, `;`, `|`, `(` or `$(`. A user's `rm -i` alias waits for an answer a
+// headless session can't give.
+export function bareRemoveOrMove(text) {
+  const found = []
+  let inFence = false
+  for (const [index, line] of text.split('\n').entries()) {
+    if (FENCE.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    const code = inFence ? [line] : line.split('`').filter((_, i) => i % 2 === 1)
+    for (const segment of code) {
+      for (const command of segment.split(/&&|\|\||;|\||\$\(|\(/)) {
+        if (/^\s*(rm|mv)(\s|$)/.test(command)) found.push(`${index + 1}: ${segment.trim()}`)
+      }
+    }
+  }
+  return found
+}
+
+// Every markdown file and workflow script under the plugin's skills, agents and workflows.
+function shellInstructionFiles() {
+  const workflows = readdirSync(join(root, 'workflows')).filter(name => name.endsWith('.js')).map(name => join(root, 'workflows', name))
+  return [...markdownFiles(join(root, 'skills')), ...markdownFiles(join(root, 'agents')), ...workflows]
+}
+
 // The `## <n>.` sections of a skill whose headings match `heading`, joined, with the line number
 // of each section's first line so invocations keep their place in the whole file.
 function numberedSections(text, heading) {
@@ -1362,6 +1390,36 @@ const tests = {
     }
     const report = (readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8').split('\n## Report\n')[1] ?? '').replace(/\s+/g, ' ')
     assert.match(report, /^ ?End with the Artifact link, or the page's path when this session has no Artifact tool,/)
+  },
+
+  'no skill, agent or workflow runs a bare rm or mv, and the ship and sprint skills tell a headless session how to delete or move a file — catches a session stalled on a user\'s interactive rm alias'() {
+    const files = shellInstructionFiles()
+    assert.ok(files.length > 20 && files.some(f => f.endsWith('build-task.js')), `the scan reads only ${files.length} files`)
+    const found = files.flatMap(file => bareRemoveOrMove(readFileSync(file, 'utf8')).map(hit => `${relative(root, file)}:${hit}`))
+    assert.deepEqual(found, [])
+    for (const skill of ['ship', 'sprint']) {
+      const prose = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8').replace(/\s+/g, ' ')
+      assert.match(prose, /To delete or move a file, run `command rm -f` or `command mv -f`/, `the ${skill} skill`)
+    }
+  },
+
+  'the bare rm and mv check names each bare command in a fence, a code span or a chain, and passes command, /bin and prose — catches a check that passes anything'() {
+    const text = [
+      'Run `rm -rf .harness` first.', '```', 'cd x && mv a b', 'rm c', '/bin/rm -f d', 'command mv -f e f',
+      'echo $(rm g)', '```', 'Remove the file, then rm it by hand.', '`git worktree remove x`', '`swiftgate prove`',
+    ].join('\n')
+    assert.deepEqual(bareRemoveOrMove(text), [
+      '1: rm -rf .harness', '3: cd x && mv a b', '4: rm c', '7: echo $(rm g)',
+    ])
+  },
+
+  'the build loop\'s red-main section takes its baseline from the user\'s go on or from the surface\'s untested modules taken without asking — catches the loop dropping the baseline step 1 took on its own'() {
+    const loop = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8')
+    const section = (loop.split('\n## Conflict or red main\n')[1] ?? '').split('\n## ')[0].replace(/\s+/g, ' ')
+    assert.match(section, /the user chose \*\*go on\*\*/)
+    assert.match(section, /`coverage\.no-t1-tests`[^.]*surface[^.]*without asking/)
+    assert.match(section, /every gating finding is one of the baseline's[^.]*GREEN/)
+    assert.doesNotMatch(section, /The same set counts as GREEN/)
   },
 
   'the ship and plan skills\' design-free text names no preset or captured page — catches a skill tuned to one preset or app'() {

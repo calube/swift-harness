@@ -721,10 +721,16 @@ enum ContextPackRun {
   private static func readSpecPage(_ path: String, root: URL) -> Result<
     SpecPageSource, GatherFailure
   > {
+    guard let relative = ContextPackFiles.repositoryPath(path, root: root) else {
+      return .failure(
+        GatherFailure(
+          "`\(path)` is outside the repository: pass a spec page inside it, absolute or "
+            + "relative to its toplevel"))
+    }
     let source: ContextSource
-    switch ContextPackFiles.read(label: path, path: path, root: root) {
+    switch ContextPackFiles.read(label: relative, path: relative, root: root) {
     case .success(let s): source = s
-    case .failure(.unreadable(let p)): return .failure(GatherFailure("can't read `\(p)`"))
+    case .failure(.unreadable): return .failure(GatherFailure("can't read `\(path)`"))
     }
     switch SpecPage.parse(source.rawText) {
     case .parsed(let page): return .success(SpecPageSource(page: page, source: source))

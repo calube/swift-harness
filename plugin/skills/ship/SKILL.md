@@ -15,6 +15,8 @@ surface commit on `main` (steps 3 and 4). Only such a preset selects that path: 
 for it. Every other tier runs step 2 and skips steps 3 and 4.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the main checkout's toplevel.
+To delete or move a file, run `command rm -f` or `command mv -f`: a user's alias for either
+may ask for an answer, and a headless session can't give one.
 
 ## Names
 

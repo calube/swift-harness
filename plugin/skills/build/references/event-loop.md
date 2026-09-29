@@ -29,8 +29,9 @@ Keep these in the conversation; none of them is a file:
 Every other fact comes from `swiftgate`: the ledger from `<plans>/<slug>/ledger.json`, the preset
 from `<plans>/<slug>/build/<run>/run.json`, the running set from `build next`.
 
-`<plans>` must stay repo-relative when a command takes it as a path: `context-pack` refuses an
-absolute path. From the main checkout's toplevel, `git rev-parse --git-common-dir` prints `.git`.
+`<plans>` must stay repo-relative when a command takes it as a path: `context-pack` reads an
+absolute path only for `--spec-page`, and only inside the repository. From the main checkout's
+toplevel, `git rev-parse --git-common-dir` prints `.git`.
 
 ## Worker pack
 
@@ -134,9 +135,11 @@ The merge gate is the preset's `mergeGate`. Run it on `main` after every clean m
 plan with a surface. From `origin/main`, the surface's stubs would read as untested changes in
 every merge; from the surface, the gate judges what the merged tasks changed on top of it.
 
-When the user chose **go on** at the start's green-main check, compare the gate's gating findings
-with that baseline by `rule`, `file` and `message`. The same set counts as GREEN. Anything new is a
-red gate, and the fixer gets only the new findings.
+The start's green-main check may leave a baseline: its findings when the user chose **go on**, or,
+for a plan with a surface, the `coverage.no-t1-tests` findings for modules the surface added, taken
+without asking. Compare the gate's gating findings with that baseline by `rule`, `file` and
+`message`. A gate whose every gating finding is one of the baseline's counts as GREEN. Anything new
+is a red gate, and the fixer gets only the new findings.
 
 | What happened | Next |
 |---|---|
