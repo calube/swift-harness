@@ -65,21 +65,22 @@ cleanup() {
   fi
   exit "$status"
 }
-# At the deadline the watchdog's pkill ends the foreground command, so set -e can start cleanup
-# before the watchdog's own TERM lands. Bash 3.2 then runs that TERM inside cleanup: exiting there,
-# or taking the default action once the trap is reset, cuts cleanup short before it reaps or
-# reports the deadline. So a signal that lands once cleanup has begun is ignored. The trap's one
-# first command both marks cleanup begun and keeps the exit status: any command before it would
-# widen the window for that signal, and any command before reading $? resets it to 0, so a failing
-# check would exit 0 with its FAIL line on stderr alone.
-stop() {
+# At the deadline the watchdog's pkill ends the foreground command, so set -e can enter the EXIT
+# trap just as the watchdog's TERM lands, even before that trap's first command runs. Bash 3.2 runs
+# the TERM trap there, and an exit from it ends the shell with no second EXIT trap. So whichever
+# trap runs first runs cleanup itself, and a signal that lands once cleanup has begun is ignored:
+# exiting or taking the default action there would cut cleanup short before it reaps or reports
+# the deadline. The EXIT trap passes $? as its first word, since any command before reading it
+# resets it to 0 and a failing check would exit 0 with its FAIL line on stderr alone.
+finish() {
   [ -n "${exiting_with:-}" ] && return 0
-  exit "$1"
+  exiting_with="$1"
+  cleanup
 }
-trap 'exiting_with=$?; cleanup' EXIT
-trap 'stop 143' TERM
-trap 'stop 130' INT
-trap 'stop 129' HUP
+trap 'finish $?' EXIT
+trap 'finish 143' TERM
+trap 'finish 130' INT
+trap 'finish 129' HUP
 
 # The watchdog bounds the run with its own deadline, under the 600s the Swift test harness gives
 # it, and reaps what the test started if the test dies without running its EXIT trap (SIGKILL).
