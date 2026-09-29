@@ -70,6 +70,10 @@ public enum SurfaceStubForm: String, Sendable, Equatable, CaseIterable {
   /// `products` and `targets` lists: a package, product, target or product declaration, or a
   /// target name.
   case extendsManifest
+  /// A `DependencyValues` accessor wired to its key's slot and nothing more: a getter that is
+  /// exactly `self[Key.self]` and a setter that is exactly `self[Key.self] = newValue`, for a key
+  /// type the commit or its parent declares.
+  case wiresDependency
 }
 
 /// Why a judged body is behaviour, not a stub.
@@ -91,6 +95,9 @@ public enum SurfaceBehaviour: Sendable, Equatable {
   /// An existing `Package.swift` changed by more than added dependencies, products and targets;
   /// `excerpt` is the first change found.
   case changesManifest(excerpt: String)
+  /// A `DependencyValues` accessor wired to `key`'s slot, where neither the commit nor its parent
+  /// declares a type named `key`.
+  case undeclaredDependencyKey(key: String)
   /// An added test file, or an added test in a changed one.
   case addsTest
 }
@@ -206,6 +213,8 @@ public enum SurfaceCheck {
     case .changesManifest(let excerpt):
       "changes the package manifest (`\(excerpt)`): a surface only adds dependencies, products "
         + "and targets to an existing manifest's lists, and removes or changes nothing"
+    case .undeclaredDependencyKey:
+      ""
     case .addsTest:
       "adds a test: a surface commit adds no tests; they follow it"
     }
