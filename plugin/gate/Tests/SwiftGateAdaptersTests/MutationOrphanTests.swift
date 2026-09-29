@@ -17,6 +17,11 @@ struct MutationOrphanTests {
   /// itself. Wall time, not a parent check: an orphan reparented to init must still be there when
   /// the test looks, or the test couldn't tell an unfixed runner from a fixed one.
   private static let hangSeconds = 90
+
+  /// How long a descendant the runner has already killed may take to leave the process table.
+  /// Well inside `hangSeconds`, so an orphan the runner never signalled is still spinning when it
+  /// passes.
+  private static let reapDeadline: Duration = .seconds(20)
   private static let hangingSource = """
     import Foundation
 
@@ -72,27 +77,47 @@ struct MutationOrphanTests {
 
     func remove() { try? FileManager.default.removeItem(at: root) }
 
-    /// No process anywhere on the machine still names this package's one-of-a-kind temp path —
-    /// the mark of a real orphan, not just this test's own already-reaped child. Reads the pipe
-    /// before waiting on the process: on a machine busy enough to fill it, waiting first deadlocks
-    /// against the child blocked writing to a full pipe nobody is draining.
-    func noDescendantSurvives() throws -> Bool {
-      try survivors().isEmpty
+    /// Waits until no process anywhere on the machine names this package's one-of-a-kind temp
+    /// path — the mark of a real orphan, not just this test's own already-reaped child — and
+    /// returns the `ps` line of each one still there once `deadline` has passed. The runner
+    /// returns as soon as it has sent SIGKILL, and on a loaded machine the kernel can list a killed
+    /// `xctest` as running, reparented to init, for a moment after that (about 0.2 s at load 120),
+    /// so a single look races the kill. An orphan nothing signalled spins for `hangSeconds`, long
+    /// past the deadline, so it still fails.
+    func survivors(reapedWithin deadline: Duration) async throws -> [String] {
+      let clock = ContinuousClock()
+      let end = clock.now.advanced(by: deadline)
+      var remaining = try survivorLines()
+      while !remaining.isEmpty, clock.now < end {
+        try await Task.sleep(for: .milliseconds(100))
+        remaining = try survivorLines()
+      }
+      return remaining.map(String.init)
     }
 
     /// Every process whose command line names this package's temp path, by pid.
     func survivors() throws -> [pid_t] {
+      try survivorLines().compactMap {
+        pid_t($0.split(separator: " ", maxSplits: 1).first ?? "")
+      }
+    }
+
+    /// The `pid ppid pgid state command` line of every process whose command line names this
+    /// package's temp path. Reads the pipe before waiting on the process: on a machine busy enough
+    /// to fill it, waiting first deadlocks against the child blocked writing to a full pipe nobody
+    /// is draining.
+    private func survivorLines() throws -> [Substring] {
       let pipe = Pipe()
       let process = Process()
       process.executableURL = URL(filePath: "/bin/ps")
-      process.arguments = ["-Ao", "pid=,command="]
+      process.arguments = ["-Ao", "pid=,ppid=,pgid=,stat=,command="]
       process.standardOutput = pipe
       try process.run()
       let data = pipe.fileHandleForReading.readDataToEndOfFile()
       process.waitUntilExit()
       return String(decoding: data, as: UTF8.self).split(separator: "\n")
+        .map { line in line.drop { $0 == " " } }
         .filter { $0.contains(uniqueToken) }
-        .compactMap { pid_t($0.split(separator: " ", maxSplits: 1).first ?? "") }
     }
 
     /// Kills whatever is still running from this package, whether the test passed or failed, so
@@ -133,6 +158,13 @@ struct MutationOrphanTests {
       return
     }
 
-    #expect(try package.noDescendantSurvives())
+    let survivors = try await package.survivors(reapedWithin: Self.reapDeadline)
+    #expect(
+      survivors.isEmpty,
+      """
+      \(survivors.count) descendant(s) of the timed-out test run still running \(Self.reapDeadline) \
+      after the runner returned (pid ppid pgid state command):
+      \(survivors.joined(separator: "\n"))
+      """)
   }
 }
