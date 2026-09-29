@@ -569,6 +569,8 @@ done
 Between the sides, `ProfileClient` gains the `ProfileClientLive` target and product and 2 test
 targets, `ProfileFeature` gains a test target and `AppFeature` gains a local package dependency and
 its product: `sprint slice` refuses only `ProfileClient`'s change.
+`build check-return` reads the same files as a plan surface and a task branch, and fails only
+`ProfileClient`'s change with `build-return.target-outside-surface`.
 
 ## PlanState (`plan.json` written before spec pages)
 

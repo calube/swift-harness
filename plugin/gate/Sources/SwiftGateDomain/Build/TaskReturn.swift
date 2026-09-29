@@ -352,6 +352,45 @@ public enum TaskReturnCheck {
     commitFindings(taskReturn, evidence) + gateFindings(taskReturn, evidence)
       + reviewFindings(taskReturn, evidence) + designConflictFindings(taskReturn, evidence)
       + writeSetFindings(taskReturn, evidence) + surfaceFindings(taskReturn, evidence)
+      + manifestFindings(evidence)
+  }
+
+  /// A task may fill the targets the plan surface declares but never declare one: at the surface
+  /// a new target has no sources, so SwiftPM refuses its package and the final gate's `prove`
+  /// can't build a test in it or a dependent. 1 finding per manifest.
+  private static func manifestFindings(_ evidence: TaskReturnEvidence) -> [TaskReturnFinding] {
+    guard let planSurface = evidence.planSurface else { return [] }
+    let surface = planSurface.surface
+    return planSurface.manifests.sorted { $0.path < $1.path }.flatMap { manifest in
+      SliceManifestCheck.findings([manifest]).map { finding in
+        let message: String
+        switch finding {
+        case .undeclared(let path, let targets, let products):
+          let named = joined(targets.map { "target \($0)" } + products.map { "product \($0)" })
+          message =
+            (manifest.atSurface == nil
+              ? "\(path) is a package the plan surface \(surface) lacks; it adds \(named)"
+              : "\(path) adds \(named), which the plan surface \(surface) doesn't declare")
+            + ". At the surface a new target has no sources, so SwiftPM refuses its package and "
+            + "the final gate's prove can't build a test in it or a dependent. The surface needs "
+            + "a stub target for each: return a design conflict (section `surface`) instead of "
+            + "declaring it on the task branch"
+        case .unreadable(let path, let side, let reason):
+          message =
+            "\(path) can't be read at "
+            + (side == .surface ? "the plan surface \(surface)" : "the task branch tip")
+            + " (\(reason)). Write its targets and products as `.target(name: \"…\")`-style "
+            + "elements of the `targets:` and `products:` arrays in its `Package(…)` call"
+        }
+        return TaskReturnFinding(rule: .targetOutsideSurface, message: message)
+      }
+    }
+  }
+
+  /// `a`, `a and b`, `a, b and c`.
+  private static func joined(_ items: [String]) -> String {
+    guard let last = items.last, items.count > 1 else { return items.first ?? "" }
+    return items.dropLast().joined(separator: ", ") + " and " + last
   }
 
   /// A surface commit must be on the task branch and, when the gate had to prove the change, be
