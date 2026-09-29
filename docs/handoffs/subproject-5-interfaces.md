@@ -459,3 +459,21 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Gates.** Integration push + prove GREEN (run 20260928T230639Z-da6e2f53), 17 of 17 proven at the merged surface
   `8fea618`. Mutate for waves 10 and 11 waits for the shim deadline fix: its flake failed mutate's unmutated baseline
   twice (runs 20260928T205530Z-a55b34f5 and 20260928T221558Z-10ce1539).
+
+## Fast-modes wave 12 (the plan surface lands on main) and the shim deadline fix
+
+- **Plan surface.** `swiftgate plan surface <slug> <sha> --gate <run id> --preset <name> --session <id> [--json]`, run
+  from the checkout whose run history holds the gate run, as the lock holder of a confirmed spec-page plan. `--preset`
+  names the preset whose `merge_gate` the gate run must meet. Exit 0 recorded, 1 refused or not held, 2 blocked. JSON
+  keys `command`, `plan`, `status` (`recorded` | `refused` | `not-held` | `blocked`), `verdict`, `rule`, `holder`,
+  `surfaceCommit`, `gate`, `mergeGate`, `findings`, `message`. Rules `plan-surface.not-confirmed`, `not-on-main`,
+  `behaviour`, `gate-unknown`, `gate-red` (a BLOCKED gate too), `gate-stale`, `gate-tier`, `main-checked-out`,
+  `already-recorded`. It fast-forwards `main` with no merge commit and records `surfaceCommit`; a run that moved `main`
+  but stopped before recording records on the next call.
+- **Shim test deadline.** `tests/shim_test.sh`'s `cleanup` ignores a TERM that lands once it has begun, so a shim test
+  past its deadline reports it and reaps. `tests/shim_deadline_cleanup_test.mjs` waits for the deadline message under a
+  named wait and carries a mid-command stall case.
+- **Gates.** Integration push + prove GREEN (run 20260929T003505Z-8bb2318a), 14 of 14 proven at `2a41700` (the
+  surface merged onto `main`). The first run went RED once on `RepositoryScriptTests.shim()` with empty stdout; it
+  passed alone and on the re-run. Mutate for waves 10-11 (run 20260928T231822Z-da99afb4) judged every sampled mutant;
+  2 sort-comparator survivors are in a fix round.
