@@ -1,0 +1,131 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "swift-dependencies",
+      "requirement" : {
+        "exact" : [
+          "1.17.1"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-dependencies"
+    },
+    {
+      "identity" : "swift-concurrency-extras",
+      "requirement" : {
+        "exact" : [
+          "1.4.1"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-concurrency-extras"
+    }
+  ],
+  "manifest_display_name" : "LogClient",
+  "name" : "LogClient",
+  "path" : "/REPO/Packages/LogClient",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "LogClient",
+      "targets" : [
+        "LogClient"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "LogClientLive",
+      "targets" : [
+        "LogClientLive"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "LogClientTests",
+      "module_type" : "SwiftTarget",
+      "name" : "LogClientTests",
+      "path" : "Tests/LogClientTests",
+      "product_dependencies" : [
+        "ConcurrencyExtras"
+      ],
+      "sources" : [
+        "LogClientTests.swift"
+      ],
+      "target_dependencies" : [
+        "LogClient"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "LogClientLiveTests",
+      "module_type" : "SwiftTarget",
+      "name" : "LogClientLiveTests",
+      "path" : "Tests/LogClientLiveTests",
+      "sources" : [
+        "OSLogEmissionTests.swift",
+        "OSLogRenderingTests.swift"
+      ],
+      "target_dependencies" : [
+        "LogClientLive"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "LogClientLive",
+      "module_type" : "SwiftTarget",
+      "name" : "LogClientLive",
+      "path" : "Sources/LogClientLive",
+      "product_memberships" : [
+        "LogClientLive"
+      ],
+      "sources" : [
+        "LogClientLive.swift"
+      ],
+      "target_dependencies" : [
+        "LogClient"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "LogClient",
+      "module_type" : "SwiftTarget",
+      "name" : "LogClient",
+      "path" : "Sources/LogClient",
+      "product_dependencies" : [
+        "Dependencies",
+        "DependenciesMacros"
+      ],
+      "product_memberships" : [
+        "LogClient",
+        "LogClientLive"
+      ],
+      "sources" : [
+        "LogClient.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

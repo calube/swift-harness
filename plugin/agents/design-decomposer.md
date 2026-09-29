@@ -53,6 +53,11 @@ such as `slice-2-test-block-moves-to-blocked: T1`. Then:
   the graph doesn't have yet must name a module that table lists.
 - The surface is already on `main`. A task may own surface stub files in its write set and fill
   them in; don't plan a task that only declares types.
+- The surface can't add a test target, so a core, client or `…Live` module it created has none.
+  Give each such module the pack's graph has no `<Module>Tests` for its package's
+  `Tests/<Module>Tests/` directory in 1 task's write set, the task that builds on that module, and
+  have that task write a host test that depends on it. An interface module no slice tests still
+  needs one.
 
 ## The unit of work
 
@@ -205,6 +210,8 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
   it in `"unresolved"`.
 - `plan-lint.spec-page-moved`: the spec page changed after its confirmation, and no task edit
   fixes that. List it in `"unresolved"`.
+- `plan-lint.new-module-untested`: add the named `Tests/<Module>Tests/` directory to the write set
+  of the task that builds on that module.
 - `plan-lint.est-lines-high`: split the task along its tests.
 - `plan-lint.too-many-modules`: split the task per module, keeping an `X` plus `XLive` pair only.
 - `plan-lint.too-many-tests`: split the task so each covers at most the bound.

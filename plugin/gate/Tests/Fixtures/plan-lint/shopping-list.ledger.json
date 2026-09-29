@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "resume": "planned; 4 tasks in 3 waves; next: build the first wave",
+  "maxParallel": 3,
+  "tasks": [
+    {
+      "id": "shopping-list-live-file-storage",
+      "deps": [],
+      "writeSet": [
+        "Packages/ShoppingListClient/Sources/ShoppingListClientLive/",
+        "Packages/ShoppingListClient/Tests/ShoppingListClientLiveTests/",
+        "Packages/ShoppingListClient/Package.swift"
+      ],
+      "gate": "fast",
+      "tests": [
+        "slice-7-live-client-round-trips-file"
+      ],
+      "covers": [
+        "slice-7-live-client-round-trips-file"
+      ],
+      "estLines": 140,
+      "status": "pending",
+      "worktree": "../ship-rehearsal-a-2026-09-29-shopping-list-shopping-list-live-file-storage",
+      "model": "sonnet"
+    },
+    {
+      "id": "shopping-list-item-editing",
+      "deps": [],
+      "writeSet": [
+        "Packages/AppFeature/Sources/AppCore/ShoppingListFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ShoppingListFeatureTests.swift"
+      ],
+      "gate": "fast",
+      "tests": [
+        "slice-1-add-trims-name-and-inserts-at-top",
+        "slice-2-quantity-stays-between-one-and-ninety-nine",
+        "slice-3-marking-bought-moves-below-unbought",
+        "slice-4-unmarking-puts-item-at-bottom-of-unbought"
+      ],
+      "covers": [
+        "slice-1-add-trims-name-and-inserts-at-top",
+        "slice-2-quantity-stays-between-one-and-ninety-nine",
+        "slice-3-marking-bought-moves-below-unbought",
+        "slice-4-unmarking-puts-item-at-bottom-of-unbought"
+      ],
+      "estLines": 280,
+      "status": "pending",
+      "worktree": "../ship-rehearsal-a-2026-09-29-shopping-list-shopping-list-item-editing",
+      "model": "sonnet"
+    },
+    {
+      "id": "shopping-list-clear-and-persist",
+      "deps": [
+        "shopping-list-item-editing"
+      ],
+      "writeSet": [
+        "Packages/AppFeature/Sources/AppCore/ShoppingListFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ShoppingListFeatureTests.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ShoppingListPersistenceTests.swift"
+      ],
+      "gate": "fast",
+      "tests": [
+        "slice-5-clear-bought-removes-bought-items",
+        "slice-6-list-survives-relaunch"
+      ],
+      "covers": [
+        "slice-5-clear-bought-removes-bought-items",
+        "slice-6-list-survives-relaunch"
+      ],
+      "estLines": 200,
+      "status": "pending",
+      "worktree": "../ship-rehearsal-a-2026-09-29-shopping-list-shopping-list-clear-and-persist",
+      "model": "opus"
+    },
+    {
+      "id": "shopping-list-screen",
+      "deps": [
+        "shopping-list-clear-and-persist",
+        "shopping-list-live-file-storage"
+      ],
+      "writeSet": [
+        "Packages/AppFeature/Sources/AppUI/ShoppingListView.swift",
+        "Packages/AppFeature/Sources/AppUI/AppView.swift",
+        "UITests/LaunchFlowUITests.swift"
+      ],
+      "gate": "ready",
+      "tests": [
+        "slice-8-adding-item-shows-row"
+      ],
+      "covers": [
+        "slice-8-adding-item-shows-row"
+      ],
+      "estLines": 140,
+      "status": "pending",
+      "worktree": "../ship-rehearsal-a-2026-09-29-shopping-list-shopping-list-screen",
+      "model": "sonnet"
+    }
+  ],
+  "waves": [
+    [
+      "shopping-list-item-editing",
+      "shopping-list-live-file-storage"
+    ],
+    [
+      "shopping-list-clear-and-persist"
+    ],
+    [
+      "shopping-list-screen"
+    ]
+  ]
+}

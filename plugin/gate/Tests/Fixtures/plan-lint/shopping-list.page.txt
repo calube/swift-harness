@@ -1,0 +1,36 @@
+# Shopping list
+
+Spec: ../ship-rehearsal-a.PROMPT.md
+
+## Goal
+A user keeps 1 shopping list under the posts count, and finds it again on the next launch.
+
+## Modules
+| Module | Kind | Owns | Depends on |
+|---|---|---|---|
+| ShoppingListClient | client | `ShoppingItem`, the load and save interface, test value | none |
+| ShoppingListClientLive | client | JSON file storage in Application Support | ShoppingListClient |
+| AppCore | feature | `ShoppingListFeature`, scoped into `AppFeature` | ShoppingListClient |
+| AppUI | feature | `ShoppingListView` under the posts count | AppCore |
+
+## Surface
+- `ShoppingItem`: `id: UUID`, `name`, `quantity`, `isBought`; Codable, Identifiable.
+- `ShoppingListClient`: `load() throws -> [ShoppingItem]`, `save([ShoppingItem]) throws`, `DependencyValues.shoppingListClient`.
+- `ShoppingListClient.live(fileURL:)` and its `liveValue`; the app target links `ShoppingListClientLive`.
+- `ShoppingListFeature.State`: `items`, `newItemName`, `isAddDisabled`, `leftToBuy`, `isClearBoughtDisabled`.
+- `ShoppingListFeature.Action`: `task`, `itemsLoaded`, `newItemNameChanged`, `addButtonTapped`, `quantityChanged(id:quantity:)`, `boughtToggled(id:)`, `clearBoughtButtonTapped`.
+- `AppFeature`: `State.shoppingList`, `Action.shoppingList`, a `Scope`.
+- `ShoppingListView(store:)`, placed in `AppView` under the posts count.
+
+## Slices
+1. Add an item. Test: `addTrimsNameAndInsertsAtTop`: "  Milk  " adds "Milk", quantity 1, at index 0; Add is disabled for "   ". Spec: "Adding "  Milk  " puts an item named "Milk" with quantity 1 at the top of the list, and Add stays disabled while the name is only spaces."
+2. Quantity stepper. Test: `quantityStaysBetweenOneAndNinetyNine`: 5 sets 5; 0 and 100 leave it at 1 and 99. Spec: none
+3. Mark bought. Test: `markingBoughtMovesBelowUnbought`: the item moves below every unbought item and `leftToBuy` drops by 1. Spec: "Marking an item bought moves it below every item not yet bought and lowers the "left to buy" count by 1."
+4. Unmark bought. Test: `unmarkingPutsItemAtBottomOfUnbought`: the item lands after the last unbought item. Spec: none
+5. Clear bought. Test: `clearBoughtRemovesBoughtItems`: bought items go; the button is disabled with none bought. Spec: "Clear bought removes every bought item and is disabled when no item is bought."
+6. Persist. Test: `listSurvivesRelaunch`: changes save through the client; a fresh store's `task` loads them back. Spec: "The list is saved on the device, and the next launch shows the same items, quantities and bought marks."
+7. Live storage. Test: `liveClientRoundTripsFile`: load after save at 1 file URL returns the list; no file loads empty. Spec: none
+8. Screen. Test: `addingItemShowsRow`: adding "Milk" on screen shows a "Milk" row. Tier: T3. Spec: none
+
+## Out of scope
+- More than 1 list, sharing a list, prices, and categories.

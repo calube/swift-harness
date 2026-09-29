@@ -1,0 +1,94 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "swift-dependencies",
+      "requirement" : {
+        "exact" : [
+          "1.17.1"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-dependencies"
+    }
+  ],
+  "manifest_display_name" : "ShoppingListClient",
+  "name" : "ShoppingListClient",
+  "path" : "/REPO/Packages/ShoppingListClient",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "ShoppingListClient",
+      "targets" : [
+        "ShoppingListClient"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "ShoppingListClientLive",
+      "targets" : [
+        "ShoppingListClientLive"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "ShoppingListClientLive",
+      "module_type" : "SwiftTarget",
+      "name" : "ShoppingListClientLive",
+      "path" : "Sources/ShoppingListClientLive",
+      "product_dependencies" : [
+        "Dependencies"
+      ],
+      "product_memberships" : [
+        "ShoppingListClientLive"
+      ],
+      "sources" : [
+        "ShoppingListClientLive.swift"
+      ],
+      "target_dependencies" : [
+        "ShoppingListClient"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "ShoppingListClient",
+      "module_type" : "SwiftTarget",
+      "name" : "ShoppingListClient",
+      "path" : "Sources/ShoppingListClient",
+      "product_dependencies" : [
+        "Dependencies",
+        "DependenciesMacros"
+      ],
+      "product_memberships" : [
+        "ShoppingListClient",
+        "ShoppingListClientLive"
+      ],
+      "sources" : [
+        "ShoppingListClient.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}
