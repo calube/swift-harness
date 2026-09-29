@@ -357,6 +357,88 @@ struct LiveProcessRunnerTests {
     #expect(output.status == .signaled(9))
     #expect(!output.status.isSuccess)
   }
+
+  @Test(
+    "a child given no standard input reads /dev/null and ends cleanly — catches a child left with no stdin at all failing on its first read"
+  )
+  func absentStandardInputIsDevNull() async throws {
+    let output = try await runner.run(
+      ProcessInvocation(executable: "/bin/cat", timeout: .seconds(10)))
+
+    #expect(output.status == .exited(0), "\(output.stderr.text)")
+    #expect(output.stdout.bytes.isEmpty)
+  }
+
+  @Test(
+    "runs leave no descriptor open behind them — catches a leaked stdin file or pipe end exhausting a long gate's descriptor table"
+  )
+  func runsLeaveNoDescriptorsOpen() async throws {
+    let runs = 200
+    let budget = Duration.seconds(60)
+    let deadline = ContinuousClock.now.advanced(by: budget)
+    let before = Self.openDescriptorCount()
+    for finished in 0..<runs {
+      guard ContinuousClock.now < deadline else {
+        Issue.record("only \(finished) of \(runs) runs finished inside \(budget)")
+        return
+      }
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "/bin/cat", standardInput: Data("echo".utf8), timeout: .seconds(10)))
+      #expect(output.stdout.text == "echo")
+    }
+    let after = Self.openDescriptorCount()
+
+    // Parallel tests open and close descriptors too; a leak of even 1 per run clears this margin.
+    #expect(after - before < runs / 2, "\(after - before) more descriptors open after \(runs) runs")
+  }
+
+  @Test(
+    "a run returns once the child exits and its output closes, not after the drain limit — catches the parent holding a pipe's write end so every run waits out the limit"
+  )
+  func runReturnsWhenOutputCloses() async throws {
+    let drainLimit = Duration.seconds(30)
+    let patient = LiveProcessRunner(
+      baseEnvironment: ["PATH": "/usr/bin:/bin"], postExitDrainLimit: drainLimit)
+
+    let output = try await patient.run(
+      ProcessInvocation(executable: "/bin/echo", arguments: ["done"], timeout: .seconds(60)))
+
+    #expect(output.stdout.text == "done\n")
+    #expect(output.elapsed < drainLimit / 2, "the run took \(output.elapsed)")
+  }
+
+  @Test(
+    "standard input is a file already unlinked when the child reads it — catches every run with stdin leaving a temp file behind"
+  )
+  func standardInputFileIsUnlinked() async throws {
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "/usr/bin/stat", arguments: ["-L", "-f", "%l", "/dev/stdin"],
+        standardInput: Data("input".utf8), timeout: .seconds(10)))
+
+    #expect(output.status == .exited(0), "\(output.stderr.text)")
+    #expect(output.stdout.text == "0\n", "stdin's file still has a name")
+  }
+
+  @Test(
+    "output exactly at the cap is whole, not truncated — catches a full capture reported as cut"
+  )
+  func outputAtCapIsNotTruncated() async throws {
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "/usr/bin/printf", arguments: ["12345"], timeout: .seconds(10),
+        maxCapturedBytesPerStream: 5))
+
+    #expect(output.stdout.text == "12345")
+    #expect(!output.stdout.truncated)
+  }
+
+  /// Every open descriptor in this process, counted one slot at a time: `F_GETFD` fails only on
+  /// a slot that isn't open.
+  private static func openDescriptorCount() -> Int {
+    (0..<getdtablesize()).count(where: { fcntl($0, F_GETFD) != -1 })
+  }
 }
 
 /// A clock that runs with the real one until a test moves it forward, so a timeout fires exactly
