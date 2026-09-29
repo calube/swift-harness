@@ -61,6 +61,7 @@ async function coldBuildStarted(run, deadline) {
 async function killedShimTest({ env = {}, deadline = coldBuildDeadline } = {}) {
   const run = start(env)
   let work
+  let failure
   try {
     try {
       work = await coldBuildStarted(run, deadline)
@@ -72,8 +73,11 @@ async function killedShimTest({ env = {}, deadline = coldBuildDeadline } = {}) {
     await run.exited
     const left = await until(() => (survivors(run.child.pid, work).length === 0 ? [] : undefined), reapDeadline)
     assert.ok(left, `processes still running ${reapDeadline / 1000}s after the shim test was killed:\n${describe(survivors(run.child.pid, work))}`)
+  } catch (error) {
+    failure = error
+    throw error
   } finally {
-    reap(run, work)
+    reap(run, work, failure)
   }
 }
 
