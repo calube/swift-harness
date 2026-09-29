@@ -497,3 +497,14 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   orchestrator added this for the headless rehearsals; the design approval page is unchanged.
 - **Gates.** Integration push + prove GREEN (run 20260929T011632Z-0c492c71), 9 of 9 proven at `2e14cb0`. Mutate for
   waves 12-13 runs after the rehearsals.
+
+## Design-free ship rehearsal fix (the surface lands on a fast gate)
+
+- `swiftgate plan surface <slug> <sha> --gate <run id> --session <id> [--json]`: no `--preset` (passing it is a parse
+  error), no `mergeGate` JSON key. The gate run must be GREEN at `fast` or above at `<sha>`; `plan-surface.gate-tier`
+  now means a run below `fast`. Ship's step 4 runs `check --tier fast` after `surface-check`, in the foreground.
+- Why: rehearsal A's push-tier surface gate (run 20260929T013554Z-2de37cc3) was RED on `impact.untested-change` for
+  each new module; see the plan's "Design-free ship rehearsal fix decisions".
+- **Gates.** Push GREEN (run 20260929T015722Z-39f5b8c8), prove 6 of 6 at `0b973e7` (run 20260929T020230Z-4c804c25).
+  Mutate for waves 12-13 GREEN (run 20260929T013754Z-1e91270d). The shim test family still fails under load now and
+  then (`RepositoryScriptTests.shim()` with empty stdout, and the deadline test at load 110): a follow-up.

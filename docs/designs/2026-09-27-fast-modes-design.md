@@ -156,8 +156,9 @@ With `design_tier = "none"`, ship runs:
    `swiftgate spec-page check` judges it, and `swiftgate plan confirm` records its sha. The user confirms it once
    unless the check prints `confirm: skippable`, which it does only when every slice's `Spec:` quote appears in the
    spec file;
-2. the surface commit (§3), written on `surface/<slug>` cut from `main`, with the preset's merge gate run there.
-   `swiftgate plan surface` runs `surface-check`, checks the gate ran GREEN at the surface, fast-forwards `main` to
+2. the surface commit (§3), written on `surface/<slug>` cut from `main`, with a `fast` gate run there, as sprint's
+   surface is gated: a push-tier gate can't pass a surface that adds a module and no test.
+   `swiftgate plan surface` runs `surface-check`, checks the gate ran GREEN at `fast` or above at the surface, fast-forwards `main` to
    it and records it as the plan's `surfaceCommit` (§3.3);
 3. `/swift-harness:plan` decomposing the spec page's slices into ledger tasks. The decomposer reads the surface's
    files, and a task may own the stubs it fills. Write sets are disjoint within a wave, as `plan-schedule` splits
