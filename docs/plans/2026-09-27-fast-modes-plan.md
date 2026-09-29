@@ -392,6 +392,12 @@ follow-ups closed. The tasks below run outside the wave map, 3 at a time, each t
 - Does: `check --tier ready` on `main` at `11fa353` (run `20260929T162648Z-d3c1bfad`) is RED on 5 `reach.no-production-lines` findings: `BuildCheckReturnTests` `requiredStepsMatchTheWorkflow` and `eachContradictionNamesItsRule`, `ReviewSynthRunTests.binaryAlwaysWritesTelemetryFirst`, and `RuleIndexTests` `lookAlikesAreNotIds` and `designFamiliesMatchIndex`. For each, decide from the code whether the test checks code in another target or only a doc (move it, or make it drive real code) or the reach check can't see code it does run (fix the rule with a captured fixture). No `swiftgate:allow`.
 - Tests: each moved or rewritten test still fails when what it checks is hand-broken; unrelated tests stay byte-identical; `check --tier ready` is GREEN on the branch.
 
+### `test-git-helper-runs-git`
+- Deps: none · Gate: push · Model: opus · estLines: 60
+- Writes: `plugin/gate/Tests/SwiftGateAdaptersTests/LiveGitTests.swift` (`TemporaryGitRepository`'s environment and a test of it), `plugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift` only if the root cause is there
+- Does: `SprintBranchesTests.fastForwardOnlyToDescendant` failed in a full push run (run `20260929T181604Z-d4b1a711`) because its git helper's `rev-parse HEAD` ran `swift` ("unable to invoke subcommand: swift-rev-parse"). Find, from the code, every shared mutable state between the helper's `git` and a concurrent test's `swift`, and make it immutable or per-call: no retries, sleeps or raised timeouts. A product fix lands after a test that fails on the race.
+- Tests: at most 3 loaded trials to reproduce; hand-breaking the fix turns the new test red; other tests stay byte-identical.
+
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
 - Writes: `docs/e2e-report.md`
