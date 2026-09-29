@@ -42,7 +42,7 @@ reap() {
 
 deadline_note="$work.deadline"
 cleanup() {
-  local status=$?
+  local status="$exiting_with"
   trap - EXIT
   kill "$watchdog" 2>/dev/null || true
   reap || true
@@ -68,12 +68,15 @@ cleanup() {
 # At the deadline the watchdog's pkill ends the foreground command, so set -e can start cleanup
 # before the watchdog's own TERM lands. Bash 3.2 then runs that TERM inside cleanup: exiting there,
 # or taking the default action once the trap is reset, cuts cleanup short before it reaps or
-# reports the deadline. So a signal that lands once cleanup has begun is ignored.
+# reports the deadline. So a signal that lands once cleanup has begun is ignored. The trap's one
+# first command both marks cleanup begun and keeps the exit status: any command before it would
+# widen the window for that signal, and any command before reading $? resets it to 0, so a failing
+# check would exit 0 with its FAIL line on stderr alone.
 stop() {
-  [ -n "${cleaning:-}" ] && return 0
+  [ -n "${exiting_with:-}" ] && return 0
   exit "$1"
 }
-trap 'cleaning=1; cleanup' EXIT
+trap 'exiting_with=$?; cleanup' EXIT
 trap 'stop 143' TERM
 trap 'stop 130' INT
 trap 'stop 129' HUP
@@ -161,6 +164,15 @@ for i in 1 2 3; do
   hook_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
   hook_out="$(cd "$work/project" && echo '{}' | "$shim" hook stop)" ||
     fail "cold hook $i exited non-zero"
+  # Blocking on the build it starts is what a cold hook must never do, and that build takes most
+  # of a minute even on an idle machine. So the hook passes when it returns while the build still
+  # runs: its lock held and no binary landed. Wall-clock time can't judge this, since machine load
+  # stretches a hook that never waited past any fixed budget.
+  if ls "$cache"/bin/*/swiftgate >/dev/null 2>&1; then
+    fail "cold stop hook $i returned only after the build it started landed its binary: a cold hook blocked on its build"
+  fi
+  ls -d "$cache"/building-* >/dev/null 2>&1 ||
+    fail "cold stop hook $i returned with no build running under $cache: $(cat "$cache"/build-*.log 2>/dev/null)"
   start_out="$(cd "$work/project" && echo '{}' | "$shim" hook session-start)" ||
     fail "cold session-start $i exited non-zero"
   hook_end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
@@ -192,8 +204,6 @@ done
 # check below expects a populated cache.
 wait_for_background_build || fail "background build did not finish"
 hook_ms="$(printf '%s\n' "${cold_samples[@]}" | sort -n | head -1)"
-[ "$hook_ms" -lt 2000 ] ||
-  fail "cold hooks took ${cold_samples[*]}ms, fastest ${hook_ms}ms, budget 2000ms${cold_note}"
 
 out1="$("$shim" --version 2>"$work/err1")"
 [ "$out1" = "0.1.0" ] || fail "first run printed '$out1': $(cat "$cache"/build-*.log)"
