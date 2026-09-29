@@ -478,6 +478,141 @@ function doctorPreflightProblems(text, heading) {
   return problems
 }
 
+// The `## <n>.` sections of a skill whose headings match `heading`, joined, with the line number
+// of each section's first line so invocations keep their place in the whole file.
+function numberedSections(text, heading) {
+  const lines = text.split('\n')
+  const sections = []
+  let current = null
+  for (const [index, row] of lines.entries()) {
+    if (/^## /.test(row)) {
+      current = heading.test(row) ? { firstLine: index + 1, lines: [] } : null
+      if (current) sections.push(current)
+    }
+    if (current) current.lines.push(row)
+  }
+  return sections
+}
+
+// The skill's design-free steps: every numbered section whose heading names the spec page or the
+// surface. Invocations carry their line in the whole file.
+function designFreeInvocations(text) {
+  return numberedSections(text, /^## \d+\. (Spec page|Surface)\b/).flatMap(section =>
+    extractInvocations(section.lines.join('\n')).map(inv => ({ ...inv, line: inv.line + section.firstLine - 1 })))
+}
+
+// The commands a design-free ship records its steps with, in the order a skill first names them.
+const SHIP_SPEC_PAGE_COMMANDS = ['plan claim', 'spec-page check', 'plan confirm', 'surface-check', 'check', 'plan surface']
+
+function shipSpecPageCalls(text) {
+  const calls = []
+  for (const inv of designFreeInvocations(text)) {
+    const path = SHIP_SPEC_PAGE_COMMANDS.find(p => inv.words.slice(0, p.split(' ').length).join(' ') === p)
+    if (path && !inv.words.includes('--help') && !calls.some(call => call.path === path)) calls.push({ path, words: inv.words, line: inv.line })
+  }
+  return calls
+}
+
+/**
+ * Runs `calls` (from `shipSpecPageCalls`) in their order through the real commands in a temp
+ * repository, filling each `<placeholder>` from a fixed map, and returns each step's exit code and
+ * JSON report until the first non-zero exit. The page is a captured spec page whose every slice
+ * quotes its spec; the gate is a GREEN push run recorded at the surface commit.
+ */
+function shipSpecPageWalk(calls) {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'skill-commands-ship-'))
+  const env = {
+    ...process.env, LLVM_PROFILE_FILE: join(dir, 'ship-%p.profraw'),
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+  const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
+  const fixtures = join(root, 'gate/Tests/Fixtures/spec-page')
+  const plans = join(dir, '.git/swift-harness/plans')
+  const page = join(plans, 'demo/spec-page.md')
+  const gateRun = '20260101T000000Z-0000aaaa'
+  let surface = null
+  const values = () => ({
+    '<plan>': 'demo', '<session>': 's1', '<spec-file>': 'spec.md', '<page>': page, '<preset>': 'nodesign',
+    '<merge_gate>': 'push', '<by>': 'spec-quotes', '<surface>': surface, '<run id>': gateRun,
+  })
+  // A placeholder written with a space, such as `<run id>`, splits into 2 words: join them back.
+  const joined = words => words.reduce((out, word) =>
+    out.length && /<[^>]*$/.test(out.at(-1)) ? [...out.slice(0, -1), `${out.at(-1)} ${word}`] : [...out, word], [])
+  const fill = words => joined(words).map(word => word.replace(/<[a-z_ -]+>/g, placeholder => {
+    const value = values()[placeholder]
+    assert.ok(value, `the walk has no value for ${placeholder} in \`${words.join(' ')}\``)
+    return value
+  }))
+  const writePage = () => {
+    if (existsSync(page)) return
+    mkdirSync(dirname(page), { recursive: true })
+    writeFileSync(page, readFileSync(join(fixtures, 'task-status.page.txt')))
+  }
+  const commitSurface = () => {
+    if (surface) return
+    run('git', ['switch', '-q', '-c', 'surface/demo', 'main'])
+    writeFileSync(join(dir, 'Sources/Core/Core.swift'), 'public func step() -> Int { 0 }\n', { flag: 'a' })
+    run('git', ['commit', '-qam', 'surface'])
+    surface = run('git', ['rev-parse', 'HEAD']).trim()
+  }
+  try {
+    mkdirSync(join(dir, 'Sources/Core'), { recursive: true })
+    mkdirSync(join(dir, '.harness/runs'), { recursive: true })
+    writeFileSync(join(dir, '.gitignore'), '.harness/\n')
+    writeFileSync(join(dir, 'Sources/Core/Core.swift'), 'public func base() -> Int { 1 }\n')
+    writeFileSync(join(dir, 'spec.md'), readFileSync(join(fixtures, 'task-status.spec.txt')))
+    writeFileSync(join(dir, '.swiftgate.toml'), [
+      'schema = 1', 'xcode = "26.2"', 'app_scheme = "App"', 'packages = ["Packages/*"]', '',
+      '[simulator]', 'device = "iPhone 17"', 'os = "26.2"', '',
+      '[build.presets.nodesign]', 'design_tier = "none"', 'max_parallel = 3', 'review = "gate"',
+      'task_gate = "fast"', 'merge_gate = "push"', 'worker_model = "tagged"', 'time_budget_min = 0',
+      'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"', '',
+    ].join('\n'))
+    run('git', ['init', '-q', '-b', 'main'])
+    run('git', ['add', '-A'])
+    run('git', ['commit', '-qm', 'init'])
+    const steps = []
+    for (const { path, words } of calls) {
+      if (path === 'spec-page check' || path === 'plan confirm') writePage()
+      if (['surface-check', 'check', 'plan surface'].includes(path)) commitSurface()
+      if (path === 'check') {
+        const tier = words[words.indexOf('--tier') + 1]
+        assert.equal(tier, '<merge_gate>', `the surface gate runs at ${tier}, not the preset's <merge_gate>`)
+        writeFileSync(join(dir, '.harness/runs/history.jsonl'), gateRecord(gateRun, 'push', surface), { flag: 'a' })
+        steps.push({ path, code: 0, report: null })
+        continue
+      }
+      const args = fill(words)
+      if (!args.includes('--json')) args.push('--json')
+      let step
+      try {
+        step = { path, code: 0, report: JSON.parse(run(binary, args)) }
+      } catch (error) {
+        step = { path, code: error.status, report: JSON.parse(error.stdout) }
+      }
+      steps.push(step)
+      if (step.code !== 0) break
+    }
+    const planFile = existsSync(join(plans, 'demo/plan.json')) ? JSON.parse(readFileSync(join(plans, 'demo/plan.json'), 'utf8')) : null
+    return { steps, planFile, surface, main: run('git', ['rev-parse', 'main']).trim() }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+// The words of `text` a generic skill must never carry: every preset name the template defines
+// except the `default` fallback, and the title of every captured spec page.
+function nonGenericWords() {
+  const template = readFileSync(join(root, 'templates/swiftgate.toml'), 'utf8')
+  const presets = [...template.matchAll(/^\[build\.presets\.([a-z0-9-]+)\]/gm)].map(m => m[1]).filter(name => name !== 'default')
+  const fixtures = join(root, 'gate/Tests/Fixtures/spec-page')
+  const titles = readdirSync(fixtures).filter(name => name.endsWith('.page.txt'))
+    .map(name => /^# (.+)$/m.exec(readFileSync(join(fixtures, name), 'utf8'))[1])
+  return [...presets, ...titles]
+}
+
 const tests = {
   'ship, build and sprint run doctor with the session id at their preflight and stop on doctor.plugin-changed — catches a session running stale prompts past its preflight'() {
     for (const [skill, heading] of [['ship', '## 1. Preflight'], ['sprint', '## 1. Preflight'], ['build', '## 1. Start']]) {
@@ -849,6 +984,107 @@ const tests = {
       ['evidence capture', ['--design']],
       ['check', ['--tier']],
     ])
+  },
+
+  'the ship skill\'s design-free steps run the spec page and surface commands in an order the real commands accept — catches a step dropped, reordered or written with a flag its command refuses'() {
+    const text = readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8')
+    const { problems } = scanSkills(join(root, 'skills/ship'), help, root)
+    assert.deepEqual(problems, [])
+    const calls = shipSpecPageCalls(text)
+    assert.deepEqual(calls.map(call => call.path), SHIP_SPEC_PAGE_COMMANDS)
+    const walk = shipSpecPageWalk(calls)
+    assert.deepEqual(walk.steps.map(step => [step.path, step.code]), calls.map(call => [call.path, 0]),
+      walk.steps.map(step => step.report?.message).filter(Boolean).join('\n'))
+    assert.deepEqual([walk.planFile.surfaceCommit, walk.main, walk.planFile.approval.by], [walk.surface, walk.surface, 'spec-quotes'])
+    // The numbered step that runs `skill`, as [its first line, its body].
+    const stepRunning = (heading, skill) => {
+      const [section] = numberedSections(text, heading)
+      assert.ok(section?.lines.join('\n').includes(skill), `no step runs ${skill}`)
+      return section.firstLine
+    }
+    const planStep = stepRunning(/^## \d+\. Plan\b/, '/swift-harness:plan <plan>')
+    assert.ok(planStep > calls.at(-1).line, 'the plan step does not follow the surface')
+    assert.ok(stepRunning(/^## \d+\. Build\b/, '/swift-harness:build <plan> --preset <preset>') > planStep, 'the build step does not follow the plan')
+    const [design] = numberedSections(text, /^## \d+\. Design\b/)
+    assert.ok(/`none`/.test(design?.lines.join('\n') ?? ''), 'the design step never says a `none` preset skips it')
+  },
+
+  'the real commands refuse the ship skill\'s design-free steps out of order — catches an order check that passes anything'() {
+    const calls = shipSpecPageCalls(readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8'))
+    const move = (path, to) => {
+      const rest = calls.filter(call => call.path !== path)
+      rest.splice(to < 0 ? rest.length : to, 0, calls.find(call => call.path === path))
+      return rest
+    }
+    const unconfirmed = shipSpecPageWalk(move('plan confirm', -1)).steps.at(-1)
+    assert.deepEqual([unconfirmed.path, unconfirmed.code, unconfirmed.report.rule], ['plan surface', 1, 'plan-surface.not-confirmed'])
+    const unclaimed = shipSpecPageWalk(move('plan claim', -1)).steps.at(-1)
+    assert.deepEqual([unclaimed.path, unclaimed.code, unclaimed.report.status], ['plan confirm', 1, 'not-held'])
+    assert.deepEqual(shipSpecPageCalls(['## 3. Spec page', '`"$SG" spec-page check <page> --spec <spec-file>`', '## 4. Plan', '`"$SG" plan claim <plan>`'].join('\n'))
+      .map(call => call.path), ['spec-page check'])
+  },
+
+  'the ship skill asks about the spec page only when spec-page check says required, resumes from plan.json and runs every step its preset runs — catches a confirm asked every time or never, or a resume that restarts the page'() {
+    const text = readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8')
+    const prose = text.replace(/\s+/g, ' ')
+    const [page] = numberedSections(text, /^## \d+\. Spec page\b/)
+    const pageText = (page?.lines ?? []).join(' ').replace(/\s+/g, ' ')
+    assert.match(pageText, /`confirm` is `required`[^.]*AskUserQuestion/, 'the page step never asks only on `confirm: required`')
+    assert.match(pageText, /`skippable`[^.]*`--by spec-quotes`/, 'a skippable page is not confirmed by its spec quotes')
+    assert.match(prose, /Never skip a step the preset runs/)
+    assert.doesNotMatch(prose, /Never skip a step or/)
+    const resume = (text.split('\n## Stop and resume\n')[1] ?? '').split('\n## ')[0].replace(/\s+/g, ' ')
+    for (const [what, pattern] of [
+      ['an unconfirmed page', /no `approval`/], ['a surface not yet recorded', /no `surfaceCommit`/],
+      ['a recorded surface', /`surfaceCommit`[^|]*\|[^|]*\/swift-harness:plan <plan>/],
+    ]) assert.match(resume, pattern, `the resume list never covers ${what}`)
+  },
+
+  'the plan skill plans a confirmed spec page without the design approval or evidence steps and packs its decomposer with --spec-page — catches a spec page plan halted on a missing designSha'() {
+    const text = readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
+    const { problems, resolved } = scanSkills(join(root, 'skills/plan'), help, root)
+    assert.deepEqual(problems, [])
+    const at = text.indexOf('\n### A spec-page plan\n')
+    assert.ok(at >= 0, 'no `### A spec-page plan` section')
+    const section = text.slice(at + 1).split(/\n#{2,3} /)[0]
+    const commands = extractInvocations(section).map(inv => inv.words.slice(0, 2).join(' '))
+    assert.deepEqual(commands.filter(c => /^(design-diff|evidence check)/.test(c)), [])
+    for (const word of ['`approval`', '`surfaceCommit`', 'plan confirm', 'plan surface']) {
+      assert.ok(section.includes(word), `the spec-page section never names ${word}`)
+    }
+    const step3 = (text.split('\n## 3. ')[1] ?? '').split('\n## ')[0].replace(/\s+/g, ' ')
+    assert.match(step3, /spec-page plan skips this step/)
+    const decomposer = extractInvocations(text).filter(inv => inv.fenced && inv.words[0] === 'context-pack' && inv.words.includes('decomposer'))
+    assert.ok(decomposer.some(inv => inv.words.includes('--spec-page') && !inv.words.includes('--design')), 'no decomposer pack reads a spec page')
+    assert.ok(decomposer.some(inv => inv.words.includes('--design') && !inv.words.includes('--spec-page')), 'no decomposer pack reads a design')
+    assert.ok(resolved.some(r => r.path === 'plan set' && r.flags.includes('--resume') && r.flags.includes('--session')), 'a spec-page plan\'s resume note is written by hand')
+    assert.match(text.replace(/\s+/g, ' '), /`plan-lint\.spec-page-moved`[^.]*halt/, 'a moved page goes to the decomposer\'s fix round')
+  },
+
+  'the plan, build and ship skills report the ledger page\'s path and go on when the session has no Artifact tool — catches a headless run halted by a view'() {
+    for (const [skill, slug] of [['plan', 'slug'], ['build', 'slug'], ['ship', 'plan']]) {
+      const prose = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8').replace(/\s+/g, ' ')
+      const fallback = new RegExp(`no Artifact tool, don't publish: report the rendered page's path, \`\\.harness/design-render/<${slug}>-ledger\\.html\`, in its place and go on\\. The page is a view, never a gate\\.`)
+      assert.match(prose, fallback, `the ${skill} skill`)
+    }
+    const report = (readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8').split('\n## Report\n')[1] ?? '').replace(/\s+/g, ' ')
+    assert.match(report, /^ ?End with the Artifact link, or the page's path when this session has no Artifact tool,/)
+  },
+
+  'the ship and plan skills\' design-free text names no preset or captured page — catches a skill tuned to one preset or app'() {
+    const words = nonGenericWords()
+    assert.ok(words.length >= 4 && words.includes('interview'), `the generic check reads only ${words.join(', ')}`)
+    const ship = readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8')
+    const plan = readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
+    const texts = {
+      'ship design-free steps': numberedSections(ship, /^## \d+\. (Spec page|Surface)\b/).map(s => s.lines.join('\n')).join('\n'),
+      'plan spec-page section': (plan.split('\n### A spec-page plan\n')[1] ?? '').split(/\n#{2,3} /)[0],
+    }
+    for (const [name, body] of Object.entries(texts)) {
+      assert.ok(body.length > 200, `no ${name} to check`)
+      const found = words.filter(word => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(body))
+      assert.deepEqual(found, [], `the ${name} name ${found.join(', ')}`)
+    }
   },
 }
 

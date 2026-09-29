@@ -76,12 +76,14 @@ flowchart TD
 1. **Preflight.** `swiftgate doctor`, a clean `main`, and `swiftgate worktree warm-check`, which fails when
    no warm `.build` or DerivedData exists to clone. A cold start costs minutes per worktree (§11).
 2. **Design** runs `/swift-harness:design` at the preset's `design_tier`, with the spec file as the goal. The
-   frame questions are where the user's clarifying questions go.
+   frame questions are where the user's clarifying questions go. At `design_tier = "none"`, a spec page and a
+   surface commit on `main` replace the design ([fast modes §5](2026-09-27-fast-modes-design.md#5-design-free-ship)).
 3. **Plan** runs `/swift-harness:plan` unchanged, apart from the decomposer's `model` tag (§5.2).
 4. **Build** runs `/swift-harness:build --preset <name>`.
 5. **Report.** It publishes the ledger page, with each task's status and timing, and ends with a summary.
 
-Each step is the existing skill. `ship` passes the preset through and stops at the first halt.
+Each step is the existing skill. `ship` passes the preset through and stops at the first halt. It never skips a
+step the preset runs; only a preset whose `design_tier` is `none` selects the design-free path, and no flag does.
 
 ### 3.2 `/swift-harness:build`: the event loop
 
@@ -159,7 +161,8 @@ task_proof = "final"
 ```
 
 A preset table must set every key, so a typo fails `swiftgate doctor` rather than falling back to a
-default without warning. `max_parallel` here overrides `[plan] max_parallel` for scheduling only; waves in
+default without warning. `design_tier` is a design tier or `none`; a preset at `none` must set
+`on_design_conflict = "block"`, since there is no design to amend. `max_parallel` here overrides `[plan] max_parallel` for scheduling only; waves in
 the ledger stay as planned.
 
 A repository names the preset it prefers with `[harness] profile = "<name>"`.
