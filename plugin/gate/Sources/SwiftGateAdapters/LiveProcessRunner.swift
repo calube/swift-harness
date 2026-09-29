@@ -107,39 +107,19 @@ public struct LiveProcessRunner: ProcessRunner {
   }
 
   /// `xcode-select -p`, read once per process: only `xcode-select -s` changes it, which no run
-  /// does mid-flight. `nil` when nothing is selected.
+  /// does mid-flight. `nil` when nothing is selected. Spawned the same way as every run, so it
+  /// gets `/dev/null` for stdin, no inherited descriptors, and its own process group.
   private static let selectedDeveloperDirectory: String? = {
-    guard let pipe = try? Pipe.make() else { return nil }
-    _ = fcntl(pipe.read, F_SETFL, fcntl(pipe.read, F_GETFL) & ~O_NONBLOCK)
-    var fileActions: posix_spawn_file_actions_t?
-    posix_spawn_file_actions_init(&fileActions)
-    defer { posix_spawn_file_actions_destroy(&fileActions) }
-    posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
-    posix_spawn_file_actions_adddup2(&fileActions, pipe.write, 1)
-    posix_spawn_file_actions_addopen(&fileActions, 2, "/dev/null", O_WRONLY, 0)
     let tool = "/usr/bin/xcode-select"
-    let argv = CStringArray([tool, "-p"])
-    defer { argv.free() }
-    var pid: pid_t = 0
-    let spawned = posix_spawn(&pid, tool, &fileActions, nil, argv.pointers, environ)
-    close(pipe.write)
-    defer { close(pipe.read) }
-    guard spawned == 0 else { return nil }
-    var output = [UInt8]()
-    var buffer = [UInt8](repeating: 0, count: 4096)
-    while true {
-      let count = buffer.withUnsafeMutableBytes { Darwin.read(pipe.read, $0.baseAddress, $0.count) }
-      if count > 0 {
-        output.append(contentsOf: buffer[0..<count])
-      } else if count == 0 || errno != EINTR {
-        break
-      }
-    }
-    var raw: Int32 = 0
-    while waitpid(pid, &raw, 0) == -1, errno == EINTR {}
-    guard raw == 0 else { return nil }
-    let directory = String(decoding: output, as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let request = SpawnRequest(
+      path: tool,
+      invocation: ProcessInvocation(executable: tool, arguments: ["-p"], timeout: .seconds(30)),
+      environment: ProcessInfo.processInfo.environment, terminationGracePeriod: .seconds(2),
+      postExitDrainLimit: .seconds(2), now: { ContinuousClock.now })
+    guard case .success(let output) = request.execute(cancellation: CancellationSignal()),
+      output.status.isSuccess
+    else { return nil }
+    let directory = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
     return directory.isEmpty ? nil : directory
   }()
 
@@ -352,8 +332,8 @@ private struct SpawnRequest: Sendable {
       let written = data.withUnsafeBytes { buffer in
         Darwin.write(fd, buffer.baseAddress?.advanced(by: offset), data.count - offset)
       }
+      // A write to a local regular file is never interrupted by a signal.
       if written < 0 {
-        if errno == EINTR { continue }
         let code = errno
         close(fd)
         throw SystemError(code: code)
@@ -367,7 +347,9 @@ private struct SpawnRequest: Sendable {
   private func spawn(stdin: Int32?, stdout: Int32, stderr: Int32) -> Result<pid_t, SystemError> {
     var fileActions: posix_spawn_file_actions_t?
     posix_spawn_file_actions_init(&fileActions)
-    defer { posix_spawn_file_actions_destroy(&fileActions) }
+    defer {
+      posix_spawn_file_actions_destroy(&fileActions)  // swiftgate:equivalent-mutant — memory only
+    }
     if let stdin {
       posix_spawn_file_actions_adddup2(&fileActions, stdin, 0)
     } else {
@@ -381,7 +363,9 @@ private struct SpawnRequest: Sendable {
 
     var attributes: posix_spawnattr_t?
     posix_spawnattr_init(&attributes)
-    defer { posix_spawnattr_destroy(&attributes) }
+    defer {
+      posix_spawnattr_destroy(&attributes)  // swiftgate:equivalent-mutant — frees memory only
+    }
     // CLOEXEC_DEFAULT keeps unrelated descriptors (other runs' pipes) out of the child.
     let flags =
       POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK
@@ -398,8 +382,8 @@ private struct SpawnRequest: Sendable {
     let argv = CStringArray([path] + invocation.arguments)
     let envp = CStringArray(environment.map { "\($0.key)=\($0.value)" }.sorted())
     defer {
-      argv.free()
-      envp.free()
+      argv.free()  // swiftgate:equivalent-mutant — frees memory only
+      envp.free()  // swiftgate:equivalent-mutant — frees memory only
     }
 
     var pid: pid_t = 0
@@ -407,14 +391,11 @@ private struct SpawnRequest: Sendable {
     return rc == 0 ? .success(pid) : .failure(SystemError(code: rc))
   }
 
+  /// `nil` while the child runs. `WNOHANG` never sleeps, so the wait can't be interrupted by a
+  /// signal and needs no `EINTR` retry.
   private static func reap(_ pid: pid_t) -> ExitStatus? {
     var raw: Int32 = 0
-    while true {
-      let result = waitpid(pid, &raw, WNOHANG)
-      if result == pid { break }
-      if result == -1, errno == EINTR { continue }
-      return nil
-    }
+    guard waitpid(pid, &raw, WNOHANG) == pid else { return nil }
     let signal = raw & 0x7f
     return signal == 0 ? .exited((raw >> 8) & 0xff) : .signaled(signal)
   }
@@ -426,10 +407,11 @@ private struct SpawnRequest: Sendable {
     if first.isOpen { fds.append(pollfd(fd: first.fd, events: Int16(POLLIN), revents: 0)) }
     if second.isOpen { fds.append(pollfd(fd: second.fd, events: Int16(POLLIN), revents: 0)) }
     guard !fds.isEmpty else {
-      usleep(UInt32(timeoutMilliseconds) * 1000)
+      usleep(UInt32(timeoutMilliseconds) * 1000)  // swiftgate:equivalent-mutant — paces only
       return
     }
-    guard poll(&fds, nfds_t(fds.count), timeoutMilliseconds) > 0 else { return }
+    let ready = poll(&fds, nfds_t(fds.count), timeoutMilliseconds)
+    guard ready > 0 else { return }  // swiftgate:equivalent-mutant — timeouts set no revents
     for entry in fds where entry.revents != 0 {
       if entry.fd == first.fd { first.drainAvailable() } else { second.drainAvailable() }
     }
