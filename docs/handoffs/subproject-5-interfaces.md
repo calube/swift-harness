@@ -477,3 +477,23 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
   surface merged onto `main`). The first run went RED once on `RepositoryScriptTests.shim()` with empty stdout; it
   passed alone and on the re-run. Mutate for waves 10-11 (run 20260928T231822Z-da99afb4) judged every sampled mutant;
   2 sort-comparator survivors are in a fix round.
+
+## Fast-modes wave 13 (ship runs without a design)
+
+- **check-return and the plan surface.** For a plan with `surfaceCommit`, `build check-return` compares every
+  `Package.swift` the task branch changed with the plan surface through `SliceManifests` and
+  `ManifestDeclarationsReader`, and fails `build-return.target-outside-surface` (exit 1, 1 finding per manifest) for a
+  non-test target or product the surface lacks, a new package, or an unreadable manifest. The message tells the worker
+  to return a design conflict with section `surface`. It applies to worker and `--fix` returns. A missing plan.json adds
+  a `warnings` line naming its path; an unreadable one exits 2. `TaskReturnEvidence.planSurface: PlanSurfaceManifests?`
+  (`surface`, `manifests: [SliceManifest]`).
+- **Ship at `design_tier = "none"`.** Ship's steps are 1 preflight, 2 claim, 3 spec page, 4 surface, 5 plan, 6 build,
+  7 report. The surface gate is `check --tier <merge_gate>` with no `--base`; `plan surface` runs while the checkout is
+  on `surface/<plan>`. The plan skill skips the design approval and evidence steps for a confirmed spec page and packs
+  the decomposer with `--spec-page`. "Never skip a step the preset runs." The `ship` and `plan` descriptions changed:
+  the evals session should re-run its routing cases for both.
+- **No Artifact tool.** When a session has no Artifact tool (headless), the plan, build and ship skills report
+  `.harness/design-render/<slug>-ledger.html` in place of publishing. The ledger page is a view, never a gate. The
+  orchestrator added this for the headless rehearsals; the design approval page is unchanged.
+- **Gates.** Integration push + prove GREEN (run 20260929T011632Z-0c492c71), 9 of 9 proven at `2e14cb0`. Mutate for
+  waves 12-13 runs after the rehearsals.
