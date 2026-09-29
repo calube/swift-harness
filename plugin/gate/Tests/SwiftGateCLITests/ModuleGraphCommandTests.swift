@@ -99,11 +99,13 @@ struct ModuleGraphCommandTests {
       Issue.record("the fixture's .swiftgate.toml doesn't load")
       return
     }
-    guard
-      case .success(let entries) = await SessionStartHook.moduleMap(
-        root: root, config: config, swiftPM: ScopeResolution.liveSwiftPM(root: root))
-    else {
-      Issue.record("SessionStart built no module map for the fixture")
+    let entries: [SessionContext.ModuleEntry]
+    switch await SessionStartHook.moduleMap(
+      root: root, config: config, swiftPM: ScopeResolution.liveSwiftPM(root: root))
+    {
+    case .success(let built): entries = built
+    case .failure(let reason):
+      Issue.record("SessionStart built no module map for the fixture: \(reason.text)")
       return
     }
     let session = SessionContext.render(

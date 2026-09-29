@@ -380,6 +380,12 @@ follow-ups closed. The tasks below run outside the wave map, 3 at a time, each t
 - Does: every usage line or hint that names `plan confirm`'s approvers lists `user|spec-quotes|delegate`, so a session answering on the user's behalf isn't steered to `--by user`. Historical records (the interfaces notes, this plan's earlier task text) stay as written.
 - Tests: `plan surface`'s not-confirmed refusal names `--by user|spec-quotes|delegate`; the plan skill's spec-page confirm line does too. Revert each wording and confirm its test goes red.
 
+### `module-graph-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 60
+- Writes: `plugin/gate/Tests/SwiftGateCLITests/ModuleGraphCommandTests.swift` (`sameMapAsSessionStart`, its failure message and waits only), the module graph load or SessionStart's module map in `C/` or `A/` only if the root cause is there
+- Does: `ModuleGraphCommandTests.sameMapAsSessionStart` failed in a full push run at load ~50 with "SessionStart built no module map for the fixture" (run `20260929T150637Z-8efbc82e`) and passed filtered. The message drops SwiftPM's reason, so first make it carry the load error, then find the root cause from the code and a loaded trial, and fix the root: no retries, no raised timeout.
+- Tests: passes 3 loaded trials in a row; the failure message names the load error; hand-breaking the module map still fails the test by name.
+
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
 - Writes: `docs/e2e-report.md`
