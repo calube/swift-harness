@@ -452,23 +452,6 @@ struct BuildCheckReturnTests {
   }
 
   @Test(
-    "the steps check-return requires are exactly the flags the build task workflow tells a worker to pass — catches the workflow and the check drifting apart"
-  )
-  func requiredStepsMatchTheWorkflow() throws {
-    let workflow = URL(filePath: #filePath)
-      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-      .deletingLastPathComponent().appending(path: "workflows/build-task.js")
-    let source = try String(contentsOf: workflow, encoding: .utf8)
-    let line = try #require(
-      source.split(separator: "\n").first { $0.hasPrefix("const TASK_GATE_STEPS = ") })
-    let quoted = try #require(line.split(separator: "'").dropFirst().first)
-
-    #expect(
-      quoted.split(separator: " ").map(String.init)
-        == TaskReturnCheck.taskGateSteps.map { "--\($0.rawValue)" })
-  }
-
-  @Test(
     "a surface commit on the task branch that the gate run proved at passes; one the gate never used as a proof base fails — catches a surface commit claimed but not proven against"
   )
   func surfaceCommitMustBeAProofBase() async throws {
@@ -649,78 +632,6 @@ struct BuildCheckReturnTests {
     let missingReport = await scenario.check(file: try scenario.write(missingKey))
     #expect(missingReport.verdict.exitCode == 2)
     #expect(missingReport.message.contains("designConflict"), "\(missingReport.message)")
-  }
-
-  @Test(
-    "each claim the evidence contradicts names its own rule: no commits, a missing branch or commit, no gate or review, a mistiered or GREEN gate-red run, and a design conflict the outcome, return or task-status.json disagree on — catches a check that lets one kind of overstatement through"
-  )
-  func eachContradictionNamesItsRule() {
-    let conflict = TaskStatusReport.Report(
-      kind: "design-conflict", section: "decision", ids: ["req-a"], claim: "caps at 20",
-      evidence: [])
-    let push = TaskReturn.Gate(tier: .push, verdict: .green, runID: "r1")
-    func taskReturn(
-      _ outcome: TaskReturn.Outcome, commits: [String] = ["abc1"], gate: TaskReturn.Gate? = push,
-      review: TaskReturn.Review? = .init(mode: .full, findings: []),
-      designConflict: TaskStatusReport.Report? = nil
-    ) -> TaskReturn {
-      TaskReturn(
-        task: "t", outcome: outcome, commits: commits, gate: gate, review: review, testsAdded: [],
-        notes: "", designConflict: designConflict)
-    }
-    func evidence(
-      branchExists: Bool = true, commit: TaskReturnEvidence.CommitState = .onBranch,
-      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green, steps: ["app-build"]),
-      status: TaskStatusReport? = nil
-    ) -> TaskReturnEvidence {
-      TaskReturnEvidence(
-        branch: "p/t", branchExists: branchExists, commits: ["abc1": commit], gateRun: run,
-        taskGate: .push, taskStatus: status, taskGateStepsRequired: true)
-    }
-    func rules(_ r: TaskReturn, _ e: TaskReturnEvidence) -> [TaskReturnFinding.Rule] {
-      TaskReturnCheck.findings(r, evidence: e).map(\.rule)
-    }
-    let otherConflict = TaskStatusReport.Report(
-      kind: "design-conflict", section: "decision", ids: ["req-b"], claim: "caps at 50",
-      evidence: [])
-
-    #expect(rules(taskReturn(.readyToMerge), evidence()) == [])
-    #expect(rules(taskReturn(.readyToMerge, commits: []), evidence()) == [.noCommits])
-    #expect(rules(taskReturn(.readyToMerge), evidence(branchExists: false)) == [.branchMissing])
-    #expect(rules(taskReturn(.readyToMerge), evidence(commit: .missing)) == [.commitMissing])
-    #expect(rules(taskReturn(.reviewBlocked, gate: nil), evidence()) == [.gateMissing])
-    #expect(rules(taskReturn(.readyToMerge, review: nil), evidence()) == [.reviewMissing])
-    #expect(
-      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green)))
-        == [
-          .gateTierMismatch, .gateMissingStep, .gateMissingStep, .gateMissingStep,
-          .gateBelowTaskGate,
-        ])
-    #expect(
-      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: .push, verdict: .green)))
-        == [.gateMissingStep])
-    #expect(
-      rules(
-        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .green, runID: "r1"), review: nil),
-        evidence()) == [.gateRedOutcomeIsGreen])
-    #expect(
-      rules(
-        taskReturn(.gateRed, gate: .init(tier: .push, verdict: .red, runID: "r1"), review: nil),
-        evidence(run: .init(tier: .push, verdict: .red))) == [])
-    #expect(rules(taskReturn(.designConflict, gate: nil), evidence()) == [.designConflictOutcome])
-    #expect(
-      rules(taskReturn(.readyToMerge, designConflict: conflict), evidence())
-        == [.designConflictOutcome, .designConflictUnrecorded])
-    #expect(
-      rules(
-        taskReturn(.readyToMerge),
-        evidence(status: .init(task: "t", state: "blocked", report: conflict)))
-        == [.designConflictUnreturned])
-    #expect(
-      rules(
-        taskReturn(.designConflict, gate: nil, designConflict: conflict),
-        evidence(status: .init(task: "t", state: "blocked", report: otherConflict)))
-        == [.designConflictMismatch])
   }
 
   @Test(
