@@ -7,7 +7,7 @@ import SwiftGateDomain
 enum PlanConfirmRule: String, Sendable, Equatable, CaseIterable {
   /// `spec-page check` found a major problem with the page.
   case pageRed = "plan-confirm.page-red"
-  /// `--by spec-quotes` on a page the check says the user must confirm.
+  /// `--by spec-quotes` on a page the check says the user, or a delegate, must confirm.
   case needsUser = "plan-confirm.needs-user"
 }
 
@@ -167,7 +167,8 @@ enum PlanConfirmRun {
         slug, .needsUser, approver, check, pageSha,
         "spec-page check says confirm: required for \(pagePath): a slice says Spec: none or "
           + "quotes a line the spec file doesn't hold. Show the page to the user and record "
-          + "their confirm with --by user.")
+          + "their confirm with --by user, or --by delegate when a session answers on the "
+          + "user's behalf under their delegation.")
     }
 
     let updated = PlanFile(
@@ -241,8 +242,9 @@ struct PlanConfirmCommand: AsyncParsableCommand {
     discussion:
       "Runs spec-page check on the plan's spec-page.md against --spec, then records "
       + "{pageSha, by, at} as plan.json's approval and sets the plan's index entry to approved. "
-      + "--by spec-quotes is refused (plan-confirm.needs-user) unless the check prints confirm: "
-      + "skippable; a RED page is refused under either --by (plan-confirm.page-red). Exits 0 "
+      + "--by delegate records a confirm a session gives on the user's behalf and is accepted "
+      + "wherever --by user is. --by spec-quotes is refused (plan-confirm.needs-user) unless the check prints confirm: "
+      + "skippable; a RED page is refused under every --by (plan-confirm.page-red). Exits 0 "
       + "when recorded, 1 when refused or this session doesn't hold the plan's lock, and 2 for "
       + "a missing or invalid flag, a design plan, or a page, spec file or plan.json that can't "
       + "be read.")
@@ -253,7 +255,9 @@ struct PlanConfirmCommand: AsyncParsableCommand {
   @Option(
     help: ArgumentHelp(
       "Who confirms the page.",
-      discussion: "user, or spec-quotes when every slice quotes the spec file."))
+      discussion:
+        "user; delegate for a session answering on the user's behalf under their "
+        + "delegation; or spec-quotes when every slice quotes the spec file."))
   var by: String
 
   @Option(help: "The spec file the page quotes.")

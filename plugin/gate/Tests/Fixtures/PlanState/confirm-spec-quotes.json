@@ -1,0 +1,15 @@
+{
+  "approval" : {
+    "at" : "2026-09-29T14:41:10Z",
+    "by" : "spec-quotes",
+    "pageSha" : "dbdc3a9cc390c6760e52ddfeeb8750d7fea2d1b3c9a595ab58b9e44db775aa5a"
+  },
+  "resume" : "framing",
+  "schemaVersion" : 1,
+  "slug" : "2026-09-29-task-status",
+  "source" : "specPage",
+  "specPage" : {
+    "pageSha" : "dbdc3a9cc390c6760e52ddfeeb8750d7fea2d1b3c9a595ab58b9e44db775aa5a",
+    "path" : "spec-page.md"
+  }
+}

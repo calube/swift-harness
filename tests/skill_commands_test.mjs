@@ -1361,6 +1361,13 @@ const tests = {
     ]) assert.match(resume, pattern, `the resume list never covers ${what}`)
   },
 
+  'the ship skill records a confirm a delegated session gives as --by delegate, never as the user — catches a delegate recorded on disk as the user answering'() {
+    const text = readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8')
+    const [page] = numberedSections(text, /^## \d+\. Spec page\b/)
+    const pageText = (page?.lines ?? []).join(' ').replace(/\s+/g, ' ')
+    assert.match(pageText, /session the user delegated to[^.]*not from the user[^.]*`<by>` is `delegate`/, 'the page step never records a delegated answer as `delegate`')
+  },
+
   'the plan skill plans a confirmed spec page without the design approval or evidence steps and packs its decomposer with --spec-page — catches a spec page plan halted on a missing designSha'() {
     const text = readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
     const { problems, resolved } = scanSkills(join(root, 'skills/plan'), help, root)

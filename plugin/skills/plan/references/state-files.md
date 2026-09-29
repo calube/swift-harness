@@ -44,8 +44,9 @@ seeds it; `--spec-page` never goes with `--design` or `--tier`.
 
 - The page is `<plans>/<slug>/spec-page.md`, and `path` is always `spec-page.md`. Only the plan's
   lock holder writes it.
-- `pageSha` and `approval` are left out until the page is hashed and confirmed. `by` is `user` or
-  `spec-quotes`.
+- `pageSha` and `approval` are left out until the page is hashed and confirmed. `by` is `user`,
+  `spec-quotes`, or `delegate` for a session that confirmed on the user's behalf under their
+  delegation.
 - A design plan has no `source` key (or `"source": "design"`). A spec-page plan carries none of
   `design`, `designSha`, `clarifyChain` and `tier`, and a design plan carries no `specPage`; either
   mix fails decoding.

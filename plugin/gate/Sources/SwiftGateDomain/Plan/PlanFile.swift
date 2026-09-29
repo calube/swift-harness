@@ -44,6 +44,9 @@ public struct PlanFile: Sendable, Equatable {
     case user
     /// Every slice quotes the spec verbatim, so the check let the confirm skip the user.
     case specQuotes = "spec-quotes"
+    /// A session answered on the user's behalf under their delegation. It stands in for the user
+    /// wherever a confirm is required, and says so on disk rather than claiming the user answered.
+    case delegate
   }
 
   /// A spec page's confirmation, bound to the bytes it confirmed.
