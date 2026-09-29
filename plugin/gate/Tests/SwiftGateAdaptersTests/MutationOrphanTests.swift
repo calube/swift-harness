@@ -82,17 +82,38 @@ struct MutationOrphanTests {
     /// returns the `ps` line of each one still there once `deadline` has passed. The runner
     /// returns as soon as it has sent SIGKILL, and on a loaded machine the kernel can list a killed
     /// `xctest` as running, reparented to init, for a moment after that (about 0.2 s at load 120),
-    /// so a single look races the kill. An orphan nothing signalled spins for `hangSeconds`, long
-    /// past the deadline, so it still fails.
-    func survivors(reapedWithin deadline: Duration) async throws -> [String] {
+    /// so a single look races the kill. The wait is on each survivor's own exit, through kqueue.
+    /// An orphan nothing signalled spins for `hangSeconds`, long past the deadline, so it still
+    /// fails.
+    func survivors(reapedWithin deadline: Duration) throws -> [String] {
+      let queue = kqueue()
+      guard queue >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+      defer { close(queue) }
+      var watched = 0
+      for pid in try survivors() {
+        var change = kevent(
+          ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
+          fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
+        // ESRCH: it exited between the listing and the registration.
+        if kevent(queue, &change, 1, nil, 0, nil) == 0 { watched += 1 }
+      }
       let clock = ContinuousClock()
       let end = clock.now.advanced(by: deadline)
-      var remaining = try survivorLines()
-      while !remaining.isEmpty, clock.now < end {
-        try await Task.sleep(for: .milliseconds(100))
-        remaining = try survivorLines()
+      while watched > 0 {
+        let left = clock.now.duration(to: end)
+        guard left > .zero else { break }
+        var timeout = timespec(
+          tv_sec: Int(left.components.seconds),
+          tv_nsec: Int(left.components.attoseconds / 1_000_000_000))
+        var event = kevent()
+        let received = kevent(queue, nil, 0, &event, 1, &timeout)
+        if received > 0 {
+          watched -= 1
+        } else if received < 0, errno != EINTR {
+          throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
       }
-      return remaining.map(String.init)
+      return try survivorLines().map(String.init)
     }
 
     /// Every process whose command line names this package's temp path, by pid.
@@ -158,7 +179,7 @@ struct MutationOrphanTests {
       return
     }
 
-    let survivors = try await package.survivors(reapedWithin: Self.reapDeadline)
+    let survivors = try package.survivors(reapedWithin: Self.reapDeadline)
     #expect(
       survivors.isEmpty,
       """
