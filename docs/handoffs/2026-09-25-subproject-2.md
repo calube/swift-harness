@@ -1,6 +1,8 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
+LATEST (2026-09-29, context clear): read the "Status at the context clear" section at the top of
+docs/handoffs/2026-09-28-day-queue.md first; it supersedes the summary below for what's in flight and what's next.
 SUMMARY (2026-09-28 morning, for the next orchestrator session). Context was cleared on purpose. The user wants every
 remaining item done TODAY: read docs/handoffs/2026-09-28-day-queue.md next; it is the ordered queue, marks every step
 that needs the user, and lists what was in flight at the clear.

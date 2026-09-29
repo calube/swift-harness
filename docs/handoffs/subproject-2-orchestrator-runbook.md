@@ -340,3 +340,29 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **A prompt edit needs its calibration in the same task.** A worker editing a calibrated agent prompt must run
   `swiftgate calibrate design` (or `build`) under the build lock and commit the record, so allow that one `claude`
   use in its brief.
+
+## Lessons from the design-free ship rehearsals and the stability round (2026-09-29)
+
+- **Rehearse before calling a mode done.** Five headless attempts of `/swift-harness:ship` on 1 practice spec found 5
+  harness gaps that every unit gate had passed: the surface's gate tier, the build's gate base, the dependency accessor
+  stub, new API without a stub under `task_proof = "final"`, and test targets for new modules. Each stop was the
+  session refusing to work around a gate, which is the harness working.
+- **Restart a rehearsal from a fresh clone.** No `swiftgate` command deletes a plan. Move the attempt's repo aside as
+  evidence, `git worktree move` its task worktrees aside from the moved repo (their paths collide with the next
+  attempt's), clone the bare origin, copy the git hooks, and warm it again.
+- **A headless session can't publish or ask.** It ends its turn with the question; resume it with
+  `claude -p --resume <session id>` and the answer, labelled orchestrator-answered. Keep each stop's stream-json file:
+  its `result` line is the stop's report, cost and duration.
+- **An `mkdir` lock isn't fair.** Pollers race, and a waiting integration gate starved for an hour behind a worker
+  that held the lock through long trials. The build lock is now a timestamped ticket queue served in order.
+- **A watchdog that only speaks under memory pressure hides starvation.** Also watch lock-queue age, and give the user
+  a checked status table every 30 minutes whether or not anything finished.
+- **Monitor scripts run under zsh.** A glob matching nothing aborts the script (`no matches found`); use `find`.
+- **Shell aliases stall sessions.** This machine's `rm` and `mv` prompt before acting; a background command waiting on
+  that prompt looks like a hang. Use `/bin/rm -f`, `/bin/mv -f`.
+- **An EXIT trap must read `$?` first.** `trap 'cleaning=1; cleanup' EXIT` makes `cleanup` see the assignment's 0,
+  so `tests/shim_test.sh` exited 0 on every failure for a day and the Swift test only saw empty stdout.
+- **Kill-then-check races the kernel.** After SIGKILL the process can still be in `ps` for about 0.2 s under load;
+  wait for its exit with kqueue `EVFILT_PROC`/`NOTE_EXIT` under a named deadline, not a sleep.
+- **Cap load reproduction.** The flaky tests are the harness's own, not a consumer's, so 3 loaded trials to see the
+  failure and 3 to confirm the fix is enough (the user's call).
