@@ -207,6 +207,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case surfaceCommitNotProofBase = "build-return.surface-commit-not-proof-base"
     case outsideWriteSetUnexplained = "build-return.outside-write-set-unexplained"
     case gateMissingStep = "build-return.gate-missing-step"
+    case targetOutsideSurface = "build-return.target-outside-surface"
   }
 
   public let rule: Rule
@@ -291,13 +292,16 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   /// A worker's green gate must run every one of ``TaskReturnCheck/taskGateSteps``, under either
   /// `task_proof`; a fixer's merge gate need not.
   public let taskGateStepsRequired: Bool
+  /// The manifests the task branch changed, read at the plan's surface commit and at the branch
+  /// tip. `nil` when the plan has no surface commit.
+  public let planSurface: PlanSurfaceManifests?
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
-    taskGateStepsRequired: Bool
+    taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -311,6 +315,21 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.reviewRequired = reviewRequired
     self.surfaceCommit = surfaceCommit
     self.taskGateStepsRequired = taskGateStepsRequired
+    self.planSurface = planSurface
+  }
+}
+
+/// Every `Package.swift` a task branch changed, as the plan's surface commit and the branch tip
+/// each hold it.
+public struct PlanSurfaceManifests: Sendable, Equatable {
+  /// The plan's surface commit.
+  public let surface: String
+  /// `atSurface` is the manifest at ``surface``; `atHead` is the manifest at the branch tip.
+  public let manifests: [SliceManifest]
+
+  public init(surface: String, manifests: [SliceManifest]) {
+    self.surface = surface
+    self.manifests = manifests
   }
 }
 
