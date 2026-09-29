@@ -13,6 +13,8 @@ Every step that matters is a `swiftgate sprint` command that checks the step and
 commands, not this skill, decide what comes next.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the main checkout's toplevel.
+To delete or move a file, run `command rm -f` or `command mv -f`: a user's alias for either
+may ask for an answer, and a headless session can't give one.
 
 ## Names
 
