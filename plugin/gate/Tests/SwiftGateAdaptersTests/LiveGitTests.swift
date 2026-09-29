@@ -7,8 +7,35 @@ import Testing
 
 /// A real git repository in a temporary directory, isolated from the user's and system git config.
 struct TemporaryGitRepository {
+  /// `/usr/bin/git` is an xcrun shim, byte-identical to `/usr/bin/swift`: it picks the tool to
+  /// launch from a lookup cache in the user's temp dir that every concurrent `git`, `swift` and
+  /// `xcrun` launch on the machine reads and rewrites, and under parallel tests that lookup has
+  /// launched `swift` for `git`. The selected developer dir's own `usr/bin` holds the real git, so
+  /// putting it first skips the shim.
+  static let developerTools: String? = {
+    if let directory = ProcessInfo.processInfo.environment["DEVELOPER_DIR"] {
+      return directory + "/usr/bin"
+    }
+    let process = Process()
+    let stdout = Pipe()
+    process.executableURL = URL(filePath: "/usr/bin/xcode-select")
+    process.arguments = ["-p"]
+    process.standardOutput = stdout
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else { return nil }
+    let data = stdout.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else { return nil }
+    let directory = String(decoding: data, as: UTF8.self)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return directory.isEmpty ? nil : directory + "/usr/bin"
+  }()
+
   static let environment: [String: String] = [
-    "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+    "PATH":
+      ([developerTools].compactMap { $0 } + [
+        "/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin",
+      ]).joined(separator: ":"),
     "HOME": FileManager.default.temporaryDirectory.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -65,6 +92,26 @@ struct TemporaryGitRepository {
 struct TestGitFailure: Error {
   let arguments: [String]
   let stderr: String
+}
+
+@Suite("TemporaryGitRepository")
+struct TemporaryGitRepositoryTests {
+  @Test(
+    "the repository's git runs without an xcrun tool lookup — catches a concurrent test's swift launch turning the helper's git into swift"
+  )
+  func gitSkipsTheXcrunShim() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    // The shim prints its lookup under `xcrun_verbose`; git itself ignores the variable.
+    let output = try await repo.runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["--version"], environmentOverlay: ["xcrun_verbose": "1"],
+        workingDirectory: repo.root.path, timeout: .seconds(30)))
+
+    #expect(output.status.isSuccess)
+    #expect(output.stdout.text.hasPrefix("git version"))
+    #expect(!output.stderr.text.contains("xcrun_db"), "\(output.stderr.text)")
+  }
 }
 
 @Suite("LiveGit")
