@@ -386,6 +386,12 @@ follow-ups closed. The tasks below run outside the wave map, 3 at a time, each t
 - Does: `ModuleGraphCommandTests.sameMapAsSessionStart` failed in a full push run at load ~50 with "SessionStart built no module map for the fixture" (run `20260929T150637Z-8efbc82e`) and passed filtered. The message drops SwiftPM's reason, so first make it carry the load error, then find the root cause from the code and a loaded trial, and fix the root: no retries, no raised timeout.
 - Tests: passes 3 loaded trials in a row; the failure message names the load error; hand-breaking the module map still fails the test by name.
 
+### `ready-reach-findings-on-main`
+- Deps: none · Gate: push, then ready · Model: opus · estLines: 120
+- Writes: the flagged tests in `plugin/gate/Tests/SwiftGateCLITests/` (`BuildCheckReturnTests.swift`, `ReviewSynthRunTests.swift`, `RuleIndexTests.swift`), the test target each moves to, `plugin/gate/Package.swift` only if a moved test needs a new test target, the reach check in `D/Testing/ChangedTestRules.swift` or `C/ChangedTestChecks.swift` only if the rule misjudges
+- Does: `check --tier ready` on `main` at `11fa353` (run `20260929T162648Z-d3c1bfad`) is RED on 5 `reach.no-production-lines` findings: `BuildCheckReturnTests` `requiredStepsMatchTheWorkflow` and `eachContradictionNamesItsRule`, `ReviewSynthRunTests.binaryAlwaysWritesTelemetryFirst`, and `RuleIndexTests` `lookAlikesAreNotIds` and `designFamiliesMatchIndex`. For each, decide from the code whether the test checks code in another target or only a doc (move it, or make it drive real code) or the reach check can't see code it does run (fix the rule with a captured fixture). No `swiftgate:allow`.
+- Tests: each moved or rewritten test still fails when what it checks is hand-broken; unrelated tests stay byte-identical; `check --tier ready` is GREEN on the branch.
+
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
 - Writes: `docs/e2e-report.md`

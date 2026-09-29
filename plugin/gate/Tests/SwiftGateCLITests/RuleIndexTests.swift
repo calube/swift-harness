@@ -279,37 +279,6 @@ extension RuleIndexTests {
   }
 
   @Test(
-    "file names, URLs, anchors, test ids, config keys and prose never count as rule ids — catches a look-alike demanded as an index row"
-  )
-  func lookAlikesAreNotIds() {
-    let source = #"""
-      let file = "review-telemetry.json", doc = "standards.md", url = "https://example.com/a.b"
-      let anchor = "standards.md#rule-id-index", test = "RuleIndexTests.sourceIdsAreIndexed"
-      let changed = "\(target).\(function)", key = "budgets.\(name)", git = "commit.gpgsign"
-      let thread = "swiftgate.process", sentence = "denied.", config = "simulator.device"
-      // a comment quoting "plan-lint.commented-out"
-      let real = Finding(ruleID: "plan-lint.dag-cycle")
-      """#
-
-    let scan = RuleIDSourceScan.scan(source: source)
-
-    #expect(scan == RuleIDSourceScan(ids: ["plan-lint.dag-cycle"], families: []))
-  }
-
-  @Test(
-    "every design-lint rule and design-diff problem has an index row, and each family's rows name only its members — catches a design rule shipped or removed without the index"
-  )
-  func designFamiliesMatchIndex() throws {
-    let documented = Self.documented(in: try Self.standardsText())
-    let lint = Set(DesignLintRule.allCases.map(\.rawValue))
-    let diff = Set(
-      DesignDiffReport.BrokenLink.Problem.allCases.map { "design-diff.\($0.rawValue)" })
-
-    #expect(lint == documented.filter { $0.hasPrefix("design-lint.") })
-    #expect(diff == documented.filter { $0.hasPrefix("design-diff.") })
-  }
-
-  @Test(
     "removing one design-lint row from the index leaves its ids registered but undocumented — catches an index check that ignores the design-lint family"
   )
   func removedDesignLintRowFails() throws {

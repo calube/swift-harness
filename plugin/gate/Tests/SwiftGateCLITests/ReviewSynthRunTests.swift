@@ -218,16 +218,19 @@ struct ReviewSynthRunTests {
   }
 
   /// Runs the built `swiftgate review-synth` on `run`'s focus files from `run.root`, as the
-  /// review skill does.
+  /// review skill does. Under `swift test --enable-code-coverage` the binary writes its profile
+  /// where SwiftPM collects this process's, so per-test reach counts the command lines it runs;
+  /// without coverage its profile lands in `run.root`, never in this checkout.
   static func synthWithBinary(_ run: Run) async throws -> ProcessOutput {
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let profile =
+      ProcessInfo.processInfo.environment["LLVM_PROFILE_FILE"]
+      ?? run.root.appending(path: "swiftgate-%p.profraw").path
     return try await LiveProcessRunner().run(
       ProcessInvocation(
         executable: binary,
         arguments: ["review-synth", "--run-directory", run.directory.path] + run.files.map(\.path),
-        environmentOverlay: [
-          "LLVM_PROFILE_FILE": run.root.appending(path: "swiftgate-%p.profraw").path
-        ],
+        environmentOverlay: ["LLVM_PROFILE_FILE": profile],
         workingDirectory: run.root.path, timeout: .seconds(120)))
   }
 

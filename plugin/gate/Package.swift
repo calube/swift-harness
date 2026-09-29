@@ -46,6 +46,7 @@ let package = Package(
       name: "SwiftGateRulesTests",
       dependencies: ["SwiftGateDomain", "SwiftGateRules"]
     ),
+    .testTarget(name: "SwiftGateTestSupportTests", dependencies: ["SwiftGateTestSupport"]),
     .testTarget(
       name: "SwiftGateCLITests",
       dependencies: ["SwiftGateCLI", "SwiftGateAdapters", "SwiftGateTestSupport"]
