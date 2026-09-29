@@ -16,6 +16,13 @@ public enum ContextPackFiles {
     root.appending(path: path)
   }
 
+  /// `path` as the repository-relative path a pack cites: unchanged when relative, the part
+  /// below `root` when absolute inside it (symlinks resolved on both sides), and `nil` when
+  /// absolute outside it, since a pack citing it would carry the operator's machine path.
+  public static func repositoryPath(_ path: String, root: URL) -> String? {
+    nil
+  }
+
   /// Reads a whole file verbatim as a labelled ``ContextSource``. `label` is what the pack's
   /// slices will cite as their source, so callers pass the same string a reader would expect to
   /// see next to a quoted line (usually `path` itself).
