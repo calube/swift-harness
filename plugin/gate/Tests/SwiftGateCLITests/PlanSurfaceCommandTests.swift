@@ -16,7 +16,6 @@ private struct SurfaceRepo {
   static let branch = "surface/task-status"
   static let clean = "func feature() -> Int {\n  0\n}\n"
   static let behaviour = "func feature() -> Int {\n  40 + 2\n}\n"
-  static let preset = "fast"
 
   let root: URL
   let runner = LiveProcessRunner(baseEnvironment: [
@@ -43,19 +42,11 @@ private struct SurfaceRepo {
 
   var liveGit: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 
-  static func preset(mergeGate: CheckTier) -> BuildPreset {
-    BuildPreset(
-      designTier: .none, maxParallel: 2, review: .gate, taskGate: .tier(.push),
-      mergeGate: mergeGate, workerModel: .opus, timeBudgetMin: 0, stopStartsBeforeMin: 0,
-      onDesignConflict: .block)
-  }
-
-  func context(mergeGate: CheckTier = .push) -> PlanSurfaceContext {
+  func context() -> PlanSurfaceContext {
     PlanSurfaceContext(
       root: root, git: liveGit,
       branches: LiveSprintBranches(runner: runner, repositoryRoot: root.path),
-      surfaceReader: LiveSurfaceCommitReader(runner: runner, repositoryRoot: root.path),
-      presets: [Self.preset: Self.preset(mergeGate: mergeGate)])
+      surfaceReader: LiveSurfaceCommitReader(runner: runner, repositoryRoot: root.path))
   }
 
   func layout() async throws -> PlanStateLayout {
@@ -135,13 +126,11 @@ private struct SurfaceRepo {
     return try #require(captured)
   }
 
-  func run(
-    _ commit: String, gate: String, session: String? = Self.session, preset: String = Self.preset,
-    mergeGate: CheckTier = .push
-  ) async -> PlanSurfaceReport {
+  func run(_ commit: String, gate: String, session: String? = Self.session) async
+    -> PlanSurfaceReport
+  {
     await PlanSurfaceRun.run(
-      slug: Self.slug, commit: commit, gate: gate, session: session, preset: preset,
-      context: context(mergeGate: mergeGate))
+      slug: Self.slug, commit: commit, gate: gate, session: session, context: context())
   }
 
   /// `main`'s sha and plan.json's bytes, to show a refusal moved and wrote nothing.
@@ -244,13 +233,46 @@ struct PlanSurfaceCommandTests {
   }
 
   @Test(
-    "a gate below the preset's merge_gate is refused as plan-surface.gate-tier, and one at or above it passes — catches a fast gate standing in for the merge gate"
+    "a GREEN fast run at the surface is accepted and moves main, as push and ready runs are — catches the push-only rule that refused every surface adding a module"
   )
-  func gateTierRefused() async throws {
-    for (command, mergeGate, refused) in [
-      ("check fast", CheckTier.push, true), ("check push", .ready, true),
-      ("check ready", .push, false),
-    ] {
+  func fastGateAccepted() async throws {
+    for command in ["check fast", "check push", "check ready"] {
+      let repo = try await SurfaceRepo()
+      defer { repo.remove() }
+      try await repo.claimed()
+      let surface = try await repo.surface()
+      let gate = try await repo.gate(command)
+
+      let report = await repo.run(surface, gate: gate)
+
+      #expect(report.status == .recorded, "\(command): \(report.message)")
+      #expect(try await repo.sha("main") == surface, "\(command)")
+      #expect(try await repo.planFile().surfaceCommit == surface, "\(command)")
+    }
+  }
+
+  @Test(
+    "a GREEN fast run at another commit than the surface is refused as plan-surface.gate-stale — catches a fast run on main standing in for the surface's own"
+  )
+  func staleFastGateRefused() async throws {
+    let repo = try await SurfaceRepo()
+    defer { repo.remove() }
+    try await repo.claimed()
+    let onMain = try await repo.gate("check fast")
+    let surface = try await repo.surface()
+    let before = try await repo.state()
+
+    let report = await repo.run(surface, gate: onMain)
+
+    try await expectRefused(report, .gateStale, repo, before: before)
+    #expect(report.message.contains("--tier fast"), "\(report.message)")
+  }
+
+  @Test(
+    "a GREEN run below fast at the surface, such as a T1 test run or coverage, is refused as plan-surface.gate-tier naming fast — catches a partial run standing in for the surface gate"
+  )
+  func belowFastRefused() async throws {
+    for command in ["test t1", "coverage"] {
       let repo = try await SurfaceRepo()
       defer { repo.remove() }
       try await repo.claimed()
@@ -258,15 +280,10 @@ struct PlanSurfaceCommandTests {
       let gate = try await repo.gate(command)
       let before = try await repo.state()
 
-      let report = await repo.run(surface, gate: gate, mergeGate: mergeGate)
+      let report = await repo.run(surface, gate: gate)
 
-      if refused {
-        try await expectRefused(report, .gateTier, repo, before: before)
-        #expect(report.message.contains(mergeGate.rawValue), "\(report.message)")
-        #expect(report.mergeGate == mergeGate)
-      } else {
-        #expect(report.status == .recorded, "\(report.message)")
-      }
+      try await expectRefused(report, .gateTier, repo, before: before)
+      #expect(report.message.contains("`fast`"), "\(command): \(report.message)")
     }
   }
 
@@ -385,7 +402,7 @@ struct PlanSurfaceCommandTests {
   }
 
   @Test(
-    "a session without the lock is not-held and exit 1; an unknown preset, a design plan, an unknown commit or an unreadable plan.json exits 2 — each writing nothing"
+    "a session without the lock is not-held and exit 1; a design plan, an unknown commit or an unreadable plan.json exits 2 — each writing nothing"
   )
   func notHeldAndBlocked() async throws {
     let repo = try await SurfaceRepo()
@@ -399,11 +416,6 @@ struct PlanSurfaceCommandTests {
     #expect(other.status == .notHeld, "\(other.message)")
     #expect(other.verdict.exitCode == 1)
     #expect(other.holder == SurfaceRepo.session)
-
-    let preset = await repo.run(surface, gate: gate, preset: "nope")
-    #expect(preset.status == .blocked, "\(preset.message)")
-    #expect(preset.verdict.exitCode == 2)
-    #expect(preset.message.contains(SurfaceRepo.preset), "\(preset.message)")
 
     let unknown = await repo.run("0000000000000000000000000000000000000000", gate: gate)
     #expect(unknown.verdict.exitCode == 2, "\(unknown.message)")
@@ -434,7 +446,7 @@ struct PlanSurfaceCommandTests {
     defer { repo.remove() }
     try await repo.claimed()
     let surface = try await repo.surface()
-    let report = await repo.run(surface, gate: try await repo.gate("check fast"))
+    let report = await repo.run(surface, gate: try await repo.gate("test t1"))
 
     let text = PlanSurfaceRun.render(report, format: .json)
     let object = try #require(
@@ -443,14 +455,13 @@ struct PlanSurfaceCommandTests {
       Set(object.keys)
         == [
           "command", "plan", "status", "verdict", "rule", "holder", "surfaceCommit", "gate",
-          "mergeGate", "findings", "message",
+          "findings", "message",
         ])
     #expect(object["command"] as? String == "plan surface")
     #expect(object["status"] as? String == "refused")
     #expect(object["verdict"] as? String == "RED")
     #expect(object["rule"] as? String == "plan-surface.gate-tier")
     #expect(object["surfaceCommit"] as? String == surface)
-    #expect(object["mergeGate"] as? String == "push")
     #expect(object["holder"] is NSNull)
 
     let human = PlanSurfaceRun.render(report, format: .human)
@@ -458,13 +469,19 @@ struct PlanSurfaceCommandTests {
   }
 
   @Test(
-    "plan surface parses its documented arguments and resolves to its own leaf — catches a skill calling an unregistered command"
+    "plan surface parses its documented arguments and resolves to its own leaf, and takes no --preset — catches a skill calling an unregistered command or a flag the gate no longer reads"
   )
   func registered() async throws {
     let parsed = try await SwiftGate.asyncParseAsRoot([
       "plan", "surface", SurfaceRepo.slug, "abc1234", "--gate", "20260928T000000Z-00000000",
-      "--preset", "fast", "--session", "s1", "--json",
+      "--session", "s1", "--json",
     ])
     #expect(type(of: parsed).configuration.commandName == "surface")
+    #expect(throws: (any Error).self) {
+      try SwiftGate.parseAsRoot([
+        "plan", "surface", SurfaceRepo.slug, "abc1234", "--gate", "20260928T000000Z-00000000",
+        "--preset", "fast", "--session", "s1",
+      ])
+    }
   }
 }

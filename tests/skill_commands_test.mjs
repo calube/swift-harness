@@ -517,7 +517,8 @@ function shipSpecPageCalls(text) {
  * Runs `calls` (from `shipSpecPageCalls`) in their order through the real commands in a temp
  * repository, filling each `<placeholder>` from a fixed map, and returns each step's exit code and
  * JSON report until the first non-zero exit. The page is a captured spec page whose every slice
- * quotes its spec; the gate is a GREEN push run recorded at the surface commit.
+ * quotes its spec; the gate is a GREEN run at the tier the skill names, recorded at the surface
+ * commit, so `plan surface` judges that tier. The preset's merge gate is `push`.
  */
 function shipSpecPageWalk(calls) {
   const binary = swiftgateBinary()
@@ -578,10 +579,9 @@ function shipSpecPageWalk(calls) {
       if (path === 'spec-page check' || path === 'plan confirm') writePage()
       if (['surface-check', 'check', 'plan surface'].includes(path)) commitSurface()
       if (path === 'check') {
-        const tier = words[words.indexOf('--tier') + 1]
-        assert.equal(tier, '<merge_gate>', `the surface gate runs at ${tier}, not the preset's <merge_gate>`)
-        writeFileSync(join(dir, '.harness/runs/history.jsonl'), gateRecord(gateRun, 'push', surface), { flag: 'a' })
-        steps.push({ path, code: 0, report: null })
+        const [tier] = fill([words[words.indexOf('--tier') + 1]])
+        writeFileSync(join(dir, '.harness/runs/history.jsonl'), gateRecord(gateRun, tier, surface), { flag: 'a' })
+        steps.push({ path, code: 0, report: null, tier })
         continue
       }
       const args = fill(words)
@@ -996,6 +996,7 @@ const tests = {
     assert.deepEqual(walk.steps.map(step => [step.path, step.code]), calls.map(call => [call.path, 0]),
       walk.steps.map(step => step.report?.message).filter(Boolean).join('\n'))
     assert.deepEqual([walk.planFile.surfaceCommit, walk.main, walk.planFile.approval.by], [walk.surface, walk.surface, 'spec-quotes'])
+    assert.equal(walk.steps.find(step => step.path === 'check').tier, 'fast', 'the surface gate runs at another tier than fast')
     // The numbered step that runs `skill`, as [its first line, its body].
     const stepRunning = (heading, skill) => {
       const [section] = numberedSections(text, heading)

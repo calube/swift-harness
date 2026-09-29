@@ -50,7 +50,7 @@ matches, after the preflight:
 | `plan.json` | Resume at |
 |---|---|
 | no `approval` | step 3, item 2: fix the page, then check and confirm it |
-| `approval`, no `surfaceCommit` | step 4; when `surface/<plan>` already holds the surface commit, item 4 with that sha |
+| `approval`, no `surfaceCommit` | step 4; when `surface/<plan>` already holds the surface commit, item 4 with that sha, then its `fast` gate and `plan surface` |
 | `surfaceCommit` | step 5, `/swift-harness:plan <plan>`, then step 6 |
 
 Never skip a step the preset runs, and never work around a halt by hand.
@@ -139,11 +139,14 @@ Only at `none`. Every task builds on 1 surface commit, recorded on the plan.
 3. Commit it alone, as the branch's only commit. Keep `<surface>`.
 4. `"$SG" surface-check <surface>`. Exit 1: turn each body it names back into a stub,
    `git commit --amend`, and run it again with the new sha.
-5. Run the preset's merge gate at the surface, in the foreground, with its output in a file.
-   Keep its `<run id>`. Not GREEN: fix, amend the commit and run it again.
+5. Once `surface-check` is clean, run the `fast` gate at the surface, in the foreground, with its
+   output in a file. Keep its `<run id>`. Not GREEN: fix, amend the commit, and run `surface-check`
+   and this gate again. The surface lands on `fast`, not the preset's merge gate: a stub has no
+   test, so push-tier impact and coverage can't pass on a new module. The first task merge runs
+   the merge gate on `main`.
 
    ```bash
-   "$SG" check --tier <merge_gate> > "$TMPDIR/ship-surface-gate.txt"; head -1 "$TMPDIR/ship-surface-gate.txt"
+   "$SG" check --tier fast > "$TMPDIR/ship-surface-gate.txt"; head -1 "$TMPDIR/ship-surface-gate.txt"
    ```
 
 6. Land the surface. It fast-forwards `main` to `<surface>` and records it as the plan's
@@ -151,7 +154,7 @@ Only at `none`. Every task builds on 1 surface commit, recorded on the plan.
    `rule: message`; fix what it names and run it again, or stop when it says so. Exit 2: stop.
 
    ```bash
-   "$SG" plan surface <plan> <surface> --gate <run id> --preset <preset> --session <session> --json
+   "$SG" plan surface <plan> <surface> --gate <run id> --session <session> --json
    ```
 
 7. `git switch main`, then `git branch -d surface/<plan>`.

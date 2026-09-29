@@ -18,7 +18,7 @@ enum PlanSurfaceRule: String, Sendable, Equatable, CaseIterable {
   case gateRed = "plan-surface.gate-red"
   /// The gate run ran at another commit than the surface.
   case gateStale = "plan-surface.gate-stale"
-  /// The gate run's tier is below the preset's `merge_gate`.
+  /// The gate run is below the `fast` tier.
   case gateTier = "plan-surface.gate-tier"
   /// A worktree has `main` checked out, whose files a moved ref would leave behind.
   case mainCheckedOut = "plan-surface.main-checked-out"
@@ -45,13 +45,11 @@ struct PlanSurfaceReport: Sendable, Equatable, Encodable {
   /// The surface's full sha, once resolved.
   var surfaceCommit: String?
   var gate: String?
-  /// The preset's `merge_gate`, once the preset is known.
-  var mergeGate: CheckTier?
   var findings: [Finding] = []
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, plan, status, verdict, rule, holder, surfaceCommit, gate, mergeGate, findings
+    case command, plan, status, verdict, rule, holder, surfaceCommit, gate, findings
     case message
   }
 
@@ -66,7 +64,6 @@ struct PlanSurfaceReport: Sendable, Equatable, Encodable {
     try c.encode(holder, forKey: .holder)
     try c.encode(surfaceCommit, forKey: .surfaceCommit)
     try c.encode(gate, forKey: .gate)
-    try c.encode(mergeGate?.rawValue, forKey: .mergeGate)
     try c.encode(findings, forKey: .findings)
     try c.encode(message, forKey: .message)
   }
@@ -79,16 +76,17 @@ struct PlanSurfaceContext: Sendable {
   let git: any Git
   let branches: any SprintBranches
   let surfaceReader: any SurfaceCommitReading
-  /// `.swiftgate.toml`'s `[build.presets]`.
-  var presets: [String: BuildPreset] = [:]
 }
 
 /// The testable core of `plan surface` (fast modes §5.1 step 2, §6): the lock holder of a
 /// confirmed spec-page plan lands its 1 surface on `main` by fast-forward, once `surface-check`
-/// and the preset's merge gate have passed at exactly that commit, and records it in plan.json.
+/// and a `fast` gate have passed at exactly that commit, and records it in plan.json.
 enum PlanSurfaceRun {
   static let command = "plan surface"
   static let mainBranch = "main"
+  /// A surface adds modules with no tests, so push-tier impact and coverage can't pass on it; the
+  /// build's first merge gate judges `main` at the preset's tier.
+  static let gateTier = CheckTier.fast
 
   /// A refusal (exit 1) or a blocked read (exit 2), thrown out of the checks as the report.
   private struct Stop: Error {
@@ -98,19 +96,10 @@ enum PlanSurfaceRun {
   static func run(
     slug: String, commit: String, gate: String, session: String?, context: PlanSurfaceContext
   ) async -> PlanSurfaceReport {
-    await run(
-      slug: slug, commit: commit, gate: gate, session: session, preset: "", context: context)
-  }
-
-  static func run(
-    slug: String, commit: String, gate: String, session: String?, preset: String,
-    context: PlanSurfaceContext
-  ) async -> PlanSurfaceReport {
     var report = PlanSurfaceReport(plan: slug, gate: gate)
     do throws(Stop) {
       try await land(
-        &report, slug: slug, commit: commit, gate: gate, session: session, presetName: preset,
-        context: context)
+        &report, slug: slug, commit: commit, gate: gate, session: session, context: context)
     } catch {
       return error.report
     }
@@ -119,16 +108,8 @@ enum PlanSurfaceRun {
 
   private static func land(
     _ report: inout PlanSurfaceReport, slug: String, commit: String, gate: String,
-    session: String?, presetName: String, context: PlanSurfaceContext
+    session: String?, context: PlanSurfaceContext
   ) async throws(Stop) {
-    guard let preset = context.presets[presetName] else {
-      let known = context.presets.keys.sorted().joined(separator: ", ")
-      throw blocked(
-        report,
-        "preset `\(presetName)` isn't defined in .swiftgate.toml; known presets: "
-          + (known.isEmpty ? "none" : known))
-    }
-    report.mergeGate = preset.mergeGate
     guard let session else {
       throw blocked(report, "--session is required: pass the id from the SessionStart context")
     }
@@ -214,12 +195,12 @@ enum PlanSurfaceRun {
           "the surface \(sha) must sit directly on \(mainBranch)'s HEAD \(main), but its parent is "
             + (parent ?? "none")
             + ". Cut surface/<slug> from \(mainBranch), commit the surface alone, and re-run its "
-            + "merge gate")
+            + "\(gateTier.rawValue) gate")
       }
     }
 
     try await requireNoBehaviour(&report, sha, context)
-    try requireGate(report, gate, at: sha, mergeGate: preset.mergeGate, context)
+    try requireGate(report, gate, at: sha, context)
 
     if !landed {
       let checkedOut = try await workspace(report, "listing worktrees") {
@@ -307,14 +288,14 @@ enum PlanSurfaceRun {
       throw refused(
         report, .behaviour,
         "surface-check found behaviour in \(sha): \(listed.joined(separator: "; ")). Move the "
-          + "behaviour to a task, rewrite the surface commit and re-run its merge gate")
+          + "behaviour to a task, rewrite the surface commit and re-run its "
+          + "\(gateTier.rawValue) gate")
     }
   }
 
-  /// The run is in this checkout's history, GREEN, at `mergeGate` or above, and ran at `sha`.
+  /// The run is in this checkout's history, GREEN, at ``gateTier`` or above, and ran at `sha`.
   private static func requireGate(
-    _ report: PlanSurfaceReport, _ id: String, at sha: String, mergeGate: CheckTier,
-    _ context: PlanSurfaceContext
+    _ report: PlanSurfaceReport, _ id: String, at sha: String, _ context: PlanSurfaceContext
   ) throws(Stop) {
     let runs = RunStore(worktreeRoot: context.root)
     let history: (records: [RunHistoryRecord], invalidLines: Int)
@@ -328,16 +309,16 @@ enum PlanSurfaceRun {
         history.invalidLines > 0 ? " (\(history.invalidLines) unreadable lines skipped)" : ""
       throw refused(
         report, .gateUnknown,
-        "run \(id) isn't in \(runs.historyFile.path)\(skipped); run the merge gate in this "
+        "run \(id) isn't in \(runs.historyFile.path)\(skipped); run the surface gate in this "
           + "checkout and pass the id `swiftgate check` printed")
     }
-    let rerun = "`swiftgate check --tier \(mergeGate.rawValue)` at \(sha)"
+    let rerun = "`swiftgate check --tier \(gateTier.rawValue)` at \(sha)"
     let tier = TaskReturnEvidence.GateRun.tier(ofCommand: record.command)
-    guard let tier, TaskReturnCheck.covers(tier, mergeGate) else {
+    guard let tier, TaskReturnCheck.covers(tier, gateTier) else {
       throw refused(
         report, .gateTier,
-        "run \(id) was `\(record.command ?? "an unnamed command")`, below the preset's merge_gate "
-          + "`\(mergeGate.rawValue)`; run \(rerun) and pass its id")
+        "run \(id) was `\(record.command ?? "an unnamed command")`, below the surface gate's "
+          + "`\(gateTier.rawValue)` tier; run \(rerun) and pass its id")
     }
     guard record.verdict == .green else {
       throw refused(
@@ -413,13 +394,13 @@ struct PlanSurfaceCommand: AsyncParsableCommand {
     abstract: "Land a spec-page plan's surface commit on main and record it, as its lock holder.",
     discussion:
       "The surface's parent must be main's HEAD, surface-check must find no behaviour in it, "
-      + "and --gate must name a GREEN run in this checkout's history at the preset's merge_gate "
-      + "tier or above whose HEAD was the surface. Then main fast-forwards to the surface "
+      + "and --gate must name a GREEN run in this checkout's history at the fast tier or above "
+      + "whose HEAD was the surface. Then main fast-forwards to the surface "
       + "(never a merge or rebase) and plan.json records it as surfaceCommit. A refusal exits 1 "
       + "as plan-surface.<reason> and writes nothing: not-confirmed, not-on-main, behaviour, "
       + "gate-unknown, gate-red, gate-stale, gate-tier, main-checked-out or already-recorded; "
       + "so does a session without the plan's lock. A missing or invalid flag, an unknown "
-      + "preset or commit, a design plan, or state, history or git that can't be read exits 2.")
+      + "commit, a design plan, or state, history or git that can't be read exits 2.")
 
   @Argument(help: "The plan's slug.")
   var slug: String
@@ -427,11 +408,8 @@ struct PlanSurfaceCommand: AsyncParsableCommand {
   @Argument(help: "The surface commit.")
   var commit: String
 
-  @Option(help: "The merge gate run's id, as `check` printed it in this checkout.")
+  @Option(help: "The surface gate run's id, as `check` printed it in this checkout.")
   var gate: String
-
-  @Option(help: "The build preset whose merge_gate the run must reach.")
-  var preset: String
 
   @Option(help: "The session id holding the plan's lock (from the SessionStart context).")
   var session: String?
@@ -441,20 +419,12 @@ struct PlanSurfaceCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
-    let report: PlanSurfaceReport
-    do {
-      let presets = try ConfigLoader().load(repositoryRoot: root)?.buildPresets ?? [:]
-      report = await PlanSurfaceRun.run(
-        slug: slug, commit: commit, gate: gate, session: session, preset: preset,
-        context: PlanSurfaceContext(
-          root: root, git: LiveGit(runner: runner, repositoryRoot: root.path),
-          branches: LiveSprintBranches(runner: runner, repositoryRoot: root.path),
-          surfaceReader: LiveSurfaceCommitReader(runner: runner, repositoryRoot: root.path),
-          presets: presets))
-    } catch {
-      report = PlanSurfaceReport(
-        plan: slug, gate: gate, message: "can't load .swiftgate.toml: \(error)")
-    }
+    let report = await PlanSurfaceRun.run(
+      slug: slug, commit: commit, gate: gate, session: session,
+      context: PlanSurfaceContext(
+        root: root, git: LiveGit(runner: runner, repositoryRoot: root.path),
+        branches: LiveSprintBranches(runner: runner, repositoryRoot: root.path),
+        surfaceReader: LiveSurfaceCommitReader(runner: runner, repositoryRoot: root.path)))
     Console.write(PlanSurfaceRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

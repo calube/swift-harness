@@ -113,7 +113,7 @@ changed after it. Don't write `plan.json` in this step.
    confirms it with `"$SG" plan confirm <slug> --by user|spec-quotes --spec <spec-file> --session <session>`.
 2. `plan.json` has no `surfaceCommit`: halt. The decomposer reads the surface's files, and every
    worker builds on it; `/swift-harness:ship` lands it with
-   `"$SG" plan surface <slug> <surface> --gate <run id> --preset <preset> --session <session>`.
+   `"$SG" plan surface <slug> <surface> --gate <run id> --session <session>`.
 3. Keep `surfaceCommit` as `<surface>`, then go to step 4.
 
 A spec-page plan has no amend, so it never replans: step 4's table applies, with every row but
