@@ -374,6 +374,12 @@ follow-ups closed. The tasks below run outside the wave map, 3 at a time, each t
 - Does: for a plan with a `surfaceCommit`, when the green-main check's gating findings are exactly `coverage.no-t1-tests` for modules the surface commit added (`git diff --name-only <surface>^ <surface>` shows their new `Package.swift` or source directory), the skill takes them as the baseline without asking and says so in its report; any other gating finding still halts and asks. The final `ready` gate gets no baseline.
 - Tests: the skill contract test walks a surface that adds a module with no test target: step 1 records the baseline without a question; a second, unrelated gating finding still halts. Revert and confirm the walk goes red.
 
+### `plan-confirm-hints-name-delegate`
+- Deps: `plan-confirm-records-a-delegate` · Gate: push · Model: opus · estLines: 40
+- Writes: `C/Commands/PlanSurfaceCommand.swift` (the not-confirmed hint), `TC/PlanSurfaceCommandTests.swift` (a new test only), `P/skills/plan/SKILL.md` (the spec-page confirm line), `tests/skill_commands_test.mjs` (a new plan-skill row)
+- Does: every usage line or hint that names `plan confirm`'s approvers lists `user|spec-quotes|delegate`, so a session answering on the user's behalf isn't steered to `--by user`. Historical records (the interfaces notes, this plan's earlier task text) stay as written.
+- Tests: `plan surface`'s not-confirmed refusal names `--by user|spec-quotes|delegate`; the plan skill's spec-page confirm line does too. Revert each wording and confirm its test goes red.
+
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
 - Writes: `docs/e2e-report.md`
