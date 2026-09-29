@@ -83,9 +83,13 @@ Parallel branches that each carry their own surface can't be proven together: at
 branches' tests don't compile. The first speed wave hit this at its merge gate and needed a merge of every surface as
 the base.
 
-The build records the surface commit on the run (`surfaceCommit`, which already exists per task) and passes it to
-every `prove` as `--proof-base`. A worker no longer rewrites finished code into stubs to make a base: trial run 2's
-list worker spent 8 commits doing that.
+A build from a spec page (§5) records its 1 surface once, as `surfaceCommit` in the plan's `plan.json`, not on each
+ledger task, so no copy can disagree. `build proof-bases` lists it first, and every `prove` gets it as `--proof-base`.
+A worker no longer rewrites finished code into stubs to make a base: trial run 2's list worker spent 8 commits doing
+that. A worker whose test needs API the plan surface lacks commits that API alone as a stub that passes
+`surface-check`, and returns it as its task return's `surfaceCommit`. The final gate proves at the plan surface, then
+at each task's stub in merge order. `build check-return` refuses a task that declares a target or product the surface
+lacks.
 
 A sprint slice can find that its test needs an API the surface lacks (orchestrator decision 2026-09-28, approved by
 the user 2026-09-28). The recorded surface stays as it is: the slice commits the missing API alone as an extra stub
@@ -148,17 +152,25 @@ against its own surface.
 
 With `design_tier = "none"`, ship runs:
 
-1. the spec page (§5.2), confirmed once by the user unless every slice maps to an acceptance test the spec lists;
-2. the surface commit and `surface-check` (§3) on `main`;
-3. `/swift-harness:plan` decomposing the spec page's slices into ledger tasks, each with a write set disjoint from
-   the others and `surfaceCommit` set to the 1 surface;
+1. the spec page (§5.2): `swiftgate plan claim <slug> --spec-page` seeds the plan, the main session writes the page,
+   `swiftgate spec-page check` judges it, and `swiftgate plan confirm` records its sha. The user confirms it once
+   unless the check prints `confirm: skippable`, which it does only when every slice's `Spec:` quote appears in the
+   spec file;
+2. the surface commit (§3), written on `surface/<slug>` cut from `main`, with the preset's merge gate run there.
+   `swiftgate plan surface` runs `surface-check`, checks the gate ran GREEN at the surface, fast-forwards `main` to
+   it and records it as the plan's `surfaceCommit` (§3.3);
+3. `/swift-harness:plan` decomposing the spec page's slices into ledger tasks. The decomposer reads the surface's
+   files, and a task may own the stubs it fills. Write sets are disjoint within a wave, as `plan-schedule` splits
+   them; a task may still depend on an earlier one;
 4. `/swift-harness:build` as today, with the preset's gates.
 
 ### 5.2 The spec page
 
-One Markdown file in plan state, at most 400 words: goal, module kinds and their boundaries, the surface (types and
-screens), the slices with 1 acceptance test each, and what's out of scope. It replaces the design doc as the
-plan's source, so `plan-lint`'s coverage rule reads its acceptance tests instead of a design's test plan.
+One Markdown file in plan state, `<plans>/<slug>/spec-page.md`, at most 400 words: goal, module kinds and their
+boundaries, the surface (types and screens), the slices with 1 acceptance test each, and what's out of scope. It
+uses the sprint page's format. It replaces the design doc as the plan's source, so `plan-lint`'s coverage rule reads
+its acceptance tests instead of a design's test plan. Each slice is 1 coverage item, `slice-<n>-<kebab test name>`,
+at T1 unless the slice adds `Tier: T2.` or `Tier: T3.` before its `Spec:`.
 
 ### 5.3 What's lost
 

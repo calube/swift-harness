@@ -1,12 +1,12 @@
 ---
 name: plan
-description: This skill should be used to turn an approved swift-harness design into a build plan, or to replan one after an amend. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD, has the decomposer agent split the design into ledger tasks (after an amend, only the needs-replan tasks and fix tasks for changed ids that done tasks cover, around the kept tasks), runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "replan", "/swift-harness:plan", or after /swift-harness:design reports an approved design or an amend.
+description: This skill should be used to turn an approved swift-harness design, or a confirmed spec page, into a build plan, or to replan one after an amend. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD (a spec page plan instead needs its confirm and its surface commit recorded), has the decomposer agent split the design or the page's slices into ledger tasks (after an amend, only the needs-replan tasks and fix tasks for changed ids that done tasks cover, around the kept tasks), runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "replan", "/swift-harness:plan", or after /swift-harness:design reports an approved design or an amend.
 ---
 
 # Plan
 
-This skill turns an approved design into `plan.json` and `ledger.json` under the git common dir,
-where every worktree of the repository reads them. It decides the order of the steps and asks the
+This skill turns an approved design, or a confirmed spec page, into `plan.json` and `ledger.json`
+under the git common dir, where every worktree of the repository reads them. It decides the order of the steps and asks the
 user. `swiftgate` does every check. The decomposer agent proposes the tasks, and this skill never
 edits a task itself.
 
@@ -49,7 +49,8 @@ session holds the plan, or `claimed` when no one held it and this session now do
   A user who knows that session is gone runs `"$SG" plan release <slug> --force` themselves. Never
   run `--force` for them.
 - Exit 2: a bad slug, no repository, or a plan that doesn't exist yet. A new plan starts in
-  `/swift-harness:design`, which claims it with its design doc. Halt.
+  `/swift-harness:design`, which claims it with its design doc, or in `/swift-harness:ship` at a
+  preset without a design step, which claims it with its spec page. Halt.
 
 The claim is the only thing that lets this session write the plan's state. The edit guard allows
 a write to `<plans>/<slug>/` only from the main session whose id is in that plan's
@@ -57,7 +58,9 @@ a write to `<plans>/<slug>/` only from the main session whose id is in that plan
 
 ## 2. Match the approval to the designSha
 
-Read `<plans>/<slug>/plan.json`. Its `design` names the design doc, `<doc>`.
+Read `<plans>/<slug>/plan.json`. `"source": "specPage"` marks a spec-page plan: follow
+[A spec-page plan](#a-spec-page-plan) instead of the rest of this step and step 3. Otherwise its
+`design` names the design doc, `<doc>`.
 
 Compute the current designSha from the committed doc, and confirm the working tree matches it:
 
@@ -100,7 +103,25 @@ current ledger was planned at, or none on a first plan. A replan (step 4) needs 
 Write `plan.json` (shape in the reference): keep its fields and set `designSha` to `<current>`, and
 `approval` to the record from this step. `plan-lint` reads the design at this `designSha`.
 
+### A spec-page plan
+
+The page is `<plans>/<slug>/spec-page.md`. Its confirm replaces the design's approval and evidence:
+`swiftgate plan confirm` recorded the page's sha in `approval`, and `plan-lint` fails a page that
+changed after it. Don't write `plan.json` in this step.
+
+1. `plan.json` has no `approval`: halt. No one has confirmed the page yet; `/swift-harness:ship`
+   confirms it with `"$SG" plan confirm <slug> --by user|spec-quotes --spec <spec-file> --session <session>`.
+2. `plan.json` has no `surfaceCommit`: halt. The decomposer reads the surface's files, and every
+   worker builds on it; `/swift-harness:ship` lands it with
+   `"$SG" plan surface <slug> <surface> --gate <run id> --preset <preset> --session <session>`.
+3. Keep `surfaceCommit` as `<surface>`, then go to step 4.
+
+A spec-page plan has no amend, so it never replans: step 4's table applies, with every row but
+**fresh** a halt.
+
 ## 3. Re-check the evidence at HEAD
+
+A spec-page plan skips this step: it has no design and no evidence.
 
 ```bash
 "$SG" evidence check --design <doc> --at HEAD --json
@@ -167,12 +188,20 @@ Build the decomposer's context pack. It needs a module graph and the task-sizing
 "$SG" context-pack --role decomposer --design <doc> --module-graph .harness/plan-draft/<slug>/module-graph.txt --task-sizing-bounds .swiftgate.toml
 ```
 
-Exit 1 or 2 halts: the design is missing a section the pack needs, or an input is unreadable.
+A spec-page plan packs its page in place of the design:
+
+```bash
+"$SG" context-pack --role decomposer --spec-page <plans>/<slug>/spec-page.md --module-graph .harness/plan-draft/<slug>/module-graph.txt --task-sizing-bounds .swiftgate.toml
+```
+
+Exit 1 or 2 halts: the design is missing a section the pack needs, the page breaks the spec page
+format, or an input is unreadable.
 
 Launch the decomposer with the Agent tool, `subagent_type: "swift-harness:design-decomposer"`.
 Give it the absolute path of `.harness/context-pack/decomposer.md`, the plan slug and the
 repository's directory name. That name is the main checkout's, the directory that holds the git
-common dir, even when you run from a linked worktree. On a replan, give it the absolute path of
+common dir, even when you run from a linked worktree. For a spec-page plan, give it `<surface>` too:
+the surface's stub files may go in the write set of the task that fills them. On a replan, give it the absolute path of
 `.harness/plan-draft/<slug>/replan.json` too, and say it's a replan. Keep the agent's id for the
 fix round.
 **Log** a `decompose` line with the tokens and duration the Agent tool reports.
@@ -206,8 +235,10 @@ shape halts.
    "$SG" plan-lint <slug> --json
    ```
 
-   Exit 0: go to step 6. Exit 2 halts: the plan state, the design at `designSha` or the module
-   graph is unreadable. Exit 1: go on to the fix round.
+   Exit 0: go to step 6. Exit 2 halts: the plan state, the design at `designSha`, the spec page
+   or the module graph is unreadable, or no one has confirmed the page. Exit 1: go on to the fix round,
+   except that `plan-lint.spec-page-moved` halts at once: the page changed after its confirm, and
+   no task edit fixes that. Confirm the page again with `/swift-harness:ship` first.
 5. **A single fix round.** Send the decomposer every finding from the report with
    `SendMessage` to the agent id you kept, as `rule (severity) task: message` lines. On a replan,
    its reply is again the new tasks only, and items 1 to 4 put `<fixed>` first again. Load
@@ -224,7 +255,9 @@ shape halts.
 ```
 
 `<resume>` is the ledger's `resume` line. Before this call, write the same line to the `resume`
-field of `plan.json`. **Log** an `index` line. A non-zero exit halts.
+field of `plan.json`. For a spec-page plan, write it with
+`"$SG" plan set <slug> --resume "<resume>" --session <session> --json`, which keeps the confirm and
+the surface as they are. **Log** an `index` line. A non-zero exit halts.
 
 ## 7. Publish the ledger page
 
