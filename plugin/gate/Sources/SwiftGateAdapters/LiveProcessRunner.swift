@@ -85,12 +85,65 @@ public struct LiveProcessRunner: ProcessRunner {
     let searchPath = environment["PATH"] ?? ""
     for directory in searchPath.split(separator: ":") where !directory.isEmpty {
       let candidate = "\(directory)/\(executable)"
-      if isExecutableFile(candidate) { return candidate }
+      if Self.isExecutableFile(candidate) {
+        return Self.skippingXcrunShim(candidate, environment: environment)
+      }
     }
     throw .launchFailed(executable: executable, reason: "not found on PATH \(searchPath)")
   }
 
-  private func isExecutableFile(_ path: String) -> Bool {
+  /// `/usr/bin/git` is an `xcrun` shim, byte-identical to `/usr/bin/swift`: it picks the tool to
+  /// launch from a lookup cache in the user's temp dir that every concurrent `git`, `swift` and
+  /// `xcrun` launch on the machine reads and rewrites, and under parallel runs that lookup has
+  /// launched `swift` for `git`. The developer dir's own `usr/bin/git` is the tool the shim would
+  /// pick, so it runs directly; a developer dir without one keeps the shim.
+  private static func skippingXcrunShim(_ path: String, environment: [String: String]) -> String {
+    let requested = environment["DEVELOPER_DIR"].flatMap { $0.isEmpty ? nil : $0 }
+    guard path == "/usr/bin/git", let developer = requested ?? selectedDeveloperDirectory else {
+      return path
+    }
+    let direct = developer + "/usr/bin/git"
+    return isExecutableFile(direct) ? direct : path
+  }
+
+  /// `xcode-select -p`, read once per process: only `xcode-select -s` changes it, which no run
+  /// does mid-flight. `nil` when nothing is selected.
+  private static let selectedDeveloperDirectory: String? = {
+    guard let pipe = try? Pipe.make() else { return nil }
+    _ = fcntl(pipe.read, F_SETFL, fcntl(pipe.read, F_GETFL) & ~O_NONBLOCK)
+    var fileActions: posix_spawn_file_actions_t?
+    posix_spawn_file_actions_init(&fileActions)
+    defer { posix_spawn_file_actions_destroy(&fileActions) }
+    posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
+    posix_spawn_file_actions_adddup2(&fileActions, pipe.write, 1)
+    posix_spawn_file_actions_addopen(&fileActions, 2, "/dev/null", O_WRONLY, 0)
+    let tool = "/usr/bin/xcode-select"
+    let argv = CStringArray([tool, "-p"])
+    defer { argv.free() }
+    var pid: pid_t = 0
+    let spawned = posix_spawn(&pid, tool, &fileActions, nil, argv.pointers, environ)
+    close(pipe.write)
+    defer { close(pipe.read) }
+    guard spawned == 0 else { return nil }
+    var output = [UInt8]()
+    var buffer = [UInt8](repeating: 0, count: 4096)
+    while true {
+      let count = buffer.withUnsafeMutableBytes { Darwin.read(pipe.read, $0.baseAddress, $0.count) }
+      if count > 0 {
+        output.append(contentsOf: buffer[0..<count])
+      } else if count == 0 || errno != EINTR {
+        break
+      }
+    }
+    var raw: Int32 = 0
+    while waitpid(pid, &raw, 0) == -1, errno == EINTR {}
+    guard raw == 0 else { return nil }
+    let directory = String(decoding: output, as: UTF8.self)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return directory.isEmpty ? nil : directory
+  }()
+
+  private static func isExecutableFile(_ path: String) -> Bool {
     var info = stat()
     guard stat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else { return false }
     return access(path, X_OK) == 0
