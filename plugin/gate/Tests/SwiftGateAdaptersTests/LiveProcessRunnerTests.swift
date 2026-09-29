@@ -102,6 +102,44 @@ struct LiveProcessRunnerTests {
     #expect(names.contains("KEEP"))
   }
 
+  @Test(
+    "git found at the /usr/bin xcrun shim runs the developer dir's own git, with no xcrun lookup — catches a concurrent swift launch turning swiftgate's git into swift",
+    .enabled(
+      if: FileManager.default.isExecutableFile(atPath: "/usr/bin/git"),
+      "this machine has no /usr/bin/git shim"))
+  func gitSkipsTheXcrunShim() async throws {
+    // The shim prints its lookup under `xcrun_verbose`; git itself ignores the variable.
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["--version"], environmentOverlay: ["xcrun_verbose": "1"],
+        timeout: .seconds(30)))
+
+    #expect(output.status.isSuccess, "\(output.stderr.text)")
+    #expect(output.stdout.text.hasPrefix("git version"))
+    #expect(!output.stderr.text.contains("xcrun_db"), "\(output.stderr.text)")
+  }
+
+  @Test(
+    "a DEVELOPER_DIR in the invocation's environment picks the git that runs — catches the resolution ignoring the Xcode a caller selects"
+  )
+  func gitFollowsTheInvocationDeveloperDirectory() async throws {
+    let developer = FileManager.default.temporaryDirectory.appending(
+      path: "developer-dir-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: developer) }
+    let tools = developer.appending(path: "usr/bin", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: tools, withIntermediateDirectories: true)
+    try Data("#!/bin/sh\necho selected git \"$@\"\n".utf8).write(to: tools.appending(path: "git"))
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o755], ofItemAtPath: tools.appending(path: "git").path)
+
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["--version"],
+        environmentOverlay: ["DEVELOPER_DIR": developer.path], timeout: .seconds(30)))
+
+    #expect(output.stdout.text == "selected git --version\n", "\(output.stderr.text)")
+  }
+
   @Test("working directory is applied — catches tools running against the wrong package")
   func workingDirectory() async throws {
     let output = try await runner.run(

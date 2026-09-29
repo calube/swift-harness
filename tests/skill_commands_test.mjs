@@ -6,17 +6,18 @@
 // that leaves out a flag or workflow arg the callee requires.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitPath } from './developer_tools.mjs'
 
 // The plugin directory: every path this test reads is relative to it.
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 
 // Prefer an explicit binary, then the checkout's debug build (fresh under `swift test`). The
 // shim's cold release build would outlast the repository-script timeout, so it isn't a fallback.
-function swiftgateBinary() {
+export function swiftgateBinary() {
   if (process.env.SWIFTGATE_BIN) return process.env.SWIFTGATE_BIN
   const debug = join(root, 'gate/.build/debug/swiftgate')
   return existsSync(debug) ? debug : null
@@ -238,14 +239,16 @@ function withTempSkill(files, body) {
   }
 }
 
-const help = realHelp()
+// Imported for its helpers, this file runs no checks and makes no help cache.
+const isMain = realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+const help = isMain ? realHelp() : undefined
 
 const designSkillFiles = () =>
   Object.fromEntries(
     markdownFiles(join(root, 'skills/design')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
   )
 
-const buildSkillFiles = () =>
+export const buildSkillFiles = () =>
   Object.fromEntries(
     markdownFiles(join(root, 'skills/build')).map(path => [relative(root, path), readFileSync(path, 'utf8')]),
   )
@@ -278,9 +281,9 @@ function sprintMachineSteps() {
     const run = (file, args) => execFileSync(file, args, {
       encoding: 'utf8', cwd: dir, env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'status-%p.profraw') },
     })
-    run('git', ['init', '-q', '-b', 'main'])
-    run('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init'])
-    const sha = run('git', ['rev-parse', 'HEAD']).trim()
+    run(gitPath, ['init', '-q', '-b', 'main'])
+    run(gitPath, ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init'])
+    const sha = run(gitPath, ['rev-parse', 'HEAD']).trim()
     const plans = join(dir, '.git/swift-harness/plans')
     mkdirSync(plans, { recursive: true })
     const steps = []
@@ -334,8 +337,8 @@ function sprintWalk(proofBases) {
   const source = join(dir, 'Sources/Core/Core.swift')
   const commit = (text, message) => {
     writeFileSync(source, text, { flag: 'a' })
-    run('git', ['commit', '-qam', message])
-    return run('git', ['rev-parse', 'HEAD']).trim()
+    run(gitPath, ['commit', '-qam', message])
+    return run(gitPath, ['rev-parse', 'HEAD']).trim()
   }
   try {
     mkdirSync(join(dir, 'Sources/Core'), { recursive: true })
@@ -343,20 +346,20 @@ function sprintWalk(proofBases) {
     writeFileSync(join(dir, '.gitignore'), '.harness/\n')
     writeFileSync(source, 'public func base() -> Int { 1 }\n')
     writeFileSync(join(dir, 'page.md'), '# page\n')
-    run('git', ['init', '-q', '-b', 'main'])
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'init'])
-    record(gateRecord('20260101T000000Z-0000aaaa', 'push', run('git', ['rev-parse', 'HEAD']).trim()))
+    run(gitPath, ['init', '-q', '-b', 'main'])
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'init'])
+    record(gateRecord('20260101T000000Z-0000aaaa', 'push', run(gitPath, ['rev-parse', 'HEAD']).trim()))
     const steps = [sg(['sprint', 'start', 'walk', '--spec-page', 'page.md', '--slices', '1'])]
-    run('git', ['switch', '-q', 'sprint/walk'])
+    run(gitPath, ['switch', '-q', 'sprint/walk'])
     const surface = commit('public func step() -> Int { 0 }\n', 'surface')
     steps.push(sg(['sprint', 'surface', surface]))
     const extra = commit('public func last() -> Int { 0 }\n', 'extra stub')
     steps.push(sg(['surface-check', extra]))
     writeFileSync(source, 'public func base() -> Int { 1 }\npublic func step() -> Int { 2 }\npublic func last() -> Int { 3 }\n')
-    run('git', ['commit', '-qam', 'slice 1'])
-    const head = run('git', ['rev-parse', 'HEAD']).trim()
-    const mainBase = run('git', ['rev-parse', 'main']).trim()
+    run(gitPath, ['commit', '-qam', 'slice 1'])
+    const head = run(gitPath, ['rev-parse', 'HEAD']).trim()
+    const mainBase = run(gitPath, ['rev-parse', 'main']).trim()
     record(gateRecord('20260101T000003Z-0000dddd', 'push', head, null, mainBase))
     const fromMain = sg(['sprint', 'slice', '1', '--gate', '20260101T000003Z-0000dddd'])
     assert.deepEqual([fromMain.code, fromMain.report.rule], [1, 'sprint.gate-base'], fromMain.report.message)
@@ -366,7 +369,7 @@ function sprintWalk(proofBases) {
       steps.map(s => s.report.message).join('\n'))
     record(gateRecord('20260101T000002Z-0000cccc', 'ready', head, proofBases(surface, extra)))
     const finish = sg(['sprint', 'finish', '--gate', '20260101T000002Z-0000cccc'])
-    return { ...finish, mainMoved: run('git', ['rev-parse', 'main']).trim() === head }
+    return { ...finish, mainMoved: run(gitPath, ['rev-parse', 'main']).trim() === head }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -581,10 +584,10 @@ function shipSpecPageWalk(calls) {
   }
   const commitSurface = () => {
     if (surface) return
-    run('git', ['switch', '-q', '-c', 'surface/demo', 'main'])
+    run(gitPath, ['switch', '-q', '-c', 'surface/demo', 'main'])
     writeFileSync(join(dir, 'Sources/Core/Core.swift'), 'public func step() -> Int { 0 }\n', { flag: 'a' })
-    run('git', ['commit', '-qam', 'surface'])
-    surface = run('git', ['rev-parse', 'HEAD']).trim()
+    run(gitPath, ['commit', '-qam', 'surface'])
+    surface = run(gitPath, ['rev-parse', 'HEAD']).trim()
   }
   try {
     mkdirSync(join(dir, 'Sources/Core'), { recursive: true })
@@ -599,9 +602,9 @@ function shipSpecPageWalk(calls) {
       'task_gate = "fast"', 'merge_gate = "push"', 'worker_model = "tagged"', 'time_budget_min = 0',
       'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"', '',
     ].join('\n'))
-    run('git', ['init', '-q', '-b', 'main'])
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'init'])
+    run(gitPath, ['init', '-q', '-b', 'main'])
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'init'])
     const steps = []
     for (const { path, words } of calls) {
       if (path === 'spec-page check' || path === 'plan confirm') writePage()
@@ -624,7 +627,7 @@ function shipSpecPageWalk(calls) {
       if (step.code !== 0) break
     }
     const planFile = existsSync(join(plans, 'demo/plan.json')) ? JSON.parse(readFileSync(join(plans, 'demo/plan.json'), 'utf8')) : null
-    return { steps, planFile, surface, main: run('git', ['rev-parse', 'main']).trim() }
+    return { steps, planFile, surface, main: run(gitPath, ['rev-parse', 'main']).trim() }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -672,7 +675,7 @@ function buildGateLines(files) {
  * `files`: with a `surfaceCommit`, the lines measuring from it, with the sha filled in; without,
  * the lines that name no base.
  */
-function buildGatesFor(files, plan) {
+export function buildGatesFor(files, plan) {
   const surfaced = typeof plan.surfaceCommit === 'string'
   return buildGateLines(files)
     .filter(gate => (gate.base !== null) === surfaced)
@@ -725,7 +728,7 @@ export function buildGateBaseProblems(files) {
  * with no test. The module is `host_testable = false`, so impact is the only rule its new
  * untested code trips at push. Returns each run's kind, verdict and gating rules.
  */
-function buildGateWalk(gates) {
+export function buildGateWalk(gates) {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
   const dir = mkdtempSync(join(tmpdir(), 'skill-commands-build-gates-'))
@@ -769,16 +772,16 @@ function buildGateWalk(gates) {
     write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n')
     write('Packages/Core/Tests/CoreTests/CoreTests.swift',
       'import Testing\n@testable import Core\n\n@Test("base is one — catches a changed base") func baseIsOne() { #expect(base() == 1) }\n')
-    run('git', ['init', '-q', '-b', 'main'])
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'init'])
-    run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    run(gitPath, ['init', '-q', '-b', 'main'])
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'init'])
+    run(gitPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
     write('.swiftgate.toml', config + module('Feed', ['host_testable = false']))
     write('Packages/Core/Package.swift', manifest(true))
     write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 0 }\n}\n')
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'surface'])
-    const surface = run('git', ['rev-parse', 'HEAD']).trim()
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'surface'])
+    const surface = run(gitPath, ['rev-parse', 'HEAD']).trim()
     const fill = words => words.map(w => (w === '<surfaceCommit>' ? surface : w))
     const surfaceCheck = gate('surface-check', ['surface-check', surface])
     assert.equal(surfaceCheck.verdict, 'GREEN', `the walk's surface is not all stubs: ${surfaceCheck.gating.join(', ')}`)
@@ -787,7 +790,7 @@ function buildGateWalk(gates) {
     const merge = gates.find(g => g.kind === 'merge')
     if (greenMain) results.push(gate('green-main', fill(greenMain.words)))
     write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 3 }\n}\n')
-    run('git', ['commit', '-qam', 'task'])
+    run(gitPath, ['commit', '-qam', 'task'])
     if (merge) results.push(gate('merge', fill(merge.words)))
     return { surface, results }
   } finally {
@@ -855,7 +858,7 @@ export function surfaceBaselineProblems(skill) {
  * decision, `baseline` (every finding taken without asking) or `halt`, on `Feed`'s finding alone
  * (`alone`), on all of them (`all`), and on `Feed`'s beside each other one (`beside`, by that one).
  */
-function surfaceBaselineWalk(gates, rule) {
+export function surfaceBaselineWalk(gates, rule) {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
   const dir = mkdtempSync(join(tmpdir(), 'skill-commands-baseline-'))
@@ -888,23 +891,23 @@ function surfaceBaselineWalk(gates, rule) {
     write('Packages/Core/Tests/CoreTests/CoreTests.swift',
       'import Testing\n@testable import Core\n\n@Test("base is one — catches a changed base") func baseIsOne() { #expect(base() == 1) }\n')
     write('Packages/Core/Sources/Legacy/Legacy.swift', 'public func legacy() -> Int { 2 }\n')
-    run('git', ['init', '-q', '-b', 'main'])
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'init'])
-    run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    run(gitPath, ['init', '-q', '-b', 'main'])
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'init'])
+    run(gitPath, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
     write('.swiftgate.toml', config([...before, 'Feed']))
     write('Packages/Core/Package.swift', manifest([...before, 'Feed']))
     write('Packages/Core/Sources/Feed/Feed.swift', 'public struct Feed: Sendable {\n  public init() {}\n  public func count() -> Int { 0 }\n}\n')
     write('Packages/Core/Sources/Legacy/Later.swift', 'public func later() -> Int { 0 }\n')
-    run('git', ['add', '-A'])
-    run('git', ['commit', '-qm', 'surface'])
-    const surface = run('git', ['rev-parse', 'HEAD']).trim()
+    run(gitPath, ['add', '-A'])
+    run(gitPath, ['commit', '-qm', 'surface'])
+    const surface = run(gitPath, ['rev-parse', 'HEAD']).trim()
     const surfaceCheck = JSON.parse(run(binary, ['surface-check', surface, '--json']))
     assert.equal(surfaceCheck.verdict, 'GREEN', 'the walk\'s surface is not all stubs')
     write('Packages/Core/Sources/Core/Core.swift', 'public func base() -> Int { 1 }\n\npublic func extra(_ value: Int) -> Int {\n  value * 3\n}\n')
     writeFileSync(join(dir, 'Packages/Core/Tests/CoreTests/CoreTests.swift'),
       '\n@Test("base stays positive — catches a negated base") func baseIsPositive() { #expect(base() > 0) }\n', { flag: 'a' })
-    run('git', ['commit', '-qam', 'later'])
+    run(gitPath, ['commit', '-qam', 'later'])
     const greenMain = gates.find(g => g.kind === 'green-main')
     assert.ok(greenMain, 'the skill has no green-main line for a plan with a surface')
     const args = greenMain.words.map(w => (w === '<merge_gate>' ? 'push' : w === '<surfaceCommit>' ? surface : w))
@@ -919,7 +922,7 @@ function surfaceBaselineWalk(gates, rule) {
     const git = (command, file) => {
       const words = command.split(/\s+/).map(w => w.replaceAll('<surfaceCommit>', surface).replaceAll('<file>', file))
       assert.equal(words[0], 'git', `the rule's command is not git: ${command}`)
-      return run('git', words.slice(1)).trim()
+      return run(gitPath, words.slice(1)).trim()
     }
     const addedBySurface = finding => rule !== null && finding.rule === rule.rule
       && git(rule.changed, finding.file) !== '' && git(rule.before, finding.file) === ''
@@ -1470,19 +1473,6 @@ const tests = {
     assert.deepEqual(problems, [])
   },
 
-  'the build skill\'s green-main check is GREEN through the real binary on main right after a surface that adds an untested module, and its merge gate still judges the task — catches a build stopped by the surface it builds on'() {
-    const files = buildSkillFiles()
-    const surfaced = buildGateWalk(buildGatesFor(files, { surfaceCommit: '<surfaceCommit>' }).filter(gate => gate.file === 'skills/build/SKILL.md'))
-    assert.deepEqual(surfaced.results.map(r => [r.kind, r.verdict]), [['green-main', 'GREEN'], ['merge', 'RED']],
-      surfaced.results.map(r => r.gating.join(', ')).join('\n'))
-    assert.deepEqual(surfaced.results[1].gating, ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift'])
-    const plain = buildGateWalk(buildGatesFor(files, {}).filter(gate => gate.file === 'skills/build/SKILL.md'))
-    assert.deepEqual(plain.results.map(r => [r.kind, r.verdict, r.gating]), [
-      ['green-main', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
-      ['merge', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
-    ], 'the old lines no longer reproduce the surface\'s RED green-main check')
-  },
-
   'the build gate base check names a surfaced line without its base, a changed old line, a base other than the surface, a missing names row and a green-main check before the plan read — catches a check that passes anything'() {
     const skill = [
       '| Name | Value |', '|---|---|', '| `<slug>` | the plan |', '',
@@ -1503,22 +1493,6 @@ const tests = {
       'the green-main check runs before step 1 reads the plan surface from plan.json',
     ])
   },
-  'the build skill takes a surface\'s untested new module as its green-main baseline without asking, and still halts on any other gating finding — catches a build halted by the surface it builds on, or a real red waved through'() {
-    const files = buildSkillFiles()
-    const skill = files['skills/build/SKILL.md']
-    assert.deepEqual(surfaceBaselineProblems(skill), [])
-    const rule = surfaceBaselineRule(skill)
-    assert.equal(rule.rule, 'coverage.no-t1-tests')
-    const gates = buildGatesFor(files, { surfaceCommit: '<surfaceCommit>' }).filter(gate => gate.file === 'skills/build/SKILL.md')
-    const walk = surfaceBaselineWalk(gates, rule)
-    assert.deepEqual([walk.verdict, walk.gating], ['RED', [
-      'coverage.diff .', 'coverage.no-t1-tests Packages/Core/Sources/Feed', 'coverage.no-t1-tests Packages/Core/Sources/Legacy',
-    ]])
-    assert.deepEqual([walk.alone, walk.all, walk.beside], ['baseline', 'halt', {
-      'coverage.diff .': 'halt', 'coverage.no-t1-tests Packages/Core/Sources/Legacy': 'halt',
-    }])
-  },
-
   'the surface baseline check names a missing rule, a command without its placeholders, no halt for other findings, a silent report, a final gate that takes the baseline and an exact-baseline merge gate — catches a check that passes anything'() {
     const skill = [
       '## 1. Start', '', '4. Check main. A later merge gate passes when its gating findings are exactly the', '   baseline\'s.', '',
@@ -1543,21 +1517,23 @@ const tests = {
   },
 }
 
-let failed = 0
-try {
-  for (const [name, test] of Object.entries(tests)) {
-    try {
-      await test()
-      console.log(`ok   ${name}`)
-    } catch (error) {
-      failed++
-      console.log(`FAIL ${name}\n     ${String(error.message).split('\n').join('\n     ')}`)
+if (isMain) {
+  let failed = 0
+  try {
+    for (const [name, test] of Object.entries(tests)) {
+      try {
+        await test()
+        console.log(`ok   ${name}`)
+      } catch (error) {
+        failed++
+        console.log(`FAIL ${name}\n     ${String(error.message).split('\n').join('\n     ')}`)
+      }
     }
+  } finally {
+    help.cleanup()
   }
-} finally {
-  help.cleanup()
-}
-if (failed) {
-  console.log(`${failed} failed`)
-  process.exit(1)
+  if (failed) {
+    console.log(`${failed} failed`)
+    process.exit(1)
+  }
 }

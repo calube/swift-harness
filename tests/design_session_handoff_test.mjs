@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitPath } from './developer_tools.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const designSkill = join(root, 'skills/design')
@@ -83,7 +84,7 @@ function fill(command, values) {
 
 function scratchRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'design-session-handoff-'))
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, stdio: 'pipe' })
+  const git = (...args) => execFileSync(gitPath, ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, stdio: 'pipe' })
   git('init', '-q', '-b', 'main')
   git('commit', '-q', '--allow-empty', '-m', 'init')
   return dir

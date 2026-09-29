@@ -10,6 +10,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitPath } from './developer_tools.mjs'
 
 const checkout = join(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -32,7 +33,7 @@ const tests = {
   'lefthook install on this lefthook.yml writes the pre-push and commit-msg hooks — catches YAML that looks right but lefthook rejects'() {
     const scratch = mkdtempSync(join(tmpdir(), 'repository-lefthook-'))
     try {
-      run('git', ['init', '-q'], scratch)
+      run(gitPath, ['init', '-q'], scratch)
       copyFileSync(join(checkout, 'lefthook.yml'), join(scratch, 'lefthook.yml'))
       run('lefthook', ['install'], scratch)
       for (const hook of ['pre-push', 'commit-msg']) {

@@ -10,6 +10,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitPath } from './developer_tools.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 
@@ -23,7 +24,7 @@ function swiftgateBinary() {
 function stampedGitignore() {
   const dir = mkdtempSync(join(tmpdir(), 'bootstrap-gitignore-'))
   try {
-    execFileSync('git', ['init', '-q'], { cwd: dir })
+    execFileSync(gitPath, ['init', '-q'], { cwd: dir })
     const result = spawnSync(swiftgateBinary(), ['bootstrap'], {
       cwd: dir,
       encoding: 'utf8',

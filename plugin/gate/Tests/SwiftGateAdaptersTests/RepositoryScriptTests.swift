@@ -30,13 +30,35 @@ struct RepositoryScriptTests {
   static let discoveredMjsScripts = mjsScripts(
     in: Fixture.harnessCheckout.appending(path: "tests", directoryHint: .isDirectory))
 
+  /// A script stopped at its timeout, with the last lines it printed: a script reports each check
+  /// as it finishes, so its stdout tail names the step it was in.
+  struct ScriptTimedOut: Error, CustomStringConvertible {
+    let script: String
+    let timeout: Duration
+    let stdout: String
+    let stderr: String
+
+    static func tail(_ text: String, lines: Int = 20) -> String {
+      text.split(separator: "\n", omittingEmptySubsequences: false).suffix(lines)
+        .joined(separator: "\n")
+    }
+
+    var description: String {
+      "\(script) was stopped at its \(timeout) timeout; stdout ends:\n\(Self.tail(stdout))\nstderr ends:\n\(Self.tail(stderr))"
+    }
+  }
+
   func run(_ executable: String, _ script: String, timeout: Duration) async throws -> ProcessOutput
   {
-    try await LiveProcessRunner().run(
-      ProcessInvocation(
-        executable: executable,
-        arguments: [Fixture.harnessCheckout.appending(path: script).path],
-        workingDirectory: Fixture.harnessCheckout.path, timeout: timeout))
+    do {
+      return try await LiveProcessRunner().run(
+        ProcessInvocation(
+          executable: executable,
+          arguments: [Fixture.harnessCheckout.appending(path: script).path],
+          workingDirectory: Fixture.harnessCheckout.path, timeout: timeout))
+    } catch .timedOut(_, let after, let stdout, let stderr) {
+      throw ScriptTimedOut(script: script, timeout: after, stdout: stdout.text, stderr: stderr.text)
+    }
   }
 
   @Test(

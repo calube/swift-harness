@@ -13,6 +13,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gitPath } from './developer_tools.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const planSkill = () => readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
@@ -102,7 +103,7 @@ const task = (id, fields) => ({
 
 function withRepo(body) {
   const dir = mkdtempSync(join(tmpdir(), 'plan-replan-'))
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, stdio: 'pipe', encoding: 'utf8' })
+  const git = (...args) => execFileSync(gitPath, ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: dir, stdio: 'pipe', encoding: 'utf8' })
   cpSync(join(root, 'gate/Fixtures/module-graph/repo'), dir, { recursive: true })
   writeFileSync(join(dir, '.gitignore'), '.harness/\n')
   git('init', '-q', '-b', 'main')
