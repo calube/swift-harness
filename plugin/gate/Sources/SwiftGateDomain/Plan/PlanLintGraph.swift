@@ -23,6 +23,7 @@ public enum PlanLintGraph {
   public static let designMovedRuleID = "plan-lint.design-moved"
   public static let writeSetUnresolvedRuleID = "plan-lint.write-set-unresolved"
   public static let specPageMovedRuleID = "plan-lint.spec-page-moved"
+  public static let newModuleUntestedRuleID = "plan-lint.new-module-untested"
 
   /// A write-set path is "hot" once at least this many distinct tasks name it.
   public static let hotFileTaskThreshold = 3
@@ -469,6 +470,17 @@ public enum PlanLintGraph {
           "workers build the plan's tasks against a page nobody confirmed, so a changed slice "
           + "ships unplanned")
     ]
+  }
+
+  // MARK: - Test targets for the modules a spec page creates
+
+  /// A `major` finding per module `page`'s Modules table names that `coverage.no-t1-tests` would
+  /// fail in `graph` (``T1Presence``) and whose `Tests/<Module>Tests/` directory no task in
+  /// `tasks` writes.
+  public static func newModuleUntestedFindings(
+    page: SpecPage, tasks: [LedgerTask], graph: ModuleGraph, pagePath: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
   }
 
   // MARK: - Entry point
