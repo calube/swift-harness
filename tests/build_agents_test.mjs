@@ -319,6 +319,15 @@ const tests = {
     }
   },
 
+  'the fixer runs the merge gate from the plan surface its inputs name, and with no base when they name none — catches a surfaced plan\'s fix gate RED on the surface\'s untested stubs'() {
+    const body = parseFrontmatter(agentText('build-fixer')).body
+    assert.deepEqual(gateCommands(body), ['swiftgate check --tier <merge gate>', 'swiftgate check --tier <merge gate> --base <surfaceCommit>', 'swiftgate check --tier'])
+    const inputs = (body.split('\n## Inputs\n')[1] ?? '').split('\n## ')[0].replace(/\s+/g, ' ')
+    assert.match(inputs, /`--base <surfaceCommit>` for a plan with a surface/, 'the inputs never name the surface base')
+    const loop = /\*\*Loop to green\.\*\*[^]*?(?=\n- \*\*)/.exec(body)?.[0].replace(/\s+/g, ' ') ?? ''
+    assert.match(loop, /`swiftgate check --tier <merge gate>`[^.]*; when the prompt gives `--base <surfaceCommit>`, `swiftgate check --tier <merge gate> --base <surfaceCommit>`/)
+  },
+
   'every verb the guard denies to a subagent is in the forbidden list — catches a guard verb added without the prompt learning it'() {
     for (const verb of GUARDED_VERBS) {
       const group = verb.split(' ')[0]
