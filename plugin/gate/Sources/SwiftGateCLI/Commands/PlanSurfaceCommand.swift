@@ -250,8 +250,8 @@ enum PlanSurfaceRun {
     slug: String
   ) throws(Stop) {
     let confirmAgain =
-      "Confirm it with `swiftgate plan confirm \(slug) --by user|spec-quotes --spec <file> "
-      + "--session <id>` first"
+      "Confirm it with `swiftgate plan confirm \(slug) --by user|spec-quotes|delegate "
+      + "--spec <file> --session <id>` first"
     guard let approval = page.approval else {
       throw refused(
         report, .notConfirmed, "plan `\(slug)`'s spec page isn't confirmed. \(confirmAgain)")
