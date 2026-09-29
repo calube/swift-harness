@@ -110,6 +110,13 @@ can pass on a surface that adds a module. The orchestrator decided the fix under
 | The build's gates after the surface lands | Rehearsal A attempt 2: with the surface on `main`, the build's green-main `check --tier push` (no `--base`, so from `origin/main`) was RED (run `20260929T021519Z-5f7ee3e6`) on the same 3 `impact.untested-change` findings, and an interface module no task tests would keep the final `ready` gate RED. Sprint's slice gates run `--base <surface>` | For a plan with a `surfaceCommit`, the build's green-main check, its merge gates on `main` and its final `ready` gate run with `--base <surfaceCommit>`: they judge what the tasks changed on top of the surface. Workers' task gates keep `--base main`. A plan without a surface is unchanged | Judge from `origin/main`, with impact skipping lines `surface-check` judges stubs |
 | A surface's new `@Dependency` accessor | Rehearsal A attempt 3: the surface stubbed `DependencyValues.shoppingListClient` as `get { .init() } set {}` (sprint's rule, where the next slice wires it). In a parallel build the accessor's file belonged to the client task, which had no test needing it, so the reducer task could never inject a test client: a design conflict blocked 6 of 7 slices | The surface wires a new accessor for real, `get { self[Key.self] } set { self[Key.self] = newValue }`, and `surface-check` accepts exactly that shape; the key's `liveValue`/`testValue` stay stubs. Sprint and ship both follow it | The decomposer gives the accessor's wiring to a task every consumer depends on |
 | New API a task's tests call, when `task_proof = "final"` | Rehearsal A attempt 3: the file-store worker added `defaultFileStoreURL(fileManager:)` without a stub commit and returned `surfaceCommit: null`; nothing caught it until the final `ready` gate went RED on 6 `prove.compile-only` findings (run `20260929T030053Z-2d4bf3b5`) | The user chose (2026-09-29): `build check-return` builds the task's new and changed tests at the plan surface plus the worker's returned stub, and refuses a test that doesn't compile there, so the worker commits its stub before merging. Full assertion prove stays at the final gate. About 30-60 s per task | Keep final-only prove; or prove every task (`task_proof` per task) |
+| Who a delegated confirm is recorded as | The rehearsals' confirms were answered by the orchestrator under the user's delegation, but `plan confirm --by` takes only `user` or `spec-quotes`, so they recorded `user` | The user chose (2026-09-29): a third value, `--by delegate`, for an answer a delegated session gives on the user's behalf. It's honest on disk; everything else treats it as `user` | Record `user` and note the delegate in the run report |
+
+### Stability before pushing
+
+The user (2026-09-29) set the bar for pushing `origin/main`: the flaky tests fixed at their root, mutate GREEN on
+`main` for the rehearsal fixes, `push` then `ready` GREEN twice in a row on `main` with no re-runs, and these
+follow-ups closed. The tasks below run outside the wave map, 3 at a time, each through the push + prove merge gate.
 
 ### Merge points for the design-free ship waves
 
@@ -329,6 +336,30 @@ can pass on a surface that adds a module. The orchestrator decided the fix under
 - Writes: `C/Commands/BuildCheckReturnCommand.swift`, `D/Build/TaskReturn.swift`, the adapter that builds tests at a commit (reuse prove's compile step; no second copy), `TC/` new check-return tests, `plugin/gate/Tests/Fixtures/` if a capture is needed, `plugin/docs/standards.md` (rule index row), `P/agents/build-worker.md` only if its return text must name the new rule (then `calibrate build`)
 - Does: for a plan with a `surfaceCommit`, `check-return` builds the task branch's new and changed test files at the proof base (the plan surface, plus the return's `surfaceCommit` when set) and fails `build-return.test-needs-stub` naming each test file that doesn't compile there, with the fix: commit the API as a stub, check it with `surface-check`, return it as `surfaceCommit`. A plan without a surface, or a return that changes no test, is unchanged.
 - Tests: a task branch whose test calls a function the surface lacks, with no stub, fails naming the file (catches rehearsal A attempt 3's final-gate RED at the return); the same branch with a stub commit returned passes; a plan with no surface is unchanged. Remove the check and confirm the first test goes red.
+
+### `plan-confirm-records-a-delegate`
+- Deps: none · Gate: push · Model: opus · estLines: 120 · Decision: "Design-free ship rehearsal fix decisions", fifth row (the user's choice)
+- Writes: `C/Commands/PlanConfirmCommand.swift`, `D/Plan/PlanFile.swift` (the `by` enum), `A/PlanState/PlanStateStore.swift` only if it decodes `by`, `TC/` and `TD/` new tests, `P/skills/ship/SKILL.md` (how a delegated session confirms), `P/skills/plan/references/state-files.md`, `tests/skill_commands_test.mjs` if it pins the line
+- Does: `plan confirm --by delegate` records `approval.by = "delegate"`; it's refused where `--by spec-quotes` is refused only if `user` would be too (a delegate stands in for the user, so a `required` page accepts it). Existing plan.json files with `user` or `spec-quotes` decode unchanged; an unknown `by` still fails naming itself. The ship skill tells a session answering on the user's behalf to pass `--by delegate`.
+- Tests: `--by delegate` on a `required` page is recorded with the page sha (catches a delegate being refused like spec-quotes); `--by spec-quotes` on the same page is still refused; old plan.json fixtures decode as before. Remove the new case and confirm its test goes red.
+
+### `repository-script-shim-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 80
+- Writes: `plugin/gate/Tests/SwiftGateAdaptersTests/RepositoryScriptTests.swift` (the `shim()` test, new assertions only), `tests/shim_test.sh`, `plugin/bin/swiftgate` only if the root cause is in the shim
+- Does: `RepositoryScriptTests.shim()` failed 3 times on 2026-09-28/29 under load with empty stdout (runs `20260929T003128Z-6d26c1af`, `20260929T111037Z-83cec208`, and the push run before `20260929T015722Z-39f5b8c8`) and passed alone each time. Find the root cause with a timed trace under bounded generated load, as the shim deadline fix did, and fix it; the test's failure message must carry stderr and the exit status.
+- Tests: `shim()` passes 10 times in a row under bounded generated load; with the fix reverted, the loaded run fails with a message naming the cause, not empty stdout.
+
+### `mutation-orphan-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 80
+- Writes: `plugin/gate/Tests/SwiftGateAdaptersTests/MutationOrphanTests.swift` (new assertions and waits only), the mutation runner's process-tree teardown in `A/` only if the root cause is there
+- Does: `MutationOrphanTests.timeoutTakesTheProcessTreeDown` failed under load on `noDescendantSurvives()` (runs `20260929T111037Z-83cec208` and a prove run on 2026-09-29) and passed alone. Find whether teardown really leaks a descendant under load (a real bug) or the test checks before the reaping finishes (a test bug), with a timed trace; fix the root, and wait on the real artifact under a named deadline.
+- Tests: passes 10 times in a row under bounded generated load; a teardown that leaves a descendant still fails by name. Revert and confirm the loaded run goes red.
+
+### `stability-follow-ups`
+- Deps: none · Gate: push · Model: opus · estLines: 60
+- Writes: `SpecPageWriteSet` in `D/Context/` or wherever it lives, its tests, and the skills' shell commands that call `rm` or `mv` bare (`P/skills/**`, `P/agents/**` only if they run shell)
+- Does: `SpecPageWriteSet.resolve` returns `WriteSetResolution.modules` sorted by name, as its doc says. Skills and agents that delete or move files in a consumer repo call `command rm -f` / `command mv -f` (or `/bin/rm -f`), so a user's interactive alias can't stall a headless session (rehearsal A attempt 1 lost a gate to a prompting `rm`).
+- Tests: a page module and a graph module resolve in name order (catches the append order); a skill-text test finds no bare `rm ` or `mv ` in shell blocks. Calibrate any calibrated prompt it edits.
 
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
