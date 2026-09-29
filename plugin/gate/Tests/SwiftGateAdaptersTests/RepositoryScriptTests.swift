@@ -77,5 +77,9 @@ struct RepositoryScriptTests {
     let output = try await run("bash", "tests/shim_test.sh", timeout: .seconds(600))
     #expect(output.status.isSuccess, "\(output.stdout.text)\n\(output.stderr.text)")
     #expect(output.stdout.text.contains("shim_test: PASS"))
+    #expect(
+      output.status.isSuccess && output.stdout.text.contains("shim_test: PASS")
+        && !output.stderr.text.contains("FAIL:"),
+      "tests/shim_test.sh exited \(output.status); stderr:\n\(output.stderr.text)")
   }
 }
