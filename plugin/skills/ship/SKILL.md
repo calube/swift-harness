@@ -169,11 +169,14 @@ build, such as a retry, doesn't end this step. Stop only when the build skill st
 ## 7. Report
 
 1. Publish the ledger page a last time: `"$SG" design-render --ledger <plan> --json`, then the
-   Artifact tool with its `output`, to the URL the plan and build skills used.
+   Artifact tool with its `output`, to the URL the plan and build skills used. When this session
+   has no Artifact tool, don't publish: report the rendered page's path,
+   `.harness/design-render/<plan>-ledger.html`, in its place and go on. The page is a view, never
+   a gate.
 2. `"$SG" stats --build <run> --plan <plan>` for each task's wall time and the total against the
    preset's budget.
 
-End with the ledger page link, then the design doc and its tier, or at `none` the spec page path
+End with the ledger page link or its path, then the design doc and its tier, or at `none` the spec page path
 and `<surface>`. List the tasks done, the unfinished
 ones with their status, and each halt with the user's answer. Give the final gate's verdict and run
 id, and the wall time against `time_budget_min`. When the index stays `building`, name the resume command.

@@ -103,7 +103,9 @@ Handle notices one at a time: merges run in completion order.
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
 6. Republish the ledger page: `"$SG" design-render --ledger <slug> --json`, then the Artifact tool
-   with the same file path every time.
+   with the same file path every time. When this session has no Artifact tool, don't publish:
+   report the rendered page's path, `.harness/design-render/<slug>-ledger.html`, in its place and
+   go on. The page is a view, never a gate.
 
 Go back to step 2.
 

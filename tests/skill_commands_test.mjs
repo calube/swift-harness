@@ -1061,6 +1061,16 @@ const tests = {
     assert.match(text.replace(/\s+/g, ' '), /`plan-lint\.spec-page-moved`[^.]*halt/, 'a moved page goes to the decomposer\'s fix round')
   },
 
+  'the plan, build and ship skills report the ledger page\'s path and go on when the session has no Artifact tool — catches a headless run halted by a view'() {
+    for (const [skill, slug] of [['plan', 'slug'], ['build', 'slug'], ['ship', 'plan']]) {
+      const prose = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8').replace(/\s+/g, ' ')
+      const fallback = new RegExp(`no Artifact tool, don't publish: report the rendered page's path, \`\\.harness/design-render/<${slug}>-ledger\\.html\`, in its place and go on\\. The page is a view, never a gate\\.`)
+      assert.match(prose, fallback, `the ${skill} skill`)
+    }
+    const report = (readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8').split('\n## Report\n')[1] ?? '').replace(/\s+/g, ' ')
+    assert.match(report, /^ ?End with the Artifact link, or the page's path when this session has no Artifact tool,/)
+  },
+
   'the ship and plan skills\' design-free text names no preset or captured page — catches a skill tuned to one preset or app'() {
     const words = nonGenericWords()
     assert.ok(words.length >= 4 && words.includes('interview'), `the generic check reads only ${words.join(', ')}`)

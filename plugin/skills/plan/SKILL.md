@@ -268,11 +268,14 @@ the surface as they are. **Log** an `index` line. A non-zero exit halts.
 Exit 0 writes `.harness/design-render/<slug>-ledger.html`; exit 2 halts. Read the whole page, then
 publish it with the `Artifact` tool, with no `capabilities`: the ledger page takes no input. On a
 rerun, publish to the same URL: the same file path in this conversation, or the earlier URL
-otherwise.
+otherwise. When this session has no Artifact tool, don't publish: report the rendered page's path,
+`.harness/design-render/<slug>-ledger.html`, in its place and go on. The page is a view, never a
+gate.
 
 ## Report
 
-End with the Artifact link and a short summary:
+End with the Artifact link, or the page's path when this session has no Artifact tool, and a
+short summary:
 
 - the task count and the waves, in the order `plan-schedule` gave them;
 - the `minor` findings `plan-lint` left;
