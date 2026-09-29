@@ -55,8 +55,16 @@ recommended first. Never work around a halt by hand. The reference lists the opt
    plan surface, `"$SG" check --tier <merge_gate> --base <surfaceCommit>`. Not
    GREEN: halt, and quote the findings as `rule: message`. Options: **stop** (Recommended) so
    `main` gets fixed first, or **go on** with these findings as the baseline. With a baseline, a
-   later merge gate passes when its gating findings are exactly the baseline's. Every merge gate
+   later merge gate passes when every gating finding it has is one of the baseline's. Every merge gate
    runs on `main`, so a finding already there would read as the task's fault.
+
+   With a plan surface, 1 red needs no question: when every gating finding is
+   `coverage.no-t1-tests` for a module the surface commit added, take them as the baseline without
+   asking. A surface can't add a test target (an empty one fails `t1.no-tests`), so the task that
+   tests the module adds it. The surface added the module at a finding's `file` when
+   `git diff --name-only <surfaceCommit>^ <surfaceCommit> -- <file>` lists files and
+   `git ls-tree -r --name-only <surfaceCommit>^ -- <file>` lists none. Any other gating finding
+   beside them still halts, quoting every finding, theirs included.
 5. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
@@ -106,7 +114,8 @@ Handle notices one at a time: merges run in completion order.
    `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
-   gate whose gating findings are exactly the step 1 baseline counts as GREEN.
+   gate whose every gating finding is one of the step 1 baseline's counts as GREEN: a task that
+   tests 1 of the surface's modules clears its finding and leaves the others.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
@@ -126,7 +135,8 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
    with the `--proof-base` arguments it prints
    ([final gate](references/event-loop.md#final-gate)). Record it with
    `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`
-   and republish the ledger page. Not GREEN: halt.
+   and republish the ledger page. Not GREEN: halt. This gate takes no baseline: the step 1
+   baseline, asked for or not, covers only the merge gates.
 2. The `validate` stage: print `validate: not configured` and go on.
 3. `"$SG" build finish <slug> --session <session> --json`.
 4. `"$SG" stats --build <run> --plan <slug>` for the wall time.
@@ -134,7 +144,8 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
 ## Report
 
 The ledger page link, then: tasks done, and the unfinished ones with their status from `build finish`;
-each halt and the user's answer; the `ready` verdict and run id; wall time against the budget;
+each halt and the user's answer; the green-main baseline taken without asking, as
+`rule: file` per finding; the `ready` verdict and run id; wall time against the budget;
 `resume` when the index stays `building`. The claim stays with this session.
 
 ## Rules
