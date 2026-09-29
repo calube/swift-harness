@@ -374,6 +374,12 @@ follow-ups closed. The tasks below run outside the wave map, 3 at a time, each t
 - Does: for a plan with a `surfaceCommit`, when the green-main check's gating findings are exactly `coverage.no-t1-tests` for modules the surface commit added (`git diff --name-only <surface>^ <surface>` shows their new `Package.swift` or source directory), the skill takes them as the baseline without asking and says so in its report; any other gating finding still halts and asks. The final `ready` gate gets no baseline.
 - Tests: the skill contract test walks a surface that adds a module with no test target: step 1 records the baseline without a question; a second, unrelated gating finding still halts. Revert and confirm the walk goes red.
 
+### `module-graph-test-holds-under-load`
+- Deps: none · Gate: push · Model: opus · estLines: 60
+- Writes: `plugin/gate/Tests/SwiftGateCLITests/ModuleGraphCommandTests.swift` (`sameMapAsSessionStart`, its failure message and waits only), the module graph load or SessionStart's module map in `C/` or `A/` only if the root cause is there
+- Does: `ModuleGraphCommandTests.sameMapAsSessionStart` failed in a full push run at load ~50 with "SessionStart built no module map for the fixture" (run `20260929T150637Z-8efbc82e`) and passed filtered. The message drops SwiftPM's reason, so first make it carry the load error, then find the root cause from the code and a loaded trial, and fix the root: no retries, no raised timeout.
+- Tests: passes 3 loaded trials in a row; the failure message names the load error; hand-breaking the module map still fails the test by name.
+
 ### `design-free-ship-rehearsals`
 - Deps: every task above · Gate: ready · Model: opus · estLines: 60 · Decision: D0, then D3
 - Writes: `docs/e2e-report.md`
