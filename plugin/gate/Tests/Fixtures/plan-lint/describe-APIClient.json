@@ -1,0 +1,134 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "swift-dependencies",
+      "requirement" : {
+        "exact" : [
+          "1.17.1"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-dependencies"
+    }
+  ],
+  "manifest_display_name" : "APIClient",
+  "name" : "APIClient",
+  "path" : "/REPO/Packages/APIClient",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "APIClient",
+      "targets" : [
+        "APIClient"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "APIClientLive",
+      "targets" : [
+        "APIClientLive"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "APIClientTests",
+      "module_type" : "SwiftTarget",
+      "name" : "APIClientTests",
+      "path" : "Tests/APIClientTests",
+      "product_dependencies" : [
+        "Dependencies"
+      ],
+      "sources" : [
+        "APIClientTests.swift"
+      ],
+      "target_dependencies" : [
+        "APIClient"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "APIClientLiveTests",
+      "module_type" : "SwiftTarget",
+      "name" : "APIClientLiveTests",
+      "path" : "Tests/APIClientLiveTests",
+      "resources" : [
+        {
+          "path" : "/REPO/Packages/APIClient/Tests/APIClientLiveTests/Fixtures",
+          "rule" : {
+            "copy" : {
+
+            }
+          }
+        }
+      ],
+      "sources" : [
+        "APIClientLiveTests.swift"
+      ],
+      "target_dependencies" : [
+        "APIClient",
+        "APIClientLive"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "APIClientLive",
+      "module_type" : "SwiftTarget",
+      "name" : "APIClientLive",
+      "path" : "Sources/APIClientLive",
+      "product_dependencies" : [
+        "Dependencies"
+      ],
+      "product_memberships" : [
+        "APIClientLive"
+      ],
+      "sources" : [
+        "APIClientLive.swift"
+      ],
+      "target_dependencies" : [
+        "APIClient"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "APIClient",
+      "module_type" : "SwiftTarget",
+      "name" : "APIClient",
+      "path" : "Sources/APIClient",
+      "product_dependencies" : [
+        "Dependencies",
+        "DependenciesMacros"
+      ],
+      "product_memberships" : [
+        "APIClient",
+        "APIClientLive"
+      ],
+      "sources" : [
+        "APIClient.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

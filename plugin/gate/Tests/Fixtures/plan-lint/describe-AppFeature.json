@@ -1,0 +1,132 @@
+{
+  "dependencies" : [
+    {
+      "identity" : "apiclient",
+      "path" : "/REPO/Packages/APIClient",
+      "type" : "fileSystem"
+    },
+    {
+      "identity" : "logclient",
+      "path" : "/REPO/Packages/LogClient",
+      "type" : "fileSystem"
+    },
+    {
+      "identity" : "shoppinglistclient",
+      "path" : "/REPO/Packages/ShoppingListClient",
+      "type" : "fileSystem"
+    },
+    {
+      "identity" : "swift-composable-architecture",
+      "requirement" : {
+        "exact" : [
+          "1.26.2"
+        ]
+      },
+      "type" : "sourceControl",
+      "url" : "https://github.com/pointfreeco/swift-composable-architecture"
+    }
+  ],
+  "manifest_display_name" : "AppFeature",
+  "name" : "AppFeature",
+  "path" : "/REPO/Packages/AppFeature",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "AppCore",
+      "targets" : [
+        "AppCore"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    },
+    {
+      "name" : "AppUI",
+      "targets" : [
+        "AppUI"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "AppUI",
+      "module_type" : "SwiftTarget",
+      "name" : "AppUI",
+      "path" : "Sources/AppUI",
+      "product_dependencies" : [
+        "ComposableArchitecture"
+      ],
+      "product_memberships" : [
+        "AppUI"
+      ],
+      "sources" : [
+        "AppView.swift",
+        "ShoppingListView.swift"
+      ],
+      "target_dependencies" : [
+        "AppCore"
+      ],
+      "type" : "library"
+    },
+    {
+      "c99name" : "AppCoreTests",
+      "module_type" : "SwiftTarget",
+      "name" : "AppCoreTests",
+      "path" : "Tests/AppCoreTests",
+      "product_dependencies" : [
+        "APIClient",
+        "LogClient",
+        "ShoppingListClient",
+        "ComposableArchitecture"
+      ],
+      "sources" : [
+        "AppFeatureTests.swift"
+      ],
+      "target_dependencies" : [
+        "AppCore"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "AppCore",
+      "module_type" : "SwiftTarget",
+      "name" : "AppCore",
+      "path" : "Sources/AppCore",
+      "product_dependencies" : [
+        "APIClient",
+        "LogClient",
+        "ShoppingListClient",
+        "ComposableArchitecture"
+      ],
+      "product_memberships" : [
+        "AppCore",
+        "AppUI"
+      ],
+      "sources" : [
+        "AppFeature.swift",
+        "ShoppingListFeature.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

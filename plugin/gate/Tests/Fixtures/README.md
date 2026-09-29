@@ -624,6 +624,21 @@ file wraps over 2 lines, joined onto 1. `shipping-address` marks the delivery no
 `Spec: none` (its spec lists no acceptance line for it) and runs to 417 words, over the 400-word
 limit: a real `too-long` page.
 
+## Plan-lint on a spec-page plan (`plan-lint/`)
+
+A design-free ship rehearsal's plan, copied byte for byte from its plan state after the decomposer
+wrote it: the confirmed spec page and the ledger `plan-lint` judged. Its surface commit created a
+client interface module and its `Live` module with no test target, and no task writes the
+interface's `Tests/<Module>Tests/`. With `P` the rehearsal repo's
+`$(git rev-parse --path-format=absolute --git-common-dir)/swift-harness/plans/<slug>` and `SC` its
+recorded `surfaceCommit`:
+
+| File | Capture |
+|---|---|
+| `shopping-list.page.txt` | `cp "$P/spec-page.md" shopping-list.page.txt` (sha256 matches the plan's `approval.pageSha`) |
+| `shopping-list.ledger.json` | `cp "$P/ledger.json" shopping-list.ledger.json` |
+| `describe-<Package>.json` (APIClient, LogClient, ShoppingListClient, AppFeature) | `R="$(cd "$(mktemp -d)" && pwd -P)"; git archive "$SC" \| tar -x -C "$R"; (cd "$R/Packages/<Package>" && swift package describe --type json) \| sed "s#$R#/REPO#g"` |
+
 ## Ledger page (`design-render --ledger`)
 
 `ledger-page/design-plan-ledger.html` is the ledger page `swiftgate design-render --ledger` wrote for a

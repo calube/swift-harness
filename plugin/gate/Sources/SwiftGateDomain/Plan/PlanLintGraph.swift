@@ -477,10 +477,49 @@ public enum PlanLintGraph {
   /// A `major` finding per module `page`'s Modules table names that `coverage.no-t1-tests` would
   /// fail in `graph` (``T1Presence``) and whose `Tests/<Module>Tests/` directory no task in
   /// `tasks` writes.
+  ///
+  /// The plan's surface has landed before it is planned, so a module the page creates is in the
+  /// graph with no test target, and a surface can't add one (an empty test target fails
+  /// `t1.no-tests`). Unless a task writes it, the final gate fails for a module no task owns. A
+  /// module the graph doesn't have isn't judged here: no surface created it, and
+  /// `build-return.target-outside-surface` refuses a task that adds it.
   public static func newModuleUntestedFindings(
     page: SpecPage, tasks: [LedgerTask], graph: ModuleGraph, pagePath: String
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    // `T1Presence` stays the one judge of which modules lack a T1 target; its findings name each
+    // module by its source path.
+    let untestedPaths = Set(try T1Presence.evaluate(graph).map(\.file))
+    let names = page.modules.map {
+      $0.name.trimmingCharacters(in: CharacterSet(charactersIn: " `"))
+    }
+    var findings: [Finding] = []
+    var seen: Set<String> = []
+    for name in names where seen.insert(name).inserted {
+      guard let module = graph.module(named: name), untestedPaths.contains(module.path),
+        let package = graph.packages.first(where: { $0.name == module.packageName })
+      else { continue }
+      let testDirectory =
+        (package.path.isEmpty ? "" : package.path + "/") + "Tests/\(name)Tests"
+      let planned = tasks.contains { task in
+        task.writeSet.contains { entry in
+          let path = entry.hasSuffix("/") ? String(entry.dropLast()) : entry
+          return path == testDirectory || ModuleGraph.isInside(path, directory: testDirectory)
+            || (entry.hasSuffix("/") && ModuleGraph.isInside(testDirectory, directory: path))
+        }
+      }
+      guard !planned else { continue }
+      findings.append(
+        try Finding(
+          ruleID: newModuleUntestedRuleID, severity: .major, file: pagePath, line: nil,
+          message:
+            "module `\(name)`, which the spec page's Modules table names, has no test target, "
+            + "and no task's write set holds `\(testDirectory)/`: add that directory to the "
+            + "write set of the task that builds on `\(name)`, with a host test that depends on it",
+          failureScenario:
+            "the build's final gate fails coverage.no-t1-tests for \(name), and no task was "
+            + "planned to give it a test target"))
+    }
+    return findings
   }
 
   // MARK: - Entry point
@@ -541,6 +580,8 @@ extension PlanLintGraph {
   ) throws(ReportContractViolation) -> [Finding] {
     var findings = try PlanLintCoverage.coverageFindings(
       page: specPage, tasks: ledger.tasks, pagePath: pagePath)
+    findings += try newModuleUntestedFindings(
+      page: specPage, tasks: ledger.tasks, graph: graph, pagePath: pagePath)
 
     let sliceTiers = PlanLintCoverage.sliceTiers(page: specPage)
     let packageDirectories = graph.packages.map(\.path)

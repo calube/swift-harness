@@ -84,7 +84,7 @@
         {
           "answered" : "a claim id starting ev-",
           "expected" : "a claim id starting ev-",
-          "probability" : 0.95,
+          "probability" : 1,
           "question" : "interval-tag"
         }
       ],
@@ -97,13 +97,13 @@
         {
           "answered" : "the UNVERIFIED tag",
           "expected" : "the UNVERIFIED tag",
-          "probability" : 1,
+          "probability" : 0.93,
           "question" : "interval-tag"
         },
         {
           "answered" : "Risks or Open questions",
           "expected" : "Risks or Open questions",
-          "probability" : 1,
+          "probability" : 0.85,
           "question" : "interval-repeated"
         }
       ],
@@ -277,7 +277,7 @@
         {
           "answered" : "it stays bounded, or no story says",
           "expected" : "it stays bounded, or no story says",
-          "probability" : 0.97,
+          "probability" : 0.98,
           "question" : "download-concurrency"
         }
       ],
@@ -330,7 +330,7 @@
       "model" : "opus"
     }
   ],
-  "contentHash" : "19e0eaca771543f65ef2d021a880261dc019a68e8d3532b613f828527dd741fa",
+  "contentHash" : "7f5981affd09f69fd64173b7808a363ca14c572842bac0c8418f7b8bfc6eca21",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -346,6 +346,6 @@
     "plugin/workflows/design-research.js",
     "plugin/workflows/design-review.js"
   ],
-  "passedAt" : "2026-09-28T22:54:24Z",
+  "passedAt" : "2026-09-29T12:10:00Z",
   "schemaVersion" : 2
 }
