@@ -339,4 +339,61 @@ struct ContextPackSpecPageTests {
     #expect(text.contains("Sample: OrderQueueCore, OrderQueueFeature"))
     #expect(text.contains("est_lines_max = 400"))
   }
+
+  @Test(
+    "an absolute --spec-page inside the repository packs byte for byte as its repository-relative path, for the decomposer and the worker — catches a page refused because the plan skill names it absolutely, or a pack citing the machine's path",
+    arguments: ["decomposer", "worker"])
+  func absolutePageInsideTheRepository(role: String) async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    var options = try workerOptions(covers: [Self.slice2ID], in: repository)
+    options.moduleGraph = try repository.write("Sample: LogClient\n", at: "graph.txt")
+    options.taskSizingBounds = try repository.write("est_lines_max = 400\n", at: "bounds.txt")
+
+    let relative = await ContextPackRun.run(
+      role: role, options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let relativePack) = relative else {
+      Issue.record("expected .written, got \(relative)")
+      return
+    }
+    let expected = try repository.text(relativePack.relativePath)
+    try FileManager.default.removeItem(
+      at: repository.root.appending(path: relativePack.relativePath))
+
+    options.specPage = repository.root.appending(path: Self.pagePath).path(percentEncoded: false)
+    let absolute = await ContextPackRun.run(
+      role: role, options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .written(let absolutePack) = absolute else {
+      Issue.record("expected .written, got \(absolute)")
+      return
+    }
+    let text = try repository.text(absolutePack.relativePath)
+    #expect(text == expected)
+    #expect(!text.contains(repository.root.path(percentEncoded: false)))
+  }
+
+  @Test(
+    "an absolute --spec-page outside the repository exits 2 naming the page — catches a pack that cites a path on the operator's machine"
+  )
+  func absolutePageOutsideTheRepositoryIsInvalid() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let elsewhere = try Repository()
+    defer { elsewhere.remove() }
+    let swiftPM = try repository.seedModuleGraph()
+    var options = try workerOptions(covers: [Self.slice2ID], in: repository)
+    try elsewhere.write(pageText, at: Self.pagePath)
+    let outside = elsewhere.root.appending(path: Self.pagePath).path(percentEncoded: false)
+    options.specPage = outside
+
+    let outcome = await ContextPackRun.run(
+      role: "worker", options: options, root: repository.root, swiftPM: swiftPM)
+    guard case .invalid(let message) = outcome else {
+      Issue.record("expected .invalid, got \(outcome)")
+      return
+    }
+    #expect(message.contains(outside))
+    #expect(message.contains("outside the repository"))
+  }
 }

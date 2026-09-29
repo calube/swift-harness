@@ -20,7 +20,13 @@ public enum ContextPackFiles {
   /// below `root` when absolute inside it (symlinks resolved on both sides), and `nil` when
   /// absolute outside it, since a pack citing it would carry the operator's machine path.
   public static func repositoryPath(_ path: String, root: URL) -> String? {
-    nil
+    guard path.hasPrefix("/") else { return path }
+    let base = root.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
+    let file = URL(filePath: path).standardizedFileURL.resolvingSymlinksInPath()
+      .path(percentEncoded: false)
+    let prefix = base.hasSuffix("/") ? base : base + "/"
+    guard file.hasPrefix(prefix), file.count > prefix.count else { return nil }
+    return String(file.dropFirst(prefix.count))
   }
 
   /// Reads a whole file verbatim as a labelled ``ContextSource``. `label` is what the pack's
