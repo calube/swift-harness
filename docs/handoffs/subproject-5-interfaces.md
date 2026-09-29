@@ -508,3 +508,29 @@ section at every merge; workers read it and never edit it. Plan: [the build exec
 - **Gates.** Push GREEN (run 20260929T015722Z-39f5b8c8), prove 6 of 6 at `0b973e7` (run 20260929T020230Z-4c804c25).
   Mutate for waves 12-13 GREEN (run 20260929T013754Z-1e91270d). The shim test family still fails under load now and
   then (`RepositoryScriptTests.shim()` with empty stdout, and the deadline test at load 110): a follow-up.
+
+## Rehearsal fixes and the stability round (2026-09-29)
+
+- **The build's gates measure from the plan surface.** With `surfaceCommit` in plan.json, the build skill's green-main
+  check, its merge gates on `main` and its final `ready` gate add `--base <surfaceCommit>`, and so does the fixer
+  (`build-fixer.md` reads it from its inputs). Workers' task gates keep `--base main`.
+- **A surface wires a new dependency accessor.** `surface-check` accepts `get { self[K.self] } set { self[K.self] = newValue }`
+  on `DependencyValues` for a key declared in the commit or on the base (`SurfaceStubForm.wiresDependency`); any other
+  body there is `surface-check.behaviour` (`SurfaceBehaviour.undeclaredDependencyKey(key:)` for an unknown key). The
+  sprint skill writes accessors that way; the old `get { .init() } set {}` still passes.
+- **check-return compiles new tests at the proof bases.** `build-return.test-needs-stub` (exit 1, 1 finding per test
+  file) when a task's new or changed test doesn't compile at the plan surface plus its stubs; the fix is a stub commit
+  returned as `surfaceCommit`. `TaskReturnEvidence.testBuild: ProofBaseTestBuild?`. Prove and check-return share the
+  scratch-tree build (`runReverted`, `partition`, `buildAtProofBases`).
+- **plan-lint requires a test target per new module.** `plan-lint.new-module-untested` (major, file = the page) when a
+  page module the graph flags `coverage.no-t1-tests` has no task whose write set holds `<pkg>/Tests/<Module>Tests`, a
+  file in it, or a directory above it.
+- **The build baselines a surface's untested new modules.** When the green-main check's gating findings are all
+  `coverage.no-t1-tests` for modules with files at the surface and none at its parent, the skill takes them as the
+  baseline without asking. A merge gate passes when its gating findings are a subset of the baseline. The final
+  `ready` gate gets none.
+- **Flaky tests.** `tests/shim_test.sh` exits non-zero on failure again (its EXIT trap reads `$?` first), and its cold
+  hook check no longer uses a wall-clock budget. `MutationOrphanTests` waits for the killed process's exit through kqueue.
+- **Gates.** Integration runs GREEN: `20260929T111240Z-65308f99` (accessor), `20260929T113136Z-9e8be8a9`
+  (check-return), `20260929T130950Z-06864a1a` (new-module lint), `20260929T143908Z-149ca8cc` (the 3 stability branches).
+  Mutate hasn't run on any of these yet.
