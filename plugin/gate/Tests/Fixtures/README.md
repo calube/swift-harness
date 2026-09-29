@@ -600,11 +600,10 @@ cp .git/swift-harness/plans/2026-09-28-reading-list/plan.json <fixtures>/PlanSta
 cp .git/swift-harness/plans/2026-09-28-saved-search/plan.json <fixtures>/PlanState/plan-set-tier-and-resume.json
 ```
 
-`confirm-user.json` and `confirm-spec-quotes.json` are the `plan.json` files the `swiftgate` on
-`main` at `def1d1e` writes when `plan confirm` records a spec page's confirmation, before
-`delegate` was an approver: they pin that a plan already confirmed by `user` or by `spec-quotes`
-decodes and re-encodes unchanged. With `FX` this fixtures directory, in the same kind of throwaway
-repository:
+`confirm-user.json` and `confirm-spec-quotes.json` are the `plan.json` files `plan confirm` writes
+with the `swiftgate` on `main` at `def1d1e`, before `delegate` was an approver. They pin that a
+plan already confirmed by `user` or by `spec-quotes` decodes and re-encodes unchanged. With `FX`
+this fixtures directory, in the same kind of throwaway repository:
 
 ```sh
 swiftgate plan claim 2026-09-29-task-status --spec-page --session $S
