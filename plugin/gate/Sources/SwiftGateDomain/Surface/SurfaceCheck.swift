@@ -213,8 +213,9 @@ public enum SurfaceCheck {
     case .changesManifest(let excerpt):
       "changes the package manifest (`\(excerpt)`): a surface only adds dependencies, products "
         + "and targets to an existing manifest's lists, and removes or changes nothing"
-    case .undeclaredDependencyKey:
-      ""
+    case .undeclaredDependencyKey(let key):
+      "keys on `\(key)`, which neither the commit nor its parent declares: a wired accessor reads "
+        + "and writes the slot of a key type the surface or the code before it declares"
     case .addsTest:
       "adds a test: a surface commit adds no tests; they follow it"
     }

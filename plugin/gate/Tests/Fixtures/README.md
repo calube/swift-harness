@@ -546,6 +546,17 @@ flag to `swiftSettings`, change a platform, change the tools version and add a s
 base tree's `Packages/AppFeature/Package.swift` is the manifest they edit. The same capture
 command records them.
 
+`allowed-dependency-accessor-stub` holds a client file from a real ship rehearsal's surface commit
+byte for byte (checked with `git show <surface>:<path> | cmp - <fixture>`), its `DependencyValues`
+accessor stubbed as `get { .init() }` and `set {}`. `allowed-dependency-accessor-wired` is the same
+file with the accessor wired as `get { self[ShoppingListClient.self] }` and
+`set { self[ShoppingListClient.self] = newValue }`, by the `sed` in the script.
+`allowed-dependency-accessor-keys` wires 1 accessor to a key the base tree declares (`ItemClient`)
+and 1 to a key another file of the same commit declares. `rejected-dependency-accessor-near-miss`
+maps the client in a getter, returns a literal, stores `.init()` or a renamed setter parameter,
+keys on an undeclared type, and wires a `self[…]` subscript outside `DependencyValues`. The same
+capture command records them.
+
 ## Sprint slice manifests (`sprint slice`)
 
 git 2.50.1 (Apple Git-155). The 3 `Package.swift` files a sprint rehearsal's surface (`b12ac55`) and

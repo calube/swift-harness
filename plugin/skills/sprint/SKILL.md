@@ -114,8 +114,9 @@ change the user asks for and go on; don't ask a second time.
    lists the allowed bodies: empty, 1 empty default (`nil`, `[]`, `[:]`, `0`, `false`, `""`,
    `.init()`) or a payload-free enum case, `EmptyView()` for a view body, `.none` from a reducer.
    No test, no trap, no sample data. An existing call path returns what it returned before.
-   A new `@Dependency` client's `DependencyValues` accessor stubs as `get { .init() }` and
-   `set {}`; the slice that tests the client turns it into `self[Key.self]`. The surface may add
+   A new `@Dependency` client's `DependencyValues` accessor is wired for real, as
+   `get { self[Key.self] }` and `set { self[Key.self] = newValue }`, so any slice's test can inject
+   the client; its key's `liveValue` and `testValue` stay stubs. The surface may add
    dependencies, products and targets to an existing `Package.swift`; any other manifest change is
    behaviour. A `surface-check` finding takes no `swiftgate:allow`: turn the body back into a stub.
 2. `"$SG" check --tier fast --base main` until GREEN: the surface builds and the tests already
