@@ -1,0 +1,35 @@
+import Dependencies
+import DependenciesMacros
+import Foundation
+
+public struct ShoppingItem: Codable, Equatable, Identifiable, Sendable {
+  public let id: UUID
+  public var name: String
+  public var quantity: Int
+  public var isBought: Bool
+
+  public init(id: UUID, name: String, quantity: Int = 1, isBought: Bool = false) {
+    self.id = id
+    self.name = name
+    self.quantity = quantity
+    self.isBought = isBought
+  }
+}
+
+@DependencyClient
+public struct ShoppingListClient: Sendable {
+  public var load: @Sendable () throws -> [ShoppingItem]
+  public var save: @Sendable (_ items: [ShoppingItem]) throws -> Void
+}
+
+extension ShoppingListClient: TestDependencyKey {
+  public static let testValue = ShoppingListClient()
+  public static let previewValue = ShoppingListClient()
+}
+
+extension DependencyValues {
+  public var shoppingListClient: ShoppingListClient {
+    get { self[ShoppingListClient.self] }
+    set { self[ShoppingListClient.self] = newValue }
+  }
+}

@@ -1,0 +1,13 @@
+import Dependencies
+
+extension DependencyValues {
+  var itemClient: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = newValue }
+  }
+
+  var profileClient: ProfileClient {
+    get { return self[ProfileClient.self] }
+    set { self[ProfileClient.self] = newValue }
+  }
+}

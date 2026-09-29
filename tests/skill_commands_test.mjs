@@ -921,7 +921,7 @@ const tests = {
     }
     for (const [lesson, pattern] of [
       ['a spec file may sit outside the repository', /`<spec-file>` \|[^|]*outside the repository/],
-      ['a new dependency accessor stubs as `.init()` and a no-op setter', /`get \{ \.init\(\) \}` and `set \{\}`[^.]*`self\[Key\.self\]`/],
+      ['a new dependency accessor is wired to its key for real', /accessor is wired for real, as `get \{ self\[Key\.self\] \}` and `set \{ self\[Key\.self\] = newValue \}`/],
       ['a surface may add to an existing Package.swift', /add dependencies, products and targets to an existing `Package\.swift`/],
       ['a surface-check finding takes no swiftgate:allow', /`surface-check` finding takes no `swiftgate:allow`/],
       ['the ready gate runs in the foreground', /ready gate in the foreground[^.]*never in the background/],

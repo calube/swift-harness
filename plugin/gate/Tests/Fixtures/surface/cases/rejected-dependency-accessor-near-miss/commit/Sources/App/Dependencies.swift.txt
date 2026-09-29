@@ -1,0 +1,35 @@
+import Dependencies
+
+extension DependencyValues {
+  var mappedClient: ItemClient {
+    get { self[ItemClient.self].configured() }
+    set { self[ItemClient.self] = newValue }
+  }
+
+  var fixedTimeout: Int {
+    get { 30 }
+    set {}
+  }
+
+  var resetClient: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = .init() }
+  }
+
+  var renamedClient: ItemClient {
+    get { self[ItemClient.self] }
+    set(client) { self[ItemClient.self] = client }
+  }
+
+  var unknownClient: UnknownClient {
+    get { self[UnknownClient.self] }
+    set { self[UnknownClient.self] = newValue }
+  }
+}
+
+struct Store {
+  var client: ItemClient {
+    get { self[ItemClient.self] }
+    set { self[ItemClient.self] = newValue }
+  }
+}
