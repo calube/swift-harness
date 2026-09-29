@@ -788,7 +788,8 @@ export function surfaceBaselineRule(skill) {
 /**
  * Problems with how the build skill takes a surface's untested new modules as the baseline: no
  * rule in step 1 (`surfaceBaselineRule`), no halt for any other gating finding beside them, a
- * report that doesn't name the baseline taken, and a final gate that doesn't refuse it.
+ * report that doesn't name the baseline taken, a final gate that doesn't refuse it, and a merge
+ * gate that passes only on exactly the baseline.
  */
 export function surfaceBaselineProblems(skill) {
   const problems = []
@@ -808,6 +809,9 @@ export function surfaceBaselineProblems(skill) {
   if (!/baseline[^.;]*without asking/.test(report.replace(/\s+/g, ' '))) problems.push('the report never names a baseline taken without asking')
   const [finish] = numberedSections(skill, /^## 4\. Finish\b/)
   if (!/\bno baseline\b/.test((finish?.lines ?? []).join(' '))) problems.push('the final gate never says it takes no baseline')
+  if (/\bexactly the (?:step 1 )?baseline/.test(skill.replace(/\s+/g, ' '))) {
+    problems.push('a merge gate passes only on exactly the baseline, so a task that clears 1 of its findings reads as red')
+  }
   return problems
 }
 
@@ -1438,9 +1442,9 @@ const tests = {
     ])
   },
 
-  'the surface baseline check names a missing rule, a command without its placeholders, no halt for other findings, a silent report and a final gate that takes the baseline — catches a check that passes anything'() {
+  'the surface baseline check names a missing rule, a command without its placeholders, no halt for other findings, a silent report, a final gate that takes the baseline and an exact-baseline merge gate — catches a check that passes anything'() {
     const skill = [
-      '## 1. Start', '', '4. Check main.', '',
+      '## 1. Start', '', '4. Check main. A later merge gate passes when its gating findings are exactly the', '   baseline\'s.', '',
       '   With a plan surface, take every `coverage.no-t1-tests` for a module the surface commit added as the baseline without asking. The surface added the module when `git diff --name-only HEAD` lists files and `git ls-tree -r --name-only <surfaceCommit>^ -- <file>` lists none.', '',
       '## 4. Finish', '', '1. Run the ready gate.', '',
       '## Report', '', 'The ledger page link.', '',
@@ -1451,6 +1455,7 @@ const tests = {
       'step 1 never halts on another gating finding beside the surface\'s',
       'the report never names a baseline taken without asking',
       'the final gate never says it takes no baseline',
+      'a merge gate passes only on exactly the baseline, so a task that clears 1 of its findings reads as red',
     ])
     assert.deepEqual(surfaceBaselineProblems('## 1. Start\n\n4. Not GREEN: halt.\n'), [
       'step 1 takes no baseline without asking for a surface\'s untested new modules',

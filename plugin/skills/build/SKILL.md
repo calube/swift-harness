@@ -55,7 +55,7 @@ recommended first. Never work around a halt by hand. The reference lists the opt
    plan surface, `"$SG" check --tier <merge_gate> --base <surfaceCommit>`. Not
    GREEN: halt, and quote the findings as `rule: message`. Options: **stop** (Recommended) so
    `main` gets fixed first, or **go on** with these findings as the baseline. With a baseline, a
-   later merge gate passes when its gating findings are exactly the baseline's. Every merge gate
+   later merge gate passes when every gating finding it has is one of the baseline's. Every merge gate
    runs on `main`, so a finding already there would read as the task's fault.
 
    With a plan surface, 1 red needs no question: when every gating finding is
@@ -114,7 +114,8 @@ Handle notices one at a time: merges run in completion order.
    `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
-   gate whose gating findings are exactly the step 1 baseline counts as GREEN.
+   gate whose every gating finding is one of the step 1 baseline's counts as GREEN: a task that
+   tests 1 of the surface's modules clears its finding and leaves the others.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
