@@ -80,7 +80,7 @@ struct PlanSurfaceContext: Sendable {
   let branches: any SprintBranches
   let surfaceReader: any SurfaceCommitReading
   /// `.swiftgate.toml`'s `[build.presets]`.
-  let presets: [String: BuildPreset]
+  var presets: [String: BuildPreset] = [:]
 }
 
 /// The testable core of `plan surface` (fast modes §5.1 step 2, §6): the lock holder of a
@@ -93,6 +93,13 @@ enum PlanSurfaceRun {
   /// A refusal (exit 1) or a blocked read (exit 2), thrown out of the checks as the report.
   private struct Stop: Error {
     let report: PlanSurfaceReport
+  }
+
+  static func run(
+    slug: String, commit: String, gate: String, session: String?, context: PlanSurfaceContext
+  ) async -> PlanSurfaceReport {
+    await run(
+      slug: slug, commit: commit, gate: gate, session: session, preset: "", context: context)
   }
 
   static func run(
