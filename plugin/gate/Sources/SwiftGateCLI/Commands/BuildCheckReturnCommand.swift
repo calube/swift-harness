@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateRules
 
 /// What `build check-return` found in one task return.
 struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
@@ -113,6 +114,8 @@ enum BuildCheckReturnRun {
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
     var outside: [String] = []
     var surface: TaskReturnEvidence.CommitState?
+    var manifests: PlanSurfaceManifests?
+    let planSurface = try planSurfaceCommit(store, warnings: &warnings)
     if let branchTip {
       for commit in taskReturn.commits {
         commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
@@ -120,8 +123,12 @@ enum BuildCheckReturnRun {
       if let surfaceCommit = taskReturn.surfaceCommit {
         surface = try await state(of: surfaceCommit, onBranchAt: branchTip, git: git)
       }
-      outside = WriteSet.outside(
-        try await branchChanges(tip: branchTip, git: git), writeSet: task.writeSet)
+      let changed = try await branchChanges(tip: branchTip, git: git)
+      if let planSurface {
+        manifests = try await surfaceManifests(
+          changed, surface: planSurface, tip: branchTip, git: git)
+      }
+      outside = WriteSet.outside(changed, writeSet: task.writeSet)
       if !outside.isEmpty {
         warnings.append(
           "the task branch changed \(outside.count) file(s) outside its write set: "
@@ -133,7 +140,46 @@ enum BuildCheckReturnRun {
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
       explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
-      surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix)
+      surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
+      planSurface: manifests)
+  }
+
+  /// `plan.json`'s `surfaceCommit`. A plan claimed before plan state had a `plan.json` has no
+  /// surface to check against, which the warnings name.
+  private static func planSurfaceCommit(_ store: PlanStateStore, warnings: inout [String])
+    throws(Blocked) -> String?
+  {
+    do throws(PlanStateStoreError) {
+      return try store.planFile().surfaceCommit
+    } catch .missing(let path) {
+      warnings.append("\(path) is missing, so no manifest was checked against a plan surface")
+      return nil
+    } catch {
+      throw Blocked("reading the plan's surface commit: \(error)")
+    }
+  }
+
+  /// Every `Package.swift` among `changed`, read at the plan surface and at the branch tip.
+  private static func surfaceManifests(
+    _ changed: [String], surface: String, tip: String, git: any Git
+  ) async throws(Blocked) -> PlanSurfaceManifests {
+    let paths = changed.filter(ManifestDeclarationsReader.isManifest)
+    guard !paths.isEmpty else { return PlanSurfaceManifests(surface: surface, manifests: []) }
+    let before: [String: String]
+    let after: [String: String]
+    do {
+      before = try await git.contents(of: paths, at: surface)
+      after = try await git.contents(of: paths, at: tip)
+    } catch {
+      throw Blocked("reading the task branch's manifests at the plan surface \(surface): \(error)")
+    }
+    return PlanSurfaceManifests(
+      surface: surface,
+      manifests: paths.map { path in
+        SliceManifest(
+          path: path, atSurface: before[path].map(ManifestDeclarationsReader.read),
+          atHead: after[path].map(ManifestDeclarationsReader.read))
+      })
   }
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
