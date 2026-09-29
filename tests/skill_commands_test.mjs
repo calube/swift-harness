@@ -1389,6 +1389,14 @@ const tests = {
     assert.match(text.replace(/\s+/g, ' '), /`plan-lint\.spec-page-moved`[^.]*halt/, 'a moved page goes to the decomposer\'s fix round')
   },
 
+  'the plan skill\'s spec-page confirm line names every approver plan confirm takes, delegate included — catches a delegated session steered to confirm as the user'() {
+    const text = readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
+    const section = text.slice(text.indexOf('\n### A spec-page plan\n') + 1).split(/\n#{2,3} /)[0]
+    const confirms = [...section.matchAll(/`[^`]*\bplan confirm\b[^`]* --by [^`]*`/g)].map(m => m[0])
+    assert.ok(confirms.length > 0, 'the spec-page section never runs plan confirm --by')
+    for (const line of confirms) assert.match(line, / --by user\|spec-quotes\|delegate /, line)
+  },
+
   'the plan, build and ship skills report the ledger page\'s path and go on when the session has no Artifact tool — catches a headless run halted by a view'() {
     for (const [skill, slug] of [['plan', 'slug'], ['build', 'slug'], ['ship', 'plan']]) {
       const prose = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8').replace(/\s+/g, ' ')
