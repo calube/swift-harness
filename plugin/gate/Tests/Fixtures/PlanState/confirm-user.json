@@ -1,0 +1,15 @@
+{
+  "approval" : {
+    "at" : "2026-09-29T14:41:10Z",
+    "by" : "user",
+    "pageSha" : "fac806ca6b4928218e61ed54e030d44a74b6d424473a01541e3a128fe5e01b18"
+  },
+  "resume" : "framing",
+  "schemaVersion" : 1,
+  "slug" : "2026-09-29-recipient-postcode",
+  "source" : "specPage",
+  "specPage" : {
+    "pageSha" : "fac806ca6b4928218e61ed54e030d44a74b6d424473a01541e3a128fe5e01b18",
+    "path" : "spec-page.md"
+  }
+}

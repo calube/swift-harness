@@ -118,6 +118,8 @@ Only at `none`. The page replaces the design doc as the plan's source.
 4. When `confirm` is `required`, ask once with `AskUserQuestion`: show the slices and each test,
    name the slices marked `Spec: none`, and offer **build this page** (Recommended) and **change
    it**. Apply any change, then run item 3 again; don't ask a second time. Then `<by>` is `user`.
+   When the answer comes from a session the user delegated to answer for them, not from the user,
+   `<by>` is `delegate`: it stands in for the user and says so on disk.
    When `confirm` is `skippable`, go on without asking, with `--by spec-quotes`: every slice
    quotes the spec.
 5. Confirm it. `swiftgate` refuses `--by spec-quotes` unless the page is skippable, and any RED

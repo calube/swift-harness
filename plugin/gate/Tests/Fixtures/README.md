@@ -600,6 +600,24 @@ cp .git/swift-harness/plans/2026-09-28-reading-list/plan.json <fixtures>/PlanSta
 cp .git/swift-harness/plans/2026-09-28-saved-search/plan.json <fixtures>/PlanState/plan-set-tier-and-resume.json
 ```
 
+`confirm-user.json` and `confirm-spec-quotes.json` are the `plan.json` files the `swiftgate` on
+`main` at `def1d1e` writes when `plan confirm` records a spec page's confirmation, before
+`delegate` was an approver: they pin that a plan already confirmed by `user` or by `spec-quotes`
+decodes and re-encodes unchanged. With `FX` this fixtures directory, in the same kind of throwaway
+repository:
+
+```sh
+swiftgate plan claim 2026-09-29-task-status --spec-page --session $S
+swiftgate plan claim 2026-09-29-recipient-postcode --spec-page --session $S
+P=$(git rev-parse --path-format=absolute --git-common-dir)/swift-harness/plans
+cp $FX/spec-page/task-status.page.txt $P/2026-09-29-task-status/spec-page.md
+cp $FX/spec-page/recipient-postcode.page.txt $P/2026-09-29-recipient-postcode/spec-page.md
+swiftgate plan confirm 2026-09-29-task-status --by spec-quotes --spec $FX/spec-page/task-status.spec.txt --session $S
+swiftgate plan confirm 2026-09-29-recipient-postcode --by user --spec $FX/spec-page/recipient-postcode.spec.txt --session $S
+cp $P/2026-09-29-task-status/plan.json $FX/PlanState/confirm-spec-quotes.json
+cp $P/2026-09-29-recipient-postcode/plan.json $FX/PlanState/confirm-user.json
+```
+
 ## Spec pages (`spec-page check`)
 
 `spec-page/<name>.page.txt` is a spec page a sprint session wrote from `spec-page/<name>.spec.txt`,
