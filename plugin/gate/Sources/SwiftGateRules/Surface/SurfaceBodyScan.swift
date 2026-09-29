@@ -75,7 +75,9 @@ private final class DeclaredNames: SyntaxVisitor {
 public enum SurfaceBodyScan {
   /// The callees of every body shaped like a forwarding call, so the parent's declarations are
   /// read only when a body could forward.
-  public static func forwardCallees(in change: SurfaceFileChange) -> Set<String> {
+  public static func forwardCallees(
+    in change: SurfaceFileChange, commitTypes: Set<String> = []
+  ) -> Set<String> {
     let asked = CalleeLog()
     _ = scan(change) { name, _ in
       asked.names.insert(name)
@@ -84,9 +86,15 @@ public enum SurfaceBodyScan {
     return asked.names
   }
 
-  public static func judge(_ change: SurfaceFileChange, parent: SurfaceParentIndex)
-    -> [SurfaceJudgement]
-  {
+  /// Every type the commit's Swift files declare, which a wired `DependencyValues` accessor may
+  /// key on beside the parent's.
+  public static func declaredTypes(in changes: [SurfaceFileChange]) -> Set<String> {
+    []
+  }
+
+  public static func judge(
+    _ change: SurfaceFileChange, parent: SurfaceParentIndex, commitTypes: Set<String> = []
+  ) -> [SurfaceJudgement] {
     scan(change) { name, kind in
       switch kind {
       case .function: parent.functions.contains(name)
