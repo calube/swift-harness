@@ -169,6 +169,8 @@ Then remove each wave's worktree and branch: `git worktree remove --force` and `
 ### 5. Pushing
 
 Merges stay local until the user says to push. Ask once at a natural stop. Never force-push `main`.
+When the push bar needs `ready` on `main`, start that run at the beginning of the round, alongside the fixes
+(see "Scout the slowest gate first" in the push-bar lessons).
 
 ## Costs seen (waves 1–5)
 
@@ -340,6 +342,24 @@ Merges stay local until the user says to push. Ask once at a natural stop. Never
 - **A prompt edit needs its calibration in the same task.** A worker editing a calibrated agent prompt must run
   `swiftgate calibrate design` (or `build`) under the build lock and commit the record, so allow that one `claude`
   use in its brief.
+
+## Lessons from the push-bar round (2026-09-29)
+
+- **Scout the slowest gate first.** When a bar needs `ready` on `main`, start one `ready` run at the beginning of the
+  round, alongside the worker fixes, not after mutate. Run last, it found 2 latent problems about 90 minutes late:
+  5 tests that executed no production code (`reach.no-production-lines`), and prove failing across the unpushed range.
+- **Push often.** `ready` measures from `origin/main`; with 320 commits unpushed, prove reverted to a base where the
+  tests don't compile (491 `prove.compile-only`). `ready --base main` is no substitute: with nothing changed since
+  `main` it ran only T0 and T1 (about 93 s), the push tier again. The evidence is then repeated full T1 runs plus each
+  branch's merge-gate prove; the real fix is keeping the unpushed range short.
+- **Cap an unreproducible flake.** At most 3 loaded trials to see it. If it doesn't reproduce, make the test report its
+  cause on failure, file a hardening task, and stop (the user's call, to save tokens and time). An extra 25-minute
+  probe (2,696 runs, 0 failures) only added load during mutate.
+- **Don't stall on a reversible question.** While a question to the user waits, start the option you recommend and
+  discard the run if the answer differs. A gate chain sat idle for 26 minutes on one question.
+- **Check a worker's base before calling a failure a flake.** 2 of the flakes reported on worker branches were fixes
+  their base predated.
+- **A probe outside the build lock still loads the machine.** Count its load against the gate it overlaps.
 
 ## Lessons from the design-free ship rehearsals and the stability round (2026-09-29)
 
