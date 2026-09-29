@@ -980,7 +980,9 @@ extension ContextPack {
     let next = page.slices.first { $0.line > slice.line }.map { $0.line - 1 } ?? lines.count
     var end = start + 1
     while end < next, !lines[end].hasPrefix("## ") { end += 1 }
-    while end > start + 1, lines[end - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+    while end > start + 1,  // swiftgate:equivalent-mutant — `>=` reads the slice's line: not blank
+      lines[end - 1].trimmingCharacters(in: .whitespaces).isEmpty
+    {
       end -= 1
     }
     return Array(lines[start..<end])
