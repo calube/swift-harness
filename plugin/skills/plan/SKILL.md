@@ -110,7 +110,7 @@ The page is `<plans>/<slug>/spec-page.md`. Its confirm replaces the design's app
 changed after it. Don't write `plan.json` in this step.
 
 1. `plan.json` has no `approval`: halt. No one has confirmed the page yet; `/swift-harness:ship`
-   confirms it with `"$SG" plan confirm <slug> --by user|spec-quotes --spec <spec-file> --session <session>`.
+   confirms it with `"$SG" plan confirm <slug> --by user|spec-quotes|delegate --spec <spec-file> --session <session>`.
 2. `plan.json` has no `surfaceCommit`: halt. The decomposer reads the surface's files, and every
    worker builds on it; `/swift-harness:ship` lands it with
    `"$SG" plan surface <slug> <surface> --gate <run id> --session <session>`.

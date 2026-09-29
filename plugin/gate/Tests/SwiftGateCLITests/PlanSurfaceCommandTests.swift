@@ -348,6 +348,23 @@ struct PlanSurfaceCommandTests {
   }
 
   @Test(
+    "the not-confirmed refusal names every approver plan confirm takes, delegate included — catches a delegated session steered to confirm as the user"
+  )
+  func unconfirmedHintNamesDelegate() async throws {
+    let repo = try await SurfaceRepo()
+    defer { repo.remove() }
+    try await repo.claimed(confirm: false)
+
+    let report = await repo.run(try await repo.surface(), gate: try await repo.gate())
+
+    #expect(report.rule == .notConfirmed, "\(report.message)")
+    #expect(
+      report.message.contains(
+        "swiftgate plan confirm \(SurfaceRepo.slug) --by user|spec-quotes|delegate --spec"),
+      "\(report.message)")
+  }
+
+  @Test(
     "a second surface for a plan that recorded one is refused as plan-surface.already-recorded — catches a plan with 2 surfaces its tasks disagree on"
   )
   func secondSurfaceRefused() async throws {
