@@ -208,6 +208,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case outsideWriteSetUnexplained = "build-return.outside-write-set-unexplained"
     case gateMissingStep = "build-return.gate-missing-step"
     case targetOutsideSurface = "build-return.target-outside-surface"
+    case testNeedsStub = "build-return.test-needs-stub"
   }
 
   public let rule: Rule
@@ -295,13 +296,17 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   /// The manifests the task branch changed, read at the plan's surface commit and at the branch
   /// tip. `nil` when the plan has no surface commit.
   public let planSurface: PlanSurfaceManifests?
+  /// The task branch's new and changed host tests, built at the plan's proof bases. `nil` when
+  /// the plan has no surface commit or the branch changes no host test.
+  public let testBuild: ProofBaseTestBuild?
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
-    taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil
+    taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil,
+    testBuild: ProofBaseTestBuild? = nil
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -316,6 +321,49 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.surfaceCommit = surfaceCommit
     self.taskGateStepsRequired = taskGateStepsRequired
     self.planSurface = planSurface
+    self.testBuild = testBuild
+  }
+}
+
+/// A task branch's new and changed host tests, built with the production source it changed
+/// reverted to each proof base in turn: the plan surface, each merged task's stub, then the
+/// return's own stub. The final gate's `prove` reverts the same way, so a test that compiles at
+/// none of them is one it can only judge compile-only.
+public struct ProofBaseTestBuild: Sendable, Equatable {
+  /// A test file the compiler rejected at the last proof base tried, with its first error there.
+  public struct UncompiledFile: Sendable, Equatable {
+    public let file: String
+    public let error: String
+
+    public init(file: String, error: String) {
+      self.file = file
+      self.error = error
+    }
+  }
+
+  /// How one package's build at one proof base went.
+  public enum Outcome: Sendable, Equatable {
+    /// The tests compiled, whatever they then did.
+    case compiled
+    /// The compiler rejected these test files.
+    case testsDontCompile([UncompiledFile])
+    /// The build says nothing about the tests: it failed outside them, or left no evidence.
+    case noEvidence(String)
+  }
+
+  /// The refs production source was reverted to, oldest first.
+  public let proofBases: [String]
+  public let uncompiled: [UncompiledFile]
+
+  public init(proofBases: [String], uncompiled: [UncompiledFile]) {
+    self.proofBases = proofBases
+    self.uncompiled = uncompiled
+  }
+
+  /// - Parameter testDirectories: the package's test target directories; a compile error
+  ///   outside them means the reverted tree itself doesn't build.
+  public static func outcome(of run: SelectedTestRun, testDirectories: [String]) -> Outcome {
+    .compiled
   }
 }
 
