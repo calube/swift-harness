@@ -16,6 +16,8 @@ struct HookHarness {
   var xcode: any XcodeSelection = FixedXcode(version: "26.2")
   var environment: [String: String] = [:]
   let judge = RecordingJudge()
+  /// Replaces ``judge`` as the commit judge when set.
+  var commitJudge: (any CommitCommentJudging)?
 
   init(scenario: String = "pass", git: FakeGit = FakeGit(changed: [], mergeBase: "base")) throws {
     repository = try ProbeRepository()
@@ -39,7 +41,8 @@ struct HookHarness {
   var dependencies: HookDependencies {
     HookDependencies(
       git: git, swiftPM: swiftPM, formatter: formatter, xcode: xcode,
-      sweep: PendingOrphanCloneSweep(), commitJudge: judge, environment: environment)
+      sweep: PendingOrphanCloneSweep(), commitJudge: commitJudge ?? judge,
+      environment: environment)
   }
 
   func run(
@@ -413,6 +416,51 @@ struct HookCommandTests {
     #expect(output["permissionDecision"] == nil)
     #expect(output["additionalContext"]?.contains("comments.diff-narration") == true)
     #expect(harness.judge.reviews == 1)
+  }
+
+  @Test(
+    "git commit on a jev repository whose key Jev refuses still goes through, with advice that the judge didn't run and no trace of the key, fastest of 5 under 250 ms of the hook's own CPU — catches a Jev failure denying the commit or echoing TYPESAFE_API_KEY"
+  )
+  func gitCommitJevFailureIsAdvisory() async throws {
+    let key = JevCommitCommentJudgeTests.sentinelKey
+    let refusal = HTTPResponse(
+      status: 401,
+      body: Data(
+        #"{"detail":{"error_type":"authentication_error","message":"bad key \#(key)"}}"#.utf8))
+    let samples = try await Latency.samples {
+      var harness = try HookHarness()
+      defer { harness.repository.remove() }
+      try harness.repository.write(".swiftgate.toml", JevCommitCommentJudgeTests.config)
+      harness.git = FakeGit(staged: [
+        Self.probeSource: FakeGit.StagedFile(
+          content: "// Increment the probe by one.\nlet probe = 1\n", addedLines: [1...2])
+      ])
+      let transport = FakeHTTPTransport([.response(refusal)])
+      harness.commitJudge = ConfiguredCommitCommentJudge(
+        makeJudge: { config, root in
+          ConfiguredCommitCommentJudge.judge(
+            for: config, root: root, transport: transport,
+            environment: JevCommitCommentJudgeTests.keyed, clock: FakeRetryClock())
+        },
+        git: { [git = harness.git] _ in git })
+
+      let (result, milliseconds) = try await harness.run(
+        .preToolUse, "pre-tool-use-bash-git-commit")
+
+      let output = try #require(
+        try harness.json(result)["hookSpecificOutput"] as? [String: String])
+      #expect(output["permissionDecision"] == nil)
+      let context = try #require(output["additionalContext"])
+      #expect(context.contains("Comment judge not run"))
+      #expect(context.contains("401"))
+      #expect(transport.requests.count == 1)
+      #expect(!(result.stdout ?? "").contains(key))
+      #expect(!(result.stderr ?? "").contains(key))
+      return milliseconds
+    }
+    #expect(
+      samples.min()! < 250,
+      "gitCommitJevFailureIsAdvisory samples: \(samples)ms, budget: 250ms")
   }
 
   @Test(
