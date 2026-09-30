@@ -137,6 +137,115 @@ struct JudgeAdaptersTests {
   }
 
   @Test(
+    "a real claude envelope yields its cost, both durations, token counts and served model — catches usage read from the wrong keys"
+  )
+  func claudeUsageFromRealResult() throws {
+    let reply = try ClaudeJudgeReply.parseReply(
+      Fixture.data("Judge/claude-result.json"), stderr: "", for: Self.captureSet)
+    let usage = try #require(reply.usage)
+    #expect(reply.answers.first?.question == "fails-if-broken")
+    #expect(abs((usage.costUSD ?? 0) - 0.01017275) < 1e-12)
+    #expect(usage.wallMilliseconds == 8389)
+    #expect(usage.backendMilliseconds == 8352)
+    #expect(usage.inputTokens == 9 + 4527 + 0)
+    #expect(usage.outputTokens == 901)
+    #expect(usage.servedModel == "claude-haiku-4-5-20251001")
+    #expect(usage.cached == false)
+  }
+
+  @Test(
+    "an envelope whose modelUsage names 2 models is malformed and names both — catches one answer credited to whichever model sorts first"
+  )
+  func twoServedModelsAreMalformed() throws {
+    var envelope = try #require(
+      try JSONSerialization.jsonObject(with: Fixture.data("Judge/claude-result.json"))
+        as? [String: Any])
+    var models = try #require(envelope["modelUsage"] as? [String: Any])
+    models["claude-sonnet-5-5"] = models["claude-haiku-4-5-20251001"]
+    envelope["modelUsage"] = models
+    let stdout = try JSONSerialization.data(withJSONObject: envelope)
+
+    #expect {
+      try ClaudeJudgeReply.parseReply(stdout, stderr: "", for: Self.captureSet)
+    } throws: { error in
+      guard case JudgeError.malformedReply(let message) = error else { return false }
+      return message.contains("claude-haiku-4-5-20251001") && message.contains("claude-sonnet-5-5")
+    }
+  }
+
+  @Test(
+    "an envelope without duration_ms is malformed — catches a reply recorded with no wall time"
+  )
+  func missingDurationIsMalformed() throws {
+    var envelope = try #require(
+      try JSONSerialization.jsonObject(with: Fixture.data("Judge/claude-result.json"))
+        as? [String: Any])
+    envelope["duration_ms"] = nil
+    let stdout = try JSONSerialization.data(withJSONObject: envelope)
+
+    #expect {
+      try ClaudeJudgeReply.parseReply(stdout, stderr: "", for: Self.captureSet)
+    } throws: { error in
+      guard case JudgeError.malformedReply(let message) = error else { return false }
+      return message.contains("duration_ms")
+    }
+  }
+
+  @Test(
+    "the claude judge's measured answer carries the envelope's usage — catches the live backend dropping its usage"
+  )
+  func claudeMeasuredAnswer() async throws {
+    let runner = Self.replaying("claude-result.json", status: 0)
+    let reply = try await ClaudeCLIJudge(runner: runner, model: "haiku")
+      .measuredAnswer(Self.subject, questions: Self.captureSet)
+    #expect(reply.usage?.servedModel == "claude-haiku-4-5-20251001")
+    #expect(abs((reply.usage?.costUSD ?? 0) - 0.01017275) < 1e-12)
+    #expect(runner.invocations.count == 1)
+  }
+
+  @Test(
+    "a cache hit reports cached and 0 cost, and a miss reports the inner judge's usage — catches a cache that bills twice or hides a live call"
+  )
+  func cachingUsage() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-judge-cache-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let runner = Self.replaying("claude-result.json", status: 0)
+    let judge = CachingJudge(
+      ClaudeCLIJudge(runner: runner, model: "haiku"), cache: FileJudgeCache(directory: directory))
+
+    let miss = try await judge.measuredAnswer(Self.subject, questions: Self.captureSet)
+    let missUsage = try #require(miss.usage)
+    #expect(missUsage.cached == false)
+    #expect(abs((missUsage.costUSD ?? 0) - 0.01017275) < 1e-12)
+    #expect(missUsage.servedModel == "claude-haiku-4-5-20251001")
+
+    let hit = try await judge.measuredAnswer(Self.subject, questions: Self.captureSet)
+    let hitUsage = try #require(hit.usage)
+    #expect(hit.answers == miss.answers)
+    #expect(hitUsage.cached == true)
+    #expect(hitUsage.costUSD == 0)
+    #expect(hitUsage.inputTokens == nil)
+    #expect(runner.invocations.count == 1)
+  }
+
+  @Test(
+    "a judge without its own accounting reports wall time and no tokens or cost — catches a default that invents a cost"
+  )
+  func defaultUsageHasNoCost() async throws {
+    let judge = FakeJudge.answering(flagged: 0.9)
+    let reply = try await judge.measuredAnswer(Self.subject, questions: .tests)
+    let usage = try #require(reply.usage)
+    #expect(reply.answers.count == JudgeQuestionSet.tests.questions.count)
+    #expect(usage.inputTokens == nil)
+    #expect(usage.outputTokens == nil)
+    #expect(usage.costUSD == nil)
+    #expect(usage.servedModel == nil)
+    #expect(usage.cached == false)
+    #expect(usage.wallMilliseconds >= 0)
+  }
+
+  @Test(
     "a disabled judge constructs no backend — catches test source leaving the machine in a repository that never opted in"
   )
   func disabledBuildsNothing() {

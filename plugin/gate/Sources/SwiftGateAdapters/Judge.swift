@@ -21,6 +21,22 @@ public protocol Judge: Sendable {
   /// Answers every question in `questions`, validated and normalized.
   func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
+  /// The same answers plus what the call cost, for the benchmark (spec §4.5).
+  func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+}
+
+extension Judge {
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
+    let clock = ContinuousClock()
+    let start = clock.now
+    let answers = try await answer(subject, questions: questions)
+    return JudgeReply(
+      answers: answers,
+      usage: JudgeUsage(wallMilliseconds: JudgeUsage.milliseconds(clock.now - start)))
+  }
 }
 
 /// Builds the judge a repository's config asks for, or `nil` when the judge is disabled. The
@@ -66,13 +82,19 @@ public struct ClaudeCLIJudge: Judge {
   public func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
   {
+    try await measuredAnswer(subject, questions: questions).answers
+  }
+
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
     let output: ProcessOutput
     do {
       output = try await runner.run(invocation(subject, questions: questions))
     } catch {
       throw .process(error)
     }
-    return try ClaudeJudgeReply.parse(
+    return try ClaudeJudgeReply.parseReply(
       output.stdout.bytes, stderr: output.stderr.text, for: questions)
   }
 
@@ -144,6 +166,38 @@ public enum ClaudeJudgePrompt {
 
 /// Reads the `claude -p --output-format json` result envelope.
 public enum ClaudeJudgeReply {
+  /// The answers plus the envelope's accounting: `duration_ms` is the call's wall time and
+  /// `duration_api_ms` the API's share of it. Input tokens add cache reads and writes to
+  /// `input_tokens`, since the backend processed all of them.
+  public static func parseReply(_ stdout: Data, stderr: String, for questions: JudgeQuestionSet)
+    throws(JudgeError) -> JudgeReply
+  {
+    let answers = try parse(stdout, stderr: stderr, for: questions)
+    guard
+      let envelope = (try? JSONSerialization.jsonObject(with: stdout)) as? [String: Any],
+      let wall = (envelope["duration_ms"] as? NSNumber)?.intValue
+    else {
+      throw .malformedReply("the result envelope has no duration_ms")
+    }
+    let usage = envelope["usage"] as? [String: Any] ?? [:]
+    let inputKeys = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"]
+    let inputParts = inputKeys.compactMap { (usage[$0] as? NSNumber)?.intValue }
+    let models = (envelope["modelUsage"] as? [String: Any] ?? [:]).keys.sorted()
+    guard models.count <= 1 else {
+      throw .malformedReply(
+        "one reply names \(models.count) served models: \(models.joined(separator: ", "))")
+    }
+    return JudgeReply(
+      answers: answers,
+      usage: JudgeUsage(
+        inputTokens: inputParts.isEmpty ? nil : inputParts.reduce(0, +),
+        outputTokens: (usage["output_tokens"] as? NSNumber)?.intValue,
+        costUSD: (envelope["total_cost_usd"] as? NSNumber)?.doubleValue,
+        wallMilliseconds: wall,
+        backendMilliseconds: (envelope["duration_api_ms"] as? NSNumber)?.intValue,
+        servedModel: models.first))
+  }
+
   public static func parse(_ stdout: Data, stderr: String, for questions: JudgeQuestionSet)
     throws(JudgeError) -> [JudgeAnswer]
   {
@@ -250,15 +304,27 @@ public struct CachingJudge: Judge {
   public func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
   {
+    try await measuredAnswer(subject, questions: questions).answers
+  }
+
+  /// A hit costs nothing and names no served model, because the cache keeps only the answers.
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
+    let clock = ContinuousClock()
+    let start = clock.now
     let key = JudgeCacheKey.make(subject: subject, questions: questions, identity: identity)
     if let cached = cache.answers(forKey: key),
       let valid = try? JudgeAnswers.validate(cached, for: questions)
     {
-      return valid
+      return JudgeReply(
+        answers: valid,
+        usage: JudgeUsage(
+          costUSD: 0, wallMilliseconds: JudgeUsage.milliseconds(clock.now - start), cached: true))
     }
-    let answers = try await inner.answer(subject, questions: questions)
-    cache.store(answers, forKey: key)
-    return answers
+    let reply = try await inner.measuredAnswer(subject, questions: questions)
+    cache.store(reply.answers, forKey: key)
+    return reply
   }
 }
 
