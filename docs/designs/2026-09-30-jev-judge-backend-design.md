@@ -119,8 +119,10 @@ argument list and add a tool version to pin, so the design doesn't use it.
 - **Timeout.** 30 s per request for `judge` and `check`, and the comment judge's 15 s inside the hook.
 - **Errors.** No key is `notConfigured` naming the variable. HTTP 401 is `backend` naming the variable; 422 is
   `backend` with the reply body, since it means the adapter built a bad request. 429 and 529 retry with
-  exponential backoff inside the timeout, honouring `retry-after`, then fail as `backend`. Any other status, or
-  a body that isn't the reply shape, is `malformedReply`.
+  exponential backoff inside the timeout, honouring `retry-after`, then fail as `backend`. HTTP 400 with
+  `{"detail":{"error_type":"max_tokens_exceeded"}}` is `stateTooLarge`, the same case the adapter's own size
+  check throws (§9), since the caller must slice the state. Any other status, or a body that isn't the reply
+  shape, is `malformedReply`.
 - **Outcome.** As with Claude, a failed judge is a non-gating `judge.not-run` note, never RED.
 
 ### 4.4 Identity, pin and cache
@@ -281,7 +283,7 @@ Jev's limits: 64K tokens per request, and 32K for the state plus the longest que
 unrelated text grows, so a smaller state is better even inside the limit.
 
 - **The adapter never trims.** It estimates tokens as UTF-8 bytes divided by 3, a conservative bound for code,
-  and refuses a state over 30K tokens with `backend("state too large: <n> estimated tokens; slice it")`. A silent
+  and refuses a state over 30K tokens with `stateTooLarge(estimatedTokens: <n>)` before sending. A silent
   cut could drop the line a question asks about.
 - **Callers slice.** `TestJudgeCheck` already caps context at 12,000 characters. The comment judge sends 6 lines.
   Design calibration sends 1 agent output; the benchmark records the largest state of each dataset.

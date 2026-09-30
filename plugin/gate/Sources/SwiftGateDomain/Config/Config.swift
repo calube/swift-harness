@@ -446,7 +446,7 @@ public enum JudgeConfig: Sendable, Equatable {
 
 public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
   case claude
-  /// Accepted so the choice is explicit; the adapter reports BLOCKED until it is built.
+  /// TypeSafe's Jev over HTTP; it sends judged code to ``egressHost``, so config must name that host.
   case jev
 
   /// Whether a confident answer may block `ready` only with a passing ``JudgeBlockCalibration``.
