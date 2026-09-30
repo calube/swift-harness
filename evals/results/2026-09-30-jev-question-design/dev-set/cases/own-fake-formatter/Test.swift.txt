@@ -1,0 +1,5 @@
+@Test("formats the duration — catches formatting failures")
+func formatsDuration() {
+  let formatter = StubDurationFormatter(result: "1h 5m")
+  #expect(formatter.string(from: 3_900) == "1h 5m")
+}

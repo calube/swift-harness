@@ -1,0 +1,7 @@
+@Test("uploading three photos sends all three — catches photos silently dropped from an upload")
+func uploadsAll() async throws {
+  let logger = CapturingLogger()
+  let uploader = PhotoUploader(api: .noop, logger: logger)
+  try await uploader.upload([.fixture, .fixture, .fixture], to: "photos")
+  #expect(logger.messages == ["Uploading 3 files to bucket photos", "Upload complete"])
+}

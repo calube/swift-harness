@@ -1,0 +1,4 @@
++  public static func total(subtotal: Decimal, coupon: Coupon?, now: Date) -> Decimal {
++    guard let coupon, coupon.expires > now else { return subtotal }
++    return subtotal * (1 - Decimal(coupon.percent) / 100)
++  }

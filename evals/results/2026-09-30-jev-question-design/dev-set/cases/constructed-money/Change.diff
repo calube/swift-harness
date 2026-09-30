@@ -1,0 +1,6 @@
++  public init(dollars: Decimal) {
++    var raw = dollars * 100
++    var rounded = Decimal()
++    NSDecimalRound(&rounded, &raw, 0, .plain)
++    cents = NSDecimalNumber(decimal: rounded).intValue
++  }

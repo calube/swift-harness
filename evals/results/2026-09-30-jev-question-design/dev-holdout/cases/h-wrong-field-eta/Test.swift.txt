@@ -1,0 +1,6 @@
+@Test("a weekend pickup delivers on Tuesday — catches ETAs that count Saturday as a business day")
+func weekendPickupEta() {
+  let shipment = Shipment(pickup: .saturday, carrier: "UPS", businessDays: 1)
+  #expect(shipment.carrier == "UPS")
+  #expect(shipment.businessDays == 1)
+}

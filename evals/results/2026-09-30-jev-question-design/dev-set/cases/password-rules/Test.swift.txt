@@ -1,0 +1,4 @@
+@Test("'abc' fails both the length and digit rules — catches weak passwords accepted at sign-up")
+func weakPasswordFailsRules() {
+  #expect(PasswordRule.violations(in: "abc") == [.tooShort, .noDigit])
+}

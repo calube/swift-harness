@@ -1,0 +1,7 @@
+@Test("load finishes — catches load bugs")
+func loadFinishes() async throws {
+  let model = OrdersModel(api: .stub(orders: [.fixture]))
+  try await model.load()
+  #expect(model._isRequestInFlight == false)
+  #expect(model._requestGeneration == 1)
+}

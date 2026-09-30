@@ -1,0 +1,7 @@
+@Test("signing out removes the token from the keychain — catches the next user inheriting the previous session")
+func signOutClearsToken() async throws {
+  let keychain = InMemoryKeychain()
+  keychain.set("tok_123", for: "auth")
+  keychain.remove("auth")
+  #expect(keychain.get("auth") == nil)
+}

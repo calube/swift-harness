@@ -1,0 +1,5 @@
++  case let .opened(id):
++    state.selectedID = id
++    state.messages[id: id]?.isRead = true
++    state.unreadCount = state.messages.filter { !$0.isRead }.count
++    return .none

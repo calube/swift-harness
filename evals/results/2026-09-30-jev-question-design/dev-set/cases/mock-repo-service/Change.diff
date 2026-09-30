@@ -1,0 +1,4 @@
++  public func currentAccount() async throws -> Account {
++    let account = try await repository.load()
++    return account.isSuspended ? .guest : account
++  }

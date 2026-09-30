@@ -1,0 +1,5 @@
++  case let .loaded(messages):
++    state.isLoading = false
++    state.messages = messages
++    state.showsEmptyState = messages.isEmpty
++    return .none

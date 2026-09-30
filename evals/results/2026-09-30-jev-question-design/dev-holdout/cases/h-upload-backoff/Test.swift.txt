@@ -1,0 +1,12 @@
+@Test("a failed upload retries after 2 seconds and completes — catches uploads abandoned after one network blip")
+func uploadRetries() async {
+  let clock = TestClock()
+  var calls = 0
+  let store = TestStore(initialState: Backup.State()) { Backup() } withDependencies: {
+    $0.continuousClock = clock
+    $0.backupClient.upload = { calls += 1; if calls == 1 { throw URLError(.networkConnectionLost) } }
+  }
+  await store.send(.startTapped) { $0.status = .uploading }
+  await clock.advance(by: .seconds(2))
+  await store.receive(\.uploadFinished) { $0.status = .done }
+}

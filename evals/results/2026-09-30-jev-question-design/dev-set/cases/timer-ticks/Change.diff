@@ -1,0 +1,9 @@
++  case .start:
++    state.isRunning = true
++    return .run { send in
++      for await _ in clock.timer(interval: .seconds(1)) { await send(.tick) }
++    }
++    .cancellable(id: CancelID.timer)
++  case .tick:
++    state.remaining -= 1
++    return .none

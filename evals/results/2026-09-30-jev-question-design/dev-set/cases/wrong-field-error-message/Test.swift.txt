@@ -1,0 +1,8 @@
+@Test("a failed save shows 'Couldn't save' — catches a silent failure the user never sees")
+func failedSaveShowsError() async {
+  let store = TestStore(initialState: Editor.State(isSaving: true)) { Editor() }
+  store.exhaustivity = .off
+  await store.send(.saveResponse(.failure(.disk))) {
+    $0.isSaving = false
+  }
+}

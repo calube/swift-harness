@@ -1,0 +1,5 @@
++  public func save(_ profile: Profile) async throws {
++    try validator.validate(profile)
++    try await store.persist(profile)
++    await notifier.notify(.profileSaved)
++  }

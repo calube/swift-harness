@@ -1,0 +1,4 @@
+func testMileageConversion() {
+  let km = Distance(miles: 26.2).kilometers
+  XCTAssertEqual(km, 42.16, accuracy: 0.01)
+}

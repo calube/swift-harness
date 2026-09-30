@@ -1,0 +1,20 @@
+@Test("two failed fetches then a success shows the feed — catches the feed staying empty after a brief outage")
+func retriesWithBackoff() async {
+  let clock = TestClock()
+  var attempts = 0
+  let store = TestStore(initialState: Feed.State()) { Feed() } withDependencies: {
+    $0.continuousClock = clock
+    $0.feedClient.load = {
+      attempts += 1
+      if attempts < 3 { throw URLError(.timedOut) }
+      return [Post(id: 1, title: "Hello")]
+    }
+  }
+  await store.send(.onAppear) { $0.isLoading = true }
+  await clock.advance(by: .seconds(1))
+  await clock.advance(by: .seconds(2))
+  await store.receive(\.loaded) {
+    $0.isLoading = false
+    $0.posts = [Post(id: 1, title: "Hello")]
+  }
+}

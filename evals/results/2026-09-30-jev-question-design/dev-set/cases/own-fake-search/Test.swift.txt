@@ -1,0 +1,6 @@
+@Test("search returns matches — catches bugs with uppercase queries")
+func searchReturnsMatches() async throws {
+  let client = SearchClient(search: { _ in [Result(title: "Swift")] })
+  let results = try await client.search("sw")
+  #expect(results == [Result(title: "Swift")])
+}

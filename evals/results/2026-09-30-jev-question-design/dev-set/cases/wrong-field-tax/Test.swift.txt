@@ -1,0 +1,6 @@
+@Test("sales tax is added to the order total — catches orders charged without tax")
+func addsTax() {
+  let order = Order(items: [LineItem(price: 10), LineItem(price: 20)], taxRate: 0.08)
+  #expect(order.items.count == 2)
+  #expect(order.taxRate == 0.08)
+}

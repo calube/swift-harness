@@ -1,0 +1,3 @@
++  case .payTapped:
++    state.receipt = Receipt(subtotal: state.subtotal, tax: state.subtotal * 0.08)
++    return .none

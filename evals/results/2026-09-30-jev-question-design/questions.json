@@ -1,0 +1,246 @@
+{
+ "_about": "Proposed Jev question set. Same shape as JudgeQuestionSet (id, version, subjectDescription, questions[id, text, kind, flag, mayBlock, problem]) plus a `jev` block per question: the sub-questions Jev is sent verbatim and the rule code applies to their answers to rebuild the question's option distribution. `text` stays the v1 text so the Claude backend and findings are unchanged; only the Jev rendering differs. Design exploration only: not a shipped question set.",
+ "id": "test-quality-jev",
+ "version": 1,
+ "alternativeId": "test-quality@2 with per-backend rendering",
+ "subjectDescription": "a Swift test function from an iOS app built with The Composable Architecture, and the production code change it covers",
+ "jevState": {
+  "_about": "Built in code by the adapter from JudgeSubject; the questions refer to these paths.",
+  "subject_kind": "questions.subjectDescription",
+  "test_name": {
+   "full": "the @Test(\"...\") display string, else the func name",
+   "behavior": "text before ' — catches ' (em dash, en dash or hyphen), else `full`",
+   "catches": "'catches ' + text after it, else null"
+  },
+  "test_source": "subject.source",
+  "assertions": "each #expect / #require / XCTAssert* / XCTUnwrap statement, and each `await store.send|receive(...)` with its trailing state closure joined onto one line, in source order",
+  "code_under_test": "subject.context",
+  "declared_tier": "subject.declaredTier"
+ },
+ "questions": [
+  {
+   "id": "fails-if-broken",
+   "text": "Would this test fail if the behavior it names were broken?",
+   "kind": {
+    "binary": [
+     "yes",
+     "no"
+    ]
+   },
+   "flag": {
+    "option": "no"
+   },
+   "mayBlock": true,
+   "problem": "the test would likely still pass if the behavior it names broke",
+   "jev": {
+    "subQuestions": [
+     {
+      "id": "runs-changed-code",
+      "type": "noul",
+      "instructions": {
+       "question": "Does `test_source` run a function, property or reducer action that `code_under_test` adds or modifies?",
+       "focus": "Calling a method on a fake, stub, mock or spy does not count, even when the method has the same name as changed code."
+      },
+      "criteria": {
+       "true": "The test runs at least one line the change adds or modifies.",
+       "false": {
+        "what": "The test never runs the changed lines",
+        "examples": [
+         "it only calls closures, fakes, stubs, mocks or spies it set up itself",
+         "it calls a method on a test double that has the same name as the changed function",
+         "it calls code the change does not touch"
+        ]
+       }
+      }
+     },
+     {
+      "id": "checks-named-result",
+      "type": "noul",
+      "instructions": {
+       "question": "Does an assertion in `assertions` compare the result that `test_name.behavior` describes with an expected value?",
+       "focus": "Find the value or state the name talks about, then look for an assertion on it."
+      },
+      "criteria": {
+       "true": {
+        "what": "An assertion checks the very value, state or output the name talks about",
+        "examples": [
+         "the name is about a total and the test asserts the total",
+         "the name is about a message shown and the test asserts that message in state",
+         "the name says a method is called and the test asserts the call"
+        ]
+       },
+       "false": {
+        "what": "The result the name describes is never compared",
+        "examples": [
+         "the assertions check other fields of the same object",
+         "the assertions check setup values or a test double's own value",
+         "the only assertion checks that something exists or is true"
+        ]
+       }
+      }
+     }
+    ],
+    "combine": {
+     "rule": "OR over the failure signals: p_no = max(1 - p(runs-changed-code), 1 - p(checks-named-result)); distribution {no: p_no, yes: 1 - p_no}"
+    },
+    "cascade": {
+     "escalateWhen": "0.2 < p_no < 0.8",
+     "to": "claude backend, test-quality@1 text"
+    }
+   }
+  },
+  {
+   "id": "tier",
+   "text": "Which tier does this test belong in? T1: host unit test of logic (reducers, pure functions, clients with fakes). T2: simulator test of rendering or platform integration (snapshots, views). T3: end-to-end UI flow (XCUITest).",
+   "kind": {
+    "choice": [
+     "T1",
+     "T2",
+     "T3"
+    ]
+   },
+   "flag": "notDeclaredTier",
+   "mayBlock": false,
+   "problem": "the test likely belongs in a different tier",
+   "jev": {
+    "subQuestions": [
+     {
+      "id": "tier",
+      "type": "choice",
+      "instructions": "Which tier does this test belong in? T1: host unit test of logic (reducers, pure functions, clients with fakes). T2: simulator test of rendering or platform integration (snapshots, views). T3: end-to-end UI flow (XCUITest).",
+      "criteria": {
+       "T1": null,
+       "T2": null,
+       "T3": null
+      }
+     }
+    ],
+    "combine": {
+     "rule": "identity: the Choice probabilities are the distribution"
+    }
+   }
+  },
+  {
+   "id": "name-specificity",
+   "text": "How specific is the regression the test's name says it catches? vague: names no symptom or restates the behavior; partial: names an area but not the symptom; specific: names a user- or caller-visible symptom.",
+   "kind": {
+    "score": [
+     "vague",
+     "partial",
+     "specific"
+    ]
+   },
+   "flag": {
+    "option": "vague"
+   },
+   "mayBlock": false,
+   "problem": "the regression name is vague",
+   "jev": {
+    "subQuestions": [
+     {
+      "id": "catches-adds",
+      "type": "choice",
+      "instructions": {
+       "question": "What does `test_name.catches` say beyond `test_name.behavior`?",
+       "focus": "Judge the wording of the name only."
+      },
+      "criteria": {
+       "nothing": {
+        "what": "Only that the behavior fails, breaks or does not happen, or failures, bugs, problems or regressions in general; or there is no catches part",
+        "examples": [
+         "fetchUser returns the user — catches fetchUser not returning the user",
+         "settings works — catches settings bugs",
+         "encodes the date — catches encoding failures",
+         "testRefresh"
+        ]
+       },
+       "condition": {
+        "what": "A specific input, case or area where it goes wrong, but not what anyone would see",
+        "examples": [
+         "catches a bug in leap years",
+         "catches wrong handling of offline mode"
+        ]
+       },
+       "symptom": {
+        "what": "What a user or caller would see go wrong",
+        "examples": [
+         "catches shoppers billed twice for one order",
+         "catches the map staying blank after location access is granted"
+        ]
+       }
+      }
+     }
+    ],
+    "combine": {
+     "rule": "map Choice options onto levels: {vague: p(nothing), partial: p(condition), specific: p(symptom)}"
+    }
+   }
+  },
+  {
+   "id": "asserts-implementation",
+   "text": "Does the test assert implementation details (private call order, internal state, exact log text, which collaborator was called) rather than observable behavior?",
+   "kind": {
+    "binary": [
+     "yes",
+     "no"
+    ]
+   },
+   "flag": {
+    "option": "yes"
+   },
+   "mayBlock": true,
+   "problem": "the test asserts implementation details rather than behavior",
+   "jev": {
+    "subQuestions": [
+     {
+      "id": "call-details",
+      "type": "noul",
+      "instructions": {
+       "question": "Does an assertion in `assertions` check how many times, in what order, or with which arguments the production code called a collaborator, spy or helper?"
+      },
+      "criteria": {
+       "true": {
+        "what": "Asserts a call count, a call order, a call's arguments, or that a method was called",
+        "examples": [
+         "#expect(mock.methodsCalled == [\"connect\", \"send\"])",
+         "#expect(api.requestCount == 2)",
+         "#expect(queue.didCallFlush)"
+        ]
+       },
+       "false": {
+        "what": "Asserts results the feature produces",
+        "not_for": [
+         "the test itself calling a mock or stub and comparing what it returns",
+         "the value the feature saves, sends or shows when that value is the feature's result",
+         "TestStore send or receive with the state it produces",
+         "advancing a test clock and checking what happened after the delay"
+        ]
+       }
+      }
+     },
+     {
+      "id": "private-state",
+      "type": "noul",
+      "instructions": "Does an entry in `assertions` read a private, underscored or testing-only property that callers of the code cannot see?",
+      "criteria": {
+       "true": "Reads a property like `_pendingQueue` or `_retainCountForTesting`, or other internal bookkeeping.",
+       "false": "Reads only public results, returned values, or TestStore state."
+      }
+     },
+     {
+      "id": "log-text",
+      "type": "noul",
+      "instructions": "Does an entry in `assertions` compare the exact text of a log or debug message?"
+     }
+    ],
+    "combine": {
+     "rule": "OR: p_yes = max(p(call-details), p(private-state), p(log-text)); distribution {yes: p_yes, no: 1 - p_yes}"
+    },
+    "cascade": {
+     "escalateWhen": "0.2 < p_yes < 0.8",
+     "to": "claude backend, test-quality@1 text"
+    }
+   }
+  }
+ ]
+}

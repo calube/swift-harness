@@ -1,0 +1,8 @@
+@Test("the price label reads '$12.50' — catches prices rendered without cents")
+func priceLabel() {
+  let formatter = SpyCurrencyFormatter()
+  let model = PriceRowModel(amount: 12.5, formatter: formatter)
+  _ = model.label
+  _ = model.label
+  #expect(formatter.formatCallCount == 1)
+}

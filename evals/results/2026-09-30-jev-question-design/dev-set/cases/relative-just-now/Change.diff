@@ -1,0 +1,5 @@
++  public static func label(for date: Date, now: Date) -> String {
++    let seconds = now.timeIntervalSince(date)
++    if seconds < 60 { return "just now" }
++    return "\(Int(seconds / 60)) minutes ago"
++  }

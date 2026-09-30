@@ -1,0 +1,3 @@
++  public var displayName: String {
++    [first, last].filter { !$0.isEmpty }.joined(separator: " ")
++  }

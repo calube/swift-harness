@@ -1,0 +1,9 @@
+@Test("turning on dark mode saves the choice — catches the app reverting to light mode on relaunch")
+func darkModePersists() async {
+  let defaults = LockIsolated<[String: Bool]>([:])
+  let store = TestStore(initialState: Appearance.State(isDark: false)) { Appearance() } withDependencies: {
+    $0.settings.setBool = { value, key in defaults.withValue { $0[key] = value } }
+  }
+  await store.send(.darkModeToggled(true)) { $0.isDark = true }
+  #expect(defaults.value["isDark"] == true)
+}
