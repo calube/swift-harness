@@ -138,7 +138,7 @@ worktrees and branches.
 [build.presets.default]
 design_tier = "standard"
 max_parallel = 3
-review = "full"            # full: verifier + test-quality per task; gate: the task gate only
+review = "full"            # full: architecture + test-quality per task, verified; gate: the task gate only
 task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready
 merge_gate = "push"
 worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
@@ -255,9 +255,12 @@ A pipeline for 1 task, launched in the background once per task:
 1. **Worker** (`swift-harness:build-worker`, model from the task's `model` or the preset). It reads its
    context pack, works test-first in its worktree, commits to its branch, and loops until `check --tier
    <task_gate>` is green.
-2. **Review** (`review = "full"` only): `verifier` and `test-quality` run in parallel on the task's diff, and
-   each returns the Foundation review contract.
-3. **Fix pass**: at most 1. A fresh worker agent gets the gate or review findings and the same worktree.
+2. **Review** (`review = "full"` only): the discovery reviewers `architecture` and `test-quality` run in
+   parallel on the task's diff, and each returns findings in the Foundation review contract. Each reviewer's
+   findings go to an independent `verifier`, which checks them against the code and never adds findings of its
+   own. Only a verified `blocker` or `major` finding gates the task.
+3. **Fix pass**: at most 1. A fresh worker agent gets the red gate or the verified blocking findings, and the same
+   worktree.
 4. **Return** the object in §5.3.
 
 A workflow can't pause for the user, so any decision returns early with an `outcome` for the skill to act on.
@@ -268,7 +271,8 @@ A workflow can't pause for the user, so any decision returns early with an `outc
 |---|---|---|
 | `build-worker` | per task | new; the worker brief's standing rules and pitfalls, turned into an agent prompt |
 | `build-fixer` | `opus` | new; resolves a conflict or red `main` in a fix worktree, with both tasks' returns |
-| `verifier`, `test-quality` | as defined | existing |
+| `architecture`, `test-quality` | as defined | existing; the discovery reviewers |
+| `verifier` | as defined | existing; verifies each reviewer's findings, adds none |
 | `design-decomposer` | `opus` | existing; adds the `model` tag (§5.2) |
 
 ## 8. Build behaviour
@@ -352,7 +356,7 @@ Figures marked *est.* are estimates, not measurements.
 | Worker wall time | 9–35 min per harness task (runbook, measured); interview-sized app tasks *est.* 5–12 min |
 | Merge + push tier | 45–70 s per merge on the harness (measured); an app's push tier is unmeasured |
 | Worktree setup | seconds with an APFS clone; minutes cold (TCA and swift-syntax macro builds) |
-| Fan-out | `max_parallel` workers, plus up to 2 reviewers each under `full` |
+| Fan-out | `max_parallel` workers, plus up to 2 reviewers and 2 verifiers each under `full` |
 | Tokens | 140k–300k per worker (runbook, measured); 10–40k per fix pass |
 | Failure isolation | 1 task's red gate or dead agent affects only that task and its dependents |
 
