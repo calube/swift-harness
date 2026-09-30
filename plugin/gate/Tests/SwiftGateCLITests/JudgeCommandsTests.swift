@@ -320,18 +320,14 @@ struct JevCommitCommentJudgeTests {
   }
 
   @Test(
-    "the capped 6 comments go to Jev in 1 concurrent round, so the hook waits for 1 request, not 2 — catches Jev held to the 4-at-a-time batch meant for claude processes"
+    "the capped 6 comments go to Jev in 1 concurrent round, so the hook waits for 1 request, not 2 — catches Jev held to the 4-at-a-time batch meant for claude processes",
+    // An under-concurrent batch never fills the barrier; the limit cancels it, which releases it.
+    .timeLimit(.minutes(1))
   )
   func capGoesInOneRound() async throws {
     let transport = BarrierTransport(
       expected: ConfiguredCommitCommentJudge.maxComments,
       reply: try FakeHTTPTransport.captured("comments"))
-    // A hang guard, not a synchronizer: a passing run releases the barrier long before it fires.
-    let watchdog = Task {
-      try? await Task.sleep(for: .seconds(20))  // swiftgate:allow det.task-sleep — hang guard only
-      transport.giveUp()
-    }
-    defer { watchdog.cancel() }
 
     let advice = try await Self.review(
       transport: transport, git: Self.git(comments: ConfiguredCommitCommentJudge.maxComments + 2))
@@ -367,7 +363,7 @@ final class StallingTransport: HTTPTransport {
 }
 
 /// Holds every request until `expected` are in flight at once, then answers them all, so a batch
-/// that sends fewer at a time never completes on its own. `giveUp` times out whoever still waits.
+/// that sends fewer at a time never completes on its own. Cancelling it times out whoever waits.
 final class BarrierTransport: HTTPTransport {
   private struct State {
     var waiting: [CheckedContinuation<Bool, Never>] = []
@@ -390,8 +386,21 @@ final class BarrierTransport: HTTPTransport {
   var requestCount: Int { state.withLock { $0.count } }
 
   func send(_ request: HTTPRequest) async throws(HTTPTransportError) -> HTTPResponse {
-    let answered = await withCheckedContinuation {
-      (continuation: CheckedContinuation<Bool, Never>) in
+    let answered = await withTaskCancellationHandler {
+      await arrive()
+    } onCancel: {
+      giveUp()
+    }
+    state.withLock { $0.inFlight -= 1 }
+    guard answered else { throw .timedOut }
+    switch reply {
+    case .response(let response): return response
+    case .failure(let error): throw error
+    }
+  }
+
+  private func arrive() async -> Bool {
+    await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
       let (resume, outcome): ([CheckedContinuation<Bool, Never>], Bool) = state.withLock { state in
         state.count += 1
         state.inFlight += 1
@@ -405,15 +414,9 @@ final class BarrierTransport: HTTPTransport {
       }
       for waiter in resume { waiter.resume(returning: outcome) }
     }
-    state.withLock { $0.inFlight -= 1 }
-    guard answered else { throw .timedOut }
-    switch reply {
-    case .response(let response): return response
-    case .failure(let error): throw error
-    }
   }
 
-  func giveUp() {
+  private func giveUp() {
     let waiting = state.withLock { state in
       if state.outcome == nil { state.outcome = false }
       defer { state.waiting = [] }
