@@ -1,7 +1,7 @@
 # Jev judge backend: implementation plan
 
 <!-- RESUME
-Status: NOT STARTED. The user decided the design's §12 on 2026-09-30. The live tasks need a TypeSafe API key, and the labelling task needs the user's time.
+Status: wave 1 merged 2026-09-30 (jev-replies-are-captured, judges-report-usage, jev-blocks-only-when-calibrated). Next: wave 2 (jev-judge-answers-over-http, config-pins-jev-and-names-its-host, judge-benchmark-metrics first; then calibrate-design-keeps-agent-replies, blocking-questions-reach-thirty-person-labels). The key is in the login Keychain as TYPESAFE_API_KEY. Person labelling waits for the user.
 Spec: docs/designs/2026-09-30-jev-judge-backend-design.md (approved 2026-09-30). Decision record: [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md).
 Scope: a working `JevJudge` behind the judge seam; a Jev block only with a passing block calibration per question and pinned model, checked in code; a Claude-written reason on every blocking finding; a person-labelled set of 30 or more cases per blocking question; the commit comment judge and `calibrate design` on either backend; per-backend recordings and a freshness check; `swiftgate judge ask`; `swiftgate judge bench` and `bench-render`, and a benchmark of pinned Sonnet 5.5 against pinned Jev with committed results; a person-labelled comment set. Out of scope: moving eval rubrics onto `judge ask` (the evals owners trial 1 rubric first), and the design's §11.2 later candidates.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec by §.
