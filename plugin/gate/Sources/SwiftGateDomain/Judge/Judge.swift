@@ -28,9 +28,13 @@ public struct JudgeQuestion: Sendable, Hashable {
   public let mayBlock: Bool
   /// What the finding says when the flag fires.
   public let problem: String
+  /// For a Score, each level with what it means, in level order, for a backend that reads the
+  /// levels apart from `text`. `nil` sends the bare level names.
+  public let levelDescriptions: [String]?
 
   public init(
-    id: String, text: String, kind: Kind, flag: Flag, mayBlock: Bool, problem: String
+    id: String, text: String, kind: Kind, flag: Flag, mayBlock: Bool, problem: String,
+    levelDescriptions: [String]? = nil
   ) {
     self.id = id
     self.text = text
@@ -38,6 +42,7 @@ public struct JudgeQuestion: Sendable, Hashable {
     self.flag = flag
     self.mayBlock = mayBlock
     self.problem = problem
+    self.levelDescriptions = levelDescriptions
   }
 
   public var options: [String] {
@@ -48,6 +53,12 @@ public struct JudgeQuestion: Sendable, Hashable {
   }
 }
 
+/// How 1 backend asks a set's questions when it doesn't ask them word for word (design §13.1).
+public enum JudgeRendering: String, Sendable, Hashable {
+  /// Split into Jev sub-questions over named state fields, recombined in code.
+  case jev
+}
+
 /// A versioned set of questions. Changing any question's text, options or flag is a new version,
 /// which invalidates the cache and must be re-calibrated.
 public struct JudgeQuestionSet: Sendable, Hashable {
@@ -56,15 +67,32 @@ public struct JudgeQuestionSet: Sendable, Hashable {
   /// What the backend is told the subject is.
   public let subjectDescription: String
   public let questions: [JudgeQuestion]
+  /// `nil` asks every backend the questions as written.
+  public let rendering: JudgeRendering?
+  /// The versioned id whose questions this set asks unchanged, so that version's labels and
+  /// Claude recording count for it.
+  public let basedOn: String?
 
-  public init(id: String, version: Int, subjectDescription: String, questions: [JudgeQuestion]) {
+  public init(
+    id: String, version: Int, subjectDescription: String, questions: [JudgeQuestion],
+    rendering: JudgeRendering? = nil, basedOn: String? = nil
+  ) {
     self.id = id
     self.version = version
     self.subjectDescription = subjectDescription
     self.questions = questions
+    self.rendering = rendering
+    self.basedOn = basedOn
   }
 
-  public var versionedID: String { "\(id)@\(version)" }
+  /// `<id>@<version>`, plus `-<rendering>` for a rendered set, so 1 rendering's cache entries,
+  /// recordings and calibration never stand in for another's.
+  public var versionedID: String {
+    "\(id)@\(version)" + (rendering.map { "-\($0.rawValue)" } ?? "")
+  }
+
+  /// The version labels and a Claude recording must target to count for this set.
+  public var labelsVersion: String { basedOn ?? versionedID }
 
   public static let tests = JudgeQuestionSet(
     id: "test-quality", version: 1,
@@ -92,7 +120,12 @@ public struct JudgeQuestionSet: Sendable, Hashable {
           + "symptom or restates the behavior; partial: names an area but not the symptom; "
           + "specific: names a user- or caller-visible symptom.",
         kind: .score(["vague", "partial", "specific"]), flag: .option("vague"), mayBlock: false,
-        problem: "the regression name is vague"),
+        problem: "the regression name is vague",
+        levelDescriptions: [
+          "vague: names no symptom or restates the behavior",
+          "partial: names an area but not the symptom",
+          "specific: names a user- or caller-visible symptom",
+        ]),
       JudgeQuestion(
         id: "asserts-implementation",
         text:
@@ -101,6 +134,11 @@ public struct JudgeQuestionSet: Sendable, Hashable {
         kind: .binary, flag: .option("yes"), mayBlock: true,
         problem: "the test asserts implementation details rather than behavior"),
     ])
+
+  /// `tests` as Jev asks it (design §13): the same questions, split into sub-questions.
+  public static let testsJev = JudgeQuestionSet(
+    id: tests.id, version: 2, subjectDescription: tests.subjectDescription,
+    questions: tests.questions, rendering: .jev, basedOn: tests.versionedID)
 
   public static let comments = JudgeQuestionSet(
     id: "comments", version: 1,
@@ -220,15 +258,18 @@ public enum JudgeAnswers {
   }
 }
 
-/// Cache key: hash(subject source, context, question-set version, backend, model) (spec §7.4).
+/// Cache key: hash(subject source, context, question-set version, backend, model) (spec §7.4),
+/// plus the questions as the backend renders them when it says so (design §13.4).
 public enum JudgeCacheKey {
   public static func make(
-    subject: JudgeSubject, questions: JudgeQuestionSet, identity: JudgeIdentity
+    subject: JudgeSubject, questions: JudgeQuestionSet, identity: JudgeIdentity,
+    renderedQuestions: String? = nil
   ) -> String {
-    let fields = [
-      "swiftgate-judge-cache-1", subject.source, subject.context, subject.declaredTier ?? "",
-      questions.versionedID, identity.backend, identity.model,
-    ]
+    let fields =
+      [
+        "swiftgate-judge-cache-1", subject.source, subject.context, subject.declaredTier ?? "",
+        questions.versionedID, identity.backend, identity.model,
+      ] + (renderedQuestions.map { [$0] } ?? [])
     // Length-prefixing each field makes the encoding unambiguous without an escape scheme.
     let canonical = fields.map { "\($0.utf8.count):\($0)" }.joined()
     return SHA256.hash(data: Data(canonical.utf8)).map { String(format: "%02x", $0) }.joined()

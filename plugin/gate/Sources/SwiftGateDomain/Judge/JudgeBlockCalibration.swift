@@ -74,6 +74,9 @@ public enum JudgeBlockCalibration {
     set: JudgeCalibrationSet, jev: JudgeRecording?, claude: JudgeRecording?
   ) -> Decision {
     let version = questions.versionedID
+    // A rendering asks its base's questions unchanged, so the base's labels and Claude's answers
+    // to them are the measure; only Jev's recording must be of the rendering itself.
+    let labelled = questions.labelsVersion
     let backend = JudgeBackend.jev.rawValue
     guard let blocking = questions.questions.first(where: { $0.id == question }) else {
       return .fails(reason: "\(version) has no question \(question)")
@@ -90,23 +93,23 @@ public enum JudgeBlockCalibration {
           "the \(backend) recording is from \(jev.identity.backend)/\(jev.identity.model), "
           + "not the pinned \(backend)/\(model)")
     }
-    guard set.questionSet == version else {
-      return .fails(reason: "the labels target \(set.questionSet), not \(version)")
+    guard set.questionSet == labelled else {
+      return .fails(reason: "the labels target \(set.questionSet), not \(labelled)")
     }
-    let labelled = set.cases.compactMap {
+    let cases = set.cases.compactMap {
       item -> (item: JudgeCalibrationSet.Case, positive: Bool)? in
       guard item.labeller == .person, JudgeCaseSplit.of(item.id) == .report,
         let expected = item.expected[question]
       else { return nil }
       return (item, flagFires(blocking, expected: expected, declaredTier: item.declaredTier))
     }
-    guard labelled.count >= minimumCases else {
+    guard cases.count >= minimumCases else {
       return .fails(
         reason:
-          "\(labelled.count) of \(minimumCases) person labels for \(question) in the report split")
+          "\(cases.count) of \(minimumCases) person labels for \(question) in the report split")
     }
-    let positives = labelled.filter(\.positive).count
-    let negatives = labelled.count - positives
+    let positives = cases.filter(\.positive).count
+    let negatives = cases.count - positives
     guard positives >= minimumPerSide, negatives >= minimumPerSide else {
       return .fails(
         reason:
@@ -116,18 +119,18 @@ public enum JudgeBlockCalibration {
     guard let claude else {
       return .fails(reason: "no claude recording to compare against")
     }
-    guard claude.questionSet == version, claude.identity.backend == JudgeBackend.claude.rawValue
+    guard claude.questionSet == labelled, claude.identity.backend == JudgeBackend.claude.rawValue
     else {
       return .fails(
         reason:
           "the claude recording is from \(claude.identity.backend)/\(claude.identity.model) on "
-          + "\(claude.questionSet), not claude on \(version)")
+          + "\(claude.questionSet), not claude on \(labelled)")
     }
     let jevCounts: (truePositives: Int, trueNegatives: Int)
     let claudeCounts: (truePositives: Int, trueNegatives: Int)
     switch (
-      correct(labelled, question: blocking, recording: jev, blockThreshold: blockThreshold),
-      correct(labelled, question: blocking, recording: claude, blockThreshold: blockThreshold)
+      correct(cases, question: blocking, recording: jev, blockThreshold: blockThreshold),
+      correct(cases, question: blocking, recording: claude, blockThreshold: blockThreshold)
     ) {
     case (.failure(let missing), _):
       return .fails(reason: "the \(backend) recording has no \(question) answer for \(missing.id)")
