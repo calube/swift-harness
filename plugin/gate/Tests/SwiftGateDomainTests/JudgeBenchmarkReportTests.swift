@@ -427,6 +427,7 @@ struct JudgeBenchmarkReportTests {
     ]
     let estimate = JudgeBenchmarkEstimate.make(
       arms: [claude, jev], judgments: [4, 4, 3], repeats: 3, recorded: recorded)
+    try #require(estimate.arms.count == 2)
     #expect(estimate.arms.map(\.calls) == [9, 9])
     #expect(estimate.arms.map(\.judgments) == [33, 33])
     // 9 calls at a mean of 0.5.
@@ -451,6 +452,7 @@ struct JudgeBenchmarkReportTests {
   func readsRecordedUsage() throws {
     let fromBench = try JudgeBenchmarkEstimate.recorded(
       from: Self.report().json, source: "bench.json")
+    try #require(fromBench.count == 2)
     #expect(fromBench.map(\.backend) == ["claude", "jev"])
     #expect(fromBench[0].model == "claude-sonnet-5-5")
     #expect(fromBench[0].usages.count == 12)
