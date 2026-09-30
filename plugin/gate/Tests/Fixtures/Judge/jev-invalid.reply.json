@@ -1,0 +1,1 @@
+{"detail":[{"type":"missing","loc":["body","questions","tier","choice","criteria"],"msg":"Field required","input":{"type":"choice","instructions":"Which tier does this test belong in? T1: host unit test of logic (reducers, pure functions, clients with fakes). T2: simulator test of rendering or platform integration (snapshots, views). T3: end-to-end UI flow (XCUITest)."}}]}

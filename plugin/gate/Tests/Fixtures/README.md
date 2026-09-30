@@ -333,6 +333,63 @@ Observed behavior the adapter relies on:
 - `--restricted` ignores user, project and local settings (so plugin hooks don't run inside the
   judge) and `--tools ""` removes every built-in tool.
 
+## Jev
+
+TypeSafe's `POST https://api.typesafe.ai/v1/systemone`, captured 2026-09-30 with `curl` 8.7.1 and
+the user's key in `TYPESAFE_API_KEY`. Each command runs from `plugin/gate/Tests/Fixtures/Judge`
+under `bash`; the key reaches `curl` through a process substitution, so it never appears in an
+argument list, and the capture keeps no request or response headers. `<name>` is the file stem below.
+
+```sh
+curl -sS -o jev-<name>.reply.json -w '%{http_code}\n' \
+  -H @<(printf 'Authorization: Bearer %s\n' "$TYPESAFE_API_KEY") \
+  -H 'Content-Type: application/json' \
+  --data-binary @jev-request-<name>.json https://api.typesafe.ai/v1/systemone > jev-<name>.status
+```
+
+A script builds the request inputs from real subjects, in the shape design §4.1 gives:
+`state` holds `subject_kind` (the question set's `subjectDescription`), `subject`, `context` and,
+for tests, `declared_tier`; each question's `instructions` is its `JudgeQuestion.text` unchanged.
+
+| Request | Subject | Questions |
+|---|---|---|
+| `jev-request-test-quality.json` | `gate/Fixtures/judge/cases/counter-increment` (`Test.swift.txt` as `subject`, `Change.diff` as `context`), `declared_tier` `T1` | `test-quality@1`: 2 Noul, 1 Choice (`criteria` `{T1: null, T2: null, T3: null}`), 1 Score (`criteria` `["vague", "partial", "specific"]`) |
+| `jev-request-alias.json` | the same for `own-double`, with `model` `jev-latest` | `test-quality@1` |
+| `jev-request-invalid.json` | `own-double` | only `tier`, a Choice with its `criteria` removed |
+| `jev-request-comments.json` | the comment `// Length-prefixing each field …` in `plugin/gate/Sources/SwiftGateDomain/Judge/Judge.swift` as it reads at commit `618c180`, with the 6 lines after it as `context` (the commit comment judge's slice) | `comments@1`: 2 Noul |
+
+| File | Capture | Status | Served `model` |
+|---|---|---|---|
+| `jev-test-quality.reply.json`, `.status` | the command above, `<name>` = `test-quality` | 200 | `jev-1.13.0` |
+| `jev-comments.reply.json`, `.status` | `<name>` = `comments` | 200 | `jev-1.13.0` |
+| `jev-alias.reply.json`, `.status` | `<name>` = `alias` (requests `jev-latest`) | 200 | `jev-1.13.0` |
+| `jev-invalid.reply.json`, `.status` | `<name>` = `invalid` | 422 | none |
+| `jev-bad-key.reply.json`, `.status` | `TYPESAFE_API_KEY=invalid`, then the command with `-o jev-bad-key.reply.json`, `--data-binary @jev-request-test-quality.json` and `> jev-bad-key.status` | 401 | none |
+| `jev-oversize.reply.json`, `.status` | the request isn't kept (157 KB): `git ls-tree -r --name-only 1075aa6 -- ../../../Sources/SwiftGateDomain \| grep '\.swift$' \| sort \| while read p; do git show "1075aa6:$p"; done \| python3 -c 'import json,sys; r=json.load(open("jev-request-test-quality.json")); r["state"]["subject"]=sys.stdin.read()[:150000]; json.dump(r,open(sys.argv[1],"w"))' "$TMPDIR/jev-request-oversize.json"`, then the command with `--data-binary @"$TMPDIR/jev-request-oversize.json"` and `-o jev-oversize.reply.json`, `> jev-oversize.status` | 400 | none |
+
+Observed behavior the adapter relies on:
+
+- A `.status` file holds the HTTP status and a newline; the reply body is what the server sent,
+  byte for byte, compact JSON with no trailing newline.
+- The server answers `jev-latest` with `jev-1.13.0`: the reply's `model` is the resolved id, never the alias.
+- Question keys with hyphens (`fails-if-broken`, `name-specificity`) come back unchanged as the
+  keys of `answers`. The server may reorder the options inside `probabilities` (`T3` came first).
+- A Noul answer is `{"type": "noul", "noul": p}`, with no `confidence`.
+- A Choice answer is `{"type": "choice", "choice", "confidence", "probabilities"}`, with
+  `probabilities` keyed by the option names sent in `criteria`.
+- A Score answer is `{"type": "score", "score", "confidence", "legend", "probabilities"}`.
+  The level index, as a string, keys `legend` and `probabilities`, `"0"` first, and
+  `legend["i"]` is the text of level `i` in the order `criteria` listed them. `score` is the
+  probability-weighted index and `confidence` can be 0 while `probabilities` are spread.
+- No answer carries a reason, rationale or any text beyond the option and level names.
+- `usage` is `{"input_tokens", "output_tokens"}`; output tokens appear even though TypeSafe
+  prices them at 0.
+- A 422 body is `{"detail": [{"type", "loc", "msg", "input"}]}`, and `loc` names the question key
+  and the missing field (`["body", "questions", "tier", "choice", "criteria"]`).
+- A bad key is 401 with `{"detail": {"error_type": "authentication_error", "message"}}`.
+- A state over the model's limit is 400, not 422, with `{"detail": {"error_type":
+  "max_tokens_exceeded"}}` and no count; the adapter's own estimate refuses it before sending.
+
 ## Review
 
 | File | Capture |

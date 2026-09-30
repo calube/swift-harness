@@ -1,0 +1,18 @@
+{
+  "model": "jev-1.13.0",
+  "state": {
+    "subject_kind": "a comment added to Swift source, with the code around it",
+    "subject": "// Length-prefixing each field makes the encoding unambiguous without an escape scheme.",
+    "context": "    let canonical = fields.map { \"\\($0.utf8.count):\\($0)\" }.joined()\n    return SHA256.hash(data: Data(canonical.utf8)).map { String(format: \"%02x\", $0) }.joined()\n  }\n}\n\n/// Turns answers into findings by threshold (spec §7.4 policy): `p >= block` blocks only at the"
+  },
+  "questions": {
+    "loses-fact": {
+      "type": "noul",
+      "instructions": "If this comment were deleted, would a reader lose a fact they cannot recover from the code (a non-obvious why, a footgun warning, a contract, a suppression reason)?"
+    },
+    "right-size": {
+      "type": "noul",
+      "instructions": "Is the comment the right size for the fact it carries (no restated code, no history narration, no padding)?"
+    }
+  }
+}
