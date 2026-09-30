@@ -91,7 +91,7 @@ struct CheckJudgeStepTests {
 
   static let pin = "jev-1.13.0"
   static let jevConfig = JudgeCommandsTests.enabled.replacing(
-    "backend = \"claude\"", with: "backend = \"jev\"")
+    "backend = \"claude\"", with: "backend = \"jev\"\nsend_to = \"api.typesafe.ai\"")
   /// Ids in the report split: their SHA-256 starts at or above 0x55 (computed with Python's hashlib).
   static let reportIDs = [
     0, 1, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 29, 30, 31, 32,

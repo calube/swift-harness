@@ -168,8 +168,12 @@ public enum ConfigSchema {
   {
     let path = "judge"
     guard let table = reader.table(root, path, at: "") else { return .disabled }
-    reader.rejectUnknownKeys(
-      in: table, at: path, allowed: ["backend", "model", "advisory_threshold", "block_threshold"])
+    let allowed: Set = ["backend", "model", "send_to", "advisory_threshold", "block_threshold"]
+    for key in table.keys.sorted() where !allowed.contains(key) {
+      let keyPath = "\(path).\(key)"
+      reader.issues.append(
+        looksLikeCredential(key) ? .judgeSecretInConfig(path: keyPath) : .unknownKey(path: keyPath))
+    }
     let rawBackend = reader.string(table, "backend", at: path, required: true)
     let backend: JudgeBackend?
     switch rawBackend {
@@ -185,9 +189,32 @@ public enum ConfigSchema {
     let advisory = reader.double(table, "advisory_threshold", at: path, required: required)
     let block = reader.double(table, "block_threshold", at: path, required: required)
     let model = reader.string(table, "model", at: path)
+    // A send_to of the wrong type, or beside a missing or unknown backend, is already reported.
+    let sendTo = reader.string(table, "send_to", at: path)
+    let sendToReadable = table["send_to"] == nil || sendTo != nil
+    if sendToReadable, rawBackend == "none" || backend != nil {
+      let sendToPath = "\(path).send_to"
+      if let backend, let host = backend.egressHost {
+        if let sendTo, sendTo != host {
+          reader.issues.append(
+            .judgeHostMismatch(path: sendToPath, value: sendTo, backend: backend, host: host))
+        } else if sendTo == nil {
+          reader.issues.append(.judgeHostNotNamed(path: sendToPath, backend: backend, host: host))
+        }
+      } else if sendTo != nil {
+        reader.issues.append(.judgeHostUnused(path: sendToPath, backend: backend))
+      }
+    }
     guard let backend, let advisory, let block else { return .disabled }
     return .enabled(
       backend: backend, thresholds: JudgeThresholds(advisory: advisory, block: block), model: model)
+  }
+
+  /// A key a person might hold an API key in. Matched loosely: a false match only renames the
+  /// unknown-key issue, while a miss would let a credential be committed with a generic error.
+  private static func looksLikeCredential(_ key: String) -> Bool {
+    let lowered = key.lowercased()
+    return ["key", "token", "secret", "password", "credential"].contains { lowered.contains($0) }
   }
 
   private static func readDocs(_ reader: inout Reader, _ root: [String: ConfigValue])
