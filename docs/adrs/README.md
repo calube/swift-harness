@@ -11,5 +11,6 @@ number and title, never by number alone.
 | [0004](0004-proof-and-mutation-may-run-once-in-the-final-gate.md) | Proof and mutation may run once, in the final gate |
 | [0005](0005-simulator-qa-drives-agent-device.md) | Simulator QA drives agent-device |
 | [0006](0006-profiling-wraps-xctrace-report-only-first.md) | Profiling wraps xctrace, and reports before it blocks |
+| [0007](0007-jev-is-an-opt-in-second-judge-backend.md) | Jev is an opt-in second judge backend |
 
 See [`../index.md`](../index.md) for the full doc router.
