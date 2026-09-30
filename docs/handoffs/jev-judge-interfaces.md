@@ -90,7 +90,7 @@ Commits and gate: surface 2d33463, behaviour 6d1c888; gate 20260930T162945Z-c554
 Commits and gate: cases+sheet da69943, gate GREEN 20260930T163647Z; failing labels test 51953a1, held until the user labels.
 - 66 cases in total: report split 44 (15 old, 29 new), tune split 22. The new ids are neutral `case-xxxxxx`. The existing 22 cases now carry labeller "agent".
 - J/labelling-sheet.md is blind: after each `Answer <question>:` line, write an option or leave it blank.
-- After the user labels, two things break. First, recording.json has no answers for the new cases, so `recordedCalibration` fails until the self-test or benchmark task re-records live.
+- After the user labels, 2 things break. First, recording.json has no answers for the new cases, so `recordedCalibration` fails until the self-test or benchmark task re-records live.
 - Second, self-test --judge counts a skipped answer as unscored, which reads as a regression. The wave-4 self-test task must handle it.
 - The worker's own estimate: each question has about 13-14 flagged cases in the report split, a thin margin over 10.
 - Merged to main: cases + sheet + tool (1f28794). Command: `node tests/judge_labelling_sheet.mjs apply`. The failing labels test waits on branch `labels-test-awaiting-person-labels` (dc1ea03); cherry-pick it after the user labels.
