@@ -102,3 +102,43 @@ Commits and gate: surface f95c271, behaviour 8546e8e, test fix 55ff63e; gate 202
 - `ConfiguredCommitCommentJudge.concurrency(_ backend: JudgeBackend) -> Int`: claude 4, jev 6. `JudgeBatch.answer(_:questions:judge:maxConcurrent:)`.
 - Failure text: "Comment judge not run: <JudgeError>". The cap stays at 6, as the design sets; Jev's wait no longer grows with the comment count.
 - Live: the real hook took 889 ms wall on Jev, with 3 Jev calls.
+
+## Wave 3 (continued)
+
+### `calibrate-design-judges-through-any-backend`
+
+Commits and gate: surface c7dd823, behaviour d2a9903 + 74835a3, record f12648e; gate 20260930T170440Z-47503fbd; 9/9 tests proved; calibration 20260930T165620Z-3e9dd0fa GREEN 23/23.
+- last-pass.json schema 3 adds `cases[].servedModels` and `judge:{backend,model,servedModels}`. A schema-2 record reads `judge` as nil, meaning the shipped judge.
+- Freshness never calls a model. It compares the record with the newest kept `<seed>.json` from a run started at or after passedAt (`DesignCalibrationReplies.observations(root:)`). With none, it can't tell, and its summary says so. A moved alias makes the record stale (#6).
+- A Jev-judged record fails freshness, because the shipped judge is Claude.
+- New API: `CalibrateDesignRun.run(judge:)` and `CalibrationRecord.JudgeRecord`.
+- Fix round: `--judge-backend jev` must name the host (`--send-to` or config).
+
+### `judge-benchmark-datasets`
+
+Commits and gate: surface efbdd01, behaviour 0507f8e, 9434cd3; gate 20260930T172054Z-8de1c69b; 19/19 tests proved.
+- Dataset JSON: {schemaVersion:1, id, questionSet:"<set@v>" | inlineQuestionSet:{id,version,subjectDescription,questions:[{id,text,kind:binary|choice|score,options?,flag:{option}|{notDeclaredTier:true}}]}, cases:[{id,source,context,declaredTier?,labels:{"<set@v>":{labeller?,expected}}}]}. Unknown keys fail; a missing labeller reads as agent. labeller is person, agent or seed, and only person counts.
+- `JudgeDataset.hash` / `.summary{id,questionSet,hash,cases,unlabelled,splits,labellers}`; `benchmarkCases(.personOnly|.all)`; `questions(for:)`; `labelsVersion` is where §13 basedOn plugs in.
+- `JudgeDatasetLoader.testQuality(harnessRoot:)`, `.directory(_:id:)`, `.storedReplies(root:runID:)` (id `calibrate-design:<run id>`), `.file(_:)`; errors are `JudgeDatasetError`.
+
+### `judge-parses-test-names-and-assertions`
+
+Commits and gate: surface bbcda87, behaviour 68514b3 + 04899d6; gate 20260930T172518Z-90d05fbb; 24/24 tests proved.
+- `JudgeTestName.parse(source:) -> JudgeTestName{full, behavior, catches: String?}`. Its encoding always writes "catches": null.
+- `JudgeAssertions.extract(source:) -> [String]`, in source order. Each entry keeps try/try?/try!/await, and multi-line statements join on 1 line with comments dropped. The extractor never repeats a nested assertion.
+- A hand-written lexer in the domain (no SwiftSyntax, per §13.2). It doesn't handle XCTFail, Issue.record, confirmation or assertSnapshot. With no @Test, the first func names the test.
+
+### `jev-native-replies-are-captured`
+
+Commits and gate: a68a75d, e733a2a; gate 20260930T174421Z-151d836d.
+- Fixtures: `jev-request-test-quality-2-jev-{good,useless}.json` and `jev-request-test-quality-levels.json`, each with .reply.json and .status. All 3 are 200 from jev-1.13.0. A helper compiled from the gate's own parser built the requests; the README holds the script.
+- Jev returns dotted question keys unchanged, in the order sent. A Score legend echoes the described level strings as sent, so the legend check must compare them with those strings.
+- catches-adds answers `condition` (0.79) for counter-increment (labelled specific). fails-if-broken p_no is 0.06 for the good case against 0.90 for the useless one.
+
+### `judge-cascade-decides-per-question`
+
+Commits and gate: surface 33e2ac4, behaviour 14d2e30, 3995cda; gate 20260930T175154Z-e89f86b5; 13/13 tests proved.
+- `JudgeCascade`: Step `.keep | .escalate(.uncertain | .uncalibratedBlock)`. `Plan.escalated: [String]` in set order. `plan` and `findings` take `subject:`, and `plan` takes `bands:`.
+- Bands: `JudgeCascade.bands(for: "test-quality@2-jev")`. The band is open: 0.5 escalates, 0.2 and 0.8 keep. Advisory questions never escalate.
+- Claude's side: `ClaudeOutcome: .answered([JudgeAnswer]) | .failed(String)`. `merge(...) -> [Decided{answer, identity, escalation?, escalationFailure?}]`. A failed escalation stays minor and never blocks; its note reads "; escalated to claude as <uncertain|an uncalibrated block>, which failed: <why>".
+- `Record{escalations, jev, claude}`: costUSD and wallMilliseconds sum the 2 calls, nil when a call that ran reported none. `sweep(q, cases: JudgeTuneCases, run:, threshold:, bands:) -> [BandPoint{band, escalated, keptCorrect}]`.
