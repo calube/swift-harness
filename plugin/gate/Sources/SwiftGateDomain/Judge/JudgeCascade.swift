@@ -19,11 +19,12 @@ public enum JudgeCascade {
 
   /// Versioned question set id, then question id, to its band. A question with no band never
   /// escalates as uncertain.
-  /// The study's dev-set band until the benchmark sets each one from its tune split.
+  /// Each band is the one the committed benchmark's tune-split sweep picked, as its summary states;
+  /// a test holds the two together.
   public static let bands: [String: [String: Band]] = [
     "test-quality@2-jev": [
-      "fails-if-broken": Band(lower: 0.2, upper: 0.8),
-      "asserts-implementation": Band(lower: 0.2, upper: 0.8),
+      "fails-if-broken": Band(lower: 0.4, upper: 0.9),
+      "asserts-implementation": Band(lower: 0.3, upper: 0.95),
     ]
   ]
 

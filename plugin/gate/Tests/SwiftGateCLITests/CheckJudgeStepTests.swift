@@ -216,10 +216,11 @@ struct CheckJudgeStepTests {
   func minorJevFindingsAskNoReason() async throws {
     let asked = Asked()
 
-    // 0.85 lies above the band and below block_threshold, so Jev's answer stands as advisory.
+    // name-specificity never escalates, so its 0.85, under block_threshold, stands as advisory.
     let judged = try await Self.ready(
       judge: Self.judge(
-        Self.jev, flagged: ["fails-if-broken": 0.99, "tier": 0.1], otherwise: 0.85),
+        Self.jev, flagged: ["fails-if-broken": 0.99, "tier": 0.1, "asserts-implementation": 0.1],
+        otherwise: 0.85),
       config: Self.jevConfig,
       reasonJudge: Self.reasonJudge(flagged: 0.9, rationale: "a reason", asked: asked))
 
@@ -227,7 +228,7 @@ struct CheckJudgeStepTests {
     #expect(!blocking.isEmpty)
     #expect(asked.all == Array(repeating: ["fails-if-broken"], count: blocking.count))
     let minor = judged.judged.filter { $0.severity == .minor }
-    #expect(!Self.findings("asserts-implementation", in: minor).isEmpty)
+    #expect(!Self.findings("name-specificity", in: minor).isEmpty)
     for finding in minor {
       #expect(finding.failureScenario == nil)
       #expect(finding.message.contains("(p=0.85, jev/\(Self.pin))"))

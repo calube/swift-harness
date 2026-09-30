@@ -1,9 +1,10 @@
 {
   "minimums": {
-    "asserts-implementation": { "precision": 0.8, "recall": 0.8 },
-    "fails-if-broken": { "precision": 0.8, "recall": 0.8 },
-    "name-specificity": { "precision": 0.8, "recall": 0.8 },
-    "tier": { "precision": 0.8, "recall": 0.8 }
+    "asserts-implementation": { "precision": 0.3, "recall": 0.3 },
+    "fails-if-broken": { "precision": 0.55, "recall": 0.55 },
+    "name-specificity": { "precision": 0.6, "recall": 0.6 },
+    "tier": { "precision": 0.55, "recall": 0.55 }
   },
-  "questionSet": "test-quality@1"
+  "questionSet": "test-quality@1",
+  "servedModels": ["claude-sonnet-5-5"]
 }

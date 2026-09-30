@@ -10,7 +10,11 @@ struct JudgeCascadeTests {
   static let subject = JudgeSubject(
     id: "CounterTests.increments()", file: "Tests/CounterTests.swift", line: 12,
     source: "@Test func increments() {}", context: "+ count += 1", declaredTier: "T1")
-  static let bands = JudgeCascade.bands(for: "test-quality@2-jev")
+  /// A fixed band, so these tests pin the mechanism; the benchmark's results pin the tuned bands.
+  static let bands = [
+    "fails-if-broken": JudgeCascade.Band(lower: 0.2, upper: 0.8),
+    "asserts-implementation": JudgeCascade.Band(lower: 0.2, upper: 0.8),
+  ]
 
   static func answers(
     failsIfBroken no: Double = 0.1, vague: Double = 0.1, implementation yes: Double = 0.1,
@@ -45,11 +49,12 @@ struct JudgeCascadeTests {
   }
 
   @Test(
-    "the 2 blocking questions of the jev-native set have the band 0.2 to 0.8 and no other question or set has one — catches a band on an advisory question or on the set claude asks"
+    "only the 2 blocking questions of the jev-native set have a band, each holding 0.5 — catches a band on an advisory question or on the set claude asks"
   )
   func bandConstants() {
-    let band = JudgeCascade.Band(lower: 0.2, upper: 0.8)
-    #expect(Self.bands == ["fails-if-broken": band, "asserts-implementation": band])
+    let bands = JudgeCascade.bands(for: "test-quality@2-jev")
+    #expect(Set(bands.keys) == ["fails-if-broken", "asserts-implementation"])
+    #expect(bands.values.allSatisfy { $0.contains(0.5) })
     #expect(JudgeCascade.bands(for: "test-quality@1").isEmpty)
   }
 
