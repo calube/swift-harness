@@ -199,6 +199,21 @@ struct JudgeCascadeTests {
   }
 
   @Test(
+    "findings from claude and jev come back in question set order, each under the identity that decided it — catches a report whose order depends on which backend answered"
+  )
+  func findingsKeepQuestionOrder() throws {
+    let found = try Self.findings(
+      Self.answers(failsIfBroken: 0.5, vague: 0.7),
+      claude: .answered([
+        JudgeAnswer(
+          question: "fails-if-broken", distribution: ["yes": 0.05, "no": 0.95], rationale: nil)
+      ]))
+    #expect(found.map(\.ruleID) == ["judge.fails-if-broken", "judge.name-specificity"])
+    #expect(found.map(\.severity) == [.major, .minor])
+    #expect(found.last?.message.contains("jev/jev-1.13.0") == true)
+  }
+
+  @Test(
     "a record sums both calls' cost and wall time when a question escalated, and is unknown when claude's cost is — catches cost counted on 1 backend"
   )
   func recordSumsUsage() {
