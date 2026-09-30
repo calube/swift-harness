@@ -14,7 +14,21 @@ Prompt: design doc `docs/library/designs/bulk-import.md`, researched at commit
 
 - `docs/library/designs/book-cache.md`, status `approved`: "Books are stored with GRDB in `library.sqlite`."
 
-## Existing claims (`docs/library/designs/book-cache.evidence/claims.jsonl`, grep "batch insert")
+## Source excerpt: `docs/library/designs/book-cache.md`
+
+```markdown
+1  ---
+2  status: approved
+3  ---
+4
+5  # Book cache
+6
+7  ## Decision
+8
+9  Books are stored with GRDB in `library.sqlite`.
+```
+
+## Existing claims (`docs/library/designs/book-cache.evidence/claims.jsonl`, grep -n "batch insert": line 4)
 
 ```json
 {"id": "ev-grdb-batch-insert-ten-thousand-rows-fast", "lane": "packages", "text": "GRDB inserts 10,000 rows in one transaction in under 50 ms.", "citation": {"kind": "file", "loc": ".build/checkouts/GRDB.swift/README.md:L410-L410", "pin": "GRDB.swift@7.4.1", "quote": "Batch inserts in a single transaction are fast."}, "status": "refuted"}

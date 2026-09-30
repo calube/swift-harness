@@ -65,6 +65,10 @@ one answer:
 - `design-evidence-auditor/decision-*` carry no claim that the queue sends one order at a time.
   Its quote showed one awaited call under a code comment, so the auditor rightly found a gating
   overreach in the clean twin, which has nothing to do with the planted defect.
+- `design-lane-prior-decisions/refuted-prior-claim` needs a `file` claim citing the earlier
+  design, and a `file` loc needs a line range. Without line-numbered excerpts of `book-cache.md`
+  and its claims record, a careful agent returns no claim rather than invent a range, so the
+  seed carries both, as the codebase seeds carry their source lines.
 - `design-pre-mortem/*` are judged on what the gating failure stories say about concurrent
   downloads. A pre-mortem is asked to find every open failure story, and the clean twin leaves
   some open (failed downloads, cache retention), so "no gating finding" isn't its label.
