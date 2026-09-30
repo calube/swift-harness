@@ -1,8 +1,9 @@
 // Runs workflows/design-review.js against stubbed reviewer agents with real async delays.
 // Run: node tests/design_review_workflow_test.mjs
 // Regressions caught: a dead or malformed reviewer taking its siblings down; a revise round
-// re-running every reviewer; the pre-mortem leaking into standard tier; a return that
-// `swiftgate review-synth --design` cannot read.
+// re-running every reviewer; the pre-mortem leaking into standard tier; a verifier's reordered
+// or partial answer verifying the wrong finding; a return that `swiftgate review-synth --design`
+// cannot read.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -412,6 +413,44 @@ const tests = {
     assert.equal(notRaised.severity, 'minor')
     assert.equal(moved.location.anchor, 'decision')
     assert.equal(moved.verified, false)
+  },
+
+  async 'a verifier that reorders or drops entries judges each finding by its own entry — catches one verifier slip swapping verdicts between findings'() {
+    const race = finding({ title: 'Queue flushes twice', severity: 'major' })
+    const cache = finding({ title: 'Cache never expires', category: 'stale-cache', severity: 'blocker' })
+    const risk = finding({ title: 'No rollback path', location: { anchor: 'risks' }, category: 'missing-rollback', severity: 'minor' })
+    const verdicts = {
+      'Queue flushes twice': { verified: true, verification_note: 'race traced' },
+      'Cache never expires': { verified: false, severity: 'minor', verification_note: 'TTL set in the Decision' },
+      'No rollback path': { verified: true, verification_note: 'Risks omits rollback' },
+    }
+    const judged = f => ({ ...f, ...verdicts[f.title] })
+
+    const reordered = await run(baseArgs(), {
+      challenger: () => ({ findings: [race, cache, risk] }),
+      verify: findings => ({ findings: [...findings].reverse().map(judged) }),
+    })
+    const [r1, c1, k1] = reviewOf(reordered.result, 'challenger').findings
+    assert.deepEqual([r1.title, r1.verified, r1.severity], ['Queue flushes twice', true, 'major'])
+    assert.deepEqual([c1.title, c1.verified, c1.severity], ['Cache never expires', false, 'minor'])
+    assert.deepEqual([k1.title, k1.verified, k1.location.anchor], ['No rollback path', true, 'risks'])
+
+    // The verifier drops the first entry and renames the cache finding's title: the cache finding
+    // still pairs by anchor, category and kind, and the dropped one is unverified, never borrowed.
+    const dropped = await run(baseArgs(), {
+      challenger: () => ({ findings: [race, cache, risk] }),
+      verify: findings => ({
+        findings: [judged(findings[1]), judged(findings[2])].map(f =>
+          f.category === 'stale-cache' ? { ...f, title: 'Cache entries never expire' } : f),
+      }),
+    })
+    const [r2, c2, k2] = reviewOf(dropped.result, 'challenger').findings
+    assert.equal(r2.verified, false)
+    assert.match(r2.verification_note, /no verifier entry matched/)
+    assert.deepEqual([c2.title, c2.verified, c2.severity], ['Cache never expires', false, 'minor'])
+    assert.equal(k2.verified, true)
+    reordered.result.reviews.forEach(assertReviewerFile)
+    dropped.result.reviews.forEach(assertReviewerFile)
   },
 
   async 'a dead verifier marks its reviewer NOT REVIEWED with findings unverified — catches unverified findings reaching the verdict'() {

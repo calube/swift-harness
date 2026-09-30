@@ -278,14 +278,47 @@ function reviewerFinding(f) {
   return out
 }
 
+// Pairs each reviewer finding with the verifier entry that judged it, never by position alone:
+// a verifier that drops or reorders entries must not verify the wrong finding. Each pass runs
+// over entries no earlier pass claimed: same anchor and title, then the one remaining entry on
+// the anchor with the same category and kind. Within a pass, an ambiguous key matches only at
+// the finding's own position.
+function matchVerifications(original, checked) {
+  const matches = original.map(() => undefined)
+  const claimed = new Set()
+  const kindOf = f => (f.kind === 'standards-violation' ? 'standards-violation' : 'defect')
+  const anchorOf = entry => (entry && typeof entry === 'object' && entry.location ? entry.location.anchor : undefined)
+  const pass = same => {
+    original.forEach((finding, index) => {
+      if (matches[index]) return
+      const candidates = checked
+        .map((entry, at) => ({ entry, at }))
+        .filter(({ entry, at }) => !claimed.has(at) && anchorOf(entry) === finding.location.anchor && same(finding, entry))
+      const pick = candidates.find(c => c.at === index) || (candidates.length === 1 ? candidates[0] : undefined)
+      if (pick) {
+        matches[index] = pick.entry
+        claimed.add(pick.at)
+      }
+    })
+  }
+  pass((f, e) => f.title === e.title)
+  pass((f, e) => f.category === e.category && kindOf(f) === kindOf(e))
+  return matches
+}
+
 // A verifier may lower severity but never raise it, may not invent findings, and may not change
 // what a finding claims (kind, rule, category, anchor); enforced here rather than trusted. A
 // standards violation is lowered only with a stated reason, as in the code review workflow.
 function reconcile(original, checked) {
+  const matches = matchVerifications(original, checked)
   return original.map((finding, index) => {
-    const match = checked[index]
-    if (!match || typeof match !== 'object' || !match.location || match.location.anchor !== finding.location.anchor) {
-      return { ...finding, verified: false, verification_note: 'verifier output did not line up with this finding' }
+    const match = matches[index]
+    if (!match) {
+      return {
+        ...finding,
+        verified: false,
+        verification_note: 'no verifier entry matched this finding by anchor and title, or by category',
+      }
     }
     const lowered = SEVERITY_RANK[match.severity] > SEVERITY_RANK[finding.severity]
     const reason = typeof match.downgrade_reason === 'string' ? match.downgrade_reason.trim() : ''
