@@ -27,9 +27,14 @@ public protocol Judge: Sendable {
   /// The same answers plus what the call cost, for the benchmark (spec §4.5).
   func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> JudgeReply
+  /// The questions as this backend sends them, when that can change within 1 version. The cache
+  /// key hashes it, so a rendering change asks again. `nil` for a backend that asks them as written.
+  func renderedQuestions(for questions: JudgeQuestionSet) -> String?
 }
 
 extension Judge {
+  public func renderedQuestions(for questions: JudgeQuestionSet) -> String? { nil }
+
   public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> JudgeReply
   {
