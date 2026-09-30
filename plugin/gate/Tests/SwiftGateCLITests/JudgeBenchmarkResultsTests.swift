@@ -84,6 +84,49 @@ struct JudgeBenchmarkResultsTests {
       "\(result.findings.filter { $0.ruleID == JudgeSelfTest.staleRuleID }.map(\.message))")
   }
 
+  /// A floor: the lower Wilson 95% bound of the rate, rounded down to 0.05; 0 when nothing counts.
+  static func floor(_ proportion: JudgeProportion) -> Double {
+    guard let lower = proportion.wilson?.lower else { return 0 }
+    return (lower * 20 + 1e-9).rounded(.down) / 20
+  }
+
+  @Test(
+    "every baseline floor is the lower Wilson bound of its recording's tune-split precision or recall, rounded down to 0.05 — catches a floor set by hand"
+  )
+  func baselineFloorsComeFromTheTuneSplit() throws {
+    let directory = Fixture.checkoutRoot.appending(
+      path: JudgeSelfTest.directory, directoryHint: .isDirectory)
+    func load<T: Decodable>(_ type: T.Type, _ name: String) throws -> T {
+      try JSONDecoder().decode(type, from: Data(contentsOf: directory.appending(path: name)))
+    }
+    let labels = try load(JudgeCalibrationSet.self, "labels.json")
+    let tune = JudgeCalibrationSet(
+      schema: labels.schema, questionSet: labels.questionSet,
+      cases: labels.cases.filter { JudgeCaseSplit.of($0.id) == .tune })
+    for (recordingFile, baselineFile, questions) in [
+      ("recording.json", "baseline.json", JudgeQuestionSet.tests),
+      ("recording-jev.json", "baseline-jev.json", JudgeQuestionSet.testsJev),
+    ] {
+      let recording = try load(JudgeCalibrationRecording.self, recordingFile)
+      let baseline = try load(JudgeBaseline.self, baselineFile)
+      let metrics = JudgeCalibration.metrics(
+        set: tune, questions: questions, answers: recording.answers)
+      #expect(Set(baseline.minimums.keys) == Set(metrics.map(\.question)), "\(baselineFile)")
+      for metric in metrics {
+        let expected = JudgeBaseline.Minimum(
+          precision: Self.floor(
+            JudgeProportion(
+              count: metric.truePositives, n: metric.truePositives + metric.falsePositives)),
+          recall: Self.floor(
+            JudgeProportion(
+              count: metric.truePositives, n: metric.truePositives + metric.falseNegatives)))
+        #expect(
+          baseline.minimums[metric.question] == expected,
+          "\(baselineFile) \(metric.question): the tune split gives \(expected)")
+      }
+    }
+  }
+
   /// The bands the sweep may pick. Each holds 0.4 to 0.6, where a standalone rerun of the Jev
   /// request moved answers across 0.5 (design §13.6), so no tune split can fit a band that lets a
   /// coin flip block.

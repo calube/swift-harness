@@ -26,6 +26,10 @@ on the first case). Dataset 4 waits for the evals owners' trial.
 
 ## Cascade bands, from the tune split only
 
+The cascade sends Jev's `fails-if-broken` answer to Claude when its flagged probability lies between 0.40
+and 0.90, both ends excluded, and its `asserts-implementation` answer when that probability lies between 0.30 and 0.95,
+both ends excluded. Every other answer stands as Jev gave it.
+
 The sweep reads only the `@2-jev` arm's 22 tune-split cases, at threshold 0.50. Its candidate bands run from
 0.05 to 0.40 at the lower edge and 0.60 to 0.95 at the upper, in steps of 0.05. So every band holds 0.4 to 0.6,
 where a rerun of the Jev request moved answers across 0.5. It picks the band with the fewest kept answers
@@ -82,10 +86,23 @@ page ranks nothing: both arms find all 5 `loses-fact` cases, and their true-nega
 ## Recordings and baselines
 
 `self-test --judge --record` wrote `recording.json` (Claude `@1`, `claude-sonnet-5-5`) and `recording-jev.json`
-(Jev `@2-jev`, `jev-1.13.0`) again over all 66 cases, with served models and usage. `baseline-jev.json` takes each minimum from the
-tune split only: the lower Wilson 95% bound of the recording's tune-split precision and recall, rounded down to
-0.05. `baseline.json` keeps 0.80 wherever Claude's new recording still meets it. Over the harder set, Claude's
-`asserts-implementation` recall is 0.67 (8/12), so that one minimum falls to the tune-split bound, 0.30.
+(Jev `@2-jev`, `jev-1.13.0`) again over all 66 cases, with served models and usage. 1 rule sets every floor in
+`baseline.json` and `baseline-jev.json`: the lower Wilson 95% bound of the recording's precision or recall on
+the tune split, rounded down to 0.05. A test recomputes each floor from the committed recording and labels.
+
+| Question | Claude precision / recall | Jev precision / recall |
+|---|---|---|
+| `fails-if-broken` | 0.55 (5/5) / 0.55 (5/5) | 0.20 (5/10) / 0.55 (5/5) |
+| `tier` | 0.55 (5/5) / 0.55 (5/5) | 0.55 (5/5) / 0.55 (5/5) |
+| `name-specificity` | 0.60 (7/7) / 0.60 (7/7) | 0.45 (7/9) / 0.60 (7/7) |
+| `asserts-implementation` | 0.30 (2/2) / 0.30 (2/2) | 0.00 (1/4) / 0.05 (1/2) |
+
+Claude's floors fell from 0.80 to these values. The tune split holds only 5 to 7 positives per question, and a
+perfect 5/5 has a Wilson lower bound of 0.57.
+
+**The known weak spot is `asserts-implementation`.** Its tune split has 2 positives, so no floor there can rise far above 0. Jev's precision floor is 0.00 and its recall floor
+0.05, so self-test can't catch a Jev regression on that question. Claude's floors of 0.30 catch only a collapse.
+Growing the tune split's `asserts-implementation` positives is the fix.
 
 ## Spend
 
