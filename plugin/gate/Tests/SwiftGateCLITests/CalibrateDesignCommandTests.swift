@@ -225,7 +225,7 @@ struct CalibrateDesignCommandTests {
     let record = try CalibrationRecord.decode(data)
     let expectedHash = DesignCalibrationHash.hash(
       try DesignCalibrationHash.discover(root: repository.root))
-    #expect(record.schemaVersion == 2)
+    #expect(record.schemaVersion == 3)
     #expect(record.contentHash == expectedHash)
     #expect(
       record.hashedFiles == [
@@ -874,5 +874,116 @@ struct CalibrateDesignCommandTests {
     }
     #expect(systemPrompt("TOKEN-A") == "CRLF body.")
     #expect(systemPrompt("TOKEN-B") == "No frontmatter here.\n---\nstill body")
+  }
+
+  // MARK: - The judge
+
+  /// A reviewer whose one case asks the judge the `tier` question the captured Jev reply answers.
+  static func tierRepository() throws -> Repository {
+    let repository = try Repository()
+    try repository.agent("design-challenger", body: "You challenge options.", model: "opus")
+    try repository.write("plugin/workflows/design-review.js", "export const steps = [];\n")
+    try repository.seed(
+      agent: "design-challenger", name: "tiered-test", token: "TOKEN-T",
+      label: """
+        {
+          "schemaVersion": 2,
+          "checks": [
+            {
+              "id": "tier",
+              "kind": "judge",
+              "text": "Which tier does the test the output proposes belong in?",
+              "options": ["T1", "T2", "T3"],
+              "expected": "T1"
+            }
+          ]
+        }
+        """)
+    return repository
+  }
+
+  @Test(
+    "--judge-backend jev --replay answers every judged label through Jev and runs no claude — catches a runner still bound to the Claude judge"
+  )
+  func jevJudgesAReplay() async throws {
+    let repository = try Self.tierRepository()
+    let kept = await Self.run(
+      repository,
+      runner: FakeProcessRunner { invocation throws(ProcessRunnerError) in
+        guard !Self.isJudge(invocation) else {
+          return ProcessOutput(status: .exited(1), stdout: "", stderr: "claude judged")
+        }
+        return ProcessOutput(
+          status: .exited(0), stdout: Self.envelope(result: "Put it in the host unit tests."))
+      }, replies: Self.replies(repository, .keep))
+    #expect(try Self.exitCode(kept) == 2)
+    let transport = FakeHTTPTransport([try FakeHTTPTransport.captured("test-quality")])
+    let replayRunner = Self.recorded([:])
+    let command = try #require(
+      try CalibrateCommand.parseAsRoot([
+        "design", "--judge-backend", "jev", "--replay", Self.keptRunID,
+      ]) as? CalibrateDesignCommand)
+
+    let replay = await CalibrateDesignRun.run(
+      root: repository.root, runner: replayRunner, model: "sonnet", now: Self.passedAt,
+      replies: Self.replies(repository, .replay),
+      judge: command.judge(
+        runner: replayRunner, transport: transport,
+        environment: [JevPin.keyVariable: "test-key"]))
+
+    #expect(try Self.exitCode(replay) == 0)
+    #expect(replayRunner.invocations.isEmpty)
+    #expect(transport.requests.count == 1)
+    #expect(
+      Self.findings(replay).contains {
+        $0.ruleID == "calibrate-design.usage" && $0.message.contains("judged by jev/jev-1.13.0")
+      })
+  }
+
+  @Test(
+    "the judge flags build the named backend on its default model, and no flags build the shipped Claude judge — catches a flag that parses but never reaches the judge"
+  )
+  func judgeFlagsBuildTheirBackend() throws {
+    func identity(_ arguments: [String]) throws -> JudgeIdentity {
+      let command = try #require(
+        try CalibrateCommand.parseAsRoot(["design"] + arguments) as? CalibrateDesignCommand)
+      return command.judge(
+        runner: Self.recorded([:]), transport: FakeHTTPTransport([]), environment: [:]
+      ).identity
+    }
+
+    #expect(try identity([]) == JudgeIdentity(backend: "claude", model: "sonnet"))
+    #expect(
+      try identity(["--judge-backend", "jev"]) == JudgeIdentity(backend: "jev", model: "jev-1.13.0")
+    )
+    #expect(
+      try identity(["--judge-backend", "claude", "--judge-model", "claude-sonnet-5-5"])
+        == JudgeIdentity(backend: "claude", model: "claude-sonnet-5-5"))
+  }
+
+  @Test(
+    "a full pass records its judge and the ids that served each agent and the judge — catches a record that keeps only the alias, so a moved alias passes unnoticed"
+  )
+  func passRecordsJudgeAndServedModels() async throws {
+    let repository = try Repository.calibrated()
+    try repository.judgedDrafter(expected: "unverified")
+
+    let outcome = await Self.run(
+      repository, runner: Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"]))
+
+    #expect(try Self.exitCode(outcome) == 0)
+    let record = try Self.recordJSON(repository)
+    let judge = try #require(record["judge"] as? [String: Any])
+    #expect(judge["backend"] as? String == "claude")
+    #expect(judge["model"] as? String == "sonnet")
+    #expect(judge["servedModels"] as? [String] == ["claude-haiku-4-5-20251001"])
+    let cases = try #require(record["cases"] as? [[String: Any]])
+    #expect(cases.count == 3)
+    for recorded in cases {
+      #expect(recorded["servedModels"] as? [String] == ["claude-haiku-4-5-20251001"])
+    }
+    let decoded = try CalibrationRecord.decode(
+      try #require(repository.data(DesignCalibrationLayout.recordPath)))
+    #expect(decoded.judge?.backend == .claude)
   }
 }

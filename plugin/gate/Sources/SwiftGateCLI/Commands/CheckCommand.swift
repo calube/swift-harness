@@ -586,8 +586,9 @@ enum CalibrationFreshness {
     var fresh: [String] = []
     var skipped: [String] = []
     var file = "."
+    let kept = DesignCalibrationReplies.observations(root: root)
     for suite in CalibrationSuite.allCases {
-      switch try check(suite, root: root) {
+      switch try check(suite, root: root, observed: kept.observations) {
       case .gating(let findings): gating += findings
       case .fresh(let note):
         if fresh.isEmpty { file = suite.recordPath }
@@ -596,10 +597,16 @@ enum CalibrationFreshness {
       }
     }
     if !gating.isEmpty { return gating }
+    var notes = fresh + skipped
+    if !kept.unreadable.isEmpty {
+      notes.append(
+        "can't read the served models kept at " + kept.unreadable.joined(separator: ", ")
+          + ", so they weren't compared")
+    }
     let message =
       fresh.isEmpty
-      ? "calibration freshness skipped: " + skipped.joined(separator: "; ") + "."
-      : "calibration fresh: " + (fresh + skipped).joined(separator: "; ") + "."
+      ? "calibration freshness skipped: " + notes.joined(separator: "; ") + "."
+      : "calibration fresh: " + notes.joined(separator: "; ") + "."
     return [try finding(summaryRuleID, .nit, file: file, message)]
   }
 
@@ -609,9 +616,9 @@ enum CalibrationFreshness {
     case skipped(String)
   }
 
-  private static func check(_ suite: CalibrationSuite, root: URL)
-    throws(ReportContractViolation) -> SuiteResult
-  {
+  private static func check(
+    _ suite: CalibrationSuite, root: URL, observed: [ServedModelObservation]
+  ) throws(ReportContractViolation) -> SuiteResult {
     let name = suite.rawValue
     let record = suite.recordPath
     let rerun = "run `\(suite.command)` and commit \(record)"
@@ -670,13 +677,27 @@ enum CalibrationFreshness {
         try finding(
           wrongModelRuleID, .major, file: record,
           "the \(name) calibration didn't run every agent on the model it ships on: "
-            + modelProblems.joined(separator: "; ") + "; \(rerun) without `--model`."))
+            + modelProblems.joined(separator: "; ")
+            + "; \(rerun) without `--model` or `--judge-backend`."))
+    }
+    let servedProblems = pass.servedModelProblems(observed: observed)
+    if !servedProblems.isEmpty {
+      gating.append(
+        try finding(
+          wrongModelRuleID, .major, file: record,
+          "a model the \(name) calibration ran on now resolves to another id: "
+            + servedProblems.joined(separator: "; ") + "; \(rerun)."))
     }
     if !gating.isEmpty { return .gating(gating) }
     let models = Set(pass.cases.map(\.model)).sorted().joined(separator: ", ")
+    let served = Set(pass.cases.flatMap { $0.servedModels ?? [] }).sorted()
+    let servedNote =
+      served.isEmpty
+      ? ", with no served ids recorded to compare with later runs"
+      : ", served by \(served.joined(separator: ", ")) and no kept reply since says otherwise"
     return .fresh(
       "\(hashed.count) \(name) prompt file(s) match content hash \(current), each agent passed "
-        + "on its own model (\(models))")
+        + "on its own model (\(models))\(servedNote)")
   }
 
   private static func finding(

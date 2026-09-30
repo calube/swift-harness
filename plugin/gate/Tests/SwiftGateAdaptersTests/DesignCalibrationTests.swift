@@ -102,7 +102,7 @@ struct DesignCalibrationTests {
   }
 
   @Test(
-    "a version 2 record with a model per case round-trips and a version 3 one fails to decode — catches a record without its models, or a future format, read as a pass"
+    "a version 2 record, and a version 3 one with served models and its judge, round-trip while a version 4 one fails to decode — catches a record losing its models or judge, or a future format read as a pass"
   )
   func recordRejectsUnknownSchema() throws {
     let text = """
@@ -114,9 +114,21 @@ struct DesignCalibrationTests {
     let encoded = String(decoding: try record.encoded(), as: UTF8.self)
     #expect(try CalibrationRecord.decode(Data(encoded.utf8)) == record)
     #expect(encoded.contains("\"model\" : \"opus\""))
-    let future = encoded.replacingOccurrences(
-      of: "\"schemaVersion\" : 2", with: "\"schemaVersion\" : 3")
-    #expect(future != encoded)
+    #expect(record.judge == nil)
+    let current = CalibrationRecord(
+      contentHash: "abc", hashedFiles: [], modelOverride: nil, passedAt: record.passedAt,
+      cases: [
+        .init(
+          agent: "design-drafter", caseName: "c", model: "opus",
+          servedModels: ["claude-opus-5-5"], answers: [])
+      ],
+      judge: .init(backend: .jev, model: "jev-1.13.0", servedModels: ["jev-1.13.0"]))
+    let currentText = String(decoding: try current.encoded(), as: UTF8.self)
+    #expect(try CalibrationRecord.decode(Data(currentText.utf8)) == current)
+    #expect(currentText.contains("\"backend\" : \"jev\""))
+    let future = currentText.replacingOccurrences(
+      of: "\"schemaVersion\" : 3", with: "\"schemaVersion\" : 4")
+    #expect(future != currentText)
     #expect(throws: (any Error).self) { try CalibrationRecord.decode(Data(future.utf8)) }
   }
 

@@ -324,7 +324,36 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
   /// What every kept run under `root` says each requested model resolved to. No call is made:
   /// these are the served ids the CLI reported when the replies were kept.
   public static func observations(root: URL) -> Observations {
-    Observations(observations: [], unreadable: [])
+    let runs = root.appending(path: RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let manager = FileManager.default
+    var observations: [ServedModelObservation] = []
+    var unreadable: [String] = []
+    let runIDs = (try? manager.contentsOfDirectory(atPath: runs.path)) ?? []
+    for runID in runIDs.sorted() where RunID.isValid(runID) {
+      let kept = "\(RunLayout.runDirectory(for: runID))\(directoryName)"
+      let agents = (try? manager.contentsOfDirectory(atPath: root.appending(path: kept).path)) ?? []
+      for agent in agents.sorted() where !agent.hasPrefix(".") {
+        let names =
+          (try? manager.contentsOfDirectory(atPath: root.appending(path: "\(kept)/\(agent)").path))
+          ?? []
+        for name in names.sorted() where name.hasSuffix(".json") {
+          let path = "\(kept)/\(agent)/\(name)"
+          guard
+            let data = try? Data(contentsOf: root.appending(path: path)),
+            let metadata = try? JSONDecoder().decode(Metadata.self, from: data),
+            metadata.schemaVersion == Metadata.currentSchemaVersion
+          else {
+            unreadable.append(path)
+            continue
+          }
+          observations.append(
+            ServedModelObservation(
+              requestedModel: metadata.requestedModel, servedModels: metadata.servedModels,
+              runID: runID, path: path))
+        }
+      }
+    }
+    return Observations(observations: observations, unreadable: unreadable)
   }
 
   func stored(agent: String, seed: String) throws(CalibrationCaseError) -> Stored {
@@ -395,8 +424,11 @@ public struct DesignCalibrationRunner: Sendable {
     self.executable = executable
     self.timeout = timeout
     self.replies = replies
-    self.judge = ClaudeCLIJudge(runner: runner, model: judgeModel, executable: executable)
+    self.judge = judge ?? ClaudeCLIJudge(runner: runner, model: judgeModel, executable: executable)
   }
+
+  /// Who answers the judged labels.
+  public var judgeIdentity: JudgeIdentity { judge.identity }
 
   public func model(of agent: DesignCalibrationSeeds.Agent) -> String {
     modelOverride ?? agent.model ?? unpinnedModel
@@ -458,13 +490,16 @@ public struct DesignCalibrationRunner: Sendable {
     }
 
     let judged = seed.label.judgeQuestions
+    var judgeServedModels: [String] = []
     if !judged.isEmpty {
       let questions = Self.judgeQuestionSet(agent: agent.name, seed: seed.name, judged)
       let replies: [JudgeAnswer]
       do {
-        replies = try await judge.answer(
+        let measured = try await judge.measuredAnswer(
           Self.judgeSubject(agent: agent.name, seed: seed, output: reply.result),
           questions: questions)
+        replies = measured.answers
+        judgeServedModels = measured.usage?.servedModel.map { [$0] } ?? []
       } catch {
         throw .blocked("the judge couldn't answer: \(error)")
       }
@@ -485,10 +520,13 @@ public struct DesignCalibrationRunner: Sendable {
       (order.firstIndex(of: $0.question) ?? 0) < (order.firstIndex(of: $1.question) ?? 0)
     }
     return CaseRun(
-      result: .init(agent: agent.name, caseName: seed.name, model: model, answers: answers),
+      result: .init(
+        agent: agent.name, caseName: seed.name, model: model, servedModels: reply.servedModels,
+        answers: answers),
       costUSD: reply.costUSD, durationMilliseconds: reply.durationMilliseconds,
       servedModels: reply.servedModels,
-      replyPath: replies?.replyPath(agent: agent.name, seed: seed.name))
+      replyPath: replies?.replyPath(agent: agent.name, seed: seed.name),
+      judgeServedModels: judgeServedModels)
   }
 
   // MARK: - The agent
