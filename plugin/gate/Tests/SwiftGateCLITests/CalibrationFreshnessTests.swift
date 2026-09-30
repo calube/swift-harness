@@ -41,24 +41,28 @@ struct CalibrationFreshnessTests {
   /// one case per agent, on `models[agent]` or else the model its frontmatter names. Written as
   /// JSON, the format push reads.
   static func recordPass(
-    _ repository: ProbeRepository, models: [String: String] = [:], modelOverride: String? = nil
+    _ repository: ProbeRepository, models: [String: String] = [:], modelOverride: String? = nil,
+    served: [String]? = nil, extra: [String: Any] = [:]
   ) throws {
     let hashed = try DesignCalibrationHash.discover(root: repository.root)
     let cases: [[String: Any]] = hashed.filter { $0.path.hasPrefix("plugin/agents/") }.map {
       file in
       let agent = String(file.path.split(separator: "/").last?.dropLast(".md".count) ?? "")
-      return [
+      var recorded: [String: Any] = [
         "agent": agent, "case": "case", "model": models[agent] ?? shippedModel(file),
         "answers": [
           ["question": "verdict", "expected": "refuted", "answered": "refuted", "probability": 1]
         ],
       ]
+      if let served { recorded["servedModels"] = served }
+      return recorded
     }
     var record: [String: Any] = [
       "schemaVersion": 2, "contentHash": DesignCalibrationHash.hash(hashed),
       "hashedFiles": hashed.map(\.path), "passedAt": "2026-09-21T12:00:00Z", "cases": cases,
     ]
     if let modelOverride { record["modelOverride"] = modelOverride }
+    record.merge(extra) { _, new in new }
     let data = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
     try repository.write(DesignCalibrationLayout.recordPath, String(decoding: data, as: UTF8.self))
   }
@@ -319,5 +323,112 @@ struct CalibrationFreshnessTests {
     #expect(report.verdict == .green)
     #expect(Self.freshness(report).map(\.ruleID) == [CalibrationFreshness.summaryRuleID])
     #expect(Self.freshness(report).first?.message.hasPrefix("calibration fresh:") == true)
+  }
+
+  // MARK: - The judge and served models
+
+  @Test(
+    "a record judged by jev turns push red naming its judge and the shipped one — catches a Jev pass standing in for the shipped Claude judge"
+  )
+  func jevJudgedRecordIsNotFresh() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(
+      repository,
+      extra: [
+        "schemaVersion": 3,
+        "judge": ["backend": "jev", "model": "jev-1.13.0", "servedModels": ["jev-1.13.0"]],
+      ])
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(findings.map(\.ruleID) == [CalibrationFreshness.wrongModelRuleID])
+    let message = try #require(findings.first?.message)
+    #expect(message.contains("judged by jev/jev-1.13.0"))
+    #expect(message.contains("claude/sonnet"))
+  }
+
+  @Test(
+    "a record naming an unknown judge backend is unreadable — catches a typo'd backend read as the shipped judge"
+  )
+  func unknownJudgeBackendIsUnreadable() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    try Self.recordPass(
+      repository,
+      extra: ["schemaVersion": 3, "judge": ["backend": "claud", "model": "sonnet"]])
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(findings.map(\.ruleID) == [CalibrationFreshness.unreadableRuleID])
+    #expect(findings.first?.message.contains("claud") == true)
+  }
+
+  /// A real kept `<seed>.json` from a live `calibrate design` run (see the fixture README).
+  static let keptSonnet = "CalibrateDesign/kept-sonnet.json"
+
+  /// Puts the kept fixture under `runID` as a sonnet agent's case, and returns the ids it names.
+  static func keep(_ repository: ProbeRepository, runID: String) throws -> [String] {
+    let data = try Fixture.data(keptSonnet)
+    try repository.write(
+      "\(RunLayout.runDirectory(for: runID))calibrate-design/design-challenger/case.json",
+      String(decoding: data, as: UTF8.self))
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    #expect(object["requestedModel"] as? String == "sonnet")
+    return try #require(object["servedModels"] as? [String])
+  }
+
+  @Test(
+    "a record whose alias served another id than a newer run's kept reply says it serves now turns push red naming both — catches a moved alias passing on the old model's calibration"
+  )
+  func movedAliasIsStale() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    let runID = "20260930T160000Z-0000beef"
+    let served = try Self.keep(repository, runID: runID)
+    try #require(served != ["claude-sonnet-5"])
+    try Self.recordPass(
+      repository, served: ["claude-sonnet-5"],
+      extra: [
+        "schemaVersion": 3,
+        "judge": ["backend": "claude", "model": "sonnet", "servedModels": ["claude-sonnet-5"]],
+      ])
+
+    let findings = try CalibrationFreshness.run(root: repository.root)
+
+    #expect(findings.map(\.ruleID) == [CalibrationFreshness.wrongModelRuleID])
+    let message = try #require(findings.first?.message)
+    #expect(message.contains("`sonnet` served claude-sonnet-5"))
+    #expect(message.contains(served.joined(separator: ", ")))
+    #expect(message.contains(runID))
+  }
+
+  @Test(
+    "a kept reply agreeing with the record, or older than the pass, keeps it fresh, and an unreadable one is named — catches every past run, or a corrupt one, silently deciding freshness"
+  )
+  func olderOrAgreeingKeptRepliesStayFresh() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    let served = try Self.keep(repository, runID: "20260930T160000Z-0000beef")
+    try repository.write(
+      "\(RunLayout.runDirectory(for: "20260930T170000Z-0000cafe"))calibrate-design/"
+        + "design-challenger/case.json", "{\"schemaVersion\": 1}")
+    try Self.recordPass(
+      repository, served: served,
+      extra: [
+        "schemaVersion": 3,
+        "judge": ["backend": "claude", "model": "sonnet", "servedModels": served],
+      ])
+    let older = try Self.repository()
+    defer { older.remove() }
+    _ = try Self.keep(older, runID: "20260920T120000Z-0000beef")
+    try Self.recordPass(older, served: ["claude-sonnet-5"])
+
+    let agreeing = try CalibrationFreshness.run(root: repository.root)
+    let stale = try CalibrationFreshness.run(root: older.root)
+
+    #expect(agreeing.map(\.ruleID) == [CalibrationFreshness.summaryRuleID])
+    #expect(agreeing.first?.message.contains("20260930T170000Z-0000cafe") == true)
+    #expect(stale.map(\.ruleID) == [CalibrationFreshness.summaryRuleID])
   }
 }

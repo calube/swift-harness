@@ -1,0 +1,7 @@
+{
+  "requestedModel" : "sonnet",
+  "schemaVersion" : 1,
+  "servedModels" : [
+    "claude-sonnet-5-5"
+  ]
+}

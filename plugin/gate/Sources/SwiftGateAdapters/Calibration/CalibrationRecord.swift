@@ -138,6 +138,23 @@ public enum CalibrationModel {
   }
 }
 
+/// What one kept reply says a requested model resolved to, read from its `<seed>.json`.
+public struct ServedModelObservation: Sendable, Equatable {
+  public let requestedModel: String
+  public let servedModels: [String]
+  /// The run that kept it; its id starts with the time it began.
+  public let runID: String
+  /// The kept file, relative to the repository root.
+  public let path: String
+
+  public init(requestedModel: String, servedModels: [String], runID: String, path: String) {
+    self.requestedModel = requestedModel
+    self.servedModels = servedModels
+    self.runID = runID
+    self.path = path
+  }
+}
+
 /// Reads an agent file's leading `---` frontmatter block.
 public enum AgentFrontmatter {
   /// A top-level `key: value` line of the frontmatter, trimmed; `nil` when absent or empty.
@@ -176,7 +193,9 @@ public enum AgentFrontmatter {
 /// check compares `contentHash` with ``CalibrationHash`` over the working tree and each case's
 /// model with its agent's frontmatter.
 public struct CalibrationRecord: Sendable, Equatable, Codable {
-  public static let currentSchemaVersion = 2
+  /// Version 3 added each case's served models and the judge; a version 2 record still reads.
+  public static let currentSchemaVersion = 3
+  public static let readableSchemaVersions: Set<Int> = [2, 3]
 
   public struct QuestionResult: Sendable, Equatable, Codable {
     /// A judged answer counts only at this probability or above, so a coin-flip answer that
@@ -203,14 +222,20 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
   public struct CaseResult: Sendable, Equatable, Codable {
     public let agent: String
     public let caseName: String
-    /// The model the agent ran on.
+    /// The model the agent was asked to run on, often an alias such as `opus`.
     public let model: String
+    /// The ids the CLI says answered, which an alias can move between; `nil` when not recorded.
+    public let servedModels: [String]?
     public let answers: [QuestionResult]
 
-    public init(agent: String, caseName: String, model: String, answers: [QuestionResult]) {
+    public init(
+      agent: String, caseName: String, model: String, servedModels: [String]? = nil,
+      answers: [QuestionResult]
+    ) {
       self.agent = agent
       self.caseName = caseName
       self.model = model
+      self.servedModels = servedModels
       self.answers = answers
     }
 
@@ -218,7 +243,56 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
       case agent
       case caseName = "case"
       case model
+      case servedModels
       case answers
+    }
+  }
+
+  /// The judge that answered the pass's judged labels.
+  public struct JudgeRecord: Sendable, Equatable, Codable {
+    public let backend: JudgeBackend
+    /// The model the judge was asked for.
+    public let model: String
+    /// The ids that answered; `nil` when not recorded.
+    public let servedModels: [String]?
+
+    /// The judge `calibrate design` uses unless told otherwise.
+    public static let shipped = JudgeRecord(
+      backend: .claude, model: JudgeFactory.defaultModel, servedModels: nil)
+
+    public init(backend: JudgeBackend, model: String, servedModels: [String]?) {
+      self.backend = backend
+      self.model = model
+      self.servedModels = servedModels
+    }
+
+    /// `backend/model`, as messages name a judge.
+    public var name: String { "\(backend.rawValue)/\(model)" }
+
+    /// Whether this is the judge the command ships with, whatever ids served it.
+    public var isShipped: Bool { backend == Self.shipped.backend && model == Self.shipped.model }
+
+    private enum CodingKeys: String, CodingKey {
+      case backend, model, servedModels
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let raw = try container.decode(String.self, forKey: .backend)
+      guard let backend = JudgeBackend(rawValue: raw) else {
+        throw DecodingError.dataCorruptedError(
+          forKey: .backend, in: container, debugDescription: "unknown judge backend `\(raw)`")
+      }
+      self.backend = backend
+      model = try container.decode(String.self, forKey: .model)
+      servedModels = try container.decodeIfPresent([String].self, forKey: .servedModels)
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(backend.rawValue, forKey: .backend)
+      try container.encode(model, forKey: .model)
+      try container.encodeIfPresent(servedModels, forKey: .servedModels)
     }
   }
 
@@ -229,10 +303,13 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
   public let modelOverride: String?
   public let passedAt: Date
   public let cases: [CaseResult]
+  /// The judge of the pass's judged labels; `nil` for a suite with no judge, or a record from
+  /// before the judge was recorded, when only the shipped judge could run.
+  public let judge: JudgeRecord?
 
   public init(
     contentHash: String, hashedFiles: [String], modelOverride: String?, passedAt: Date,
-    cases: [CaseResult]
+    cases: [CaseResult], judge: JudgeRecord? = nil
   ) {
     self.schemaVersion = Self.currentSchemaVersion
     self.contentHash = contentHash
@@ -240,16 +317,17 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     self.modelOverride = modelOverride
     self.passedAt = passedAt
     self.cases = cases
+    self.judge = judge
   }
 
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, contentHash, hashedFiles, modelOverride, passedAt, cases
+    case schemaVersion, contentHash, hashedFiles, modelOverride, passedAt, cases, judge
   }
 
   public init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let version = try container.decode(Int.self, forKey: .schemaVersion)
-    guard version == Self.currentSchemaVersion else {
+    guard Self.readableSchemaVersions.contains(version) else {
       throw DecodingError.dataCorruptedError(
         forKey: .schemaVersion, in: container,
         debugDescription: "unsupported calibration record schemaVersion \(version)")
@@ -260,6 +338,7 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     modelOverride = try container.decodeIfPresent(String.self, forKey: .modelOverride)
     passedAt = try container.decode(Date.self, forKey: .passedAt)
     cases = try container.decode([CaseResult].self, forKey: .cases)
+    judge = version >= 3 ? try container.decodeIfPresent(JudgeRecord.self, forKey: .judge) : nil
   }
 
   /// Pretty, key-sorted JSON with ISO 8601 dates and a trailing newline, so a re-pass diffs
@@ -277,17 +356,70 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     return try decoder.decode(CalibrationRecord.self, from: data)
   }
 
+  /// Why an alias this record ran on no longer serves what it served in the pass: for each
+  /// requested model, the newest observation from a run started at or after ``passedAt`` whose
+  /// served ids differ from the recorded ones. Empty when nothing newer disagrees.
+  public func servedModelProblems(observed: [ServedModelObservation]) -> [String] {
+    var recorded: [String: Set<String>] = [:]
+    for result in cases {
+      guard let served = result.servedModels, !served.isEmpty else { continue }
+      recorded[result.model, default: []].formUnion(served)
+    }
+    // Kept replies come from the Claude CLI, so they speak only for a Claude judge's alias.
+    if let judge, judge.backend == .claude, let served = judge.servedModels, !served.isEmpty {
+      recorded[judge.model, default: []].formUnion(served)
+    }
+    let since = String(RunID.make(startedAt: passedAt, suffix: 0).prefix(Self.runIDTimeLength))
+    var problems: [String] = []
+    for (alias, servedThen) in recorded.sorted(by: { $0.key < $1.key }) {
+      let newest =
+        observed
+        .filter {
+          $0.requestedModel == alias && !$0.servedModels.isEmpty
+            && Self.runIDTime($0.runID).map { $0 >= since } == true
+        }
+        .max { ($0.runID, $0.path) < ($1.runID, $1.path) }
+      guard let newest, Set(newest.servedModels) != servedThen else { continue }
+      problems.append(
+        "`\(alias)` served \(servedThen.sorted().joined(separator: ", ")) in the pass, but "
+          + "\(newest.servedModels.sorted().joined(separator: ", ")) in run \(newest.runID) "
+          + "(\(newest.path))")
+    }
+    return problems
+  }
+
+  /// `yyyyMMddTHHmmssZ`, the start time every run id begins with.
+  static let runIDTimeLength = 16
+
+  static func runIDTime(_ runID: String) -> String? {
+    let time = runID.prefix(runIDTimeLength)
+    guard time.count == runIDTimeLength else { return nil }
+    let shape = time.enumerated().allSatisfy { index, character in
+      switch index {
+      case 8: character == "T"
+      case 15: character == "Z"
+      default: character.isASCII && character.isNumber
+      }
+    }
+    return shape ? String(time) : nil
+  }
+
   /// Why this record doesn't show each hashed agent calibrated on the model it ships on: a
   /// `--model` override, an agent with no case, or a case run on another model than the agent's
   /// frontmatter names. Empty when every agent passed on its own model.
   public func modelProblems(agents: [CalibrationHash.File], suite: CalibrationSuite) -> [String] {
+    var problems: [String] = []
+    if let judge, !judge.isShipped {
+      problems.append(
+        "the pass was judged by \(judge.name), not the shipped judge "
+          + "\(JudgeRecord.shipped.name), and only a pass on the shipped judge counts")
+    }
     if let modelOverride {
-      return [
+      return problems + [
         "the pass ran every agent on `--model \(modelOverride)`, and a pass on an override never "
           + "counts"
       ]
     }
-    var problems: [String] = []
     for file in agents where suite.isHashedAgent(file.path) {
       let name = String(
         file.path.dropFirst(CalibrationSuite.agentsDirectory.count + 1).dropLast(".md".count))

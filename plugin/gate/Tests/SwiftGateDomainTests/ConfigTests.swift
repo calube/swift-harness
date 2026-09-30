@@ -3,6 +3,25 @@ import Testing
 
 @Suite("Config")
 struct ConfigTests {
+  @Test(
+    "a judge backend's host check wants exactly its egress host, and no host for a backend that sends nowhere — catches a lookalike or missing host allowing egress"
+  )
+  func egressIssueWantsTheExactHost() {
+    let host = "api.typesafe.ai"
+    #expect(
+      JudgeBackend.jev.egressIssue(sendTo: nil, path: "p")
+        == .judgeHostNotNamed(path: "p", backend: .jev, host: host))
+    #expect(
+      JudgeBackend.jev.egressIssue(sendTo: "api.typesafe.ai.example.com", path: "p")
+        == .judgeHostMismatch(
+          path: "p", value: "api.typesafe.ai.example.com", backend: .jev, host: host))
+    #expect(JudgeBackend.jev.egressIssue(sendTo: host, path: "p") == nil)
+    #expect(
+      JudgeBackend.claude.egressIssue(sendTo: host, path: "p")
+        == .judgeHostUnused(path: "p", backend: .claude))
+    #expect(JudgeBackend.claude.egressIssue(sendTo: nil, path: "p") == nil)
+  }
+
   @Test("building a Config in code enforces the same rules as the file — catches a bypass path")
   func initEnforcesInvariants() {
     #expect {
