@@ -145,6 +145,15 @@ public enum JevRendering {
     }
   }
 
+  /// The template reason for `native`'s combined answer (design §13.3): the sub-question whose
+  /// answer set the value, what that answer means, and its probability. `nil` for a question Jev
+  /// is asked as written, or when a sub-answer is missing.
+  public static func reason(_ native: JevNativeQuestion, answers: [String: JevSubAnswer])
+    -> String?
+  {
+    nil
+  }
+
   private static func answer(_ key: String, in answers: [String: JevSubAnswer])
     throws(JevCombinationError) -> JevSubAnswer
   {

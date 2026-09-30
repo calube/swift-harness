@@ -6,11 +6,17 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
   public let model: String
   /// A built-in set's versioned id, written after `#`; `nil` asks the dataset's own set.
   public let questionSet: String?
+  /// For a cascade arm, the Claude model that answers the questions Jev escalates; `backend` and
+  /// `model` are then Jev's. `nil` for an arm of 1 backend.
+  public let claudeModel: String?
 
-  public init(backend: JudgeBackend, model: String, questionSet: String? = nil) {
+  public init(
+    backend: JudgeBackend, model: String, questionSet: String? = nil, claudeModel: String? = nil
+  ) {
     self.backend = backend
     self.model = model
     self.questionSet = questionSet
+    self.claudeModel = claudeModel
   }
 
   /// The built-in sets an arm may name after `#`.
@@ -231,6 +237,9 @@ public struct JudgeBenchmarkLabelledCase: Sendable, Equatable, Codable {
 public struct JudgeBenchmarkReply: Sendable, Equatable, Codable {
   public let answers: [JudgeAnswer]
   public let usage: JudgeUsage?
+  /// On a cascade arm's Claude reply, each question Jev escalated and why; `nil` on every other
+  /// reply.
+  public var escalations: [String: JudgeCascade.Escalation]? = nil
 
   public init(_ reply: JudgeReply) {
     answers = reply.answers

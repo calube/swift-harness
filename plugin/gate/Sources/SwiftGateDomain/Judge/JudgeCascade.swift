@@ -109,7 +109,7 @@ public enum JudgeCascade {
   /// Decides each question's step from Jev's answers.
   public static func plan(
     subject: JudgeSubject, jev: [JudgeAnswer], questions: JudgeQuestionSet,
-    bands: [String: Band], blockDecisions: [String: JudgeBlockCalibration.Decision],
+    bands: [String: Band], blockDecisions: [String: JudgeBlockCalibration.Decision] = [:],
     thresholds: JudgeThresholds, atReadyTier: Bool
   ) -> Plan {
     let byQuestion = Dictionary(jev.map { ($0.question, $0) }, uniquingKeysWith: { a, _ in a })
@@ -166,7 +166,7 @@ public enum JudgeCascade {
   public static func findings(
     subject: JudgeSubject, plan: Plan, jev: [JudgeAnswer], claude: ClaudeOutcome,
     questions: JudgeQuestionSet, jevIdentity: JudgeIdentity, claudeIdentity: JudgeIdentity,
-    blockDecisions: [String: JudgeBlockCalibration.Decision], thresholds: JudgeThresholds,
+    blockDecisions: [String: JudgeBlockCalibration.Decision] = [:], thresholds: JudgeThresholds,
     atReadyTier: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     let decided = merge(

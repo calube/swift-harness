@@ -182,9 +182,13 @@ enum JudgeBench {
     }
   }
 
-  /// The arm's judge at its model, never behind the answer cache.
+  /// The arm's judge at its model, never behind the answer cache. A cascade arm escalates at
+  /// `threshold` as its block threshold, under the block calibrations `harnessRoot` holds for
+  /// `questions`.
   static func liveJudge(
-    _ arm: JudgeBenchmarkArm, runner: any ProcessRunner, environment: [String: String]
+    _ arm: JudgeBenchmarkArm, runner: any ProcessRunner, environment: [String: String],
+    questions: JudgeQuestionSet? = nil, harnessRoot: URL? = nil,
+    threshold: Double = JudgeCalibration.decisionThreshold
   ) -> any Judge {
     switch arm.backend {
     case .claude: ClaudeCLIJudge(runner: KeylessProcessRunner(inner: runner), model: arm.model)
