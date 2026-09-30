@@ -79,7 +79,8 @@ public struct BuildPreset: Sendable, Equatable {
     }
   }
 
-  /// `full`: verifier + test-quality per task. `gate`: the task gate only.
+  /// `full`: architecture and test-quality review per task, each finding checked by the verifier.
+  /// `gate`: the task gate only.
   public enum Review: String, Sendable, Equatable, CaseIterable {
     case full, gate
   }

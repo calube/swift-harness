@@ -6,7 +6,8 @@ description: This skill should be used to build a planned swift-harness plan, ru
 # Build
 
 Invoking this skill is the user's opt-in to run the build: 1 workflow per task, each with a worker,
-and at the `full` review preset 2 reviewers, plus a fixer for each merge that goes red. This skill
+and at the `full` review preset 2 reviewers and a verifier for each reviewer's findings, plus a
+fixer for each merge that goes red. This skill
 is the orchestrator. It runs every git, ledger and gate step as a `swiftgate` command in this main
 session, launches workflows, and asks the user. It never edits code and never writes the ledger by
 hand.

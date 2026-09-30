@@ -84,7 +84,8 @@ Workflow({
     model: "<sonnet|opus>",
     review: "<full|gate>",
     taskProof: "<per-task|final>",
-    planSurface: "<plan.json's surfaceCommit, or null>"
+    planSurface: "<plan.json's surfaceCommit, or null>",
+    pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
   }
 })
 ```
@@ -96,6 +97,10 @@ Workflow({
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
+- `pluginRoot`: the absolute plugin root. A workflow script can't read the environment, and the
+  reviewers and their verifiers need it to open the plugin's `docs/standards.md` and
+  `docs/testing-playbook.md`. Without it the verifier can't confirm a finding that cites a playbook
+  rule (`P1`–`P11`), so that finding never blocks the task.
 - `planSurface`: `surfaceCommit` from `plan.json`, or JSON `null` when the plan has none; never
   leave it out. With a sha, the worker writes no surface of its own: its task gate adds
   `--proof-base <planSurface>`, and when a test needs API the plan surface lacks it commits that API
@@ -183,7 +188,8 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
 1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`. `build next` never lists a
    `blocked` task, and neither does a resumed build.
 2. Ask. Quote the check's findings, the return's `gate`, or the blocking review findings as
-   `severity file: title`. Options:
+   `severity file: title`. A blocking finding has `verified: true` and severity blocker or major;
+   a `review-blocked` return with none names the unreviewed focus in its `notes`. Options:
    - **Go on without it** (Recommended): it stays `blocked`; its dependents never start.
    - **Retry**: `ledger set … pending`, then let `build next` start it again. Its worktree and
      branch still exist, so skip `worktree create` and launch into the same worktree.
