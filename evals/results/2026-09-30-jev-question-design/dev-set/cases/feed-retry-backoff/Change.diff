@@ -1,0 +1,9 @@
++  case .onAppear:
++    state.isLoading = true
++    return .run { send in
++      var delay = Duration.seconds(1)
++      for attempt in 1...3 {
++        do { return await send(.loaded(try await feedClient.load())) }
++        catch where attempt < 3 { try await clock.sleep(for: delay); delay *= 2 }
++      }
++    }

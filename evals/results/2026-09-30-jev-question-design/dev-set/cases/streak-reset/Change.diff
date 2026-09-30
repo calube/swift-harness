@@ -1,0 +1,8 @@
++  public static func current(days: [Date], calendar: Calendar) -> Int {
++    var streak = 1
++    for (a, b) in zip(days, days.dropFirst()).reversed() {
++      guard calendar.dateComponents([.day], from: a, to: b).day == 1 else { break }
++      streak += 1
++    }
++    return streak
++  }

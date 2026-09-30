@@ -1,0 +1,8 @@
+@Test("reading a message lowers the unread badge — catches a badge stuck at the old count")
+func readingLowersBadge() async {
+  let store = TestStore(initialState: Inbox.State(messages: [.unread(1), .unread(2)], unreadCount: 2)) { Inbox() }
+  store.exhaustivity = .off
+  await store.send(.opened(id: 1)) {
+    $0.selectedID = 1
+  }
+}

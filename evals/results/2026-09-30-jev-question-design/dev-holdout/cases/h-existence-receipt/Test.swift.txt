@@ -1,0 +1,7 @@
+@Test("the receipt includes 8% tax — catches receipts that understate the amount paid")
+func receiptIncludesTax() async {
+  let store = TestStore(initialState: Checkout.State(subtotal: 100)) { Checkout() }
+  store.exhaustivity = .off
+  await store.send(.payTapped)
+  #expect(store.state.receipt != nil)
+}

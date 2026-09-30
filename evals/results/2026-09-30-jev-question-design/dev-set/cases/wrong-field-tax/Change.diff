@@ -1,0 +1,4 @@
++  public var total: Decimal {
++    let subtotal = items.reduce(0) { $0 + $1.price }
++    return subtotal + subtotal * taxRate
++  }

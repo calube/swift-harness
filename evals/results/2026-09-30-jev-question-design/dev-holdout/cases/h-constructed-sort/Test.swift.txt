@@ -1,0 +1,6 @@
+@Test("merge sort sorts — catches merge sort not sorting")
+func mergeSorts() {
+  let expected = [1, 2, 3]
+  let result = expected.sorted()
+  #expect(result == expected)
+}

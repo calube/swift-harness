@@ -1,0 +1,7 @@
+@Test("streak counting — catches wrong handling of a skipped day")
+func missedDayResetsStreak() {
+  let cal = Calendar(identifier: .gregorian)
+  let days = [DateComponents(year: 2026, month: 3, day: 1), DateComponents(year: 2026, month: 3, day: 3)]
+    .map { cal.date(from: $0)! }
+  #expect(Streak.current(days: days, calendar: cal) == 1)
+}

@@ -1,0 +1,6 @@
++  public static func request(_ note: Note, encoder: JSONEncoderProtocol) throws -> URLRequest {
++    var request = URLRequest(url: .notes)
++    request.httpMethod = "POST"
++    request.httpBody = try encoder.encode(note)
++    return request
++  }

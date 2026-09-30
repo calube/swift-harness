@@ -1,0 +1,6 @@
++  public func avatar(at url: URL) async throws -> Image {
++    if let cached = cache.image(for: url) { return cached }
++    let image = try await downloader.download(url)
++    cache.insert(image, for: url)
++    return image
++  }

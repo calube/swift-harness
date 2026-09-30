@@ -1,0 +1,5 @@
+@Test("badge text — catches problems with more than 99 unread")
+func capsBadge() {
+  #expect(Badge.text(for: 120) == "99+")
+  #expect(Badge.text(for: 7) == "7")
+}

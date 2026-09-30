@@ -1,0 +1,9 @@
+@Test("loaded messages update the inbox — catches a bug when the server returns no messages")
+func emptyInbox() async {
+  let store = TestStore(initialState: Inbox.State(isLoading: true)) { Inbox() }
+  await store.send(.loaded([])) {
+    $0.isLoading = false
+    $0.messages = []
+    $0.showsEmptyState = true
+  }
+}

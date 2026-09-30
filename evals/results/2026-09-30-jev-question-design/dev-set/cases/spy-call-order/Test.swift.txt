@@ -1,0 +1,7 @@
+@Test("saving a profile — catches a regression in the save flow")
+func saveOrder() async throws {
+  let spy = CallRecorder()
+  let saver = ProfileSaver(validator: spy.validator, store: spy.store, notifier: spy.notifier)
+  try await saver.save(Profile(name: "Ada"))
+  #expect(spy.calls == ["validate", "persist", "notify"])
+}

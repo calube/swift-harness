@@ -1,0 +1,4677 @@
+{
+ "runs": [
+  "r2",
+  "r3"
+ ],
+ "jev_calls_used": 401,
+ "questions": {
+  "fails-if-broken": {
+   "base (s0, today)": {
+    "dev": {
+     "n": 40,
+     "tp": 10,
+     "fp": 0,
+     "fn": 10,
+     "tn": 20,
+     "precision": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "recall": [
+      0.5,
+      0.2992949144298199,
+      0.7007050855701801
+     ],
+     "accuracy": [
+      0.75,
+      0.598057409330299,
+      0.8581303210445048
+     ],
+     "specificity": [
+      1.0,
+      0.8388698745050667,
+      1
+     ],
+     "brier": 0.17035687500000002,
+     "per_run": {
+      "r2": {
+       "tp": 9,
+       "fp": 0,
+       "fn": 11,
+       "tn": 20
+      },
+      "r3": {
+       "tp": 10,
+       "fp": 0,
+       "fn": 10,
+       "tn": 20
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.095,
+      "cache-internal-storage": 0.13,
+      "constructed-money": 0.53,
+      "countdown-stops-on-dismiss": 0.29,
+      "discount-edges": 0.07,
+      "email-disables-login": 0.08,
+      "empty-inbox-state": 0.1,
+      "encoder-args": 0.135,
+      "existence-parse": 0.22,
+      "existence-rows": 0.62,
+      "feed-retry-backoff": 0.12,
+      "formatter-call-count": 0.21,
+      "invalidate-called": 0.06,
+      "log-text": 0.2,
+      "mock-cache-hit": 0.39,
+      "mock-factory-vm": 0.1,
+      "mock-repo-service": 0.66,
+      "mock-session-task": 0.435,
+      "no-assertion-sync": 0.78,
+      "order-status-unknown": 0.065,
+      "own-fake-clock": 0.655,
+      "own-fake-formatter": 0.13,
+      "own-fake-keychain": 0.515,
+      "own-fake-search": 0.195,
+      "own-fake-weather": 0.845,
+      "password-rules": 0.09,
+      "relative-just-now": 0.08,
+      "search-debounce": 0.11,
+      "sort-works": 0.085,
+      "spy-call-order": 0.145,
+      "streak-reset": 0.115,
+      "tautology-count": 0.83,
+      "timer-ticks": 0.11,
+      "tip-rounding": 0.075,
+      "vague-good-toggle": 0.08,
+      "wrong-field-badge": 0.375,
+      "wrong-field-display-name": 0.76,
+      "wrong-field-error-message": 0.455,
+      "wrong-field-tax": 0.735,
+      "xctest-name-only": 0.14
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 4,
+     "fp": 0,
+     "fn": 3,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      0.5714285714285714,
+      0.2504542304090258,
+      0.8417830777373732
+     ],
+     "accuracy": [
+      0.7857142857142857,
+      0.5241027622679172,
+      0.9242875166308363
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.15323214285714284,
+     "per_run": {
+      "r2": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 3,
+       "tn": 7
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 3,
+       "tn": 7
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.115,
+      "h-badge-partial": 0.075,
+      "h-constructed-sort": 0.81,
+      "h-convert-vague": 0.09,
+      "h-dark-mode": 0.12,
+      "h-existence-receipt": 0.275,
+      "h-mock-token": 0.7,
+      "h-own-fake-rates": 0.64,
+      "h-private-inflight": 0.125,
+      "h-reminder-schedule": 0.1,
+      "h-upload-backoff": 0.14,
+      "h-wrong-field-eta": 0.735,
+      "h-wrong-field-favorite": 0.345,
+      "h-xctest-discount": 0.09
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 0,
+     "fn": 0,
+     "tn": 5,
+     "precision": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.5655085052479191,
+      1
+     ],
+     "brier": 0.040982142857142856,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 0,
+       "fn": 0,
+       "tn": 5
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 0,
+       "fn": 0,
+       "tn": 5
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.085,
+      "existence-only": 0.85,
+      "login-error-alert": 0.09,
+      "own-double": 0.56,
+      "private-state-coupling": 0.1,
+      "restated-name": 0.135,
+      "ui-flow-in-t1": 0.165
+     }
+    }
+   },
+   "s0 NOT(calls AND asserts)": {
+    "dev": {
+     "n": 40,
+     "tp": 17,
+     "fp": 4,
+     "fn": 3,
+     "tn": 16,
+     "precision": [
+      0.8095238095238095,
+      0.599990134607267,
+      0.9233255938482269
+     ],
+     "recall": [
+      0.85,
+      0.6395767041130426,
+      0.9476322080405041
+     ],
+     "accuracy": [
+      0.825,
+      0.6804970794560755,
+      0.9125469700311694
+     ],
+     "specificity": [
+      0.8,
+      0.5839782779742401,
+      0.9193436467288
+     ],
+     "brier": 0.103978125,
+     "per_run": {
+      "r2": {
+       "tp": 17,
+       "fp": 4,
+       "fn": 3,
+       "tn": 16
+      },
+      "r3": {
+       "tp": 17,
+       "fp": 4,
+       "fn": 3,
+       "tn": 16
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.29,
+      "cache-internal-storage": 0.1,
+      "constructed-money": 0.79,
+      "countdown-stops-on-dismiss": 0.745,
+      "discount-edges": 0.045,
+      "email-disables-login": 0.06,
+      "empty-inbox-state": 0.08,
+      "encoder-args": 0.6,
+      "existence-parse": 0.36,
+      "existence-rows": 0.825,
+      "feed-retry-backoff": 0.12,
+      "formatter-call-count": 0.835,
+      "invalidate-called": 0.54,
+      "log-text": 0.115,
+      "mock-cache-hit": 0.795,
+      "mock-factory-vm": 0.625,
+      "mock-repo-service": 0.905,
+      "mock-session-task": 0.675,
+      "no-assertion-sync": 0.94,
+      "order-status-unknown": 0.11,
+      "own-fake-clock": 0.93,
+      "own-fake-formatter": 0.665,
+      "own-fake-keychain": 0.825,
+      "own-fake-search": 0.825,
+      "own-fake-weather": 0.92,
+      "password-rules": 0.055,
+      "relative-just-now": 0.035,
+      "search-debounce": 0.14,
+      "sort-works": 0.045,
+      "spy-call-order": 0.655,
+      "streak-reset": 0.04,
+      "tautology-count": 0.535,
+      "timer-ticks": 0.1,
+      "tip-rounding": 0.03,
+      "vague-good-toggle": 0.06,
+      "wrong-field-badge": 0.77,
+      "wrong-field-display-name": 0.95,
+      "wrong-field-error-message": 0.46,
+      "wrong-field-tax": 0.94,
+      "xctest-name-only": 0.04
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 6,
+     "fp": 0,
+     "fn": 1,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "recall": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.07600178571428572,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 1,
+       "tn": 7
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 1,
+       "tn": 7
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.23,
+      "h-badge-partial": 0.03,
+      "h-constructed-sort": 0.94,
+      "h-convert-vague": 0.05,
+      "h-dark-mode": 0.135,
+      "h-existence-receipt": 0.545,
+      "h-mock-token": 0.9,
+      "h-own-fake-rates": 0.79,
+      "h-private-inflight": 0.03,
+      "h-reminder-schedule": 0.11,
+      "h-upload-backoff": 0.11,
+      "h-wrong-field-eta": 0.945,
+      "h-wrong-field-favorite": 0.605,
+      "h-xctest-discount": 0.025
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 1,
+     "fn": 1,
+     "tn": 4,
+     "precision": [
+      0.5,
+      0.09452865480086614,
+      0.9054713451991339
+     ],
+     "recall": [
+      0.5,
+      0.09452865480086614,
+      0.9054713451991339
+     ],
+     "accuracy": [
+      0.7142857142857143,
+      0.35892909014821267,
+      0.9177828342909844
+     ],
+     "specificity": [
+      0.8,
+      0.3755282641185388,
+      0.9637768390302125
+     ],
+     "brier": 0.16914642857142856,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 1,
+       "fn": 1,
+       "tn": 4
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 1,
+       "fn": 1,
+       "tn": 4
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.04,
+      "existence-only": 0.38,
+      "login-error-alert": 0.065,
+      "own-double": 0.9,
+      "private-state-coupling": 0.19,
+      "restated-name": 0.09,
+      "ui-flow-in-t1": 0.86
+     }
+    }
+   },
+   "s1 runs_changed v2": {
+    "dev": {
+     "n": 40,
+     "tp": 12,
+     "fp": 0,
+     "fn": 8,
+     "tn": 20,
+     "precision": [
+      1.0,
+      0.7574992425007574,
+      1
+     ],
+     "recall": [
+      0.6,
+      0.3865779423152061,
+      0.7811960325858074
+     ],
+     "accuracy": [
+      0.8,
+      0.6524239261814333,
+      0.8950013502683314
+     ],
+     "specificity": [
+      1.0,
+      0.8388698745050667,
+      1
+     ],
+     "brier": 0.16567,
+     "per_run": {
+      "r2": {
+       "tp": 12,
+       "fp": 0,
+       "fn": 8,
+       "tn": 20
+      },
+      "r3": {
+       "tp": 12,
+       "fp": 0,
+       "fn": 8,
+       "tn": 20
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.125,
+      "cache-internal-storage": 0.12,
+      "constructed-money": 0.755,
+      "countdown-stops-on-dismiss": 0.105,
+      "discount-edges": 0.06,
+      "email-disables-login": 0.11,
+      "empty-inbox-state": 0.1,
+      "encoder-args": 0.105,
+      "existence-parse": 0.055,
+      "existence-rows": 0.19,
+      "feed-retry-backoff": 0.09,
+      "formatter-call-count": 0.1,
+      "invalidate-called": 0.11,
+      "log-text": 0.095,
+      "mock-cache-hit": 0.94,
+      "mock-factory-vm": 0.83,
+      "mock-repo-service": 0.925,
+      "mock-session-task": 0.88,
+      "no-assertion-sync": 0.24,
+      "order-status-unknown": 0.11,
+      "own-fake-clock": 0.93,
+      "own-fake-formatter": 0.915,
+      "own-fake-keychain": 0.91,
+      "own-fake-search": 0.895,
+      "own-fake-weather": 0.91,
+      "password-rules": 0.045,
+      "relative-just-now": 0.05,
+      "search-debounce": 0.11,
+      "sort-works": 0.045,
+      "spy-call-order": 0.11,
+      "streak-reset": 0.05,
+      "tautology-count": 0.06,
+      "timer-ticks": 0.1,
+      "tip-rounding": 0.04,
+      "vague-good-toggle": 0.075,
+      "wrong-field-badge": 0.07,
+      "wrong-field-display-name": 0.84,
+      "wrong-field-error-message": 0.14,
+      "wrong-field-tax": 0.8,
+      "xctest-name-only": 0.07
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 4,
+     "fp": 0,
+     "fn": 3,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      0.5714285714285714,
+      0.2504542304090258,
+      0.8417830777373732
+     ],
+     "accuracy": [
+      0.7857142857142857,
+      0.5241027622679172,
+      0.9242875166308363
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.18385714285714289,
+     "per_run": {
+      "r2": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 3,
+       "tn": 7
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 3,
+       "tn": 7
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.125,
+      "h-badge-partial": 0.07,
+      "h-constructed-sort": 0.95,
+      "h-convert-vague": 0.055,
+      "h-dark-mode": 0.18,
+      "h-existence-receipt": 0.07,
+      "h-mock-token": 0.92,
+      "h-own-fake-rates": 0.905,
+      "h-private-inflight": 0.06,
+      "h-reminder-schedule": 0.125,
+      "h-upload-backoff": 0.12,
+      "h-wrong-field-eta": 0.8,
+      "h-wrong-field-favorite": 0.1,
+      "h-xctest-discount": 0.04
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 1,
+     "tn": 5,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      0.5,
+      0.09452865480086614,
+      0.9054713451991339
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "specificity": [
+      1.0,
+      0.5655085052479191,
+      1
+     ],
+     "brier": 0.12552500000000003,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 1,
+       "tn": 5
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 1,
+       "tn": 5
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.06,
+      "existence-only": 0.09,
+      "login-error-alert": 0.105,
+      "own-double": 0.895,
+      "private-state-coupling": 0.06,
+      "restated-name": 0.09,
+      "ui-flow-in-t1": 0.115
+     }
+    }
+   },
+   "s1 checks_named": {
+    "dev": {
+     "n": 40,
+     "tp": 15,
+     "fp": 1,
+     "fn": 5,
+     "tn": 19,
+     "precision": [
+      0.9375,
+      0.7167073163197013,
+      0.9888809426916687
+     ],
+     "recall": [
+      0.75,
+      0.5312949900419365,
+      0.888139947210597
+     ],
+     "accuracy": [
+      0.85,
+      0.7092737396097997,
+      0.9293890829149256
+     ],
+     "specificity": [
+      0.95,
+      0.7638641064874331,
+      0.9911187805671268
+     ],
+     "brier": 0.12254125,
+     "per_run": {
+      "r2": {
+       "tp": 15,
+       "fp": 1,
+       "fn": 5,
+       "tn": 19
+      },
+      "r3": {
+       "tp": 15,
+       "fp": 2,
+       "fn": 5,
+       "tn": 18
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.095,
+      "cache-internal-storage": 0.495,
+      "constructed-money": 0.565,
+      "countdown-stops-on-dismiss": 0.79,
+      "discount-edges": 0.04,
+      "email-disables-login": 0.14,
+      "empty-inbox-state": 0.13,
+      "encoder-args": 0.32,
+      "existence-parse": 0.855,
+      "existence-rows": 0.92,
+      "feed-retry-backoff": 0.14,
+      "formatter-call-count": 0.92,
+      "invalidate-called": 0.145,
+      "log-text": 0.685,
+      "mock-cache-hit": 0.45,
+      "mock-factory-vm": 0.095,
+      "mock-repo-service": 0.72,
+      "mock-session-task": 0.815,
+      "no-assertion-sync": 0.935,
+      "order-status-unknown": 0.03,
+      "own-fake-clock": 0.925,
+      "own-fake-formatter": 0.11,
+      "own-fake-keychain": 0.135,
+      "own-fake-search": 0.305,
+      "own-fake-weather": 0.95,
+      "password-rules": 0.03,
+      "relative-just-now": 0.03,
+      "search-debounce": 0.32,
+      "sort-works": 0.04,
+      "spy-call-order": 0.325,
+      "streak-reset": 0.04,
+      "tautology-count": 0.93,
+      "timer-ticks": 0.06,
+      "tip-rounding": 0.03,
+      "vague-good-toggle": 0.055,
+      "wrong-field-badge": 0.915,
+      "wrong-field-display-name": 0.945,
+      "wrong-field-error-message": 0.905,
+      "wrong-field-tax": 0.945,
+      "xctest-name-only": 0.04
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 6,
+     "fp": 0,
+     "fn": 1,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "recall": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.06131071428571428,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 1,
+       "tn": 7
+      },
+      "r3": {
+       "tp": 7,
+       "fp": 0,
+       "fn": 0,
+       "tn": 7
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "h-analytics-help": 0.86,
+      "h-badge-partial": 0.05,
+      "h-constructed-sort": 0.495,
+      "h-convert-vague": 0.37,
+      "h-dark-mode": 0.15,
+      "h-existence-receipt": 0.92,
+      "h-mock-token": 0.93,
+      "h-own-fake-rates": 0.735,
+      "h-private-inflight": 0.43,
+      "h-reminder-schedule": 0.065,
+      "h-upload-backoff": 0.365,
+      "h-wrong-field-eta": 0.93,
+      "h-wrong-field-favorite": 0.895,
+      "h-xctest-discount": 0.045
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 1,
+     "fn": 0,
+     "tn": 4,
+     "precision": [
+      0.6666666666666666,
+      0.2076549551264879,
+      0.9385096847238394
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "specificity": [
+      0.8,
+      0.3755282641185388,
+      0.9637768390302125
+     ],
+     "brier": 0.09703571428571427,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 4
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 3
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "cart-total-discount": 0.02,
+      "existence-only": 0.83,
+      "login-error-alert": 0.05,
+      "own-double": 0.74,
+      "private-state-coupling": 0.48,
+      "restated-name": 0.085,
+      "ui-flow-in-t1": 0.585
+     }
+    }
+   },
+   "s0 NOT runs OR NOT named": {
+    "dev": {
+     "n": 40,
+     "tp": 19,
+     "fp": 2,
+     "fn": 1,
+     "tn": 18,
+     "precision": [
+      0.9047619047619048,
+      0.7108541613925933,
+      0.9734817912030528
+     ],
+     "recall": [
+      0.95,
+      0.7638641064874331,
+      0.9911187805671268
+     ],
+     "accuracy": [
+      0.925,
+      0.8013546984090248,
+      0.9741644432281419
+     ],
+     "specificity": [
+      0.9,
+      0.6989617935882066,
+      0.9721341060158468
+     ],
+     "brier": 0.051518125000000005,
+     "per_run": {
+      "r2": {
+       "tp": 19,
+       "fp": 2,
+       "fn": 1,
+       "tn": 18
+      },
+      "r3": {
+       "tp": 19,
+       "fp": 2,
+       "fn": 1,
+       "tn": 18
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.165,
+      "cache-internal-storage": 0.535,
+      "constructed-money": 0.72,
+      "countdown-stops-on-dismiss": 0.835,
+      "discount-edges": 0.06,
+      "email-disables-login": 0.065,
+      "empty-inbox-state": 0.215,
+      "encoder-args": 0.395,
+      "existence-parse": 0.855,
+      "existence-rows": 0.925,
+      "feed-retry-backoff": 0.15,
+      "formatter-call-count": 0.9,
+      "invalidate-called": 0.125,
+      "log-text": 0.38,
+      "mock-cache-hit": 0.92,
+      "mock-factory-vm": 0.85,
+      "mock-repo-service": 0.925,
+      "mock-session-task": 0.84,
+      "no-assertion-sync": 0.925,
+      "order-status-unknown": 0.07,
+      "own-fake-clock": 0.93,
+      "own-fake-formatter": 0.91,
+      "own-fake-keychain": 0.895,
+      "own-fake-search": 0.88,
+      "own-fake-weather": 0.93,
+      "password-rules": 0.065,
+      "relative-just-now": 0.06,
+      "search-debounce": 0.205,
+      "sort-works": 0.04,
+      "spy-call-order": 0.24,
+      "streak-reset": 0.05,
+      "tautology-count": 0.845,
+      "timer-ticks": 0.1,
+      "tip-rounding": 0.035,
+      "vague-good-toggle": 0.09,
+      "wrong-field-badge": 0.9,
+      "wrong-field-display-name": 0.945,
+      "wrong-field-error-message": 0.88,
+      "wrong-field-tax": 0.95,
+      "xctest-name-only": 0.06
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 7,
+     "fp": 1,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      0.875,
+      0.5291051942301386,
+      0.9775830911367038
+     ],
+     "recall": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "brier": 0.042542857142857146,
+     "per_run": {
+      "r2": {
+       "tp": 7,
+       "fp": 1,
+       "fn": 0,
+       "tn": 6
+      },
+      "r3": {
+       "tp": 7,
+       "fp": 1,
+       "fn": 0,
+       "tn": 6
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.815,
+      "h-badge-partial": 0.055,
+      "h-constructed-sort": 0.935,
+      "h-convert-vague": 0.075,
+      "h-dark-mode": 0.32,
+      "h-existence-receipt": 0.885,
+      "h-mock-token": 0.92,
+      "h-own-fake-rates": 0.88,
+      "h-private-inflight": 0.31,
+      "h-reminder-schedule": 0.18,
+      "h-upload-backoff": 0.515,
+      "h-wrong-field-eta": 0.935,
+      "h-wrong-field-favorite": 0.89,
+      "h-xctest-discount": 0.045
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 2,
+     "fn": 0,
+     "tn": 3,
+     "precision": [
+      0.5,
+      0.15003570882017148,
+      0.8499642911798285
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.7142857142857143,
+      0.35892909014821267,
+      0.9177828342909844
+     ],
+     "specificity": [
+      0.6,
+      0.23071993220883708,
+      0.8823817688407467
+     ],
+     "brier": 0.1308642857142857,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.05,
+      "existence-only": 0.77,
+      "login-error-alert": 0.08,
+      "own-double": 0.92,
+      "private-state-coupling": 0.54,
+      "restated-name": 0.175,
+      "ui-flow-in-t1": 0.725
+     }
+    }
+   },
+   "s1 NOT runs OR NOT named": {
+    "dev": {
+     "n": 40,
+     "tp": 20,
+     "fp": 1,
+     "fn": 0,
+     "tn": 19,
+     "precision": [
+      0.9523809523809523,
+      0.7733018341376452,
+      0.9915442305280766
+     ],
+     "recall": [
+      1.0,
+      0.8388698745050667,
+      1
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      0.95,
+      0.7638641064874331,
+      0.9911187805671268
+     ],
+     "brier": 0.04074875,
+     "per_run": {
+      "r2": {
+       "tp": 20,
+       "fp": 1,
+       "fn": 0,
+       "tn": 19
+      },
+      "r3": {
+       "tp": 20,
+       "fp": 2,
+       "fn": 0,
+       "tn": 18
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.125,
+      "cache-internal-storage": 0.495,
+      "constructed-money": 0.755,
+      "countdown-stops-on-dismiss": 0.79,
+      "discount-edges": 0.06,
+      "email-disables-login": 0.14,
+      "empty-inbox-state": 0.13,
+      "encoder-args": 0.32,
+      "existence-parse": 0.855,
+      "existence-rows": 0.92,
+      "feed-retry-backoff": 0.14,
+      "formatter-call-count": 0.92,
+      "invalidate-called": 0.145,
+      "log-text": 0.685,
+      "mock-cache-hit": 0.94,
+      "mock-factory-vm": 0.83,
+      "mock-repo-service": 0.925,
+      "mock-session-task": 0.88,
+      "no-assertion-sync": 0.935,
+      "order-status-unknown": 0.11,
+      "own-fake-clock": 0.93,
+      "own-fake-formatter": 0.915,
+      "own-fake-keychain": 0.91,
+      "own-fake-search": 0.895,
+      "own-fake-weather": 0.95,
+      "password-rules": 0.045,
+      "relative-just-now": 0.05,
+      "search-debounce": 0.32,
+      "sort-works": 0.045,
+      "spy-call-order": 0.325,
+      "streak-reset": 0.05,
+      "tautology-count": 0.93,
+      "timer-ticks": 0.1,
+      "tip-rounding": 0.04,
+      "vague-good-toggle": 0.075,
+      "wrong-field-badge": 0.915,
+      "wrong-field-display-name": 0.945,
+      "wrong-field-error-message": 0.905,
+      "wrong-field-tax": 0.945,
+      "xctest-name-only": 0.07
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 7,
+     "fp": 0,
+     "fn": 0,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.7846829880728186,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.040725,
+     "per_run": {
+      "r2": {
+       "tp": 7,
+       "fp": 0,
+       "fn": 0,
+       "tn": 7
+      },
+      "r3": {
+       "tp": 7,
+       "fp": 0,
+       "fn": 0,
+       "tn": 7
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.86,
+      "h-badge-partial": 0.07,
+      "h-constructed-sort": 0.95,
+      "h-convert-vague": 0.37,
+      "h-dark-mode": 0.185,
+      "h-existence-receipt": 0.92,
+      "h-mock-token": 0.93,
+      "h-own-fake-rates": 0.905,
+      "h-private-inflight": 0.43,
+      "h-reminder-schedule": 0.125,
+      "h-upload-backoff": 0.365,
+      "h-wrong-field-eta": 0.93,
+      "h-wrong-field-favorite": 0.895,
+      "h-xctest-discount": 0.045
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 1,
+     "fn": 0,
+     "tn": 4,
+     "precision": [
+      0.6666666666666666,
+      0.2076549551264879,
+      0.9385096847238394
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "specificity": [
+      0.8,
+      0.3755282641185388,
+      0.9637768390302125
+     ],
+     "brier": 0.09075357142857142,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 4
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 3
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "cart-total-discount": 0.06,
+      "existence-only": 0.83,
+      "login-error-alert": 0.105,
+      "own-double": 0.895,
+      "private-state-coupling": 0.48,
+      "restated-name": 0.09,
+      "ui-flow-in-t1": 0.585
+     }
+    }
+   },
+   "claude-sonnet-5-5": {
+    "dev": {
+     "n": 39,
+     "tp": 20,
+     "fp": 1,
+     "fn": 0,
+     "tn": 18,
+     "precision": [
+      0.9523809523809523,
+      0.7733018341376452,
+      0.9915442305280766
+     ],
+     "recall": [
+      1.0,
+      0.8388698745050667,
+      1
+     ],
+     "accuracy": [
+      0.9743589743589743,
+      0.8681871352137286,
+      0.9954594139347627
+     ],
+     "specificity": [
+      0.9473684210526315,
+      0.7536078466345479,
+      0.99064824750947
+     ],
+     "brier": 0.023817948717948716,
+     "per_case": {
+      "email-disables-login": 0.12,
+      "wrong-field-badge": 0.96,
+      "mock-session-task": 0.98,
+      "search-debounce": 0.07,
+      "own-fake-formatter": 0.98,
+      "spy-call-order": 0.2,
+      "own-fake-clock": 0.98,
+      "vague-good-toggle": 0.07,
+      "mock-cache-hit": 0.97,
+      "formatter-call-count": 0.97,
+      "relative-just-now": 0.07,
+      "no-assertion-sync": 0.99,
+      "empty-inbox-state": 0.07,
+      "constructed-money": 0.98,
+      "existence-rows": 0.96,
+      "encoder-args": 0.7,
+      "discount-edges": 0.07,
+      "xctest-name-only": 0.07,
+      "sort-works": 0.07,
+      "log-text": 0.88,
+      "countdown-stops-on-dismiss": 0.07,
+      "autosave-draft": 0.12,
+      "mock-factory-vm": 0.97,
+      "streak-reset": 0.2,
+      "own-fake-keychain": 0.97,
+      "own-fake-weather": 0.97,
+      "existence-parse": 0.8,
+      "cache-internal-storage": 0.4,
+      "password-rules": 0.07,
+      "feed-retry-backoff": 0.12,
+      "wrong-field-display-name": 0.98,
+      "own-fake-search": 0.97,
+      "mock-repo-service": 0.97,
+      "tautology-count": 0.98,
+      "order-status-unknown": 0.05,
+      "wrong-field-tax": 0.97,
+      "timer-ticks": 0.07,
+      "wrong-field-error-message": 0.88,
+      "invalidate-called": 0.15
+     }
+    }
+   },
+   "cascade": {
+    "0.3-0.7": {
+     "dev": {
+      "n": 40,
+      "escalated": 5,
+      "escalated_ids": [
+       "cache-internal-storage",
+       "encoder-args",
+       "log-text",
+       "search-debounce",
+       "spy-call-order"
+      ],
+      "share": [
+       0.125,
+       0.05459419773541284,
+       0.26112420670238146
+      ],
+      "jev_kept_accuracy": [
+       0.9714285714285714,
+       0.8546659090672868,
+       0.9949386386341466
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 20,
+       "fp": 2,
+       "fn": 0,
+       "tn": 18,
+       "precision": [
+        0.9090909090909091,
+        0.7218461934161421,
+        0.9747051037171622
+       ],
+       "recall": [
+        1.0,
+        0.8388698745050667,
+        1
+       ],
+       "accuracy": [
+        0.95,
+        0.834958291820748,
+        0.9861796228538989
+       ],
+       "specificity": [
+        0.9,
+        0.6989617935882066,
+        0.9721341060158468
+       ],
+       "brier": 0.042114375
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 3,
+      "escalated_ids": [
+       "h-convert-vague",
+       "h-private-inflight",
+       "h-upload-backoff"
+      ],
+      "share": [
+       0.21428571428571427,
+       0.0757124833691637,
+       0.4758972377320828
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7411599827511859,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 2,
+      "escalated_ids": [
+       "private-state-coupling",
+       "ui-flow-in-t1"
+      ],
+      "share": [
+       0.2857142857142857,
+       0.0822171657090155,
+       0.6410709098517873
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.5655085052479191,
+       1
+      ]
+     }
+    },
+    "0.2-0.8": {
+     "dev": {
+      "n": 40,
+      "escalated": 7,
+      "escalated_ids": [
+       "cache-internal-storage",
+       "constructed-money",
+       "countdown-stops-on-dismiss",
+       "encoder-args",
+       "log-text",
+       "search-debounce",
+       "spy-call-order"
+      ],
+      "share": [
+       0.175,
+       0.08745302996883066,
+       0.3195029205439244
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.8957265699643882,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 20,
+       "fp": 1,
+       "fn": 0,
+       "tn": 19,
+       "precision": [
+        0.9523809523809523,
+        0.7733018341376452,
+        0.9915442305280766
+       ],
+       "recall": [
+        1.0,
+        0.8388698745050667,
+        1
+       ],
+       "accuracy": [
+        0.975,
+        0.8711834051199223,
+        0.9955732825922052
+       ],
+       "specificity": [
+        0.95,
+        0.7638641064874331,
+        0.9911187805671268
+       ],
+       "brier": 0.02514375
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 3,
+      "escalated_ids": [
+       "h-convert-vague",
+       "h-private-inflight",
+       "h-upload-backoff"
+      ],
+      "share": [
+       0.21428571428571427,
+       0.0757124833691637,
+       0.4758972377320828
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7411599827511859,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 2,
+      "escalated_ids": [
+       "private-state-coupling",
+       "ui-flow-in-t1"
+      ],
+      "share": [
+       0.2857142857142857,
+       0.0822171657090155,
+       0.6410709098517873
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.5655085052479191,
+       1
+      ]
+     }
+    },
+    "0.1-0.9": {
+     "dev": {
+      "n": 40,
+      "escalated": 17,
+      "escalated_ids": [
+       "autosave-draft",
+       "cache-internal-storage",
+       "constructed-money",
+       "countdown-stops-on-dismiss",
+       "email-disables-login",
+       "empty-inbox-state",
+       "encoder-args",
+       "existence-parse",
+       "feed-retry-backoff",
+       "invalidate-called",
+       "log-text",
+       "mock-factory-vm",
+       "mock-session-task",
+       "order-status-unknown",
+       "own-fake-search",
+       "search-debounce",
+       "spy-call-order"
+      ],
+      "share": [
+       0.425,
+       0.28509168524815875,
+       0.5780519956394001
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.8568788745827374,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 20,
+       "fp": 1,
+       "fn": 0,
+       "tn": 19,
+       "precision": [
+        0.9523809523809523,
+        0.7733018341376452,
+        0.9915442305280766
+       ],
+       "recall": [
+        1.0,
+        0.8388698745050667,
+        1
+       ],
+       "accuracy": [
+        0.975,
+        0.8711834051199223,
+        0.9955732825922052
+       ],
+       "specificity": [
+        0.95,
+        0.7638641064874331,
+        0.9911187805671268
+       ],
+       "brier": 0.02352125
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 7,
+      "escalated_ids": [
+       "h-analytics-help",
+       "h-convert-vague",
+       "h-dark-mode",
+       "h-private-inflight",
+       "h-reminder-schedule",
+       "h-upload-backoff",
+       "h-wrong-field-favorite"
+      ],
+      "share": [
+       0.5,
+       0.2679886791947528,
+       0.7320113208052472
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.6456611570247934,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 5,
+      "escalated_ids": [
+       "existence-only",
+       "login-error-alert",
+       "own-double",
+       "private-state-coupling",
+       "ui-flow-in-t1"
+      ],
+      "share": [
+       0.7142857142857143,
+       0.35892909014821267,
+       0.9177828342909844
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.34237195288961925,
+       1
+      ]
+     }
+    }
+   }
+  },
+  "name-specificity": {
+   "base (s0, today)": {
+    "dev": {
+     "n": 40,
+     "tp": 0,
+     "fp": 0,
+     "fn": 12,
+     "tn": 28,
+     "precision": [
+      NaN,
+      NaN,
+      NaN
+     ],
+     "recall": [
+      0.0,
+      0,
+      0.2425007574992425
+     ],
+     "accuracy": [
+      0.7,
+      0.545696893456796,
+      0.8192532908430471
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.171520625,
+     "per_run": {
+      "r2": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 12,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 11,
+       "tn": 28
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.0,
+      "cache-internal-storage": 0.01,
+      "constructed-money": 0.015,
+      "countdown-stops-on-dismiss": 0.01,
+      "discount-edges": 0.01,
+      "email-disables-login": 0.005,
+      "empty-inbox-state": 0.01,
+      "encoder-args": 0.095,
+      "existence-parse": 0.095,
+      "existence-rows": 0.01,
+      "feed-retry-backoff": 0.005,
+      "formatter-call-count": 0.0,
+      "invalidate-called": 0.25,
+      "log-text": 0.01,
+      "mock-cache-hit": 0.01,
+      "mock-factory-vm": 0.285,
+      "mock-repo-service": 0.105,
+      "mock-session-task": 0.05,
+      "no-assertion-sync": 0.215,
+      "order-status-unknown": 0.01,
+      "own-fake-clock": 0.23,
+      "own-fake-formatter": 0.48,
+      "own-fake-keychain": 0.01,
+      "own-fake-search": 0.02,
+      "own-fake-weather": 0.04,
+      "password-rules": 0.025,
+      "relative-just-now": 0.0,
+      "search-debounce": 0.01,
+      "sort-works": 0.485,
+      "spy-call-order": 0.43,
+      "streak-reset": 0.01,
+      "tautology-count": 0.23,
+      "timer-ticks": 0.0,
+      "tip-rounding": 0.0,
+      "vague-good-toggle": 0.075,
+      "wrong-field-badge": 0.0,
+      "wrong-field-display-name": 0.065,
+      "wrong-field-error-message": 0.01,
+      "wrong-field-tax": 0.025,
+      "xctest-name-only": 0.22
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 1,
+     "fp": 0,
+     "fn": 3,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      0.25,
+      0.045586062644636216,
+      0.6993639475573634
+     ],
+     "accuracy": [
+      0.7857142857142857,
+      0.5241027622679172,
+      0.9242875166308363
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.1226232142857143,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 3,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 3,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.01,
+      "h-badge-partial": 0.015,
+      "h-constructed-sort": 0.34,
+      "h-convert-vague": 0.68,
+      "h-dark-mode": 0.0,
+      "h-existence-receipt": 0.01,
+      "h-mock-token": 0.1,
+      "h-own-fake-rates": 0.01,
+      "h-private-inflight": 0.395,
+      "h-reminder-schedule": 0.01,
+      "h-upload-backoff": 0.02,
+      "h-wrong-field-eta": 0.005,
+      "h-wrong-field-favorite": 0.025,
+      "h-xctest-discount": 0.105
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 3,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      0.25,
+      0.045586062644636216,
+      0.6993639475573634
+     ],
+     "accuracy": [
+      0.5714285714285714,
+      0.2504542304090258,
+      0.8417830777373732
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.23253214285714288,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 3,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 3,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.0,
+      "existence-only": 0.825,
+      "login-error-alert": 0.0,
+      "own-double": 0.425,
+      "private-state-coupling": 0.015,
+      "restated-name": 0.085,
+      "ui-flow-in-t1": 0.345
+     }
+    }
+   },
+   "probe criteria (s0)": {
+    "dev": {
+     "n": 40,
+     "tp": 4,
+     "fp": 0,
+     "fn": 8,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      0.3333333333333333,
+      0.13811783989736134,
+      0.609382412602386
+     ],
+     "accuracy": [
+      0.8,
+      0.6524239261814333,
+      0.8950013502683314
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.097781875,
+     "per_run": {
+      "r2": {
+       "tp": 5,
+       "fp": 0,
+       "fn": 7,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 8,
+       "tn": 28
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.01,
+      "cache-internal-storage": 0.075,
+      "constructed-money": 0.025,
+      "countdown-stops-on-dismiss": 0.065,
+      "discount-edges": 0.165,
+      "email-disables-login": 0.025,
+      "empty-inbox-state": 0.045,
+      "encoder-args": 0.31,
+      "existence-parse": 0.2,
+      "existence-rows": 0.02,
+      "feed-retry-backoff": 0.03,
+      "formatter-call-count": 0.005,
+      "invalidate-called": 0.79,
+      "log-text": 0.02,
+      "mock-cache-hit": 0.04,
+      "mock-factory-vm": 0.755,
+      "mock-repo-service": 0.185,
+      "mock-session-task": 0.14,
+      "no-assertion-sync": 0.38,
+      "order-status-unknown": 0.025,
+      "own-fake-clock": 0.485,
+      "own-fake-formatter": 0.645,
+      "own-fake-keychain": 0.02,
+      "own-fake-search": 0.055,
+      "own-fake-weather": 0.1,
+      "password-rules": 0.055,
+      "relative-just-now": 0.02,
+      "search-debounce": 0.055,
+      "sort-works": 0.64,
+      "spy-call-order": 0.46,
+      "streak-reset": 0.08,
+      "tautology-count": 0.435,
+      "timer-ticks": 0.01,
+      "tip-rounding": 0.0,
+      "vague-good-toggle": 0.225,
+      "wrong-field-badge": 0.01,
+      "wrong-field-display-name": 0.145,
+      "wrong-field-error-message": 0.035,
+      "wrong-field-tax": 0.07,
+      "xctest-name-only": 0.35
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.05943928571428571,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.025,
+      "h-badge-partial": 0.09,
+      "h-constructed-sort": 0.61,
+      "h-convert-vague": 0.65,
+      "h-dark-mode": 0.005,
+      "h-existence-receipt": 0.05,
+      "h-mock-token": 0.19,
+      "h-own-fake-rates": 0.015,
+      "h-private-inflight": 0.6,
+      "h-reminder-schedule": 0.015,
+      "h-upload-backoff": 0.13,
+      "h-wrong-field-eta": 0.025,
+      "h-wrong-field-favorite": 0.04,
+      "h-xctest-discount": 0.425
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 0,
+     "fn": 2,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "recall": [
+      0.5,
+      0.15003570882017148,
+      0.8499642911798285
+     ],
+     "accuracy": [
+      0.7142857142857143,
+      0.35892909014821267,
+      0.9177828342909844
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.12471785714285714,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 0,
+       "fn": 2,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 0,
+       "fn": 2,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.0,
+      "existence-only": 0.86,
+      "login-error-alert": 0.0,
+      "own-double": 0.68,
+      "private-state-coupling": 0.135,
+      "restated-name": 0.32,
+      "ui-flow-in-t1": 0.48
+     }
+    }
+   },
+   "s1 structured score": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 0,
+     "fn": 6,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "recall": [
+      0.5,
+      0.2537781703934222,
+      0.7462218296065778
+     ],
+     "accuracy": [
+      0.85,
+      0.7092737396097997,
+      0.9293890829149256
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.105461875,
+     "per_run": {
+      "r2": {
+       "tp": 5,
+       "fp": 0,
+       "fn": 7,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 6,
+       "tn": 28
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.0,
+      "cache-internal-storage": 0.045,
+      "constructed-money": 0.0,
+      "countdown-stops-on-dismiss": 0.01,
+      "discount-edges": 0.005,
+      "email-disables-login": 0.02,
+      "empty-inbox-state": 0.015,
+      "encoder-args": 0.205,
+      "existence-parse": 0.13,
+      "existence-rows": 0.005,
+      "feed-retry-backoff": 0.01,
+      "formatter-call-count": 0.0,
+      "invalidate-called": 0.615,
+      "log-text": 0.015,
+      "mock-cache-hit": 0.015,
+      "mock-factory-vm": 0.965,
+      "mock-repo-service": 0.02,
+      "mock-session-task": 0.035,
+      "no-assertion-sync": 0.21,
+      "order-status-unknown": 0.02,
+      "own-fake-clock": 0.32,
+      "own-fake-formatter": 0.545,
+      "own-fake-keychain": 0.0,
+      "own-fake-search": 0.01,
+      "own-fake-weather": 0.02,
+      "password-rules": 0.025,
+      "relative-just-now": 0.0,
+      "search-debounce": 0.01,
+      "sort-works": 0.91,
+      "spy-call-order": 0.395,
+      "streak-reset": 0.01,
+      "tautology-count": 0.52,
+      "timer-ticks": 0.035,
+      "tip-rounding": 0.0,
+      "vague-good-toggle": 0.265,
+      "wrong-field-badge": 0.0,
+      "wrong-field-display-name": 0.01,
+      "wrong-field-error-message": 0.05,
+      "wrong-field-tax": 0.03,
+      "xctest-name-only": 0.52
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.08064821428571427,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.045,
+      "h-badge-partial": 0.01,
+      "h-constructed-sort": 0.815,
+      "h-convert-vague": 0.54,
+      "h-dark-mode": 0.0,
+      "h-existence-receipt": 0.01,
+      "h-mock-token": 0.025,
+      "h-own-fake-rates": 0.0,
+      "h-private-inflight": 0.88,
+      "h-reminder-schedule": 0.03,
+      "h-upload-backoff": 0.01,
+      "h-wrong-field-eta": 0.0,
+      "h-wrong-field-favorite": 0.01,
+      "h-xctest-discount": 0.07
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 4,
+     "fp": 0,
+     "fn": 0,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.05530714285714285,
+     "per_run": {
+      "r2": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.0,
+      "existence-only": 0.585,
+      "login-error-alert": 0.0,
+      "own-double": 0.98,
+      "private-state-coupling": 0.045,
+      "restated-name": 0.55,
+      "ui-flow-in-t1": 0.9
+     }
+    }
+   },
+   "s0 restates OR (no symptom, no cond)": {
+    "dev": {
+     "n": 40,
+     "tp": 10,
+     "fp": 0,
+     "fn": 2,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "recall": [
+      0.8333333333333334,
+      0.5519636426153274,
+      0.9530358523851776
+     ],
+     "accuracy": [
+      0.95,
+      0.834958291820748,
+      0.9861796228538989
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.05794247,
+     "per_run": {
+      "r2": {
+       "tp": 9,
+       "fp": 0,
+       "fn": 3,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 10,
+       "fp": 0,
+       "fn": 2,
+       "tn": 28
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.1,
+      "cache-internal-storage": 0.09,
+      "constructed-money": 0.135,
+      "countdown-stops-on-dismiss": 0.145,
+      "discount-edges": 0.115,
+      "email-disables-login": 0.115,
+      "empty-inbox-state": 0.15,
+      "encoder-args": 0.52,
+      "existence-parse": 0.662,
+      "existence-rows": 0.105,
+      "feed-retry-backoff": 0.115,
+      "formatter-call-count": 0.12,
+      "invalidate-called": 0.602,
+      "log-text": 0.15,
+      "mock-cache-hit": 0.135,
+      "mock-factory-vm": 0.65,
+      "mock-repo-service": 0.26,
+      "mock-session-task": 0.22,
+      "no-assertion-sync": 0.69,
+      "order-status-unknown": 0.115,
+      "own-fake-clock": 0.474,
+      "own-fake-formatter": 0.75,
+      "own-fake-keychain": 0.13,
+      "own-fake-search": 0.145,
+      "own-fake-weather": 0.13,
+      "password-rules": 0.16,
+      "relative-just-now": 0.095,
+      "search-debounce": 0.11,
+      "sort-works": 0.655,
+      "spy-call-order": 0.679,
+      "streak-reset": 0.1,
+      "tautology-count": 0.481,
+      "timer-ticks": 0.145,
+      "tip-rounding": 0.08,
+      "vague-good-toggle": 0.54,
+      "wrong-field-badge": 0.095,
+      "wrong-field-display-name": 0.16,
+      "wrong-field-error-message": 0.1,
+      "wrong-field-tax": 0.166,
+      "xctest-name-only": 0.833
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.08478231875,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.265,
+      "h-badge-partial": 0.15,
+      "h-constructed-sort": 0.601,
+      "h-convert-vague": 0.77,
+      "h-dark-mode": 0.1,
+      "h-existence-receipt": 0.21,
+      "h-mock-token": 0.183,
+      "h-own-fake-rates": 0.085,
+      "h-private-inflight": 0.715,
+      "h-reminder-schedule": 0.1,
+      "h-upload-backoff": 0.1,
+      "h-wrong-field-eta": 0.115,
+      "h-wrong-field-favorite": 0.365,
+      "h-xctest-discount": 0.265
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.09111873714285713,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.1,
+      "existence-only": 0.725,
+      "login-error-alert": 0.09,
+      "own-double": 0.71,
+      "private-state-coupling": 0.105,
+      "restated-name": 0.36,
+      "ui-flow-in-t1": 0.801
+     }
+    }
+   },
+   "s1 restates OR (no symptom, no cond)": {
+    "dev": {
+     "n": 40,
+     "tp": 11,
+     "fp": 0,
+     "fn": 1,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.7411599827511859,
+      1
+     ],
+     "recall": [
+      0.9166666666666666,
+      0.6461140782014047,
+      0.9851352905492264
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.042321110375,
+     "per_run": {
+      "r2": {
+       "tp": 11,
+       "fp": 0,
+       "fn": 1,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 11,
+       "fp": 0,
+       "fn": 1,
+       "tn": 28
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.07,
+      "cache-internal-storage": 0.085,
+      "constructed-money": 0.075,
+      "countdown-stops-on-dismiss": 0.125,
+      "discount-edges": 0.08,
+      "email-disables-login": 0.11,
+      "empty-inbox-state": 0.11,
+      "encoder-args": 0.685,
+      "existence-parse": 0.519,
+      "existence-rows": 0.087,
+      "feed-retry-backoff": 0.12,
+      "formatter-call-count": 0.1,
+      "invalidate-called": 0.76,
+      "log-text": 0.1,
+      "mock-cache-hit": 0.15,
+      "mock-factory-vm": 0.87,
+      "mock-repo-service": 0.181,
+      "mock-session-task": 0.179,
+      "no-assertion-sync": 0.74,
+      "order-status-unknown": 0.175,
+      "own-fake-clock": 0.682,
+      "own-fake-formatter": 0.88,
+      "own-fake-keychain": 0.105,
+      "own-fake-search": 0.085,
+      "own-fake-weather": 0.105,
+      "password-rules": 0.115,
+      "relative-just-now": 0.08,
+      "search-debounce": 0.095,
+      "sort-works": 0.777,
+      "spy-call-order": 0.729,
+      "streak-reset": 0.07,
+      "tautology-count": 0.595,
+      "timer-ticks": 0.14,
+      "tip-rounding": 0.07,
+      "vague-good-toggle": 0.41,
+      "wrong-field-badge": 0.08,
+      "wrong-field-display-name": 0.11,
+      "wrong-field-error-message": 0.27,
+      "wrong-field-tax": 0.228,
+      "xctest-name-only": 0.874
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.040681968214285706,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.16,
+      "h-badge-partial": 0.13,
+      "h-constructed-sort": 0.73,
+      "h-convert-vague": 0.83,
+      "h-dark-mode": 0.065,
+      "h-existence-receipt": 0.16,
+      "h-mock-token": 0.146,
+      "h-own-fake-rates": 0.08,
+      "h-private-inflight": 0.85,
+      "h-reminder-schedule": 0.08,
+      "h-upload-backoff": 0.085,
+      "h-wrong-field-eta": 0.065,
+      "h-wrong-field-favorite": 0.09,
+      "h-xctest-discount": 0.435
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 3,
+     "fp": 0,
+     "fn": 1,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "recall": [
+      0.75,
+      0.3006360524426366,
+      0.9544139373553637
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.06402857142857142,
+     "per_run": {
+      "r2": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 3,
+       "fp": 0,
+       "fn": 1,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.085,
+      "existence-only": 0.695,
+      "login-error-alert": 0.095,
+      "own-double": 0.88,
+      "private-state-coupling": 0.08,
+      "restated-name": 0.45,
+      "ui-flow-in-t1": 0.875
+     }
+    }
+   },
+   "s1 choice adds=nothing": {
+    "dev": {
+     "n": 40,
+     "tp": 11,
+     "fp": 0,
+     "fn": 1,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.7411599827511859,
+      1
+     ],
+     "recall": [
+      0.9166666666666666,
+      0.6461140782014047,
+      0.9851352905492264
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.028684375,
+     "per_run": {
+      "r2": {
+       "tp": 10,
+       "fp": 0,
+       "fn": 2,
+       "tn": 28
+      },
+      "r3": {
+       "tp": 11,
+       "fp": 0,
+       "fn": 1,
+       "tn": 28
+      }
+     },
+     "flips": 1,
+     "per_case": {
+      "autosave-draft": 0.01,
+      "cache-internal-storage": 0.06,
+      "constructed-money": 0.01,
+      "countdown-stops-on-dismiss": 0.01,
+      "discount-edges": 0.0,
+      "email-disables-login": 0.04,
+      "empty-inbox-state": 0.0,
+      "encoder-args": 0.775,
+      "existence-parse": 0.415,
+      "existence-rows": 0.0,
+      "feed-retry-backoff": 0.01,
+      "formatter-call-count": 0.01,
+      "invalidate-called": 0.815,
+      "log-text": 0.025,
+      "mock-cache-hit": 0.04,
+      "mock-factory-vm": 0.94,
+      "mock-repo-service": 0.01,
+      "mock-session-task": 0.03,
+      "no-assertion-sync": 0.645,
+      "order-status-unknown": 0.01,
+      "own-fake-clock": 0.68,
+      "own-fake-formatter": 0.965,
+      "own-fake-keychain": 0.01,
+      "own-fake-search": 0.0,
+      "own-fake-weather": 0.025,
+      "password-rules": 0.055,
+      "relative-just-now": 0.01,
+      "search-debounce": 0.035,
+      "sort-works": 0.935,
+      "spy-call-order": 0.505,
+      "streak-reset": 0.0,
+      "tautology-count": 0.8,
+      "timer-ticks": 0.095,
+      "tip-rounding": 0.01,
+      "vague-good-toggle": 0.59,
+      "wrong-field-badge": 0.015,
+      "wrong-field-display-name": 0.0,
+      "wrong-field-error-message": 0.065,
+      "wrong-field-tax": 0.045,
+      "xctest-name-only": 1.0
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 4,
+     "fp": 0,
+     "fn": 0,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.7846829880728186,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.003649999999999999,
+     "per_run": {
+      "r2": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.175,
+      "h-badge-partial": 0.01,
+      "h-constructed-sort": 0.91,
+      "h-convert-vague": 0.925,
+      "h-dark-mode": 0.0,
+      "h-existence-receipt": 0.06,
+      "h-mock-token": 0.01,
+      "h-own-fake-rates": 0.0,
+      "h-private-inflight": 0.985,
+      "h-reminder-schedule": 0.02,
+      "h-upload-backoff": 0.025,
+      "h-wrong-field-eta": 0.01,
+      "h-wrong-field-favorite": 0.04,
+      "h-xctest-discount": 1.0
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 4,
+     "fp": 0,
+     "fn": 0,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.019114285714285716,
+     "per_run": {
+      "r2": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 3
+      },
+      "r3": {
+       "tp": 4,
+       "fp": 0,
+       "fn": 0,
+       "tn": 3
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.01,
+      "existence-only": 0.735,
+      "login-error-alert": 0.005,
+      "own-double": 0.915,
+      "private-state-coupling": 0.03,
+      "restated-name": 0.765,
+      "ui-flow-in-t1": 0.99
+     }
+    }
+   },
+   "claude-sonnet-5-5": {
+    "dev": {
+     "n": 39,
+     "tp": 10,
+     "fp": 0,
+     "fn": 2,
+     "tn": 27,
+     "precision": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "recall": [
+      0.8333333333333334,
+      0.5519636426153274,
+      0.9530358523851776
+     ],
+     "accuracy": [
+      0.9487179487179487,
+      0.8311406095436208,
+      0.9858223423536004
+     ],
+     "specificity": [
+      1.0,
+      0.8754409628553641,
+      1
+     ],
+     "brier": 0.05943333333333334,
+     "per_case": {
+      "email-disables-login": 0.03,
+      "wrong-field-badge": 0.05,
+      "mock-session-task": 0.1,
+      "search-debounce": 0.03,
+      "own-fake-formatter": 0.6,
+      "spy-call-order": 0.6,
+      "own-fake-clock": 0.7,
+      "vague-good-toggle": 0.6,
+      "mock-cache-hit": 0.05,
+      "formatter-call-count": 0.05,
+      "relative-just-now": 0.03,
+      "no-assertion-sync": 0.6,
+      "empty-inbox-state": 0.15,
+      "constructed-money": 0.1,
+      "existence-rows": 0.05,
+      "encoder-args": 0.3,
+      "discount-edges": 0.15,
+      "xctest-name-only": 0.35,
+      "sort-works": 0.85,
+      "log-text": 0.05,
+      "countdown-stops-on-dismiss": 0.03,
+      "autosave-draft": 0.03,
+      "mock-factory-vm": 0.85,
+      "streak-reset": 0.15,
+      "own-fake-keychain": 0.05,
+      "own-fake-weather": 0.05,
+      "existence-parse": 0.6,
+      "cache-internal-storage": 0.1,
+      "password-rules": 0.1,
+      "feed-retry-backoff": 0.05,
+      "wrong-field-display-name": 0.3,
+      "own-fake-search": 0.15,
+      "mock-repo-service": 0.1,
+      "tautology-count": 0.8,
+      "order-status-unknown": 0.03,
+      "wrong-field-tax": 0.1,
+      "timer-ticks": 0.05,
+      "wrong-field-error-message": 0.05,
+      "invalidate-called": 0.6
+     }
+    }
+   },
+   "cascade": {
+    "0.3-0.7": {
+     "dev": {
+      "n": 40,
+      "escalated": 5,
+      "escalated_ids": [
+       "existence-parse",
+       "no-assertion-sync",
+       "own-fake-clock",
+       "spy-call-order",
+       "vague-good-toggle"
+      ],
+      "share": [
+       0.125,
+       0.05459419773541284,
+       0.26112420670238146
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.9010957324106112,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 12,
+       "fp": 0,
+       "fn": 0,
+       "tn": 28,
+       "precision": [
+        1.0,
+        0.7574992425007574,
+        1
+       ],
+       "recall": [
+        1.0,
+        0.7574992425007574,
+        1
+       ],
+       "accuracy": [
+        1.0,
+        0.9123754607496077,
+        1
+       ],
+       "specificity": [
+        1.0,
+        0.8793527963418923,
+        1
+       ],
+       "brier": 0.022340000000000006
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.21531701192718142
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7846829880728186,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.35433884297520657
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.6456611570247934,
+       1
+      ]
+     }
+    },
+    "0.2-0.8": {
+     "dev": {
+      "n": 40,
+      "escalated": 6,
+      "escalated_ids": [
+       "encoder-args",
+       "existence-parse",
+       "no-assertion-sync",
+       "own-fake-clock",
+       "spy-call-order",
+       "vague-good-toggle"
+      ],
+      "share": [
+       0.15,
+       0.07061091708507435,
+       0.2907262603902003
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.8984820937803899,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 11,
+       "fp": 0,
+       "fn": 1,
+       "tn": 28,
+       "precision": [
+        1.0,
+        0.7411599827511859,
+        1
+       ],
+       "recall": [
+        0.9166666666666666,
+        0.6461140782014047,
+        0.9851352905492264
+       ],
+       "accuracy": [
+        0.975,
+        0.8711834051199223,
+        0.9955732825922052
+       ],
+       "specificity": [
+        1.0,
+        0.8793527963418923,
+        1
+       ],
+       "brier": 0.033324375
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.21531701192718142
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7846829880728186,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 2,
+      "escalated_ids": [
+       "existence-only",
+       "restated-name"
+      ],
+      "share": [
+       0.2857142857142857,
+       0.0822171657090155,
+       0.6410709098517873
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.5655085052479191,
+       1
+      ]
+     }
+    },
+    "0.1-0.9": {
+     "dev": {
+      "n": 40,
+      "escalated": 8,
+      "escalated_ids": [
+       "encoder-args",
+       "existence-parse",
+       "invalidate-called",
+       "no-assertion-sync",
+       "own-fake-clock",
+       "spy-call-order",
+       "tautology-count",
+       "vague-good-toggle"
+      ],
+      "share": [
+       0.2,
+       0.10499864973166874,
+       0.34757607381856676
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.8928172849426366,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 11,
+       "fp": 0,
+       "fn": 1,
+       "tn": 28,
+       "precision": [
+        1.0,
+        0.7411599827511859,
+        1
+       ],
+       "recall": [
+        0.9166666666666666,
+        0.6461140782014047,
+        0.9851352905492264
+       ],
+       "accuracy": [
+        0.975,
+        0.8711834051199223,
+        0.9955732825922052
+       ],
+       "specificity": [
+        1.0,
+        0.8793527963418923,
+        1
+       ],
+       "brier": 0.03646875
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 1,
+      "escalated_ids": [
+       "h-analytics-help"
+      ],
+      "share": [
+       0.07142857142857142,
+       0.012721886112291636,
+       0.3146926955395781
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7718981569447083,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 2,
+      "escalated_ids": [
+       "existence-only",
+       "restated-name"
+      ],
+      "share": [
+       0.2857142857142857,
+       0.0822171657090155,
+       0.6410709098517873
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.5655085052479191,
+       1
+      ]
+     }
+    }
+   }
+  },
+  "asserts-implementation": {
+   "base (s0, today)": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 3,
+     "fn": 0,
+     "tn": 31,
+     "precision": [
+      0.6666666666666666,
+      0.35419734749908977,
+      0.879418401317257
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      0.925,
+      0.8013546984090248,
+      0.9741644432281419
+     ],
+     "specificity": [
+      0.9117647058823529,
+      0.7703918204763959,
+      0.9695346096956899
+     ],
+     "brier": 0.100144375,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 3,
+       "fn": 0,
+       "tn": 31
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 3,
+       "fn": 0,
+       "tn": 31
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.335,
+      "cache-internal-storage": 0.855,
+      "constructed-money": 0.13,
+      "countdown-stops-on-dismiss": 0.21,
+      "discount-edges": 0.045,
+      "email-disables-login": 0.39,
+      "empty-inbox-state": 0.37,
+      "encoder-args": 0.715,
+      "existence-parse": 0.06,
+      "existence-rows": 0.39,
+      "feed-retry-backoff": 0.33,
+      "formatter-call-count": 0.715,
+      "invalidate-called": 0.67,
+      "log-text": 0.79,
+      "mock-cache-hit": 0.385,
+      "mock-factory-vm": 0.23,
+      "mock-repo-service": 0.69,
+      "mock-session-task": 0.65,
+      "no-assertion-sync": 0.105,
+      "order-status-unknown": 0.055,
+      "own-fake-clock": 0.54,
+      "own-fake-formatter": 0.135,
+      "own-fake-keychain": 0.375,
+      "own-fake-search": 0.085,
+      "own-fake-weather": 0.465,
+      "password-rules": 0.07,
+      "relative-just-now": 0.09,
+      "search-debounce": 0.325,
+      "sort-works": 0.04,
+      "spy-call-order": 0.83,
+      "streak-reset": 0.055,
+      "tautology-count": 0.12,
+      "timer-ticks": 0.37,
+      "tip-rounding": 0.04,
+      "vague-good-toggle": 0.4,
+      "wrong-field-badge": 0.465,
+      "wrong-field-display-name": 0.19,
+      "wrong-field-error-message": 0.48,
+      "wrong-field-tax": 0.45,
+      "xctest-name-only": 0.05
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 1,
+     "fp": 4,
+     "fn": 1,
+     "tn": 8,
+     "precision": [
+      0.2,
+      0.03622316096978745,
+      0.6244717358814613
+     ],
+     "recall": [
+      0.5,
+      0.09452865480086614,
+      0.9054713451991339
+     ],
+     "accuracy": [
+      0.6428571428571429,
+      0.3876400468214042,
+      0.8365550926279727
+     ],
+     "specificity": [
+      0.6666666666666666,
+      0.3906175873976139,
+      0.8618821601026385
+     ],
+     "brier": 0.14716071428571428,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 3,
+       "fn": 1,
+       "tn": 9
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 3,
+       "fn": 1,
+       "tn": 9
+      }
+     },
+     "flips": 2,
+     "per_case": {
+      "h-analytics-help": 0.485,
+      "h-badge-partial": 0.05,
+      "h-constructed-sort": 0.05,
+      "h-convert-vague": 0.04,
+      "h-dark-mode": 0.505,
+      "h-existence-receipt": 0.435,
+      "h-mock-token": 0.72,
+      "h-own-fake-rates": 0.235,
+      "h-private-inflight": 0.835,
+      "h-reminder-schedule": 0.5,
+      "h-upload-backoff": 0.405,
+      "h-wrong-field-eta": 0.26,
+      "h-wrong-field-favorite": 0.51,
+      "h-xctest-discount": 0.04
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "brier": 0.06341785714285715,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.04,
+      "existence-only": 0.085,
+      "login-error-alert": 0.295,
+      "own-double": 0.32,
+      "private-state-coupling": 0.795,
+      "restated-name": 0.445,
+      "ui-flow-in-t1": 0.075
+     }
+    }
+   },
+   "s1 base+criteria": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 3,
+     "fn": 0,
+     "tn": 31,
+     "precision": [
+      0.6666666666666666,
+      0.35419734749908977,
+      0.879418401317257
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      0.925,
+      0.8013546984090248,
+      0.9741644432281419
+     ],
+     "specificity": [
+      0.9117647058823529,
+      0.7703918204763959,
+      0.9695346096956899
+     ],
+     "brier": 0.062873125,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 3,
+       "fn": 0,
+       "tn": 31
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 3,
+       "fn": 0,
+       "tn": 31
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.215,
+      "cache-internal-storage": 0.885,
+      "constructed-money": 0.08,
+      "countdown-stops-on-dismiss": 0.12,
+      "discount-edges": 0.035,
+      "email-disables-login": 0.13,
+      "empty-inbox-state": 0.14,
+      "encoder-args": 0.885,
+      "existence-parse": 0.05,
+      "existence-rows": 0.165,
+      "feed-retry-backoff": 0.15,
+      "formatter-call-count": 0.885,
+      "invalidate-called": 0.85,
+      "log-text": 0.895,
+      "mock-cache-hit": 0.34,
+      "mock-factory-vm": 0.35,
+      "mock-repo-service": 0.58,
+      "mock-session-task": 0.825,
+      "no-assertion-sync": 0.13,
+      "order-status-unknown": 0.05,
+      "own-fake-clock": 0.39,
+      "own-fake-formatter": 0.12,
+      "own-fake-keychain": 0.34,
+      "own-fake-search": 0.085,
+      "own-fake-weather": 0.595,
+      "password-rules": 0.045,
+      "relative-just-now": 0.045,
+      "search-debounce": 0.11,
+      "sort-works": 0.035,
+      "spy-call-order": 0.92,
+      "streak-reset": 0.04,
+      "tautology-count": 0.095,
+      "timer-ticks": 0.135,
+      "tip-rounding": 0.03,
+      "vague-good-toggle": 0.11,
+      "wrong-field-badge": 0.23,
+      "wrong-field-display-name": 0.185,
+      "wrong-field-error-message": 0.275,
+      "wrong-field-tax": 0.37,
+      "xctest-name-only": 0.04
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 2,
+     "fp": 1,
+     "fn": 0,
+     "tn": 11,
+     "precision": [
+      0.6666666666666666,
+      0.2076549551264879,
+      0.9385096847238394
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      0.9166666666666666,
+      0.6461140782014047,
+      0.9851352905492264
+     ],
+     "brier": 0.08686428571428571,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 11
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 11
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.76,
+      "h-badge-partial": 0.04,
+      "h-constructed-sort": 0.04,
+      "h-convert-vague": 0.03,
+      "h-dark-mode": 0.475,
+      "h-existence-receipt": 0.185,
+      "h-mock-token": 0.74,
+      "h-own-fake-rates": 0.14,
+      "h-private-inflight": 0.9,
+      "h-reminder-schedule": 0.38,
+      "h-upload-backoff": 0.185,
+      "h-wrong-field-eta": 0.305,
+      "h-wrong-field-favorite": 0.21,
+      "h-xctest-discount": 0.04
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "brier": 0.017864285714285714,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.03,
+      "existence-only": 0.08,
+      "login-error-alert": 0.125,
+      "own-double": 0.255,
+      "private-state-coupling": 0.89,
+      "restated-name": 0.15,
+      "ui-flow-in-t1": 0.05
+     }
+    }
+   },
+   "s0 any(call v2, private, log)": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 1,
+     "fn": 0,
+     "tn": 33,
+     "precision": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      0.9705882352941176,
+      0.8508409778365519,
+      0.9947892280744034
+     ],
+     "brier": 0.023255625000000002,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 1,
+       "fn": 0,
+       "tn": 33
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 1,
+       "fn": 0,
+       "tn": 33
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.545,
+      "cache-internal-storage": 0.95,
+      "constructed-money": 0.115,
+      "countdown-stops-on-dismiss": 0.085,
+      "discount-edges": 0.04,
+      "email-disables-login": 0.1,
+      "empty-inbox-state": 0.115,
+      "encoder-args": 0.935,
+      "existence-parse": 0.03,
+      "existence-rows": 0.115,
+      "feed-retry-backoff": 0.13,
+      "formatter-call-count": 0.96,
+      "invalidate-called": 0.97,
+      "log-text": 0.965,
+      "mock-cache-hit": 0.23,
+      "mock-factory-vm": 0.15,
+      "mock-repo-service": 0.24,
+      "mock-session-task": 0.36,
+      "no-assertion-sync": 0.04,
+      "order-status-unknown": 0.04,
+      "own-fake-clock": 0.335,
+      "own-fake-formatter": 0.07,
+      "own-fake-keychain": 0.125,
+      "own-fake-search": 0.06,
+      "own-fake-weather": 0.06,
+      "password-rules": 0.04,
+      "relative-just-now": 0.13,
+      "search-debounce": 0.16,
+      "sort-works": 0.05,
+      "spy-call-order": 0.975,
+      "streak-reset": 0.04,
+      "tautology-count": 0.05,
+      "timer-ticks": 0.135,
+      "tip-rounding": 0.03,
+      "vague-good-toggle": 0.09,
+      "wrong-field-badge": 0.1,
+      "wrong-field-display-name": 0.1,
+      "wrong-field-error-message": 0.125,
+      "wrong-field-tax": 0.155,
+      "xctest-name-only": 0.05
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 2,
+     "fp": 2,
+     "fn": 0,
+     "tn": 10,
+     "precision": [
+      0.5,
+      0.15003570882017148,
+      0.8499642911798285
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.8571428571428571,
+      0.600580922361363,
+      0.9599069262620787
+     ],
+     "specificity": [
+      0.8333333333333334,
+      0.5519636426153274,
+      0.9530358523851776
+     ],
+     "brier": 0.09820357142857143,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 10
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 2,
+       "fn": 0,
+       "tn": 10
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.97,
+      "h-badge-partial": 0.04,
+      "h-constructed-sort": 0.035,
+      "h-convert-vague": 0.03,
+      "h-dark-mode": 0.615,
+      "h-existence-receipt": 0.11,
+      "h-mock-token": 0.255,
+      "h-own-fake-rates": 0.07,
+      "h-private-inflight": 0.96,
+      "h-reminder-schedule": 0.935,
+      "h-upload-backoff": 0.12,
+      "h-wrong-field-eta": 0.075,
+      "h-wrong-field-favorite": 0.115,
+      "h-xctest-discount": 0.03
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "brier": 0.004485714285714286,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.045,
+      "existence-only": 0.035,
+      "login-error-alert": 0.085,
+      "own-double": 0.07,
+      "private-state-coupling": 0.97,
+      "restated-name": 0.11,
+      "ui-flow-in-t1": 0.055
+     }
+    }
+   },
+   "s1 any(call v2, private, log)": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 0,
+     "fn": 0,
+     "tn": 34,
+     "precision": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      1.0,
+      0.9123754607496077,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.8984820937803899,
+      1
+     ],
+     "brier": 0.0213275,
+     "per_run": {
+      "r2": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 0,
+       "tn": 34
+      },
+      "r3": {
+       "tp": 6,
+       "fp": 0,
+       "fn": 0,
+       "tn": 34
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "autosave-draft": 0.42,
+      "cache-internal-storage": 0.96,
+      "constructed-money": 0.105,
+      "countdown-stops-on-dismiss": 0.115,
+      "discount-edges": 0.04,
+      "email-disables-login": 0.085,
+      "empty-inbox-state": 0.095,
+      "encoder-args": 0.965,
+      "existence-parse": 0.045,
+      "existence-rows": 0.11,
+      "feed-retry-backoff": 0.1,
+      "formatter-call-count": 0.96,
+      "invalidate-called": 0.98,
+      "log-text": 0.97,
+      "mock-cache-hit": 0.08,
+      "mock-factory-vm": 0.095,
+      "mock-repo-service": 0.095,
+      "mock-session-task": 0.475,
+      "no-assertion-sync": 0.05,
+      "order-status-unknown": 0.05,
+      "own-fake-clock": 0.265,
+      "own-fake-formatter": 0.095,
+      "own-fake-keychain": 0.115,
+      "own-fake-search": 0.09,
+      "own-fake-weather": 0.08,
+      "password-rules": 0.04,
+      "relative-just-now": 0.34,
+      "search-debounce": 0.125,
+      "sort-works": 0.05,
+      "spy-call-order": 0.975,
+      "streak-reset": 0.04,
+      "tautology-count": 0.055,
+      "timer-ticks": 0.115,
+      "tip-rounding": 0.04,
+      "vague-good-toggle": 0.08,
+      "wrong-field-badge": 0.155,
+      "wrong-field-display-name": 0.145,
+      "wrong-field-error-message": 0.14,
+      "wrong-field-tax": 0.115,
+      "xctest-name-only": 0.055
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 2,
+     "fp": 1,
+     "fn": 0,
+     "tn": 11,
+     "precision": [
+      0.6666666666666666,
+      0.2076549551264879,
+      0.9385096847238394
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      0.9166666666666666,
+      0.6461140782014047,
+      0.9851352905492264
+     ],
+     "brier": 0.07203392857142855,
+     "per_run": {
+      "r2": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 11
+      },
+      "r3": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 0,
+       "tn": 11
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "h-analytics-help": 0.97,
+      "h-badge-partial": 0.04,
+      "h-constructed-sort": 0.05,
+      "h-convert-vague": 0.03,
+      "h-dark-mode": 0.465,
+      "h-existence-receipt": 0.11,
+      "h-mock-token": 0.14,
+      "h-own-fake-rates": 0.095,
+      "h-private-inflight": 0.97,
+      "h-reminder-schedule": 0.845,
+      "h-upload-backoff": 0.085,
+      "h-wrong-field-eta": 0.095,
+      "h-wrong-field-favorite": 0.115,
+      "h-xctest-discount": 0.035
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "brier": 0.004021428571428572,
+     "per_run": {
+      "r2": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      },
+      "r3": {
+       "tp": 1,
+       "fp": 0,
+       "fn": 0,
+       "tn": 6
+      }
+     },
+     "flips": 0,
+     "per_case": {
+      "cart-total-discount": 0.045,
+      "existence-only": 0.05,
+      "login-error-alert": 0.095,
+      "own-double": 0.05,
+      "private-state-coupling": 0.98,
+      "restated-name": 0.09,
+      "ui-flow-in-t1": 0.06
+     }
+    }
+   },
+   "claude-sonnet-5-5": {
+    "dev": {
+     "n": 39,
+     "tp": 6,
+     "fp": 1,
+     "fn": 0,
+     "tn": 32,
+     "precision": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      0.9743589743589743,
+      0.8681871352137286,
+      0.9954594139347627
+     ],
+     "specificity": [
+      0.9696969696969697,
+      0.8468093832683193,
+      0.9946307279103482
+     ],
+     "brier": 0.03393333333333333,
+     "per_case": {
+      "email-disables-login": 0.12,
+      "wrong-field-badge": 0.15,
+      "mock-session-task": 0.35,
+      "search-debounce": 0.15,
+      "own-fake-formatter": 0.15,
+      "spy-call-order": 0.93,
+      "own-fake-clock": 0.15,
+      "vague-good-toggle": 0.12,
+      "mock-cache-hit": 0.3,
+      "formatter-call-count": 0.97,
+      "relative-just-now": 0.03,
+      "no-assertion-sync": 0.03,
+      "empty-inbox-state": 0.12,
+      "constructed-money": 0.05,
+      "existence-rows": 0.1,
+      "encoder-args": 0.93,
+      "discount-edges": 0.03,
+      "xctest-name-only": 0.03,
+      "sort-works": 0.04,
+      "log-text": 0.93,
+      "countdown-stops-on-dismiss": 0.15,
+      "autosave-draft": 0.2,
+      "mock-factory-vm": 0.6,
+      "streak-reset": 0.03,
+      "own-fake-keychain": 0.25,
+      "own-fake-weather": 0.3,
+      "existence-parse": 0.05,
+      "cache-internal-storage": 0.9,
+      "password-rules": 0.12,
+      "feed-retry-backoff": 0.2,
+      "wrong-field-display-name": 0.1,
+      "own-fake-search": 0.15,
+      "mock-repo-service": 0.3,
+      "tautology-count": 0.05,
+      "order-status-unknown": 0.04,
+      "wrong-field-tax": 0.3,
+      "timer-ticks": 0.2,
+      "wrong-field-error-message": 0.15,
+      "invalidate-called": 0.85
+     }
+    }
+   },
+   "cascade": {
+    "0.3-0.7": {
+     "dev": {
+      "n": 40,
+      "escalated": 3,
+      "escalated_ids": [
+       "autosave-draft",
+       "mock-session-task",
+       "relative-just-now"
+      ],
+      "share": [
+       0.075,
+       0.025835556771858226,
+       0.19864530159097524
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.9059390425448564,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 6,
+       "fp": 0,
+       "fn": 0,
+       "tn": 34,
+       "precision": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "recall": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "accuracy": [
+        1.0,
+        0.9123754607496077,
+        1
+       ],
+       "specificity": [
+        1.0,
+        0.8984820937803899,
+        1
+       ],
+       "brier": 0.012471875
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 1,
+      "escalated_ids": [
+       "h-dark-mode"
+      ],
+      "share": [
+       0.07142857142857142,
+       0.012721886112291636,
+       0.3146926955395781
+      ],
+      "jev_kept_accuracy": [
+       0.9230769230769231,
+       0.6668546607175265,
+       0.9862899336203037
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.35433884297520657
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.6456611570247934,
+       1
+      ]
+     }
+    },
+    "0.2-0.8": {
+     "dev": {
+      "n": 40,
+      "escalated": 4,
+      "escalated_ids": [
+       "autosave-draft",
+       "mock-session-task",
+       "own-fake-clock",
+       "relative-just-now"
+      ],
+      "share": [
+       0.1,
+       0.03957888759557486,
+       0.23052074380473897
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.9035781695514236,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 6,
+       "fp": 0,
+       "fn": 0,
+       "tn": 34,
+       "precision": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "recall": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "accuracy": [
+        1.0,
+        0.9123754607496077,
+        1
+       ],
+       "specificity": [
+        1.0,
+        0.8984820937803899,
+        1
+       ],
+       "brier": 0.01127875
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 1,
+      "escalated_ids": [
+       "h-dark-mode"
+      ],
+      "share": [
+       0.07142857142857142,
+       0.012721886112291636,
+       0.3146926955395781
+      ],
+      "jev_kept_accuracy": [
+       0.9230769230769231,
+       0.6668546607175265,
+       0.9862899336203037
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.35433884297520657
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.6456611570247934,
+       1
+      ]
+     }
+    },
+    "0.1-0.9": {
+     "dev": {
+      "n": 40,
+      "escalated": 14,
+      "escalated_ids": [
+       "autosave-draft",
+       "constructed-money",
+       "countdown-stops-on-dismiss",
+       "existence-rows",
+       "mock-session-task",
+       "own-fake-clock",
+       "own-fake-keychain",
+       "relative-just-now",
+       "search-debounce",
+       "timer-ticks",
+       "wrong-field-badge",
+       "wrong-field-display-name",
+       "wrong-field-error-message",
+       "wrong-field-tax"
+      ],
+      "share": [
+       0.35,
+       0.2213433317104915,
+       0.5049440300646263
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.8712669561953784,
+       1
+      ],
+      "combined": {
+       "n": 40,
+       "tp": 6,
+       "fp": 0,
+       "fn": 0,
+       "tn": 34,
+       "precision": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "recall": [
+        1.0,
+        0.6096569663469354,
+        0.9999999999999999
+       ],
+       "accuracy": [
+        1.0,
+        0.9123754607496077,
+        1
+       ],
+       "specificity": [
+        1.0,
+        0.8984820937803899,
+        1
+       ],
+       "brier": 0.01499625
+      }
+     },
+     "holdout": {
+      "n": 14,
+      "escalated": 5,
+      "escalated_ids": [
+       "h-dark-mode",
+       "h-existence-receipt",
+       "h-mock-token",
+       "h-reminder-schedule",
+       "h-wrong-field-favorite"
+      ],
+      "share": [
+       0.35714285714285715,
+       0.16344490737202735,
+       0.6123599531785959
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.7008472464490407,
+       1
+      ]
+     },
+     "tune": {
+      "n": 7,
+      "escalated": 0,
+      "escalated_ids": [],
+      "share": [
+       0.0,
+       0,
+       0.35433884297520657
+      ],
+      "jev_kept_accuracy": [
+       1.0,
+       0.6456611570247934,
+       1
+      ]
+     }
+    }
+   }
+  }
+ },
+ "standalone_final_request": {
+  "note": "questions_final.FINAL sent alone in the s1 state, one run",
+  "metrics": {
+   "fails-if-broken": {
+    "dev": {
+     "n": 40,
+     "tp": 20,
+     "fp": 1,
+     "fn": 0,
+     "tn": 19,
+     "precision": [
+      0.9523809523809523,
+      0.7733018341376452,
+      0.9915442305280766
+     ],
+     "recall": [
+      1.0,
+      0.8388698745050667,
+      1
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      0.95,
+      0.7638641064874331,
+      0.9911187805671268
+     ],
+     "brier": 0.0409925,
+     "per_case": {
+      "email-disables-login": 0.13,
+      "wrong-field-badge": 0.91,
+      "mock-session-task": 0.88,
+      "search-debounce": 0.34,
+      "own-fake-formatter": 0.92,
+      "spy-call-order": 0.33,
+      "own-fake-clock": 0.93,
+      "vague-good-toggle": 0.07,
+      "mock-cache-hit": 0.94,
+      "formatter-call-count": 0.92,
+      "relative-just-now": 0.06,
+      "no-assertion-sync": 0.94,
+      "empty-inbox-state": 0.12,
+      "constructed-money": 0.75,
+      "existence-rows": 0.92,
+      "encoder-args": 0.33,
+      "discount-edges": 0.05,
+      "xctest-name-only": 0.07,
+      "sort-works": 0.05,
+      "log-text": 0.67,
+      "countdown-stops-on-dismiss": 0.81,
+      "tip-rounding": 0.04,
+      "autosave-draft": 0.13,
+      "mock-factory-vm": 0.86,
+      "streak-reset": 0.06,
+      "own-fake-keychain": 0.91,
+      "own-fake-weather": 0.94,
+      "existence-parse": 0.86,
+      "cache-internal-storage": 0.46,
+      "password-rules": 0.04,
+      "feed-retry-backoff": 0.13,
+      "wrong-field-display-name": 0.94,
+      "own-fake-search": 0.9,
+      "mock-repo-service": 0.92,
+      "tautology-count": 0.94,
+      "order-status-unknown": 0.1,
+      "wrong-field-tax": 0.94,
+      "timer-ticks": 0.09,
+      "wrong-field-error-message": 0.9,
+      "invalidate-called": 0.13
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 7,
+     "fp": 0,
+     "fn": 0,
+     "tn": 7,
+     "precision": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.7846829880728186,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "brier": 0.038049999999999994,
+     "per_case": {
+      "h-badge-partial": 0.07,
+      "h-dark-mode": 0.18,
+      "h-existence-receipt": 0.92,
+      "h-convert-vague": 0.37,
+      "h-upload-backoff": 0.36,
+      "h-mock-token": 0.93,
+      "h-wrong-field-eta": 0.94,
+      "h-own-fake-rates": 0.9,
+      "h-wrong-field-favorite": 0.9,
+      "h-xctest-discount": 0.05,
+      "h-analytics-help": 0.87,
+      "h-private-inflight": 0.4,
+      "h-constructed-sort": 0.95,
+      "h-reminder-schedule": 0.11
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 2,
+     "fp": 2,
+     "fn": 0,
+     "tn": 3,
+     "precision": [
+      0.5,
+      0.15003570882017148,
+      0.8499642911798285
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.7142857142857143,
+      0.35892909014821267,
+      0.9177828342909844
+     ],
+     "specificity": [
+      0.6,
+      0.23071993220883708,
+      0.8823817688407467
+     ],
+     "brier": 0.10678571428571428,
+     "per_case": {
+      "cart-total-discount": 0.06,
+      "ui-flow-in-t1": 0.6,
+      "private-state-coupling": 0.57,
+      "existence-only": 0.85,
+      "login-error-alert": 0.11,
+      "restated-name": 0.1,
+      "own-double": 0.88
+     }
+    }
+   },
+   "name-specificity": {
+    "dev": {
+     "n": 40,
+     "tp": 10,
+     "fp": 0,
+     "fn": 2,
+     "tn": 28,
+     "precision": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "recall": [
+      0.8333333333333334,
+      0.5519636426153274,
+      0.9530358523851776
+     ],
+     "accuracy": [
+      0.95,
+      0.834958291820748,
+      0.9861796228538989
+     ],
+     "specificity": [
+      1.0,
+      0.8793527963418923,
+      1
+     ],
+     "brier": 0.030425,
+     "per_case": {
+      "email-disables-login": 0.05,
+      "wrong-field-badge": 0.01,
+      "mock-session-task": 0.02,
+      "search-debounce": 0.04,
+      "own-fake-formatter": 0.97,
+      "spy-call-order": 0.44,
+      "own-fake-clock": 0.75,
+      "vague-good-toggle": 0.57,
+      "mock-cache-hit": 0.05,
+      "formatter-call-count": 0.01,
+      "relative-just-now": 0.01,
+      "no-assertion-sync": 0.63,
+      "empty-inbox-state": 0.0,
+      "constructed-money": 0.01,
+      "existence-rows": 0.0,
+      "encoder-args": 0.84,
+      "discount-edges": 0.0,
+      "xctest-name-only": 1.0,
+      "sort-works": 0.96,
+      "log-text": 0.03,
+      "countdown-stops-on-dismiss": 0.01,
+      "tip-rounding": 0.01,
+      "autosave-draft": 0.0,
+      "mock-factory-vm": 0.92,
+      "streak-reset": 0.0,
+      "own-fake-keychain": 0.01,
+      "own-fake-weather": 0.01,
+      "existence-parse": 0.42,
+      "cache-internal-storage": 0.05,
+      "password-rules": 0.05,
+      "feed-retry-backoff": 0.01,
+      "wrong-field-display-name": 0.0,
+      "own-fake-search": 0.0,
+      "mock-repo-service": 0.01,
+      "tautology-count": 0.78,
+      "order-status-unknown": 0.01,
+      "wrong-field-tax": 0.05,
+      "timer-ticks": 0.12,
+      "wrong-field-error-message": 0.08,
+      "invalidate-called": 0.75
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 4,
+     "fp": 0,
+     "fn": 0,
+     "tn": 10,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.7846829880728186,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.7224598312333834,
+      1
+     ],
+     "brier": 0.0035428571428571423,
+     "per_case": {
+      "h-badge-partial": 0.01,
+      "h-dark-mode": 0.0,
+      "h-existence-receipt": 0.06,
+      "h-convert-vague": 0.92,
+      "h-upload-backoff": 0.03,
+      "h-mock-token": 0.01,
+      "h-wrong-field-eta": 0.01,
+      "h-own-fake-rates": 0.0,
+      "h-wrong-field-favorite": 0.03,
+      "h-xctest-discount": 1.0,
+      "h-analytics-help": 0.17,
+      "h-private-inflight": 0.98,
+      "h-constructed-sort": 0.91,
+      "h-reminder-schedule": 0.01
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 4,
+     "fp": 0,
+     "fn": 0,
+     "tn": 3,
+     "precision": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.5100999795960008,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.43849391955098227,
+      1
+     ],
+     "brier": 0.01647142857142857,
+     "per_case": {
+      "cart-total-discount": 0.01,
+      "ui-flow-in-t1": 0.99,
+      "private-state-coupling": 0.03,
+      "existence-only": 0.77,
+      "login-error-alert": 0.01,
+      "restated-name": 0.76,
+      "own-double": 0.94
+     }
+    }
+   },
+   "asserts-implementation": {
+    "dev": {
+     "n": 40,
+     "tp": 6,
+     "fp": 1,
+     "fn": 0,
+     "tn": 33,
+     "precision": [
+      0.8571428571428571,
+      0.48686549668097007,
+      0.9743210440510253
+     ],
+     "recall": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "accuracy": [
+      0.975,
+      0.8711834051199223,
+      0.9955732825922052
+     ],
+     "specificity": [
+      0.9705882352941176,
+      0.8508409778365519,
+      0.9947892280744034
+     ],
+     "brier": 0.0238325,
+     "per_case": {
+      "email-disables-login": 0.08,
+      "wrong-field-badge": 0.15,
+      "mock-session-task": 0.53,
+      "search-debounce": 0.12,
+      "own-fake-formatter": 0.1,
+      "spy-call-order": 0.98,
+      "own-fake-clock": 0.28,
+      "vague-good-toggle": 0.08,
+      "mock-cache-hit": 0.08,
+      "formatter-call-count": 0.96,
+      "relative-just-now": 0.37,
+      "no-assertion-sync": 0.04,
+      "empty-inbox-state": 0.1,
+      "constructed-money": 0.1,
+      "existence-rows": 0.1,
+      "encoder-args": 0.97,
+      "discount-edges": 0.04,
+      "xctest-name-only": 0.05,
+      "sort-works": 0.05,
+      "log-text": 0.97,
+      "countdown-stops-on-dismiss": 0.11,
+      "tip-rounding": 0.04,
+      "autosave-draft": 0.45,
+      "mock-factory-vm": 0.1,
+      "streak-reset": 0.04,
+      "own-fake-keychain": 0.11,
+      "own-fake-weather": 0.08,
+      "existence-parse": 0.04,
+      "cache-internal-storage": 0.96,
+      "password-rules": 0.04,
+      "feed-retry-backoff": 0.11,
+      "wrong-field-display-name": 0.13,
+      "own-fake-search": 0.08,
+      "mock-repo-service": 0.09,
+      "tautology-count": 0.05,
+      "order-status-unknown": 0.05,
+      "wrong-field-tax": 0.11,
+      "timer-ticks": 0.12,
+      "wrong-field-error-message": 0.15,
+      "invalidate-called": 0.98
+     }
+    },
+    "holdout": {
+     "n": 14,
+     "tp": 2,
+     "fp": 1,
+     "fn": 0,
+     "tn": 11,
+     "precision": [
+      0.6666666666666666,
+      0.2076549551264879,
+      0.9385096847238394
+     ],
+     "recall": [
+      1.0,
+      0.34237195288961925,
+      1
+     ],
+     "accuracy": [
+      0.9285714285714286,
+      0.6853073044604219,
+      0.9872781138877085
+     ],
+     "specificity": [
+      0.9166666666666666,
+      0.6461140782014047,
+      0.9851352905492264
+     ],
+     "brier": 0.07119285714285714,
+     "per_case": {
+      "h-badge-partial": 0.05,
+      "h-dark-mode": 0.44,
+      "h-existence-receipt": 0.1,
+      "h-convert-vague": 0.03,
+      "h-upload-backoff": 0.08,
+      "h-mock-token": 0.16,
+      "h-wrong-field-eta": 0.09,
+      "h-own-fake-rates": 0.1,
+      "h-wrong-field-favorite": 0.11,
+      "h-xctest-discount": 0.04,
+      "h-analytics-help": 0.97,
+      "h-private-inflight": 0.97,
+      "h-constructed-sort": 0.04,
+      "h-reminder-schedule": 0.85
+     }
+    },
+    "tune": {
+     "n": 7,
+     "tp": 1,
+     "fp": 0,
+     "fn": 0,
+     "tn": 6,
+     "precision": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "recall": [
+      1.0,
+      0.20654329147389294,
+      1
+     ],
+     "accuracy": [
+      1.0,
+      0.6456611570247934,
+      1
+     ],
+     "specificity": [
+      1.0,
+      0.6096569663469354,
+      0.9999999999999999
+     ],
+     "brier": 0.004014285714285715,
+     "per_case": {
+      "cart-total-discount": 0.05,
+      "ui-flow-in-t1": 0.06,
+      "private-state-coupling": 0.98,
+      "existence-only": 0.04,
+      "login-error-alert": 0.1,
+      "restated-name": 0.08,
+      "own-double": 0.06
+     }
+    }
+   }
+  }
+ },
+ "claude_calls": {
+  "used": 40,
+  "saved": 39,
+  "lost": "tip-rounding (output not saved on the first test call)",
+  "model": "claude-sonnet-5-5",
+  "cost_usd_saved_calls": 0.259
+ },
+ "splits": {
+  "dev": "40 hand-written cases, used to design and iterate",
+  "holdout": "14 hand-written cases written after round 2 froze the designs; scored once",
+  "tune": "7 repo cases with SHA-256(id)[0] < 0x55; report split never read"
+ }
+}

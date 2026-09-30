@@ -1,0 +1,9 @@
+@Test("setting a 9am reminder schedules one notification at 9am — catches reminders firing at the wrong hour")
+func schedulesReminder() async {
+  let scheduled = LockIsolated<[DateComponents]>([])
+  let store = TestStore(initialState: Reminders.State()) { Reminders() } withDependencies: {
+    $0.notifications.schedule = { at in scheduled.withValue { $0.append(at) } }
+  }
+  await store.send(.reminderTimeChosen(hour: 9)) { $0.reminderHour = 9 }
+  #expect(scheduled.value == [DateComponents(hour: 9, minute: 0)])
+}

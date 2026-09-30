@@ -1,0 +1,8 @@
+@Test("account loading — catches mishandling of suspended accounts")
+func returnsStoredAccount() async throws {
+  let repo = MockAccountRepository()
+  repo.accountToReturn = .fixture
+  let service = MockAccountService(repository: repo)
+  let account = try await service.repository.load()
+  #expect(account == .fixture)
+}

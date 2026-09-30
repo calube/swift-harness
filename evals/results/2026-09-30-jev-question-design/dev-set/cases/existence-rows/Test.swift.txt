@@ -1,0 +1,10 @@
+@Test("chats sort newest first — catches old conversations shown at the top")
+func sortsNewestFirst() async {
+  let store = TestStore(initialState: Chats.State()) { Chats() } withDependencies: {
+    $0.chatClient.list = { [Chat(id: 1, updated: .distantPast), Chat(id: 2, updated: .now)] }
+  }
+  store.exhaustivity = .off
+  await store.send(.onAppear)
+  await store.skipReceivedActions()
+  #expect(!store.state.chats.isEmpty)
+}

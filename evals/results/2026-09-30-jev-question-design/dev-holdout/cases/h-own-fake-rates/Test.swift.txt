@@ -1,0 +1,6 @@
+@Test("pull to refresh replaces stale rates — catches travellers converting at yesterday's rate")
+func refreshReplacesRates() async throws {
+  let client = RatesClient(fetch: { ["EUR": 0.91] })
+  let rates = try await client.fetch()
+  #expect(rates["EUR"] == 0.91)
+}

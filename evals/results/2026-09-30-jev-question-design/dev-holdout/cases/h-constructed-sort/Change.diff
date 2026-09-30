@@ -1,0 +1,5 @@
++  public static func mergeSort(_ values: [Int]) -> [Int] {
++    guard values.count > 1 else { return values }
++    let mid = values.count / 2
++    return merge(mergeSort(Array(values[..<mid])), mergeSort(Array(values[mid...])))
++  }

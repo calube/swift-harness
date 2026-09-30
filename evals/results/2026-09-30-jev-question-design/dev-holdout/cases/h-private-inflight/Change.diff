@@ -1,0 +1,6 @@
++  public func load() async throws {
++    _isRequestInFlight = true
++    _requestGeneration += 1
++    defer { _isRequestInFlight = false }
++    orders = try await api.orders()
++  }

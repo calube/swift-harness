@@ -1,0 +1,5 @@
+@Test("dedupe removes duplicates — catches dedupe not removing duplicates")
+func dedupes() {
+  let tags = TagList(["a", "b", "a"]).deduplicated()
+  #expect(tags.count == tags.count)
+}

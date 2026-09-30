@@ -1,0 +1,6 @@
+@Test("a message sent 59 seconds ago reads 'just now' — catches timestamps showing '0 minutes ago'")
+func underAMinuteIsJustNow() {
+  let now = Date(timeIntervalSince1970: 1_000)
+  let label = RelativeTime.label(for: now.addingTimeInterval(-59), now: now)
+  #expect(label == "just now")
+}

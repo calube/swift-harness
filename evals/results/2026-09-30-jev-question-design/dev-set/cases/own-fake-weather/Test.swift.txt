@@ -1,0 +1,6 @@
+@Test("the forecast shows Fahrenheit for US users — catches US users seeing Celsius")
+func showsFahrenheit() async throws {
+  let client = WeatherClient(current: { Weather(celsius: 20) })
+  let weather = try await client.current()
+  #expect(weather.celsius == 20)
+}

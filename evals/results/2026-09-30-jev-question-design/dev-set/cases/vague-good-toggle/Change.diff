@@ -1,0 +1,4 @@
++  case .muteTapped:
++    state.isMuted.toggle()
++    state.volume = state.isMuted ? 0 : state.savedVolume
++    return .none
