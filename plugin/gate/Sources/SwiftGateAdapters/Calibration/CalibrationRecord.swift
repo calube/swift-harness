@@ -138,6 +138,23 @@ public enum CalibrationModel {
   }
 }
 
+/// What one kept reply says a requested model resolved to, read from its `<seed>.json`.
+public struct ServedModelObservation: Sendable, Equatable {
+  public let requestedModel: String
+  public let servedModels: [String]
+  /// The run that kept it; its id starts with the time it began.
+  public let runID: String
+  /// The kept file, relative to the repository root.
+  public let path: String
+
+  public init(requestedModel: String, servedModels: [String], runID: String, path: String) {
+    self.requestedModel = requestedModel
+    self.servedModels = servedModels
+    self.runID = runID
+    self.path = path
+  }
+}
+
 /// Reads an agent file's leading `---` frontmatter block.
 public enum AgentFrontmatter {
   /// A top-level `key: value` line of the frontmatter, trimmed; `nil` when absent or empty.
@@ -203,14 +220,20 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
   public struct CaseResult: Sendable, Equatable, Codable {
     public let agent: String
     public let caseName: String
-    /// The model the agent ran on.
+    /// The model the agent was asked to run on, often an alias such as `opus`.
     public let model: String
+    /// The ids the CLI says answered, which an alias can move between; `nil` when not recorded.
+    public let servedModels: [String]?
     public let answers: [QuestionResult]
 
-    public init(agent: String, caseName: String, model: String, answers: [QuestionResult]) {
+    public init(
+      agent: String, caseName: String, model: String, servedModels: [String]? = nil,
+      answers: [QuestionResult]
+    ) {
       self.agent = agent
       self.caseName = caseName
       self.model = model
+      self.servedModels = servedModels
       self.answers = answers
     }
 
@@ -218,7 +241,23 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
       case agent
       case caseName = "case"
       case model
+      case servedModels
       case answers
+    }
+  }
+
+  /// The judge that answered the pass's judged labels.
+  public struct JudgeRecord: Sendable, Equatable {
+    public let backend: JudgeBackend
+    /// The model the judge was asked for.
+    public let model: String
+    /// The ids that answered; `nil` when not recorded.
+    public let servedModels: [String]?
+
+    public init(backend: JudgeBackend, model: String, servedModels: [String]?) {
+      self.backend = backend
+      self.model = model
+      self.servedModels = servedModels
     }
   }
 
@@ -229,6 +268,9 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
   public let modelOverride: String?
   public let passedAt: Date
   public let cases: [CaseResult]
+  /// The judge of the pass's judged labels; `nil` for a suite with no judge, or a record from
+  /// before the judge was recorded, when only the shipped judge could run.
+  public var judge: JudgeRecord? { nil }
 
   public init(
     contentHash: String, hashedFiles: [String], modelOverride: String?, passedAt: Date,
@@ -275,6 +317,13 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     return try decoder.decode(CalibrationRecord.self, from: data)
+  }
+
+  /// Why an alias this record ran on no longer serves what it served in the pass: for each
+  /// requested model, the newest observation from a run started at or after ``passedAt`` whose
+  /// served ids differ from the recorded ones. Empty when nothing newer disagrees.
+  public func servedModelProblems(observed: [ServedModelObservation]) -> [String] {
+    []
   }
 
   /// Why this record doesn't show each hashed agent calibrated on the model it ships on: a

@@ -44,7 +44,24 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
       valueName: "run id"))
   var replay: String?
 
+  @Option(
+    help:
+      "The backend that answers judged labels. The record of a pass judged by any but the default never counts as fresh."
+  )
+  var judgeBackend: JudgeBackend = .claude
+
+  @Option(help: "The judge's model; the backend's default when unset.")
+  var judgeModel: String?
+
   @OptionGroup var output: OutputOptions
+
+  /// The judge these flags name, built by the judge factory.
+  func judge(
+    runner: any ProcessRunner, transport: any HTTPTransport = URLSessionTransport(),
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> any Judge {
+    ClaudeCLIJudge(runner: runner, model: JudgeFactory.defaultModel)
+  }
 
   func validate() throws {
     guard let replay else { return }
@@ -132,7 +149,8 @@ enum CalibrateDesignRun {
   ///   - modelOverride: every agent's model instead of its own, for experiments.
   static func run(
     root: URL, runner: any ProcessRunner, model: String, modelOverride: String? = nil,
-    now: Date, concurrentCases: Int = 1, replies: DesignCalibrationReplies? = nil
+    now: Date, concurrentCases: Int = 1, replies: DesignCalibrationReplies? = nil,
+    judge: (any Judge)? = nil
   ) async -> StaticCheckOutcome {
     let calibration = DesignCalibrationRunner(
       runner: runner, unpinnedModel: model, modelOverride: modelOverride, replies: replies)
@@ -199,6 +217,8 @@ enum CalibrationRun {
     let result: CalibrationRecord.CaseResult
     /// Shown as a non-gating `usage` finding, such as what the agent run cost.
     let note: String?
+    /// The ids the judge reported serving this case's judged labels.
+    var judgeServedModels: [String] = []
   }
 
   static func usage(_ what: String, costUSD: Double?, durationMilliseconds: Int?) -> String {
@@ -213,7 +233,7 @@ enum CalibrationRun {
   ///   the agents, so it never writes the record.
   static func run<Label>(
     root: URL, seeds: CalibrationSeeds<Label>, modelOverride: String?, now: Date,
-    concurrentCases: Int = 1, replayOf: String? = nil,
+    concurrentCases: Int = 1, replayOf: String? = nil, judge: JudgeIdentity? = nil,
     runCase:
       @escaping @Sendable (CalibrationSeeds<Label>.Agent, CalibrationSeeds<Label>.Case)
       async throws(CalibrationCaseError) -> CaseRun

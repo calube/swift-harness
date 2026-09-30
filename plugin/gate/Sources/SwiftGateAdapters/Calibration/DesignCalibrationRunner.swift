@@ -315,6 +315,18 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
     }
   }
 
+  /// Every kept `<seed>.json` under `root`'s runs, and each one that couldn't be read, by path.
+  public struct Observations: Sendable, Equatable {
+    public let observations: [ServedModelObservation]
+    public let unreadable: [String]
+  }
+
+  /// What every kept run under `root` says each requested model resolved to. No call is made:
+  /// these are the served ids the CLI reported when the replies were kept.
+  public static func observations(root: URL) -> Observations {
+    Observations(observations: [], unreadable: [])
+  }
+
   func stored(agent: String, seed: String) throws(CalibrationCaseError) -> Stored {
     let replyPath = replyPath(agent: agent, seed: seed)
     guard let data = try? Data(contentsOf: file(agent: agent, seed: seed, "txt")) else {
@@ -353,13 +365,15 @@ public struct DesignCalibrationRunner: Sendable {
     public let servedModels: [String]
     /// Where the reply is kept, when the run keeps or replays replies.
     public let replyPath: String?
+    /// The ids the judge reported serving its judged labels; empty when it judged none.
+    public internal(set) var judgeServedModels: [String] = []
   }
 
   public static let judgeSubjectDescription =
     "the output a design agent returned for a design task"
 
   private let runner: any ProcessRunner
-  private let judge: ClaudeCLIJudge
+  private let judge: any Judge
   private let executable: String
   private let timeout: Duration
   /// The model for an agent whose frontmatter names none.
@@ -373,7 +387,7 @@ public struct DesignCalibrationRunner: Sendable {
     runner: any ProcessRunner, unpinnedModel: String = CalibrationModel.unpinned,
     modelOverride: String? = nil, judgeModel: String = JudgeFactory.defaultModel,
     executable: String = "claude", timeout: Duration = .seconds(900),
-    replies: DesignCalibrationReplies? = nil
+    replies: DesignCalibrationReplies? = nil, judge: (any Judge)? = nil
   ) {
     self.runner = runner
     self.unpinnedModel = unpinnedModel
