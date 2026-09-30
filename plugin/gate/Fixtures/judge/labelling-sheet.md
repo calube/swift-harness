@@ -1,5 +1,11 @@
 # Test-quality labelling sheet
 
+When every answer is in, turn the sheet into `labels.json` from the repository root with:
+
+```sh
+node tests/judge_labelling_sheet.mjs apply
+```
+
 You are labelling blind: each case shows only a test, the production change it covers, and
 the tier the test lives in today, exactly as the judge sees them. Case numbers and keys say
 nothing about the answer, and the order is arbitrary.
@@ -16,7 +22,8 @@ How to fill it in:
 - Don't edit anything outside the answer lines; the `key` on each case heading is how the
   answers find their case.
 
-When done, the answers are turned into `labels.json` with `labeller: "person"`.
+The command records every answered case with `labeller: "person"` and refuses the whole sheet
+if any answer isn't one of its question's options.
 
 ## Case 1 · key 02bc0469
 
