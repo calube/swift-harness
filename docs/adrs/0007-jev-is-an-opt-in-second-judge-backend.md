@@ -1,8 +1,7 @@
 # 0007. Jev is an opt-in second judge backend
 
-Status: proposed, 2026-09-30, with the Jev judge backend design
-(`docs/designs/2026-09-30-jev-judge-backend-design.md`). The user decides the open questions in its §12
-before any task that depends on them starts.
+Status: accepted by the user, 2026-09-30, with the Jev judge backend design
+(`docs/designs/2026-09-30-jev-judge-backend-design.md`) and the 5 decisions in its §12.
 
 ## Context
 
@@ -27,14 +26,21 @@ Jev becomes a second backend behind the existing `Judge` protocol, as a `JevJudg
 question sets, policy and calibration code don't change shape.
 
 Claude stays the default backend. Jev is opt-in per repository, because it sends test source, diffs and comments
-to a third party. Its API key comes from the environment and never from config.
+to a third party: `backend = "jev"` needs `send_to = "api.typesafe.ai"` beside it. Its API key comes from
+`TYPESAFE_API_KEY` and never from config.
 
-Jev findings are advisory until Jev meets the evals design's bar on the labelled sets: at least 30 labelled
-cases per blocking question, with true-positive and true-negative rates reported against those labels. The code
-enforces this: a Jev answer can't make the `ready` tier RED until a later decision turns that on.
+Jev may block the `ready` tier on its own, but only for a question with a passing calibration. For each
+question id and pinned Jev model, the code checks the committed Jev recording against the evals design's bar.
+The bar is at least 30 person-labelled cases, and true-positive and true-negative rates of at least 0.8 and at
+least Claude's, at the repository's block threshold. Without that, the finding is advisory with a note saying why. A new Jev model makes
+the calibration stale until someone records it again.
+
+A Jev finding that blocks carries a reason Claude writes about that subject. An advisory Jev finding carries a
+template reason: the question, the probability and the model.
 
 A general `swiftgate judge ask` takes a question set and subjects as JSON, so other callers, the eval runner
-among them, can ask the same judge instead of building their own.
+among them, can ask the same judge instead of building their own. The eval runner trials it on 1 rubric, split
+into 1 Noul per clause, before anything else moves.
 
 ## Consequences
 
@@ -42,8 +48,9 @@ among them, can ask the same judge instead of building their own.
   a repository that doesn't opt in.
 - Thresholds for Jev come from an A/B on the 22-case test-quality set and the design calibration seeds. A
   threshold tuned on Claude never carries over, because Jev's probabilities differ in shape.
-- A Jev finding has no model-written reason. Its message states the question, the probability and the model
-  version, which is enough for an advisory note but not for a blocking one.
+- A blocking Jev finding still costs 1 Claude call, for its reason. Claude runs only on those findings.
+- Jev can't block anything until a person labels at least 30 cases per blocking question; the 22 cases the
+  tuning agent labelled don't count.
 - The cache key and every recording carry the pinned Jev model id, so a new Jev release re-asks, and the
   calibration record shows which judge scored it.
 - `swiftgate` gains its first HTTP client. It lives in 1 adapter behind a protocol, and tests replay captured
