@@ -46,8 +46,12 @@ into 1 Noul per clause, before anything else moves.
 
 - A repository can try Jev with 1 config line and an API key, and turn it off the same way. Nothing changes for
   a repository that doesn't opt in.
-- Thresholds for Jev come from an A/B on the 22-case test-quality set and the design calibration seeds. A
-  threshold tuned on Claude never carries over, because Jev's probabilities differ in shape.
+- `swiftgate judge bench` compares pinned Sonnet 5.5 (`claude-sonnet-5-5`) with pinned Jev on the same labelled
+  datasets, k times, and commits a versioned result with every number's n and interval. Jev's thresholds come
+  from each dataset's tune split, never from the cases the benchmark reports. A threshold tuned on Claude never
+  carries over, because Jev's probabilities differ in shape.
+- The 22-case test-quality set can't rank the 2 backends: Sonnet 5.5 scores at or near 1.00 on it. A harder,
+  person-labelled set has to exist before the benchmark can say which backend is better.
 - A blocking Jev finding still costs 1 Claude call, for its reason. Claude runs only on those findings.
 - Jev can't block anything until a person labels at least 30 cases per blocking question; the 22 cases the
   tuning agent labelled don't count.

@@ -54,7 +54,8 @@ The seam fits Jev: 1 subject and 1 question set become 1 request, which is the b
 | Blocking | Jev blocks alone for a question only when the code finds a passing block calibration for that question and the pinned model; otherwise its finding is advisory | §7 |
 | A general entry point | `swiftgate judge ask`, question set and subjects as JSON in, answers as JSON out | §8 |
 | Context | the caller slices; the adapter refuses an oversized state and never trims it | §9 |
-| Thresholds | set per backend from an A/B on the labelled sets | §10 |
+| Benchmark | `swiftgate judge bench` runs pinned Sonnet 5.5 and pinned Jev on the same labelled datasets, k times, and writes a versioned JSON that `bench render` turns into a comparison page | §10 |
+| Thresholds | set per backend from the benchmark's tune split, never from the cases it reports | §10.5 |
 | Adoption order | test quality, then the commit comment judge, then design calibration | §11 |
 
 ## 4. The `JevJudge` adapter
@@ -85,9 +86,9 @@ in the same request, since Jev reads the state once and answers each question in
 | `.choice(options)` | Choice | `{option: null}` for each option |
 | `.score(levels)` | Score | the levels in order, worst first, as the question set lists them |
 
-The question text goes to Jev unchanged, so an A/B compares the same questions on both backends. The tier
+The question text goes to Jev unchanged, so the benchmark compares the same questions on both backends. The tier
 question carries its option descriptions in its text today. Moving them into Choice `criteria` would be a new
-question set version (`test-quality@2`) and a new calibration pass, so it waits for A/B data (§12, decision 5).
+question set version (`test-quality@2`) and a new calibration pass, so it waits for benchmark data (§12, decision 5).
 
 The subject's file path doesn't go into the state. A question refers to `subject` and `context` by those names.
 
@@ -134,10 +135,12 @@ own docs say to pin the version you tuned a threshold on.
 
 ### 4.5 Cost and latency accounting
 
-The A/B (§10) needs cost and latency per call. `Judge` gains a `measuredAnswer` requirement returning answers
-plus a `JudgeUsage` (input and output tokens, cost in USD, wall time, the served model). A protocol extension
+The benchmark (§10) needs cost, tokens, latency and the served model per call. `Judge` gains a `measuredAnswer`
+requirement returning answers plus a `JudgeUsage` (input and output tokens, cost in USD, wall time, the
+backend's own reported time when it has one, the served model). A protocol extension
 gives every judge a default with no usage, so `FakeJudge` and existing callers don't change. Claude reads
-`total_cost_usd` and `duration_ms` from its result envelope; Jev reads `usage.input_tokens` and prices it at
+`total_cost_usd`, `duration_ms`, `duration_api_ms`, `usage` and the model key of `modelUsage` from its result
+envelope; Jev reads `usage.input_tokens` and prices it at
 the pinned model's per-token rate, kept beside the pin. `CachingJudge` reports a cache hit as 0 cost.
 
 ## 5. What leaves the machine, and the opt-in
@@ -191,7 +194,7 @@ it passes when all of these hold:
 
 1. The recording answers the check's question set version (`test-quality@1`), and its identity is `jev` with the
    model id the config pins.
-2. At least 30 cases carry a person's label for that question, with at least 10 where the flag should fire and
+2. At least 30 cases in the report split (§10.5) carry a person's label for that question, with at least 10 where the flag should fire and
    10 where it shouldn't, so both rates rest on real counts. A label from an agent doesn't count.
 3. At the repository's `block_threshold`, Jev's true-positive and true-negative rates on those cases are each at
    least 0.8, and at least Claude's rates from `recording.json` on the same cases.
@@ -222,14 +225,15 @@ set version, `23 of 30` person labels, a rate under 0.8, or a rate under Claude'
 A new pin makes the calibration stale the same way calibration freshness works for agents: the recording's
 model no longer matches, so every Jev finding falls back to advisory until someone re-records it and the rates
 pass again. A new question set version does the same. `self-test --judge` fails with
-`swiftgate.self-test.judge-stale` meanwhile (§10.3). A label change takes effect at once, since the policy
+`swiftgate.self-test.judge-stale` meanwhile (§10.8). A label change takes effect at once, since the policy
 computes the calibration each run.
 
 ### 7.4 Growing the labelled set
 
 Today's 22 cases carry the tuning agent's labels, a bias the sub-project 2 review names. The set grows to at
-least 30 person-labelled cases for each blocking question, `fails-if-broken` and `asserts-implementation`, with
-at least 10 on each side.
+least 30 person-labelled cases in the report split for each blocking question, `fails-if-broken` and
+`asserts-implementation`, with at least 10 on each side. The tune split (§10.5) takes about 1 case in 3, so the
+whole set needs about 45 person-labelled cases.
 
 - Each case in `labels.json` gains `labeller`, `person` or `agent`. A case without it reads as `agent`, so the
   existing 22 count only once a person relabels them.
@@ -279,40 +283,122 @@ unrelated text grows, so a smaller state is better even inside the limit.
   and refuses a state over 30K tokens with `backend("state too large: <n> estimated tokens; slice it")`. A silent
   cut could drop the line a question asks about.
 - **Callers slice.** `TestJudgeCheck` already caps context at 12,000 characters. The comment judge sends 6 lines.
-  Design calibration sends 1 agent output; the A/B records its largest state.
+  Design calibration sends 1 agent output; the benchmark records the largest state of each dataset.
 - **Eval rubrics need real slicing.** A digest can reach 60,000 characters, plus 20,000 of final message and
   20,000 of diff. Each clause gets only its slice: the turns after the first deny for an evasion clause, the final
   message for a claims clause. Clauses a regex or the hook log can decide move to code graders.
 
-## 10. Calibration, thresholds and freshness
+## 10. Benchmark, calibration and freshness
 
-### 10.1 The A/B
+### 10.1 What the benchmark compares
 
-Both backends answer the same labelled sets, live, once:
+2 backends, each at a pinned id: Claude at `claude-sonnet-5-5`, never the `sonnet` alias, and Jev at
+`jev-1.13.0`. Each run records the backend, the requested model id and the served model version: the reply's
+`model` field for Jev, the `modelUsage` key of the result envelope for Claude. A served version that differs
+from the one the run started with fails the run, since the answers would mix 2 models. The gate's own default,
+`sonnet`, doesn't change here; the benchmark and the committed recordings use the pinned id.
 
-1. The `test-quality@1` set, once it holds 30 person labels per blocking question (§7.4), through
-   `self-test --judge --judge-backend <b> --record`.
-2. The design calibration seeds' judged labels, through `calibrate design --judge-backend <b> --replay <run id>`.
-   `calibrate design` doesn't keep agent outputs today. It starts writing each reply under its run directory, and
-   `--replay` judges those stored replies without running the agents again, so only the judge differs.
-3. The 2 comment questions have no labelled set. The A/B reports agreement with Claude on the staged comments
-   of recent commits, and the plan doesn't use that to set thresholds.
+### 10.2 Datasets, in order of readiness
 
-Per backend and question, it reports precision, recall (the true-positive rate), the true-negative rate, latency
-p50 and p95 per subject, and cost per subject. It sweeps thresholds from 0.5 to 0.95 in steps of 0.05 for each
-flagged question and reports the lowest block threshold whose precision is at least the baseline. The results go
-to `evals/results/<date>-judge-backend-ab/`, and the Jev recording and baseline go beside Claude's.
+| # | Dataset | Questions | Labels | Ready |
+|---|---|---|---|---|
+| 1 | `test-quality@1`, `plugin/gate/Fixtures/judge/` | all 4 | 22 cases the tuning agent labelled, then the harder person-labelled set (§10.3) | now as a smoke set; the harder set after the §7.4 labelling pass. The page names the labeller mix |
+| 2 | The comment judge, `plugin/gate/Fixtures/judge-comments/` | `loses-fact`, `right-size` | a person's, gathered as below | after a labelling pass |
+| 3 | `calibrate design`'s judged labels, from a run's stored replies | each seed's judged questions | the expected option each seed's label file names | once `calibrate design` keeps agent replies |
+| 4 | 1 eval rubric, split into 1 Noul per clause | 1 question per clause | a person's, per clause, on transcript slices (§9) | when the evals owners run their trial (§8) |
 
-Jev's thresholds come from this data. A threshold tuned on Claude never carries over: a Noul probability and a
-Choice probability for the same question aren't comparable, per TypeSafe's own jaggedness notes.
+**Gathering comments.** A worker collects comments that commits added to Swift files, from this repo's history and
+`examples/SampleApp`. It samples up to 80, half from lines a `comments.*` rule flags and half from lines no rule
+flags, so both answers appear. Each case holds the comment and the 6 lines after it, the same state the hook
+judge sends. The person labels them blind, under neutral numbers, on the same kind of sheet as §7.4. The dataset
+counts only once each question has at least 30 cases in the report split and 10 on each side.
 
-### 10.2 Recordings per backend
+**Format.** Every dataset reduces to 1 JSON shape: the question set, or its versioned id for a built-in set, and
+cases with `id`, `source`, `context`, an optional `declaredTier`, per-question `labels` and a `labeller`. The
+dataset hash is SHA-256 over its canonical form, labels included, so a relabel is a new dataset.
+
+### 10.3 The 22-case set has hit its ceiling
+
+A live baseline on 2026-09-30 ran `self-test --judge --judge-backend claude` at `claude-sonnet-5-5` 3 times,
+with 4 requests at a time, about 30 s each. Runs 1 and 2 scored 1.00 precision and recall on all 4 questions.
+Run 3 missed 1 case on `name-specificity`, a recall of 0.88 (7/8). With Sonnet at the ceiling and so few
+positives, the set can't rank 2 backends at the top: both can score 1.00 while differing on cases the set lacks.
+The self-test JSON reports only precision, recall and their counts. It has no per-case probability, latency or
+cost, so Brier, reliability, latency and cost need `measuredAnswer` (§4.5) and the benchmark's per-case raw
+answers first.
+
+The benchmark therefore adds a harder, person-labelled test-quality set, built with the §7.4 labelling pass:
+
+- **Near misses.** Tests that assert something true but miss the behaviour their name claims; tests that mock 1
+  collaborator too many; tests whose only assertion is on a value the test itself built.
+- **Ambiguous tiers.** Tests on the boundary between host logic and rendering, such as a reducer test that
+  reads a formatted string, so `tier` has more than 2 positives.
+- **Balance.** At least 10 positives and 10 negatives per question in the report split, and at least 30 cases
+  per blocking question, which is also what the block calibration in §7 needs.
+
+The 22 cases stay as a smoke set that every backend must pass; the harder set is the one that ranks.
+
+### 10.4 Metrics
+
+Every metric is per question and per backend, and every number carries its n.
+
+| Metric | Definition |
+|---|---|
+| Counts | true and false positives and negatives at the configured threshold, with the flag firing as the positive class |
+| Precision, recall, true-positive rate, true-negative rate | from those counts; recall and the true-positive rate are the same number, shown once |
+| Accuracy | the most probable option against the label, for binary, Choice and Score questions alike |
+| Brier score | the mean over cases of the squared error summed over options, from the full distribution |
+| Reliability | the flagged probability in 10 equal bins: mean predicted, observed rate and count per bin, plus the expected calibration error. Thresholds gate, so a backend whose 0.9 isn't right 9 times in 10 can't set one |
+| Stability | over k repeats, k at least 3: the share of cases whose decision or most probable option flips, and the mean standard deviation of the flagged probability |
+| Agreement | Cohen's κ between the 2 backends on each question's decision, from the majority over repeats |
+| Latency | wall time p50 and p95 per request, and per case (all requests to answer 1 case once), plus the backend's own reported time |
+| Cost and tokens | input and output tokens per case, cost per case, and cost per 1,000 judgments, where 1 judgment is 1 question for 1 case |
+
+The benchmark sends each case's requests 1 at a time by default, so queueing doesn't pollute latency, and never
+reads or writes the judge cache, so repeats measure the model and not the cache.
+
+### 10.5 Honesty rules
+
+- **n beside every number.** The page never shows a rate without its count, as in `0.91 (10/11)`.
+- **Intervals.** Proportions carry 95% Wilson intervals. Brier, the calibration error, κ and each difference
+  between backends carry 95% intervals from a paired bootstrap over cases, 2,000 resamples with a fixed seed.
+- **Small sets say so.** The 22-case set has few positives per question: 5 for `fails-if-broken`, 2 for `tier`,
+  8 for `name-specificity` and 3 for `asserts-implementation`. A perfect 5/5 recall has a 95% interval from 0.57
+  to 1.00, and 3/3 runs from 0.44 to 1.00. The page states that whenever the interval of a difference crosses 0.
+- **No tuning on reported cases.** A fixed rule splits every dataset: a case whose SHA-256 of its id starts
+  below `0x55` is in the tune split, about 1 in 3; the rest are in the report split. Threshold sweeps read only
+  the tune split. Every headline metric, and the block calibration in §7, reads only the report split. A
+  threshold chosen on the report split is the mistake this rule exists to stop.
+
+### 10.6 Commands and output
+
+```
+swiftgate judge bench --dataset <path|built-in id> --backend claude:claude-sonnet-5-5 --backend jev:jev-1.13.0
+                      [--repeats 3] [--concurrency 1] --out <file>
+swiftgate judge bench-render <file> [--out <file.md>]
+```
+
+`bench` writes 1 versioned JSON: `schemaVersion`, the `swiftgate` version, the start time, the dataset id, hash
+and split counts, the labeller mix, and per backend its identity and every run's raw answers with usage, per
+repeat and per case. It also writes the metrics section, computed by pure domain code from those raw answers.
+`bench-render` recomputes the metrics from the raw answers and refuses a file whose stored metrics differ. It
+prints a markdown comparison page: a table per question with both backends side by side, the intervals, the
+reliability bins, and every case where the backends disagree, with both probabilities.
+
+The measuring lives in `swiftgate`, not in a script, so the eval runner and the gate share 1 definition of every
+metric. Results go under `evals/results/<date>-judge-benchmark/`: the JSON and the rendered page, committed.
+
+### 10.7 Recordings per backend
 
 `plugin/gate/Fixtures/judge/` holds 1 recording today. It becomes 1 per backend: `recording.json` stays
-Claude's, and `recording-jev.json` and `baseline-jev.json` hold Jev's. `self-test --judge` scores every
-recording that exists, each against its own baseline, offline.
+Claude's, recorded again at `claude-sonnet-5-5`, and `recording-jev.json` and `baseline-jev.json` hold Jev's.
+`self-test --judge` scores every recording that exists, each against its own baseline, offline. The block
+calibration (§7) reads these recordings, not the benchmark JSON.
 
-### 10.3 Freshness
+Jev's thresholds come from the tune split. A threshold tuned on Claude never carries over: a Noul probability and
+a Choice probability for the same question aren't comparable, per TypeSafe's own jaggedness notes.
+
+### 10.8 Freshness
 
 - A recording records the identity that answered it, pinned model included. `self-test --judge` fails with
   `swiftgate.self-test.judge-stale` when a recording's model isn't its backend's current default pin, so a pin
@@ -320,6 +406,8 @@ recording that exists, each against its own baseline, offline.
 - `last-pass.json` for `calibrate design` records the agents' models but not the judge's. It gains
   `judge: {backend, model}`. The push tier's `calibration-freshness.wrong-model` also covers a record whose judge
   isn't the command's default judge, so a Jev-judged pass never stands in for the shipped one.
+- A benchmark result names its dataset hash and both served versions, so a reader can tell whether a comparison
+  is stale without running it again.
 
 ## 11. Order of adoption
 
@@ -329,7 +417,7 @@ recording that exists, each against its own baseline, offline.
 |---|---|---|---|
 | 1 | `test-quality@1` (`swiftgate judge`, `check --tier ready`) | `fails-if-broken`, `asserts-implementation`: Noul. `tier`: Choice. `name-specificity`: Score | Typed already, and the only question set with a labelled set and a baseline |
 | 2 | The commit comment judge (`comments@1`) | `loses-fact`, `right-size`: Noul | Latency-bound in the hook (15 s, at most 6 comments) and advisory only. A fast backend helps most here |
-| 3 | `calibrate design`'s judged labels | Choice | Choice plus a threshold already. The known flaky answers near p of 0.55 and 0.6 are the uncertain band the A/B measures |
+| 3 | `calibrate design`'s judged labels | Choice | Choice plus a threshold already. The known flaky answers near p of 0.55 and 0.6 are the uncertain band the benchmark's reliability bins measure |
 
 ### 11.2 Later candidates, not in the plan
 
@@ -362,7 +450,7 @@ Each needs its own labelled set before it counts.
 | 2 | Do the eval runner's `llm` graders move onto `swiftgate judge ask`? | Build `ask` now. The evals owners trial it on 1 rubric split into 1 Noul per clause before anything else moves (§8) |
 | 3 | How does a Jev finding get its reason? | A template reason for advisory findings. Every finding that would block, a calibrated Jev block included, gets a Claude-written reason (§6) |
 | 4 | What does the egress opt-in look like? | `backend = "jev"` needs `send_to = "api.typesafe.ai"`; the key comes from `TYPESAFE_API_KEY` (§5) |
-| 5 | Should the tier question's option descriptions move into Choice `criteria`? | Not for the A/B: `test-quality@1` stays as is, and `test-quality@2` comes only if Jev's `tier` metrics fall short (§4.1) |
+| 5 | Should the tier question's option descriptions move into Choice `criteria`? | Not for the benchmark: `test-quality@1` stays as is, and `test-quality@2` comes only if Jev's `tier` metrics fall short (§4.1) |
 
 ## 13. Testing the harness
 
@@ -378,5 +466,8 @@ Each needs its own labelled set before it counts.
   recording, with a recording from another model, and with 29 person labels. It is major with a passing
   calibration for that question and model, and a passing calibration for `asserts-implementation` alone doesn't
   unlock `fails-if-broken`. The same answer from a Claude identity is major, as today.
+- **Benchmark metrics.** Pure domain tests pin each metric on small inputs worked by hand: a Brier score, a
+  Wilson interval, κ for 2 known decision lists, a flip share over 3 repeats, a bin table. The bootstrap with a
+  fixed seed gives the same interval twice.
 - **Offline self-test.** `self-test --judge` scores `recording-jev.json` against `baseline-jev.json` with no
   network.
