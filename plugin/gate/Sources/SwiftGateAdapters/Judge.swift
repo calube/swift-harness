@@ -2,12 +2,15 @@ import Foundation
 import SwiftGateDomain
 
 public enum JudgeError: Error, Sendable, Equatable {
-  /// The backend exists in config but can't be used yet (Jev), or config disables the judge.
+  /// The backend can't be used as configured (Jev without its key), or config disables the judge.
   case notConfigured(String)
   /// The backend ran and reported an error (API error, bad model, budget).
   case backend(String)
   /// The backend's reply didn't match the question set.
   case malformedReply(String)
+  /// The subject's state is over the backend's size limit, by the adapter's estimate or by the
+  /// backend's own refusal. The caller slices the state; the adapter never trims it.
+  case stateTooLarge(estimatedTokens: Int)
   case process(ProcessRunnerError)
 
   /// The judge failing says nothing about the code.
@@ -46,13 +49,17 @@ public enum JudgeFactory {
   public static let defaultModel = "sonnet"
 
   public static func make(
-    _ config: JudgeConfig, runner: any ProcessRunner, cacheDirectory: URL?
+    _ config: JudgeConfig, runner: any ProcessRunner, cacheDirectory: URL?,
+    transport: any HTTPTransport = URLSessionTransport(),
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> (any Judge)? {
-    guard case .enabled(let backend, _, let model) = config else { return nil }
+    guard case .enabled(let backend, _, let configured) = config else { return nil }
+    let model = configured ?? backend.pinnedModel
     let judge: any Judge =
       switch backend {
       case .claude: ClaudeCLIJudge(runner: runner, model: model ?? defaultModel)
-      case .jev: JevJudge(model: model ?? "unset")
+      case .jev:
+        JevJudge(model: model ?? JevPin.model, transport: transport, environment: environment)
       }
     guard let cacheDirectory else { return judge }
     return CachingJudge(judge, cache: FileJudgeCache(directory: cacheDirectory))
@@ -241,20 +248,316 @@ public enum ClaudeJudgeReply {
 
 // MARK: - Jev
 
-/// TypeSafe AI's Jev decision model (spec §7.4). Its HTTP request schema, pricing and rate limits
-/// are unverified, so the adapter is a placeholder that always reports BLOCKED; selecting
-/// `backend = "jev"` is accepted by config so the choice is visible, not silently ignored.
+/// TypeSafe AI's Jev decision model over HTTP (design §4). Every question over 1 subject goes in 1
+/// request, since Jev reads the state once and answers each question in parallel.
 public struct JevJudge: Judge {
-  public let identity: JudgeIdentity
+  /// Jev's state limit is 32K tokens with the longest question; 30K leaves room for the question.
+  public static let maxStateTokens = 30_000
 
-  public init(model: String) {
+  public let identity: JudgeIdentity
+  private let transport: any HTTPTransport
+  private let key: APIKey?
+  private let clock: any RetryClock
+  private let timeout: Duration
+
+  public init(
+    model: String, transport: any HTTPTransport, environment: [String: String],
+    clock: any RetryClock = LiveRetryClock(), timeout: Duration = .seconds(30)
+  ) {
     identity = JudgeIdentity(backend: JudgeBackend.jev.rawValue, model: model)
+    self.transport = transport
+    self.key = environment[JevPin.keyVariable].flatMap { $0.isEmpty ? nil : APIKey($0) }
+    self.clock = clock
+    self.timeout = timeout
   }
 
   public func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
   {
-    throw .notConfigured("the Jev judge backend is not implemented yet; use backend = \"claude\"")
+    try await measuredAnswer(subject, questions: questions).answers
+  }
+
+  /// Jev reports tokens but no cost or server time, so cost is input tokens at the pin's price,
+  /// and `nil` for any other model, whose price this harness doesn't know.
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
+    guard let key else {
+      throw .notConfigured("set \(JevPin.keyVariable) to use the Jev judge backend")
+    }
+    let body = JevRequest.body(subject, questions: questions, model: identity.model)
+    let tokens = JevRequest.estimatedStateTokens(subject, questions: questions)
+    guard tokens <= Self.maxStateTokens else { throw .stateTooLarge(estimatedTokens: tokens) }
+    let start = clock.now()
+    let response: HTTPResponse
+    do {
+      response = try await send(body, key: key, start: start)
+    } catch {
+      throw error.redacting(key)
+    }
+    let wall = JudgeUsage.milliseconds(clock.now() - start)
+    do {
+      return try JevReply.parse(
+        response, for: questions, model: identity.model, estimatedTokens: tokens,
+        wallMilliseconds: wall)
+    } catch {
+      throw error.redacting(key)
+    }
+  }
+
+  /// Retries 429 and 529 with exponential backoff, honouring `retry-after`, until the timeout.
+  private func send(_ body: Data, key: APIKey, start: Duration) async throws(JudgeError)
+    -> HTTPResponse
+  {
+    guard let url = URL(string: JevPin.endpoint) else {
+      throw .notConfigured("the Jev endpoint \(JevPin.endpoint) is not a URL")
+    }
+    var backoff = Duration.seconds(1)
+    var attempts = 0
+    while true {
+      let remaining = timeout - (clock.now() - start)
+      let request = HTTPRequest(
+        method: "POST", url: url,
+        headers: ["Authorization": "Bearer \(key.value)", "Content-Type": "application/json"],
+        body: body, timeout: remaining)
+      let response: HTTPResponse
+      do {
+        response = try await transport.send(request)
+      } catch {
+        switch error {
+        case .timedOut:
+          throw .backend("Jev did not answer within the \(Self.seconds(timeout)) timeout")
+        case .unreachable(let reason):
+          throw .backend("Jev is unreachable: \(reason)")
+        }
+      }
+      attempts += 1
+      guard response.status == 429 || response.status == 529 else { return response }
+      let wait = Self.retryAfter(response) ?? backoff
+      guard clock.now() - start + wait < timeout else {
+        throw .backend(
+          "Jev answered \(response.status) (rate limited or overloaded) \(attempts) times "
+            + "within the \(Self.seconds(timeout)) timeout")
+      }
+      await clock.sleep(for: wait)
+      backoff *= 2
+    }
+  }
+
+  private static func retryAfter(_ response: HTTPResponse) -> Duration? {
+    guard let value = response.headers["retry-after"], let seconds = Double(value), seconds >= 0
+    else { return nil }
+    return .milliseconds(Int(seconds * 1000))
+  }
+
+  private static func seconds(_ duration: Duration) -> String {
+    "\(duration.components.seconds) s"
+  }
+}
+
+/// The key, kept out of every description so interpolating a judge or its state can't print it.
+struct APIKey: Sendable, CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+  let value: String
+
+  init(_ value: String) { self.value = value }
+
+  var description: String { "<redacted>" }
+  var debugDescription: String { description }
+  var customMirror: Mirror { Mirror(self, children: []) }
+}
+
+extension JudgeError {
+  /// Replaces the key wherever a message quotes it, as a server echoing the request might.
+  fileprivate func redacting(_ key: APIKey) -> JudgeError {
+    func scrub(_ text: String) -> String { text.replacing(key.value, with: "<redacted>") }
+    return switch self {
+    case .notConfigured(let message): .notConfigured(scrub(message))
+    case .backend(let message): .backend(scrub(message))
+    case .malformedReply(let message): .malformedReply(scrub(message))
+    case .stateTooLarge, .process: self
+    }
+  }
+}
+
+/// Builds Jev's request body (design §4.1).
+enum JevRequest {
+  static func state(_ subject: JudgeSubject, questions: JudgeQuestionSet) -> [String: Any] {
+    var state: [String: Any] = [
+      "subject_kind": questions.subjectDescription, "subject": subject.source,
+      "context": subject.context,
+    ]
+    if let tier = subject.declaredTier { state["declared_tier"] = tier }
+    return state
+  }
+
+  static func body(_ subject: JudgeSubject, questions: JudgeQuestionSet, model: String) -> Data {
+    var asked: [String: Any] = [:]
+    for question in questions.questions {
+      var entry: [String: Any] = ["instructions": question.text]
+      switch question.kind {
+      case .binary:
+        entry["type"] = "noul"
+      case .choice(let options):
+        entry["type"] = "choice"
+        entry["criteria"] = Dictionary(uniqueKeysWithValues: options.map { ($0, NSNull()) })
+      case .score(let levels):
+        entry["type"] = "score"
+        entry["criteria"] = levels
+      }
+      asked[question.id] = entry
+    }
+    let body: [String: Any] = [
+      "model": model, "state": state(subject, questions: questions), "questions": asked,
+    ]
+    return
+      (try? JSONSerialization.data(
+        withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+  }
+
+  /// UTF-8 bytes of the serialized state over 3: a conservative bound for code (design §9).
+  static func estimatedStateTokens(_ subject: JudgeSubject, questions: JudgeQuestionSet) -> Int {
+    let data =
+      (try? JSONSerialization.data(
+        withJSONObject: state(subject, questions: questions),
+        options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+    return (data.count + 2) / 3
+  }
+}
+
+/// Reads Jev's reply (design §4.2, §4.3).
+enum JevReply {
+  private struct Body: Decodable {
+    let model: String
+    let answers: [String: Answer]
+    let usage: Usage
+  }
+
+  private struct Usage: Decodable {
+    let inputTokens: Int
+    let outputTokens: Int
+
+    enum CodingKeys: String, CodingKey {
+      case inputTokens = "input_tokens"
+      case outputTokens = "output_tokens"
+    }
+  }
+
+  /// Jev's answer types. An unknown type fails decoding rather than reading as an empty answer.
+  private enum Answer: Decodable {
+    case noul(Double)
+    case choice(probabilities: [String: Double])
+    case score(probabilities: [String: Double], legend: [String: String])
+
+    private enum Kind: String, Decodable {
+      case noul, choice, score
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case type, noul, probabilities, legend
+    }
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      switch try container.decode(Kind.self, forKey: .type) {
+      case .noul: self = .noul(try container.decode(Double.self, forKey: .noul))
+      case .choice:
+        self = .choice(
+          probabilities: try container.decode([String: Double].self, forKey: .probabilities))
+      case .score:
+        self = .score(
+          probabilities: try container.decode([String: Double].self, forKey: .probabilities),
+          legend: try container.decode([String: String].self, forKey: .legend))
+      }
+    }
+  }
+
+  private struct Refusal: Decodable {
+    struct Detail: Decodable {
+      let errorType: String
+      enum CodingKeys: String, CodingKey { case errorType = "error_type" }
+    }
+    let detail: Detail
+  }
+
+  static func parse(
+    _ response: HTTPResponse, for questions: JudgeQuestionSet, model: String,
+    estimatedTokens: Int, wallMilliseconds: Int
+  ) throws(JudgeError) -> JudgeReply {
+    let text = String(decoding: response.body.prefix(2_000), as: UTF8.self)
+    switch response.status {
+    case 200: break
+    case 401:
+      throw .backend("Jev refused the key in \(JevPin.keyVariable) (401): \(text)")
+    case 422:
+      throw .backend("Jev refused the request as invalid (422): \(text)")
+    case 400
+    where (try? JSONDecoder().decode(Refusal.self, from: response.body))?.detail.errorType
+      == "max_tokens_exceeded":
+      throw .stateTooLarge(estimatedTokens: estimatedTokens)
+    default:
+      throw .malformedReply("Jev answered HTTP \(response.status): \(text)")
+    }
+    let body: Body
+    do {
+      body = try JSONDecoder().decode(Body.self, from: response.body)
+    } catch {
+      throw .malformedReply("Jev's reply isn't the reply shape (\(error)): \(text)")
+    }
+    guard body.model == model else {
+      throw .malformedReply(
+        "Jev served \(body.model), not the requested \(model); pin a model version")
+    }
+    var answers: [JudgeAnswer] = []
+    for question in questions.questions {
+      guard let answer = body.answers[question.id] else { continue }
+      answers.append(
+        JudgeAnswer(
+          question: question.id, distribution: try distribution(answer, for: question),
+          rationale: nil))
+    }
+    let validated: [JudgeAnswer]
+    do {
+      validated = try JudgeAnswers.validate(answers, for: questions)
+    } catch {
+      throw .malformedReply("\(error)")
+    }
+    let cost =
+      model == JevPin.model
+      ? Double(body.usage.inputTokens) * JevPin.pricePerMillionInputTokens / 1_000_000 : nil
+    return JudgeReply(
+      answers: validated,
+      usage: JudgeUsage(
+        inputTokens: body.usage.inputTokens, outputTokens: body.usage.outputTokens,
+        costUSD: cost, wallMilliseconds: wallMilliseconds, servedModel: body.model))
+  }
+
+  private static func distribution(_ answer: Answer, for question: JudgeQuestion)
+    throws(JudgeError) -> [String: Double]
+  {
+    switch (question.kind, answer) {
+    case (.binary, .noul(let p)):
+      return ["yes": p, "no": 1 - p]
+    case (.choice, .choice(let probabilities)):
+      return probabilities
+    case (.score(let levels), .score(let probabilities, let legend)):
+      let expected = Dictionary(
+        uniqueKeysWithValues: levels.enumerated().map { ("\($0.offset)", $0.element) })
+      guard legend == expected else {
+        throw .malformedReply(
+          "\(question.id): Jev's Score legend \(legend.sorted { $0.key < $1.key }) doesn't "
+            + "match the levels \(levels)")
+      }
+      var mapped: [String: Double] = [:]
+      for (index, p) in probabilities {
+        guard let level = expected[index] else {
+          throw .malformedReply("\(question.id): Jev scored level \(index), which has no option")
+        }
+        mapped[level] = p
+      }
+      return mapped
+    default:
+      throw .malformedReply("\(question.id): Jev answered with the wrong answer type")
+    }
   }
 }
 
