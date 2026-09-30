@@ -262,18 +262,22 @@ struct JudgeBlockCalibrationTests {
     #expect(reason.contains("29 of 30"))
   }
 
-  @Test("a true-negative rate of 0.79 fails naming it — catches a floor below 0.8 on negatives")
+  @Test(
+    "a true-negative rate of 19/24 (0.7917) fails naming it — catches a floor of 0.79 or lower on negatives"
+  )
   func trueNegativeRateBelowFloor() throws {
-    let items = Self.items(positives: 11, negatives: 19, jevFalseAlarms: 4, claudeFalseAlarms: 4)
+    let items = Self.items(positives: 10, negatives: 24, jevFalseAlarms: 5, claudeFalseAlarms: 5)
     let reason = try #require(Self.reason(Self.evaluate(items)))
-    #expect(reason.contains("true-negative rate 0.79 (15/19)"))
+    #expect(reason.contains("true-negative rate 0.79 (19/24)"))
   }
 
-  @Test("a true-positive rate of 0.79 fails naming it — catches a floor below 0.8 on positives")
+  @Test(
+    "a true-positive rate of 19/24 (0.7917) fails naming it — catches a floor of 0.79 or lower on positives"
+  )
   func truePositiveRateBelowFloor() throws {
-    let items = Self.items(positives: 19, negatives: 11, jevMisses: 4, claudeMisses: 4)
+    let items = Self.items(positives: 24, negatives: 10, jevMisses: 5, claudeMisses: 5)
     let reason = try #require(Self.reason(Self.evaluate(items)))
-    #expect(reason.contains("true-positive rate 0.79 (15/19)"))
+    #expect(reason.contains("true-positive rate 0.79 (19/24)"))
   }
 
   @Test(
