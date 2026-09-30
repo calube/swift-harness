@@ -9,17 +9,51 @@ public struct JudgeCalibrationSet: Sendable, Equatable, Codable {
       case useless
     }
 
+    /// Who chose the case's labels. Only a person's labels count toward a block calibration.
+    public enum Labeller: String, Sendable, Codable {
+      case person
+      case agent
+    }
+
     public let id: String
     public let label: Label
     public let declaredTier: String
     /// Question id → the option a correct judge picks.
     public let expected: [String: String]
+    public let labeller: Labeller
 
-    public init(id: String, label: Label, declaredTier: String, expected: [String: String]) {
+    public init(
+      id: String, label: Label, declaredTier: String, expected: [String: String],
+      labeller: Labeller = .agent
+    ) {
       self.id = id
       self.label = label
       self.declaredTier = declaredTier
       self.expected = expected
+      self.labeller = labeller
+    }
+
+    private enum CodingKeys: String, CodingKey {
+      case id, label, declaredTier, expected, labeller
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      id = try container.decode(String.self, forKey: .id)
+      label = try container.decode(Label.self, forKey: .label)
+      declaredTier = try container.decode(String.self, forKey: .declaredTier)
+      expected = try container.decode([String: String].self, forKey: .expected)
+      // A case without a labeller carries the tuning agent's labels.
+      labeller = try container.decodeIfPresent(Labeller.self, forKey: .labeller) ?? .agent
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(id, forKey: .id)
+      try container.encode(label, forKey: .label)
+      try container.encode(declaredTier, forKey: .declaredTier)
+      try container.encode(expected, forKey: .expected)
+      try container.encode(labeller, forKey: .labeller)
     }
   }
 
