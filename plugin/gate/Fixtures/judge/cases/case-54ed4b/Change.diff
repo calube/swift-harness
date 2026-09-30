@@ -1,0 +1,4 @@
++      case .decrementButtonTapped:
++        state.count -= 1
++        state.fact = nil
++        return .none

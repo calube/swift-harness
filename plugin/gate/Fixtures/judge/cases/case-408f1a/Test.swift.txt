@@ -1,0 +1,19 @@
+@Test("disabled levels never build their attributes — catches logging cost paid when disabled")
+func disabledLevelSkipsAttributeConstruction() {
+  let records = LockIsolated<[LogRecord]>([])
+  let client = LogClient(
+    isEnabled: { level, _ in level == .error },
+    emit: { record in records.withValue { $0.append(record) } }
+  )
+  var attributeBuilds = 0
+  func expensiveAttributes() -> [LogAttribute] {
+    attributeBuilds += 1
+    return [.public("k", "v")]
+  }
+
+  client.log(.debug, "dropped", category: "Test", expensiveAttributes())
+  client.log(.error, "kept", category: "Test", expensiveAttributes())
+
+  #expect(attributeBuilds == 1)
+  #expect(records.value.map(\.message) == ["kept"])
+}

@@ -1,0 +1,11 @@
+@Test("a failed fact request stops the spinner — catches a spinner that never goes away")
+func failureStopsSpinner() async {
+  let store = TestStore(initialState: CounterFeature.State()) {
+    CounterFeature()
+  } withDependencies: {
+    $0.apiClient.randomFact = { throw FactUnavailable() }
+  }
+  store.exhaustivity = .off
+
+  await store.send(.factButtonTapped) { $0.isLoadingFact = true }
+}

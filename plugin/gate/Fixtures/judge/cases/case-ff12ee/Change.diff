@@ -1,0 +1,11 @@
++  private static func isOnPath(runner: any ProcessRunner, timeout: Duration) async -> Bool {
++    do throws(ProcessRunnerError) {
++      _ = try await runner.run(
++        ProcessInvocation(executable: "mmdc", arguments: ["--version"]), timeout: timeout)
++      return true
++    } catch .launchFailed {
++      return false
++    } catch {
++      return true
++    }
++  }

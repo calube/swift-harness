@@ -1,0 +1,9 @@
+@Test(
+  "the minimum level gates lower severities only — catches debug logs shipping in release or errors being dropped"
+)
+func minimumLevelGate() {
+  let client = LogClient.osLog(subsystem: "test", minimumLevel: .notice)
+  #expect(client.isEnabled(.info, "Any") == false)
+  #expect(client.isEnabled(.notice, "Any"))
+  #expect(client.isEnabled(.fault, "Any"))
+}

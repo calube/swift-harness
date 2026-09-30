@@ -1,0 +1,8 @@
+@Test("log levels map to OSLog types — catches errors being filed as debug noise in Console")
+func levelMapping() {
+  #expect(OSLogRendering.type(for: .debug) == .debug)
+  #expect(OSLogRendering.type(for: .info) == .info)
+  #expect(OSLogRendering.type(for: .notice) == .default)
+  #expect(OSLogRendering.type(for: .error) == .error)
+  #expect(OSLogRendering.type(for: .fault) == .fault)
+}

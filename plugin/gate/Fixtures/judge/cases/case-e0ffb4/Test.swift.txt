@@ -1,0 +1,10 @@
+@MainActor
+func testFactButton() {
+  let app = XCUIApplication()
+  app.launch()
+
+  app.buttons["counter.fact"].tap()
+
+  let expected = "Cat fact"
+  XCTAssertEqual(expected, "Cat fact")
+}

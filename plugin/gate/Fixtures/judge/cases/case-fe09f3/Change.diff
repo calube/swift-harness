@@ -1,0 +1,4 @@
+     case .reset:
+-      next = GameState(seed: 0)
++      next.board = Array(repeating: nil, count: GameState.cellCount)
++      next.outcome = .inProgress

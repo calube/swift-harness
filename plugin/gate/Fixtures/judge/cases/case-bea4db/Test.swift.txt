@@ -1,0 +1,19 @@
+@Test("changing the count clears a shown fact — catches a stale fact shown next to a new count")
+func countChangeClearsFact() async {
+  let factRequests = LockIsolated(0)
+  let store = TestStore(initialState: CounterFeature.State(count: 3, fact: "old")) {
+    CounterFeature()
+  } withDependencies: {
+    $0.apiClient.randomFact = {
+      factRequests.withValue { $0 += 1 }
+      return Fact(text: "new")
+    }
+    $0.logClient = LogClient(isEnabled: { _, _ in false }, emit: { _ in })
+  }
+
+  await store.send(.incrementButtonTapped) {
+    $0.count = 4
+    $0.fact = nil
+  }
+  #expect(factRequests.value == 0)
+}

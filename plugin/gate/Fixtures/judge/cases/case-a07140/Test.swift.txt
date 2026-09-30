@@ -1,0 +1,19 @@
+@Test("a failed fact request is handled — catches regressions")
+func factFailure() async {
+  let apiCalls = LockIsolated(0)
+  let logCalls = LockIsolated(0)
+  let store = TestStore(initialState: CounterFeature.State(count: 7)) {
+    CounterFeature()
+  } withDependencies: {
+    $0.apiClient.randomFact = {
+      apiCalls.withValue { $0 += 1 }
+      throw FactUnavailable()
+    }
+    $0.logClient.emit = { _ in logCalls.withValue { $0 += 1 } }
+  }
+
+  await store.send(.factButtonTapped) { $0.isLoadingFact = true }
+  await store.receive(\.factFailed) { $0.isLoadingFact = false }
+  #expect(apiCalls.value == 1)
+  #expect(logCalls.value == 1)
+}

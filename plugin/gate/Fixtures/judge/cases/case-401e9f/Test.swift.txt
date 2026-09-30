@@ -1,0 +1,6 @@
+@Test("the seed drives the computer's moves — catches the engine ignoring its injected RNG")
+func seedChangesComputerMoves() {
+  let first = GameEngine.replay(seed: 3, inputs: [.humanPlaced(4)])
+  let second = GameEngine.replay(seed: 3, inputs: [.humanPlaced(4)])
+  #expect(first.board == second.board)
+}

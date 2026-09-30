@@ -1,0 +1,9 @@
++extension HTTPClient {
++  public func data(for request: URLRequest) async throws -> Data {
++    let (data, response) = try await send(request)
++    guard (200..<300).contains(response.statusCode) else {
++      throw HTTPError.unacceptableStatus(response.statusCode)
++    }
++    return data
++  }
++}

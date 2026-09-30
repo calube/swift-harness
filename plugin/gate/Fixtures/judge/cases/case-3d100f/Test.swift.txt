@@ -1,0 +1,7 @@
+@Test("game over — catches regressions")
+func gameOver() {
+  var finished = GameState(seed: 1)
+  finished.board = [.x, .x, .x, .o, .o, nil, nil, nil, nil]
+  finished.outcome = .won(.x)
+  #expect(GameEngine.step(finished, .humanPlaced(8)) == finished)
+}

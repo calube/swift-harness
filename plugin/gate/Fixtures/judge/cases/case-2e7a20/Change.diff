@@ -1,0 +1,11 @@
++      Button("Cat fact") { store.send(.factButtonTapped) }
++        .disabled(store.isLoadingFact)
++        .accessibilityIdentifier("counter.fact")
++
++      if store.isLoadingFact {
++        ProgressView()
++      } else if let fact = store.fact {
++        Text(fact)
++          .multilineTextAlignment(.center)
++          .accessibilityIdentifier("counter.factText")
++      }

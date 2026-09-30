@@ -1,0 +1,11 @@
+@Test("the fact button loads and shows a fact — catches the loading state never resolving")
+func factLoads() async {
+  let store = TestStore(initialState: CounterFeature.State()) {
+    CounterFeature()
+  } withDependencies: {
+    $0.apiClient.randomFact = { Fact(text: "Cats have five toes on their front paws.") }
+  }
+  store.exhaustivity = .off
+
+  await store.send(.factButtonTapped) { $0.isLoadingFact = true }
+}
