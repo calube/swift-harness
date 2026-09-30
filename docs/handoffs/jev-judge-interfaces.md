@@ -193,3 +193,16 @@ Commits and gate: surface 156e336, behaviour 8f4b88c, 10b7690; gate 20260930T204
 - Input: {schemaVersion:1, questionSet:"<id@v>" | inlineQuestionSet:{…dataset format…}, subjects:[{id,source,context,declaredTier?}]}. `inlineQuestionSet` requires `flag`.
 - Output: compact sorted {schemaVersion:1, questionSet, identity:{backend,model}, subjects:[{id, answers:[{question,distribution,rationale?}], usage|null}]}.
 - Exit codes: 0 answered; 2 bad input, config or host (`<field>: <reason>` on stderr); 3 backend failure; 64 unparseable flag. The eval invocation is in `judge ask --help`.
+
+## Wave 7
+
+### `judge-bench-measures-backends`
+
+Commits and gate: surface 561ef12, behaviour efec10c, 7767455; gate 20260930T211540Z-e9c2b57c; 23/23 tests proved.
+- `judge bench --dataset <path|test-quality|comments|calibrate-design:<id>> --backend <b>:<model>[#<set@v>]… [--repeats 3] [--concurrency 1] [--threshold 0.5] [--case <id>…] [--smoke] [--send-to <host>] [--estimate --usage-from <file>…] --out <file>`.
+- An arm's `#<set@v>` picks a native question set, for example `jev:jev-1.13.0#test-quality@2-jev`; the set must be `basedOn` the dataset's set, and it scores on the base labels. `JudgeBenchmarkArm.parse` is where a cascade arm plugs in.
+- A Claude arm names a pinned `claude-…` model; aliases such as `sonnet` are refused. A Jev arm needs the host, from `send_to` or `--send-to`.
+- Every call skips the cache. The result JSON keeps every raw answer (repeats × cases × questions × arms) and rejects unknown keys.
+- Exit codes: `bench` 0, 2 for bad input or fewer than 3 repeats, 3 for a backend failure or a served model that changes between repeats. `bench-render <file> [--out <md>]` 0, 1 when a stored metric differs from a recomputed one, 2 for bad input.
+- Metrics come only from `JudgeBenchmarkMetrics`, and every rate prints its `(n=…)`. The person view reads only `labeller: person` cases and says "No person labels" when there are none.
+- `--estimate --usage-from <recording>…` prints per-arm calls, judgments and cost, then `Claude spend: $X` or `unknown`. With `--dataset test-quality`, the Claude arm estimated 66 calls for $0.58 per repeat set.
