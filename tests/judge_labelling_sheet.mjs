@@ -11,8 +11,9 @@
 //
 // `--from-json` reads `{"test-quality": [entry], "comments": [entry]}`, each entry
 // `{key, case?, answers: {question: value | null}}` as `fillSheet` takes it, and needs
-// `--labeller`, so another labeller's answers are never recorded as a person's by default. The
-// sheets on disk stay as they are.
+// `--labeller`, so another labeller's answers are never recorded as a person's by default. It
+// never changes a committed label: it prints each answer that disagrees with one and keeps the
+// label. The sheets on disk stay as they are.
 //
 // `apply` records each answered case with its labeller (`person` unless `--labeller agent`) and
 // only the answers given; a blank answer leaves that question unlabelled. A case with no answers keeps its entry, or stays out of
@@ -175,14 +176,35 @@ function derivedLabel(expected, declaredTier) {
   return fires ? 'useless' : 'good'
 }
 
+// With `keepExisting`, a question the case already has a label for keeps it, and each answer
+// that disagrees adds a line to `kept`. Returns the expected answers to record, or undefined when
+// the existing entry stays as it is. Adding answers to an entry by another labeller is an error,
+// since one entry has one labeller.
+function keepExistingAnswers({ existing, expected, labeller, where, kept, errors }) {
+  const added = {}
+  for (const [question, value] of Object.entries(expected)) {
+    const old = existing.expected[question]
+    if (old === undefined) added[question] = value
+    else if (old !== value) kept.push(`kept existing ${existing.id}/${question}: ${old}, input ${value}`)
+  }
+  if (!Object.keys(added).length) return undefined
+  const oldLabeller = existing.labeller ?? 'agent'
+  if (oldLabeller !== labeller) {
+    errors.push(`${where}: ${existing.id} holds ${oldLabeller} labels, so ${labeller} answers can't join them`)
+    return undefined
+  }
+  return { ...existing.expected, ...added }
+}
+
 // Returns the labels unchanged whenever `errors` is non-empty.
-export function applySheet({ labels, sheet, caseIds, labeller = 'person' }) {
+export function applySheet({ labels, sheet, caseIds, labeller = 'person', keepExisting = false }) {
   const parsed = parseSheet(sheet)
   const errors = [...parsed.errors]
   const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
   const existing = new Map(labels.cases.map((item) => [item.id, item]))
   const answered = new Map()
   const onSheet = new Set()
+  const kept = []
   for (const item of parsed.cases) {
     const where = `case ${item.number} (key ${item.key})`
     const id = byKey.get(item.key)
@@ -213,19 +235,22 @@ export function applySheet({ labels, sheet, caseIds, labeller = 'person' }) {
       }
       expected[question] = value
     }
-    if (Object.keys(expected).length) {
+    const recorded = keepExisting && existing.has(id)
+      ? keepExistingAnswers({ existing: existing.get(id), expected, labeller, where, kept, errors })
+      : expected
+    if (recorded && Object.keys(recorded).length) {
       answered.set(id, {
-        declaredTier: item.tier, expected, id, label: derivedLabel(expected, item.tier), labeller,
+        declaredTier: item.tier, expected: recorded, id, label: derivedLabel(recorded, item.tier), labeller,
       })
     }
   }
   const unlisted = caseIds.filter((id) => !onSheet.has(id))
   if (unlisted.length) errors.push(`${unlisted.length} cases aren't on the sheet: ${unlisted.join(', ')}`)
-  if (errors.length) return { labels, errors, person: 0 }
+  if (errors.length) return { labels, errors, kept, person: 0 }
   const cases = labels.cases.map((item) => answered.get(item.id) ?? item)
   const added = [...answered.values()].filter((item) => !existing.has(item.id))
   const merged = { ...labels, cases: [...cases, ...added] }
-  return { labels: merged, errors, person: merged.cases.filter((item) => item.labeller === 'person').length }
+  return { labels: merged, errors, kept, person: merged.cases.filter((item) => item.labeller === 'person').length }
 }
 
 // The comment judge's questions (`JudgeQuestionSet.comments`), word for word; the test holds them
@@ -310,13 +335,14 @@ export function parseCommentSheet(text) {
 }
 
 // Returns the labels unchanged whenever `errors` is non-empty.
-export function applyCommentSheet({ labels, sheet, caseIds, labeller = 'person' }) {
+export function applyCommentSheet({ labels, sheet, caseIds, labeller = 'person', keepExisting = false }) {
   const parsed = parseCommentSheet(sheet)
   const errors = [...parsed.errors]
   const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
-  const existing = new Set(labels.cases.map((item) => item.id))
+  const existing = new Map(labels.cases.map((item) => [item.id, item]))
   const answered = new Map()
   const onSheet = new Set()
+  const kept = []
   for (const item of parsed.cases) {
     const where = `case ${item.number} (key ${item.key})`
     const id = byKey.get(item.key)
@@ -343,16 +369,19 @@ export function applyCommentSheet({ labels, sheet, caseIds, labeller = 'person' 
       }
       expected[question] = value
     }
-    if (Object.keys(expected).length) answered.set(id, { expected, id, labeller })
+    const recorded = keepExisting && existing.has(id)
+      ? keepExistingAnswers({ existing: existing.get(id), expected, labeller, where, kept, errors })
+      : expected
+    if (recorded && Object.keys(recorded).length) answered.set(id, { expected: recorded, id, labeller })
   }
   const unlisted = caseIds.filter((id) => !onSheet.has(id))
   if (unlisted.length) errors.push(`${unlisted.length} cases aren't on the sheet: ${unlisted.join(', ')}`)
-  if (errors.length) return { labels, errors, person: 0 }
+  if (errors.length) return { labels, errors, kept, person: 0 }
   const cases = labels.cases.map((item) => answered.get(item.id) ?? item)
   // In id order, so the file doesn't depend on the sheet's order.
   const added = [...answered.values()].filter((item) => !existing.has(item.id)).sort((a, b) => a.id.localeCompare(b.id))
   const merged = { ...labels, cases: [...cases, ...added] }
-  return { labels: merged, errors, person: merged.cases.filter((item) => item.labeller === 'person').length }
+  return { labels: merged, errors, kept, person: merged.cases.filter((item) => item.labeller === 'person').length }
 }
 
 // Writes each entry's answers onto the answer lines of the sheet case with its `key`: entries are
@@ -528,7 +557,9 @@ function main(argv) {
         sheet = filled.sheet
       }
       const labels = JSON.parse(readFileSync(file.labelsPath, 'utf8'))
-      return { file, result: file.set.apply({ labels, sheet, caseIds: file.caseIds, labeller }) }
+      return {
+        file, result: file.set.apply({ labels, sheet, caseIds: file.caseIds, labeller, keepExisting: answers !== undefined }),
+      }
     })
     const failed = results.filter(({ result }) => result.errors.length)
     if (failed.length) {
@@ -539,6 +570,7 @@ function main(argv) {
       return 1
     }
     for (const { file, result } of results) {
+      for (const line of result.kept) console.log(`${file.name}: ${line}`)
       writeFileSync(file.labelsPath, formatLabels(result.labels))
       const unlabelled = file.caseIds.length - result.labels.cases.length
       const byLabeller = labellers.map((name) => {

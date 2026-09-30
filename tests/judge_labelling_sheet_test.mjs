@@ -213,6 +213,28 @@ const tests = {
     assert.match(errors([{ key, answers: { 'loses-fact': 'yes' } }], answered), /already answered/)
   },
 
+  'an import keeps every committed label and names each disagreement — catches an import that rewrites a label already committed'() {
+    const withExisting = { ...commentLabels, cases: [{ expected: { 'loses-fact': 'yes' }, id: 'case-0a1b2c', labeller: 'person' }] }
+    const filled = fillSheet(renderCommentSheet({ cases: comments }), [
+      { key: sheetKey('case-0a1b2c'), answers: { 'loses-fact': 'no', 'right-size': 'yes' } },
+    ])
+    const commentResult = applyCommentSheet({
+      labels: withExisting, sheet: filled.sheet, caseIds: commentIds, labeller: 'agent', keepExisting: true,
+    })
+    assert.match(commentResult.errors.join('\n'), /case-0a1b2c.*person/)
+    assert.deepEqual(commentResult.labels, withExisting)
+
+    const answers = { 'fails-if-broken': 'no', tier: 'T1', 'name-specificity': 'vague', 'asserts-implementation': 'no' }
+    const sheet = fillSheet(renderSheet({ labels, cases }), [{ key: sheetKey('old-case'), answers }]).sheet
+    const result = applySheet({ labels, sheet, caseIds, labeller: 'agent', keepExisting: true })
+    assert.deepEqual(result.errors, [])
+    assert.deepEqual(result.labels, labels)
+    assert.deepEqual(result.kept, [
+      'kept existing old-case/fails-if-broken: yes, input no',
+      'kept existing old-case/name-specificity: specific, input vague',
+    ])
+  },
+
   'formatting the committed comment labels reproduces the file byte for byte — catches a rewrite that reorders or reformats every comment label'() {
     const text = readFileSync(`${root}plugin/gate/Fixtures/judge-comments/labels.json`, 'utf8')
     assert.equal(formatLabels(JSON.parse(text)), text)
