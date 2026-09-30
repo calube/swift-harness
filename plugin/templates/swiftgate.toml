@@ -59,7 +59,7 @@ profile = {{PROFILE}}
 [build.presets.default]
 design_tier = "standard"
 max_parallel = 3
-review = "full"            # full: verifier + test-quality per task; gate: the task gate only
+review = "full"            # full: architecture + test-quality per task, verified; gate: the task gate only
 task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready
 merge_gate = "push"
 worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus

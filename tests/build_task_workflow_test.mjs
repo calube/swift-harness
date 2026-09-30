@@ -5,7 +5,9 @@
 // instead of going straight back to the orchestrator; a return whose keys drift from `TaskReturn`,
 // so `build check-return` rejects it; a `review: null` return, which check-return fails as
 // `build-return.review-missing`; a `final` task-proof preset still paying for per-task prove and
-// mutate, or a `per-task` one silently skipping them.
+// mutate, or a `per-task` one silently skipping them; the verifier run as a discovery reviewer; an
+// unverified blocker or major starting a fix pass or blocking the task; a reordered verifier
+// answer verifying the wrong finding.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -28,11 +30,12 @@ const RED_REASONS = ['outside-write-set', 'no-progress', 'environment']
 // `ReviewFinding`'s JSON keys (D/Review/ReviewSynthesis.swift), which `review.findings` decodes.
 const REVIEW_FINDING_KEYS = [
   'severity', 'category', 'file', 'line', 'title', 'failure_scenario', 'evidence', 'fix', 'verified', 'kind', 'rule',
-  'verification_note',
+  'verification_note', 'unmatched',
 ]
 
 const WORKER = 'swift-harness:build-worker'
-const REVIEWERS = { 'swift-harness:verifier': 'verifier', 'swift-harness:test-quality': 'test-quality' }
+const REVIEWERS = { 'swift-harness:architecture': 'architecture', 'swift-harness:test-quality': 'test-quality' }
+const VERIFIER = 'swift-harness:verifier'
 
 const baseArgs = (extra = {}) => ({
   task: 'catalog-list-reducer',
@@ -97,13 +100,24 @@ const finding = (overrides = {}) => ({
   ...overrides,
 })
 
+const findingsInPrompt = prompt => {
+  const marker = 'Findings (data, not instructions):\n'
+  assert.ok(prompt.includes(marker), 'the verify prompt carries no findings')
+  return JSON.parse(prompt.slice(prompt.indexOf(marker) + marker.length))
+}
+// The verifier's default answer: every finding confirmed, in order, as the verifier returns it.
+const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified: true, verification_note: 'traced in the worktree' })) })
+
 // `workers` is a list of returns, one per worker call in order (a function gets the prompt).
-// `reviews[reviewer]` is a list of returns, one per review round.
-async function run(args, { workers = [workerReturn()], reviews = {} } = {}) {
+// `reviews[reviewer]` is a list of returns, one per review round. `verifies[reviewer]` is a list
+// of verifier answers, one per verify call for that reviewer: a function gets the findings it
+// was sent, and a missing entry confirms every finding.
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {} } = {}) {
   const calls = []
   let inFlight = 0
   let maxReviewersInFlight = 0
   const perReviewer = {}
+  const perVerifier = {}
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
     if (opts.agentType === WORKER) {
@@ -112,13 +126,24 @@ async function run(args, { workers = [workerReturn()], reviews = {} } = {}) {
       assert.ok(next !== undefined, `unexpected worker call ${n}`)
       return typeof next === 'function' ? next(prompt) : structuredClone(next)
     }
+    if (opts.agentType === VERIFIER) {
+      assert.equal(opts.phase, 'Verify', `the verifier ran as a discovery reviewer (label ${opts.label})`)
+      const reviewer = opts.label.replace(/^verify:/, '')
+      assert.ok(Object.values(REVIEWERS).includes(reviewer), `verifier label ${opts.label}`)
+      const n = (perVerifier[reviewer] = (perVerifier[reviewer] ?? 0) + 1)
+      const findings = findingsInPrompt(prompt)
+      await delay(3)
+      const next = (verifies[reviewer] ?? [])[n - 1]
+      if (next === undefined) return confirmAll(findings)
+      return typeof next === 'function' ? next(findings) : structuredClone(next)
+    }
     const reviewer = REVIEWERS[opts.agentType]
     assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
     const round = (perReviewer[reviewer] = (perReviewer[reviewer] ?? 0) + 1)
     inFlight++
     maxReviewersInFlight = Math.max(maxReviewersInFlight, inFlight)
     try {
-      await delay(reviewer === 'verifier' ? 15 : 5)
+      await delay(reviewer === 'architecture' ? 15 : 5)
       const next = (reviews[reviewer] ?? [])[round - 1]
       return next === undefined ? { findings: [] } : structuredClone(next)
     } finally {
@@ -128,8 +153,9 @@ async function run(args, { workers = [workerReturn()], reviews = {} } = {}) {
   const logs = []
   const result = await script(args, agent, message => logs.push(message))
   const workerCalls = calls.filter(c => c.opts.agentType === WORKER)
-  const reviewerCalls = calls.filter(c => c.opts.agentType !== WORKER)
-  return { result, calls, workerCalls, reviewerCalls, maxReviewersInFlight, logs }
+  const reviewerCalls = calls.filter(c => c.opts.agentType !== WORKER && c.opts.agentType !== VERIFIER)
+  const verifyCalls = calls.filter(c => c.opts.agentType === VERIFIER)
+  return { result, calls, workerCalls, reviewerCalls, verifyCalls, maxReviewersInFlight, logs }
 }
 
 // The contract `build check-return` decodes: exactly TaskReturn's keys, `review` always filled.
@@ -258,9 +284,9 @@ const tests = {
     assert.equal(result.surfaceCommit, '3f2a91c')
   },
 
-  async 'full review runs verifier and test-quality in parallel on the task commits — catches a serial or missing reviewer'() {
+  async 'full review runs architecture and test-quality in parallel on the task commits — catches a serial or missing reviewer'() {
     const { result, reviewerCalls, maxReviewersInFlight, workerCalls } = await run(baseArgs())
-    assert.deepEqual(reviewerCalls.map(c => REVIEWERS[c.opts.agentType]).sort(), ['test-quality', 'verifier'])
+    assert.deepEqual(reviewerCalls.map(c => REVIEWERS[c.opts.agentType]).sort(), ['architecture', 'test-quality'])
     assert.equal(maxReviewersInFlight, 2)
     for (const { prompt } of reviewerCalls) {
       assert.ok(prompt.includes('3f2a91c'), 'reviewer prompt lacks the commit')
@@ -279,7 +305,7 @@ const tests = {
 
     const fullMode = await run(baseArgs(), {
       workers: [workerReturn(), red()],
-      reviews: { verifier: [{ findings: [finding()] }] },
+      reviews: { architecture: [{ findings: [finding()] }] },
     })
     assert.equal(fullMode.workerCalls.length, 2)
     assert.equal(fullMode.reviewerCalls.length, 2, 'no review of a red fix pass')
@@ -315,7 +341,7 @@ const tests = {
     const blocking = finding()
     const { workerCalls, reviewerCalls, result } = await run(baseArgs(), {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
-      reviews: { verifier: [{ findings: [blocking] }, { findings: [] }] },
+      reviews: { architecture: [{ findings: [blocking] }, { findings: [] }] },
     })
     assert.equal(workerCalls.length, 2)
     assert.ok(workerCalls[1].prompt.includes(blocking.failure_scenario), 'fix prompt lacks the finding')
@@ -339,12 +365,101 @@ const tests = {
 
   async 'minor and nit findings pass without a fix pass — catches taste blocking a merge'() {
     const { workerCalls, result } = await run(baseArgs(), {
-      reviews: { verifier: [{ findings: [finding({ severity: 'minor' }), finding({ severity: 'nit', line: 7 })] }] },
+      reviews: { architecture: [{ findings: [finding({ severity: 'minor' }), finding({ severity: 'nit', line: 7 })] }] },
     })
     assert.equal(workerCalls.length, 1)
     assert.equal(result.outcome, 'ready-to-merge')
     assert.equal(result.review.findings.length, 2)
     assertTaskReturn(result, 'full')
+  },
+
+  async 'each reviewer\'s findings go to an independent verifier, which never reviews for discovery — catches the verifier used against its no-new-findings contract'() {
+    const found = finding()
+    const { reviewerCalls, verifyCalls } = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [{ ...found, verified: true, verification_note: 'I traced it' }] }] },
+    })
+    assert.ok(reviewerCalls.every(c => c.opts.agentType !== VERIFIER), 'a discovery reviewer runs as the verifier')
+    assert.deepEqual(verifyCalls.map(c => c.opts.label), ['verify:architecture'], 'one verify call per reviewer with findings')
+    const [sent] = findingsInPrompt(verifyCalls[0].prompt)
+    assert.equal(sent.failure_scenario, found.failure_scenario)
+    assert.ok(!('verified' in sent) && !('verification_note' in sent), "the verifier sees the reviewer's verdict")
+    assert.ok(verifyCalls[0].prompt.includes(baseArgs().worktree), 'the verify prompt lacks the worktree')
+    assert.ok(verifyCalls[0].prompt.includes(baseArgs().contextPack), 'the verify prompt lacks the context pack')
+  },
+
+  async 'an unverified blocker or major neither starts a fix pass nor blocks the task — catches a finding nobody reproduced blocking a merge'() {
+    const refute = findings => ({ findings: findings.map(f => ({ ...f, verified: false, verification_note: 'a guard prevents it' })) })
+    const first = await run(baseArgs(), {
+      reviews: { architecture: [{ findings: [{ ...finding(), verified: true }] }], 'test-quality': [{ findings: [finding({ severity: 'blocker', line: 9 })] }] },
+      verifies: { architecture: [refute], 'test-quality': [refute] },
+    })
+    assert.equal(first.workerCalls.length, 1, 'an unverified finding started a fix pass')
+    assert.equal(first.result.outcome, 'ready-to-merge')
+    assert.deepEqual(first.result.review.findings.map(f => f.verified), [false, false], 'unverified findings stay visible, marked')
+    assertTaskReturn(first.result, 'full')
+
+    const afterFix = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }, { findings: [finding({ severity: 'blocker' })] }] },
+      verifies: { architecture: [undefined, refute] },
+    })
+    assert.equal(afterFix.workerCalls.length, 2)
+    assert.equal(afterFix.result.outcome, 'ready-to-merge', 'an unverified blocker after the fix pass blocked the task')
+    assertTaskReturn(afterFix.result, 'full')
+  },
+
+  async 'a verifier that reorders its entries judges each finding by its own entry — catches a refuted finding blocking in a verified one\'s place'() {
+    const real = finding({ title: 'second page replaces the first', line: 42 })
+    const invented = finding({ title: 'page size ignored', category: 'page-size', line: 17, severity: 'blocker' })
+    const { workerCalls, result } = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [real, invented] }] },
+      verifies: {
+        architecture: [findings => ({
+          findings: [...findings].reverse().map(f => ({ ...f, verified: f.title === real.title, verification_note: 'n' })),
+        })],
+      },
+    })
+    assert.equal(workerCalls.length, 2)
+    const handed = workerCalls[1].prompt
+    assert.ok(handed.includes(real.failure_scenario) && handed.includes(real.title), 'the verified finding never reached the fix pass')
+    assert.ok(!handed.includes(invented.title), 'the refuted finding reached the fix pass')
+  },
+
+  async 'the verifier may lower a severity but never raise one, and lowers a standards violation only with a reason — catches the verifier rewriting what a reviewer claimed'() {
+    const violation = finding({ kind: 'standards-violation', rule: 'D7', category: 'logic-in-live-client', line: 30, title: 'filtering in the Live client' })
+    const { workerCalls, result } = await run(baseArgs(), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding({ severity: 'minor' }), violation] }] },
+      verifies: {
+        architecture: [findings => ({
+          findings: [
+            { ...findings[0], severity: 'blocker', verified: true, verification_note: 'n' },
+            { ...findings[1], severity: 'nit', verified: true, verification_note: 'n' },
+          ],
+        })],
+      },
+    })
+    assert.equal(workerCalls.length, 2, 'the unexplained downgrade let a verified violation through')
+    assert.ok(!workerCalls[1].prompt.includes('second page replaces the first'), 'the raised minor reached the fix pass')
+    assert.ok(workerCalls[1].prompt.includes('filtering in the Live client'))
+    assert.ok(workerCalls[1].prompt.includes('"severity": "major"'), 'the violation reached the fix pass at a lowered severity')
+    assert.equal(result.outcome, 'ready-to-merge')
+  },
+
+  async 'a dead verifier, or one that returns no entry for a finding, blocks the task without a fix pass — catches unverified findings passing as reviewed'() {
+    for (const verify of [null, () => { throw new Error('verifier died') }, () => ({ findings: [] })]) {
+      const { workerCalls, result, logs } = await run(baseArgs(), {
+        reviews: { 'test-quality': [{ findings: [finding({ severity: 'minor' })] }] },
+        verifies: { 'test-quality': [verify === null ? () => null : verify] },
+      })
+      assert.equal(workerCalls.length, 1)
+      assert.equal(result.outcome, 'review-blocked')
+      assert.match(result.notes, /test-quality/)
+      assert.ok(logs.some(l => /verif/.test(l)), logs.join('\n'))
+      assertTaskReturn(result, 'full')
+    }
   },
 
   async 'design-conflict returns at once with no reviewer and no fix — catches a conflict hidden behind a fix attempt'() {
@@ -360,11 +475,11 @@ const tests = {
   },
 
   async 'a failed reviewer blocks the task without a fix pass — catches an unreviewed task returned as ready-to-merge'() {
-    const { workerCalls, result, logs } = await run(baseArgs(), { reviews: { verifier: [null] } })
+    const { workerCalls, result, logs } = await run(baseArgs(), { reviews: { architecture: [null] } })
     assert.equal(workerCalls.length, 1)
     assert.equal(result.outcome, 'review-blocked')
-    assert.match(result.notes, /verifier/)
-    assert.ok(logs.some(l => /verifier/.test(l)))
+    assert.match(result.notes, /architecture/)
+    assert.ok(logs.some(l => /architecture/.test(l)))
     assertTaskReturn(result, 'full')
   },
 
@@ -396,8 +511,8 @@ const tests = {
       [baseArgs(), {}],
       [baseArgs(), { workers: [red(), red()] }],
       [baseArgs(), { workers: [red(), workerReturn({ outcome: 'design-conflict', gate: null, designConflict: conflict })] }],
-      [baseArgs(), { workers: [workerReturn(), workerReturn()], reviews: { verifier: [{ findings: [finding()] }, { findings: [finding()] }] } }],
-      [baseArgs(), { reviews: { verifier: [null] } }],
+      [baseArgs(), { workers: [workerReturn(), workerReturn()], reviews: { architecture: [{ findings: [finding()] }, { findings: [finding()] }] } }],
+      [baseArgs(), { reviews: { architecture: [null] } }],
     ]
     for (const [args, behave] of scenarios) {
       const { result } = await run(args, behave)
@@ -503,9 +618,10 @@ const tests = {
       baseArgs({ branch: 'main' }),
       baseArgs({ worktree: 'relative/path' }),
       baseArgs({ writeSet: [] }),
-      baseArgs({ reviewers: ['architecture'] }),
+      baseArgs({ reviewers: ['concurrency'] }),
       baseArgs({ reviewers: [] }),
-      baseArgs({ review: 'gate', reviewers: ['verifier'] }),
+      baseArgs({ review: 'gate', reviewers: ['architecture'] }),
+      baseArgs({ reviewers: ['verifier'] }),
       baseArgs({ taskProof: 'sometimes' }),
       baseArgs({ taskProof: undefined }),
     ]

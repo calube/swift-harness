@@ -183,7 +183,8 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
 1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`. `build next` never lists a
    `blocked` task, and neither does a resumed build.
 2. Ask. Quote the check's findings, the return's `gate`, or the blocking review findings as
-   `severity file: title`. Options:
+   `severity file: title`. A blocking finding has `verified: true` and severity blocker or major;
+   a `review-blocked` return with none names the unreviewed focus in its `notes`. Options:
    - **Go on without it** (Recommended): it stays `blocked`; its dependents never start.
    - **Retry**: `ledger set … pending`, then let `build next` start it again. Its worktree and
      branch still exist, so skip `worktree create` and launch into the same worktree.
