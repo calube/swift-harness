@@ -451,6 +451,26 @@ struct JudgeBenchmarkReportTests {
   }
 
   @Test(
+    "an estimate prices a cascade arm's Claude side as if every case escalated, in the Claude spend — catches the cascade's Claude calls left out of the spend cap"
+  )
+  func estimateCountsCascadeClaudeSpend() throws {
+    let arm = try #require(try? JudgeBenchmarkArm.parse("cascade:jev-1.13.0,claude-sonnet-5-5"))
+    let estimate = JudgeBenchmarkEstimate.make(
+      arms: [arm], judgments: [2, 2], repeats: 3,
+      recorded: [
+        .init(
+          backend: "claude", model: "claude-sonnet-5-5",
+          usages: [JudgeUsage(costUSD: 0.01, wallMilliseconds: 1)], source: "claude.json"),
+        .init(
+          backend: "jev", model: "jev-1.13.0",
+          usages: [JudgeUsage(costUSD: 0.0001, wallMilliseconds: 1)], source: "jev.json"),
+      ])
+    #expect(estimate.arms.count == 2)
+    #expect(estimate.claudeCostUSD.map { abs($0 - 0.06) < 1e-12 } == true)
+    #expect(estimate.text.contains("if every case escalates"))
+  }
+
+  @Test(
     "recorded usage reads from a bench result and from a judge recording — catches an estimate that ignores the smoke run"
   )
   func readsRecordedUsage() throws {
