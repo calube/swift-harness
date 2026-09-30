@@ -142,3 +142,43 @@ Commits and gate: surface 33e2ac4, behaviour 14d2e30, 3995cda; gate 20260930T175
 - Bands: `JudgeCascade.bands(for: "test-quality@2-jev")`. The band is open: 0.5 escalates, 0.2 and 0.8 keep. Advisory questions never escalate.
 - Claude's side: `ClaudeOutcome: .answered([JudgeAnswer]) | .failed(String)`. `merge(...) -> [Decided{answer, identity, escalation?, escalationFailure?}]`. A failed escalation stays minor and never blocks; its note reads "; escalated to claude as <uncertain|an uncalibrated block>, which failed: <why>".
 - `Record{escalations, jev, claude}`: costUSD and wallMilliseconds sum the 2 calls, nil when a call that ran reported none. `sweep(q, cases: JudgeTuneCases, run:, threshold:, bands:) -> [BandPoint{band, escalated, keptCorrect}]`.
+
+## Wave 4
+
+### `jev-asks-the-native-test-quality-set`
+
+Commits and gate: surface 5b04877, behaviour 1fac177, d7cf05a; gate 20260930T180450Z-145f7c37; 29/29 tests proved.
+- `JudgeQuestionSet.testsJev`: versioned id test-quality@2-jev, with `rendering: JudgeRendering.jev`, `basedOn`, and `labelsVersion` (= basedOn ?? versionedID). `JudgeQuestion.levelDescriptions: [String]?` fixes @1's bare levels.
+- `JevRendering.questions(for:)`, `.combine(_:question:answers:) throws(JevCombinationError)`, `.key(question:sub:)` (gives "q.sub"). `JevCombination`: .asked, .noWhenAnyFalse, .yesWhenAnyTrue, .optionMap.
+- Sub-question ids: runs-changed-code, checks-named-result, catches-adds, call-details, private-state, log-text.
+- `Judge.renderedQuestions(for:)` feeds `JudgeCacheKey.make(…renderedQuestions:)`.
+- OPEN for the reasons task: advisory reasons don't yet name the sub-question (§13.3).
+- OPEN for the bench task: `JudgeDataset.labelsVersion` and `questions(for:)` drop rendering and basedOn; use `questions.labelsVersion`.
+
+### `self-test-scores-each-backend-recording`
+
+Commits and gate: surface c939ed8, behaviour 7af4d96; gate 20260930T182017Z-0cd5c309; 22/22 tests proved.
+- `JudgeCalibrationRecording{questionSet, identity, servedModels?, answers, usage?}` (its JSON still decodes as JudgeRecording). `JudgeBaseline.servedModels?`.
+- `JudgeRecordingStaleness` cases gate as major, except servedUnrecorded and labelledNotRecorded, which are minor.
+- Offline checks: the backend matches the file, the recording asked for and got a pinned model, the question set matches, and the recording's served models equal the baseline's. The live check: running `--judge-backend` without `--record` compares served models against the committed recording.
+- self-test `--model` defaults per backend; Jev needs `--send-to <host>`. A blank label isn't a regression, and a labelled but unrecorded case is a minor finding.
+- Self-test calibrates Jev on test-quality@2-jev against @1's labels.
+- NOT re-recorded yet: recording.json and baseline.json show 2 non-gating "no served model" notes until the benchmark task re-records.
+
+### `comment-judge-gains-a-labelled-set`
+
+Commits and gate: 705c8ed, b256304; the failing labels test 9402c01 waits on branch comment-labels-test-awaiting-person-labels.
+- 80 comments from main (70 harness, 10 SampleApp), 40 flagged and 40 not, in `plugin/gate/Fixtures/judge-comments/`. Split: 46 report (24 flagged), 34 tune. labels.json is empty.
+- Labelling: `node tests/judge_labelling_sheet.mjs apply comments`; a bare `apply` covers both sets.
+- The labels test lives in the adapters test target, because only that target can load the dataset loader.
+
+## Wave 5
+
+### `jev-blocks-carry-a-claude-reason`
+
+Commits and gate: surface 32e2727, behaviour 972ec00; gate 20260930T184430Z-a5b7062e; 7/7 tests proved.
+- `TestJudgeCheck.Dependencies(…, reasonJudge: (any Judge)?, secrets: [String])`; `JudgeBlockReason.attach(_:subjects:answers:questions:identity:reasonJudge:redacting:)`.
+- Each reason call asks a set of 1 question, id `test-quality.<question>`, through the cache. The message suffix reads "; reason from claude/<model> (claude p=0.93)". Claude never changes a severity.
+- Missing reason: failureScenario = "Claude's reason is missing: <why>", and the block stands.
+- `KeylessProcessRunner` strips every backend's key variable from Claude's environment. `liveJudge(root:runner:)` uses the sonnet alias.
+- OPEN for ready-check-cascades-jev-to-claude: advisory reasons must name the @2-jev sub-question that drove the answer (§13.3). It needs A/Judge.swift, JevRendering.swift and JudgePolicy.
