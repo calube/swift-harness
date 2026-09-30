@@ -7,7 +7,8 @@
 // `build-return.review-missing`; a `final` task-proof preset still paying for per-task prove and
 // mutate, or a `per-task` one silently skipping them; the verifier run as a discovery reviewer; an
 // unverified blocker or major starting a fix pass or blocking the task; a reordered verifier
-// answer verifying the wrong finding.
+// answer verifying the wrong finding; a verifier never told where the testing playbook lives, so
+// a playbook-rule finding can never block.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -135,7 +136,7 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       await delay(3)
       const next = (verifies[reviewer] ?? [])[n - 1]
       if (next === undefined) return confirmAll(findings)
-      return typeof next === 'function' ? next(findings) : structuredClone(next)
+      return typeof next === 'function' ? next(findings, prompt) : structuredClone(next)
     }
     const reviewer = REVIEWERS[opts.agentType]
     assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
@@ -446,6 +447,35 @@ const tests = {
     assert.ok(workerCalls[1].prompt.includes('filtering in the Live client'))
     assert.ok(workerCalls[1].prompt.includes('"severity": "major"'), 'the violation reached the fix pass at a lowered severity')
     assert.equal(result.outcome, 'ready-to-merge')
+  },
+
+  async 'a verified playbook-rule major blocks when the verifier is handed the plugin\'s testing playbook — catches test-quality findings citing P1–P11 dropped as unverifiable'() {
+    const pluginRoot = '/plugins/swift-harness/'
+    const playbook = '/plugins/swift-harness/docs/testing-playbook.md'
+    const hollow = finding({
+      kind: 'standards-violation', rule: 'P2', category: 'would-not-fail', file: 'Tests/CatalogCoreTests/CatalogListTests.swift',
+      line: 12, title: 'testLoads passes with the append reverted',
+    })
+    // A verifier can only confirm a P rule it can read: without the playbook's path it refutes.
+    const verifyByPlaybook = (findings, prompt) => ({
+      findings: findings.map(f => ({ ...f, verified: prompt.includes(playbook), verification_note: 'P2 read in the playbook' })),
+    })
+    const { workerCalls, reviewerCalls, verifyCalls, result } = await run(baseArgs({ pluginRoot }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { 'test-quality': [{ findings: [hollow] }] },
+      verifies: { 'test-quality': [verifyByPlaybook] },
+    })
+    assert.equal(workerCalls.length, 2, 'a verified P2 major did not start the fix pass')
+    assert.ok(workerCalls[1].prompt.includes(hollow.title))
+    for (const { prompt } of [...reviewerCalls, ...verifyCalls]) {
+      assert.ok(prompt.includes(playbook), 'an agent prompt lacks the testing playbook')
+      assert.ok(prompt.includes('/plugins/swift-harness/docs/standards.md'), 'an agent prompt lacks the standards')
+    }
+    assert.ok(!workerCalls[0].prompt.includes(playbook), 'the worker prompt changed')
+    assertTaskReturn(result, 'full')
+    for (const bad of ['relative/root', '', 42]) {
+      await assert.rejects(script(baseArgs({ pluginRoot: bad }), async () => {}, () => {}), /build-task: pluginRoot/)
+    }
   },
 
   async 'a dead verifier, or one that returns no entry for a finding, blocks the task without a fix pass — catches unverified findings passing as reviewed'() {

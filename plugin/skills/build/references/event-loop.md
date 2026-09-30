@@ -84,7 +84,8 @@ Workflow({
     model: "<sonnet|opus>",
     review: "<full|gate>",
     taskProof: "<per-task|final>",
-    planSurface: "<plan.json's surfaceCommit, or null>"
+    planSurface: "<plan.json's surfaceCommit, or null>",
+    pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
   }
 })
 ```
@@ -96,6 +97,10 @@ Workflow({
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
+- `pluginRoot`: the absolute plugin root. A workflow script can't read the environment, and the
+  reviewers and their verifiers need it to open the plugin's `docs/standards.md` and
+  `docs/testing-playbook.md`. Without it the verifier can't confirm a finding that cites a playbook
+  rule (`P1`–`P11`), so that finding never blocks the task.
 - `planSurface`: `surfaceCommit` from `plan.json`, or JSON `null` when the plan has none; never
   leave it out. With a sha, the worker writes no surface of its own: its task gate adds
   `--proof-base <planSurface>`, and when a test needs API the plan surface lacks it commits that API
