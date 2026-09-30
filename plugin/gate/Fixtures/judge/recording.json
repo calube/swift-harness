@@ -7,69 +7,69 @@
           "yes" : 0.02
         },
         "question" : "fails-if-broken",
-        "rationale" : "It only asserts that a state initialized with count 1 has count 1; the reducer's incrementButtonTapped is never invoked, so breaking it wouldn't fail the test."
+        "rationale" : "It only checks that State(count: 1) has count 1; it never sends incrementButtonTapped, so breaking the reducer would not fail it."
       },
       {
         "distribution" : {
-          "T1" : 0.93,
+          "T1" : 0.95,
           "T2" : 0.02,
-          "T3" : 0.05
+          "T3" : 0.03
         },
         "question" : "tier",
-        "rationale" : "It's a pure state\/logic check with no rendering or UI flow, so it belongs in host unit tests (T1)."
+        "rationale" : "It is a pure state-initialization check with no views or UI, so it belongs with host unit tests."
       },
       {
         "distribution" : {
-          "partial" : 0.09,
+          "partial" : 0.06,
           "specific" : 0.01,
-          "vague" : 0.9
+          "vague" : 0.93
         },
         "question" : "name-specificity",
-        "rationale" : "'counter works — catches counter bugs' names no symptom and just restates generic behavior."
+        "rationale" : "'counter works — catches counter bugs' names no symptom and just restates the behavior."
       },
       {
         "distribution" : {
-          "no" : 0.9,
-          "yes" : 0.1
+          "no" : 0.85,
+          "yes" : 0.15
         },
         "question" : "asserts-implementation",
-        "rationale" : "It doesn't assert call order, collaborators, or logs; it's a tautological check of an initializer value rather than implementation details."
+        "rationale" : "It asserts initial state rather than call order or collaborators. It is trivial and tautological, not implementation-coupled."
       }
     ],
     "call-count-coupling" : [
       {
         "distribution" : {
-          "no" : 0.3,
-          "yes" : 0.7
+          "no" : 0.1,
+          "yes" : 0.9
         },
         "question" : "fails-if-broken",
-        "rationale" : "The exact call-list assertion fails if fetchItems is skipped or called twice. It never checks that items updated, and it already mismatches the production code, which never logs 'refresh done'."
+        "rationale" : "It asserts the exact call list, so removing the fetch or the log fails it. It already fails against the shown refresh(), which never logs."
       },
       {
         "distribution" : {
           "T1" : 0.97,
-          "T2" : 0.02,
-          "T3" : 0.01
+          "T2" : 0.01,
+          "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "It's a host-side model test that uses a fake API client, so it belongs in T1."
+        "rationale" : "It is a host-level model test that uses fake closures and has no UI."
       },
       {
         "distribution" : {
-          "partial" : 0.17,
+          "partial" : 0.22,
           "specific" : 0.03,
-          "vague" : 0.8
+          "vague" : 0.75
         },
         "question" : "name-specificity",
-        "rationale" : "'Catches refresh regressions' names no user-visible symptom. The rest just restates which collaborator is called."
+        "rationale" : "The name restates the behavior (calls fetchItems, logs) and only says 'refresh regressions', with no user-visible symptom."
       },
       {
         "distribution" : {
-          "no" : 0.04,
-          "yes" : 0.96
+          "no" : 0.05,
+          "yes" : 0.95
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts which collaborator was called, in what order, and the exact log text, and it doesn't assert the resulting items."
+        "rationale" : "It checks which collaborators were called, in what order, and the exact log text, and it never checks the resulting items."
       }
     ],
     "cancel-on-dismiss" : [
@@ -79,7 +79,7 @@
           "yes" : 0.85
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the cancel were removed, the polling effect would still be running after onDisappear. TestStore would then fail on the clock advance, either through a received action that wasn't asserted or an effect still in flight at the end of the test. The onAppear polling is assumed to emit actions on the clock."
+        "rationale" : "If the cancel were removed, the running poll effect would emit actions after clock.advance, and TestStore would fail on the unexpected action or on the effect still running at the end. There is a small chance the .onAppear effect is not a long-running poll, which would make the test pass either way."
       },
       {
         "distribution" : {
@@ -88,24 +88,24 @@
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "It is a TestStore reducer test with a TestClock, so it runs on the host as a logic test."
+        "rationale" : "It is a TestStore reducer test using TestClock, so it runs as a host unit test of logic."
       },
       {
         "distribution" : {
-          "partial" : 0.15,
-          "specific" : 0.82,
-          "vague" : 0.03
+          "partial" : 0.2,
+          "specific" : 0.75,
+          "vague" : 0.05
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a concrete symptom: a background poll draining battery after dismissal."
+        "rationale" : "The name describes a user-visible symptom: a background poll draining battery after the screen is dismissed."
       },
       {
         "distribution" : {
-          "no" : 0.88,
-          "yes" : 0.12
+          "no" : 0.85,
+          "yes" : 0.15
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts no internal state. The only check is that no further actions arrive after disappearing, which is observable behavior."
+        "rationale" : "It checks that no further actions arrive after disappearing, which is observable behavior. It doesn't check internal state or call order. The cancel ID is an implementation detail, but the test doesn't assert on it directly."
       }
     ],
     "cart-total-discount" : [
@@ -115,16 +115,16 @@
           "yes" : 0.95
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the discount were ignored, total would be 10 rather than 9, so the #expect fails."
+        "rationale" : "If the discount were ignored, total would be 10 and the #expect(total == 9) would fail."
       },
       {
         "distribution" : {
-          "T1" : 0.97,
+          "T1" : 0.98,
           "T2" : 0.01,
-          "T3" : 0.02
+          "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "Pure logic on a model type, run on the host with no UI or platform involvement."
+        "rationale" : "Pure logic on a Cart model's computed property, which a host unit test covers."
       },
       {
         "distribution" : {
@@ -133,7 +133,7 @@
           "vague" : 0.03
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a concrete caller-visible symptom: customers charged the undiscounted price."
+        "rationale" : "The name states a concrete caller-visible symptom: customers being charged the undiscounted price."
       },
       {
         "distribution" : {
@@ -141,17 +141,521 @@
           "yes" : 0.03
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts only the observable total value, with no collaborators or internal state."
+        "rationale" : "It asserts only the observable total value, with no reference to internals or collaborators."
       }
     ],
-    "counter-increment" : [
+    "case-0bd1b3" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the store isn't wired to the view, the displayed label wouldn't change and the assertions on \"2\" and \"1\" would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.03,
+          "T2" : 0.12,
+          "T3" : 0.85
+        },
+        "question" : "tier",
+        "rationale" : "It uses XCUIApplication, launches the app, and taps buttons. That is an end-to-end XCUITest UI flow, so it belongs in T3, not T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.6,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes the user-visible behavior, and the doc comment names the symptom: the counter buttons not updating the on-screen value."
+      },
+      {
+        "distribution" : {
+          "no" : 0.96,
+          "yes" : 0.04
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks only the visible label after taps, which is observable behavior and not internal state or collaborator calls."
+      }
+    ],
+    "case-16a0e2" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If countLabel returned \"1 taps\" for count 1, the #expect on \"1 tap\" would fail; the TestStore send also checks count state."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.93,
+          "T2" : 0.05,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test with a pure computed-property check on state. It needs no simulator or rendering, so it is host-runnable logic and belongs in T1 even though it currently lives in T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.08,
+          "specific" : 0.9,
+          "vague" : 0.02
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says it catches the counter label saying '1 taps', which is a user-visible symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.93,
+          "yes" : 0.07
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the user-visible label text and the resulting count state after a tap, not call order or collaborators."
+      }
+    ],
+    "case-1d1de2" : [
+      {
+        "distribution" : {
+          "no" : 0.88,
+          "yes" : 0.12
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test uses ImmediateClock and only asserts 3 requests were made. If the backoff delay were removed or made linear, it would still pass. It only catches the retry count breaking, not the delay the name describes."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a logic test of an API client with a fake transport and a fake clock, so it belongs in a host unit test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.2,
+          "specific" : 0.75,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name gives a concrete symptom: retries hammering the server without delay. The test itself doesn't check that symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "The request count is fairly observable behavior, since it is the retry outcome at the transport boundary. It does lean on the collaborator's recorded calls, but it doesn't assert call order, internal state or log text."
+      }
+    ],
+    "case-2569f2" : [
+      {
+        "distribution" : {
+          "no" : 0.2,
+          "yes" : 0.8
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "String(describing: body) includes modifier type info with identifier strings, so removing an identifier would likely drop it from the description; somewhat fragile but it does detect removal."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.3,
+          "T2" : 0.6,
+          "T3" : 0.1
+        },
+        "question" : "tier",
+        "rationale" : "It inspects a SwiftUI view's body for rendering\/accessibility properties, which is view-level, so it fits T2 rather than reducer logic, though it runs without a simulator."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.6,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "Name states the symptom: UI tests losing their handles because identifiers are missing."
+      },
+      {
+        "distribution" : {
+          "no" : 0.5,
+          "yes" : 0.5
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It matches substrings in the debug description of the view body, an implementation detail, though the identifiers are a real accessibility contract."
+      }
+    ],
+    "case-260aa3" : [
+      {
+        "distribution" : {
+          "no" : 0.1,
+          "yes" : 0.9
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If decrement stopped subtracting 1, count would not be -1 and the #expect would fail; the test does not check that fact is cleared."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test that runs on the host, so it is logic-level T1."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.22,
+          "specific" : 0.03,
+          "vague" : 0.75
+        },
+        "question" : "name-specificity",
+        "rationale" : "'catches counter bugs' names no symptom and only restates that the test covers the counter."
+      },
+      {
+        "distribution" : {
+          "no" : 0.93,
+          "yes" : 0.07
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the observable count value after a user action, not call order or internal collaborators."
+      }
+    ],
+    "case-277d33" : [
+      {
+        "distribution" : {
+          "no" : 0.2,
+          "yes" : 0.8
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the computer skipped its turn, the RNG wouldn't advance and the assertion fails. A caveat: nextIndex might consume a different number of RNG draws than next(), which could make the test brittle or pass or fail incorrectly."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It tests a pure reducer\/engine function on the host with no UI."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.65,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes the symptom 'computer skipping its turn', which is caller-visible."
+      },
+      {
+        "distribution" : {
+          "no" : 0.25,
+          "yes" : 0.75
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts internal RNG state advanced by one draw rather than checking the board has one O. That is an implementation detail and is coupled to how the RNG is consumed."
+      }
+    ],
+    "case-2e7a20" : [
+      {
+        "distribution" : {
+          "no" : 0.3,
+          "yes" : 0.7
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The snapshot renders the loading state with the disabled button and ProgressView, so changes to that UI would fail it. It's a coarse test, though, and it can't tell meaningful changes from incidental ones."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.03,
+          "T2" : 0.95,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a snapshot of a hosted SwiftUI view on a simulator device config, which is T2 rendering."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.13,
+          "specific" : 0.02,
+          "vague" : 0.85
+        },
+        "question" : "name-specificity",
+        "rationale" : "'catches changes' names no symptom. It only restates what a snapshot test does."
+      },
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It compares rendered output, which is what the user sees. It doesn't check internal calls or state."
+      }
+    ],
+    "case-387fa2" : [
+      {
+        "distribution" : {
+          "no" : 0.55,
+          "yes" : 0.45
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "It checks the constant's count and cell coverage, so deleting a line fails it. A wrong line, such as [0,1,3], could still pass, and it never calls outcome()."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a pure logic check on a static constant, so it belongs in host unit tests."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.6,
+          "specific" : 0.25,
+          "vague" : 0.15
+        },
+        "question" : "name-specificity",
+        "rationale" : "It names a missing win line, which is an area of failure. It doesn't name a user-visible symptom such as a win going undetected."
+      },
+      {
+        "distribution" : {
+          "no" : 0.28,
+          "yes" : 0.72
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the internal winningLines data structure (count and union of cells) instead of outcomes from outcome(of:)."
+      }
+    ],
+    "case-3d100f" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the outcome guard were removed, a move at cell 8 would change the board, so the equality check would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a pure reducer\/engine logic test that runs on the host."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.17,
+          "specific" : 0.03,
+          "vague" : 0.8
+        },
+        "question" : "name-specificity",
+        "rationale" : "'catches regressions' names no symptom; 'game over' only hints at an area."
+      },
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts that state is unchanged after a move on a finished game, which is observable behavior."
+      }
+    ],
+    "case-401e9f" : [
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test only checks that the same seed gives the same board twice. An engine that ignored its RNG and played a fixed move would still pass. So it wouldn't catch the regression in its name."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a pure logic test of a game engine replay, so it belongs in a host unit test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.5,
+          "specific" : 0.3,
+          "vague" : 0.2
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says the engine ignores its injected RNG, which is a concrete failure mode. It names no user-visible symptom, though, and the name doesn't match what the test checks."
+      },
+      {
+        "distribution" : {
+          "no" : 0.8,
+          "yes" : 0.2
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It compares the final boards, which is observable output. The determinism check does touch the RNG a little, but it doesn't assert on internals."
+      }
+    ],
+    "case-408f1a" : [
       {
         "distribution" : {
           "no" : 0.04,
           "yes" : 0.96
         },
         "question" : "fails-if-broken",
-        "rationale" : "TestStore asserts count changes to 1 then 2; if increment stopped advancing, the state assertions would fail."
+        "rationale" : "If attributes were eagerly evaluated, attributeBuilds would be 2 and the expect would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "Pure logic test of LogClient with fake emit closures on the host."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.65,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "Names the symptom: logging cost paid when disabled, i.e. attributes built for disabled levels. It is a performance symptom rather than a user-visible one."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It counts attribute builds, which is laziness and somewhat internal, but that is the contract of the autoclosure. It also checks the emitted records, which is observable behavior."
+      }
+    ],
+    "case-54ed4b" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "TestStore asserts count goes 2 to 1, so breaking the decrement would fail. TestStore also fails on any unasserted state change, such as fact being modified, but fact is already nil here so that part is weakly covered."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a reducer test using TestStore and runs on the host. It has no UI, so the current T3 placement is wrong."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.13,
+          "specific" : 0.02,
+          "vague" : 0.85
+        },
+        "question" : "name-specificity",
+        "rationale" : "'decrement works — catches bugs' restates the behavior and names no symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.95,
+          "yes" : 0.05
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the observable state change (count) after a user action, not call order or collaborators."
+      }
+    ],
+    "case-574e3a" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "TestStore asserts state changes and receiving factResponse; if loading never resolved or the fact was not set, the test would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a reducer test using TestStore with a faked dependency, which is host-level logic."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.65,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name states a symptom, 'the loading state never resolving', which a user would see as a spinner that never stops."
+      },
+      {
+        "distribution" : {
+          "no" : 0.75,
+          "yes" : 0.25
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "Mostly it asserts observable state. The call-count check on the collaborator is a minor implementation detail."
+      }
+    ],
+    "case-5778d5" : [
+      {
+        "distribution" : {
+          "no" : 0.1,
+          "yes" : 0.9
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The board is full with no winning line, so the test fails if outcome() stops returning .draw, for example by returning .inProgress or a false win."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.98,
+          "T2" : 0.01,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It tests a pure function on the host with no UI involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.17,
+          "specific" : 0.03,
+          "vague" : 0.8
+        },
+        "question" : "name-specificity",
+        "rationale" : "'draw works — catches draw bugs' restates the behavior and names no symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.97,
+          "yes" : 0.03
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts only the returned outcome for a given board, which is observable behavior."
+      }
+    ],
+    "case-5e44c5" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "Removing the Accept header setValue makes the header nil, so the #expect fails."
       },
       {
         "distribution" : {
@@ -160,16 +664,916 @@
           "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "Reducer test using TestStore on the host; no rendering or UI flow."
+        "rationale" : "Client with a fake transport on host; no UI or rendering involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.7,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "Name cites a concrete symptom: the server answering with an HTML page instead of JSON."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It inspects the outgoing request header, which is the client's observable contract with the server, though it does check a collaborator's captured input."
+      }
+    ],
+    "case-5fab6d" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the accessor used a different key than the override path, the stubbed fact wouldn't be returned, so the expectation would fail. Some doubt because the override goes through the same accessor, so a swapped key could still round-trip."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.95,
+          "T2" : 0.03,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a pure logic test of dependency wiring that runs on the host with no rendering or UI. It belongs in T1, not T2."
       },
       {
         "distribution" : {
           "partial" : 0.3,
-          "specific" : 0.55,
+          "specific" : 0.65,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes a concrete failure, the accessor wired to a different key than the override. That is a caller-visible symptom, though it is about wiring rather than a user-facing effect."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the observable value a reader gets from the dependency and doesn't check call order or internals."
+      }
+    ],
+    "case-6077a8" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the status guard were removed, a 500 response would return data and no error would be thrown, so the expectation fails."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It tests a client with a fake transport in a host unit test, with no UI involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.7,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says error pages being decoded as data, which is a caller-visible symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks only that an error is thrown for a 500 response, which is observable behavior. The error type isn't checked."
+      }
+    ],
+    "case-7bbfdf" : [
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test asserts only that rng is unchanged after reset, not that the board is cleared. A board left full would still pass. The old code, which reset to seed 0, might even fail it, but that isn't the named behavior."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It tests a pure reducer\/engine function on the host, so it is a T1 logic test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.65,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says it catches a board left full after reset, which is a visible symptom. The assertion doesn't match the name."
+      },
+      {
+        "distribution" : {
+          "no" : 0.4,
+          "yes" : 0.6
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts internal rng state equality rather than observable board contents, which leans toward implementation detail."
+      }
+    ],
+    "case-7e8258" : [
+      {
+        "distribution" : {
+          "no" : 0.88,
+          "yes" : 0.12
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "It only checks that the counter.value text exists after tapping. It never reads the count, so a broken increment would still pass."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.1,
+          "T2" : 0.05,
+          "T3" : 0.85
+        },
+        "question" : "tier",
+        "rationale" : "It is an XCUITest that launches the app and taps a button, so it is an end-to-end UI flow. It fits T3 by form, though the behavior could be covered by a reducer test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.1,
+          "vague" : 0.6
+        },
+        "question" : "name-specificity",
+        "rationale" : "'Increment updates the count' restates the behavior and names no symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It uses only UI-visible elements found by accessibility identifiers. It doesn't assert internal state or call order. Its weakness is that the assertion is too weak, not that it checks implementation."
+      }
+    ],
+    "case-88cfe5" : [
+      {
+        "distribution" : {
+          "no" : 0.97,
+          "yes" : 0.03
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test builds a Fact locally and compares its text to the same literal. It never touches APIClient.previewValue, so breaking the preview value wouldn't fail it."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.93,
+          "T2" : 0.05,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a plain host-level logic test with no rendering or UI, so T1 fits."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.4,
+          "specific" : 0.45,
           "vague" : 0.15
         },
         "question" : "name-specificity",
-        "rationale" : "Name states a symptom (counter not advancing on tap, shows 2), which is user-visible, though it's fairly simple."
+        "rationale" : "The name describes a symptom, previews and snapshots reaching for the network. That is fairly specific, but it is not a user-visible symptom, and the test body doesn't match the claim."
+      },
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks a value's own field against a literal. That is a tautology, not an assertion about collaborators, call order or internal state."
+      }
+    ],
+    "case-89ea7f" : [
+      {
+        "distribution" : {
+          "no" : 0.88,
+          "yes" : 0.12
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test only asserts isLoadingFact becomes true after the tap. With exhaustivity off, it never awaits the factResponse, so a loading state that never resolves, or a missing fact, would still pass."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.96,
+          "T2" : 0.02,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a TestStore reducer test with a faked dependency, which is host-level logic testing."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.30000000000000004,
+          "specific" : 0.6000000000000001,
+          "vague" : 0.10000000000000002
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name cites a symptom, the loading state never resolving. That is user-visible, although the test doesn't actually check it."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts state, isLoadingFact, which is observable behavior. It doesn't check call order or which collaborator was called."
+      }
+    ],
+    "case-93fe9c" : [
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The assertion checks a locally constructed response's statusCode (204), which is unrelated to the client. It only fails if the call throws, so it would catch a thrown error but not a wrong body."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It tests client logic with a fake client on the host, so it is a unit test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.6,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name gives a symptom: successful responses treated as failures. It is reasonably specific, though 'return the body' is not what the test checks."
+      },
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts no internals. The assertion is tautological instead of implementation-coupled."
+      }
+    ],
+    "case-9e63a6" : [
+      {
+        "distribution" : {
+          "no" : 0.1,
+          "yes" : 0.9
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "It reads real OSLogStore entries and checks count, category, level and message, so a client that drops log lines fails it. The only doubt is OSLogStore flakiness."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.8,
+          "T2" : 0.12,
+          "T3" : 0.08
+        },
+        "question" : "tier",
+        "rationale" : "It is a host-level test of a logging client with no UI. It does touch a platform API (OSLogStore), which leaves some chance it belongs in T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.7,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says the catch is 'the live client silently dropping every log line'. That is a concrete symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.8,
+          "yes" : 0.2
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the observable result in unified logging, not which collaborator was called. The composed message prefix is a little format-specific."
+      }
+    ],
+    "case-a07140" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the failure path broke (no factFailed, isLoadingFact not reset, or no logging), the TestStore receive or call-count expectations would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "TestStore reducer test with fake dependencies runs on the host, so it is a logic unit test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.33,
+          "specific" : 0.07,
+          "vague" : 0.6
+        },
+        "question" : "name-specificity",
+        "rationale" : "'is handled — catches regressions' names no user-visible symptom and mostly restates the behavior."
+      },
+      {
+        "distribution" : {
+          "no" : 0.4,
+          "yes" : 0.6
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It counts calls to the API and log collaborators, which is implementation detail, though the state assertions on isLoadingFact are observable behavior."
+      }
+    ],
+    "case-a1d5f0" : [
+      {
+        "distribution" : {
+          "no" : 0.97,
+          "yes" : 0.03
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The only assertion checks a locally constructed State(count: 5).count == 5, which is always true. With exhaustivity off, store.send asserts nothing, so a broken increment would still pass."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.96,
+          "T2" : 0.02,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test that runs on the host, so it belongs in T1."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.65,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name gives a visible symptom: the increment button doing nothing. It is reasonably specific even though the test body doesn't check it."
+      },
+      {
+        "distribution" : {
+          "no" : 0.95,
+          "yes" : 0.05
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks no internal details such as call order or collaborators. The assertion is tautological, not implementation-coupled."
+      }
+    ],
+    "case-a4d740" : [
+      {
+        "distribution" : {
+          "no" : 0.2,
+          "yes" : 0.8
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If level, category, message or attributes were dropped from the emitted record, the equality check would fail. One caveat is that testValue's isEnabled may gate emission, but the test seems to assume it is enabled. The autoclosure change itself is covered too, since attributes are still evaluated and emitted."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It is a host unit test of a logging client using a fake emit closure, with no UI involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.45,
+          "specific" : 0.45,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says 'catches lost log fields', which describes a caller-visible symptom of fields going missing. It doesn't say which field, so it sits between partial and specific."
+      },
+      {
+        "distribution" : {
+          "no" : 0.8,
+          "yes" : 0.2
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the record the client emits, which is the client's observable output. The emit closure is the client's seam and is being used as the output channel. It does not check call order or internal state."
+      }
+    ],
+    "case-a6f159" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If any level mapped to the wrong OSLogType, the matching #expect would fail; all five levels are covered."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.96,
+          "T2" : 0.03,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It tests a pure mapping function on the host with no rendering, views or simulator, so it is a T1 logic test even though it currently sits in T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.2,
+          "specific" : 0.75,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name gives a visible symptom: errors filed as debug noise in Console."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the function's input-to-output mapping, which is the observable contract. It doesn't check call order, internal state or collaborators."
+      }
+    ],
+    "case-ad08e1" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the view read the wrong state, the inspected text would differ from \"42\" and the test would fail. The remaining risk is that ViewInspector is brittle about structure."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.15,
+          "T2" : 0.75,
+          "T3" : 0.1
+        },
+        "question" : "tier",
+        "rationale" : "It inspects a SwiftUI view's rendered content with ViewInspector, which is view rendering rather than reducer logic, so it fits T2 better than T1."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.5,
+          "specific" : 0.3,
+          "vague" : 0.2
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says the view reads the wrong state, which is a cause and not a visible symptom. It is somewhat specific but does not describe what the user would see."
+      },
+      {
+        "distribution" : {
+          "no" : 0.8,
+          "yes" : 0.2
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the displayed text, which is observable output. The vStack().text(0) index lookup couples it slightly to the view structure."
+      }
+    ],
+    "case-b8c208" : [
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test only sends .factButtonTapped and asserts isLoadingFact = true. With exhaustivity off, it never awaits .factFailed or checks that the spinner stops, so breaking the failure handling would not fail it."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.95,
+          "T2" : 0.02,
+          "T3" : 0.03
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test with a faked dependency, so it belongs in T1 and not in T3 where it currently sits."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.15,
+          "specific" : 0.8,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name states a user-visible symptom: a spinner that never goes away after a failed request."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the state change isLoadingFact, which is observable state and not call order or collaborator use. The problem is that it asserts too little, not that it asserts internals."
+      }
+    ],
+    "case-b93034" : [
+      {
+        "distribution" : {
+          "no" : 0.2,
+          "yes" : 0.8
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If testValue stopped reporting an issue or threw on unstubbed calls (e.g. returned a fact), the known-issue and throws expectations would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "Pure host-side test of a dependency client's test value, with no UI or rendering."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.2,
+          "specific" : 0.75,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "Names the symptom: a feature test passing on a made-up fact it never stubbed."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the observable behavior that an unstubbed call throws and reports an issue. The issue description match on 'randomFact' leans slightly toward internal text."
+      }
+    ],
+    "case-bea4db" : [
+      {
+        "distribution" : {
+          "no" : 0.04,
+          "yes" : 0.96
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "TestStore asserts state.fact becomes nil after increment; removing the new line makes the state mismatch and the test fails."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test with faked dependencies, which runs on the host as logic."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.12,
+          "specific" : 0.85,
+          "vague" : 0.03
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes a stale fact shown next to a new count, which is a user-visible symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts state changes, which are observable behavior. The request-count check is a minor collaborator assertion, but it backs the claim that no fetch happens."
+      }
+    ],
+    "case-c4354f" : [
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "A snapshot comparison fails if the fact text or layout changes. It would miss a change that leaves the rendering identical, such as a broken accessibility identifier."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.03,
+          "T2" : 0.94,
+          "T3" : 0.03
+        },
+        "question" : "tier",
+        "rationale" : "It is a snapshot test of a hosted view on a simulator device config, not an XCUITest flow, so it belongs in T2 even though it currently sits in T3."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.6,
+          "specific" : 0.3,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says layout regressions in the counter screen. That names an area but no concrete symptom such as truncated text."
+      },
+      {
+        "distribution" : {
+          "no" : 0.95,
+          "yes" : 0.05
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It snapshots rendered output and doesn't check internal calls or state, so it tests what the user sees."
+      }
+    ],
+    "case-c5276f" : [
+      {
+        "distribution" : {
+          "no" : 0.1,
+          "yes" : 0.9
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the .factResponse case stopped clearing isLoadingFact or setting fact, the TestStore state assertions would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.96,
+          "T2" : 0.03,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test that runs on the host with no rendering, so it belongs in T1, not T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.55,
+          "specific" : 0.15,
+          "vague" : 0.3
+        },
+        "question" : "name-specificity",
+        "rationale" : "'Fact display issues' names an area but no concrete symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the resulting state (loading flag and fact text), which is what the user sees. It doesn't check call order or which collaborator was called."
+      }
+    ],
+    "case-d8b98a" : [
+      {
+        "distribution" : {
+          "no" : 0.3,
+          "yes" : 0.7
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "A dump snapshot of the view with count 5 would change if the text, buttons, or identifiers changed, but the name is generic and dump snapshots may miss some changes such as fonts."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.3,
+          "T2" : 0.62,
+          "T3" : 0.08
+        },
+        "question" : "tier",
+        "rationale" : "It is a view snapshot test, which is rendering and view-structure coverage, so it belongs in T2. It runs as a host test with the .dump strategy, so T1 is plausible."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.1,
+          "specific" : 0.02,
+          "vague" : 0.88
+        },
+        "question" : "name-specificity",
+        "rationale" : "'catches regressions' names no symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "A dump snapshot captures the view's structure, which is partly internal and brittle. It still describes what the view renders rather than call order or which collaborator was used."
+      }
+    ],
+    "case-db1b45" : [
+      {
+        "distribution" : {
+          "no" : 0.12,
+          "yes" : 0.88
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the failure path broke (no factFailed, loading not reset, or no log), the store receive or expectations would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "TestStore reducer test with fake dependencies runs on host; it belongs in T1, not simulator."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.6,
+          "specific" : 0.2,
+          "vague" : 0.2
+        },
+        "question" : "name-specificity",
+        "rationale" : "Name says 'catches failures' about fact failure; names the area but no user-visible symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.5,
+          "yes" : 0.5
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "State and action flow are observable behavior, but asserting exact log message and category from the log collaborator is implementation detail."
+      }
+    ],
+    "case-e0ffb4" : [
+      {
+        "distribution" : {
+          "no" : 0.9,
+          "yes" : 0.1
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The only assertion compares a local constant to the same literal, so it always passes. The tap would only fail if the button were missing, and even then only weakly."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.03,
+          "T2" : 0.07,
+          "T3" : 0.9
+        },
+        "question" : "tier",
+        "rationale" : "It uses XCUIApplication, launches the app and taps a button, so it is an end-to-end XCUITest and belongs in T3, not T1."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.22,
+          "specific" : 0.03,
+          "vague" : 0.75
+        },
+        "question" : "name-specificity",
+        "rationale" : "'testFactButton' names the button but no symptom or regression."
+      },
+      {
+        "distribution" : {
+          "no" : 0.95,
+          "yes" : 0.05
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts no implementation details. It asserts nothing meaningful, just a tautology."
+      }
+    ],
+    "case-e64c8b" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the severity comparison were inverted or off by one, the assertions on info, notice and fault would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.93,
+          "T2" : 0.05,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a pure logic check on a client's isEnabled closure. It needs no rendering, simulator or UI, so it belongs in a host unit test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.2,
+          "specific" : 0.75,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes symptoms a user or caller would see: debug logs shipping in release, or errors being dropped."
+      },
+      {
+        "distribution" : {
+          "no" : 0.92,
+          "yes" : 0.08
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the public isEnabled result for each level and does not look at internal severity numbers or which collaborators were called."
+      }
+    ],
+    "case-e88fb3" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the failure log were removed or changed, the #expect on the records would fail. If factFailed were not sent, store.receive would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a TestStore reducer test with faked dependencies, which is host-level logic."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.7,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name says 'catches a silent failure', which describes a concrete symptom: a failed request that goes unlogged."
+      },
+      {
+        "distribution" : {
+          "no" : 0.55,
+          "yes" : 0.45
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It checks the exact log message text and the logClient collaborator, which are implementation details. The logged error is arguably the named behavior, though, and the state assertions are observable."
+      }
+    ],
+    "case-e9f4f5" : [
+      {
+        "distribution" : {
+          "no" : 0.07,
+          "yes" : 0.93
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "Exact argument lists are asserted, so reverting to the old subcommand or dropping the build-results call would fail it, and so would wrong contents."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a host unit test of a reader with a fake runner and fixtures; no UI is involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.6,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name states the symptom of calling a subcommand that Xcode 26.2 lacks, which is concrete, though it is tied to the implementation."
+      },
+      {
+        "distribution" : {
+          "no" : 0.3,
+          "yes" : 0.7
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the exact executable and argument lists passed to the runner, which is which-collaborator-was-called detail. The contents assertions are observable, but the invocation check dominates."
+      }
+    ],
+    "case-ec67cf" : [
+      {
+        "distribution" : {
+          "no" : 0.25,
+          "yes" : 0.75
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "A snapshot test of the view with a fact set would fail if the fact text rendering or layout changed, though it's a reference-image comparison, so it only catches visual changes it was recorded with."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.05,
+          "T2" : 0.93,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It's a snapshot test of a UIHostingController on a simulator device config, which is rendering\/platform integration (T2), not a host reducer test."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.22,
+          "specific" : 0.03,
+          "vague" : 0.75
+        },
+        "question" : "name-specificity",
+        "rationale" : "'catches rendering issues' names no symptom and restates that the screen renders."
       },
       {
         "distribution" : {
@@ -177,7 +1581,187 @@
           "yes" : 0.07
         },
         "question" : "asserts-implementation",
-        "rationale" : "Asserts resulting state count, which is the observable behavior of the reducer, not call order or collaborators."
+        "rationale" : "It compares rendered output, which is observable behavior, not internal calls or state."
+      }
+    ],
+    "case-ef3239" : [
+      {
+        "distribution" : {
+          "no" : 0.04,
+          "yes" : 0.96
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the delay stopped growing (for example a constant 1s), the sleeps assertion [1s, 2s] would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a host unit test of client retry logic. It uses a fake clock and a scripted transport, with no UI."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.65,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name states the symptom, a backoff that does not grow between attempts. That is caller-visible timing, though it is not a user-facing symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "The recorded sleep durations are a fake-clock proxy for the backoff timing, which is the behavior under test. The test does not check call order or internal state, though it does depend on a clock collaborator."
+      }
+    ],
+    "case-fa9b3c" : [
+      {
+        "distribution" : {
+          "no" : 0.98,
+          "yes" : 0.02
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The test only checks a local array against a range and never calls HTTPClient.data(for:), so breaking production code can't fail it."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.93,
+          "T2" : 0.02,
+          "T3" : 0.05
+        },
+        "question" : "tier",
+        "rationale" : "It's a pure logic check with no UI or platform dependency, so T1 fits, even though it tests nothing real."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.17,
+          "specific" : 0.03,
+          "vague" : 0.8
+        },
+        "question" : "name-specificity",
+        "rationale" : "'Catches status bugs' names no symptom and just restates the area."
+      },
+      {
+        "distribution" : {
+          "no" : 0.95,
+          "yes" : 0.05
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts no internals, collaborators or call order. It's a tautology on local data, not an implementation-coupled check."
+      }
+    ],
+    "case-fe09f3" : [
+      {
+        "distribution" : {
+          "no" : 0.2,
+          "yes" : 0.8
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "The old code reset to GameState(seed: 0), so rng differed from seed 9's rng. The new code keeps rng, so the rng != assertion would fail if the change regressed the behavior. The board-empty check would also catch a broken clear."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.96,
+          "T2" : 0.02,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It calls the pure GameEngine.step function directly with no views or UI, so it is a host unit test of logic and belongs in T1, not T2."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.5,
+          "specific" : 0.1,
+          "vague" : 0.4
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name mentions reset and the generator and says 'catches reset problems'. That names an area but no user-visible symptom."
+      },
+      {
+        "distribution" : {
+          "no" : 0.55,
+          "yes" : 0.45
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "The board-empty check is observable behavior. The rng inequality inspects internal state, and it is also oddly worded: seed 9 after one move may differ from fresh seed 9 regardless of reset. That leans toward implementation detail, but the test is mostly state-based."
+      }
+    ],
+    "case-ff12ee" : [
+      {
+        "distribution" : {
+          "no" : 0.12,
+          "yes" : 0.88
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If launch failure were no longer mapped to .notOnPath (e.g. returned true), the outcome expectation would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "Pure logic test using a fake process runner on the host, with no UI."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.25,
+          "specific" : 0.7,
+          "vague" : 0.05
+        },
+        "question" : "name-specificity",
+        "rationale" : "It names the symptom 'design-lint blocking where mmdc is absent', which a caller would see."
+      },
+      {
+        "distribution" : {
+          "no" : 0.7,
+          "yes" : 0.3
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "The main assertion is on the outcome. The invocations.count == 1 check is a mild collaborator-call check, but most of the test is about observable behavior."
+      }
+    ],
+    "counter-increment" : [
+      {
+        "distribution" : {
+          "no" : 0.05,
+          "yes" : 0.95
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "TestStore asserts exact state after each send; if count didn't advance or advanced wrongly, the assertion would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It's a reducer test using TestStore, which runs on the host with no UI."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.3,
+          "specific" : 0.6,
+          "vague" : 0.1
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes a visible symptom: the counter not advancing on tap, and the expected value of 2. It is simple, but the symptom is concrete."
+      },
+      {
+        "distribution" : {
+          "no" : 0.93,
+          "yes" : 0.07
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the resulting count state after user actions, which is observable behavior, not internal call order or collaborators."
       }
     ],
     "date-formatting-boundary" : [
@@ -187,7 +1771,7 @@
           "yes" : 0.85
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the same-day check were removed, 23:59 today would read 'Upcoming' or 'Overdue' and the test would fail; a small chance a broken variant still passes."
+        "rationale" : "If the same-day check were dropped or replaced with a plain due < now comparison, the 23:59 due date would read 'Upcoming' or 'Overdue' and the test would fail. The fixed timestamp and time zone make it deterministic. The one weak spot is that it would still pass if the bug only appeared for some other time of day."
       },
       {
         "distribution" : {
@@ -196,7 +1780,7 @@
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "Pure function with injected calendar and date; a host unit test fits."
+        "rationale" : "It tests a pure function with an injected calendar and date, so it is a host unit test of logic."
       },
       {
         "distribution" : {
@@ -205,75 +1789,75 @@
           "vague" : 0.03
         },
         "question" : "name-specificity",
-        "rationale" : "The name states the symptom: tasks flagged overdue hours early, and the expected label 'Due today'."
+        "rationale" : "The name describes a user-visible symptom: a task is labelled 'Overdue' hours before it is actually due."
       },
       {
         "distribution" : {
-          "no" : 0.96,
-          "yes" : 0.04
+          "no" : 0.97,
+          "yes" : 0.03
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts only the returned label string, which is observable output, with no collaborators or internal state."
+        "rationale" : "It asserts only the returned label string, which is observable output, and does not check internal state or collaborators."
       }
     ],
     "debounce-search" : [
-      {
-        "distribution" : {
-          "no" : 0.1,
-          "yes" : 0.9
-        },
-        "question" : "fails-if-broken",
-        "rationale" : "If cancelInFlight were removed, both effects would run and TestStore would fail on an unexpected second searchResponse, and results would differ. Without the debounce sleep the test would also fail."
-      },
-      {
-        "distribution" : {
-          "T1" : 0.97,
-          "T2" : 0.01,
-          "T3" : 0.02
-        },
-        "question" : "tier",
-        "rationale" : "It is a TestStore reducer test with a TestClock and a faked API client, so it belongs in the host unit-test tier."
-      },
-      {
-        "distribution" : {
-          "partial" : 0.12,
-          "specific" : 0.85,
-          "vague" : 0.03
-        },
-        "question" : "name-specificity",
-        "rationale" : "The name states the trigger (two queries within 300ms) and the symptom (a stale result overwriting the newest query). The function name 'debounced' is generic, but the display name is specific."
-      },
-      {
-        "distribution" : {
-          "no" : 0.88,
-          "yes" : 0.12
-        },
-        "question" : "asserts-implementation",
-        "rationale" : "It asserts the resulting query and results state, which is observable behavior. The clock and API fakes are only used as setup."
-      }
-    ],
-    "decode-unknown-enum" : [
       {
         "distribution" : {
           "no" : 0.07,
           "yes" : 0.93
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the fallback to .unknown were removed, decoding \"refunded_partial\" would throw or yield a different status, so the test would fail."
+        "rationale" : "Without cancelInFlight, the first effect would also send a response after 300ms. TestStore would then fail on the unreceived or extra searchResponse, and the results would differ."
       },
       {
         "distribution" : {
           "T1" : 0.97,
-          "T2" : 0.02,
-          "T3" : 0.01
+          "T2" : 0.01,
+          "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "It is a pure JSON decoding test that runs on the host with no UI or platform involvement."
+        "rationale" : "It is a reducer test using TestStore and TestClock, so it runs on the host as a logic test."
       },
       {
         "distribution" : {
-          "partial" : 0.12,
-          "specific" : 0.85,
+          "partial" : 0.22,
+          "specific" : 0.75,
+          "vague" : 0.03
+        },
+        "question" : "name-specificity",
+        "rationale" : "The name describes the symptom, a stale result overwriting the newest query, and the input that triggers it."
+      },
+      {
+        "distribution" : {
+          "no" : 0.85,
+          "yes" : 0.15
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts observable state, meaning the query and the results. The fake API only supplies data. The TestStore receive step is idiomatic for TCA and does not check private call order."
+      }
+    ],
+    "decode-unknown-enum" : [
+      {
+        "distribution" : {
+          "no" : 0.05,
+          "yes" : 0.95
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "If the fallback to .unknown were removed, decoding would throw or give a wrong status, so the test would fail."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.98,
+          "T2" : 0.01,
+          "T3" : 0.01
+        },
+        "question" : "tier",
+        "rationale" : "It is a pure JSON decoding logic test that runs on the host with no UI or simulator."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.1,
+          "specific" : 0.87,
           "vague" : 0.03
         },
         "question" : "name-specificity",
@@ -281,21 +1865,21 @@
       },
       {
         "distribution" : {
-          "no" : 0.95,
-          "yes" : 0.05
+          "no" : 0.93,
+          "yes" : 0.07
         },
         "question" : "asserts-implementation",
-        "rationale" : "It checks the decoded status value, which is observable behavior of the decoder, and does not check internals or collaborators."
+        "rationale" : "It checks the decoded status value, which is observable decoding behavior, not internals or collaborator calls."
       }
     ],
     "empty-list-state" : [
       {
         "distribution" : {
-          "no" : 0.12,
-          "yes" : 0.88
+          "no" : 0.1,
+          "yes" : 0.9
         },
         "question" : "fails-if-broken",
-        "rationale" : "TestStore asserts isEmptyStateVisible becomes true after an empty response; if the reducer stopped setting it, the state mutation would mismatch and fail. Initial value presumably false, so the change is meaningful."
+        "rationale" : "TestStore asserts state mutation; if isEmptyStateVisible were not set to true for empty items, the exhaustive assertion would fail."
       },
       {
         "distribution" : {
@@ -304,34 +1888,34 @@
           "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "It is a TestStore reducer test running on the host, which is the T1 logic tier."
+        "rationale" : "It's a reducer test with TestStore, pure logic on the host."
       },
       {
         "distribution" : {
-          "partial" : 0.2,
-          "specific" : 0.75,
+          "partial" : 0.25,
+          "specific" : 0.7,
           "vague" : 0.05
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a user-visible symptom: a blank screen when the user has no items."
+        "rationale" : "Name cites a blank screen when user has no items, which is a user-visible symptom."
       },
       {
         "distribution" : {
-          "no" : 0.85,
-          "yes" : 0.15
+          "no" : 0.88,
+          "yes" : 0.12
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts reducer state that drives the empty state UI, which is observable behavior in TCA. It does not check call order or collaborators."
+        "rationale" : "It asserts state flag driving the empty state visibility, which is observable behavior of the reducer; no collaborator or call-order checks."
       }
     ],
     "engine-replay" : [
       {
         "distribution" : {
-          "no" : 0.15,
-          "yes" : 0.85
+          "no" : 0.12,
+          "yes" : 0.88
         },
         "question" : "fails-if-broken",
-        "rationale" : "Reduces recorded inputs through step and compares to the expected final state, so changes to position or rng logic would fail it; an unchanged-but-nondeterministic source might slip through, and the fixture could be regenerated."
+        "rationale" : "Golden-state replay compares final state to the recorded one, so any change to step, rng, or dt math would make the states differ and the test fail."
       },
       {
         "distribution" : {
@@ -340,24 +1924,24 @@
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "Pure reducer function on a fixture, runs on the host with no UI or platform involvement."
+        "rationale" : "It is a pure function reduce over fixture data. It has no UI or platform dependency, so it belongs in a host unit test."
       },
       {
         "distribution" : {
           "partial" : 0.3,
-          "specific" : 0.6,
-          "vague" : 0.1
+          "specific" : 0.62,
+          "vague" : 0.08
         },
         "question" : "name-specificity",
-        "rationale" : "Names the symptom of saved replays breaking due to nondeterminism, which is a user-visible failure, though somewhat abstract."
+        "rationale" : "The name gives a caller-visible symptom: saved replays break because of nondeterminism. It is somewhat abstract, but it is more than a restatement of the behavior."
       },
       {
         "distribution" : {
-          "no" : 0.88,
-          "yes" : 0.12
+          "no" : 0.85,
+          "yes" : 0.15
         },
         "question" : "asserts-implementation",
-        "rationale" : "Asserts the observable final state from given inputs and seed, not call order or collaborators; the golden-state comparison is coupled to the step logic but is still behavior."
+        "rationale" : "It checks the final state for a given seed and inputs, which is observable determinism. It does not check call order or which collaborator was called. The golden state does tie it loosely to the exact algorithm."
       }
     ],
     "existence-only" : [
@@ -367,16 +1951,16 @@
           "yes" : 0.01
         },
         "question" : "fails-if-broken",
-        "rationale" : "The assertion `config != nil || config == nil` is a tautology and always passes, even if parse throws or breaks."
+        "rationale" : "The assertion `config != nil || config == nil` is a tautology, so it passes whatever parse does. The test can't fail unless the code crashes."
       },
       {
         "distribution" : {
-          "T1" : 0.95,
-          "T2" : 0.03,
+          "T1" : 0.97,
+          "T2" : 0.01,
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "It tests pure parsing logic on Data with no UI or platform involvement, so a host unit test fits."
+        "rationale" : "It exercises pure JSON parsing logic on a host, so it belongs in T1."
       },
       {
         "distribution" : {
@@ -385,7 +1969,7 @@
           "vague" : 0.85
         },
         "question" : "name-specificity",
-        "rationale" : "The name says 'parse returns something' and 'parse failures' with no user- or caller-visible symptom."
+        "rationale" : "The name says 'parse returns something' and 'catches parse failures'. It names no concrete symptom."
       },
       {
         "distribution" : {
@@ -393,17 +1977,53 @@
           "yes" : 0.03
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts nothing about internals, call order or collaborators. The assertion is just vacuous."
+        "rationale" : "It asserts nothing about internals. The assertion is a tautology, not a check on implementation details."
       }
     ],
     "logger-text-coupling" : [
       {
         "distribution" : {
-          "no" : 0.1,
-          "yes" : 0.9
+          "no" : 0.07,
+          "yes" : 0.93
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the logger call is removed or the message text changes, the exact-match expectation on log.messages fails."
+        "rationale" : "If the sync stops logging, or logs the wrong count, the messages array differs and the expectation fails."
+      },
+      {
+        "distribution" : {
+          "T1" : 0.97,
+          "T2" : 0.01,
+          "T3" : 0.02
+        },
+        "question" : "tier",
+        "rationale" : "It is a host-level unit test of a Syncer that uses mock and fake collaborators, with no UI involved."
+      },
+      {
+        "distribution" : {
+          "partial" : 0.4,
+          "specific" : 0.15,
+          "vague" : 0.45
+        },
+        "question" : "name-specificity",
+        "rationale" : "'Catches sync not logging' mostly restates the behavior. It names no symptom that a user or caller would see."
+      },
+      {
+        "distribution" : {
+          "no" : 0.15,
+          "yes" : 0.85
+        },
+        "question" : "asserts-implementation",
+        "rationale" : "It asserts the exact log text through a recorder. Logging is an internal side effect, not behavior a user or caller observes."
+      }
+    ],
+    "login-error-alert" : [
+      {
+        "distribution" : {
+          "no" : 0.04,
+          "yes" : 0.96
+        },
+        "question" : "fails-if-broken",
+        "rationale" : "TestStore asserts isLoading false and alert state exactly; breaking either in the reducer fails the test."
       },
       {
         "distribution" : {
@@ -412,43 +2032,7 @@
           "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "It is a host unit test of a Syncer with mock store, noop API and a fake logger, with no UI or rendering involved."
-      },
-      {
-        "distribution" : {
-          "partial" : 0.33,
-          "specific" : 0.07,
-          "vague" : 0.6
-        },
-        "question" : "name-specificity",
-        "rationale" : "'Catches sync not logging' restates the behavior and names no user- or caller-visible symptom."
-      },
-      {
-        "distribution" : {
-          "no" : 0.1,
-          "yes" : 0.9
-        },
-        "question" : "asserts-implementation",
-        "rationale" : "It asserts the exact log message text on a logger collaborator, which is an implementation detail, and it doesn't check that the upload happened."
-      }
-    ],
-    "login-error-alert" : [
-      {
-        "distribution" : {
-          "no" : 0.05,
-          "yes" : 0.95
-        },
-        "question" : "fails-if-broken",
-        "rationale" : "TestStore asserts isLoading becomes false and the alert is set with the exact message; breaking either mutation or the message fails the test."
-      },
-      {
-        "distribution" : {
-          "T1" : 0.96,
-          "T2" : 0.03,
-          "T3" : 0.01
-        },
-        "question" : "tier",
-        "rationale" : "TestStore reducer test running on the host with no views or UI involved."
+        "rationale" : "Reducer test with TestStore runs on host with no UI."
       },
       {
         "distribution" : {
@@ -457,15 +2041,15 @@
           "vague" : 0.03
         },
         "question" : "name-specificity",
-        "rationale" : "Name states the visible symptom: a login screen stuck loading after a 401, with the spinner stopping and the alert showing."
+        "rationale" : "Names the symptom: login screen stuck loading after a 401, with the error alert shown and the spinner stopped."
       },
       {
         "distribution" : {
-          "no" : 0.9,
-          "yes" : 0.1
+          "no" : 0.88,
+          "yes" : 0.12
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts state changes that drive user-visible behavior (spinner and alert text), not call order or collaborators."
+        "rationale" : "Asserts user-visible state (spinner, alert message) resulting from the action, not call order or collaborators."
       }
     ],
     "mock-returns-mock" : [
@@ -475,33 +2059,33 @@
           "yes" : 0.02
         },
         "question" : "fails-if-broken",
-        "rationale" : "The test calls a MockWeatherService stub and asserts it returns the stubbed value, so it never exercises the real conversion code and would pass even if the kelvin subtraction were removed."
+        "rationale" : "The test calls a MockWeatherService stub that returns the stubbed Forecast, so the real conversion (kelvin - 273.15) is never run. It would pass even if the conversion were deleted."
       },
       {
         "distribution" : {
-          "T1" : 0.93,
-          "T2" : 0.02,
-          "T3" : 0.05
+          "T1" : 0.95,
+          "T2" : 0.01,
+          "T3" : 0.04
         },
         "question" : "tier",
-        "rationale" : "It is a logic test of a service with a fake and needs no rendering or UI flow, so it belongs in T1 (host unit test)."
+        "rationale" : "It is a host-level logic test with a mock service and no UI, so it belongs in T1."
       },
       {
         "distribution" : {
-          "partial" : 0.1,
-          "specific" : 0.85,
+          "partial" : 0.15,
+          "specific" : 0.8,
           "vague" : 0.05
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a user-visible symptom, temperatures shown 273 degrees too hot."
+        "rationale" : "The name states a concrete user-visible symptom: temperatures shown 273 degrees too hot."
       },
       {
         "distribution" : {
-          "no" : 0.7,
-          "yes" : 0.3
+          "no" : 0.85,
+          "yes" : 0.15
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts on the returned value rather than call order or internal state, but it only checks the mock's own stub, so it verifies the fake rather than real behavior. It does not assert on implementation details in the usual sense."
+        "rationale" : "The assertion checks an output value (celsius == 20), not call order, internal state, or which collaborator was called. The real flaw is that it tests the mock, not that it checks implementation details."
       }
     ],
     "own-double" : [
@@ -511,7 +2095,7 @@
           "yes" : 0.03
         },
         "question" : "fails-if-broken",
-        "rationale" : "The test calls the fake's api.fetchProfile() directly, never loadProfile(), so breaking loadProfile (e.g. the trimming) cannot fail it."
+        "rationale" : "The test calls api.fetchProfile() on a stub client, not the production loadProfile(), so breaking loadProfile or its trimming would not fail it."
       },
       {
         "distribution" : {
@@ -520,7 +2104,7 @@
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "Pure logic test with a fake client, no rendering or UI flow, so it belongs in the host unit tier."
+        "rationale" : "It is a host unit test of client logic using a fake, so it belongs in T1."
       },
       {
         "distribution" : {
@@ -529,7 +2113,7 @@
           "vague" : 0.85
         },
         "question" : "name-specificity",
-        "rationale" : "The name restates the behavior ('returns the profile' \/ 'not returning the profile') and names no user-visible symptom."
+        "rationale" : "The name restates the behavior ('loadProfile not returning the profile') and names no user-visible symptom."
       },
       {
         "distribution" : {
@@ -537,35 +2121,35 @@
           "yes" : 0.2
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts a returned value rather than call order or internals, but it just echoes the fake's own output, which is closer to a tautology than an implementation-detail check."
+        "rationale" : "It asserts a returned value rather than call order or internal state, but it mostly checks the stub it built. That makes it tautological more than implementation-coupled."
       }
     ],
     "price-rounding" : [
       {
         "distribution" : {
-          "no" : 0.05,
-          "yes" : 0.95
+          "no" : 0.07,
+          "yes" : 0.93
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the \/100 division were dropped or wrong, the output would be $1,999.00 and the equality assertion would fail."
+        "rationale" : "If the \/100 division were dropped or wrong, the output would differ from \"$19.99\", so the exact-string assertion fails."
       },
       {
         "distribution" : {
-          "T1" : 0.95,
-          "T2" : 0.04,
+          "T1" : 0.96,
+          "T2" : 0.03,
           "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "Pure formatter logic tested on the host with a locale; no rendering or UI involved."
+        "rationale" : "It calls a pure formatting function directly with a fixed locale, which is host-level logic testing."
       },
       {
         "distribution" : {
-          "partial" : 0.1,
-          "specific" : 0.87,
+          "partial" : 0.12,
+          "specific" : 0.85,
           "vague" : 0.03
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a concrete visible symptom: prices shown as $1,999.00 instead of $19.99."
+        "rationale" : "The name states the exact symptom, prices shown as $1,999.00, and the input and expected output."
       },
       {
         "distribution" : {
@@ -573,7 +2157,7 @@
           "yes" : 0.03
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts only the formatted output string, which is observable behavior."
+        "rationale" : "It asserts only the formatted string the caller gets back, which is observable output."
       }
     ],
     "private-state-coupling" : [
@@ -583,7 +2167,7 @@
           "yes" : 0.6
         },
         "question" : "fails-if-broken",
-        "rationale" : "If duplicates were appended, storage.count would be 2 and the count == 1 assertion fails; but quantity is never checked, and the capacity and mutation-count assertions are weak or tied to internals."
+        "rationale" : "If duplicates were appended, storage.count would be 2 and the count==1 check fails. But the test never asserts quantity, so the increment itself could break unnoticed. The mutation count check depends on testing-only internals that the shown code doesn't define."
       },
       {
         "distribution" : {
@@ -592,24 +2176,24 @@
           "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "Pure logic on a value type Cart, so it belongs in a host unit test."
+        "rationale" : "It is a pure logic test of a value type, so it runs on the host."
       },
       {
         "distribution" : {
-          "partial" : 0.3,
-          "specific" : 0.6,
+          "partial" : 0.25,
+          "specific" : 0.65,
           "vague" : 0.1
         },
         "question" : "name-specificity",
-        "rationale" : "The name says 'catches duplicate cart lines', which is a user-visible symptom, though it is somewhat generic."
+        "rationale" : "The name says 'catches duplicate cart lines', which is a user-visible symptom."
       },
       {
         "distribution" : {
-          "no" : 0.1,
-          "yes" : 0.9
+          "no" : 0.15,
+          "yes" : 0.85
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts _storageForTesting count and capacity and _mutationCountForTesting, which are internal state. It never asserts the quantity that the name promises."
+        "rationale" : "It asserts on _storageForTesting, capacity and _mutationCountForTesting, which are internal state. It never checks the quantity it claims to verify."
       }
     ],
     "restated-name" : [
@@ -619,16 +2203,16 @@
           "yes" : 0.85
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the toggle stops flipping isFavorite, the state assertion fails; TestStore also requires the effect to finish, though the API arg isn't checked."
+        "rationale" : "If the toggle stopped flipping isFavorite, the state assertion would fail. It doesn't check that the API gets the right value, but the named behavior is covered."
       },
       {
         "distribution" : {
           "T1" : 0.97,
-          "T2" : 0.02,
-          "T3" : 0.01
+          "T2" : 0.01,
+          "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "TestStore reducer test with a faked dependency runs on the host."
+        "rationale" : "It's a TestStore reducer test with a faked dependency, which is host-side logic."
       },
       {
         "distribution" : {
@@ -637,7 +2221,7 @@
           "vague" : 0.75
         },
         "question" : "name-specificity",
-        "rationale" : "The name and the 'catches' clause just restate the behavior and name no user-visible symptom."
+        "rationale" : "The name and its 'catches' clause both restate the behavior without naming a user-visible symptom."
       },
       {
         "distribution" : {
@@ -645,7 +2229,7 @@
           "yes" : 0.12
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts the resulting state change (isFavorite), which is observable behavior, and doesn't check call order or which collaborator was called."
+        "rationale" : "It asserts the resulting state change, which is observable behavior. The API stub is a no-op and isn't asserted on."
       }
     ],
     "retry-backoff" : [
@@ -655,25 +2239,25 @@
           "yes" : 0.93
         },
         "question" : "fails-if-broken",
-        "rationale" : "If retries became unbounded or the error changed, the throws expectation or the attempts == 3 count would fail."
+        "rationale" : "If retries were unbounded the test would hang or fail, and a wrong error or attempt count would fail the assertions."
       },
       {
         "distribution" : {
-          "T1" : 0.96,
+          "T1" : 0.97,
           "T2" : 0.01,
-          "T3" : 0.03
+          "T3" : 0.02
         },
         "question" : "tier",
-        "rationale" : "Tests a client with a fake transport and ImmediateClock on the host, with no UI or rendering."
+        "rationale" : "This is a client logic test that uses a fake transport and an ImmediateClock, so it runs on the host."
       },
       {
         "distribution" : {
-          "partial" : 0.12,
-          "specific" : 0.85,
+          "partial" : 0.22,
+          "specific" : 0.75,
           "vague" : 0.03
         },
         "question" : "name-specificity",
-        "rationale" : "The name states a concrete symptom, the client retrying forever on a dead server, and the resulting .unavailable error."
+        "rationale" : "The name describes a caller-visible symptom: the client retries forever on a dead server instead of surfacing .unavailable."
       },
       {
         "distribution" : {
@@ -681,17 +2265,17 @@
           "yes" : 0.3
         },
         "question" : "asserts-implementation",
-        "rationale" : "The thrown error is observable behavior. The attempts count of 3 checks the transport call count, which is somewhat internal, but the retry limit is the behavior under test."
+        "rationale" : "The thrown error is observable behavior. The attempt count of 3 is partly an implementation detail, but it is the retry contract."
       }
     ],
     "snapshot-in-t1" : [
       {
         "distribution" : {
-          "no" : 0.25,
-          "yes" : 0.75
+          "no" : 0.2,
+          "yes" : 0.8
         },
         "question" : "fails-if-broken",
-        "rationale" : "A snapshot comparison would fail if the row's layout or text changed, though it may be recorded fresh on first run and only catches visual diffs."
+        "rationale" : "A snapshot comparison fails if the row's layout or text changes, though it depends on a recorded reference image existing."
       },
       {
         "distribution" : {
@@ -700,7 +2284,7 @@
           "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "It is a snapshot test of a SwiftUI view rendered on a simulator device config, which is T2 rather than a host logic test."
+        "rationale" : "It's a snapshot test of a SwiftUI view rendered in a UIHostingController on a simulator device config, which is T2 rather than host logic."
       },
       {
         "distribution" : {
@@ -709,25 +2293,25 @@
           "vague" : 0.8
         },
         "question" : "name-specificity",
-        "rationale" : "The name 'row renders — catches row rendering issues' restates the behavior and names no symptom."
+        "rationale" : "'Catches row rendering issues' restates the test name and names no concrete symptom."
       },
       {
         "distribution" : {
-          "no" : 0.9,
-          "yes" : 0.1
+          "no" : 0.95,
+          "yes" : 0.05
         },
         "question" : "asserts-implementation",
-        "rationale" : "It asserts the rendered image, which is observable output, not internal state or collaborator calls."
+        "rationale" : "It asserts the rendered image, which is observable output, and not internal calls or state."
       }
     ],
     "ui-flow-in-t1" : [
       {
         "distribution" : {
-          "no" : 0.15,
-          "yes" : 0.85
+          "no" : 0.2,
+          "yes" : 0.8
         },
         "question" : "fails-if-broken",
-        "rationale" : "If the Checkout button stops sending checkoutTapped or the Thanks! text doesn't appear, the XCUITest flow fails; it asserts the end result."
+        "rationale" : "If the Checkout button or the Thanks! flow broke, the UI test would fail to find the element or the text. It may be flaky or fail for unrelated reasons."
       },
       {
         "distribution" : {
@@ -736,7 +2320,7 @@
           "T3" : 0.9
         },
         "question" : "tier",
-        "rationale" : "Uses XCUIApplication launch and taps, so it is an end-to-end UI flow, not a host unit test, despite currently living in T1."
+        "rationale" : "It uses XCUIApplication, launches the app and taps buttons, so it is an end-to-end XCUITest flow. It does not belong in T1."
       },
       {
         "distribution" : {
@@ -749,30 +2333,30 @@
       },
       {
         "distribution" : {
-          "no" : 0.95,
-          "yes" : 0.05
+          "no" : 0.96,
+          "yes" : 0.04
         },
         "question" : "asserts-implementation",
-        "rationale" : "It checks user-visible outcome (Thanks! text) after user taps, no internal state or collaborator calls."
+        "rationale" : "It asserts only user-visible results: the taps and the 'Thanks!' text. It checks no internals."
       }
     ],
     "wrong-field" : [
       {
         "distribution" : {
-          "no" : 0.9,
-          "yes" : 0.1
+          "no" : 0.88,
+          "yes" : 0.12
         },
         "question" : "fails-if-broken",
-        "rationale" : "Exhaustivity is off and the closure only asserts isLoading = false, so removing the alert assignment would still pass; the named alert behavior is never checked."
+        "rationale" : "Exhaustivity is off and the test only asserts isLoading=false, so removing the alert assignment would still pass; the named behavior (alert shown) is unchecked."
       },
       {
         "distribution" : {
-          "T1" : 0.95,
-          "T2" : 0.03,
-          "T3" : 0.02
+          "T1" : 0.97,
+          "T2" : 0.02,
+          "T3" : 0.01
         },
         "question" : "tier",
-        "rationale" : "A TestStore reducer test runs on the host and belongs in T1."
+        "rationale" : "TestStore reducer test on the host; pure logic with no rendering or UI flow."
       },
       {
         "distribution" : {
@@ -781,21 +2365,620 @@
           "vague" : 0.05
         },
         "question" : "name-specificity",
-        "rationale" : "The name and description say a rejected password shows an alert and that this catches silent login failures, which is a user-visible symptom."
+        "rationale" : "Names a user-visible symptom: a rejected password with no alert, described as a silent login failure."
       },
       {
         "distribution" : {
-          "no" : 0.85,
-          "yes" : 0.15
+          "no" : 0.88,
+          "yes" : 0.12
         },
         "question" : "asserts-implementation",
-        "rationale" : "It checks state after an action, which is observable reducer behavior, and it does not check call order, collaborators or log text."
+        "rationale" : "It checks state (isLoading) that's observable through the reducer's output, with no call-order or collaborator checks. The problem is that it checks too little, not that it checks internals."
       }
     ]
   },
   "identity" : {
     "backend" : "claude",
-    "model" : "sonnet"
+    "model" : "claude-sonnet-5-5"
   },
-  "questionSet" : "test-quality@1"
+  "questionSet" : "test-quality@1",
+  "servedModels" : [
+    "claude-sonnet-5-5"
+  ],
+  "usage" : {
+    "assert-constructed-value" : {
+      "backendMilliseconds" : 3149,
+      "cached" : false,
+      "costUSD" : 0.0062584000000000025,
+      "inputTokens" : 2889,
+      "outputTokens" : 386,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4454
+    },
+    "call-count-coupling" : {
+      "backendMilliseconds" : 4561,
+      "cached" : false,
+      "costUSD" : 0.0088259,
+      "inputTokens" : 3016,
+      "outputTokens" : 611,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 6310
+    },
+    "cancel-on-dismiss" : {
+      "backendMilliseconds" : 3661,
+      "cached" : false,
+      "costUSD" : 0.0071284,
+      "inputTokens" : 2977,
+      "outputTokens" : 451,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5775
+    },
+    "cart-total-discount" : {
+      "backendMilliseconds" : 2588,
+      "cached" : false,
+      "costUSD" : 0.010914,
+      "inputTokens" : 2986,
+      "outputTokens" : 345,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4404
+    },
+    "case-0bd1b3" : {
+      "backendMilliseconds" : 3077,
+      "cached" : false,
+      "costUSD" : 0.0074834,
+      "inputTokens" : 3291,
+      "outputTokens" : 408,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3595
+    },
+    "case-16a0e2" : {
+      "backendMilliseconds" : 3457,
+      "cached" : false,
+      "costUSD" : 0.006840900000000002,
+      "inputTokens" : 2982,
+      "outputTokens" : 421,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4377
+    },
+    "case-1d1de2" : {
+      "backendMilliseconds" : 3673,
+      "cached" : false,
+      "costUSD" : 0.0078309,
+      "inputTokens" : 3262,
+      "outputTokens" : 450,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4185
+    },
+    "case-2569f2" : {
+      "backendMilliseconds" : 3875,
+      "cached" : false,
+      "costUSD" : 0.0072434,
+      "inputTokens" : 3175,
+      "outputTokens" : 413,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4374
+    },
+    "case-260aa3" : {
+      "backendMilliseconds" : 2767,
+      "cached" : false,
+      "costUSD" : 0.006153400000000003,
+      "inputTokens" : 2951,
+      "outputTokens" : 360,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3327
+    },
+    "case-277d33" : {
+      "backendMilliseconds" : 3300,
+      "cached" : false,
+      "costUSD" : 0.0071534,
+      "inputTokens" : 3139,
+      "outputTokens" : 413,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4624
+    },
+    "case-2e7a20" : {
+      "backendMilliseconds" : 3399,
+      "cached" : false,
+      "costUSD" : 0.0068784,
+      "inputTokens" : 3113,
+      "outputTokens" : 392,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3982
+    },
+    "case-387fa2" : {
+      "backendMilliseconds" : 3076,
+      "cached" : false,
+      "costUSD" : 0.006920900000000003,
+      "inputTokens" : 3118,
+      "outputTokens" : 395,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3567
+    },
+    "case-3d100f" : {
+      "backendMilliseconds" : 3272,
+      "cached" : false,
+      "costUSD" : 0.0064384,
+      "inputTokens" : 3129,
+      "outputTokens" : 344,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4124
+    },
+    "case-401e9f" : {
+      "backendMilliseconds" : 3922,
+      "cached" : false,
+      "costUSD" : 0.0072034,
+      "inputTokens" : 3143,
+      "outputTokens" : 417,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4453
+    },
+    "case-408f1a" : {
+      "backendMilliseconds" : 2935,
+      "cached" : false,
+      "costUSD" : 0.0073734,
+      "inputTokens" : 3287,
+      "outputTokens" : 398,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4602
+    },
+    "case-54ed4b" : {
+      "backendMilliseconds" : 3683,
+      "cached" : false,
+      "costUSD" : 0.0064834,
+      "inputTokens" : 2935,
+      "outputTokens" : 397,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4174
+    },
+    "case-574e3a" : {
+      "backendMilliseconds" : 3028,
+      "cached" : false,
+      "costUSD" : 0.007113400000000004,
+      "inputTokens" : 3287,
+      "outputTokens" : 372,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3556
+    },
+    "case-5778d5" : {
+      "backendMilliseconds" : 3982,
+      "cached" : false,
+      "costUSD" : 0.008323400000000003,
+      "inputTokens" : 3111,
+      "outputTokens" : 537,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5160
+    },
+    "case-5e44c5" : {
+      "backendMilliseconds" : 2946,
+      "cached" : false,
+      "costUSD" : 0.006405899999999997,
+      "inputTokens" : 3084,
+      "outputTokens" : 352,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3447
+    },
+    "case-5fab6d" : {
+      "backendMilliseconds" : 3521,
+      "cached" : false,
+      "costUSD" : 0.007133400000000003,
+      "inputTokens" : 3051,
+      "outputTokens" : 433,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4527
+    },
+    "case-6077a8" : {
+      "backendMilliseconds" : 2762,
+      "cached" : false,
+      "costUSD" : 0.006275899999999998,
+      "inputTokens" : 3016,
+      "outputTokens" : 356,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4187
+    },
+    "case-7bbfdf" : {
+      "backendMilliseconds" : 3184,
+      "cached" : false,
+      "costUSD" : 0.006575899999999997,
+      "inputTokens" : 2972,
+      "outputTokens" : 397,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3892
+    },
+    "case-7e8258" : {
+      "backendMilliseconds" : 3571,
+      "cached" : false,
+      "costUSD" : 0.007255899999999997,
+      "inputTokens" : 3176,
+      "outputTokens" : 414,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4092
+    },
+    "case-88cfe5" : {
+      "backendMilliseconds" : 3157,
+      "cached" : false,
+      "costUSD" : 0.006818400000000005,
+      "inputTokens" : 3013,
+      "outputTokens" : 411,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3702
+    },
+    "case-89ea7f" : {
+      "backendMilliseconds" : 3656,
+      "cached" : false,
+      "costUSD" : 0.0073309,
+      "inputTokens" : 3194,
+      "outputTokens" : 417,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4190
+    },
+    "case-93fe9c" : {
+      "backendMilliseconds" : 3553,
+      "cached" : false,
+      "costUSD" : 0.006758399999999998,
+      "inputTokens" : 3077,
+      "outputTokens" : 389,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4059
+    },
+    "case-9e63a6" : {
+      "backendMilliseconds" : 3414,
+      "cached" : false,
+      "costUSD" : 0.007903400000000001,
+      "inputTokens" : 3463,
+      "outputTokens" : 407,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3945
+    },
+    "case-a07140" : {
+      "backendMilliseconds" : 3030,
+      "cached" : false,
+      "costUSD" : 0.007390900000000003,
+      "inputTokens" : 3322,
+      "outputTokens" : 391,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3531
+    },
+    "case-a1d5f0" : {
+      "backendMilliseconds" : 3172,
+      "cached" : false,
+      "costUSD" : 0.0067384,
+      "inputTokens" : 3025,
+      "outputTokens" : 400,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3698
+    },
+    "case-a4d740" : {
+      "backendMilliseconds" : 3735,
+      "cached" : false,
+      "costUSD" : 0.0079784,
+      "inputTokens" : 3277,
+      "outputTokens" : 461,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4598
+    },
+    "case-a6f159" : {
+      "backendMilliseconds" : 3129,
+      "cached" : false,
+      "costUSD" : 0.006665900000000004,
+      "inputTokens" : 3064,
+      "outputTokens" : 383,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3732
+    },
+    "case-ad08e1" : {
+      "backendMilliseconds" : 3770,
+      "cached" : false,
+      "costUSD" : 0.007350899999999998,
+      "inputTokens" : 3158,
+      "outputTokens" : 428,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4276
+    },
+    "case-b8c208" : {
+      "backendMilliseconds" : 3279,
+      "cached" : false,
+      "costUSD" : 0.0075384,
+      "inputTokens" : 3189,
+      "outputTokens" : 439,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3782
+    },
+    "case-b93034" : {
+      "backendMilliseconds" : 3345,
+      "cached" : false,
+      "costUSD" : 0.0066684,
+      "inputTokens" : 3037,
+      "outputTokens" : 390,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4856
+    },
+    "case-bea4db" : {
+      "backendMilliseconds" : 3078,
+      "cached" : false,
+      "costUSD" : 0.0068459,
+      "inputTokens" : 3144,
+      "outputTokens" : 381,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3583
+    },
+    "case-c4354f" : {
+      "backendMilliseconds" : 3305,
+      "cached" : false,
+      "costUSD" : 0.007138400000000005,
+      "inputTokens" : 3161,
+      "outputTokens" : 406,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4469
+    },
+    "case-c5276f" : {
+      "backendMilliseconds" : 3468,
+      "cached" : false,
+      "costUSD" : 0.0068684,
+      "inputTokens" : 3169,
+      "outputTokens" : 377,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3977
+    },
+    "case-d8b98a" : {
+      "backendMilliseconds" : 3437,
+      "cached" : false,
+      "costUSD" : 0.0071434,
+      "inputTokens" : 3127,
+      "outputTokens" : 415,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3934
+    },
+    "case-db1b45" : {
+      "backendMilliseconds" : 3116,
+      "cached" : false,
+      "costUSD" : 0.007095900000000002,
+      "inputTokens" : 3284,
+      "outputTokens" : 371,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4639
+    },
+    "case-e0ffb4" : {
+      "backendMilliseconds" : 3515,
+      "cached" : false,
+      "costUSD" : 0.006558400000000003,
+      "inputTokens" : 3049,
+      "outputTokens" : 376,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4048
+    },
+    "case-e64c8b" : {
+      "backendMilliseconds" : 3332,
+      "cached" : false,
+      "costUSD" : 0.0068259,
+      "inputTokens" : 3120,
+      "outputTokens" : 385,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4611
+    },
+    "case-e88fb3" : {
+      "backendMilliseconds" : 3641,
+      "cached" : false,
+      "costUSD" : 0.007305900000000004,
+      "inputTokens" : 3280,
+      "outputTokens" : 393,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4184
+    },
+    "case-e9f4f5" : {
+      "backendMilliseconds" : 3404,
+      "cached" : false,
+      "costUSD" : 0.007945899999999997,
+      "inputTokens" : 3448,
+      "outputTokens" : 415,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3956
+    },
+    "case-ec67cf" : {
+      "backendMilliseconds" : 4278,
+      "cached" : false,
+      "costUSD" : 0.0069209,
+      "inputTokens" : 3138,
+      "outputTokens" : 390,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5491
+    },
+    "case-ef3239" : {
+      "backendMilliseconds" : 3429,
+      "cached" : false,
+      "costUSD" : 0.0076534,
+      "inputTokens" : 3319,
+      "outputTokens" : 418,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4485
+    },
+    "case-fa9b3c" : {
+      "backendMilliseconds" : 2905,
+      "cached" : false,
+      "costUSD" : 0.006348400000000002,
+      "inputTokens" : 2989,
+      "outputTokens" : 370,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4104
+    },
+    "case-fe09f3" : {
+      "backendMilliseconds" : 3997,
+      "cached" : false,
+      "costUSD" : 0.0074959,
+      "inputTokens" : 3000,
+      "outputTokens" : 482,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5435
+    },
+    "case-ff12ee" : {
+      "backendMilliseconds" : 3327,
+      "cached" : false,
+      "costUSD" : 0.006843399999999997,
+      "inputTokens" : 3159,
+      "outputTokens" : 377,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3869
+    },
+    "counter-increment" : {
+      "backendMilliseconds" : 2869,
+      "cached" : false,
+      "costUSD" : 0.011184,
+      "inputTokens" : 2958,
+      "outputTokens" : 379,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4666
+    },
+    "date-formatting-boundary" : {
+      "backendMilliseconds" : 3767,
+      "cached" : false,
+      "costUSD" : 0.0073034,
+      "inputTokens" : 3107,
+      "outputTokens" : 436,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5199
+    },
+    "debounce-search" : {
+      "backendMilliseconds" : 3235,
+      "cached" : false,
+      "costUSD" : 0.0119415,
+      "inputTokens" : 3149,
+      "outputTokens" : 407,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5036
+    },
+    "decode-unknown-enum" : {
+      "backendMilliseconds" : 2674,
+      "cached" : false,
+      "costUSD" : 0.0063459000000000015,
+      "inputTokens" : 2992,
+      "outputTokens" : 369,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4772
+    },
+    "empty-list-state" : {
+      "backendMilliseconds" : 2581,
+      "cached" : false,
+      "costUSD" : 0.0064484,
+      "inputTokens" : 2981,
+      "outputTokens" : 382,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3526
+    },
+    "engine-replay" : {
+      "backendMilliseconds" : 3638,
+      "cached" : false,
+      "costUSD" : 0.007080899999999997,
+      "inputTokens" : 2998,
+      "outputTokens" : 441,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 5415
+    },
+    "existence-only" : {
+      "backendMilliseconds" : 6516,
+      "cached" : false,
+      "costUSD" : 0.0062959,
+      "inputTokens" : 2920,
+      "outputTokens" : 382,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 7755
+    },
+    "logger-text-coupling" : {
+      "backendMilliseconds" : 2943,
+      "cached" : false,
+      "costUSD" : 0.0064984,
+      "inputTokens" : 2981,
+      "outputTokens" : 387,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3449
+    },
+    "login-error-alert" : {
+      "backendMilliseconds" : 2672,
+      "cached" : false,
+      "costUSD" : 0.011139,
+      "inputTokens" : 3016,
+      "outputTokens" : 360,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4497
+    },
+    "mock-returns-mock" : {
+      "backendMilliseconds" : 3365,
+      "cached" : false,
+      "costUSD" : 0.0068534,
+      "inputTokens" : 3003,
+      "outputTokens" : 417,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4680
+    },
+    "own-double" : {
+      "backendMilliseconds" : 2891,
+      "cached" : false,
+      "costUSD" : 0.0066584,
+      "inputTokens" : 2985,
+      "outputTokens" : 402,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3423
+    },
+    "price-rounding" : {
+      "backendMilliseconds" : 2876,
+      "cached" : false,
+      "costUSD" : 0.0061934,
+      "inputTokens" : 2963,
+      "outputTokens" : 361,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4410
+    },
+    "private-state-coupling" : {
+      "backendMilliseconds" : 6506,
+      "cached" : false,
+      "costUSD" : 0.0068709,
+      "inputTokens" : 3026,
+      "outputTokens" : 413,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 7816
+    },
+    "restated-name" : {
+      "backendMilliseconds" : 2943,
+      "cached" : false,
+      "costUSD" : 0.0065459,
+      "inputTokens" : 3020,
+      "outputTokens" : 382,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3473
+    },
+    "retry-backoff" : {
+      "backendMilliseconds" : 2995,
+      "cached" : false,
+      "costUSD" : 0.006700900000000004,
+      "inputTokens" : 3074,
+      "outputTokens" : 384,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4998
+    },
+    "snapshot-in-t1" : {
+      "backendMilliseconds" : 3786,
+      "cached" : false,
+      "costUSD" : 0.0062259,
+      "inputTokens" : 2932,
+      "outputTokens" : 372,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4325
+    },
+    "ui-flow-in-t1" : {
+      "backendMilliseconds" : 3684,
+      "cached" : false,
+      "costUSD" : 0.0066509,
+      "inputTokens" : 2958,
+      "outputTokens" : 408,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 4980
+    },
+    "wrong-field" : {
+      "backendMilliseconds" : 3044,
+      "cached" : false,
+      "costUSD" : 0.006778399999999995,
+      "inputTokens" : 2993,
+      "outputTokens" : 412,
+      "servedModel" : "claude-sonnet-5-5",
+      "wallMilliseconds" : 3605
+    }
+  }
 }
