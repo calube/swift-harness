@@ -28,7 +28,8 @@ public struct JudgeUsage: Sendable, Equatable, Codable {
   }
 
   public static func milliseconds(_ duration: Duration) -> Int {
-    0
+    let (seconds, attoseconds) = duration.components
+    return Int(seconds) * 1000 + Int(attoseconds / 1_000_000_000_000_000)
   }
 }
 
