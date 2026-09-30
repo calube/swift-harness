@@ -1,0 +1,12 @@
+@Test(
+  "the test value fails an unstubbed call instead of answering — catches a feature test passing on a made-up fact it never stubbed"
+)
+func unstubbedCallFails() async {
+  let client = APIClient.testValue
+
+  await withKnownIssue {
+    await #expect(throws: (any Error).self) { try await client.randomFact() }
+  } matching: { issue in
+    issue.description.contains("randomFact")
+  }
+}

@@ -1,0 +1,5 @@
+@Test("view — catches regressions")
+func view() {
+  let store = Store(initialState: CounterFeature.State(count: 5)) { CounterFeature() }
+  assertSnapshot(of: CounterView(store: store), as: .dump)
+}

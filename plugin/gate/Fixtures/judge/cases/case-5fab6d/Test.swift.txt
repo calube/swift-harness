@@ -1,0 +1,13 @@
+@Test(
+  "an override set with withDependencies is what @Dependency(\\.apiClient) reads — catches the accessor wired to a different key than the override"
+)
+func overrideReachesReaders() async throws {
+  let fact = try await withDependencies {
+    $0.apiClient.randomFact = { Fact(text: "stubbed") }
+  } operation: {
+    @Dependency(\.apiClient) var apiClient
+    return try await apiClient.randomFact()
+  }
+
+  #expect(fact == Fact(text: "stubbed"))
+}

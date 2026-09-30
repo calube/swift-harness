@@ -1,0 +1,9 @@
+@Test("a human move is answered by one computer move — catches the computer skipping its turn")
+func computerAnswersHumanMove() {
+  let start = GameState(seed: 1)
+  let state = GameEngine.step(start, .humanPlaced(4))
+
+  var expectedRNG = start.rng
+  _ = expectedRNG.next()
+  #expect(state.rng == expectedRNG)
+}

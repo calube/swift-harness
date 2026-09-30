@@ -1,0 +1,7 @@
+@Test("reset and the generator — catches reset problems")
+func resetGenerator() {
+  let played = GameEngine.step(GameState(seed: 9), .humanPlaced(0))
+  let reset = GameEngine.step(played, .reset)
+  #expect(reset.board.allSatisfy { $0 == nil })
+  #expect(reset.rng != GameState(seed: 9).rng)
+}

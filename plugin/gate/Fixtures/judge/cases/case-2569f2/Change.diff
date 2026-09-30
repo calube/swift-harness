@@ -1,0 +1,13 @@
++    VStack(spacing: 24) {
++      Text("\(store.count)")
++        .font(.system(size: 64, weight: .bold, design: .rounded))
++        .monospacedDigit()
++        .accessibilityIdentifier("counter.value")
++
++      HStack(spacing: 32) {
++        Button("Decrement", systemImage: "minus") { store.send(.decrementButtonTapped) }
++          .accessibilityIdentifier("counter.decrement")
++        Button("Increment", systemImage: "plus") { store.send(.incrementButtonTapped) }
++          .accessibilityIdentifier("counter.increment")
++      }
++      .labelStyle(.iconOnly)

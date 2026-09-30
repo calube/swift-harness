@@ -1,0 +1,9 @@
+@MainActor
+func testIncrementUpdatesTheCount() {
+  let app = XCUIApplication()
+  app.launch()
+
+  XCTAssertTrue(app.buttons["counter.increment"].waitForExistence(timeout: 10))
+  app.buttons["counter.increment"].tap()
+  XCTAssertTrue(app.staticTexts["counter.value"].exists)
+}

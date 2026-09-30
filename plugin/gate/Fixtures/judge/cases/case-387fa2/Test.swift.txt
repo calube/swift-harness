@@ -1,0 +1,5 @@
+@Test("each row, column and diagonal wins — catches a missing win line")
+func everyLineWins() {
+  #expect(GameState.winningLines.count == 8)
+  #expect(Set(GameState.winningLines.flatMap { $0 }) == Set(0..<9))
+}

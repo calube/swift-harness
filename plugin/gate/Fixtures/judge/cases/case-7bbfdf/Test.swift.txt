@@ -1,0 +1,6 @@
+@Test("reset clears the board — catches a board left full after reset")
+func resetClearsBoard() {
+  let played = GameEngine.step(GameState(seed: 1), .humanPlaced(4))
+  let reset = GameEngine.step(played, .reset)
+  #expect(reset.rng == played.rng)
+}

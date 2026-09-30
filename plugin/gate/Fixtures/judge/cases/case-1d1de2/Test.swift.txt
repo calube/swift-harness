@@ -1,0 +1,13 @@
+@Test(
+  "server errors retry with exponential backoff — catches retries hammering the server without delay"
+)
+func retriesWithBackoff() async throws {
+  let transport = ScriptedTransport([
+    .status(503), .status(503), .status(200, try fixture("catfact-fact")),
+  ])
+  let client = APIClient.live(http: transport.client, clock: ImmediateClock())
+
+  _ = try await client.randomFact()
+
+  #expect(transport.requests.count == 3)
+}

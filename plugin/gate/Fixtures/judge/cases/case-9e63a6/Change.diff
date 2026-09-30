@@ -1,0 +1,13 @@
++  public static func osLog(subsystem: String, minimumLevel: LogLevel = .debug) -> Self {
++    let minimum = OSLogRendering.severity(of: minimumLevel)
++    return Self(
++      isEnabled: { level, _ in OSLogRendering.severity(of: level) >= minimum },
++      emit: { record in
++        let segments = OSLogRendering.segments(for: record.attributes)
++        Logger(subsystem: subsystem, category: record.category).log(
++          level: OSLogRendering.type(for: record.level),
++          "\(record.message, privacy: .public) \(segments.publicText, privacy: .public) \(segments.privateText, privacy: .private) \(segments.sensitiveText, privacy: .sensitive)"
++        )
++      }
++    )
++  }

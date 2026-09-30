@@ -1,0 +1,24 @@
+@Test("a log call emits level, category, message and tagged attributes — catches lost log fields")
+func emitsFullRecord() {
+  let records = LockIsolated<[LogRecord]>([])
+  var client = LogClient.testValue
+  client.emit = { record in records.withValue { $0.append(record) } }
+
+  client.log(
+    .error, "fact request failed", category: "Counter",
+    [.public("attempt", 3), .private("email", "a@b.c")])
+
+  #expect(
+    records.value == [
+      LogRecord(
+        level: .error,
+        category: "Counter",
+        message: "fact request failed",
+        attributes: [
+          LogAttribute(key: "attempt", value: "3", privacy: .public),
+          LogAttribute(key: "email", value: "a@b.c", privacy: .private),
+        ]
+      )
+    ]
+  )
+}

@@ -1,0 +1,11 @@
+@Test("fact response — catches fact display issues")
+func factResponse() async {
+  let store = TestStore(initialState: CounterFeature.State(isLoadingFact: true)) {
+    CounterFeature()
+  }
+
+  await store.send(.factResponse("Cats have five toes on their front paws.")) {
+    $0.isLoadingFact = false
+    $0.fact = "Cats have five toes on their front paws."
+  }
+}

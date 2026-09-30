@@ -1,0 +1,6 @@
+@Test("decrement works — catches bugs")
+func decrement() async {
+  let store = TestStore(initialState: CounterFeature.State(count: 2)) { CounterFeature() }
+
+  await store.send(.decrementButtonTapped) { $0.count = 1 }
+}

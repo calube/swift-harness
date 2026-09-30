@@ -1,0 +1,10 @@
+@Test("snapshot — catches changes")
+func snapshot() {
+  let store = Store(initialState: CounterFeature.State(count: 3, isLoadingFact: true)) {
+    CounterFeature()
+  }
+  assertSnapshot(
+    of: UIHostingController(rootView: CounterView(store: store)),
+    as: .image(on: .iPhone13, traits: UITraitCollection(userInterfaceStyle: .dark))
+  )
+}

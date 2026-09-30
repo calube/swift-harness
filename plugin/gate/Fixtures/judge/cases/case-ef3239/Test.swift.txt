@@ -1,0 +1,14 @@
+@Test("retries wait 1s then 2s — catches a backoff that does not grow between attempts")
+func backoffGrows() async throws {
+  let clock = SleepRecordingClock()
+  let transport = ScriptedTransport([
+    .status(503), .status(502), .status(200, try fixture("catfact-fact")),
+  ])
+  let client = APIClient.live(
+    http: transport.client, clock: clock,
+    retry: RetryPolicy(maxAttempts: 3, baseDelay: .seconds(1)))
+
+  _ = try await client.randomFact()
+
+  #expect(clock.sleeps == [.seconds(1), .seconds(2)])
+}

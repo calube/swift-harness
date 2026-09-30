@@ -1,0 +1,9 @@
+@Test("the fact request asks for JSON — catches the server answering with an HTML page")
+func requestsJSON() async throws {
+  let transport = ScriptedTransport([.status(200, try fixture("catfact-fact"))])
+  let client = APIClient.live(http: transport.client, clock: TestClock())
+
+  _ = try await client.randomFact()
+
+  #expect(transport.requests.first?.value(forHTTPHeaderField: "Accept") == "application/json")
+}
