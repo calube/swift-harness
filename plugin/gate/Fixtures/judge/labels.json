@@ -221,7 +221,7 @@
       "expected": {
         "asserts-implementation": "no",
         "fails-if-broken": "no",
-        "name-specificity": "specific",
+        "name-specificity": "partial",
         "tier": "T1"
       },
       "id": "wrong-field",
