@@ -3,6 +3,7 @@ import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateRules
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -206,5 +207,218 @@ struct JudgeCommandsTests {
       "diff --git a/A.swift b/A.swift\n+a\ndiff --git a/B/C.swift b/B/C.swift\n+c")
     #expect(sections.map(\.path) == ["A.swift", "B/C.swift"])
     #expect(sections[1].text.hasSuffix("+c"))
+  }
+}
+
+@Suite("commit comment judge on the Jev backend")
+struct JevCommitCommentJudgeTests {
+  static let config = """
+    \(ProbeRepository.config)
+
+    [judge]
+    backend = "jev"
+    send_to = "api.typesafe.ai"
+    advisory_threshold = 0.6
+    block_threshold = 0.9
+    """
+  static let sentinelKey = "sentinel-jev-key-8f3c1d"
+  static let keyed = [JevPin.keyVariable: sentinelKey]
+  static let staged = "// Increment the counter by one.\ncount += 1\n"
+
+  static func git(comments: Int = 1) -> FakeGit {
+    let content = (0..<comments).map { "// Step \($0) of the walk.\nstep(\($0))" }
+      .joined(separator: "\n")
+    return FakeGit(staged: [
+      "Sources/A.swift": .init(
+        content: comments == 1 ? staged : content, addedLines: [1...(2 * comments)])
+    ])
+  }
+
+  static func review(
+    transport: any HTTPTransport, environment: [String: String] = keyed,
+    clock: FakeRetryClock = FakeRetryClock(), git: FakeGit = git()
+  ) async throws -> String? {
+    let repository = try ProbeRepository(config: config)
+    defer { repository.remove() }
+    let judge = ConfiguredCommitCommentJudge(
+      makeJudge: { config, root in
+        ConfiguredCommitCommentJudge.judge(
+          for: config, root: root, transport: transport, environment: environment, clock: clock)
+      },
+      git: { _ in git })
+    return await judge.review(root: repository.root)
+  }
+
+  @Test(
+    "a staged comment on a jev config is judged from Jev's captured reply, both questions in 1 request — catches the hook building the Claude judge for a jev repository"
+  )
+  func replaysCapturedReply() async throws {
+    let transport = FakeHTTPTransport([try FakeHTTPTransport.captured("comments")])
+
+    let advice = try #require(try await Self.review(transport: transport))
+
+    #expect(advice.contains("jev/jev-1.13.0"))
+    #expect(advice.contains("CUT"))
+    #expect(advice.contains("Sources/A.swift:1"))
+    #expect(transport.requests.count == 1)
+    let request = try #require(transport.requests.first)
+    let body = try #require(
+      try JSONSerialization.jsonObject(with: request.body) as? [String: Any])
+    let questions = try #require(body["questions"] as? [String: Any])
+    #expect(questions.keys.sorted() == ["loses-fact", "right-size"])
+  }
+
+  @Test(
+    "a Jev request that stalls past 15 s reports the judge not run within the hook's budget — catches the hook waiting on the adapter's default 30 s timeout"
+  )
+  func stallIsNotRun() async throws {
+    let transport = StallingTransport(
+      stall: .seconds(20), reply: try FakeHTTPTransport.captured("comments"))
+
+    let advice = try #require(try await Self.review(transport: transport))
+
+    #expect(advice.hasPrefix("Comment judge not run"))
+    #expect(advice.contains("15 s"))
+    #expect(transport.timeouts.allSatisfy { $0 <= .seconds(15) })
+    #expect(!transport.timeouts.isEmpty)
+  }
+
+  enum Failure: String, CaseIterable, Sendable {
+    case missingKey, badKey, stateTooLarge, rateLimited
+  }
+
+  @Test(
+    "every Jev failure lets the commit through with advice naming why, and never the key — catches a Jev outage silencing the judge or printing TYPESAFE_API_KEY",
+    arguments: Failure.allCases)
+  func failureIsNamed(_ failure: Failure) async throws {
+    let reply: FakeHTTPTransport.Reply
+    let environment: [String: String]
+    let reason: String
+    switch failure {
+    case .missingKey:
+      (reply, environment, reason) = (
+        try FakeHTTPTransport.captured("comments"), [:], "TYPESAFE_API_KEY"
+      )
+    case .badKey:
+      (reply, environment, reason) = (try FakeHTTPTransport.captured("bad-key"), Self.keyed, "401")
+    case .stateTooLarge:
+      (reply, environment, reason) = (
+        try FakeHTTPTransport.captured("oversize"), Self.keyed, "stateTooLarge"
+      )
+    case .rateLimited:
+      (reply, environment, reason) = (
+        .response(HTTPResponse(status: 429, body: Data())), Self.keyed, "429"
+      )
+    }
+    let transport = FakeHTTPTransport([reply])
+
+    let advice = try #require(try await Self.review(transport: transport, environment: environment))
+
+    #expect(advice.hasPrefix("Comment judge not run"), "\(failure): \(advice)")
+    #expect(advice.contains(reason), "\(failure): \(advice)")
+    #expect(!advice.contains(Self.sentinelKey))
+  }
+
+  @Test(
+    "the capped 6 comments go to Jev in 1 concurrent round, so the hook waits for 1 request, not 2 — catches Jev held to the 4-at-a-time batch meant for claude processes"
+  )
+  func capGoesInOneRound() async throws {
+    let transport = BarrierTransport(
+      expected: ConfiguredCommitCommentJudge.maxComments,
+      reply: try FakeHTTPTransport.captured("comments"))
+    // A hang guard, not a synchronizer: a passing run releases the barrier long before it fires.
+    let watchdog = Task {
+      try? await Task.sleep(for: .seconds(20))  // swiftgate:allow det.task-sleep — hang guard only
+      transport.giveUp()
+    }
+    defer { watchdog.cancel() }
+
+    let advice = try await Self.review(
+      transport: transport, git: Self.git(comments: ConfiguredCommitCommentJudge.maxComments + 2))
+
+    #expect(transport.maxInFlight == ConfiguredCommitCommentJudge.maxComments)
+    #expect(transport.requestCount == ConfiguredCommitCommentJudge.maxComments)
+    #expect(advice.map { !$0.hasPrefix("Comment judge not run") } == true, "\(advice ?? "nil")")
+  }
+}
+
+/// Answers only when the request's timeout outlasts `stall`, as a server that takes `stall` to
+/// reply would; otherwise times out at once, since the fake clock stands in for the wait.
+final class StallingTransport: HTTPTransport {
+  private let stall: Duration
+  private let reply: FakeHTTPTransport.Reply
+  private let recorded = Mutex<[Duration]>([])
+
+  init(stall: Duration, reply: FakeHTTPTransport.Reply) {
+    self.stall = stall
+    self.reply = reply
+  }
+
+  var timeouts: [Duration] { recorded.withLock { $0 } }
+
+  func send(_ request: HTTPRequest) async throws(HTTPTransportError) -> HTTPResponse {
+    recorded.withLock { $0.append(request.timeout) }
+    guard request.timeout > stall else { throw .timedOut }
+    switch reply {
+    case .response(let response): return response
+    case .failure(let error): throw error
+    }
+  }
+}
+
+/// Holds every request until `expected` are in flight at once, then answers them all, so a batch
+/// that sends fewer at a time never completes on its own. `giveUp` times out whoever still waits.
+final class BarrierTransport: HTTPTransport {
+  private struct State {
+    var waiting: [CheckedContinuation<Bool, Never>] = []
+    var inFlight = 0
+    var maxInFlight = 0
+    var count = 0
+    var outcome: Bool?
+  }
+
+  private let expected: Int
+  private let reply: FakeHTTPTransport.Reply
+  private let state = Mutex(State())
+
+  init(expected: Int, reply: FakeHTTPTransport.Reply) {
+    self.expected = expected
+    self.reply = reply
+  }
+
+  var maxInFlight: Int { state.withLock { $0.maxInFlight } }
+  var requestCount: Int { state.withLock { $0.count } }
+
+  func send(_ request: HTTPRequest) async throws(HTTPTransportError) -> HTTPResponse {
+    let answered = await withCheckedContinuation {
+      (continuation: CheckedContinuation<Bool, Never>) in
+      let (resume, outcome): ([CheckedContinuation<Bool, Never>], Bool) = state.withLock { state in
+        state.count += 1
+        state.inFlight += 1
+        state.maxInFlight = max(state.maxInFlight, state.inFlight)
+        if let outcome = state.outcome { return ([continuation], outcome) }
+        state.waiting.append(continuation)
+        guard state.inFlight >= expected else { return ([], true) }
+        state.outcome = true
+        defer { state.waiting = [] }
+        return (state.waiting, true)
+      }
+      for waiter in resume { waiter.resume(returning: outcome) }
+    }
+    state.withLock { $0.inFlight -= 1 }
+    guard answered else { throw .timedOut }
+    switch reply {
+    case .response(let response): return response
+    case .failure(let error): throw error
+    }
+  }
+
+  func giveUp() {
+    let waiting = state.withLock { state in
+      if state.outcome == nil { state.outcome = false }
+      defer { state.waiting = [] }
+      return state.waiting
+    }
+    for waiter in waiting { waiter.resume(returning: false) }
   }
 }
