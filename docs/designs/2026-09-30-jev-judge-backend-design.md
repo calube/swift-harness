@@ -1,8 +1,9 @@
 # swift-harness: Jev as a second judge backend
 
 <!-- RESUME
-Status: APPROVED 2026-09-30 by the user, with the 5 decisions in §12. Jev may block `ready` on its own for a
-question once the code finds a passing block calibration for it (§7).
+Status: APPROVED 2026-09-30 by the user, with the 5 decisions in §12. Later that day the user removed the block
+calibration: Jev may block `ready` on its own for any blocking question, and the labelled sets carry an Opus
+agent's blind labels (§7).
 Why: the judge seam was built with a second backend in mind (`[judge] backend = "jev"` parses today and reports
 BLOCKED), and the repo runs 2 judge stacks that share no code.
 Decision record: [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md), accepted.
@@ -25,7 +26,6 @@ confidence, models and jaggedness pages (read 2026-09-30), and the evals design'
 ### Non-goals
 
 - Replacing Claude as the default judge. Claude stays the default backend.
-- A Jev block without a passing block calibration for that question and model (§7).
 - Jev in review panels, the verifier, the design challenger or any other open-ended critique (§11.3).
 - A Swift SDK. TypeSafe ships Python and JS clients only; the adapter speaks the HTTP API.
 
@@ -53,13 +53,13 @@ The seam fits Jev: 1 subject and 1 question set become 1 request, which is the b
 | Model id | a pinned version, `jev-1.13.0` by default; the aliases `jev-latest` and `jev-preview` fail config | §4.4 |
 | What leaves the machine | the subject, its context and the question text, to `api.typesafe.ai`, only after an explicit opt-in | §5 |
 | Missing reason | a template reason for advisory findings; a Claude-written reason on every blocking finding | §6 |
-| Blocking | Jev blocks alone for a question only when the code finds a passing block calibration for that question and the pinned model; otherwise its finding is advisory | §7 |
+| Blocking | Jev blocks alone on a blocking question when its answer reaches `block_threshold`, at the pinned model, with no block calibration (user, 2026-09-30) | §7 |
 | A general entry point | `swiftgate judge ask`, question set and subjects as JSON in, answers as JSON out | §8 |
 | Context | the caller slices; the adapter refuses an oversized state and never trims it | §9 |
 | Benchmark | `swiftgate judge bench` runs pinned Sonnet 5.5 and pinned Jev on the same labelled datasets, k times, and writes a versioned JSON that `bench render` turns into a comparison page | §10 |
 | Thresholds | set per backend from the benchmark's tune split, never from the cases it reports | §10.5 |
 | Adoption order | test quality, then the commit comment judge, then design calibration | §11 |
-| Jev's own rendering | `test-quality@2-jev`: the `@1` questions asked as Nouls and a Choice over parsed state fields, combined in code; Jev's uncertain or uncalibrated blocking answers go to Claude | §13 |
+| Jev's own rendering | `test-quality@2-jev`: the `@1` questions asked as Nouls and a Choice over parsed state fields, combined in code; Jev's uncertain blocking answers go to Claude | §13 |
 
 ## 4. The `JevJudge` adapter
 
@@ -181,74 +181,66 @@ The user's decision (§12, decision 3):
 3. **Split questions carry their own diagnosis.** A rubric split into 1 Noul per clause (§11.2) names the clause
    that failed, which is most of what a reason gives error analysis.
 
-When Claude can't answer (no `claude` on `PATH`, a timeout, an error), a calibrated Jev block stands with the
+When Claude can't answer (no `claude` on `PATH`, a timeout, an error), a Jev block stands with the
 template reason and a `failureScenario` naming why Claude's reason is missing. The user decided this on
 2026-09-30.
 
-## 7. Jev blocks only once calibrated
+## 7. Jev blocks on its own
 
-The user's decision (§12, decision 1): Jev may block `ready` on its own for a question, but only once it has a
-passing calibration for that question. The code enforces it, not the docs. For a Jev answer, `JudgePolicy` treats a
-`mayBlock` question as blocking only when the block calibration below passes for that question id and the
-pinned Jev model. Otherwise the finding stays minor, with a note that says why.
+**Changed 2026-09-30.** The user approved this design with a block calibration: Jev could block only for a
+question whose committed recording met a bar against at least 30 person labels. Later the same day the user
+made 2 decisions that replace it. First, "let Jev cook": the block calibration gate goes, and Jev may block
+`ready` on its own for any blocking question. Second, the user won't label: an Opus agent labelled the sheets
+blind, and those labels stand as `labeller: agent`. The reason: with no person labelling, the bar could never
+pass, so Jev would have stayed advisory for good. The Claude reason on every block (§6), the pin (§4.4) and
+the egress opt-in (§5) stay. The subsections below state the rule now, and what the user removed.
 
-### 7.1 The block calibration
+The rule: for a Jev answer, `JudgePolicy` treats a `mayBlock` question at `ready` as it does for Claude.
+An answer at or above the repository's `block_threshold` is a major finding, and the gate goes RED.
 
-The calibration record is the committed Jev recording, `recording-jev.json`, scored against the labelled set.
-Pure domain code, `JudgeBlockCalibration`, computes it each time the ready policy runs, so no separate summary
-file exists to hand-edit or drift. For 1 question id, the pinned model and the repository's `block_threshold`,
-it passes when all of these hold:
+### 7.1 The block calibration (removed)
 
-1. The recording answers the check's question set version (`test-quality@1`), and its identity is `jev` with the
-   model id the config pins.
-2. At least 30 cases in the report split (§10.5) carry a person's label for that question, with at least 10 where the flag should fire and
-   10 where it shouldn't, so both rates rest on real counts. A label from an agent doesn't count.
-3. At the repository's `block_threshold`, Jev's true-positive and true-negative rates on those cases are each at
-   least 0.8, and at least Claude's rates from `recording.json` on the same cases.
-
-The first 2 conditions are the evals design's bar. The 0.8 floor is the existing test-quality baseline, and the
-comparison with Claude is the evals design's condition for keeping Jev. Rates at the configured threshold
-matter because a repository that lowers `block_threshold` must meet the bar again at the new value.
-
-The plugin ships the labels and recordings under `gate/Fixtures/judge/`. The ready check reads them from
-`SWIFTGATE_HARNESS_ROOT`, as `self-test` does. Without that root, or without a recording, the calibration
-doesn't pass.
+The removed gate was pure domain code, `JudgeBlockCalibration`, which scored the committed Jev recording
+against the labelled set at every ready run. It passed only when the recording answered the check's question
+set version at the pinned model, and at least 30 report-split cases carried a person's label for the question,
+10 on each side. Jev's true-positive and true-negative rates at `block_threshold` also had to reach 0.8 and
+Claude's. The ready check no longer reads labels or recordings to decide a block. The benchmark (§10)
+still reports those rates beside Claude's, for information only.
 
 ### 7.2 Policy
 
-`JudgeBackend` gains a pure `needsBlockCalibration`: `false` for `claude`, which keeps today's behaviour, and
-`true` for `jev`. For a Jev answer over the block threshold on a `mayBlock` question at `ready`:
+For a Jev answer on a `mayBlock` question at `ready`:
 
-| Block calibration | Finding |
+| Jev's flagged probability | Finding |
 |---|---|
-| passes | major, and the gate goes RED; the reason comes from Claude (§6) |
-| fails | minor, with `advisory: jev has no passing block calibration for <question> on <model>: <why>` |
+| at or above `block_threshold` | major, and the gate goes RED; the reason comes from Claude (§6) |
+| below it | minor, as for Claude |
 
-`<why>` names the first condition that failed: no recording, a recording from another model, another question
-set version, `23 of 30` person labels, a rate under 0.8, or a rate under Claude's.
+The cascade (§13.5) runs first for `test-quality@2-jev`: a blocking question whose answer lies in its uncertain
+band goes to Claude, and Claude's answer decides it.
 
 ### 7.3 Freshness
 
-A new pin makes the calibration stale the same way calibration freshness works for agents: the recording's
-model no longer matches, so every Jev finding falls back to advisory until someone re-records it and the rates
-pass again. A new question set version does the same. `self-test --judge` fails with
-`swiftgate.self-test.judge-stale` meanwhile (§10.8). A label change takes effect at once, since the policy
-computes the calibration each run.
+The pin is what keeps a Jev block tied to a known model: config refuses the aliases (§4.4), and the adapter
+fails a reply whose served model isn't the pin. A new pin no longer changes whether Jev may block.
+`self-test --judge` still fails with `swiftgate.self-test.judge-stale` when a recording's model isn't the pin
+(§10.8), so the recording and baseline follow the pin.
 
 ### 7.4 Growing the labelled set
 
-Today's 22 cases carry the tuning agent's labels, a bias the sub-project 2 review names. The set grows to at
-least 30 person-labelled cases in the report split for each blocking question, `fails-if-broken` and
-`asserts-implementation`, with at least 10 on each side. The tune split (§10.5) takes about 1 case in 3, so the
-whole set needs about 45 person-labelled cases. The user confirmed that size and the fixed split on
-2026-09-30.
+Today's 22 cases carry the tuning agent's labels, a bias the sub-project 2 review names. The set grew to 66
+cases for the benchmark (§10.3), with about 1 in 3 in the tune split (§10.5).
 
-- Each case in `labels.json` gains `labeller`, `person` or `agent`. A case without it reads as `agent`, so the
-  existing 22 count only once a person relabels them.
-- The person labels blind: a sheet shows each case under a neutral number with only the test and the diff,
-  never the drafter's intent or the case's directory name.
+- Each case in `labels.json` carries `labeller`: `person`, `agent` or `seed`. A case without it reads as
+  `agent`.
+- The labels are an Opus agent's, not a person's: the user decided on 2026-09-30 not to label. The agent
+  labelled blind: a sheet showed each case under a neutral number with only the test and the diff, never the
+  drafter's intent or the case's directory name. The orchestrator commits its answers as given, with
+  `labeller: agent`.
 - Candidate cases come from real tests in the repo's history and examples, plus hollow variants an agent
-  drafts. The drafter writes no label, and the person's label is the only one recorded.
+  drafts. The drafter writes no label.
+- The labeller is from the same model family as the Claude arm, so results on these labels may favour Claude.
+  Every benchmark page says so (§10.5).
 
 ## 8. `swiftgate judge ask`
 
@@ -310,16 +302,16 @@ from the one the run started with fails the run, since the answers would mix 2 m
 
 | # | Dataset | Questions | Labels | Ready |
 |---|---|---|---|---|
-| 1 | `test-quality@1`, `plugin/gate/Fixtures/judge/` | all 4 | 22 cases the tuning agent labelled, then the harder person-labelled set (§10.3) | now as a smoke set; the harder set after the §7.4 labelling pass. The page names the labeller mix |
-| 2 | The comment judge, `plugin/gate/Fixtures/judge-comments/` | `loses-fact`, `right-size` | a person's, gathered as below | after a labelling pass |
+| 1 | `test-quality@1`, `plugin/gate/Fixtures/judge/` | all 4 | 22 cases the tuning agent labelled, then the harder set an Opus agent labelled blind (§10.3) | now as a smoke set; the harder set after the §7.4 labelling pass. The page names the labeller mix |
+| 2 | The comment judge, `plugin/gate/Fixtures/judge-comments/` | `loses-fact`, `right-size` | an Opus agent's, blind, gathered as below | after the agent's labelling pass |
 | 3 | `calibrate design`'s judged labels, from a run's stored replies | each seed's judged questions | the expected option each seed's label file names | once `calibrate design` keeps agent replies |
 | 4 | 1 eval rubric, split into 1 Noul per clause | 1 question per clause | a person's, per clause, on transcript slices (§9) | when the evals owners run their trial (§8) |
 
 **Gathering comments.** A worker collects comments that commits added to Swift files, from this repo's history and
 `examples/SampleApp`. It samples up to 80, half from lines a `comments.*` rule flags and half from lines no rule
 flags, so both answers appear. Each case holds the comment and the 6 lines after it, the same state the hook
-judge sends. The person labels them blind, under neutral numbers, on the same kind of sheet as §7.4. The dataset
-counts only once each question has at least 30 cases in the report split and 10 on each side.
+judge sends. An Opus agent labelled them blind, under neutral numbers, on the same kind of sheet as §7.4, and
+the repo keeps its labels as `labeller: agent` (user, 2026-09-30).
 
 **Format.** Every dataset reduces to 1 JSON shape: the question set, or its versioned id for a built-in set, and
 cases with `id`, `source`, `context`, an optional `declaredTier`, per-question `labels` and a `labeller`. The
@@ -335,14 +327,14 @@ The self-test JSON reports only precision, recall and their counts. It has no pe
 cost, so Brier, reliability, latency and cost need `measuredAnswer` (§4.5) and the benchmark's per-case raw
 answers first.
 
-The benchmark therefore adds a harder, person-labelled test-quality set, built with the §7.4 labelling pass:
+The benchmark therefore adds a harder test-quality set, built with the §7.4 labelling pass:
 
 - **Near misses.** Tests that assert something true but miss the behaviour their name claims; tests that mock 1
   collaborator too many; tests whose only assertion is on a value the test itself built.
 - **Ambiguous tiers.** Tests on the boundary between host logic and rendering, such as a reducer test that
   reads a formatted string, so `tier` has more than 2 positives.
 - **Balance.** At least 10 positives and 10 negatives per question in the report split, and at least 30 cases
-  per blocking question, which is also what the block calibration in §7 needs.
+  per blocking question, so each rate rests on real counts.
 
 The 22 cases stay as a smoke set that every backend must pass; the harder set is the one that ranks.
 
@@ -375,8 +367,11 @@ reads or writes the judge cache, so repeats measure the model and not the cache.
   to 1.00, and 3/3 runs from 0.44 to 1.00. The page states that whenever the interval of a difference crosses 0.
 - **No tuning on reported cases.** A fixed rule splits every dataset: a case whose SHA-256 of its id starts
   below `0x55` is in the tune split, about 1 in 3; the rest are in the report split. Threshold sweeps read only
-  the tune split. Every headline metric, and the block calibration in §7, reads only the report split. A
-  threshold chosen on the report split is the mistake this rule exists to stop.
+  the tune split. Every headline metric reads only the report split. A threshold chosen on the report split is
+  the mistake this rule exists to stop.
+- **Name the labeller.** The page states the labeller mix. With the Opus agent's labels (user, 2026-09-30), it
+  says before any number that the labels are Opus's, so the results are for information and may favour the
+  Claude arm.
 
 ### 10.6 Commands and output
 
@@ -400,8 +395,7 @@ metric. Results go under `evals/results/<date>-judge-benchmark/`: the JSON and t
 
 `plugin/gate/Fixtures/judge/` holds 1 recording today. It becomes 1 per backend: `recording.json` stays
 Claude's, recorded again at `claude-sonnet-5-5`, and `recording-jev.json` and `baseline-jev.json` hold Jev's.
-`self-test --judge` scores every recording that exists, each against its own baseline, offline. The block
-calibration (§7) reads these recordings, not the benchmark JSON.
+`self-test --judge` scores every recording that exists, each against its own baseline, offline.
 
 Jev's thresholds come from the tune split. A threshold tuned on Claude never carries over: a Noul probability and
 a Choice probability for the same question aren't comparable, per TypeSafe's own jaggedness notes.
@@ -454,9 +448,9 @@ Each needs its own labelled set before it counts.
 
 | # | Question | Decision |
 |---|---|---|
-| 1 | May Jev ever block the `ready` gate? | Yes, on its own, but only once calibrated: per question and per pinned model, at least 30 person-labelled cases and true-positive and true-negative rates that meet the bar. The code enforces it and downgrades an uncalibrated block to advisory with a note; a model change makes the calibration stale (§7) |
+| 1 | May Jev ever block the `ready` gate? | Yes, on its own. As approved, only once calibrated: per question and per pinned model, at least 30 person-labelled cases and rates that meet the bar. Changed by the user later on 2026-09-30: no block calibration, and Jev blocks at `block_threshold` like Claude (§7) |
 | 2 | Do the eval runner's `llm` graders move onto `swiftgate judge ask`? | Build `ask` now. The evals owners trial it on 1 rubric split into 1 Noul per clause before anything else moves (§8) |
-| 3 | How does a Jev finding get its reason? | A template reason for advisory findings. Every finding that would block, a calibrated Jev block included, gets a Claude-written reason (§6) |
+| 3 | How does a Jev finding get its reason? | A template reason for advisory findings. Every finding that would block, every Jev block included, gets a Claude-written reason (§6) |
 | 4 | What does the egress opt-in look like? | `backend = "jev"` needs `send_to = "api.typesafe.ai"`; the key comes from `TYPESAFE_API_KEY` (§5) |
 | 5 | Should the tier question's option descriptions move into Choice `criteria`? | Not for the benchmark: `test-quality@1` stays as is, and `test-quality@2` comes only if Jev's `tier` metrics fall short (§4.1) |
 
@@ -477,12 +471,11 @@ question's distribution. Claude keeps asking `test-quality@1`, so its prompt, it
 calibration don't change.
 
 - **Versioned id.** `JudgeQuestionSet` gains a `rendering` tag, `jev` here, and `versionedID` becomes
-  `test-quality@2-jev`. The cache key, the recordings, the baselines and the block calibration's first
-  condition (§7.1) all read that id, so a Jev recording of `@1` never passes a calibration for
-  `@2-jev`, and the reverse.
+  `test-quality@2-jev`. The cache key, the recordings and the baselines all read that id, so a Jev
+  recording of `@1` never stands in for `@2-jev`, and the reverse.
 - **Labels carry over.** The set names `basedOn: test-quality@1`. Since the questions and their meaning
-  are those of `@1`, the labels in `labels.json` count for `@2-jev`, and the §7.1 comparison with
-  Claude reads Claude's `@1` recording on the same cases. A test pins that every question of `@2-jev`
+  are those of `@1`, the labels in `labels.json` count for `@2-jev`, and the benchmark's comparison
+  with Claude reads Claude's `@1` answers on the same cases. A test pins that every question of `@2-jev`
   equals its `@1` twin field by field, so `basedOn` can't hide a changed question.
 - **§12 decision 5.** `tier` keeps its text and its null Choice criteria. The set doesn't move the tier
   descriptions into criteria, so it doesn't decide decision 5, and plain `test-quality@2` stays free for
@@ -681,26 +674,24 @@ pure domain code, `JudgeCascade`, decides per question whether Jev's answer stan
 1. **Uncertain band.** When the combined flagged probability lies inside the question's open band,
    the question escalates to Claude. The study read 0.2 < p < 0.8 off its dev set; the benchmark's
    tune split sets each band (§10.5), and the band lives beside the version in the domain.
-2. **Uncalibrated block.** When Jev's answer reaches `block_threshold` on a `mayBlock` question at
-   `ready` and the §7 block calibration doesn't pass for it, the question escalates too. Without this
-   step the cascade would turn Jev's most confident flags into notes while its uncertain ones could
-   block.
-3. **Otherwise Jev's answer stands**, and it may block only under §7's block calibration for that
-   question on `@2-jev` and the pin.
+2. **Otherwise Jev's answer stands**, and it blocks when it reaches `block_threshold` (§7.2).
+
+As approved, a second trigger also escalated an answer that would block without a passing block
+calibration. The user removed the block calibration on 2026-09-30 (§7), and that trigger with it.
 
 The check asks Claude every escalated question for a subject in 1 request, with the `@1` text. The
-escalated answer replaces Jev's and carries Claude's authority: the policy judges it as a Claude answer
-under §7.2's first row, and the finding names `claude/<model>`. `name-specificity` and `tier` never
+escalated answer replaces Jev's and carries Claude's authority: the policy judges it as a Claude answer,
+and the finding names `claude/<model>`. `name-specificity` and `tier` never
 escalate: they're advisory, and Jev alone matched or beat Claude on them in the study.
 
 When Claude can't answer an escalated question (no `claude` on `PATH`, a timeout, an error), Jev's
 answer stands as minor, with a note that names why the escalation failed. It never blocks: an uncertain
-answer lies under the block threshold, and an uncalibrated one falls under §7.2's second row.
+answer lies under the block threshold.
 
-`JudgeCascade` is pure: from Jev's answers, the block decisions and the thresholds, it returns each
+`JudgeCascade` is pure: from Jev's answers and the thresholds, it returns each
 question's plan (keep, or escalate and why). From the plan and Claude's answers it returns the merged
-answers with the identity that decided each. `JudgePolicy` then runs once over the Jev answers with
-their block decisions and once over the Claude answers as today. A `CascadingJudge` in
+answers with the identity that decided each. `JudgePolicy` then runs once over the Jev answers and
+once over the Claude answers as today. A `CascadingJudge` in
 `SwiftGateAdapters` wires a `JevJudge` and a `ClaudeCLIJudge`, each behind its cache. The test-quality
 check uses it when `[judge] backend = "jev"`. `judge ask` never cascades, since it applies no policy
 (§8).
@@ -709,13 +700,13 @@ The §12 decisions stay as they are:
 
 | Decision | How the cascade keeps it |
 |---|---|
-| 1, blocking | Jev blocks on its own only under a passing, person-labelled block calibration for that question, `@2-jev` and the pin. An escalated answer is Claude's, which blocks as the Claude backend does today |
-| 3, reasons | An escalated block carries Claude's own rationale, with no second call. A calibrated Jev block gets its Claude-written reason from §6 point 2. Every block carries a Claude reason |
+| 1, blocking (as changed 2026-09-30) | A kept Jev answer blocks on its own at `block_threshold`, on `@2-jev` and the pin. An escalated answer is Claude's, which blocks as the Claude backend does today |
+| 3, reasons | An escalated block carries Claude's own rationale, with no second call. A kept Jev block gets its Claude-written reason from §6 point 2. Every block carries a Claude reason |
 | 4, egress | An escalation sends Anthropic the same subject, context and question text the Claude backend and §6 already send. No new host; the opt-in for `api.typesafe.ai` is unchanged |
 | 5, tier criteria | Untouched (§13.1) |
 
-The block calibration still measures Jev alone on the report split, at `block_threshold`, not the
-cascade: it decides when Jev's own answer may block, and the cascade only adds Claude answers.
+The benchmark measures Jev alone and the cascade as separate arms, so a reader can see what the
+escalations add.
 
 ### 13.6 Evidence and limits
 
@@ -744,15 +735,16 @@ The limits:
 
 - **Agent-labelled data.** An agent wrote and labelled the dev and holdout cases and wrote the
   questions, so both share 1 view of each question. They're for design exploration only and never count
-  toward a calibration, a baseline or the reported benchmark. The tune split has 7 cases with 1 to 4
-  positives per question, and the tuning agent labelled those too. Only the benchmark's person-labelled
-  report split (§7.4, §10.3) can support adopting `@2-jev`.
+  toward a baseline or the reported benchmark. The tune split has 7 cases with 1 to 4 positives per
+  question, and the tuning agent labelled those too. The benchmark's report split (§7.4, §10.3) is the
+  better evidence, though an Opus agent labelled it too, blind (user, 2026-09-30).
 - **Dev is optimistic.** The designs changed after round 1 on dev; holdout came after the freeze.
 - **The spy-record false positive is open.** On `asserts-implementation`, a spy's record that *is* the
   feature's output, such as scheduled notifications, scored 0.84 on 1 holdout case, above any band, so
   the cascade doesn't catch it. The same shape scored 0.42 on dev. The labelling pass adds cases of that
-  shape (saved drafts, scheduled notifications, sent requests), and until the calibration passes on
-  them, a Jev-kept `asserts-implementation` answer can't block.
+  shape (saved drafts, scheduled notifications, sent requests). With the block calibration removed
+  (§7), a Jev-kept answer of that shape at or above `block_threshold` blocks; the benchmark lists those
+  cases with each arm's answer.
 - **Borderline flips.** A standalone run of the `@2-jev` request moved 1 case per question across 0.5,
   all between 0.44 and 0.57. On the 2 blocking questions that lies inside the band.
 - **Internal-state tests** sit near 0.5 on `fails-if-broken` (0.45 to 0.57), which the band sends to
@@ -768,10 +760,9 @@ The limits:
 - **Mapping.** Each captured reply decodes to a distribution that `JudgeAnswers.validate` accepts, and each
   Score level maps to the right option (a swapped order fails).
 - **No key leaks.** With a sentinel key, no error, finding, cache file or recording contains it.
-- **Blocking only when calibrated.** A Jev answer at p of 0.99 on `fails-if-broken` at `ready` is minor with no
-  recording, with a recording from another model, and with 29 person labels. It is major with a passing
-  calibration for that question and model, and a passing calibration for `asserts-implementation` alone doesn't
-  unlock `fails-if-broken`. The same answer from a Claude identity is major, as today.
+- **Blocking on its own.** A Jev answer at p of 0.99 on `fails-if-broken` at `ready` is major with no labels or
+  recordings on disk, and carries a Claude reason. An answer under `block_threshold` is minor. The same answer
+  from a Claude identity is major, as today.
 - **Benchmark metrics.** Pure domain tests pin each metric on small inputs worked by hand: a Brier score, a
   Wilson interval, κ for 2 known decision lists, a flip share over 3 repeats, a bin table. The bootstrap with a
   fixed seed gives the same interval twice.
