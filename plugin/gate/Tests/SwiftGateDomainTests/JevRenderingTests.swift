@@ -72,6 +72,50 @@ struct JevRenderingTests {
       ])
   }
 
+  // MARK: - The template reason
+
+  @Test(
+    "each combined answer's reason names the sub-question that set it, its meaning and p, and a question asked as written has none — catches an advisory Jev finding that can't say which signal fired"
+  )
+  func reasonNamesTheDrivingSubQuestion() throws {
+    #expect(
+      JevRendering.reason(
+        try Self.native("fails-if-broken"),
+        answers: Self.noul(
+          "fails-if-broken", ["runs-changed-code": 0.9, "checks-named-result": 0.1]))
+        == "checks-named-result: The result the name describes is never compared (p=0.90)")
+    #expect(
+      JevRendering.reason(
+        try Self.native("fails-if-broken"),
+        answers: Self.noul(
+          "fails-if-broken", ["runs-changed-code": 0.2, "checks-named-result": 0.95]))
+        == "runs-changed-code: The test never runs the changed lines (p=0.80)")
+    #expect(
+      JevRendering.reason(
+        try Self.native("asserts-implementation"),
+        answers: Self.noul(
+          "asserts-implementation",
+          ["call-details": 0.3, "private-state": 0.1, "log-text": 0.85]))
+        == "log-text answered true (p=0.85): Does an entry in `assertions` compare the exact text "
+        + "of a log or debug message?")
+    #expect(
+      JevRendering.reason(
+        try Self.native("name-specificity"),
+        answers: [
+          "name-specificity.catches-adds": .choice([
+            "nothing": 0.2, "condition": 0.7, "symptom": 0.1,
+          ])
+        ])
+        == "catches-adds: A specific input, case or area where it goes wrong, but not what "
+        + "anyone would see (p=0.70)")
+    #expect(
+      JevRendering.reason(try Self.native("tier"), answers: ["tier": .choice(["T1": 1])]) == nil)
+    #expect(
+      JevRendering.reason(
+        try Self.native("fails-if-broken"),
+        answers: Self.noul("fails-if-broken", ["runs-changed-code": 0.2])) == nil)
+  }
+
   // MARK: - Combination rules
 
   @Test(

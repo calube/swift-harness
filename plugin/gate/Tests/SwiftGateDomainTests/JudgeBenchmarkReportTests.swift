@@ -116,10 +116,14 @@ struct JudgeBenchmarkReportTests {
       try JudgeBenchmarkArm.parse("jev:jev-latest")
     }
     #expect(
-      throws: JudgeBenchmarkArmError.unknownBackend(arm: "cascade:jev-1.13.0", backend: "cascade")
+      throws: JudgeBenchmarkArmError.unknownBackend(arm: "gemini:gemini-3", backend: "gemini")
     ) {
+      try JudgeBenchmarkArm.parse("gemini:gemini-3")
+    }
+    let oneModel = #expect(throws: JudgeBenchmarkArmError.self) {
       try JudgeBenchmarkArm.parse("cascade:jev-1.13.0")
     }
+    #expect(oneModel.map { "\($0)" }?.contains("cascade:<jev model>,<claude model>") == true)
     #expect(throws: JudgeBenchmarkArmError.malformed("claude")) {
       try JudgeBenchmarkArm.parse("claude")
     }

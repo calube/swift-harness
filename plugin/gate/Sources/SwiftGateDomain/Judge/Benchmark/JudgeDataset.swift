@@ -1,8 +1,8 @@
 import CryptoKit
 import Foundation
 
-/// Who chose a case's labels. Only `person` labels count toward a person-only benchmark or a
-/// block calibration; `seed` labels come from a calibration seed's expected option.
+/// Who chose a case's labels. Only `person` labels count toward a person-only benchmark; `seed`
+/// labels come from a calibration seed's expected option.
 public enum JudgeDatasetLabeller: String, Sendable, Equatable, Codable, CaseIterable {
   case person
   case agent

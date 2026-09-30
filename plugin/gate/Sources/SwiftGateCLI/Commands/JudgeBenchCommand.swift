@@ -182,19 +182,27 @@ enum JudgeBench {
     }
   }
 
-  /// The arm's judge at its model, never behind the answer cache. A cascade arm escalates at
-  /// `threshold` as its block threshold, under the block calibrations `harnessRoot` holds for
-  /// `questions`.
+  /// The arm's judge at its model, never behind the answer cache. A cascade arm's Claude
+  /// answers from the set `questions` is based on.
   static func liveJudge(
     _ arm: JudgeBenchmarkArm, runner: any ProcessRunner, environment: [String: String],
-    questions: JudgeQuestionSet? = nil, harnessRoot: URL? = nil,
-    threshold: Double = JudgeCalibration.decisionThreshold
+    questions: JudgeQuestionSet = .testsJev
   ) -> any Judge {
-    switch arm.backend {
-    case .claude: ClaudeCLIJudge(runner: KeylessProcessRunner(inner: runner), model: arm.model)
-    case .jev:
-      JevJudge(model: arm.model, transport: URLSessionTransport(), environment: environment)
+    let claude = { (model: String) in
+      ClaudeCLIJudge(runner: KeylessProcessRunner(inner: runner), model: model)
     }
+    let single: any Judge =
+      switch arm.backend {
+      case .claude: claude(arm.model)
+      case .jev:
+        JevJudge(model: arm.model, transport: URLSessionTransport(), environment: environment)
+      }
+    guard let claudeModel = arm.claudeModel else { return single }
+    // Escalation reads only the band; the thresholds don't change which questions go to Claude.
+    return CascadingJudge(
+      jev: single, claude: claude(claudeModel), base: JudgeBenchmarkArm.base(of: questions),
+      policy: CascadingJudge.Policy(
+        thresholds: JudgeThresholds(advisory: 0, block: 1), atReadyTier: true))
   }
 
   /// Asks every case of `plan` through `judges` (1 per arm, in arm order) `plan.repeats` times,
@@ -213,7 +221,7 @@ enum JudgeBench {
     // Arms take turns within each repeat, so drift over the run touches every arm alike.
     for repeatIndex in 0..<plan.repeats {
       for (index, entry) in plan.arms.enumerated() {
-        let replies: [String: JudgeReply]
+        let replies: [String: [JudgeBenchmarkReply]]
         switch await answer(plan, questions: entry.questions, judge: judges[index]) {
         case .failure(let failure):
           return failed(
@@ -221,7 +229,11 @@ enum JudgeBench {
         case .success(let found): replies = found
         }
         for item in plan.cases {
-          guard let model = replies[item.id]?.usage?.servedModel else { continue }
+          // A cascade's Claude reply comes first and names its escalations; Jev's is the arm's.
+          guard
+            let model = replies[item.id]?.last(where: { $0.escalations == nil })?.usage?
+              .servedModel
+          else { continue }
           if let first = served[index], first != model {
             return failed(
               "\(entry.arm): the served model changed from \(first) to \(model) at repeat "
@@ -229,7 +241,7 @@ enum JudgeBench {
           }
           served[index] = model
         }
-        answered[index].append(replies.mapValues { [JudgeBenchmarkReply($0)] })
+        answered[index].append(replies)
       }
     }
     let formatter = ISO8601DateFormatter()
@@ -239,7 +251,8 @@ enum JudgeBench {
       return JudgeBenchmarkArmResult(
         arm: arm.description,
         identity: JudgeBenchmarkIdentity(
-          backend: arm.backend.rawValue, requestedModel: arm.model, servedModel: served[index]),
+          backend: arm.backendName, requestedModel: arm.requestedModel,
+          servedModel: served[index]),
         questionSet: questions.versionedID, labelsVersion: questions.labelsVersion,
         repeats: answered[index])
     }
@@ -265,13 +278,16 @@ enum JudgeBench {
   }
 
   /// 1 request per case, at most `plan.concurrency` at a time; the first failure fails them all.
+  /// A cascade's case holds Claude's reply, when a question escalated, before Jev's, so the
+  /// merged answer is the first per question.
   static func answer(_ plan: Plan, questions: JudgeQuestionSet, judge: any Judge) async -> Result<
-    [String: JudgeReply], CaseFailure
+    [String: [JudgeBenchmarkReply]], CaseFailure
   > {
     let version = plan.dataset.labelsVersion
-    return await withTaskGroup(of: (String, Result<JudgeReply, CaseFailure>).self) { group in
+    return await withTaskGroup(of: (String, Result<[JudgeBenchmarkReply], CaseFailure>).self) {
+      group in
       var pending = plan.cases[...]
-      var replies: [String: JudgeReply] = [:]
+      var replies: [String: [JudgeBenchmarkReply]] = [:]
       var failure: CaseFailure?
       func enqueue() {
         guard let item = pending.popFirst() else { return }
@@ -280,16 +296,32 @@ enum JudgeBench {
           id: item.id, file: item.id, line: 1, source: item.source, context: item.context,
           declaredTier: item.declaredTier)
         group.addTask {
+          func failure(_ reason: String) -> (String, Result<[JudgeBenchmarkReply], CaseFailure>) {
+            (item.id, .failure(CaseFailure(caseID: item.id, reason: reason)))
+          }
           do throws(JudgeError) {
-            let reply = try await judge.measuredAnswer(subject, questions: asked)
-            do throws(JudgeAnswerViolation) {
-              _ = try JudgeAnswers.validate(reply.answers, for: asked)
-            } catch {
-              return (item.id, .failure(CaseFailure(caseID: item.id, reason: "\(error)")))
+            let answers: [JudgeAnswer]
+            let found: [JudgeBenchmarkReply]
+            if let cascade = judge as? CascadingJudge {
+              let reply = try await cascade.cascade(subject, questions: asked)
+              if case .failed(let why) = reply.claude { return failure("escalation: \(why)") }
+              var escalated = reply.claudeReply.map(JudgeBenchmarkReply.init)
+              escalated?.escalations = reply.plan.escalations
+              answers = reply.decided.map(\.answer)
+              found = (escalated.map { [$0] } ?? []) + [JudgeBenchmarkReply(reply.jev)]
+            } else {
+              let reply = try await judge.measuredAnswer(subject, questions: asked)
+              answers = reply.answers
+              found = [JudgeBenchmarkReply(reply)]
             }
-            return (item.id, .success(reply))
+            do throws(JudgeAnswerViolation) {
+              _ = try JudgeAnswers.validate(answers, for: asked)
+            } catch {
+              return failure("\(error)")
+            }
+            return (item.id, .success(found))
           } catch {
-            return (item.id, .failure(CaseFailure(caseID: item.id, reason: "\(error)")))
+            return failure("\(error)")
           }
         }
       }
@@ -333,7 +365,10 @@ struct JudgeBenchCommand: AsyncParsableCommand {
     discussion:
       "Each --backend is <backend>:<model>, with a pinned model, optionally followed by "
       + "#<set id>@<version> to ask a built-in set that reads the dataset's labels, such as "
-      + "jev:jev-1.13.0#test-quality@2-jev. Every case is asked with no cache, 1 request at a "
+      + "jev:jev-1.13.0#test-quality@2-jev. cascade:<jev model>,<claude model> asks Jev the "
+      + "set rendered for it, then Claude the blocking questions Jev's answer leaves in its "
+      + "uncertain band; its cost per case sums both, and the result names each case's "
+      + "escalations. Every case is asked with no cache, 1 request at a "
       + "time by default, --repeats times (at least 3). --estimate counts the calls and prices "
       + "each arm from --usage-from files (a bench result or a judge recording) and calls "
       + "nothing. A Jev arm sends each case to api.typesafe.ai: pass --send-to api.typesafe.ai "
@@ -349,7 +384,9 @@ struct JudgeBenchCommand: AsyncParsableCommand {
 
   @Option(
     name: .customLong("backend"),
-    help: ArgumentHelp("An arm; repeat for each arm.", valueName: "backend:model[#set@version]"))
+    help: ArgumentHelp(
+      "An arm; repeat for each arm.",
+      valueName: "backend:model[#set@version]|cascade:jev-model,claude-model"))
   var arms: [String] = []
 
   @Option(help: "How many times each arm answers every case.")
@@ -439,7 +476,8 @@ struct JudgeBenchCommand: AsyncParsableCommand {
     }
     let runner = LiveProcessRunner()
     let judges = plan.arms.map {
-      JudgeBench.liveJudge($0.arm, runner: runner, environment: environment)
+      JudgeBench.liveJudge(
+        $0.arm, runner: runner, environment: environment, questions: $0.questions)
     }
     let report: JudgeBenchmarkReport
     switch await JudgeBench.run(plan, judges: judges, startedAt: Date()) {

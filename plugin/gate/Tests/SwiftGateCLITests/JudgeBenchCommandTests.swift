@@ -218,6 +218,113 @@ struct JudgeBenchCommandTests {
     #expect(arms[0].questions[0].accuracy.n == 4)
   }
 
+  static let cascadeArm = "cascade:jev-1.13.0,claude-sonnet-5-5"
+
+  @Test(
+    "a cascade arm asks Jev @2-jev and Claude only the escalated questions, scores the merged answers on @1 labels, records each case's escalations, and sums both backends' cost per case — catches cost counted on 1 backend"
+  )
+  func cascadeArmSumsBothBackends() async throws {
+    let arm = try #require(try? JudgeBenchmarkArm.parse(Self.cascadeArm))
+    #expect(arm.description == Self.cascadeArm)
+    let jev = ServingJudge("jev", "jev-1.13.0", flagged: 0.5) { _ in "jev-1.13.0" }
+    let claude = ServingJudge("claude", "claude-sonnet-5-5", flagged: 0.1) { _ in
+      "claude-sonnet-5-5"
+    }
+    let cascade = CascadingJudge(
+      jev: jev, claude: claude, base: .tests,
+      policy: CascadingJudge.Policy(
+        thresholds: JudgeThresholds(advisory: 0.5, block: 0.5), atReadyTier: true))
+
+    let report = try await JudgeBench.run(
+      try Self.plan(arms: [Self.cascadeArm]), judges: [cascade], startedAt: Date()
+    ).get()
+
+    #expect(jev.count == 12)
+    #expect(claude.count == 12)
+    let result = try #require(report.arms.first)
+    #expect(
+      result.identity
+        == JudgeBenchmarkIdentity(
+          backend: "cascade", requestedModel: "jev-1.13.0,claude-sonnet-5-5",
+          servedModel: "jev-1.13.0"))
+    #expect(result.questionSet == "test-quality@2-jev")
+    #expect(result.labelsVersion == "test-quality@1")
+    for answered in result.repeats {
+      for replies in answered.values {
+        #expect(replies.count == 2)
+        #expect(
+          replies.first?.escalations == [
+            "fails-if-broken": .uncertain, "asserts-implementation": .uncertain,
+          ])
+        #expect(replies.last?.escalations == nil)
+      }
+    }
+    let all = try #require(report.metrics.views.first { $0.labels == .all })
+    guard case .measured(let arms, _) = all.outcome else {
+      Issue.record("no numbers")
+      return
+    }
+    #expect(arms[0].usage.costPerCase.value.map { abs($0 - 0.02) < 1e-12 } == true)
+    // Jev's 0.5 would flag every case; Claude's 0.1 flags none, so these are Claude's answers.
+    #expect(arms[0].questions[0].truePositiveRate.value == 0)
+    #expect(arms[0].questions[0].trueNegativeRate.value == 1)
+    let page = try JudgeBench.render(report.json).get()
+    #expect(page.contains("### Escalations to Claude"))
+    #expect(page.contains("| fails-if-broken | 1.00 (n=12: 12/12)"))
+
+    let live = JudgeBench.liveJudge(
+      arm, runner: Self.noProcess, environment: [:], questions: .testsJev)
+    #expect(
+      (live as? CascadingJudge)?.identity == JudgeIdentity(backend: "jev", model: "jev-1.13.0"))
+  }
+
+  @Test(
+    "a cascade arm with an unknown set after #, 1 model, or an alias exits 2 naming it, and needs the Jev host — catches a malformed cascade benchmarked as something else"
+  )
+  func badCascadeArmsExitTwo() throws {
+    let root = try Self.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = root.appending(path: "four.json")
+    try JSONSerialization.data(withJSONObject: Self.datasetObject()).write(to: file)
+    func refusal(_ arm: String, sendTo: String? = "api.typesafe.ai") -> JudgeBench.Refusal? {
+      Self.refusal(
+        JudgeBench.plan(
+          Self.options(file.path, arms: [arm]) { $0.sendTo = sendTo }, root: root,
+          harnessRoot: nil, configNamesHost: false, environment: [:]))
+    }
+
+    let unknownSet = refusal(Self.cascadeArm + "#test-quality@7")
+    #expect(unknownSet?.status == 2)
+    #expect(unknownSet?.message.contains("unknown question set `test-quality@7`") == true)
+    let oneModel = refusal("cascade:jev-1.13.0")
+    #expect(oneModel?.status == 2)
+    #expect(oneModel?.message.contains("cascade:<jev model>,<claude model>") == true)
+    let alias = refusal("cascade:jev-1.13.0,sonnet")
+    #expect(alias?.message.contains("`sonnet` is an alias") == true)
+    #expect(refusal(Self.cascadeArm, sendTo: nil)?.message.contains("--send-to") == true)
+    #expect(refusal(Self.cascadeArm) == nil)
+  }
+
+  @Test(
+    "an estimate prices a cascade arm's Claude side as if every case escalated, in the Claude spend — catches the cascade's Claude calls left out of the spend cap"
+  )
+  func estimateCountsCascadeClaudeSpend() throws {
+    let arm = try #require(try? JudgeBenchmarkArm.parse(Self.cascadeArm))
+    let estimate = JudgeBenchmarkEstimate.make(
+      arms: [arm], judgments: [2, 2], repeats: 3,
+      recorded: [
+        .init(
+          backend: "claude", model: "claude-sonnet-5-5",
+          usages: [JudgeUsage(costUSD: 0.01, wallMilliseconds: 1)], source: "claude.json"),
+        .init(
+          backend: "jev", model: "jev-1.13.0",
+          usages: [JudgeUsage(costUSD: 0.0001, wallMilliseconds: 1)], source: "jev.json"),
+      ])
+    #expect(estimate.arms.count == 2)
+    #expect(estimate.claudeCostUSD.map { abs($0 - 0.06) < 1e-12 } == true)
+    #expect(estimate.text.contains("if every case escalates"))
+  }
+
   @Test(
     "--repeats 2 exits 2 unless --smoke over named cases — catches stability measured on 2 repeats"
   )

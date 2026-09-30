@@ -22,7 +22,11 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
   /// The built-in sets an arm may name after `#`.
   public static let questionSets: [JudgeQuestionSet] = [.tests, .testsJev, .comments]
 
-  /// `<backend>:<model>` or `<backend>:<model>#<set id>@<version>`.
+  /// The name a cascade arm is written with, in place of a backend.
+  public static let cascadeName = "cascade"
+
+  /// `<backend>:<model>` or `cascade:<jev model>,<claude model>`, either optionally followed by
+  /// `#<set id>@<version>`.
   public static func parse(_ text: String) throws(JudgeBenchmarkArmError) -> JudgeBenchmarkArm {
     let parts = text.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
     let head = parts[0]
@@ -33,17 +37,37 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
     let name = String(head[..<colon])
     let model = String(head[head.index(after: colon)...])
     guard !name.isEmpty, !model.isEmpty else { throw .malformed(text) }
-    // A cascade arm plugs in here as a third backend whose model names both of its judges.
-    guard let backend = JudgeBackend(rawValue: name) else {
-      throw .unknownBackend(arm: text, backend: name)
+    let arm: JudgeBenchmarkArm
+    if name == cascadeName {
+      let models = model.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+      guard models.count == 2, !models[0].isEmpty, !models[1].isEmpty else {
+        throw .malformedCascade(text)
+      }
+      for (backend, pin) in zip([JudgeBackend.jev, .claude], models) where !pinned(pin, on: backend)
+      {
+        throw .notPinned(arm: text, model: pin)
+      }
+      arm = JudgeBenchmarkArm(
+        backend: .jev, model: models[0], questionSet: set, claudeModel: models[1])
+    } else {
+      guard let backend = JudgeBackend(rawValue: name) else {
+        throw .unknownBackend(arm: text, backend: name)
+      }
+      guard pinned(model, on: backend) else { throw .notPinned(arm: text, model: model) }
+      arm = JudgeBenchmarkArm(backend: backend, model: model, questionSet: set)
     }
-    guard pinned(model, on: backend) else { throw .notPinned(arm: text, model: model) }
     if let set, !questionSets.contains(where: { $0.versionedID == set }) {
       throw .unknownQuestionSet(
         arm: text, questionSet: set, known: questionSets.map(\.versionedID))
     }
-    return JudgeBenchmarkArm(backend: backend, model: model, questionSet: set)
+    return arm
   }
+
+  /// `cascade` for a cascade arm, else the backend's name.
+  public var backendName: String { claudeModel == nil ? backend.rawValue : Self.cascadeName }
+
+  /// The model, or for a cascade arm Jev's and Claude's, comma-separated.
+  public var requestedModel: String { claudeModel.map { "\(model),\($0)" } ?? model }
 
   /// Claude's aliases (`sonnet`, `opus`) move to new models; only a full `claude-…` id is pinned.
   static func pinned(_ model: String, on backend: JudgeBackend) -> Bool {
@@ -54,17 +78,24 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
   }
 
   public var description: String {
-    "\(backend.rawValue):\(model)" + (questionSet.map { "#\($0)" } ?? "")
+    "\(backendName):\(requestedModel)" + (questionSet.map { "#\($0)" } ?? "")
   }
 
   /// The set this arm asks on `dataset`. It must read the dataset's labels, and a set rendered
-  /// for 1 backend is asked only of that backend.
+  /// for 1 backend is asked only of that backend. A cascade arm's Jev asks the set rendered for
+  /// it on the dataset's labels, when one exists.
   public func questions(for dataset: JudgeDataset) throws(JudgeBenchmarkArmError)
     -> JudgeQuestionSet
   {
+    let native =
+      claudeModel == nil
+      ? nil
+      : Self.questionSets.first {
+        $0.rendering?.rawValue == backend.rawValue && $0.basedOn == dataset.labelsVersion
+      }
     let set =
       questionSet.flatMap { id in Self.questionSets.first { $0.versionedID == id } }
-      ?? dataset.questions
+      ?? native ?? dataset.questions
     guard set.labelsVersion == dataset.labelsVersion else {
       throw .otherLabels(
         arm: description, questionSet: set.versionedID, labels: set.labelsVersion,
@@ -75,6 +106,15 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
         arm: description, questionSet: set.versionedID, rendering: rendering.rawValue)
     }
     return set
+  }
+
+  /// The set a cascade's Claude asks from when its Jev asks `set`: the built-in set whose labels
+  /// `set` reads, else `set` as written.
+  public static func base(of set: JudgeQuestionSet) -> JudgeQuestionSet {
+    questionSets.first { $0.versionedID == set.labelsVersion && $0.rendering == nil }
+      ?? JudgeQuestionSet(
+        id: set.id, version: set.version, subjectDescription: set.subjectDescription,
+        questions: set.questions)
   }
 
   /// `set` cut to the questions `item` is labelled on under `labelsVersion`, keeping the set's
@@ -93,6 +133,8 @@ public struct JudgeBenchmarkArm: Sendable, Hashable, CustomStringConvertible {
 public enum JudgeBenchmarkArmError: Error, Sendable, Equatable, CustomStringConvertible {
   /// Not `<backend>:<model>[#<set>]`.
   case malformed(String)
+  /// `cascade:` not followed by 2 comma-separated models.
+  case malformedCascade(String)
   case unknownBackend(arm: String, backend: String)
   /// A moving alias, such as `sonnet` or `jev-latest`, where the benchmark needs a pinned id.
   case notPinned(arm: String, model: String)
@@ -106,9 +148,13 @@ public enum JudgeBenchmarkArmError: Error, Sendable, Equatable, CustomStringConv
     switch self {
     case .malformed(let arm):
       "--backend \(arm): write <backend>:<model>, optionally followed by #<set id>@<version>"
+    case .malformedCascade(let arm):
+      "--backend \(arm): write cascade:<jev model>,<claude model>, optionally followed by "
+        + "#<set id>@<version>"
     case .unknownBackend(let arm, let backend):
       "--backend \(arm): unknown backend `\(backend)`; use "
-        + JudgeBackend.allCases.map(\.rawValue).joined(separator: " or ")
+        + (JudgeBackend.allCases.map(\.rawValue) + [JudgeBenchmarkArm.cascadeName]).joined(
+          separator: " or ")
     case .notPinned(let arm, let model):
       "--backend \(arm): `\(model)` is an alias that can move; name a pinned model id, such as "
         + "claude-sonnet-5-5 or jev-1.13.0"
@@ -556,25 +602,34 @@ public struct JudgeBenchmarkEstimate: Sendable, Equatable {
   ) -> JudgeBenchmarkEstimate {
     let calls = judgments.count * repeats
     let asked = judgments.reduce(0, +) * repeats
-    return JudgeBenchmarkEstimate(
-      arms: arms.map { arm in
-        // Only the same backend at the same model prices an arm; a cache hit cost nothing and
-        // says nothing about the price.
-        let matching = recorded.filter {
-          $0.backend == arm.backend.rawValue && $0.model == arm.model
-        }
-        let costs = matching.flatMap(\.usages).filter { !$0.cached }.compactMap(\.costUSD)
-        guard !costs.isEmpty else {
-          return Arm(
-            arm: arm.description, backend: arm.backend, calls: calls, judgments: asked,
-            costUSD: nil, basis: .noRecordedUsage)
-        }
-        let mean = costs.reduce(0, +) / Double(costs.count)
+    func priced(_ label: String, backend: JudgeBackend, model: String) -> Arm {
+      // Only the same backend at the same model prices an arm; a cache hit cost nothing and
+      // says nothing about the price.
+      let matching = recorded.filter { $0.backend == backend.rawValue && $0.model == model }
+      let costs = matching.flatMap(\.usages).filter { !$0.cached }.compactMap(\.costUSD)
+      guard !costs.isEmpty else {
         return Arm(
-          arm: arm.description, backend: arm.backend, calls: calls, judgments: asked,
-          costUSD: mean * Double(calls),
-          basis: .recorded(
-            meanPerCall: mean, calls: costs.count, sources: Set(matching.map(\.source)).sorted()))
+          arm: label, backend: backend, calls: calls, judgments: asked, costUSD: nil,
+          basis: .noRecordedUsage)
+      }
+      let mean = costs.reduce(0, +) / Double(costs.count)
+      return Arm(
+        arm: label, backend: backend, calls: calls, judgments: asked,
+        costUSD: mean * Double(calls),
+        basis: .recorded(
+          meanPerCall: mean, calls: costs.count, sources: Set(matching.map(\.source)).sorted()))
+    }
+    return JudgeBenchmarkEstimate(
+      arms: arms.flatMap { arm in
+        let own = priced(arm.description, backend: arm.backend, model: arm.model)
+        // Which cases escalate isn't known before the run, so the Claude side is its ceiling.
+        guard let claudeModel = arm.claudeModel else { return [own] }
+        return [
+          own,
+          priced(
+            "\(arm.description) (claude, at most: if every case escalates)", backend: .claude,
+            model: claudeModel),
+        ]
       })
   }
 
@@ -738,6 +793,42 @@ struct JudgeBenchmarkPage {
         Self.estimate($0.costPerThousandJudgments, digits: 4)
       },
     ]
+    lines += escalations(cases)
+    return lines
+  }
+
+  /// For each cascade arm, the share of answered cases per repeat whose question went to Claude.
+  /// A cascade case's usage already sums both backends' calls.
+  func escalations(_ cases: JudgeReportCases) -> [String] {
+    let cascades = report.arms.filter { $0.identity.backend == JudgeBenchmarkArm.cascadeName }
+    guard !cascades.isEmpty else { return [] }
+    func share(_ arm: JudgeBenchmarkArmResult, _ question: String?) -> JudgeProportion {
+      var count = 0
+      var n = 0
+      for answered in arm.repeats {
+        for item in cases.cases {
+          guard let replies = answered[item.id], !replies.isEmpty else { continue }
+          if let question, item.expected[question] == nil { continue }
+          n += 1
+          let escalated = replies.compactMap(\.escalations).flatMap(\.keys)
+          let hit = question.map { escalated.contains($0) } ?? !escalated.isEmpty
+          if hit { count += 1 }
+        }
+      }
+      return JudgeProportion(count: count, n: n)
+    }
+    var lines = [
+      "", "### Escalations to Claude", "",
+      "Answered cases, per repeat, whose question Jev sent to Claude; each case's cost and "
+        + "latency above sum both calls.", "",
+      "| Question | " + cascades.map { "`\($0.arm)`" }.joined(separator: " | ") + " |",
+      "|---|" + String(repeating: "---|", count: cascades.count),
+    ]
+    for question in report.questions.map(\.id) + [nil] {
+      lines.append(
+        "| \(question ?? "Any question") | "
+          + cascades.map { Self.rate(share($0, question)) }.joined(separator: " | ") + " |")
+    }
     return lines
   }
 

@@ -25,7 +25,7 @@ enum JudgeBlockReason {
     questions: JudgeQuestionSet, identity: JudgeIdentity, reasonJudge: (any Judge)?,
     redacting secrets: [String]
   ) async -> [Finding] {
-    guard JudgeBackend(rawValue: identity.backend)?.needsBlockCalibration == true else {
+    guard JudgeBackend(rawValue: identity.backend)?.writesReasons == false else {
       return findings
     }
     let bySite = Dictionary(
@@ -123,7 +123,7 @@ enum JudgeBlockReason {
     do throws(JudgeError) {
       answers = try await judge.answer(request.subject, questions: asked)
     } catch {
-      return .missing(why(error, judge: judge.identity))
+      return .missing(error.explanation(by: judge.identity))
     }
     let name = judge.identity.backend
     guard let answer = answers.first(where: { $0.question == request.question.id }),
@@ -136,27 +136,7 @@ enum JudgeBlockReason {
     return .written(rationale, p: p, by: judge.identity)
   }
 
-  static func why(_ error: JudgeError, judge: JudgeIdentity) -> String {
-    let name = judge.backend
-    switch error {
-    case .process(.launchFailed(let executable, let reason)):
-      return "\(executable) could not start: \(reason)"
-    case .process(.timedOut(let executable, let after, _, _)):
-      return "\(executable) timed out after \(after.components.seconds) s"
-    case .process(.cancelled(let executable)):
-      return "\(executable) was cancelled"
-    case .backend(let detail):
-      return "\(name) reported an error: \(detail)"
-    case .malformedReply(let detail):
-      return "\(name)'s reply didn't fit the question: \(detail)"
-    case .notConfigured(let detail):
-      return "\(name) isn't configured: \(detail)"
-    case .stateTooLarge(let tokens):
-      return "the subject is too large for \(name) (about \(tokens) tokens)"
-    }
-  }
-
-  private static func redact(_ text: String, _ secrets: [String]) -> String {
+  static func redact(_ text: String, _ secrets: [String]) -> String {
     secrets.filter { !$0.isEmpty }.reduce(text) { $0.replacing($1, with: "<redacted>") }
   }
 }
