@@ -1,18 +1,16 @@
-// Walks the build skill's gate lines through the real binary in temp repositories, each walk a
-// real push gate with a cold SwiftPM build of its package. They run apart from
-// skill_commands_test.mjs so these cold builds, the step a loaded machine slows most, don't share
-// its 60s repository-script timeout with its text checks.
+// Walks the build skill's green-main and merge gate lines through the real binary in temp
+// repositories; one of their push gates makes a cold SwiftPM build of its package. Each script
+// holds at most one cold build (the other is skill_surface_baseline_walk_test.mjs): it is the step
+// a loaded machine slows most, two in one script overran its 60s repository-script timeout at a
+// load average near 120 on 16 cores, and separate scripts get separate timeouts and run side by
+// side.
 // Run: node tests/skill_gate_walks_test.mjs
-// Regressions caught: a build stopped by the surface it builds on, and a real red waved through
-// as the surface's baseline.
+// Regression caught: a build stopped by the surface it builds on.
 import assert from 'node:assert/strict'
 import {
   buildGatesFor,
   buildGateWalk,
   buildSkillFiles,
-  surfaceBaselineProblems,
-  surfaceBaselineRule,
-  surfaceBaselineWalk,
 } from './skill_commands_test.mjs'
 
 const tests = {
@@ -27,22 +25,6 @@ const tests = {
       ['green-main', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
       ['merge', 'RED', ['impact.untested-change Packages/Core/Sources/Feed/Feed.swift']],
     ], 'the old lines no longer reproduce the surface\'s RED green-main check')
-  },
-
-  'the build skill takes a surface\'s untested new module as its green-main baseline without asking, and still halts on any other gating finding — catches a build halted by the surface it builds on, or a real red waved through'() {
-    const files = buildSkillFiles()
-    const skill = files['skills/build/SKILL.md']
-    assert.deepEqual(surfaceBaselineProblems(skill), [])
-    const rule = surfaceBaselineRule(skill)
-    assert.equal(rule.rule, 'coverage.no-t1-tests')
-    const gates = buildGatesFor(files, { surfaceCommit: '<surfaceCommit>' }).filter(gate => gate.file === 'skills/build/SKILL.md')
-    const walk = surfaceBaselineWalk(gates, rule)
-    assert.deepEqual([walk.verdict, walk.gating], ['RED', [
-      'coverage.diff .', 'coverage.no-t1-tests Packages/Core/Sources/Feed', 'coverage.no-t1-tests Packages/Core/Sources/Legacy',
-    ]])
-    assert.deepEqual([walk.alone, walk.all, walk.beside], ['baseline', 'halt', {
-      'coverage.diff .': 'halt', 'coverage.no-t1-tests Packages/Core/Sources/Legacy': 'halt',
-    }])
   },
 }
 
