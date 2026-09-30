@@ -73,3 +73,32 @@ Commits and gate: surface 5c23a60, behaviour 7c56d42; gate 20260930T162220Z-e9d6
 - Counts, κ and rates use each case's majority decision over repeats (a tie goes to the mean probability). Brier, accuracy and reliability use the mean distribution.
 - `JudgeBootstrap`: 2000 resamples, seed 20260930, SplitMix64, nearest-rank percentiles.
 - Deviation: surface-check was RED on 3 struct-returning stubs, which no allowed stub form covers. The prove at the surface still worked.
+
+## Wave 2 (continued) and wave 3
+
+### `calibrate-design-keeps-agent-replies`
+
+Commits and gate: surface 2d33463, behaviour 6d1c888; gate 20260930T162945Z-c554ba3a; 8/8 tests proved.
+- Layout: `.harness/runs/<run id>/calibrate-design/<agent>/<seed>.txt` holds the raw reply; `<seed>.json` holds {schemaVersion:1, requestedModel, servedModels:[modelUsage keys, sorted]}.
+- `swiftgate calibrate design --replay <run id>` judges kept replies and runs no agent. It exits 0/1/2 like a live run, a missing reply exits 2 naming the seed, and it never writes last-pass.json. It refuses `--model` and anything that isn't a run id.
+- Types: `DesignCalibrationReplies(root:runID:mode: .keep|.replay)`, `DesignCalibrationRunner(replies:)`, `CaseRun.servedModels` and `CaseRun.replyPath`.
+- `StaticCheckRun.execute` gained `runID: String? = nil`.
+- OPEN (#6): last-pass.json still stores the alias; freshness doesn't check the served model yet.
+
+### `blocking-questions-reach-thirty-person-labels`
+
+Commits and gate: cases+sheet da69943, gate GREEN 20260930T163647Z; failing labels test 51953a1, held until the user labels.
+- 66 cases in total: report split 44 (15 old, 29 new), tune split 22. The new ids are neutral `case-xxxxxx`. The existing 22 cases now carry labeller "agent".
+- J/labelling-sheet.md is blind: after each `Answer <question>:` line, write an option or leave it blank.
+- After the user labels, two things break. First, recording.json has no answers for the new cases, so `recordedCalibration` fails until the self-test or benchmark task re-records live.
+- Second, self-test --judge counts a skipped answer as unscored, which reads as a regression. The wave-4 self-test task must handle it.
+- The worker's own estimate: each question has about 13-14 flagged cases in the report split, a thin margin over 10.
+- Merged to main: cases + sheet + tool (1f28794). Command: `node tests/judge_labelling_sheet.mjs apply`. The failing labels test waits on branch `labels-test-awaiting-person-labels` (dc1ea03); cherry-pick it after the user labels.
+
+### `commit-comment-judge-runs-on-jev`
+
+Commits and gate: surface f95c271, behaviour 8546e8e, test fix 55ff63e; gate 20260930T164857Z-a51fa607; 5/5 tests proved.
+- `ConfiguredCommitCommentJudge.judge(for:root:transport:environment:clock:) -> (any Judge)?`
+- `ConfiguredCommitCommentJudge.concurrency(_ backend: JudgeBackend) -> Int`: claude 4, jev 6. `JudgeBatch.answer(_:questions:judge:maxConcurrent:)`.
+- Failure text: "Comment judge not run: <JudgeError>". The cap stays at 6, as the design sets; Jev's wait no longer grows with the comment count.
+- Live: the real hook took 889 ms wall on Jev, with 3 Jev calls.
