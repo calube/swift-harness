@@ -13,21 +13,21 @@ user removed the block calibration on 2026-09-30, and Jev blocks on its own at `
 | `comments` (`comments@1` labels) | 80, 3 unlabelled (45 / 32) | Claude `@1`, Jev `@1` | 3 |
 
 Every call skipped the cache, 1 request at a time. Each dataset ran as several `judge bench` commands over
-disjoint `--case` chunks, so that each command fit in 10 minutes. The chunks were joined into 1 result per
-dataset by `JudgeBenchmarkReport`'s own initializer, which recomputes every metric from the raw answers, and
-`bench-render` verifies them. Claude and both Jev arms took turns within each repeat. The cascade ran after its
-bands were set, below, so its answers come from a later run than the other 3 arms'. One chunk failed at its
-3rd repeat on a Jev reply that couldn't be parsed, and was asked again from scratch.
+disjoint `--case` chunks, so that each command fit in 10 minutes. `JudgeBenchmarkReport`'s own initializer
+joined the chunks into 1 result per dataset, recomputing every metric from the raw answers, and `bench-render`
+verifies them. Claude and both Jev arms took turns within each repeat. The cascade ran after the sweep below set
+its bands, so its answers come from a later run than the other 3 arms'. One chunk failed at its 3rd repeat on a
+Jev reply the adapter couldn't parse, and ran again from scratch.
 
 Skipped: dataset 3, `calibrate design`'s judged labels. A live `calibrate design` run passed 23 of 23 seeds
-and kept its replies, but the Claude arm can't answer that dataset: its question ids carry the
+and kept its replies. The Claude arm can't answer that dataset, though: its question ids carry the
 `<agent>/<seed>/` prefix, and Claude's structured-output schema refuses `/` in a property key (API error 400
 on the first case). Dataset 4 waits for the evals owners' trial.
 
 ## Cascade bands, from the tune split only
 
 The sweep reads only the `@2-jev` arm's 22 tune-split cases, at threshold 0.50. Its candidate bands run from
-0.05 to 0.40 at the lower edge and 0.60 to 0.95 at the upper, in steps of 0.05, so every band holds 0.4 to 0.6,
+0.05 to 0.40 at the lower edge and 0.60 to 0.95 at the upper, in steps of 0.05. So every band holds 0.4 to 0.6,
 where a rerun of the Jev request moved answers across 0.5. It picks the band with the fewest kept answers
 wrong, then the fewest escalations, then the narrowest, then the lowest.
 
@@ -81,8 +81,8 @@ page ranks nothing: both arms find all 5 `loses-fact` cases, and their true-nega
 
 ## Recordings and baselines
 
-`recording.json` (Claude `@1`, `claude-sonnet-5-5`) and `recording-jev.json` (Jev `@2-jev`, `jev-1.13.0`) were
-recorded again over all 66 cases, with served models and usage. `baseline-jev.json` takes each minimum from the
+`self-test --judge --record` wrote `recording.json` (Claude `@1`, `claude-sonnet-5-5`) and `recording-jev.json`
+(Jev `@2-jev`, `jev-1.13.0`) again over all 66 cases, with served models and usage. `baseline-jev.json` takes each minimum from the
 tune split only: the lower Wilson 95% bound of the recording's tune-split precision and recall, rounded down to
 0.05. `baseline.json` keeps 0.80 wherever Claude's new recording still meets it. Over the harder set, Claude's
 `asserts-implementation` recall is 0.67 (8/12), so that one minimum falls to the tune-split bound, 0.30.
