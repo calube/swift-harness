@@ -21,6 +21,17 @@ public protocol Judge: Sendable {
   /// Answers every question in `questions`, validated and normalized.
   func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
+  /// The same answers plus what the call cost, for the benchmark (spec §4.5).
+  func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+}
+
+extension Judge {
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
+    JudgeReply(answers: [], usage: nil)
+  }
 }
 
 /// Builds the judge a repository's config asks for, or `nil` when the judge is disabled. The
@@ -144,6 +155,12 @@ public enum ClaudeJudgePrompt {
 
 /// Reads the `claude -p --output-format json` result envelope.
 public enum ClaudeJudgeReply {
+  public static func parseReply(_ stdout: Data, stderr: String, for questions: JudgeQuestionSet)
+    throws(JudgeError) -> JudgeReply
+  {
+    JudgeReply(answers: [], usage: nil)
+  }
+
   public static func parse(_ stdout: Data, stderr: String, for questions: JudgeQuestionSet)
     throws(JudgeError) -> [JudgeAnswer]
   {
