@@ -174,9 +174,9 @@ The user's decision (§12, decision 3):
 3. **Split questions carry their own diagnosis.** A rubric split into 1 Noul per clause (§11.2) names the clause
    that failed, which is most of what a reason gives error analysis.
 
-When Claude can't answer (no `claude` on `PATH`, a timeout, an error), the plan's choice is that the block
-stands with the template reason and a `failureScenario` naming why Claude's reason is missing. The plan marks
-this for the user to confirm.
+When Claude can't answer (no `claude` on `PATH`, a timeout, an error), a calibrated Jev block stands with the
+template reason and a `failureScenario` naming why Claude's reason is missing. The user decided this on
+2026-09-30.
 
 ## 7. Jev blocks only once calibrated
 
@@ -233,7 +233,8 @@ computes the calibration each run.
 Today's 22 cases carry the tuning agent's labels, a bias the sub-project 2 review names. The set grows to at
 least 30 person-labelled cases in the report split for each blocking question, `fails-if-broken` and
 `asserts-implementation`, with at least 10 on each side. The tune split (§10.5) takes about 1 case in 3, so the
-whole set needs about 45 person-labelled cases.
+whole set needs about 45 person-labelled cases. The user confirmed that size and the fixed split on
+2026-09-30.
 
 - Each case in `labels.json` gains `labeller`, `person` or `agent`. A case without it reads as `agent`, so the
   existing 22 count only once a person relabels them.

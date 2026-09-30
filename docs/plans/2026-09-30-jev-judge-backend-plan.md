@@ -12,9 +12,9 @@ Progress: git log. Update this header at every wave merge.
 
 ## Decisions made while planning
 
-The user decided the design's §12 questions on 2026-09-30; the rows marked "user" record those decisions. The
-other rows are the plan's own choices within them. The row marked "user (confirm)" is a choice the design's
-decisions leave open; the orchestrator asks the user before `jev-blocks-carry-a-claude-reason` starts.
+The user decided the design's §12 questions on 2026-09-30; the rows marked "user" record those decisions, and
+the 2 rows marked "user, 2026-09-30" record choices the user confirmed later that day. The other rows are the
+plan's own choices within them.
 
 | Decision | Evidence | Choice | Needs |
 |---|---|---|---|
@@ -25,14 +25,14 @@ decisions leave open; the orchestrator asks the user before `jev-blocks-carry-a-
 | Tier criteria (§12 decision 5) | §4.1 | `test-quality@1` unchanged for the benchmark | user |
 | Benchmark backends | user, 2026-09-30: compare Sonnet 5.5 at `claude-sonnet-5-5`, not the `sonnet` alias, with a pinned Jev | `--backend claude:claude-sonnet-5-5 --backend jev:jev-1.13.0`. The recordings in `J/` use the same pins. The gate's default `sonnet` doesn't change | user |
 | The 22-case set can't rank | a live baseline on 2026-09-30: Sonnet 5.5 scored 1.00 on all 4 questions in 2 of 3 runs, and 7/8 on `name-specificity` in the third; positives per question are 5, 2, 8 and 3 | It stays as a smoke set. The labelling task builds a harder set: near misses, ambiguous tiers, at least 10 positives and 10 negatives per question in the report split | — |
-| Tune and report splits | user: don't tune thresholds on the cases the benchmark reports | A case is in the tune split when the SHA-256 of its id starts below `0x55`, about 1 in 3; the rest report. Sweeps read tune only; headline metrics and the block calibration read report only. The labelled set grows to about 45 cases so the report split holds 30 per blocking question | user (confirm the labelling size) |
+| Tune and report splits | user: don't tune thresholds on the cases the benchmark reports | A case is in the tune split when the SHA-256 of its id starts below `0x55`, about 1 in 3; the rest report. Sweeps read tune only; headline metrics and the block calibration read report only. The labelled set grows to about 45 cases so the report split holds 30 per blocking question | user, 2026-09-30 |
 | Intervals | user: show confidence intervals; n beside every number | Wilson 95% for proportions; a paired bootstrap over cases, 2,000 resamples, fixed seed, for Brier, calibration error, κ and differences | — |
 | Benchmark requests | latency under queueing measures the queue | 1 request at a time by default; `--concurrency` exists but the committed run uses 1. The cache is off for every benchmark call | — |
 | Where the block calibration lives | the user asked for "a calibration record … for that question id and Jev version"; a separate summary file could drift from, or be edited apart from, the recording it summarises | The record is the committed `J/recording-jev.json` scored against `J/labels.json`. Pure domain code computes pass or fail at every ready run; no summary file | — |
 | The bar's numbers | evals design: 30 or more labelled cases, rates reported against a person's labels, and Jev kept only if its rates match Claude's; `J/baseline.json` sets 0.8 for every question | 30 person-labelled cases per question, at least 10 on each side; true-positive and true-negative rates of at least 0.8 and at least Claude's on the same cases, at the repository's `block_threshold`. Constants in the domain type, 1 test per number | — |
 | Who labels | the sub-project 2 review: the tuning agent labelled today's 22 cases | A `labeller` field, `person` or `agent`, on each case; only `person` counts. A missing field reads as `agent` | — |
 | Blind labelling | today's case directory names give the intent away (`existence-only`, `own-double`) | The labelling sheet shows neutral numbers, the test and the diff only. New case directories get neutral names | — |
-| Claude can't write the reason | §6: no `claude` on `PATH`, a timeout, an error | The block stands with the template reason, and `failureScenario` names why Claude's reason is missing. The alternative is to downgrade the finding to advisory | user (confirm) |
+| Claude can't write the reason | §6: no `claude` on `PATH`, a timeout, an error | The block stands with the template reason, and `failureScenario` names why Claude's reason is missing. | user, 2026-09-30 |
 | Where the placeholder goes | `JevJudge` in `A/Judge.swift` throws `notConfigured`; `JudgeBackend.jev` already parses; `JudgeFactory.make` already switches on it | `jev-judge-answers-over-http` replaces the placeholder in place. No new backend case, no new config key for the backend | — |
 | HTTP transport | the gate has no HTTP client; `curl` through `ProcessRunner` would put the key in an argument list | `HTTPTransport` protocol in `A/HTTP/`, a live type on `URLSession(configuration: .ephemeral)`, a replaying fake in `S/` | — |
 | The pinned model | TypeSafe's models page (2026-09-30): `jev-latest` and `jev-preview` both resolve to `jev-1.13.0`; pinning a version is their advice for tuned thresholds | Default `jev-1.13.0`; an alias fails config. The capture task records the served id for `jev-latest` | — |
@@ -193,7 +193,7 @@ tests include the existing index test, which fails when an id the registries rep
 - Tests: the dataset loads through the loader, and each question has at least 30 `person` labels in the report split with at least 10 on each side; it fails before the labels exist. Every case's text appears in its named commit (catches an edited or made-up comment).
 
 ### `jev-blocks-carry-a-claude-reason`
-- Deps: jev-blocks-only-when-calibrated, jev-judge-answers-over-http, self-test-scores-each-backend-recording · Gate: push · Model: opus · estLines: 240 · Needs: user (confirm the Claude-failure row in Decisions)
+- Deps: jev-blocks-only-when-calibrated, jev-judge-answers-over-http, self-test-scores-each-backend-recording · Gate: push · Model: opus · estLines: 240
 - Writes: `C/Commands/JudgeCommands.swift` (`TestJudgeCheck`), `C/JudgeBlockReason.swift`, `TC/CheckJudgeStepTests.swift`
 - Does: design §6 point 2. After `JudgePolicy` returns, each major finding from a Jev identity triggers 1 `ClaudeCLIJudge` call with a question set holding only that question, for that subject, through the cache. Claude's rationale becomes `failureScenario`, and the message adds `claude p=<p>` beside Jev's. The finding stays major whatever Claude answers. If Claude can't answer, the finding stays major, and `failureScenario` says Claude's reason is missing and why (Decisions). Minor Jev findings call nothing.
 - Tests: a calibrated Jev block with a fake Claude judge carries that judge's rationale and both probabilities (catches a block with no reason). A fake Claude answer that disagrees leaves the finding major (catches Claude overruling Jev). A minor Jev finding makes 0 Claude calls (catches a Claude call on every flag). A failing Claude judge leaves the finding major with the missing-reason text. A Claude-backend block makes no second call.
