@@ -134,37 +134,39 @@ struct JudgeCascadeTests {
   }
 
   @Test(
-    "a failed or missing claude answer for an uncertain 0.7 is minor under jev with the escalation note — catches a failed escalation hiding why"
+    "a failed or missing claude answer for an uncertain 0.7 is minor under jev with the escalation note, while a confident 0.95 beside it stays jev's and blocks — catches a failed escalation hiding why, or a confident jev answer sent to claude"
   )
   func failedEscalationStaysMinor() throws {
-    let uncertain = Self.answers(failsIfBroken: 0.7)
+    let jev = Self.answers(failsIfBroken: 0.7, implementation: 0.95)
     for outcome in [
       JudgeCascade.ClaudeOutcome.failed("claude is not on PATH"), .answered([]),
     ] {
-      let found = try Self.findings(uncertain, claude: outcome)
-      #expect(found.map(\.severity) == [.minor])
+      let found = try Self.findings(jev, claude: outcome)
+      #expect(found.map(\.ruleID) == ["judge.fails-if-broken", "judge.asserts-implementation"])
+      #expect(found.map(\.severity) == [.minor, .major])
       let message = found.first?.message ?? ""
       #expect(message.contains("(p=0.70, jev/jev-1.13.0); escalated to claude as uncertain"))
+      #expect(found.last?.message.contains("escalated") == false)
     }
-    let failed = try Self.findings(uncertain, claude: .failed("claude is not on PATH"))
+    let failed = try Self.findings(jev, claude: .failed("claude is not on PATH"))
     #expect(failed.first?.message.hasSuffix("which failed: claude is not on PATH") == true)
   }
 
   @Test(
-    "a failed escalation of an uncertain answer over a low block threshold never blocks — catches an uncertain jev answer blocking after claude fails"
+    "over a low block threshold, a failed escalation of an uncertain 0.75 never blocks while a kept 0.9 does — catches an uncertain jev answer blocking after claude fails"
   )
   func failedUncertainEscalationNeverBlocks() throws {
     let low = JudgeThresholds(advisory: 0.5, block: 0.7)
-    let jev = Self.answers(failsIfBroken: 0.75)
+    let jev = Self.answers(failsIfBroken: 0.75, implementation: 0.9)
     let plan = JudgeCascade.plan(
       subject: Self.subject, jev: jev, questions: .tests, bands: Self.bands, thresholds: low,
       atReadyTier: true)
-    #expect(plan.step(for: "fails-if-broken") == .escalate(.uncertain))
+    #expect(plan.escalations == ["fails-if-broken": .uncertain])
     let found = try JudgeCascade.findings(
       subject: Self.subject, plan: plan, jev: jev, claude: .failed("timed out"),
       questions: .tests, jevIdentity: Self.jev, claudeIdentity: Self.claude, thresholds: low,
       atReadyTier: true)
-    #expect(found.map(\.severity) == [.minor])
+    #expect(found.map(\.severity) == [.minor, .major])
     #expect(found.first?.message.contains("escalated to claude as uncertain") == true)
   }
 
