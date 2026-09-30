@@ -204,11 +204,19 @@ enum DiffSections {
   }
 }
 
-typealias JudgeTestsCommand = JudgeCommand
-
+/// `swiftgate judge`: `tests` when no subcommand is named, so `swiftgate judge --ready` keeps
+/// its meaning.
 struct JudgeCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "judge",
+    abstract: "Ask the configured judge about changed tests, or any question set.",
+    subcommands: [JudgeTestsCommand.self, JudgeAskCommand.self],
+    defaultSubcommand: JudgeTestsCommand.self)
+}
+
+struct JudgeTestsCommand: AsyncParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "tests",
     abstract: "Ask the configured judge about new and changed host tests (advisory below ready).",
     discussion:
       "Off unless .swiftgate.toml has [judge] backend set: a remote backend sends test source "

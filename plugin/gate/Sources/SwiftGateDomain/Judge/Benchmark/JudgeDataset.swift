@@ -237,6 +237,24 @@ public struct JudgeDataset: Sendable, Equatable {
       })
   }
 
+  /// An `inlineQuestionSet` object, found at `place`, read and validated as a dataset reads its
+  /// own, for another input that embeds one.
+  static func inlineQuestionSet(_ object: Any, at place: String) throws(JudgeDatasetError)
+    -> JudgeQuestionSet
+  {
+    try WireKeys.checkQuestionSet(object, in: place)
+    let wire: WireQuestionSet
+    do {
+      wire = try JSONDecoder().decode(
+        WireQuestionSet.self, from: JSONSerialization.data(withJSONObject: object))
+    } catch {
+      throw .malformed(reason: "\(error)")
+    }
+    let set = try wire.questionSet()
+    try validate(inline: set)
+    return set
+  }
+
   public var questions: JudgeQuestionSet {
     switch questionSet {
     case .builtIn(let set), .inline(let set): set
@@ -430,18 +448,22 @@ private enum WireKeys {
   static func check(_ object: Any) throws(JudgeDatasetError) {
     let top = try keys(object, dataset, in: "the dataset")
     if let inline = top["inlineQuestionSet"] {
-      let set = try keys(inline, questionSet, in: "inlineQuestionSet")
-      for (index, entry) in (set["questions"] as? [Any] ?? []).enumerated() {
-        let place = "inlineQuestionSet.questions[\(index)]"
-        let fields = try keys(entry, question, in: place)
-        if let value = fields["flag"] { _ = try keys(value, flag, in: "\(place).flag") }
-      }
+      try checkQuestionSet(inline, in: "inlineQuestionSet")
     }
     for (index, entry) in (top["cases"] as? [Any] ?? []).enumerated() {
       let fields = try keys(entry, item, in: "cases[\(index)]")
       for (version, value) in fields["labels"] as? [String: Any] ?? [:] {
         _ = try keys(value, label, in: "cases[\(index)].labels.\(version)")
       }
+    }
+  }
+
+  static func checkQuestionSet(_ inline: Any, in place: String) throws(JudgeDatasetError) {
+    let set = try keys(inline, questionSet, in: place)
+    for (index, entry) in (set["questions"] as? [Any] ?? []).enumerated() {
+      let at = "\(place).questions[\(index)]"
+      let fields = try keys(entry, question, in: at)
+      if let value = fields["flag"] { _ = try keys(value, flag, in: "\(at).flag") }
     }
   }
 
