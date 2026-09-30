@@ -1,0 +1,1 @@
+// Every worker gets the Decision section, covered or not.

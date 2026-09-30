@@ -1,0 +1,6 @@
+  /// redacts private and sensitive values exactly as a direct `Logger` call would.
+  public static func osLog(subsystem: String, minimumLevel: LogLevel = .debug) -> Self {
+    let minimum = OSLogRendering.severity(of: minimumLevel)
+    return Self(
+      isEnabled: { level, _ in OSLogRendering.severity(of: level) >= minimum },
+      emit: { record in

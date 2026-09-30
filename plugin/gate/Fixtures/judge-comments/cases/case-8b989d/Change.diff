@@ -1,0 +1,6 @@
+/// its configured word budget. Every numeric limit comes from `DocsBudgets`; this file names none
+/// of its own.
+public enum DesignLintDiagrams {
+  /// Mermaid diagram grammars `design-lint` recognises without running `mmdc`. A fence whose
+  /// declaration falls outside this set — a typo, an invented type, an all-blank fence, or a `%%`
+  /// comment standing in for the real declaration — is unknown. Full syntax validation still runs

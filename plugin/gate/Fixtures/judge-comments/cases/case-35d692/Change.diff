@@ -1,0 +1,6 @@
+    let attribution = ProbeAttribution.attribute(
+      diagnostics, probes: [Self.fabricated, Self.wrongSignature])
+    #expect(attribution.verdicts.allSatisfy { $0.verdict == .red })
+    #expect(attribution.unattributed.count == 7)
+    #expect(attribution.verdict == .red)
+  }

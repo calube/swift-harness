@@ -1,0 +1,1 @@
+/// `~/.swift-harness/projects.json`: the bootstrapped repositories on this machine, as absolute

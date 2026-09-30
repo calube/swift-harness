@@ -1,0 +1,6 @@
+  private static func graphWithTestTargets() throws -> ModuleGraph {
+    try ModuleGraph(packages: [
+      PackageManifest(
+        name: "Pkg", path: "",
+        targets: [
+          PackageTarget(name: "Foo", type: .library, path: "Sources/Foo"),

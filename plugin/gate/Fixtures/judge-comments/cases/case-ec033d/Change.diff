@@ -1,0 +1,6 @@
+  ///   or to load its package at an earlier base is tried again.
+  static func prove(
+    _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
+    context: GateRun.Context
+  ) async -> ChangedTestJudgement {
+    let (result, milliseconds) = await GateRun.timed {

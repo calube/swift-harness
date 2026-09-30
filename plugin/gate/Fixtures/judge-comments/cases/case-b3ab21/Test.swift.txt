@@ -1,0 +1,1 @@
+/// Spec §5.3's separator is `" — tier "` specifically, not the bare word "tier" — a behaviour

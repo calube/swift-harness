@@ -1,0 +1,6 @@
+  /// every task in the run touches the same single module. One `minor` warning per maximal run,
+  /// located at its first task: this many tasks strung end to end through one module is either one
+  /// task cut apart for no reason, or a chain that never needed to be one.
+  public static func singleDependentChainFindings(
+    ledger: Ledger, graph: ModuleGraph, ledgerPath: String
+  )

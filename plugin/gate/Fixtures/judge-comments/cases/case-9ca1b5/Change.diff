@@ -1,0 +1,6 @@
+    let crashing = SprintStore(
+      layout: scenario.layout, lock: SprintScenario.lock(scenario.layout), timeout: .seconds(30),
+      beforeRename: { _ in
+        try FileSystemConditions.setMode(0o555, root)
+        throw SimulatedCrash()
+      })

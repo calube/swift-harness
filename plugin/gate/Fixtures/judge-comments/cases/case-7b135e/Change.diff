@@ -1,0 +1,6 @@
+      // harness's own tests prove that shape collides with ordinary abbreviations (test tiers
+      // `T0`-`T3`, a `-R1` revision suffix, a standards code like `D7`), so it would flag its own
+      // corpus. Bounded at 3 letters and 2 digits so the match never starts inside a longer
+      // all-caps acronym (`HTTP2` has 4 leading letters) or spans a 3-digit version number
+      // (`H264`) — in both cases the excess character breaks the closing `\b`, so no match is
+      // found there at all.

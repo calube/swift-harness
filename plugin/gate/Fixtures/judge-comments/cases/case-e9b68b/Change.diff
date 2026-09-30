@@ -1,0 +1,6 @@
+    let sketchRelaxesDecision = tier == .sketch
+    let taggedSections:
+      [(
+        name: String, section: MarkdownDocument.Section?, requireSupported: Bool,
+        forbidUnverified: Bool
+      )] = [

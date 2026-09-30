@@ -1,0 +1,6 @@
+  public static func retryable(_ tests: [ChangedTest], in judgement: ChangedTestJudgement)
+    -> [ChangedTest]
+  {
+    let noEvidence = judgement.findings.filter { $0.ruleID == noEvidenceRuleID }
+    if noEvidence.contains(where: { finding in !tests.contains { isAbout($0, finding) } }) {
+      return tests

@@ -1,0 +1,6 @@
+/// process cannot always resolve for pids outside its own tree) finds it regardless of which
+/// group it put itself in.
+private enum ProcessTree {
+  /// `root` and every process descended from it, root first, from one `ps` snapshot.
+  static func descendants(of root: pid_t) -> [pid_t] {
+    var childrenByParent: [pid_t: [pid_t]] = [:]

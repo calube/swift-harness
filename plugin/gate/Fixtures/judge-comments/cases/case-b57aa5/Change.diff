@@ -1,0 +1,6 @@
+/// found in a comment or test name.
+///
+/// This type only merges already-read ids into one set; reading them off disk (every common-dir
+/// ledger, `claims.jsonl`, and design docs) is the adapter layer's job, wired in by whichever
+/// caller assembles the check's `RuleContext`.
+public enum KnownIds {

@@ -1,0 +1,1 @@
+// iOS-only: sources are compiled out on macOS so `swift test` on the host stays Core-only.

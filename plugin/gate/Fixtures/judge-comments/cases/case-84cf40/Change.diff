@@ -1,0 +1,6 @@
+/// ledger alongside it (``Ledger``) holds tasks and waves, so a plan can ride out an amendment's
+/// `clarifyChain` without touching task state or the wave schedule.
+public struct PlanFile: Sendable, Equatable, Codable {
+  /// The reviewer's decision on the design page (spec §8.2, `design-render`'s approval bar).
+  /// Closed so an unrecognized value fails decoding instead of a gate reading it as approved.
+  public enum ApprovalDecision: String, Sendable, Equatable, Codable, CaseIterable {

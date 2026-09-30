@@ -1,0 +1,6 @@
+  public let cached: Bool
+
+  public init(
+    inputTokens: Int? = nil, outputTokens: Int? = nil, costUSD: Double? = nil,
+    wallMilliseconds: Int, backendMilliseconds: Int? = nil, servedModel: String? = nil,
+    cached: Bool = false

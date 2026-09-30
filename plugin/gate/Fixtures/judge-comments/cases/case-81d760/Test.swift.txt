@@ -1,0 +1,1 @@
+/// `PackageDescription` factory names `surface-check` judges a manifest by.

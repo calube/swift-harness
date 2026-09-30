@@ -1,0 +1,1 @@
+// when it's one of the harness's own stamped resources — a template a test can guard — so it

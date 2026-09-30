@@ -1,0 +1,6 @@
+    // can remove it.
+    let stuck = base.appending(path: ".app-swiftgate-prove-\(dead)-9c0d")
+    _ = try await Self.git("worktree", "add", "--detach", "--quiet", stuck.path, in: root)
+    try FileManager.default.removeItem(at: stuck.appending(path: ".git"))
+    let locked = stuck.appending(path: "locked", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)

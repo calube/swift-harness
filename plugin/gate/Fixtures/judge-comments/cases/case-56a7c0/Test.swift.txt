@@ -1,0 +1,1 @@
+/// an advisory note (spec §6.2: a repo with none still gets the generic families and defaults).

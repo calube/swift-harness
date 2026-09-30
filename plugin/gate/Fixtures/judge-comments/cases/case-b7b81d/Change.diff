@@ -1,0 +1,6 @@
+  /// reparented once `root` dies and can no longer be found by walking parents, so a later signal
+  /// passes the groups an earlier one returned. A group already gone is not an error: `kill` on
+  /// an empty group is a no-op.
+  @discardableResult
+  static func terminate(root: pid_t, signal: Int32, alongside groups: Set<pid_t> = [])
+    -> Set<pid_t>

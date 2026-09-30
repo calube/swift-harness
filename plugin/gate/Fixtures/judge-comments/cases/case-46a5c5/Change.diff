@@ -1,0 +1,6 @@
+    let result = JudgeBenchmarkMetrics.question(
+      Self.failsIfBroken,
+      cases: JudgeReportCases([
+        Self.item("case-0", positive: false), Self.item("case-1", positive: false),
+      ]),
+      run: Self.run([["case-0": 0.1, "case-1": 0.1]]), threshold: 0.5)

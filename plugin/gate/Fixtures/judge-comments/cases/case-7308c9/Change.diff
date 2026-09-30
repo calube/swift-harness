@@ -1,0 +1,6 @@
+    let samples = try await Latency.samples {
+      let elsewhere = FileManager.default.temporaryDirectory
+        .appending(path: "swiftgate-noconfig-\(UUID().uuidString)", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(
+        at: elsewhere.appending(path: ".git"), withIntermediateDirectories: true)
+      defer { try? FileManager.default.removeItem(at: elsewhere) }

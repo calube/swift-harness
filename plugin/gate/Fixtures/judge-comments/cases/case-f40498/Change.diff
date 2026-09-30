@@ -1,0 +1,6 @@
+/// however full the parent directory is.
+enum RepositoryCheckouts {
+  static func of(root: URL, git: any Git, around paths: [String]) async
+    -> SubagentScopeGuard.Checkouts
+  {
+    let common = (try? await git.commonDirectory()).map { URL(filePath: $0) }

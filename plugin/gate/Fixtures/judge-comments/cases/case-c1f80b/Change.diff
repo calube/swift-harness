@@ -1,0 +1,6 @@
+/// reason travel together.
+public enum HookOutput {
+  /// Context Claude reads: SessionStart at the start of the session, PreToolUse and PostToolUse
+  /// next to the tool result.
+  public static func context(_ event: HookEvent, _ text: String) -> String {
+    encode(["hookSpecificOutput": ["hookEventName": event.claudeName, "additionalContext": text]])

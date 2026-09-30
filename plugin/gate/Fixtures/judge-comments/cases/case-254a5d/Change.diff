@@ -1,0 +1,6 @@
+  private static let technicalTokenExceptions: Set<String> = [
+    "UTF8", "SHA1", "MD5", "ARM64",
+  ]
+
+  static func isWholeWordMatch(_ range: Range<String.Index>, in text: String) -> Bool {
+    let before =

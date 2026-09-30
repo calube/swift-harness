@@ -1,0 +1,5 @@
+  /// never added to `visited` and is flagged.
+  private static func reachabilityFindings(
+    resolutions: [LinkOccurrence], pathSet: Set<String>
+  ) throws(ReportContractViolation) -> [Finding] {
+    guard pathSet.contains(routerRoot) else { return [] }

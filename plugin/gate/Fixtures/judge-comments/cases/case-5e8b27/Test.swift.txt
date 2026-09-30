@@ -1,0 +1,1 @@
+// Absent: sampleTask never set actualLines, so it stays nil and the key never appears.

@@ -1,0 +1,1 @@
+/// Regression: the counter buttons stop updating the on-screen value (store not wired to the view).

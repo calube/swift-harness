@@ -1,0 +1,6 @@
+/// conformances supply the live values the features resolve at runtime.
+@main
+struct SampleApp: App {
+  @MainActor static let store = Store(initialState: CounterFeature.State()) { CounterFeature() }
+
+  var body: some Scene {

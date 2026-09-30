@@ -1,0 +1,5 @@
+  static let moduleCacheNames = ["ModuleCache", "ModuleCache.noindex"]
+
+  private let runner: any ProcessRunner
+  private let repositoryRoot: String
+  private let timeout: Duration

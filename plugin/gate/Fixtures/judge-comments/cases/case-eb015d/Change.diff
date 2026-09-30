@@ -1,0 +1,6 @@
+/// each one over as a ``ScannedDocument``.
+public enum DocsLintPolicy {
+  /// The harness's own product paths: binaries and caches it legitimately tells readers to look
+  /// at, so ``LocalPathRule`` never flags them. No config key — letting a repo override this would
+  /// let a real machine-specific path slip through disguised as "product".
+  public static let productPaths: [String] = [

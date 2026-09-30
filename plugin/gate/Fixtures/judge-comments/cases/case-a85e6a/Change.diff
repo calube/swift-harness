@@ -1,0 +1,6 @@
+    // `[UNVERIFIED]`, and neither Decision nor Perf & scale mirrors its `[UNVERIFIED]` bullets in
+    // Risks. A Decision may also cite the user's own frame answer once `evidence check` found its
+    // quote: the answer is the user's choice, and nothing else at sketch could judge it. Every
+    // other citation must still be `supported`.
+    let sketchRelaxesDecision = tier == .sketch
+    let sketchUnmirrored: Set<String> = sketchRelaxesDecision ? ["Decision", "Perf & scale"] : []
