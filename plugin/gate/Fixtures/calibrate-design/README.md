@@ -69,6 +69,10 @@ one answer:
   design, and a `file` loc needs a line range. Without line-numbered excerpts of `book-cache.md`
   and its claims record, a careful agent returns no claim rather than invent a range, so the
   seed carries both, as the codebase seeds carry their source lines.
+- `design-challenger/option-on-probe-passed-api` states when the live client starts and cancels
+  its monitor, with passing probes for those APIs. Without that, opus rightly found the
+  unspecified lifecycle a major gap and placed it at `decision` in 2 of 3 runs, which has
+  nothing to do with the probe verdicts the pair plants.
 - `design-pre-mortem/*` are judged on what the gating failure stories say about concurrent
   downloads. A pre-mortem is asked to find every open failure story, and the clean twin leaves
   some open (failed downloads, cache retention), so "no gating finding" isn't its label.
