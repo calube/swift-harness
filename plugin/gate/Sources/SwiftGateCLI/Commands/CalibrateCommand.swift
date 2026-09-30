@@ -57,7 +57,20 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
   @Option(help: "The judge's model; the backend's default when unset.")
   var judgeModel: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "The host a remote judge backend may send each judged reply to; `--judge-backend jev` "
+        + "needs it, or a [judge] config naming it.",
+      valueName: "host"))
+  var sendTo: String?
+
   @OptionGroup var output: OutputOptions
+
+  /// Why the judge these flags name may not send replies where it would, given the repository's
+  /// `[judge]` config; `nil` when it may.
+  func egressRefusal(configuredJudge: JudgeConfig?) -> String? {
+    ""
+  }
 
   /// The judge these flags name, built by the judge factory.
   func judge(
