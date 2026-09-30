@@ -106,6 +106,25 @@ struct JudgeTestNameTests {
         == "retries back off — catches retries hammering the server")
   }
 
+  @Test(
+    "a multi-line display string is dedented and its escapes resolved — catches a name kept with its indent"
+  )
+  func multiLineDisplayString() {
+    let source = #"""
+      @Test(
+        """
+        caps retries at 3 \u{2014} catches unbounded retries
+        """
+      )
+      func capsRetries() {}
+      """#
+    #expect(
+      JudgeTestName.parse(source: source)
+        == JudgeTestName(
+          full: "caps retries at 3 — catches unbounded retries", behavior: "caps retries at 3",
+          catches: "catches unbounded retries"))
+  }
+
   @Test("a commented-out @Test isn't the name — catches a name read from a comment")
   func ignoresCommentedAttribute() {
     let source = """
@@ -259,6 +278,27 @@ struct JudgeAssertionsTests {
       JudgeAssertions.extract(source: source) == [
         "#expect(n > 0)",
         "await #expect(throws: (any Error).self) { try #require(nil as Int?) }",
+      ])
+  }
+
+  @Test(
+    "an #expect with only trailing closures keeps each labelled closure — catches the closure form dropped"
+  )
+  func labelledTrailingClosures() {
+    let source = """
+      func parses() {
+        #expect {
+          try Parser.parse("x")
+        } throws: { error in
+          (error as? ParseError) == .unexpected
+        }
+        #expect(true)
+      }
+      """
+    #expect(
+      JudgeAssertions.extract(source: source) == [
+        #"#expect { try Parser.parse("x") } throws: { error in (error as? ParseError) == .unexpected }"#,
+        "#expect(true)",
       ])
   }
 

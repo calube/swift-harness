@@ -121,7 +121,8 @@ struct SwiftSourceScan {
     return statements
   }
 
-  /// When an assertion's name starts at `index`, the index of its opening parenthesis.
+  /// When an assertion's name starts at `index`, the index of its argument list, or of its first
+  /// trailing closure when it has no argument list.
   private func assertionCall(at index: Int) -> Int? {
     let nameEnd: Int
     if let end = macro(at: index, "#expect") ?? macro(at: index, "#require") {
@@ -136,7 +137,7 @@ struct SwiftSourceScan {
       return nil
     }
     let open = skipWhitespace(from: nameEnd, newlines: false)
-    return isCode(open, "(") ? open : nil
+    return isCode(open, "(") || isCode(open, "{") ? open : nil
   }
 
   private func macro(at index: Int, _ name: String) -> Int? {
