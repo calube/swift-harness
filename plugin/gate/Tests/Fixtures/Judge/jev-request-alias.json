@@ -1,0 +1,37 @@
+{
+  "model": "jev-latest",
+  "state": {
+    "subject_kind": "a Swift test function from an iOS app built with The Composable Architecture, and the production code change it covers",
+    "subject": "@Test(\"loadProfile returns the profile — catches loadProfile not returning the profile\")\nfunc loadsProfile() async throws {\n  let api = APIClient(fetchProfile: { Profile(name: \"Ada\") })\n  let profile = try await api.fetchProfile()\n  #expect(profile.name == \"Ada\")\n}\n",
+    "context": "+  public func loadProfile() async throws -> Profile {\n+    let profile = try await api.fetchProfile()\n+    return Profile(name: profile.name.trimmingCharacters(in: .whitespaces))\n+  }\n",
+    "declared_tier": "T1"
+  },
+  "questions": {
+    "fails-if-broken": {
+      "type": "noul",
+      "instructions": "Would this test fail if the behavior it names were broken?"
+    },
+    "tier": {
+      "type": "choice",
+      "instructions": "Which tier does this test belong in? T1: host unit test of logic (reducers, pure functions, clients with fakes). T2: simulator test of rendering or platform integration (snapshots, views). T3: end-to-end UI flow (XCUITest).",
+      "criteria": {
+        "T1": null,
+        "T2": null,
+        "T3": null
+      }
+    },
+    "name-specificity": {
+      "type": "score",
+      "instructions": "How specific is the regression the test's name says it catches? vague: names no symptom or restates the behavior; partial: names an area but not the symptom; specific: names a user- or caller-visible symptom.",
+      "criteria": [
+        "vague",
+        "partial",
+        "specific"
+      ]
+    },
+    "asserts-implementation": {
+      "type": "noul",
+      "instructions": "Does the test assert implementation details (private call order, internal state, exact log text, which collaborator was called) rather than observable behavior?"
+    }
+  }
+}
