@@ -1347,13 +1347,16 @@ struct SelfTestCommand: AsyncParsableCommand {
   var sampleApp: String?
 
   @Flag(
-    help: "Calibrate the judge instead: precision and recall per question on gate/Fixtures/judge.")
+    help:
+      "Calibrate the judge instead: score every backend's recording on gate/Fixtures/judge against its own baseline, and flag stale ones."
+  )
   var judge = false
 
   @Option(
     help: ArgumentHelp(
-      "With --judge: answer with a live backend (claude) instead of the stored recording. "
-        + "Costs money and sends the calibration set to the backend."))
+      "With --judge: answer with a live backend instead of the stored recordings, and flag the "
+        + "backend's recording as stale if another model now serves it. Costs money and sends "
+        + "the calibration set to the backend."))
   var judgeBackend: JudgeBackend?
 
   @Option(help: "With --judge-backend: the backend's model; the backend's default when unset.")
@@ -1366,7 +1369,10 @@ struct SelfTestCommand: AsyncParsableCommand {
       valueName: "host"))
   var sendTo: String?
 
-  @Flag(help: "With --judge-backend: replace the stored recording with the live answers.")
+  @Flag(
+    help:
+      "With --judge-backend: replace that backend's recording (recording.json for claude, recording-<backend>.json otherwise) with the live answers, served models and usage."
+  )
   var record = false
 
   @OptionGroup var output: OutputOptions
@@ -1376,6 +1382,14 @@ struct SelfTestCommand: AsyncParsableCommand {
       throw ValidationError("--judge-backend and --record need --judge")
     }
     if record, judgeBackend == nil { throw ValidationError("--record needs --judge-backend") }
+    if sendTo != nil, judgeBackend == nil {
+      throw ValidationError("--send-to needs --judge-backend")
+    }
+    if let judgeBackend,
+      let issue = judgeBackend.egressIssue(sendTo: sendTo, path: "--send-to")
+    {
+      throw ValidationError("\(issue)")
+    }
   }
 
   /// The live judge `--judge-backend` names, or `nil` for the stored recordings.
@@ -1383,7 +1397,7 @@ struct SelfTestCommand: AsyncParsableCommand {
     judgeBackend.map {
       .enabled(
         backend: $0, thresholds: JudgeThresholds(advisory: 0, block: 1),
-        model: model ?? JudgeFactory.defaultModel)
+        model: model)
     }
   }
 
@@ -1400,7 +1414,8 @@ struct SelfTestCommand: AsyncParsableCommand {
         JudgeFactory.make($0, runner: LiveProcessRunner(), cacheDirectory: nil)
       }
       try await StaticCheckRun.execute(root: root, format: output.format) {
-        await JudgeSelfTest.run(harnessRoot: root, judge: live, record: record)
+        await JudgeSelfTest.run(
+          harnessRoot: root, judge: live, record: record, backend: judgeBackend ?? .claude)
       }
       return
     }

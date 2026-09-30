@@ -95,8 +95,8 @@ public struct JudgeBaseline: Sendable, Equatable, Codable {
 }
 
 /// A backend's answers to the calibration set as `self-test --judge --record` writes them: the
-/// requested identity, the model ids that actually answered, and each subject's usage. It reads
-/// as a ``JudgeRecording`` too, since that ignores the extra keys.
+/// requested identity, the model ids that actually answered, and each subject's usage. The same
+/// file decodes as a ``JudgeRecording`` too, since that ignores the extra keys.
 public struct JudgeCalibrationRecording: Sendable, Equatable, Codable {
   public let questionSet: String
   /// The requested backend and model, which may be an alias.
@@ -120,18 +120,22 @@ public struct JudgeCalibrationRecording: Sendable, Equatable, Codable {
 
   /// From live replies, taking the served models and usage from each reply's usage.
   public init(questionSet: String, identity: JudgeIdentity, replies: [String: JudgeReply]) {
+    let served = Set(replies.values.compactMap { $0.usage?.servedModel }).sorted()
     self.init(
-      questionSet: questionSet, identity: identity, servedModels: nil,
-      answers: replies.mapValues(\.answers), usage: nil)
-  }
-
-  public var recording: JudgeRecording {
-    JudgeRecording(questionSet: questionSet, identity: identity, answers: answers)
+      questionSet: questionSet, identity: identity, servedModels: served.isEmpty ? nil : served,
+      answers: replies.mapValues(\.answers), usage: replies.compactMapValues(\.usage))
   }
 
   /// The recording as 1 benchmark repeat, so the benchmark's metrics can score it.
   public var run: JudgeBenchmarkRun {
-    JudgeBenchmarkRun(identity: identity, repeats: [])
+    JudgeBenchmarkRun(
+      identity: identity,
+      repeats: [
+        Dictionary(
+          uniqueKeysWithValues: answers.map { id, found in
+            (id, [JudgeReply(answers: found, usage: usage?[id])])
+          })
+      ])
   }
 }
 
@@ -150,15 +154,68 @@ public enum JudgeRecordingStaleness: Sendable, Equatable {
     file: String, baselineFile: String, baseline: [String], recording: [String])
   /// The live backend now serves other models than the ones that answered the recording.
   case liveServedDiffers(file: String, recording: [String], live: [String])
+  /// The recording answers another question set version than the one its backend is asked now.
+  case questionSetDiffers(file: String, found: String, expected: String)
   /// Labelled cases the recording has no answer for, so they aren't scored.
   case labelledNotRecorded(file: String, backend: JudgeBackend, cases: Int)
 
-  /// Whether the finding fails the gate.
-  public var gates: Bool { false }
+  /// Whether the finding fails the gate. A missing served model or unrecorded labels only
+  /// narrow what self-test can check, and fixing them needs a live call, so they're notes.
+  public var gates: Bool {
+    switch self {
+    case .wrongBackend, .offPin, .servedOffPin, .baselineServedDiffers, .liveServedDiffers,
+      .questionSetDiffers:
+      true
+    case .servedUnrecorded, .labelledNotRecorded: false
+    }
+  }
+
+  /// The file the finding is about.
+  public var file: String {
+    switch self {
+    case .wrongBackend(let file, _, _), .offPin(let file, _, _), .servedOffPin(let file, _, _),
+      .servedUnrecorded(let file), .baselineServedDiffers(let file, _, _, _),
+      .liveServedDiffers(let file, _, _), .questionSetDiffers(let file, _, _),
+      .labelledNotRecorded(let file, _, _):
+      file
+    }
+  }
 }
 
 extension JudgeRecordingStaleness: CustomStringConvertible {
-  public var description: String { "" }
+  public var description: String {
+    func ids(_ models: [String]) -> String { models.joined(separator: ", ") }
+    func rerecord(_ backend: JudgeBackend) -> String {
+      "re-record with --judge-backend \(backend.rawValue) --record"
+    }
+    switch self {
+    case .wrongBackend(let file, let expected, let found):
+      return "\(file) holds \(found.backend)/\(found.model) answers, not \(expected.rawValue)'s; "
+        + rerecord(expected)
+    case .offPin(let file, let found, let pin):
+      return "\(file) was recorded from \(found.backend)/\(found.model), not the pinned "
+        + "\(found.backend)/\(pin); re-record with --judge-backend \(found.backend) --record"
+    case .servedOffPin(let file, let served, let pin):
+      return "\(file) was answered by \(ids(served)), not the pinned \(pin); re-record with "
+        + "--record once the backend serves \(pin)"
+    case .servedUnrecorded(let file):
+      return "\(file) names no served model, so a model change behind its alias can't be "
+        + "caught offline; re-record, or set servedModels"
+    case .baselineServedDiffers(let file, let baselineFile, let baseline, let recording):
+      return "\(file) was answered by \(ids(recording)), but \(baselineFile) was set against "
+        + "\(ids(baseline)); check the metrics, then set \(baselineFile) servedModels to "
+        + "\(ids(recording))"
+    case .liveServedDiffers(let file, let recording, let live):
+      return "the live backend now serves \(ids(live)), but \(file) was answered by "
+        + "\(ids(recording)); re-record with --record"
+    case .questionSetDiffers(let file, let found, let expected):
+      return "\(file) answers \(found), but its backend is now asked \(expected), so it isn't "
+        + "scored; re-record with --record"
+    case .labelledNotRecorded(let file, let backend, let cases):
+      return "\(cases) labelled but not recorded in \(file), so self-test doesn't score them; "
+        + rerecord(backend)
+    }
+  }
 }
 
 /// The metrics of 1 recording over the labelled set.
@@ -175,7 +232,11 @@ public struct JudgeCalibrationScore: Sendable, Equatable {
 
 extension JudgeCalibrationSet {
   /// The set's cases as the benchmark scores them.
-  public var benchmarkCases: [JudgeBenchmarkCase] { [] }
+  public var benchmarkCases: [JudgeBenchmarkCase] {
+    cases.map {
+      JudgeBenchmarkCase(id: $0.id, declaredTier: $0.declaredTier, expected: $0.expected)
+    }
+  }
 }
 
 /// Precision and recall of one question, treating "the flag fires" as the positive class.
@@ -201,7 +262,9 @@ public struct JudgeQuestionMetrics: Sendable, Equatable, Codable {
   }
 
   /// `nil` when no case is labeled negative.
-  public var trueNegativeRate: Double? { nil }
+  public var trueNegativeRate: Double? {
+    JudgeProportion(count: trueNegatives, n: trueNegatives + falsePositives).value
+  }
 }
 
 public enum JudgeCalibration {
@@ -216,8 +279,22 @@ public enum JudgeCalibration {
   public static func score(
     set: JudgeCalibrationSet, questions: JudgeQuestionSet, answers: [String: [JudgeAnswer]]
   ) -> JudgeCalibrationScore {
-    JudgeCalibrationScore(
-      metrics: metrics(set: set, questions: questions, answers: answers), unrecorded: [])
+    // Scoring reads only the answers, never the run's identity.
+    let run = JudgeBenchmarkRun(
+      identity: JudgeIdentity(backend: "labels", model: "answers"),
+      repeats: [answers.mapValues { [JudgeReply(answers: $0, usage: nil)] }])
+    var unrecorded: Set<String> = []
+    let metrics = questions.questions.map { question in
+      let labelled = set.benchmarkCases.filter { $0.expected[question.id] != nil }
+      let answered = labelled.filter { item in
+        answers[item.id]?.contains { $0.question == question.id } == true
+      }
+      unrecorded.formUnion(Set(labelled.map(\.id)).subtracting(answered.map(\.id)))
+      let (scored, unscored) = JudgeBenchmarkMetrics.score(question, cases: answered, run: run)
+      return JudgeBenchmarkMetrics.tally(
+        question.id, scored, unscored: unscored, threshold: decisionThreshold)
+    }
+    return JudgeCalibrationScore(metrics: metrics, unrecorded: unrecorded.sorted())
   }
 
   /// Offline checks that `recording`, stored in `file` for `backend`, still describes that
@@ -226,7 +303,28 @@ public enum JudgeCalibration {
     recording: JudgeCalibrationRecording, file: String, backend: JudgeBackend,
     baseline: JudgeBaseline?, baselineFile: String
   ) -> [JudgeRecordingStaleness] {
-    []
+    guard recording.identity.backend == backend.rawValue else {
+      return [.wrongBackend(file: file, expected: backend, found: recording.identity)]
+    }
+    var found: [JudgeRecordingStaleness] = []
+    if let pin = backend.pinnedModel {
+      if recording.identity.model != pin {
+        found.append(.offPin(file: file, found: recording.identity, pin: pin))
+      }
+      if let served = recording.servedModels, served != [pin] {
+        found.append(.servedOffPin(file: file, served: served, pin: pin))
+      }
+    }
+    switch (recording.servedModels, baseline?.servedModels) {
+    case (let served?, let set?) where served != set:
+      found.append(
+        .baselineServedDiffers(
+          file: file, baselineFile: baselineFile, baseline: set, recording: served))
+    case (let served, let set):
+      if served == nil { found.append(.servedUnrecorded(file: file)) }
+      if baseline != nil, set == nil { found.append(.servedUnrecorded(file: baselineFile)) }
+    }
+    return found
   }
 
   /// Whether the models a live run was answered by differ from the committed recording's; `nil`
@@ -234,7 +332,13 @@ public enum JudgeCalibration {
   public static func liveStaleness(
     committed: JudgeCalibrationRecording?, file: String, live: JudgeCalibrationRecording
   ) -> JudgeRecordingStaleness? {
-    nil
+    guard let committed else { return nil }
+    guard let recorded = committed.servedModels else { return .servedUnrecorded(file: file) }
+    guard let live = live.servedModels else {
+      return .servedUnrecorded(file: "the live replies")
+    }
+    return live == recorded
+      ? nil : .liveServedDiffers(file: file, recording: recorded, live: live)
   }
 
   /// The lowest of ``sweepThresholds`` whose precision on the tune split reaches
@@ -243,56 +347,30 @@ public enum JudgeCalibration {
     _ question: JudgeQuestion, cases: JudgeTuneCases, run: JudgeBenchmarkRun,
     minimumPrecision: Double
   ) -> Double? {
-    nil
+    JudgeBenchmarkMetrics.sweep(question, cases: cases, run: run, thresholds: sweepThresholds)
+      .first { point in
+        let counts = point.counts
+        let hasPositives = counts.truePositives + counts.falseNegatives > 0
+        return (counts.precision ?? (hasPositives ? 0 : 1)) >= minimumPrecision
+      }?.threshold
   }
 
   /// Latency, tokens and cost of the recording over the set's report split.
   public static func usage(set: JudgeCalibrationSet, recording: JudgeCalibrationRecording)
     -> JudgeUsageBenchmark
   {
-    JudgeBenchmarkMetrics.usage(cases: JudgeReportCases([]), run: recording.run)
+    JudgeBenchmarkMetrics.usage(cases: JudgeReportCases(set.benchmarkCases), run: recording.run)
   }
 
   public static func metrics(
     set: JudgeCalibrationSet, questions: JudgeQuestionSet, answers: [String: [JudgeAnswer]]
   ) -> [JudgeQuestionMetrics] {
-    questions.questions.map { question in
-      var tp = 0
-      var fp = 0
-      var fn = 0
-      var tn = 0
-      var unscored = 0
-      for item in set.cases {
-        let subject = JudgeSubject(
-          id: item.id, file: item.id, line: 1, source: "", context: "",
-          declaredTier: item.declaredTier)
-        guard let expected = item.expected[question.id],
-          let answer = answers[item.id]?.first(where: { $0.question == question.id }),
-          let p = JudgePolicy.flaggedProbability(question, answer: answer, subject: subject)
-        else {
-          unscored += 1
-          continue
-        }
-        let actual: Bool
-        switch question.flag {
-        case .option(let option): actual = expected == option
-        case .notDeclaredTier: actual = expected != item.declaredTier
-        }
-        switch (p >= decisionThreshold, actual) {
-        case (true, true): tp += 1
-        case (true, false): fp += 1
-        case (false, true): fn += 1
-        case (false, false): tn += 1
-        }
-      }
-      return JudgeQuestionMetrics(
-        question: question.id, truePositives: tp, falsePositives: fp, falseNegatives: fn,
-        trueNegatives: tn, unscored: unscored)
-    }
+    score(set: set, questions: questions, answers: answers).metrics
   }
 
   /// One line per question that fell below its baseline. A question with labeled positives but no
-  /// flags scores precision 0; unscored cases are a regression because the set must be answered.
+  /// flags scores precision 0; an unscored case, one whose recorded answer can't be read, is a
+  /// regression because every recorded answer must score.
   public static func regressions(_ metrics: [JudgeQuestionMetrics], baseline: JudgeBaseline)
     -> [String]
   {

@@ -13,15 +13,26 @@ enum JudgeBatch {
     _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
     maxConcurrent: Int = maxConcurrent
   ) async -> Result<[String: [JudgeAnswer]], JudgeError> {
-    await withTaskGroup(of: (String, Result<[JudgeAnswer], JudgeError>).self) { group in
+    await measuredAnswer(subjects, questions: questions, judge: judge, maxConcurrent: maxConcurrent)
+      .map { $0.mapValues(\.answers) }
+  }
+
+  /// ``answer(_:questions:judge:maxConcurrent:)`` keeping each subject's usage.
+  static func measuredAnswer(
+    _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
+    maxConcurrent: Int = maxConcurrent
+  ) async -> Result<[String: JudgeReply], JudgeError> {
+    await withTaskGroup(of: (String, Result<JudgeReply, JudgeError>).self) { group in
       var pending = subjects[...]
-      var answers: [String: [JudgeAnswer]] = [:]
+      var replies: [String: JudgeReply] = [:]
       var failure: JudgeError?
       func enqueue() {
         guard let subject = pending.popFirst() else { return }
         group.addTask {
           do throws(JudgeError) {
-            return (subject.id, .success(try await judge.answer(subject, questions: questions)))
+            return (
+              subject.id, .success(try await judge.measuredAnswer(subject, questions: questions))
+            )
           } catch {
             return (subject.id, .failure(error))
           }
@@ -30,23 +41,13 @@ enum JudgeBatch {
       for _ in 0..<maxConcurrent { enqueue() }
       for await (id, result) in group {
         switch result {
-        case .success(let found): answers[id] = found
+        case .success(let found): replies[id] = found
         case .failure(let error): failure = failure ?? error
         }
         if failure == nil { enqueue() }
       }
       if let failure { return .failure(failure) }
-      return .success(answers)
-    }
-  }
-
-  /// ``answer(_:questions:judge:maxConcurrent:)`` keeping each subject's usage.
-  static func measuredAnswer(
-    _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
-    maxConcurrent: Int = maxConcurrent
-  ) async -> Result<[String: JudgeReply], JudgeError> {
-    await answer(subjects, questions: questions, judge: judge, maxConcurrent: maxConcurrent).map {
-      $0.mapValues { JudgeReply(answers: $0, usage: nil) }
+      return .success(replies)
     }
   }
 }
@@ -348,10 +349,18 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
 /// (spec §7.4). Offline by default, from the recorded answers of a real backend.
 enum JudgeSelfTest {
   static let directory = "gate/Fixtures/judge"
-  static let recordingFile = "recording.json"
   static let ruleID = "swiftgate.self-test.judge"
   static let metricsRuleID = "swiftgate.self-test.judge-metrics"
   static let staleRuleID = "swiftgate.self-test.judge-stale"
+
+  /// The set each backend is calibrated on: Jev asks its own rendering, whose labels are the
+  /// base set's.
+  static func questions(for backend: JudgeBackend) -> JudgeQuestionSet {
+    switch backend {
+    case .claude: .tests
+    case .jev: .testsJev
+    }
+  }
 
   /// Claude's baseline keeps its original name; every other backend's is `baseline-<backend>.json`.
   static func baselineFile(for backend: JudgeBackend) -> String {
@@ -373,90 +382,273 @@ enum JudgeSelfTest {
     }
   }
 
-  /// `judge` answers every case as `backend`; with `record`, its answers replace the stored
-  /// recording.
+  /// A recording to score, with the baseline beside it.
+  struct Scored {
+    let backend: JudgeBackend
+    let recording: JudgeCalibrationRecording
+    let baseline: JudgeBaseline?
+    /// From comparing a live run with the committed recording; `nil` offline or when recording.
+    let live: JudgeRecordingStaleness?
+  }
+
+  /// Offline, scores every backend's recording that exists against its own baseline; Claude's
+  /// must exist. With `judge`, answers every case live as `backend` and scores that instead;
+  /// with `record`, the live answers replace `backend`'s recording.
   static func run(
     harnessRoot: URL, judge: (any Judge)?, record: Bool, backend: JudgeBackend = .claude
   ) async -> StaticCheckOutcome {
     let root = harnessRoot.appending(path: directory, directoryHint: .isDirectory)
     let set: JudgeCalibrationSet
-    let baseline: JudgeBaseline
     let subjects: [JudgeSubject]
     do {
       set = try JSONDecoder().decode(
         JudgeCalibrationSet.self, from: Data(contentsOf: root.appending(path: "labels.json")))
-      baseline = try JSONDecoder().decode(
-        JudgeBaseline.self, from: Data(contentsOf: root.appending(path: "baseline.json")))
       subjects = try Self.subjects(harnessRoot: harnessRoot, set: set)
     } catch {
       return .blocked(reason: "self-test --judge: calibration set unreadable: \(error)")
     }
-    let questions = JudgeQuestionSet.tests
-    guard set.questionSet == questions.versionedID, baseline.questionSet == questions.versionedID
-    else {
+    let labelled = JudgeQuestionSet.tests
+    guard set.questionSet == labelled.versionedID else {
       return .invalid(
         reason:
-          "labels and baseline must target \(questions.versionedID); relabel and re-baseline "
+          "labels and baseline must target \(labelled.versionedID); relabel and re-baseline "
           + "after a question-set change",
         file: "\(directory)/labels.json")
     }
-    let resolved: any Judge
+    var scored: [Scored] = []
     if let judge {
-      resolved = judge
+      let replies: [String: JudgeReply]
+      let questions = questions(for: backend)
+      switch await JudgeBatch.measuredAnswer(subjects, questions: questions, judge: judge) {
+      case .failure(let error): return .blocked(reason: "self-test --judge: \(error)")
+      case .success(let found): replies = found
+      }
+      let live = JudgeCalibrationRecording(
+        questionSet: questions.versionedID, identity: judge.identity, replies: replies)
+      let file = JudgeCalibrationFiles.recordingFile(for: backend)
+      var drift: JudgeRecordingStaleness?
+      if record {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+          try encoder.encode(live).write(to: root.appending(path: file), options: .atomic)
+        } catch {
+          return .blocked(reason: "self-test --judge: could not write the recording: \(error)")
+        }
+      } else {
+        do {
+          drift = JudgeCalibration.liveStaleness(
+            committed: try recording(in: root, file: file), file: file, live: live)
+        } catch {
+          return .blocked(reason: "self-test --judge: no usable \(directory)/\(file): \(error)")
+        }
+      }
+      do {
+        scored = [
+          Scored(
+            backend: backend, recording: live, baseline: try baseline(in: root, for: backend),
+            live: drift)
+        ]
+      } catch {
+        return .blocked(reason: "self-test --judge: \(error)")
+      }
     } else {
-      do {
-        resolved = RecordedJudge(
-          try JSONDecoder().decode(
-            RecordedJudge.Recording.self,
-            from: Data(contentsOf: root.appending(path: recordingFile))))
-      } catch {
-        return .blocked(
-          reason: "self-test --judge: no usable \(directory)/\(recordingFile): \(error)")
+      for candidate in JudgeBackend.allCases {
+        let file = JudgeCalibrationFiles.recordingFile(for: candidate)
+        do {
+          guard let found = try recording(in: root, file: file) else {
+            // Claude's recording is the one the harness always ships.
+            guard candidate == .claude else { continue }
+            return .blocked(reason: "self-test --judge: no \(directory)/\(file)")
+          }
+          scored.append(
+            Scored(
+              backend: candidate, recording: found,
+              baseline: try baseline(in: root, for: candidate), live: nil))
+        } catch {
+          return .blocked(reason: "self-test --judge: no usable \(directory)/\(file): \(error)")
+        }
       }
     }
-    let answers: [String: [JudgeAnswer]]
-    switch await JudgeBatch.answer(subjects, questions: questions, judge: resolved) {
-    case .failure(let error): return .blocked(reason: "self-test --judge: \(error)")
-    case .success(let found): answers = found
-    }
-    if record {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-      do {
-        try encoder.encode(
-          RecordedJudge.Recording(
-            questionSet: questions.versionedID, identity: resolved.identity, answers: answers)
-        ).write(to: root.appending(path: recordingFile), options: .atomic)
-      } catch {
-        return .blocked(reason: "self-test --judge: could not write the recording: \(error)")
+    var findings: [Finding] = []
+    for entry in scored {
+      switch score(entry, set: set, subjects: subjects) {
+      case .success(let found): findings += found
+      case .failure(let refused): return refused.outcome
       }
     }
-    let metrics = JudgeCalibration.metrics(set: set, questions: questions, answers: answers)
+    return .checked(RuleRunResult(findings: findings, allowances: []))
+  }
+
+  /// `nil` when the file doesn't exist; a file that exists but won't decode is an error.
+  static func recording(in root: URL, file: String) throws -> JudgeCalibrationRecording? {
+    let url = root.appending(path: file)
+    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+    return try JSONDecoder().decode(JudgeCalibrationRecording.self, from: Data(contentsOf: url))
+  }
+
+  /// `nil` when a backend other than Claude has no baseline yet; Claude's must exist.
+  static func baseline(in root: URL, for backend: JudgeBackend) throws -> JudgeBaseline? {
+    let file = baselineFile(for: backend)
+    let url = root.appending(path: file)
+    guard backend == .claude || FileManager.default.fileExists(atPath: url.path) else {
+      return nil
+    }
     do {
-      var findings = try metrics.map { metric throws(ReportContractViolation) in
-        try Finding(
-          ruleID: metricsRuleID, severity: .nit, file: "\(directory)/labels.json", line: nil,
-          message: describe(metric, identity: resolved.identity), failureScenario: nil)
-      }
-      findings += try JudgeCalibration.regressions(metrics, baseline: baseline).map {
-        line throws(ReportContractViolation) in
-        try Finding(
-          ruleID: ruleID, severity: .major, file: "\(directory)/baseline.json", line: nil,
-          message: "judge calibration regressed: \(line)", failureScenario: nil)
-      }
-      return .checked(RuleRunResult(findings: findings, allowances: []))
+      return try JSONDecoder().decode(JudgeBaseline.self, from: Data(contentsOf: url))
     } catch {
-      return .blocked(reason: "self-test --judge: \(error)")
+      throw BaselineUnreadable(description: "\(directory)/\(file) unreadable: \(error)")
     }
   }
 
+  struct BaselineUnreadable: Error, CustomStringConvertible {
+    let description: String
+  }
+
+  /// A recording that can't be scored at all, and the outcome that says why.
+  struct Refused: Error {
+    let outcome: StaticCheckOutcome
+
+    static func failure(_ outcome: StaticCheckOutcome) -> Result<[Finding], Refused> {
+      .failure(Refused(outcome: outcome))
+    }
+  }
+
+  /// Every finding for 1 recording: its metrics, usage, regressions against its baseline, and
+  /// why it may be stale.
+  static func score(
+    _ entry: Scored, set: JudgeCalibrationSet, subjects: [JudgeSubject]
+  ) -> Result<[Finding], Refused> {
+    let questions = questions(for: entry.backend)
+    let file = JudgeCalibrationFiles.recordingFile(for: entry.backend)
+    let baselineFile = baselineFile(for: entry.backend)
+    let recording = entry.recording
+    guard recording.questionSet == questions.versionedID else {
+      // Answers to another version can't be scored as this one's; only a re-record helps.
+      let stale = JudgeRecordingStaleness.questionSetDiffers(
+        file: file, found: recording.questionSet, expected: questions.versionedID)
+      do {
+        return .success([
+          try Finding(
+            ruleID: staleRuleID, severity: .major, file: "\(directory)/\(file)", line: nil,
+            message: stale.description, failureScenario: nil)
+        ])
+      } catch {
+        return Refused.failure(.blocked(reason: "self-test --judge: \(error)"))
+      }
+    }
+    if let baseline = entry.baseline, baseline.questionSet != questions.versionedID {
+      return Refused.failure(
+        .invalid(
+          reason:
+            "labels and baseline must target \(questions.versionedID); relabel and re-baseline "
+            + "after a question-set change",
+          file: "\(directory)/\(baselineFile)"))
+    }
+    let asked = Set(subjects.map(\.id))
+    var answers: [String: [JudgeAnswer]] = [:]
+    for (id, found) in recording.answers where asked.contains(id) {
+      do {
+        answers[id] = try JudgeAnswers.validate(found, for: questions)
+      } catch {
+        return Refused.failure(
+          .blocked(reason: "self-test --judge: \(file): recorded answer for \(id): \(error)"))
+      }
+    }
+    let valid = JudgeCalibrationRecording(
+      questionSet: recording.questionSet, identity: recording.identity,
+      servedModels: recording.servedModels, answers: answers, usage: recording.usage)
+    let result = JudgeCalibration.score(set: set, questions: questions, answers: answers)
+    var stale = JudgeCalibration.staleness(
+      recording: recording, file: file, backend: entry.backend, baseline: entry.baseline,
+      baselineFile: baselineFile)
+    if let live = entry.live { stale.append(live) }
+    if !result.unrecorded.isEmpty {
+      stale.append(
+        .labelledNotRecorded(file: file, backend: entry.backend, cases: result.unrecorded.count))
+    }
+    let tune = JudgeTuneCases(set.benchmarkCases)
+    let labelsFile = "\(directory)/labels.json"
+    do {
+      var findings = try zip(questions.questions, result.metrics).map {
+        question, metric throws(ReportContractViolation) in
+        let threshold = sweep(
+          question, tune: tune, run: valid.run,
+          minimumPrecision: entry.baseline?.minimums[question.id]?.precision)
+        return try Finding(
+          ruleID: metricsRuleID, severity: .nit, file: labelsFile, line: nil,
+          message: describe(metric, identity: recording.identity) + "; " + threshold,
+          failureScenario: nil)
+      }
+      findings.append(
+        try Finding(
+          ruleID: metricsRuleID, severity: .nit, file: labelsFile, line: nil,
+          message: describe(
+            JudgeCalibration.usage(set: set, recording: valid), identity: recording.identity),
+          failureScenario: nil))
+      if let baseline = entry.baseline {
+        findings += try JudgeCalibration.regressions(result.metrics, baseline: baseline).map {
+          line throws(ReportContractViolation) in
+          try Finding(
+            ruleID: ruleID, severity: .major, file: "\(directory)/\(baselineFile)", line: nil,
+            message: "judge calibration regressed [\(file)]: \(line)", failureScenario: nil)
+        }
+      } else {
+        findings.append(
+          try Finding(
+            ruleID: ruleID, severity: .major, file: "\(directory)/\(baselineFile)", line: nil,
+            message:
+              "\(file) has no \(baselineFile) to score against; set one from these metrics",
+            failureScenario: nil))
+      }
+      findings += try stale.map { item throws(ReportContractViolation) in
+        try Finding(
+          ruleID: staleRuleID, severity: item.gates ? .major : .minor,
+          // A note about the live replies has no file of its own; it's about the recording.
+          file: "\(directory)/\(item.file.hasSuffix(".json") ? item.file : file)", line: nil,
+          message: item.description,
+          failureScenario: nil)
+      }
+      return .success(findings)
+    } catch {
+      return Refused.failure(.blocked(reason: "self-test --judge: \(error)"))
+    }
+  }
+
+  /// The swept threshold column: the lowest block threshold whose tune-split precision reaches
+  /// the baseline's.
+  static func sweep(
+    _ question: JudgeQuestion, tune: JudgeTuneCases, run: JudgeBenchmarkRun,
+    minimumPrecision: Double?
+  ) -> String {
+    let labelled = tune.cases.filter { $0.expected[question.id] != nil }.count
+    let prefix = "lowest block threshold at baseline precision (tune split, n \(labelled)): "
+    guard let minimumPrecision else { return prefix + "no baseline" }
+    let lowest = JudgeCalibration.lowestBlockThreshold(
+      question, cases: tune, run: run, minimumPrecision: minimumPrecision)
+    let range = JudgeCalibration.sweepThresholds
+    return prefix
+      + (lowest.map { format($0) }
+        ?? "none from \(format(range.first ?? 0)) to \(format(range.last ?? 0))")
+  }
+
+  static func format(_ value: Double?) -> String {
+    value.map { String(format: "%.2f", $0) } ?? "n/a"
+  }
+
   static func describe(_ metric: JudgeQuestionMetrics, identity: JudgeIdentity) -> String {
-    func format(_ value: Double?) -> String { value.map { String(format: "%.2f", $0) } ?? "n/a" }
-    return
-      "\(metric.question) [\(identity.backend)/\(identity.model)]: precision "
+    "\(metric.question) [\(identity.backend)/\(identity.model)]: precision "
       + "\(format(metric.precision)) recall \(format(metric.recall)) "
       + "(tp \(metric.truePositives) fp \(metric.falsePositives) fn \(metric.falseNegatives) "
-      + "tn \(metric.trueNegatives))"
+      + "tn \(metric.trueNegatives)); true-negative rate \(format(metric.trueNegativeRate))"
+  }
+
+  static func describe(_ usage: JudgeUsageBenchmark, identity: JudgeIdentity) -> String {
+    func milliseconds(_ value: Int?) -> String { value.map { "\($0) ms" } ?? "n/a" }
+    let cost = usage.costPerCase.value.map { String(format: "$%.4f", $0) } ?? "n/a"
+    return "[\(identity.backend)/\(identity.model)] usage over the report split: latency p50 "
+      + "\(milliseconds(usage.requestLatency.p50)) p95 \(milliseconds(usage.requestLatency.p95)) "
+      + "(n \(usage.requestLatency.n)); cost per subject \(cost) (n \(usage.costPerCase.n))"
   }
 }
 extension JudgeBackend: ExpressibleByArgument {}

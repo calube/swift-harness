@@ -163,7 +163,8 @@ struct JudgeCommandsTests {
     #expect(labels.cases.filter { $0.label == .good }.count >= 10)
     #expect(labels.cases.filter { $0.label == .useless }.count >= 10)
     let byID = Dictionary(uniqueKeysWithValues: labels.cases.map { ($0.id, $0) })
-    let oracle = FakeJudge { subject, questions throws(JudgeError) in
+    let oracle = FakeJudge(identity: JudgeIdentity(backend: "claude", model: "sonnet")) {
+      subject, questions throws(JudgeError) in
       questions.questions.map { question in
         let expected = byID[subject.id]?.expected[question.id] ?? question.options[0]
         return JudgeAnswer(
@@ -186,6 +187,11 @@ struct JudgeCommandsTests {
     #expect(!goodResult.findings.contains { $0.severity.failsGate })
     #expect(goodResult.findings.contains { $0.ruleID == JudgeSelfTest.metricsRuleID })
     #expect(badResult.findings.contains { $0.ruleID == JudgeSelfTest.ruleID })
+    func line(_ result: RuleRunResult) -> String? {
+      result.findings.first { $0.message.hasPrefix("fails-if-broken ") }?.message
+    }
+    #expect(line(goodResult)?.contains("true-negative rate 1.00") == true)
+    #expect(line(badResult)?.contains("true-negative rate 0.00") == true)
   }
 
   @Test(
@@ -423,5 +429,346 @@ final class BarrierTransport: HTTPTransport {
       return state.waiting
     }
     for waiter in waiting { waiter.resume(returning: false) }
+  }
+}
+
+@Suite("self-test scores each backend's recording")
+struct JudgeSelfTestBackendsTests {
+  static let questions = JudgeQuestionSet.tests
+  static let good = [
+    "fails-if-broken": "yes", "tier": "T1", "name-specificity": "specific",
+    "asserts-implementation": "no",
+  ]
+  static let useless = [
+    "fails-if-broken": "no", "tier": "T1", "name-specificity": "vague",
+    "asserts-implementation": "yes",
+  ]
+  static let cases: [JudgeCalibrationSet.Case] = [
+    .init(id: "good-a", label: .good, declaredTier: "T1", expected: good),
+    .init(id: "useless-b", label: .useless, declaredTier: "T1", expected: useless),
+  ]
+
+  /// Answers every question with certainty on the option `labels` names for the subject.
+  static func oracle(_ labels: [String: [String: String]], subject: String) -> [JudgeAnswer] {
+    questions.questions.map { question in
+      let expected = labels[subject]?[question.id] ?? question.options[0]
+      return JudgeAnswer(
+        question: question.id,
+        distribution: Dictionary(
+          uniqueKeysWithValues: question.options.map { ($0, $0 == expected ? 1.0 : 0.0) }),
+        rationale: nil)
+    }
+  }
+
+  static var labels: [String: [String: String]] {
+    Dictionary(uniqueKeysWithValues: cases.map { ($0.id, $0.expected) })
+  }
+
+  /// A live backend stand-in that names the model that served each answer.
+  struct ServedJudge: Judge {
+    let identity: JudgeIdentity
+    let served: String
+
+    func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
+      -> [JudgeAnswer]
+    {
+      JudgeSelfTestBackendsTests.oracle(JudgeSelfTestBackendsTests.labels, subject: subject.id)
+    }
+
+    func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+      async throws(JudgeError) -> JudgeReply
+    {
+      JudgeReply(
+        answers: try await answer(subject, questions: questions),
+        usage: JudgeUsage(
+          inputTokens: 100, outputTokens: 5, costUSD: 0.01, wallMilliseconds: 40,
+          servedModel: served))
+    }
+  }
+
+  /// A harness root holding only `gate/Fixtures/judge/` with the given labelled cases.
+  struct Harness {
+    let root: URL
+    var judge: URL { root.appending(path: JudgeSelfTest.directory, directoryHint: .isDirectory) }
+
+    init(cases: [JudgeCalibrationSet.Case] = JudgeSelfTestBackendsTests.cases) throws {
+      root = FileManager.default.temporaryDirectory.appending(
+        path: "judge-self-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+      for item in cases {
+        let directory = judge.appending(path: "cases/\(item.id)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "@Test func \(item.id)() {}".write(
+          to: directory.appending(path: "Test.swift.txt"), atomically: true, encoding: .utf8)
+        try "+ let x = 1".write(
+          to: directory.appending(path: "Change.diff"), atomically: true, encoding: .utf8)
+      }
+      try write(
+        "labels.json",
+        JudgeCalibrationSet(
+          questionSet: JudgeSelfTestBackendsTests.questions.versionedID, cases: cases))
+    }
+
+    func write(_ file: String, _ value: some Encodable) throws {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+      try encoder.encode(value).write(to: judge.appending(path: file))
+    }
+
+    func read<Value: Decodable>(_ type: Value.Type, _ file: String) throws -> Value {
+      try JSONDecoder().decode(type, from: Data(contentsOf: judge.appending(path: file)))
+    }
+
+    func remove() { try? FileManager.default.removeItem(at: root) }
+  }
+
+  /// Jev is calibrated on its own rendering of the set; Claude on the set as written.
+  static func questionSet(_ backend: String) -> String {
+    backend == "jev" ? JudgeQuestionSet.testsJev.versionedID : questions.versionedID
+  }
+
+  static func baseline(_ backend: String = "claude", served: [String]) -> JudgeBaseline {
+    JudgeBaseline(
+      questionSet: questionSet(backend),
+      minimums: Dictionary(
+        uniqueKeysWithValues: questions.questions.map {
+          ($0.id, JudgeBaseline.Minimum(precision: 0.8, recall: 0.8))
+        }),
+      servedModels: served)
+  }
+
+  static func recording(
+    _ backend: String, _ model: String, served: [String], ids: [String]? = nil,
+    questionSet: String? = nil
+  ) -> JudgeCalibrationRecording {
+    let answered = ids ?? cases.map(\.id)
+    return JudgeCalibrationRecording(
+      questionSet: questionSet ?? Self.questionSet(backend),
+      identity: JudgeIdentity(backend: backend, model: model),
+      servedModels: served,
+      answers: Dictionary(uniqueKeysWithValues: answered.map { ($0, oracle(labels, subject: $0)) }),
+      usage: Dictionary(
+        uniqueKeysWithValues: answered.map {
+          ($0, JudgeUsage(costUSD: 0.02, wallMilliseconds: 120, servedModel: served.first))
+        }))
+  }
+
+  static func findings(_ outcome: StaticCheckOutcome) -> [Finding] {
+    guard case .checked(let result) = outcome else {
+      Issue.record("expected self-test --judge to run, got \(outcome)")
+      return []
+    }
+    return result.findings
+  }
+
+  @Test(
+    "with only Claude's recording, each question's line is today's plus the true-negative rate and the swept threshold, with a usage line — catches the metrics note losing today's columns"
+  )
+  func claudeOnly() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    try harness.write(
+      "recording.json", Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(harnessRoot: harness.root, judge: nil, record: false))
+
+    #expect(!found.contains { $0.severity.failsGate })
+    #expect(!found.contains { $0.ruleID == JudgeSelfTest.staleRuleID })
+    let lines = found.filter { $0.ruleID == JudgeSelfTest.metricsRuleID }.map(\.message)
+    let fails = try #require(lines.first { $0.hasPrefix("fails-if-broken ") })
+    #expect(
+      fails.hasPrefix(
+        "fails-if-broken [claude/sonnet]: precision 1.00 recall 1.00 (tp 1 fp 0 fn 0 tn 1)"))
+    #expect(fails.contains("true-negative rate 1.00"))
+    #expect(fails.contains("lowest block threshold"))
+    #expect(lines.count == Self.questions.questions.count + 1)
+    #expect(lines.contains { $0.contains("[claude/sonnet] usage") && $0.contains("p95 120 ms") })
+  }
+
+  @Test(
+    "a Jev recording from jev-1.12.0 beside Claude's is judge-stale and gates, naming both ids — catches a pin bump with an old recording"
+  )
+  func oldJevPin() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    try harness.write(
+      "recording.json", Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]))
+    try harness.write("baseline-jev.json", Self.baseline("jev", served: ["jev-1.12.0"]))
+    try harness.write(
+      "recording-jev.json", Self.recording("jev", "jev-1.12.0", served: ["jev-1.12.0"]))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(harnessRoot: harness.root, judge: nil, record: false))
+
+    let stale = found.filter { $0.ruleID == JudgeSelfTest.staleRuleID && $0.severity == .major }
+    #expect(
+      stale.contains { $0.message.contains("jev-1.12.0") && $0.message.contains("jev-1.13.0") })
+    #expect(found.contains { $0.message.hasPrefix("fails-if-broken [jev/jev-1.12.0]") })
+  }
+
+  @Test(
+    "a labelled case the recording lacks is a non-gating judge-stale note asking for a re-record, and a blank label isn't a regression — catches new labels failing self-test or vanishing silently"
+  )
+  func labelledButNotRecorded() async throws {
+    let harness = try Harness(
+      cases: Self.cases + [
+        .init(id: "new-c", label: .useless, declaredTier: "T1", expected: ["fails-if-broken": "no"])
+      ])
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    try harness.write(
+      "recording.json", Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(harnessRoot: harness.root, judge: nil, record: false))
+
+    #expect(!found.contains { $0.severity.failsGate })
+    let note = try #require(found.first { $0.ruleID == JudgeSelfTest.staleRuleID })
+    #expect(note.severity == .minor)
+    #expect(note.message.contains("1 labelled but not recorded"))
+    #expect(note.message.contains("--judge-backend claude --record"))
+  }
+
+  @Test(
+    "--record writes the backend's recording with served models and usage, and a served model its baseline wasn't set on is stale — catches a re-record that hides a model change"
+  )
+  func recordNamesServedModel() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    try harness.write(
+      "recording.json", Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(
+        harnessRoot: harness.root,
+        judge: ServedJudge(
+          identity: JudgeIdentity(backend: "claude", model: "sonnet"), served: "claude-sonnet-6-0"),
+        record: true, backend: .claude))
+
+    let written = try harness.read(JudgeCalibrationRecording.self, "recording.json")
+    #expect(written.servedModels == ["claude-sonnet-6-0"])
+    #expect(written.usage?["good-a"]?.inputTokens == 100)
+    let stale = try #require(found.first { $0.ruleID == JudgeSelfTest.staleRuleID })
+    #expect(stale.severity == .major)
+    #expect(stale.message.contains("claude-sonnet-5-5"))
+    #expect(stale.message.contains("claude-sonnet-6-0"))
+  }
+
+  @Test(
+    "--record for Jev writes recording-jev.json and leaves Claude's recording alone — catches every backend overwriting recording.json"
+  )
+  func recordJevFile() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    let claude = Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"])
+    try harness.write("recording.json", claude)
+    try harness.write("baseline-jev.json", Self.baseline("jev", served: ["jev-1.13.0"]))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(
+        harnessRoot: harness.root,
+        judge: ServedJudge(
+          identity: JudgeIdentity(backend: "jev", model: "jev-1.13.0"), served: "jev-1.13.0"),
+        record: true, backend: .jev))
+
+    #expect(!found.contains { $0.severity.failsGate })
+    #expect(try harness.read(JudgeCalibrationRecording.self, "recording.json") == claude)
+    let jev = try harness.read(JudgeCalibrationRecording.self, "recording-jev.json")
+    #expect(jev.identity == JudgeIdentity(backend: "jev", model: "jev-1.13.0"))
+    #expect(jev.servedModels == ["jev-1.13.0"])
+    #expect(jev.questionSet == "test-quality@2-jev")
+  }
+
+  @Test(
+    "a Jev recording of test-quality@1 rather than its own rendering is judge-stale and unscored — catches Jev's calibration standing on a set it's no longer asked"
+  )
+  func jevRecordingOfBaseSet() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    try harness.write(
+      "recording.json", Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]))
+    try harness.write("baseline-jev.json", Self.baseline("jev", served: ["jev-1.13.0"]))
+    try harness.write(
+      "recording-jev.json",
+      Self.recording(
+        "jev", "jev-1.13.0", served: ["jev-1.13.0"], questionSet: Self.questions.versionedID))
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(harnessRoot: harness.root, judge: nil, record: false))
+
+    #expect(
+      found.contains {
+        $0.ruleID == JudgeSelfTest.staleRuleID && $0.severity == .major
+          && $0.message.contains("test-quality@2-jev")
+      })
+    #expect(!found.contains { $0.message.contains("[jev/") })
+    #expect(found.contains { $0.message.hasPrefix("fails-if-broken [claude/sonnet]") })
+  }
+
+  @Test(
+    "a live run served by another model than the committed recording is stale and leaves the recording alone — catches an alias that moved since the recording passing"
+  )
+  func liveServedDiffers() async throws {
+    let harness = try Harness()
+    defer { harness.remove() }
+    try harness.write("baseline.json", Self.baseline(served: ["claude-sonnet-5-5"]))
+    let committed = Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"])
+    try harness.write("recording.json", committed)
+
+    let found = Self.findings(
+      await JudgeSelfTest.run(
+        harnessRoot: harness.root,
+        judge: ServedJudge(
+          identity: JudgeIdentity(backend: "claude", model: "sonnet"), served: "claude-sonnet-6-0"),
+        record: false, backend: .claude))
+
+    #expect(
+      found.contains {
+        $0.ruleID == JudgeSelfTest.staleRuleID && $0.severity == .major
+          && $0.message.contains("claude-sonnet-6-0") && $0.message.contains("claude-sonnet-5-5")
+      })
+    #expect(try harness.read(JudgeCalibrationRecording.self, "recording.json") == committed)
+  }
+
+  @Test(
+    "--judge-backend jev with no --model asks for the pinned jev-1.13.0, and claude for sonnet — catches Jev being asked for sonnet"
+  )
+  func defaultModelPerBackend() throws {
+    func model(_ arguments: [String]) throws -> String? {
+      let command = try SelfTestCommand.parse(arguments)
+      return try command.liveJudgeConfig.flatMap {
+        JudgeFactory.make(
+          $0,
+          runner: FakeProcessRunner { invocation throws(ProcessRunnerError) in
+            throw .launchFailed(executable: invocation.executable, reason: "never run")
+          }, cacheDirectory: nil, environment: [:])
+      }.map(\.identity.model)
+    }
+    #expect(
+      try model(["--judge", "--judge-backend", "jev", "--send-to", "api.typesafe.ai"])
+        == "jev-1.13.0")
+    #expect(try model(["--judge", "--judge-backend", "claude"]) == "sonnet")
+    #expect(
+      try model(["--judge", "--judge-backend", "claude", "--model", "claude-sonnet-5-5"])
+        == "claude-sonnet-5-5")
+  }
+
+  @Test(
+    "--judge-backend jev without --send-to naming its host is refused — catches the calibration set leaving the machine unannounced"
+  )
+  func jevNeedsHost() {
+    #expect(throws: (any Error).self) {
+      try SelfTestCommand.parse(["--judge", "--judge-backend", "jev"])
+    }
+    #expect(throws: (any Error).self) {
+      try SelfTestCommand.parse([
+        "--judge", "--judge-backend", "jev", "--send-to", "example.com",
+      ])
+    }
   }
 }

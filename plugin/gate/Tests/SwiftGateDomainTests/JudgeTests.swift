@@ -264,3 +264,261 @@ struct JudgeTests {
     #expect(found.contains("tier: 2 cases unscored"))
   }
 }
+
+@Suite("self-test scoring of each backend's recording")
+struct JudgeRecordingScoreTests {
+  static let questions = JudgeQuestionSet.tests
+  static let jevFile = "recording-jev.json"
+  static let claudeFile = "recording.json"
+
+  static func failsIfBroken(_ flagged: Double) -> [JudgeAnswer] {
+    JudgeTests.answers(failsIfBroken: flagged)
+  }
+
+  static func recording(
+    _ backend: String, _ model: String, served: [String]?,
+    answers: [String: [JudgeAnswer]] = [:], usage: [String: JudgeUsage]? = nil
+  ) -> JudgeCalibrationRecording {
+    JudgeCalibrationRecording(
+      questionSet: questions.versionedID, identity: JudgeIdentity(backend: backend, model: model),
+      servedModels: served, answers: answers, usage: usage)
+  }
+
+  /// Ids of the split asked for, in a stable order.
+  static func ids(in split: JudgeCaseSplit, count: Int) -> [String] {
+    Array((0..<200).map { "case-\($0)" }.filter { JudgeCaseSplit.of($0) == split }.prefix(count))
+  }
+
+  @Test(
+    "the true-negative rate over 2 negatives with 1 false positive is 0.5 — catches the true-negative rate computed as recall"
+  )
+  func trueNegativeRate() throws {
+    let set = JudgeCalibrationSet(
+      questionSet: Self.questions.versionedID,
+      cases: [
+        .init(
+          id: "flagged", label: .good, declaredTier: "T1", expected: ["fails-if-broken": "yes"]),
+        .init(id: "passed", label: .good, declaredTier: "T1", expected: ["fails-if-broken": "yes"]),
+      ])
+    let score = JudgeCalibration.score(
+      set: set, questions: Self.questions,
+      answers: ["flagged": Self.failsIfBroken(0.9), "passed": Self.failsIfBroken(0.1)])
+    let metric = try #require(score.metrics.first { $0.question == "fails-if-broken" })
+    #expect(metric.falsePositives == 1)
+    #expect(metric.trueNegatives == 1)
+    #expect(metric.trueNegativeRate == 0.5)
+  }
+
+  @Test(
+    "a question left blank for a case isn't scored and isn't a regression — catches a skipped label failing self-test"
+  )
+  func blankLabelIsNotARegression() throws {
+    let set = JudgeCalibrationSet(
+      questionSet: Self.questions.versionedID,
+      cases: [.init(id: "tier-only", label: .good, declaredTier: "T1", expected: ["tier": "T1"])])
+    let score = JudgeCalibration.score(
+      set: set, questions: Self.questions, answers: ["tier-only": JudgeTests.answers()])
+    let metric = try #require(score.metrics.first { $0.question == "fails-if-broken" })
+    #expect(metric.unscored == 0)
+    #expect(score.unrecorded == [])
+    let baseline = JudgeBaseline(
+      questionSet: Self.questions.versionedID,
+      minimums: ["fails-if-broken": .init(precision: 0.8, recall: 0.8)])
+    #expect(JudgeCalibration.regressions(score.metrics, baseline: baseline) == [])
+  }
+
+  @Test(
+    "a labelled case the recording never answered is listed as unrecorded, not scored — catches new labels silently shrinking or failing the scored set"
+  )
+  func labelledButNotRecorded() throws {
+    let set = JudgeCalibrationSet(
+      questionSet: Self.questions.versionedID,
+      cases: [
+        .init(id: "old", label: .good, declaredTier: "T1", expected: ["fails-if-broken": "yes"]),
+        .init(id: "new", label: .useless, declaredTier: "T1", expected: ["fails-if-broken": "no"]),
+      ])
+    let score = JudgeCalibration.score(
+      set: set, questions: Self.questions, answers: ["old": Self.failsIfBroken(0.1)])
+    #expect(score.unrecorded == ["new"])
+    let metric = try #require(score.metrics.first { $0.question == "fails-if-broken" })
+    #expect(metric.unscored == 0)
+    #expect(metric.trueNegatives == 1)
+    #expect(metric.falseNegatives == 0)
+  }
+
+  @Test(
+    "a Jev recording from jev-1.12.0 is stale and gates, naming both ids — catches a pin bump that keeps an old recording"
+  )
+  func oldPinIsStale() throws {
+    let found = JudgeCalibration.staleness(
+      recording: Self.recording("jev", "jev-1.12.0", served: ["jev-1.12.0"]), file: Self.jevFile,
+      backend: .jev, baseline: nil, baselineFile: "baseline-jev.json")
+    let stale = try #require(found.first { $0.gates })
+    #expect(
+      stale
+        == .offPin(
+          file: Self.jevFile, found: JudgeIdentity(backend: "jev", model: "jev-1.12.0"),
+          pin: "jev-1.13.0"))
+    #expect(stale.description.contains("jev-1.12.0"))
+    #expect(stale.description.contains("jev-1.13.0"))
+  }
+
+  @Test(
+    "a pinned recording answered by another model is stale — catches a recording whose served model left the pin"
+  )
+  func servedOffPin() {
+    let found = JudgeCalibration.staleness(
+      recording: Self.recording("jev", "jev-1.13.0", served: ["jev-1.14.0"]), file: Self.jevFile,
+      backend: .jev, baseline: nil, baselineFile: "baseline-jev.json")
+    #expect(
+      found.contains(.servedOffPin(file: Self.jevFile, served: ["jev-1.14.0"], pin: "jev-1.13.0")))
+    #expect(found.contains { $0.gates })
+  }
+
+  @Test(
+    "a Claude recording served by its baseline's model is fresh; one served by another is stale — catches an alias moving under a baseline"
+  )
+  func baselineServedModel() {
+    let recording = Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"])
+    func baseline(_ served: [String]) -> JudgeBaseline {
+      JudgeBaseline(questionSet: Self.questions.versionedID, minimums: [:], servedModels: served)
+    }
+    #expect(
+      JudgeCalibration.staleness(
+        recording: recording, file: Self.claudeFile, backend: .claude,
+        baseline: baseline(["claude-sonnet-5-5"]), baselineFile: "baseline.json") == [])
+    let moved = JudgeCalibration.staleness(
+      recording: recording, file: Self.claudeFile, backend: .claude,
+      baseline: baseline(["claude-sonnet-5-0"]), baselineFile: "baseline.json")
+    #expect(
+      moved == [
+        .baselineServedDiffers(
+          file: Self.claudeFile, baselineFile: "baseline.json", baseline: ["claude-sonnet-5-0"],
+          recording: ["claude-sonnet-5-5"])
+      ])
+    #expect(moved.allSatisfy { $0.gates })
+  }
+
+  @Test(
+    "a recording or baseline that names no served model is a non-gating note — catches an unrecorded served model passing silently or failing the gate"
+  )
+  func servedUnrecorded() {
+    let found = JudgeCalibration.staleness(
+      recording: Self.recording("claude", "sonnet", served: nil), file: Self.claudeFile,
+      backend: .claude,
+      baseline: JudgeBaseline(questionSet: Self.questions.versionedID, minimums: [:]),
+      baselineFile: "baseline.json")
+    #expect(
+      found == [.servedUnrecorded(file: Self.claudeFile), .servedUnrecorded(file: "baseline.json")])
+    #expect(!found.contains { $0.gates })
+  }
+
+  @Test(
+    "a recording holding another backend's answers is stale — catches a Claude recording saved as Jev's"
+  )
+  func wrongBackend() {
+    let found = JudgeCalibration.staleness(
+      recording: Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"]),
+      file: Self.jevFile, backend: .jev, baseline: nil, baselineFile: "baseline-jev.json")
+    #expect(
+      found.contains(
+        .wrongBackend(
+          file: Self.jevFile, expected: .jev,
+          found: JudgeIdentity(backend: "claude", model: "sonnet"))))
+    #expect(found.contains { $0.gates })
+  }
+
+  @Test(
+    "a live run served by another model than the committed recording is stale — catches an alias that moved since the recording"
+  )
+  func liveServedModel() {
+    let committed = Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"])
+    let moved = JudgeCalibration.liveStaleness(
+      committed: committed, file: Self.claudeFile,
+      live: Self.recording("claude", "sonnet", served: ["claude-sonnet-6-0"]))
+    #expect(
+      moved
+        == .liveServedDiffers(
+          file: Self.claudeFile, recording: ["claude-sonnet-5-5"], live: ["claude-sonnet-6-0"]))
+    #expect(moved?.gates == true)
+    #expect(
+      JudgeCalibration.liveStaleness(
+        committed: committed, file: Self.claudeFile,
+        live: Self.recording("claude", "sonnet", served: ["claude-sonnet-5-5"])) == nil)
+    let unnamed = JudgeCalibration.liveStaleness(
+      committed: committed, file: Self.claudeFile,
+      live: Self.recording("claude", "sonnet", served: nil))
+    #expect(unnamed == .servedUnrecorded(file: "the live replies"))
+    #expect(unnamed?.gates == false)
+  }
+
+  @Test(
+    "a recording built from live replies keeps each subject's usage and the sorted served models — catches a recording that drops what answered it"
+  )
+  func recordingFromReplies() {
+    func reply(_ served: String?) -> JudgeReply {
+      JudgeReply(
+        answers: JudgeTests.answers(),
+        usage: JudgeUsage(inputTokens: 10, wallMilliseconds: 50, servedModel: served))
+    }
+    let recording = JudgeCalibrationRecording(
+      questionSet: Self.questions.versionedID,
+      identity: JudgeIdentity(backend: "claude", model: "sonnet"),
+      replies: ["a": reply("m-2"), "b": reply("m-1"), "c": reply("m-2"), "d": reply(nil)])
+    #expect(recording.servedModels == ["m-1", "m-2"])
+    #expect(recording.usage?["a"]?.inputTokens == 10)
+    #expect(recording.usage?.count == 4)
+    #expect(recording.answers["d"] == JudgeTests.answers())
+  }
+
+  @Test(
+    "the sweep picks the lowest threshold whose tune-split precision meets the baseline — catches the highest or the first threshold being picked"
+  )
+  func sweepPicksLowest() throws {
+    let ids = Self.ids(in: .tune, count: 6)
+    let flagged = [0.62, 0.72, 0.9, 0.58, 0.66, 0.1]
+    let cases = ids.enumerated().map { index, id in
+      JudgeBenchmarkCase(
+        id: id, declaredTier: "T1", expected: ["fails-if-broken": index < 3 ? "no" : "yes"])
+    }
+    let recording = Self.recording(
+      "jev", "jev-1.13.0", served: ["jev-1.13.0"],
+      answers: Dictionary(
+        uniqueKeysWithValues: zip(ids, flagged).map { ($0, Self.failsIfBroken($1)) }))
+    let question = try #require(Self.questions.questions.first { $0.id == "fails-if-broken" })
+    let lowest = JudgeCalibration.lowestBlockThreshold(
+      question, cases: JudgeTuneCases(cases), run: recording.run, minimumPrecision: 0.8)
+    #expect(lowest == 0.7)
+    #expect(
+      JudgeCalibration.lowestBlockThreshold(
+        question, cases: JudgeTuneCases(cases), run: recording.run, minimumPrecision: 1.01)
+        == nil)
+  }
+
+  @Test(
+    "latency and cost per subject come from the report split's usage — catches usage read from the tune split or dropped"
+  )
+  func usageFromReportSplit() {
+    let report = Self.ids(in: .report, count: 2)
+    let tune = Self.ids(in: .tune, count: 1)
+    let set = JudgeCalibrationSet(
+      questionSet: Self.questions.versionedID,
+      cases: (report + tune).map {
+        .init(id: $0, label: .good, declaredTier: "T1", expected: ["fails-if-broken": "yes"])
+      })
+    let usage = [
+      report[0]: JudgeUsage(costUSD: 0.01, wallMilliseconds: 100),
+      report[1]: JudgeUsage(costUSD: 0.03, wallMilliseconds: 300),
+      tune[0]: JudgeUsage(costUSD: 5, wallMilliseconds: 90_000),
+    ]
+    let recording = Self.recording(
+      "claude", "sonnet", served: ["claude-sonnet-5-5"],
+      answers: Dictionary(uniqueKeysWithValues: (report + tune).map { ($0, JudgeTests.answers()) }),
+      usage: usage)
+    let measured = JudgeCalibration.usage(set: set, recording: recording)
+    #expect(measured.requestLatency.n == 2)
+    #expect(measured.requestLatency.p95 == 300)
+    #expect(measured.costPerCase.value.map { abs($0 - 0.02) < 1e-9 } == true)
+    #expect(measured.costPerCase.n == 2)
+  }
+}
