@@ -7,7 +7,8 @@ import SwiftGateDomain
 /// exits with the verdict's status.
 enum StaticCheckRun {
   static func execute(
-    root: URL, format: OutputFormat, check: () async -> StaticCheckOutcome
+    root: URL, format: OutputFormat, runID: String? = nil,
+    check: () async -> StaticCheckOutcome
   ) async throws {
     let clock = ContinuousClock()
     let startedAt = Date()
@@ -17,7 +18,7 @@ enum StaticCheckRun {
     let milliseconds =
       Int(elapsed.components.seconds * 1000)
       + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
-    let runID = RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
+    let runID = runID ?? RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
     let report = try StaticCheckReport.make(
       runID: runID, durationMilliseconds: milliseconds, outcome: outcome)
     do {

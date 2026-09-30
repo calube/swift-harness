@@ -233,4 +233,51 @@ struct DesignCalibrationTests {
     #expect(hashed == (agents + workflows).sorted())
   }
 
+  @Test(
+    "a kept reply replays to the same case result without running the agent, and a replay keeps nothing new — catches a replay that calls claude or scores a different reply"
+  )
+  func keptReplyReplaysToTheSameResult() async throws {
+    let repository = try TempRoot()
+    try repository.write(
+      "plugin/agents/design-challenger.md",
+      "---\nname: design-challenger\nmodel: opus\n---\n\nYou challenge options.\n")
+    try repository.write(
+      "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/refuted-api/input.md",
+      "Case: the design says X.\n")
+    try repository.write(
+      "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/refuted-api/label.json",
+      "{\"schemaVersion\": 2, \"checks\": [\(Self.good)]}")
+    let seeds = DesignCalibrationSeeds.load(root: repository.root)
+    let agent = try #require(seeds.agents.first)
+    let seed = try #require(agent.cases.first)
+    let reply = "```json\n{\"verdicts\": [{\"id\": \"x\", \"status\": \"refuted\"}]}\n```\n"
+    let fixture = try Fixture.data("Judge/claude-result.json")
+    var envelope = try #require(try JSONSerialization.jsonObject(with: fixture) as? [String: Any])
+    envelope["result"] = reply
+    let stdout = String(
+      decoding: try JSONSerialization.data(withJSONObject: envelope), as: UTF8.self)
+    let live = FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(status: .exited(0), stdout: stdout)
+    }
+    let replay = FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(status: .exited(1), stdout: "", stderr: "no agent runs on a replay")
+    }
+    let runID = "20260930T120000Z-0000abcd"
+
+    let kept = try await DesignCalibrationRunner(
+      runner: live,
+      replies: DesignCalibrationReplies(root: repository.root, runID: runID, mode: .keep)
+    ).run(agent: agent, seed: seed)
+    let keptFile = repository.root.appending(
+      path: ".harness/runs/\(runID)/calibrate-design/design-challenger/refuted-api.txt")
+    let replayed = try await DesignCalibrationRunner(
+      runner: replay,
+      replies: DesignCalibrationReplies(root: repository.root, runID: runID, mode: .replay)
+    ).run(agent: agent, seed: seed)
+
+    #expect(try Data(contentsOf: keptFile) == Data(reply.utf8))
+    #expect(kept.result.answers.map(\.answered) == ["refuted"])
+    #expect(replayed.result == kept.result)
+    #expect(replay.invocations.isEmpty)
+  }
 }
