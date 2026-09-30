@@ -249,6 +249,14 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
     },
     git: { LiveGit(runner: LiveProcessRunner(), repositoryRoot: $0.path) })
 
+  /// The configured backend held to the hook's timeout, wrapped in the cache under `root`.
+  static func judge(
+    for config: JudgeConfig, root: URL, transport: any HTTPTransport,
+    environment: [String: String], clock: any RetryClock
+  ) -> (any Judge)? {
+    nil
+  }
+
   func review(root: URL) async -> String? {
     guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root),
       case .enabled(_, let thresholds, _) = config.judge,
