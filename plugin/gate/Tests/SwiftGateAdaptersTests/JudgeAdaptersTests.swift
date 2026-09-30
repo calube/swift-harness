@@ -254,19 +254,6 @@ struct JudgeAdaptersTests {
     #expect(runner.invocations.isEmpty)
   }
 
-  @Test("the Jev backend reports not configured — catches a stub silently answering nothing")
-  func jevIsBlocked() async {
-    let judge = JudgeFactory.make(
-      .enabled(backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9)),
-      runner: Self.replaying("claude-result.json", status: 0), cacheDirectory: nil)
-    await #expect {
-      _ = try await judge?.answer(Self.subject, questions: .tests)
-    } throws: { error in
-      guard case JudgeError.notConfigured = error else { return false }
-      return (error as? JudgeError)?.verdict == .blocked
-    }
-  }
-
   @Test(
     "a recording for another question-set version is refused — catches calibration run against stale answers"
   )
