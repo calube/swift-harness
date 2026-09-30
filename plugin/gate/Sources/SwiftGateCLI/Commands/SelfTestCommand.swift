@@ -1356,8 +1356,15 @@ struct SelfTestCommand: AsyncParsableCommand {
         + "Costs money and sends the calibration set to the backend."))
   var judgeBackend: JudgeBackend?
 
-  @Option(help: "With --judge-backend: the backend's model.")
-  var model = JudgeFactory.defaultModel
+  @Option(help: "With --judge-backend: the backend's model; the backend's default when unset.")
+  var model: String?
+
+  @Option(
+    help: ArgumentHelp(
+      "With --judge-backend: the host a remote backend may send the calibration set to; "
+        + "`--judge-backend jev` needs `--send-to api.typesafe.ai`.",
+      valueName: "host"))
+  var sendTo: String?
 
   @Flag(help: "With --judge-backend: replace the stored recording with the live answers.")
   var record = false
@@ -1371,6 +1378,15 @@ struct SelfTestCommand: AsyncParsableCommand {
     if record, judgeBackend == nil { throw ValidationError("--record needs --judge-backend") }
   }
 
+  /// The live judge `--judge-backend` names, or `nil` for the stored recordings.
+  var liveJudgeConfig: JudgeConfig? {
+    judgeBackend.map {
+      .enabled(
+        backend: $0, thresholds: JudgeThresholds(advisory: 0, block: 1),
+        model: model ?? JudgeFactory.defaultModel)
+    }
+  }
+
   func run() async throws {
     guard
       let path = harnessRoot ?? ProcessInfo.processInfo.environment[Self.harnessRootVariable]
@@ -1380,10 +1396,8 @@ struct SelfTestCommand: AsyncParsableCommand {
     }
     let root = CanonicalPath.url(URL(filePath: path, directoryHint: .isDirectory))
     if judge {
-      let live = judgeBackend.flatMap {
-        JudgeFactory.make(
-          .enabled(backend: $0, thresholds: JudgeThresholds(advisory: 0, block: 1), model: model),
-          runner: LiveProcessRunner(), cacheDirectory: nil)
+      let live = liveJudgeConfig.flatMap {
+        JudgeFactory.make($0, runner: LiveProcessRunner(), cacheDirectory: nil)
       }
       try await StaticCheckRun.execute(root: root, format: output.format) {
         await JudgeSelfTest.run(harnessRoot: root, judge: live, record: record)

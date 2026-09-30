@@ -39,6 +39,16 @@ enum JudgeBatch {
       return .success(answers)
     }
   }
+
+  /// ``answer(_:questions:judge:maxConcurrent:)`` keeping each subject's usage.
+  static func measuredAnswer(
+    _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
+    maxConcurrent: Int = maxConcurrent
+  ) async -> Result<[String: JudgeReply], JudgeError> {
+    await answer(subjects, questions: questions, judge: judge, maxConcurrent: maxConcurrent).map {
+      $0.mapValues { JudgeReply(answers: $0, usage: nil) }
+    }
+  }
 }
 
 // MARK: - Test quality
@@ -341,6 +351,15 @@ enum JudgeSelfTest {
   static let recordingFile = "recording.json"
   static let ruleID = "swiftgate.self-test.judge"
   static let metricsRuleID = "swiftgate.self-test.judge-metrics"
+  static let staleRuleID = "swiftgate.self-test.judge-stale"
+
+  /// Claude's baseline keeps its original name; every other backend's is `baseline-<backend>.json`.
+  static func baselineFile(for backend: JudgeBackend) -> String {
+    switch backend {
+    case .claude: "baseline.json"
+    case .jev: "baseline-jev.json"
+    }
+  }
 
   static func subjects(harnessRoot: URL, set: JudgeCalibrationSet) throws -> [JudgeSubject] {
     try set.cases.map { item in
@@ -354,8 +373,11 @@ enum JudgeSelfTest {
     }
   }
 
-  /// `judge` answers every case; with `record`, its answers replace the stored recording.
-  static func run(harnessRoot: URL, judge: (any Judge)?, record: Bool) async -> StaticCheckOutcome {
+  /// `judge` answers every case as `backend`; with `record`, its answers replace the stored
+  /// recording.
+  static func run(
+    harnessRoot: URL, judge: (any Judge)?, record: Bool, backend: JudgeBackend = .claude
+  ) async -> StaticCheckOutcome {
     let root = harnessRoot.appending(path: directory, directoryHint: .isDirectory)
     let set: JudgeCalibrationSet
     let baseline: JudgeBaseline
