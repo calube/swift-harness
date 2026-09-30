@@ -7,6 +7,12 @@ import SwiftGateDomain
 /// exits with the verdict's status.
 enum StaticCheckRun {
   static func execute(
+    root: URL, format: OutputFormat, runID: String?, check: () async -> StaticCheckOutcome
+  ) async throws {
+    try await execute(root: root, format: format, check: check)
+  }
+
+  static func execute(
     root: URL, format: OutputFormat, check: () async -> StaticCheckOutcome
   ) async throws {
     let clock = ContinuousClock()

@@ -244,6 +244,29 @@ extension CalibrationLabel: CalibrationSeedLabel {
   public static func requiredEntries(agent: String) -> [String] { [] }
 }
 
+/// Where a run keeps each agent's reply, `.harness/runs/<run id>/calibrate-design/<agent>/`:
+/// `<seed>.txt` holds the reply exactly as the agent returned it, and `<seed>.json` the model the
+/// run asked for and the ones the CLI says served it. A live run keeps them; a replay reads them in
+/// place of running the agents.
+public struct DesignCalibrationReplies: Sendable, Equatable {
+  public enum Mode: Sendable, Equatable {
+    case keep
+    case replay
+  }
+
+  public static let directoryName = "calibrate-design"
+
+  public let root: URL
+  public let runID: String
+  public let mode: Mode
+
+  public init(root: URL, runID: String, mode: Mode) {
+    self.root = root
+    self.runID = runID
+    self.mode = mode
+  }
+}
+
 /// Runs one design agent on one seed as it ships: its prompt body as the system prompt, the
 /// model its frontmatter names, `input.md` verbatim as the whole prompt, and no tools. The agent
 /// answers in its own output contract, and the label's checks score that output. A judge
@@ -271,7 +294,8 @@ public struct DesignCalibrationRunner: Sendable {
   public init(
     runner: any ProcessRunner, unpinnedModel: String = CalibrationModel.unpinned,
     modelOverride: String? = nil, judgeModel: String = JudgeFactory.defaultModel,
-    executable: String = "claude", timeout: Duration = .seconds(900)
+    executable: String = "claude", timeout: Duration = .seconds(900),
+    replies: DesignCalibrationReplies? = nil
   ) {
     self.runner = runner
     self.unpinnedModel = unpinnedModel

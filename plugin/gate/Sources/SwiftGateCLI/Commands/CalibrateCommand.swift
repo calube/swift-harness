@@ -33,6 +33,13 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
         + "record it writes never counts as fresh."))
   var model: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "Judge the replies an earlier run kept under .harness/runs/<run id>/ instead of running "
+        + "the agents.",
+      valueName: "run id"))
+  var replay: String?
+
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
@@ -108,7 +115,7 @@ enum CalibrateDesignRun {
   ///   - modelOverride: every agent's model instead of its own, for experiments.
   static func run(
     root: URL, runner: any ProcessRunner, model: String, modelOverride: String? = nil,
-    now: Date, concurrentCases: Int = 1
+    now: Date, concurrentCases: Int = 1, replies: DesignCalibrationReplies? = nil
   ) async -> StaticCheckOutcome {
     let calibration = DesignCalibrationRunner(
       runner: runner, unpinnedModel: model, modelOverride: modelOverride)
