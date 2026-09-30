@@ -67,14 +67,21 @@ enum TestJudgeCheck {
     /// The harness checkout whose labels and recordings decide whether a backend that needs a
     /// block calibration may block; `nil` when none is known.
     let harnessRoot: URL?
+    /// Writes the reason on a blocking finding from a backend that gives none; `nil` leaves such
+    /// a finding with a note that the reason is missing.
+    let reasonJudge: (any Judge)?
+    /// Values no reason may carry, such as the Jev key.
+    let secrets: [String]
 
     init(
       makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
-      harnessRoot: URL? = nil
+      harnessRoot: URL? = nil, reasonJudge: (any Judge)? = nil, secrets: [String] = []
     ) {
       self.makeJudge = makeJudge
       self.diff = diff
       self.harnessRoot = harnessRoot
+      self.reasonJudge = reasonJudge
+      self.secrets = secrets
     }
 
     static func live(root: URL, git: LiveGit) -> Dependencies {
@@ -87,6 +94,10 @@ enum TestJudgeCheck {
         diff: git,
         harnessRoot: ProcessInfo.processInfo.environment[SelfTestCommand.harnessRootVariable].map {
           URL(filePath: $0, directoryHint: .isDirectory)
+        },
+        reasonJudge: JudgeBlockReason.liveJudge(root: root),
+        secrets: JudgeBackend.allCases.compactMap {
+          $0.keyVariable.flatMap { ProcessInfo.processInfo.environment[$0] }
         })
     }
   }
@@ -156,7 +167,10 @@ enum TestJudgeCheck {
             thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier,
             blockAuthority: authority)) ?? []
       }
-      return findings
+      return await JudgeBlockReason.attach(
+        findings, subjects: subjects, answers: answers, questions: .tests,
+        identity: judge.identity, reasonJudge: dependencies.reasonJudge,
+        redacting: dependencies.secrets)
     }
   }
 
