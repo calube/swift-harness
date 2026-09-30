@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -13,7 +14,8 @@ import Testing
 @Suite("check --tier ready: judge step")
 struct CheckJudgeStepTests {
   private static func ready(
-    judge: FakeJudge?, config: String = JudgeCommandsTests.enabled, harnessRoot: URL? = nil
+    judge: FakeJudge?, config: String = JudgeCommandsTests.enabled, harnessRoot: URL? = nil,
+    reasonJudge: (any Judge)? = nil, secrets: [String] = []
   ) async throws -> (t1: TierResult, judged: [Finding]) {
     let repository = try ProbeRepository(config: config)
     defer { repository.remove() }
@@ -52,7 +54,7 @@ struct CheckJudgeStepTests {
             diff: FakeDiff(
               text:
                 "diff --git a/\(JudgeCommandsTests.testFile) b/\(JudgeCommandsTests.testFile)\n+@Test\n"
-            ), harnessRoot: harnessRoot)
+            ), harnessRoot: harnessRoot, reasonJudge: reasonJudge, secrets: secrets)
         }))
     let t1 = try #require(parts.tiers.first { $0.tier == .t1 })
     return (t1, parts.findings.filter { $0.ruleID.hasPrefix(JudgePolicy.ruleIDPrefix) })
@@ -99,20 +101,28 @@ struct CheckJudgeStepTests {
   ].map { "case-\($0)" }
 
   /// A judge with `identity` whose flagged option gets `p` on every question.
-  static func judge(_ identity: JudgeIdentity, flagged p: Double) -> FakeJudge {
+  static func judge(
+    _ identity: JudgeIdentity, flagged p: Double, rationale: String? = "fake"
+  ) -> FakeJudge {
     FakeJudge(identity: identity) { subject, questions throws(JudgeError) in
-      questions.questions.map { question in
-        let options = question.options
-        let flaggedOption: String =
-          switch question.flag {
-          case .option(let option): option
-          case .notDeclaredTier: options.first { $0 != subject.declaredTier } ?? options[0]
-          }
-        let rest = options.filter { $0 != flaggedOption }
-        var distribution = [flaggedOption: p]
-        for option in rest { distribution[option] = (1 - p) / Double(rest.count) }
-        return JudgeAnswer(question: question.id, distribution: distribution, rationale: "fake")
-      }
+      answers(subject, questions, flagged: p, rationale: rationale)
+    }
+  }
+
+  static func answers(
+    _ subject: JudgeSubject, _ questions: JudgeQuestionSet, flagged p: Double, rationale: String?
+  ) -> [JudgeAnswer] {
+    questions.questions.map { question in
+      let options = question.options
+      let flaggedOption: String =
+        switch question.flag {
+        case .option(let option): option
+        case .notDeclaredTier: options.first { $0 != subject.declaredTier } ?? options[0]
+        }
+      let rest = options.filter { $0 != flaggedOption }
+      var distribution = [flaggedOption: p]
+      for option in rest { distribution[option] = (1 - p) / Double(rest.count) }
+      return JudgeAnswer(question: question.id, distribution: distribution, rationale: rationale)
     }
   }
 
@@ -223,5 +233,253 @@ struct CheckJudgeStepTests {
     #expect(advisory.message.contains("jev-1.12.0"))
     #expect(advisory.message.contains(Self.pin))
     #expect(judged.t1.verdict != .red)
+  }
+
+  // MARK: - Claude's reason on a blocking Jev finding
+
+  static let jev = JudgeIdentity(backend: "jev", model: pin)
+  static let claude = JudgeIdentity(backend: "claude", model: "sonnet")
+
+  /// The question ids of each set a judge was asked, in order.
+  final class Asked: Sendable {
+    private let sets = Mutex<[[String]]>([])
+
+    func record(_ questions: JudgeQuestionSet) {
+      sets.withLock { $0.append(questions.questions.map(\.id)) }
+    }
+
+    var all: [[String]] { sets.withLock { $0 } }
+  }
+
+  /// Claude writing reasons: `p` on the flagged option of whatever it's asked, with `rationale`.
+  static func reasonJudge(flagged p: Double, rationale: String, asked: Asked) -> FakeJudge {
+    FakeJudge(identity: claude) { subject, questions throws(JudgeError) in
+      asked.record(questions)
+      return answers(subject, questions, flagged: p, rationale: rationale)
+    }
+  }
+
+  /// A reason judge that fails every call with `error`.
+  static func failingReasonJudge(_ error: JudgeError, asked: Asked) -> FakeJudge {
+    FakeJudge(identity: claude) { _, questions throws(JudgeError) in
+      asked.record(questions)
+      throw error
+    }
+  }
+
+  static func findings(_ question: String, in judged: [Finding]) -> [Finding] {
+    judged.filter { $0.ruleID == JudgePolicy.ruleIDPrefix + question }
+  }
+
+  @Test(
+    "a calibrated Jev block carries the reason judge's rationale with Jev's and Claude's p, from 1 call per blocking finding asking only its question — catches a Jev block with no reason"
+  )
+  func calibratedJevBlockCarriesClaudesReason() async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let asked = Asked()
+
+    let judged = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root,
+      reasonJudge: Self.reasonJudge(
+        flagged: 0.93, rationale: "doubling with the wrong factor still passes", asked: asked))
+
+    let blocking = judged.judged.filter { $0.severity == .major }
+    #expect(!blocking.isEmpty)
+    for finding in blocking {
+      #expect(finding.failureScenario == "doubling with the wrong factor still passes")
+      #expect(finding.message.contains("p=0.99, jev/\(Self.pin)"))
+      #expect(finding.message.contains("claude p=0.93"))
+    }
+    #expect(asked.all == Array(repeating: ["fails-if-broken"], count: blocking.count))
+    #expect(judged.t1.verdict == .red)
+  }
+
+  @Test(
+    "a reason judge answering p=0.02 leaves the calibrated Jev block major, with its rationale and p beside Jev's — catches Claude overruling Jev"
+  )
+  func disagreeingClaudeLeavesJevBlockMajor() async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let judged = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root,
+      reasonJudge: Self.reasonJudge(
+        flagged: 0.02, rationale: "the assertion compares the doubled value", asked: Asked()))
+
+    let blocks = Self.findings("fails-if-broken", in: judged.judged)
+    #expect(!blocks.isEmpty)
+    for finding in blocks {
+      #expect(finding.severity == .major)
+      #expect(finding.failureScenario == "the assertion compares the doubled value")
+      #expect(finding.message.contains("p=0.99, jev/\(Self.pin)"))
+      #expect(finding.message.contains("claude p=0.02"))
+    }
+    #expect(judged.t1.verdict == .red)
+  }
+
+  @Test(
+    "minor Jev findings keep the template reason and ask the reason judge nothing, while the block beside them asks it — catches a Claude call on every flag"
+  )
+  func minorJevFindingsAskNoReason() async throws {
+    let calibratedRoot = try Self.harnessRoot(jevModel: Self.pin)
+    let uncalibratedRoot = try Self.harnessRoot(jevModel: nil)
+    defer {
+      try? FileManager.default.removeItem(at: calibratedRoot)
+      try? FileManager.default.removeItem(at: uncalibratedRoot)
+    }
+    let asked = Asked()
+    let unasked = Asked()
+
+    let calibrated = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: calibratedRoot,
+      reasonJudge: Self.reasonJudge(flagged: 0.9, rationale: "a reason", asked: asked))
+    let uncalibrated = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: uncalibratedRoot,
+      reasonJudge: Self.reasonJudge(flagged: 0.9, rationale: "a reason", asked: unasked))
+
+    let blocking = calibrated.judged.filter { $0.severity == .major }
+    #expect(!blocking.isEmpty)
+    #expect(asked.all == Array(repeating: ["fails-if-broken"], count: blocking.count))
+    let minor = calibrated.judged.filter { $0.severity == .minor } + uncalibrated.judged
+    #expect(!Self.findings("asserts-implementation", in: minor).isEmpty)
+    for finding in minor {
+      #expect(finding.severity == .minor)
+      #expect(finding.failureScenario == nil)
+      #expect(finding.message.contains("(p=0.99, jev/\(Self.pin))"))
+      #expect(!finding.message.contains("claude p="))
+    }
+    #expect(unasked.all.isEmpty)
+  }
+
+  enum ReasonFailure: String, CaseIterable, Sendable {
+    case notOnPath, timeout, backendError
+
+    var error: JudgeError {
+      switch self {
+      case .notOnPath:
+        .process(.launchFailed(executable: "claude", reason: "not found on PATH /usr/bin"))
+      case .timeout:
+        .process(
+          .timedOut(
+            executable: "claude", after: .seconds(180), stdout: CapturedStream(),
+            stderr: CapturedStream()))
+      case .backendError: .backend("overloaded")
+      }
+    }
+
+    var why: String {
+      switch self {
+      case .notOnPath: "claude could not start: not found on PATH /usr/bin"
+      case .timeout: "claude timed out after 180 s"
+      case .backendError: "claude reported an error: overloaded"
+      }
+    }
+  }
+
+  @Test(
+    "when the reason judge fails, the calibrated Jev block stays major and failureScenario says why Claude's reason is missing — catches a lost block or a silent missing reason",
+    arguments: ReasonFailure.allCases)
+  func failingClaudeLeavesJevBlockWithMissingReason(_ failure: ReasonFailure) async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let judged = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root, reasonJudge: Self.failingReasonJudge(failure.error, asked: Asked()))
+
+    let blocks = Self.findings("fails-if-broken", in: judged.judged)
+    #expect(!blocks.isEmpty)
+    for finding in blocks {
+      #expect(finding.severity == .major)
+      #expect(finding.failureScenario == JudgeBlockReason.missingPrefix + failure.why)
+      #expect(finding.message.contains("p=0.99, jev/\(Self.pin)"))
+    }
+    #expect(judged.t1.verdict == .red)
+  }
+
+  @Test(
+    "with no reason judge at all, the calibrated Jev block stays major and says no Claude judge was available — catches a nil judge read as a reason"
+  )
+  func missingReasonJudgeLeavesJevBlockWithMissingReason() async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    let judged = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root)
+
+    let blocks = Self.findings("fails-if-broken", in: judged.judged)
+    #expect(!blocks.isEmpty)
+    for finding in blocks {
+      #expect(finding.severity == .major)
+      #expect(
+        finding.failureScenario == JudgeBlockReason.missingPrefix + "no Claude judge is available")
+    }
+  }
+
+  @Test(
+    "a Claude-backend block keeps Claude's own rationale and asks the reason judge nothing, while a Jev block asks it — catches asking Claude twice for its reason"
+  )
+  func claudeBlockMakesNoSecondCall() async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let claudeAsked = Asked()
+    let jevAsked = Asked()
+
+    let claude = try await Self.ready(
+      judge: Self.judge(Self.claude, flagged: 0.99, rationale: "Claude's own reason"),
+      reasonJudge: Self.reasonJudge(flagged: 0.5, rationale: "a second reason", asked: claudeAsked))
+    let jev = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root,
+      reasonJudge: Self.reasonJudge(flagged: 0.5, rationale: "a second reason", asked: jevAsked))
+
+    let blocks = claude.judged.filter { $0.severity == .major }
+    #expect(!blocks.isEmpty)
+    for finding in blocks {
+      #expect(finding.failureScenario == "Claude's own reason")
+      #expect(!finding.message.contains("claude p="))
+    }
+    #expect(claudeAsked.all.isEmpty)
+    #expect(!jevAsked.all.isEmpty)
+  }
+
+  @Test(
+    "the live reason judge runs claude without the Jev key, and a failure that echoes the key never puts it in a reason — catches the key reaching Claude or a finding"
+  )
+  func liveReasonJudgeNeverCarriesTheKey() async throws {
+    let root = try Self.harnessRoot(jevModel: Self.pin)
+    let cache = FileManager.default.temporaryDirectory.appending(
+      path: "judge-reason-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer {
+      try? FileManager.default.removeItem(at: root)
+      try? FileManager.default.removeItem(at: cache)
+    }
+    let key = "tsk-live-secret-0123456789"
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      throw .launchFailed(executable: invocation.executable, reason: "no claude; saw \(key)")
+    }
+
+    let judged = try await Self.ready(
+      judge: Self.judge(Self.jev, flagged: 0.99, rationale: nil), config: Self.jevConfig,
+      harnessRoot: root, reasonJudge: JudgeBlockReason.liveJudge(root: cache, runner: runner),
+      secrets: [key])
+
+    let invocation = try #require(runner.invocations.first)
+    #expect(invocation.environmentOverlay.keys.contains("TYPESAFE_API_KEY"))
+    #expect(invocation.environmentOverlay["TYPESAFE_API_KEY"] == .some(nil))
+    let blocks = Self.findings("fails-if-broken", in: judged.judged)
+    #expect(!blocks.isEmpty)
+    for finding in blocks {
+      #expect(finding.severity == .major)
+      #expect(finding.failureScenario?.hasPrefix(JudgeBlockReason.missingPrefix) == true)
+      #expect(finding.failureScenario?.contains(key) == false)
+      #expect(!finding.message.contains(key))
+    }
   }
 }
