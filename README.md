@@ -61,6 +61,7 @@ Each runs as `/swift-harness:<name>`.
 | `review` | run the multi-agent code review on a Swift change |
 | `comment-audit` | judge each comment a change adds: keep, trim or cut |
 | `validate` | produce ready-for-review evidence and a PR body block |
+| `pr-feedback` | work review comments to a stopping rule: validate, fix, gate, reply, resolve |
 | `status` | list active plans across this machine's bootstrapped repositories |
 
 ## Contributing
