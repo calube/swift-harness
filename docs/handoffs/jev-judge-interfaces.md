@@ -220,3 +220,14 @@ Commits and gate: surface 561ef12, behaviour efec10c, 7767455; gate 20260930T211
 - Exit codes: `bench` 0, 2 for bad input or fewer than 3 repeats, 3 for a backend failure or a served model that changes between repeats. `bench-render <file> [--out <md>]` 0, 1 when a stored metric differs from a recomputed one, 2 for bad input.
 - Metrics come only from `JudgeBenchmarkMetrics`, and every rate prints its `(n=…)`. The person view reads only `labeller: person` cases and says "No person labels" when there are none.
 - `--estimate --usage-from <recording>…` prints per-arm calls, judgments and cost, then `Claude spend: $X` or `unknown`. With `--dataset test-quality`, the Claude arm estimated 66 calls for $0.58 per repeat set.
+
+## Wave 8
+
+### `ready-check-cascades-jev-to-claude`
+
+Commits and gate: surface 8d71137, behaviour 2f0d598, 32a44db; gate 20260930T223308Z-74cd617b; 24/24 tests proved.
+- The block calibration is gone from code: `JudgeBlockAuthority`, `blockDecisions` and the uncalibrated-block note are deleted, and `JudgeBlockCalibration.swift` became `JudgeCaseSplit.swift` (the tune and report split only). `JudgeBackend.writesReasons` replaces `needsBlockCalibration`.
+- With `[judge] backend = "jev"`, `TestJudgeCheck` asks `test-quality@2-jev` through `CascadingJudge(jev:claude:base:policy:)`. A blocking question whose Jev p lies in its band escalates to Claude on the `@1` text, once per subject; every other answer is Jev's. Advisory questions never escalate.
+- A Jev block at or above `block_threshold` is `major` with a Claude-written reason; if Claude fails, the block stays `major` with the template reason and a missing-reason note. An escalated answer carries Claude's rationale and makes no reason call. A failed escalation leaves the Jev answer `minor`.
+- Findings name the identity that decided them (`claude/<model>` or `jev/<model>`). Advisory reasons name the `@2-jev` sub-question in `failureScenario`.
+- `judge bench --backend cascade:<jev model>,<claude model>[#<set@v>]`: the result's backend is `cascade`, its model `<jev>,<claude>`. Each case records which questions escalated (`JudgeBenchmarkReply.escalations`), and its usage sums both backends. The rendered page adds "Escalations to Claude", and the estimate adds a Claude ceiling row.
