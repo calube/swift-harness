@@ -80,6 +80,27 @@ struct NewSubcommandRegistrationTests {
       "ask"
     ),
     (
+      "judge bench",
+      [
+        "judge", "bench", "--dataset", "test-quality", "--backend", "claude:claude-sonnet-5-5",
+        "--backend", "jev:jev-1.13.0#test-quality@2-jev", "--repeats", "3", "--concurrency", "1",
+        "--send-to", "api.typesafe.ai", "--out", "bench.json",
+      ],
+      "bench"
+    ),
+    (
+      "judge bench --estimate",
+      [
+        "judge", "bench", "--dataset", "test-quality", "--backend", "claude:claude-sonnet-5-5",
+        "--estimate", "--usage-from", "smoke.json",
+      ],
+      "bench"
+    ),
+    (
+      "judge bench-render", ["judge", "bench-render", "bench.json", "--out", "page.md"],
+      "bench-render"
+    ),
+    (
       "build start",
       ["build", "start", "example-plan", "--preset", "interview", "--session", "session-123"],
       "start"
@@ -182,6 +203,7 @@ struct NewSubcommandRegistrationTests {
     "design-render",
     "calibrate design",
     "judge", "judge --ready", "judge tests --ready", "judge ask", "judge ask --backend",
+    "judge bench", "judge bench --estimate", "judge bench-render",
     "build start", "build next", "build finish", "build check-return", "build proof-bases",
     "build record-gate",
     "build merge",
