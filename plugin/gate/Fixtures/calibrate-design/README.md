@@ -37,14 +37,14 @@ The spec's layer 2 seeds come first; the rest give every other design agent a ca
 | `design-evidence-auditor` | `decision-contradicts-evidence`: the Decision says queued orders survive termination, citing a claim that they live in memory only: gating, at `decision`, `blocker` | `decision-follows-evidence`: the Decision claims only in-session retry: no gating finding at `decision` |
 | `design-evidence-auditor` | `option-on-probe-refuted-api`: the chosen option cites a claim whose probe failed: gating, at `decision`, `blocker` | as above |
 | `design-standards-conformance` | `uikit-in-core-module`: a Core module imports UIKit: gating, rule `A2` | `uikit-in-live-module-only`: UIKit sits behind a client in its `*Live` module: no gating finding citing `A2` |
-| `design-challenger` | `option-on-probe-refuted-api`: the chosen option rests on an API the probe refuted: gating, at `decision` | `option-on-probe-passed-api`: the chosen option's APIs all passed their probes: no gating finding at `decision` |
+| `design-challenger` | `option-on-probe-refuted-api`: the chosen option rests on an API the probe refuted: a gating finding says an API it calls failed its probe, at any anchor | `option-on-probe-passed-api`: the chosen option's APIs all passed their probes: no gating finding says one failed |
 | `design-pre-mortem` | `unbounded-prefetch`: one download per album photo, all at once: gating, at `decision` or `perf--scale`, and its story has downloads grow with the album | `bounded-prefetch`: at most 6 in flight, tested: no gating story has downloads grow with the album |
 | `design-drafter` | `point-without-supported-claim`: a frame answer no supported claim backs: `[UNVERIFIED]`, repeated in Risks or Open questions | `point-with-supported-claim`: the pack holds a claim that backs it: cite it |
 | `design-decomposer` | `flow-test-needs-ready-gate`: a T3 test: gate `ready` | `host-test-needs-fast-gate`: a T1 test: gate `fast` |
 | `design-lane-codebase` | `product-intent-question`: the brief asks a product choice: `needsDecision` | `code-fact-question`: the brief asks what code does: a `file` claim |
 | `design-lane-apple-docs` | `signature-needs-probe`: a snapshot shows a signature: a `probe` claim | `semantics-from-snapshot`: the snapshot states behaviour: a `snapshot` claim |
 | `design-lane-packages` | `pinned-package-not-checked-out`: the pinned package has no checkout: `needsDecision` | `pinned-package-checked-out`: a claim citing the checkout, pinned `<pkg>@<version>` |
-| `design-lane-prior-decisions` | `refuted-prior-claim`: a prior claim was refuted: a warning claim citing the earlier design | `supported-prior-file-claim`: carried forward with its original id, status `new` |
+| `design-lane-prior-decisions` | `refuted-prior-claim`: a prior claim was refuted: a warning claim citing the refuted claim's record | `supported-prior-file-claim`: carried forward with its original id, status `new` |
 
 These seeds each held a choice a careful agent could make either way, so each is built to leave
 one answer:
@@ -73,6 +73,15 @@ one answer:
   its monitor, with passing probes for those APIs. Without that, opus rightly found the
   unspecified lifecycle a major gap and placed it at `decision` in 2 of 3 runs, which has
   nothing to do with the probe verdicts the pair plants.
+- `design-lane-prior-decisions/refuted-prior-claim` requires a `file` claim citing the refuted
+  claim's record, `book-cache.evidence/claims.jsonl` from line 4 (label changed with the user's
+  approval, 2026-09-30). Any claim citing `book-cache.` met the old label, so a lane that cited
+  only the design's `book-cache.md:L9` sentence passed without warning that the claim was refuted.
+- `design-challenger/*` are judged on what the gating findings say about the chosen option's
+  probe verdicts, at any anchor (label changed with the user's approval, 2026-09-30). The old
+  label asked for a gating finding at `decision`, so it scored where opus filed a finding rather
+  than the planted failed `pathUpdates` probe: a lifecycle gap filed at `decision` failed the
+  clean twin, and the refuted twin's probe finding filed elsewhere would have failed it too.
 - `design-pre-mortem/*` are judged on what the gating failure stories say about concurrent
   downloads. A pre-mortem is asked to find every open failure story, and the clean twin leaves
   some open (failed downloads, cache retention), so "no gating finding" isn't its label.

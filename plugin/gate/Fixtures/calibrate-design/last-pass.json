@@ -4,10 +4,10 @@
       "agent" : "design-challenger",
       "answers" : [
         {
-          "answered" : "absent",
-          "expected" : "absent",
-          "probability" : 1,
-          "question" : "gating-finding-at-decision"
+          "answered" : "its APIs passed their probes, or no finding says",
+          "expected" : "its APIs passed their probes, or no finding says",
+          "probability" : 0.98,
+          "question" : "gating-finding-on-failed-probe"
         }
       ],
       "case" : "option-on-probe-passed-api",
@@ -20,7 +20,13 @@
           "answered" : "present",
           "expected" : "present",
           "probability" : 1,
-          "question" : "gating-finding-at-decision"
+          "question" : "gating-finding"
+        },
+        {
+          "answered" : "an API it calls failed its probe or doesn't exist",
+          "expected" : "an API it calls failed its probe or doesn't exist",
+          "probability" : 0.98,
+          "question" : "gating-finding-on-failed-probe"
         }
       ],
       "case" : "option-on-probe-refuted-api",
@@ -84,7 +90,7 @@
         {
           "answered" : "a claim id starting ev-",
           "expected" : "a claim id starting ev-",
-          "probability" : 0.8,
+          "probability" : 0.9595959595959596,
           "question" : "interval-tag"
         }
       ],
@@ -97,7 +103,7 @@
         {
           "answered" : "the UNVERIFIED tag",
           "expected" : "the UNVERIFIED tag",
-          "probability" : 0.97,
+          "probability" : 0.9696969696969697,
           "question" : "interval-tag"
         },
         {
@@ -277,7 +283,7 @@
         {
           "answered" : "it stays bounded, or no story says",
           "expected" : "it stays bounded, or no story says",
-          "probability" : 0.98,
+          "probability" : 0.97,
           "question" : "download-concurrency"
         }
       ],
@@ -346,6 +352,6 @@
     "plugin/workflows/design-research.js",
     "plugin/workflows/design-review.js"
   ],
-  "passedAt" : "2026-09-30T13:40:04Z",
+  "passedAt" : "2026-09-30T14:39:42Z",
   "schemaVersion" : 2
 }
