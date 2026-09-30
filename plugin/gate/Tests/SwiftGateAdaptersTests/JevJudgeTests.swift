@@ -113,7 +113,7 @@ struct JevJudgeTests {
   }
 
   @Test(
-    "a Score legend with its levels reordered fails naming the question — catches a level-to-option swap"
+    "the legend Jev echoes of the levels sent decodes, and 1 with its levels reordered fails naming the question — catches a level-to-option swap"
   )
   func reorderedLegendFails() async throws {
     let swapped = try Self.edited("test-quality-levels") {
@@ -134,6 +134,9 @@ struct JevJudgeTests {
       return
     }
     #expect(message.contains("name-specificity"))
+    let (sent, _) = Self.judge([try FakeHTTPTransport.captured("test-quality-levels")])
+    let answers = try await sent.answer(subject, questions: .tests)
+    #expect(Self.distribution(answers, "name-specificity")["specific"] == 0.99)
   }
 
   @Test(
@@ -295,7 +298,7 @@ struct JevJudgeTests {
   func missingKeySendsNothing() async throws {
     for environment in [[:], [JevPin.keyVariable: ""]] {
       let (judge, transport) = Self.judge(
-        [try FakeHTTPTransport.captured("test-quality-levels")], environment: environment)
+        [try FakeHTTPTransport.captured("test-quality")], environment: environment)
       let subject = try Self.caseSubject("counter-increment")
       let error = await Self.error { () async throws(JudgeError) in
         _ = try await judge.answer(subject, questions: .tests)
@@ -576,9 +579,11 @@ struct JevJudgeTests {
   }
 
   @Test(
-    "a Score level with no option, or an answer of the wrong type, is malformedReply naming the question — catches an answer mapped to a level or kind it isn't"
+    "the reply as captured decodes, while a Score level with no option, or an answer of the wrong type, is malformedReply naming the question — catches an answer mapped to a level or kind it isn't"
   )
   func wrongLevelOrTypeFails() async throws {
+    let (unedited, _) = Self.judge([try FakeHTTPTransport.captured("test-quality-levels")])
+    _ = try await unedited.answer(try Self.caseSubject("counter-increment"), questions: .tests)
     let edits: [(String, String, String)] = [
       (
         #""probabilities":{"0":0.01,"1":0.0,"2":0.99}"#,
@@ -645,7 +650,7 @@ struct JevJudgeTests {
   }
 
   @Test(
-    "a missing @2-jev sub-answer is malformedReply naming its key — catches a question combined from a partial reply"
+    "a missing @2-jev sub-answer, or 1 of the wrong type, is malformedReply naming its key — catches a question combined from a partial reply"
   )
   func nativeMissingSubAnswerFails() async throws {
     let partial = try Self.edited("test-quality-2-jev-good") {
@@ -663,6 +668,23 @@ struct JevJudgeTests {
       return
     }
     #expect(message.contains("asserts-implementation.log-text"))
+
+    let wrongType = try Self.edited("test-quality-2-jev-good") {
+      $0.replacing(
+        #""asserts-implementation.log-text":{"type":"noul","noul":0.02}"#,
+        with:
+          #""asserts-implementation.log-text":{"type":"choice","choice":"true","confidence":1.0,"probabilities":{"true":1.0}}"#
+      )
+    }
+    let (typed, _) = Self.judge([wrongType])
+    let typeError = await Self.error { () async throws(JudgeError) in
+      _ = try await typed.answer(subject, questions: .testsJev)
+    }
+    guard case .malformedReply(let typeMessage) = typeError else {
+      Issue.record("expected malformedReply, got \(String(describing: typeError))")
+      return
+    }
+    #expect(typeMessage.contains("asserts-implementation.log-text"))
   }
 
   @Test(
@@ -750,6 +772,8 @@ struct JevJudgeTests {
       try FakeHTTPTransport.captured("test-quality"),
     ])
     let judge = CachingJudge(inner, cache: FileJudgeCache(directory: cache))
+    #expect(judge.renderedQuestions(for: .tests) != nil)
+    #expect(judge.renderedQuestions(for: .tests) == inner.renderedQuestions(for: .tests))
     let bare = JudgeQuestionSet(
       id: "test-quality", version: 1,
       subjectDescription: JudgeQuestionSet.tests.subjectDescription,
