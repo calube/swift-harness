@@ -107,9 +107,11 @@ disown "$watchdog"
 
 mkdir -p "$work/repo/plugin"
 cp -R "$repo_src/plugin/bin" "$repo_src/plugin/templates" "$work/repo/plugin/"
-# .build can run into the hundreds of MB; rsync leaves it behind instead of copying it and
-# throwing it away.
-rsync -a --exclude .build "$repo_src/plugin/gate/" "$work/repo/plugin/gate/"
+# .build can run into the hundreds of MB, and the fixture trees hold two thirds of the package's
+# files though no build or shim reads them. This copy is all the work before the first cold hook,
+# and its file count is what machine load stretches, so rsync leaves them behind.
+rsync -a --exclude .build --exclude /Fixtures --exclude /Tests/Fixtures --exclude '*.profraw' \
+  "$repo_src/plugin/gate/" "$work/repo/plugin/gate/"
 # An installed plugin's hooks get CLAUDE_PLUGIN_DATA, which outlives the per-version install
 # directory, so the build lands there. The user cache is where a contributor checkout builds, and
 # it must stay untouched while the data directory is set.
@@ -270,18 +272,51 @@ stop_rebuild() {
   done
   rmdir "$cache/building-$cached_hash" 2>/dev/null || true
 }
-stale_start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
-stale_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+# Each hook below starts a rebuild that runs a stand-in swift holding the build open, so a hook is
+# judged by whether it returned while its rebuild still ran, never by wall-clock time. A real
+# rebuild of unchanged sources can land in a second or two, before a slowed hook returns. The hold
+# outlasts the PreToolUse hook timeout: Claude Code would kill a hook that waited on its rebuild
+# before the hold ended, and here that hook returns only after the stand-in marks the hold's end.
+pre_tool_use_timeout="$(python3 -c '
+import json, sys
+entries = json.load(open(sys.argv[1]))["hooks"]["PreToolUse"]
+print(max(hook["timeout"] for entry in entries for hook in entry["hooks"]))
+' "$repo_src/plugin/hooks/hooks.json")" || fail "could not read the PreToolUse hook timeout from hooks.json"
+held_bin="$work/held-bin"
+rebuild_hold_ended="$work/rebuild-hold.ended"
+mkdir -p "$held_bin"
+cat >"$held_bin/swift" <<EOF
+#!/usr/bin/perl
+sleep $((pre_tool_use_timeout + 5));
+open my \$marker, '>', '$rebuild_hold_ended' or die "$rebuild_hold_ended: \$!\n";
+exit 1;
+EOF
+chmod +x "$held_bin/swift"
+# Called right after a hook returns, before its rebuild is stopped.
+rebuild_still_held() {
+  [ ! -e "$rebuild_hold_ended" ] || fail "$1: the hook returned only after its rebuild ended: it waited on the rebuild"
+  [ -d "$cache/building-$cached_hash" ] || fail "$1: a hook with no binary for its hash started no rebuild"
+  [ ! -e "$cache/bin/$cached_hash/swiftgate" ] || fail "$1: a binary for the current hash landed while its rebuild was held"
+}
+# A loaded machine can hold a hook back for seconds: the previous binary's first launch from its
+# new path waits on system code-signing checks that load starves. A stand-in bash holds this hook's
+# start back the same way, so nothing below may judge the hook by how long it took.
+stretched_bin="$work/stretched-bin"
+mkdir -p "$stretched_bin"
+cat >"$stretched_bin/bash" <<'EOF'
+#!/usr/bin/perl
+select undef, undef, undef, 3;
+exec '/bin/bash', @ARGV or die "exec: $!\n";
+EOF
+chmod +x "$stretched_bin/bash"
+stale_out="$(cd "$work/project" && echo "$deny_payload" | PATH="$stretched_bin:$held_bin:$PATH" "$shim" hook pre-tool-use)" ||
   fail "hook during a rebuild exited non-zero"
-stale_end=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
-stale_ms="$(perl -e "printf '%d', ($stale_end - $stale_start) * 1000")"
-[ -d "$cache/building-$cached_hash" ] || fail "a hook with no binary for its hash started no rebuild"
+rebuild_still_held "a hook during a rebuild"
 stop_rebuild
 case "$stale_out" in
   *'"permissionDecision":"deny"'*) ;;
   *) fail "during a rebuild the hook did not enforce with the last good binary: '$stale_out'" ;;
 esac
-[ "$stale_ms" -lt 2000 ] || fail "a hook during a rebuild took ${stale_ms}ms, budget 2000ms"
 # The gate's own last build wins over a newer binary another checkout left in a shared cache; with
 # no record of it, the newest cached binary runs. A decoy tells which one ran.
 decoy=ffffffffffffffff
@@ -293,16 +328,18 @@ pointer=("$cache"/last-good/*)
 [ "$(cat "${pointer[0]}" 2>/dev/null)" = "$cached_hash" ] ||
   fail "the build did not record its hash as the last good binary"
 printf '%s\n' "$stale" >"${pointer[0]}"
-recorded_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+recorded_out="$(cd "$work/project" && echo "$deny_payload" | PATH="$held_bin:$PATH" "$shim" hook pre-tool-use)" ||
   fail "hook with a last-good record exited non-zero"
+rebuild_still_held "a hook with a last-good record"
 stop_rebuild
 case "$recorded_out" in
   *'"permissionDecision":"deny"'*) ;;
   *) fail "the recorded last good binary did not run ahead of a newer one: '$recorded_out'" ;;
 esac
 /bin/rm -f "${pointer[0]}"
-newest_out="$(cd "$work/project" && echo "$deny_payload" | "$shim" hook pre-tool-use)" ||
+newest_out="$(cd "$work/project" && echo "$deny_payload" | PATH="$held_bin:$PATH" "$shim" hook pre-tool-use)" ||
   fail "hook with no last-good record exited non-zero"
+rebuild_still_held "a hook with no last-good record"
 stop_rebuild
 [ "$newest_out" = "decoy" ] || fail "with no last-good record the newest cached binary did not run: '$newest_out'"
 /bin/rm -rf "$cache/bin/$decoy" "$cache/bin/$cached_hash"
@@ -412,4 +449,4 @@ done
 stray="$(pgrep -fl "$work" 2>/dev/null || true)"
 [ -z "$stray" ] || fail "stray process(es) still running under \$work: $stray"
 
-echo "shim_test: PASS (cold samples: ${cold_samples[*]}ms, fastest ${hook_ms}ms${cold_note}; cached run samples: ${samples[*]}ms, fastest ${elapsed}ms; hook during a rebuild ${stale_ms}ms)"
+echo "shim_test: PASS (cold samples: ${cold_samples[*]}ms, fastest ${hook_ms}ms${cold_note}; cached run samples: ${samples[*]}ms, fastest ${elapsed}ms)"

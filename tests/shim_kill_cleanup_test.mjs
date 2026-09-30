@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, processes, reap, runCases, start, survivors, until } from './shim_cleanup.mjs'
 
-// The shim test copies the whole gate package before its first cold hook takes the build lock,
+// The shim test copies the gate package's sources before its first cold hook takes the build lock,
 // and under a loaded full test run that start has run past 20s. The wait is sized for a cold start
 // under load while leaving the reap check its share of the 60s a script is given.
 const coldBuildDeadline = 30_000
@@ -25,6 +25,11 @@ function workOf(group) {
     if (match) return match[1]
   }
   return undefined
+}
+
+// What the shim test was running when the wait ended, so a slow start names the step it was in.
+function stepsOf(group) {
+  return describe(processes().filter((row) => row.pgid === group && row.pid !== group))
 }
 
 // The first cold hook takes `building-<hash>` in the shim test's data directory just before it
@@ -50,7 +55,7 @@ async function coldBuildStarted(run, deadline) {
     run.exit !== undefined
       ? `the shim test exited first (${JSON.stringify(run.exit)})`
       : work
-        ? 'it was copying into its temp directory but took no build lock'
+        ? `it had started copying into its temp directory but took no build lock; still running:\n${stepsOf(run.child.pid)}`
         : 'no copy into a temp directory was seen'
   throw Object.assign(
     new Error(`the shim test started no cold build within the ${deadline / 1000}s cold-build deadline: ${reached}\n${run.output}`),
