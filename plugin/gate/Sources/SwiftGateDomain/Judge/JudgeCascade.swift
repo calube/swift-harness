@@ -1,6 +1,5 @@
 /// Jev answers first, and per question this decides whether its answer stands or goes to Claude
-/// (spec §13.5). An escalated answer is Claude's and carries Claude's authority; a kept Jev answer
-/// blocks only under its block calibration.
+/// (spec §13.5). An escalated answer is Claude's; a kept Jev answer blocks as Claude's would.
 public enum JudgeCascade {
   /// The flagged probabilities too uncertain for Jev's answer to stand.
   public struct Band: Sendable, Equatable, Codable {
@@ -35,8 +34,6 @@ public enum JudgeCascade {
   public enum Escalation: String, Sendable, Equatable, Codable {
     /// Jev's flagged probability lies inside the question's band.
     case uncertain
-    /// Jev's answer would block, and its block calibration doesn't pass.
-    case uncalibratedBlock
   }
 
   public enum Step: Sendable, Equatable {
@@ -106,31 +103,20 @@ public enum JudgeCascade {
     }
   }
 
-  /// Decides each question's step from Jev's answers.
+  /// Decides each question's step from Jev's answers: a blocking question whose flagged
+  /// probability lies in its band escalates, and every other answer stands.
   public static func plan(
     subject: JudgeSubject, jev: [JudgeAnswer], questions: JudgeQuestionSet,
-    bands: [String: Band], blockDecisions: [String: JudgeBlockCalibration.Decision],
-    thresholds: JudgeThresholds, atReadyTier: Bool
+    bands: [String: Band], thresholds: JudgeThresholds, atReadyTier: Bool
   ) -> Plan {
     let byQuestion = Dictionary(jev.map { ($0.question, $0) }, uniquingKeysWith: { a, _ in a })
     return Plan(
       entries: questions.questions.map { question in
         guard question.mayBlock, let answer = byQuestion[question.id],
-          let p = JudgePolicy.flaggedProbability(question, answer: answer, subject: subject)
+          let p = JudgePolicy.flaggedProbability(question, answer: answer, subject: subject),
+          bands[question.id]?.contains(p) == true
         else { return Plan.Entry(question: question.id, step: .keep) }
-        if bands[question.id]?.contains(p) == true {
-          return Plan.Entry(question: question.id, step: .escalate(.uncertain))
-        }
-        let calibrated: Bool
-        if case .passes = blockDecisions[question.id] {
-          calibrated = true
-        } else {
-          calibrated = false
-        }
-        if atReadyTier, p >= thresholds.block, !calibrated {
-          return Plan.Entry(question: question.id, step: .escalate(.uncalibratedBlock))
-        }
-        return Plan.Entry(question: question.id, step: .keep)
+        return Plan.Entry(question: question.id, step: .escalate(.uncertain))
       })
   }
 
@@ -161,13 +147,12 @@ public enum JudgeCascade {
     }
   }
 
-  /// The findings for the merged answers: Jev's under its block decisions, Claude's with standing
-  /// authority, and a failed escalation's Jev answer never above minor.
+  /// The findings for the merged answers, each under the identity that decided it; a failed
+  /// escalation's Jev answer never above minor.
   public static func findings(
     subject: JudgeSubject, plan: Plan, jev: [JudgeAnswer], claude: ClaudeOutcome,
     questions: JudgeQuestionSet, jevIdentity: JudgeIdentity, claudeIdentity: JudgeIdentity,
-    blockDecisions: [String: JudgeBlockCalibration.Decision], thresholds: JudgeThresholds,
-    atReadyTier: Bool
+    thresholds: JudgeThresholds, atReadyTier: Bool
   ) throws(ReportContractViolation) -> [Finding] {
     let decided = merge(
       plan: plan, jev: jev, claude: claude, jevIdentity: jevIdentity,
@@ -182,8 +167,7 @@ public enum JudgeCascade {
       }, uniquingKeysWith: { a, _ in a })
     let jevFindings = try JudgePolicy.findings(
       subject: subject, answers: byJev.map(\.answer), questions: questions,
-      thresholds: thresholds, identity: jevIdentity, atReadyTier: atReadyTier,
-      blockAuthority: .perQuestion(blockDecisions)
+      thresholds: thresholds, identity: jevIdentity, atReadyTier: atReadyTier
     ).map { finding throws(ReportContractViolation) in
       let question = String(finding.ruleID.dropFirst(JudgePolicy.ruleIDPrefix.count))
       guard let (why, reason) = failures[question] else { return finding }
@@ -196,8 +180,7 @@ public enum JudgeCascade {
     }
     let claudeFindings = try JudgePolicy.findings(
       subject: subject, answers: byClaude.map(\.answer), questions: questions,
-      thresholds: thresholds, identity: claudeIdentity, atReadyTier: atReadyTier,
-      blockAuthority: .standing)
+      thresholds: thresholds, identity: claudeIdentity, atReadyTier: atReadyTier)
     let order = Dictionary(
       questions.questions.enumerated().map { (JudgePolicy.ruleIDPrefix + $1.id, $0) },
       uniquingKeysWith: { a, _ in a })
@@ -209,7 +192,6 @@ public enum JudgeCascade {
   static func describe(_ escalation: Escalation) -> String {
     switch escalation {
     case .uncertain: "uncertain"
-    case .uncalibratedBlock: "an uncalibrated block"
     }
   }
 

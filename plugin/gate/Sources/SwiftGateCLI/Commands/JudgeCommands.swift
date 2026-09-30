@@ -22,17 +22,25 @@ enum JudgeBatch {
     _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
     maxConcurrent: Int = maxConcurrent
   ) async -> Result<[String: JudgeReply], JudgeError> {
-    await withTaskGroup(of: (String, Result<JudgeReply, JudgeError>).self) { group in
+    await each(subjects, maxConcurrent: maxConcurrent) { subject throws(JudgeError) in
+      try await judge.measuredAnswer(subject, questions: questions)
+    }
+  }
+
+  /// `ask` for every subject, at most `maxConcurrent` at a time, keyed by subject id.
+  static func each<Value: Sendable>(
+    _ subjects: [JudgeSubject], maxConcurrent: Int = maxConcurrent,
+    _ ask: @escaping @Sendable (JudgeSubject) async throws(JudgeError) -> Value
+  ) async -> Result<[String: Value], JudgeError> {
+    await withTaskGroup(of: (String, Result<Value, JudgeError>).self) { group in
       var pending = subjects[...]
-      var replies: [String: JudgeReply] = [:]
+      var replies: [String: Value] = [:]
       var failure: JudgeError?
       func enqueue() {
         guard let subject = pending.popFirst() else { return }
         group.addTask {
           do throws(JudgeError) {
-            return (
-              subject.id, .success(try await judge.measuredAnswer(subject, questions: questions))
-            )
+            return (subject.id, .success(try await ask(subject)))
           } catch {
             return (subject.id, .failure(error))
           }
@@ -64,22 +72,19 @@ enum TestJudgeCheck {
   struct Dependencies: Sendable {
     let makeJudge: @Sendable (JudgeConfig) -> (any Judge)?
     let diff: any DiffReading
-    /// The harness checkout whose labels and recordings decide whether a backend that needs a
-    /// block calibration may block; `nil` when none is known.
-    let harnessRoot: URL?
-    /// Writes the reason on a blocking finding from a backend that gives none; `nil` leaves such
-    /// a finding with a note that the reason is missing.
+    /// Claude: it answers the questions Jev escalates, and writes the reason on a blocking
+    /// finding from a backend that gives none. `nil` leaves such a finding with a note that the
+    /// reason is missing, and fails every escalation.
     let reasonJudge: (any Judge)?
     /// Values no reason may carry, such as the Jev key.
     let secrets: [String]
 
     init(
       makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
-      harnessRoot: URL? = nil, reasonJudge: (any Judge)? = nil, secrets: [String] = []
+      reasonJudge: (any Judge)? = nil, secrets: [String] = []
     ) {
       self.makeJudge = makeJudge
       self.diff = diff
-      self.harnessRoot = harnessRoot
       self.reasonJudge = reasonJudge
       self.secrets = secrets
     }
@@ -92,9 +97,6 @@ enum TestJudgeCheck {
             cacheDirectory: root.appending(path: FileJudgeCache.directoryName))
         },
         diff: git,
-        harnessRoot: ProcessInfo.processInfo.environment[SelfTestCommand.harnessRootVariable].map {
-          URL(filePath: $0, directoryHint: .isDirectory)
-        },
         reasonJudge: JudgeBlockReason.liveJudge(root: root),
         secrets: JudgeBackend.allCases.compactMap {
           $0.keyVariable.flatMap { ProcessInfo.processInfo.environment[$0] }
@@ -109,9 +111,6 @@ enum TestJudgeCheck {
     guard case .enabled(let backend, let thresholds, _) = config.judge,
       let judge = dependencies.makeJudge(config.judge)
     else { return [] }
-    let needsCalibration =
-      backend.needsBlockCalibration
-      || JudgeBackend(rawValue: judge.identity.backend)?.needsBlockCalibration == true
     let selection: ChangedTestChecks.Selection
     switch await ChangedTestChecks.select(environment, graph: graph, base: base) {
     case .failure(let reason): return note("judge not run: \(reason.text)")
@@ -149,29 +148,76 @@ enum TestJudgeCheck {
             context: String(context.prefix(maxContextCharacters)), declaredTier: "T1"))
       }
     }
+    if backend == .jev {
+      return await cascaded(
+        subjects, jev: judge, thresholds: thresholds, atReadyTier: atReadyTier,
+        dependencies: dependencies)
+    }
     switch await JudgeBatch.answer(subjects, questions: .tests, judge: judge) {
     case .failure(let error): return note("judge not run: \(error)")
     case .success(let answers):
-      let authority: JudgeBlockAuthority =
-        needsCalibration
-        ? .perQuestion(
-          JudgeCalibrationFiles.blockDecisions(
-            harnessRoot: dependencies.harnessRoot, questions: .tests,
-            model: judge.identity.model, blockThreshold: thresholds.block))
-        : .standing
       var findings: [Finding] = []
       for subject in subjects {
         findings +=
           (try? JudgePolicy.findings(
             subject: subject, answers: answers[subject.id] ?? [], questions: .tests,
-            thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier,
-            blockAuthority: authority)) ?? []
+            thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier)) ?? []
       }
       return await JudgeBlockReason.attach(
         findings, subjects: subjects, answers: answers, questions: .tests,
         identity: judge.identity, reasonJudge: dependencies.reasonJudge,
         redacting: dependencies.secrets)
     }
+  }
+
+  /// Jev asks its own rendering, and Claude answers each subject's uncertain blocking questions
+  /// (design §13.5). A Claude-decided finding keeps Claude's rationale; a Jev block gets Claude's
+  /// reason.
+  static func cascaded(
+    _ subjects: [JudgeSubject], jev: any Judge, thresholds: JudgeThresholds, atReadyTier: Bool,
+    dependencies: Dependencies
+  ) async -> [Finding] {
+    let questions = JudgeQuestionSet.testsJev
+    let cascade = CascadingJudge(
+      jev: jev, claude: dependencies.reasonJudge, base: .tests,
+      policy: CascadingJudge.Policy(thresholds: thresholds, atReadyTier: atReadyTier))
+    let replies: [String: CascadingJudge.Reply]
+    switch await JudgeBatch.each(
+      subjects,
+      { subject throws(JudgeError) in
+        try await cascade.cascade(subject, questions: questions)
+      })
+    {
+    case .failure(let error): return note("judge not run: \(error)")
+    case .success(let found): replies = found
+    }
+    var found: [(finding: Finding, byClaude: Bool)] = []
+    for subject in subjects {
+      guard let reply = replies[subject.id] else { continue }
+      // An escalation's failure can echo what Claude's process saw, so it's redacted like a reason.
+      let claude: JudgeCascade.ClaudeOutcome =
+        switch reply.claude {
+        case .answered: reply.claude
+        case .failed(let why): .failed(JudgeBlockReason.redact(why, dependencies.secrets))
+        }
+      let byClaude = Set(
+        reply.decided.filter { $0.escalation != nil && $0.escalationFailure == nil }.map {
+          JudgePolicy.ruleIDPrefix + $0.answer.question
+        })
+      let findings =
+        (try? JudgeCascade.findings(
+          subject: subject, plan: reply.plan, jev: reply.jev.answers, claude: claude,
+          questions: questions, jevIdentity: reply.jevIdentity,
+          claudeIdentity: reply.claudeIdentity, thresholds: thresholds, atReadyTier: atReadyTier))
+        ?? []
+      found += findings.map { ($0, byClaude.contains($0.ruleID)) }
+    }
+    let reasoned = await JudgeBlockReason.attach(
+      found.filter { !$0.byClaude }.map(\.finding), subjects: subjects,
+      answers: replies.mapValues(\.jev.answers), questions: .tests, identity: jev.identity,
+      reasonJudge: dependencies.reasonJudge, redacting: dependencies.secrets)
+    var next = reasoned.makeIterator()
+    return found.compactMap { item in item.byClaude ? item.finding : next.next() }
   }
 
   /// A judge that can't run is reported, never gating: it says nothing about the code.

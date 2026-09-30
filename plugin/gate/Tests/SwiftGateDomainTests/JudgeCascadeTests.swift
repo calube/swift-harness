@@ -11,11 +11,6 @@ struct JudgeCascadeTests {
     id: "CounterTests.increments()", file: "Tests/CounterTests.swift", line: 12,
     source: "@Test func increments() {}", context: "+ count += 1", declaredTier: "T1")
   static let bands = JudgeCascade.bands(for: "test-quality@2-jev")
-  static let passing = JudgeBlockCalibration.Decision.passes(
-    JudgeBlockCalibration.Rates(
-      positives: 10, negatives: 20, jevTruePositives: 10, jevTrueNegatives: 20,
-      claudeTruePositives: 10, claudeTrueNegatives: 20))
-  static let failing = JudgeBlockCalibration.Decision.fails(reason: "no recording from jev")
 
   static func answers(
     failsIfBroken no: Double = 0.1, vague: Double = 0.1, implementation yes: Double = 0.1,
@@ -34,23 +29,19 @@ struct JudgeCascadeTests {
     ]
   }
 
-  static func plan(
-    _ jev: [JudgeAnswer], decisions: [String: JudgeBlockCalibration.Decision] = [:],
-    ready: Bool = true
-  ) -> JudgeCascade.Plan {
+  static func plan(_ jev: [JudgeAnswer], ready: Bool = true) -> JudgeCascade.Plan {
     JudgeCascade.plan(
-      subject: subject, jev: jev, questions: .tests, bands: bands, blockDecisions: decisions,
-      thresholds: thresholds, atReadyTier: ready)
+      subject: subject, jev: jev, questions: .tests, bands: bands, thresholds: thresholds,
+      atReadyTier: ready)
   }
 
-  static func findings(
-    _ jev: [JudgeAnswer], claude: JudgeCascade.ClaudeOutcome,
-    decisions: [String: JudgeBlockCalibration.Decision] = [:]
-  ) throws -> [Finding] {
+  static func findings(_ jev: [JudgeAnswer], claude: JudgeCascade.ClaudeOutcome) throws
+    -> [Finding]
+  {
     try JudgeCascade.findings(
-      subject: subject, plan: plan(jev, decisions: decisions), jev: jev, claude: claude,
-      questions: .tests, jevIdentity: Self.jev, claudeIdentity: Self.claude,
-      blockDecisions: decisions, thresholds: thresholds, atReadyTier: true)
+      subject: subject, plan: plan(jev), jev: jev, claude: claude, questions: .tests,
+      jevIdentity: Self.jev, claudeIdentity: Self.claude, thresholds: thresholds,
+      atReadyTier: true)
   }
 
   @Test(
@@ -93,29 +84,16 @@ struct JudgeCascadeTests {
   }
 
   @Test(
-    "0.95 with a failing block decision escalates as an uncalibrated block, and with a passing one keeps and is major under jev — catches a confident uncalibrated jev flag turning into a note"
+    "a jev answer of 0.95 on fails-if-broken keeps at ready and below it, and is major under jev at ready — catches a confident jev block sent to claude or held back"
   )
-  func uncalibratedBlockEscalates() throws {
+  func confidentJevBlockKeeps() throws {
     let slop = Self.answers(failsIfBroken: 0.95)
-    #expect(
-      Self.plan(slop, decisions: ["fails-if-broken": Self.failing]).step(for: "fails-if-broken")
-        == .escalate(.uncalibratedBlock))
-    #expect(Self.plan(slop).step(for: "fails-if-broken") == .escalate(.uncalibratedBlock))
-    let calibrated: [String: JudgeBlockCalibration.Decision] = ["fails-if-broken": Self.passing]
-    #expect(Self.plan(slop, decisions: calibrated).escalated.isEmpty)
-    let found = try Self.findings(slop, claude: .answered([]), decisions: calibrated)
+    #expect(Self.plan(slop).escalated.isEmpty)
+    #expect(Self.plan(slop, ready: false).escalated.isEmpty)
+    let found = try Self.findings(slop, claude: .answered([]))
     #expect(found.map(\.severity) == [.major])
-    #expect(found.first?.message.contains("jev/jev-1.13.0") == true)
-  }
-
-  @Test(
-    "below the ready tier a confident uncalibrated jev answer keeps — catches asking claude for a block that can't happen"
-  )
-  func uncalibratedBlockOnlyAtReady() {
-    let slop = Self.answers(failsIfBroken: 0.95)
-    let decisions: [String: JudgeBlockCalibration.Decision] = ["fails-if-broken": Self.failing]
-    #expect(Self.plan(slop, decisions: decisions, ready: false).escalated.isEmpty)
-    #expect(Self.plan(slop, decisions: decisions, ready: true).escalated == ["fails-if-broken"])
+    #expect(found.first?.message.contains("(p=0.95, jev/jev-1.13.0)") == true)
+    #expect(found.first?.message.contains("advisory") == false)
   }
 
   @Test(
@@ -156,45 +134,39 @@ struct JudgeCascadeTests {
   }
 
   @Test(
-    "a missing claude answer for an uncalibrated block at 0.95 is minor with the calibration note and the escalation note — catches a failed escalation blocking or hiding why"
+    "a failed or missing claude answer for an uncertain 0.7 is minor under jev with the escalation note, while a confident 0.95 beside it stays jev's and blocks — catches a failed escalation hiding why, or a confident jev answer sent to claude"
   )
   func failedEscalationStaysMinor() throws {
-    let slop = Self.answers(failsIfBroken: 0.95)
-    let decisions: [String: JudgeBlockCalibration.Decision] = ["fails-if-broken": Self.failing]
+    let jev = Self.answers(failsIfBroken: 0.7, implementation: 0.95)
     for outcome in [
       JudgeCascade.ClaudeOutcome.failed("claude is not on PATH"), .answered([]),
     ] {
-      let found = try Self.findings(slop, claude: outcome, decisions: decisions)
-      #expect(found.map(\.severity) == [.minor])
+      let found = try Self.findings(jev, claude: outcome)
+      #expect(found.map(\.ruleID) == ["judge.fails-if-broken", "judge.asserts-implementation"])
+      #expect(found.map(\.severity) == [.minor, .major])
       let message = found.first?.message ?? ""
-      #expect(message.contains("jev/jev-1.13.0"))
-      #expect(
-        message.contains(
-          "advisory: jev has no passing block calibration for fails-if-broken on jev-1.13.0: "
-            + "no recording from jev"))
-      #expect(message.contains("escalated to claude as an uncalibrated block"))
+      #expect(message.contains("(p=0.70, jev/jev-1.13.0); escalated to claude as uncertain"))
+      #expect(found.last?.message.contains("escalated") == false)
     }
-    let failed = try Self.findings(
-      slop, claude: .failed("claude is not on PATH"), decisions: decisions)
-    #expect(failed.first?.message.contains("claude is not on PATH") == true)
+    let failed = try Self.findings(jev, claude: .failed("claude is not on PATH"))
+    #expect(failed.first?.message.hasSuffix("which failed: claude is not on PATH") == true)
   }
 
   @Test(
-    "a failed escalation of an uncertain answer over a low block threshold never blocks — catches an uncertain jev answer blocking after claude fails"
+    "over a low block threshold, a failed escalation of an uncertain 0.75 never blocks while a kept 0.9 does — catches an uncertain jev answer blocking after claude fails"
   )
   func failedUncertainEscalationNeverBlocks() throws {
     let low = JudgeThresholds(advisory: 0.5, block: 0.7)
-    let jev = Self.answers(failsIfBroken: 0.75)
-    let decisions: [String: JudgeBlockCalibration.Decision] = ["fails-if-broken": Self.passing]
+    let jev = Self.answers(failsIfBroken: 0.75, implementation: 0.9)
     let plan = JudgeCascade.plan(
-      subject: Self.subject, jev: jev, questions: .tests, bands: Self.bands,
-      blockDecisions: decisions, thresholds: low, atReadyTier: true)
-    #expect(plan.step(for: "fails-if-broken") == .escalate(.uncertain))
+      subject: Self.subject, jev: jev, questions: .tests, bands: Self.bands, thresholds: low,
+      atReadyTier: true)
+    #expect(plan.escalations == ["fails-if-broken": .uncertain])
     let found = try JudgeCascade.findings(
       subject: Self.subject, plan: plan, jev: jev, claude: .failed("timed out"),
-      questions: .tests, jevIdentity: Self.jev, claudeIdentity: Self.claude,
-      blockDecisions: decisions, thresholds: low, atReadyTier: true)
-    #expect(found.map(\.severity) == [.minor])
+      questions: .tests, jevIdentity: Self.jev, claudeIdentity: Self.claude, thresholds: low,
+      atReadyTier: true)
+    #expect(found.map(\.severity) == [.minor, .major])
     #expect(found.first?.message.contains("escalated to claude as uncertain") == true)
   }
 

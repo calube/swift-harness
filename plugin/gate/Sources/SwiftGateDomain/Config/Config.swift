@@ -449,11 +449,12 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
   /// TypeSafe's Jev over HTTP; it sends judged code to ``egressHost``, so config must name that host.
   case jev
 
-  /// Whether a confident answer may block `ready` only with a passing ``JudgeBlockCalibration``.
-  public var needsBlockCalibration: Bool {
+  /// Whether each answer carries the backend's own rationale; a blocking finding from a backend
+  /// without one gets its reason from Claude (spec §6).
+  public var writesReasons: Bool {
     switch self {
-    case .claude: false
-    case .jev: true
+    case .claude: true
+    case .jev: false
     }
   }
 

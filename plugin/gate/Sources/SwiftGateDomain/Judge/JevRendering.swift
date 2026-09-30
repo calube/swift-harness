@@ -145,6 +145,52 @@ public enum JevRendering {
     }
   }
 
+  /// The template reason for `native`'s combined answer (design §13.3): the sub-question whose
+  /// answer set the value, what that answer means, and its probability. `nil` for a question Jev
+  /// is asked as written, or when a sub-answer is missing.
+  public static func reason(_ native: JevNativeQuestion, answers: [String: JevSubAnswer])
+    -> String?
+  {
+    var driver: (sub: JevSubQuestion, answer: String, p: Double)?
+    // Strictly greater, so a tie names the sub-question written first.
+    func consider(_ sub: JevSubQuestion, _ answer: String, _ p: Double) {
+      if p > (driver?.p ?? -1) { driver = (sub, answer, p) }
+    }
+    switch native.combination {
+    case .asked:
+      return nil
+    case .noWhenAnyFalse(let ids), .yesWhenAnyTrue(let ids):
+      let failing = if case .noWhenAnyFalse = native.combination { true } else { false }
+      for id in ids {
+        guard let sub = native.subQuestions.first(where: { $0.id == id }),
+          case .noul(let p)? = answers[key(question: native.question, sub: id)]
+        else { return nil }
+        consider(sub, failing ? "false" : "true", failing ? 1 - p : p)
+      }
+    case .optionMap(let id, _):
+      guard let sub = native.subQuestions.first(where: { $0.id == id }),
+        case .choice(let probabilities)? = answers[key(question: native.question, sub: id)]
+      else { return nil }
+      for option in sub.options { consider(sub, option, probabilities[option] ?? 0) }
+    }
+    guard let driver else { return nil }
+    let p = String(format: "%.2f", driver.p)
+    guard let criterion = driver.sub.criteria?.first(where: { $0.answer == driver.answer }) else {
+      let asked =
+        switch driver.sub.instructions {
+        case .text(let text): text
+        case .prompt(let question, _): question
+        }
+      return "\(driver.sub.id) answered \(driver.answer) (p=\(p)): \(asked)"
+    }
+    let meaning =
+      switch criterion.criterion {
+      case .text(let text): text
+      case .examples(let what, _), .exclusions(let what, _): what
+      }
+    return "\(driver.sub.id): \(meaning) (p=\(p))"
+  }
+
   private static func answer(_ key: String, in answers: [String: JevSubAnswer])
     throws(JevCombinationError) -> JevSubAnswer
   {

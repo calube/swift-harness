@@ -43,7 +43,7 @@ public struct JudgeProportion: Sendable, Equatable, Codable {
 
   public var description: String {
     guard let value else { return "undefined (\(count)/\(n))" }
-    return "\(JudgeBlockCalibration.format(value)) (\(count)/\(n))"
+    return "\(String(format: "%.2f", value)) (\(count)/\(n))"
   }
 }
 

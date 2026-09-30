@@ -654,7 +654,7 @@ enum JevReply {
           JudgeAnswer(
             question: question.id,
             distribution: try JevRendering.combine(native, question: question, answers: subAnswers),
-            rationale: nil))
+            rationale: JevRendering.reason(native, answers: subAnswers)))
       } catch {
         switch error {
         case .missing(let key): throw .malformedReply("Jev's reply has no answer for \(key)")

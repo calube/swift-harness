@@ -9,7 +9,7 @@ public struct JudgeCalibrationSet: Sendable, Equatable, Codable {
       case useless
     }
 
-    /// Who chose the case's labels. Only a person's labels count toward a block calibration.
+    /// Who chose the case's labels. Only a person's labels count toward person-labelled metrics.
     public enum Labeller: String, Sendable, Codable {
       case person
       case agent

@@ -645,7 +645,13 @@ struct JevJudgeTests {
         Self.isClose(Self.distribution(answers, "name-specificity"), expected.name),
         "\(expected.case)")
       #expect(Self.distribution(answers, "tier") == ["T1": 1, "T2": 0, "T3": 0])
-      #expect(answers.allSatisfy { $0.rationale == nil })
+      let reasons = Dictionary(uniqueKeysWithValues: answers.map { ($0.question, $0.rationale) })
+      #expect(reasons["tier"] == .some(nil))
+      #expect(
+        reasons["fails-if-broken"]??.hasPrefix(
+          "runs-changed-code: The test never runs the changed lines (p="
+            + String(format: "%.2f", pNo)) == true,
+        "\(expected.case)")
     }
   }
 

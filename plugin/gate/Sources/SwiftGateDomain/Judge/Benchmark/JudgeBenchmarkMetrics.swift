@@ -402,19 +402,15 @@ public enum JudgeBenchmarkMetrics {
     return (scored, unscored)
   }
 
-  /// The block calibration's rule for which side a label is on; `nil` for a tier question on a
-  /// case with no declared tier.
+  /// Whether a correct judge's `expected` answer means the flag fires; `nil` for a tier question
+  /// on a case with no declared tier.
   static func flagFires(_ question: JudgeQuestion, expected: String, declaredTier: String?)
     -> Bool?
   {
-    if case .notDeclaredTier = question.flag {
-      guard let declaredTier else { return nil }
-      return JudgeBlockCalibration.flagFires(
-        question, expected: expected, declaredTier: declaredTier)
+    switch question.flag {
+    case .option(let option): return expected == option
+    case .notDeclaredTier: return declaredTier.map { expected != $0 }
     }
-    // An option flag never reads the declared tier.
-    return JudgeBlockCalibration.flagFires(
-      question, expected: expected, declaredTier: declaredTier ?? "")
   }
 
   static func tally(_ question: String, _ scored: [ScoredCase], unscored: Int, threshold: Double)
