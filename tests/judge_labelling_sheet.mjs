@@ -169,7 +169,7 @@ function derivedLabel(expected, declaredTier) {
 }
 
 // Returns the labels unchanged whenever `errors` is non-empty.
-export function applySheet({ labels, sheet, caseIds }) {
+export function applySheet({ labels, sheet, caseIds, labeller = 'person' }) {
   const parsed = parseSheet(sheet)
   const errors = [...parsed.errors]
   const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
@@ -303,7 +303,7 @@ export function parseCommentSheet(text) {
 }
 
 // Returns the labels unchanged whenever `errors` is non-empty.
-export function applyCommentSheet({ labels, sheet, caseIds }) {
+export function applyCommentSheet({ labels, sheet, caseIds, labeller = 'person' }) {
   const parsed = parseCommentSheet(sheet)
   const errors = [...parsed.errors]
   const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
@@ -346,6 +346,10 @@ export function applyCommentSheet({ labels, sheet, caseIds }) {
   const added = [...answered.values()].filter((item) => !existing.has(item.id)).sort((a, b) => a.id.localeCompare(b.id))
   const merged = { ...labels, cases: [...cases, ...added] }
   return { labels: merged, errors, person: merged.cases.filter((item) => item.labeller === 'person').length }
+}
+
+export function fillSheet(sheet, entries) {
+  return { sheet, errors: [] }
 }
 
 function sortedKeys(value) {
