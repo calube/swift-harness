@@ -290,7 +290,7 @@ public struct JevJudge: Judge {
     guard let key else {
       throw .notConfigured("set \(JevPin.keyVariable) to use the Jev judge backend")
     }
-    let body = JevRequest.body(subject, questions: questions, model: identity.model)
+    let body = try JevRequest.body(subject, questions: questions, model: identity.model)
     let tokens = JevRequest.estimatedStateTokens(subject, questions: questions)
     guard tokens <= Self.maxStateTokens else { throw .stateTooLarge(estimatedTokens: tokens) }
     let start = clock.now()
@@ -349,6 +349,12 @@ public struct JevJudge: Judge {
     }
   }
 
+  /// The questions as they go over the wire, so a rendering change within 1 version asks again.
+  public func renderedQuestions(for questions: JudgeQuestionSet) -> String? {
+    guard let asked = try? JevRequest.questions(questions) else { return nil }
+    return JevRequest.serialized(asked)
+  }
+
   private static func retryAfter(_ response: HTTPResponse) -> Duration? {
     guard let value = response.headers["retry-after"], let seconds = Double(value), seconds >= 0
     else { return nil }
@@ -384,48 +390,123 @@ extension JudgeError {
   }
 }
 
-/// Builds Jev's request body (design §4.1).
+/// Builds Jev's request body: the questions as written (design §4.1), or a set's Jev rendering
+/// (design §13.2, §13.3).
 enum JevRequest {
   static func state(_ subject: JudgeSubject, questions: JudgeQuestionSet) -> [String: Any] {
-    var state: [String: Any] = [
-      "subject_kind": questions.subjectDescription, "subject": subject.source,
-      "context": subject.context,
-    ]
+    var state: [String: Any]
+    if questions.rendering == .jev {
+      let name = JudgeTestName.parse(source: subject.source)
+      state = [
+        "subject_kind": questions.subjectDescription,
+        "test_name": [
+          "full": name.full, "behavior": name.behavior, "catches": name.catches ?? NSNull(),
+        ] as [String: Any],
+        "test_source": subject.source,
+        "assertions": JudgeAssertions.extract(source: subject.source),
+        "code_under_test": subject.context,
+      ]
+    } else {
+      state = [
+        "subject_kind": questions.subjectDescription, "subject": subject.source,
+        "context": subject.context,
+      ]
+    }
     if let tier = subject.declaredTier { state["declared_tier"] = tier }
     return state
   }
 
-  static func body(_ subject: JudgeSubject, questions: JudgeQuestionSet, model: String) -> Data {
-    var asked: [String: Any] = [:]
-    for question in questions.questions {
-      var entry: [String: Any] = ["instructions": question.text]
-      switch question.kind {
-      case .binary:
-        entry["type"] = "noul"
-      case .choice(let options):
-        entry["type"] = "choice"
-        entry["criteria"] = Dictionary(uniqueKeysWithValues: options.map { ($0, NSNull()) })
-      case .score(let levels):
-        entry["type"] = "score"
-        entry["criteria"] = levels
-      }
-      asked[question.id] = entry
+  /// The `questions` object: each question as written, or, for a rendered set, each
+  /// sub-question under `<question id>.<sub-question id>`.
+  static func questions(_ questions: JudgeQuestionSet) throws(JudgeError) -> [String: Any] {
+    guard questions.rendering != nil else {
+      return Dictionary(uniqueKeysWithValues: questions.questions.map { ($0.id, asWritten($0)) })
     }
+    guard let rendering = JevRendering.questions(for: questions) else {
+      throw .notConfigured("\(questions.versionedID) has no Jev rendering")
+    }
+    var asked: [String: Any] = [:]
+    for native in rendering {
+      guard native.combination != .asked else {
+        guard let question = questions.questions.first(where: { $0.id == native.question }) else {
+          throw .notConfigured("\(questions.versionedID) has no question \(native.question)")
+        }
+        asked[question.id] = asWritten(question)
+        continue
+      }
+      for sub in native.subQuestions {
+        asked[JevRendering.key(question: native.question, sub: sub.id)] = json(sub)
+      }
+    }
+    return asked
+  }
+
+  static func body(_ subject: JudgeSubject, questions: JudgeQuestionSet, model: String)
+    throws(JudgeError) -> Data
+  {
     let body: [String: Any] = [
-      "model": model, "state": state(subject, questions: questions), "questions": asked,
+      "model": model, "state": state(subject, questions: questions),
+      "questions": try self.questions(questions),
     ]
-    return
+    return Data(serialized(body).utf8)
+  }
+
+  static func serialized(_ object: [String: Any]) -> String {
+    let data =
       (try? JSONSerialization.data(
-        withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+        withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
+    return String(decoding: data, as: UTF8.self)
+  }
+
+  /// A Score's criteria are its level descriptions when it has them: Jev reads bare level names
+  /// apart from the question's text, and scored them near chance (design §13.4).
+  static func asWritten(_ question: JudgeQuestion) -> [String: Any] {
+    var entry: [String: Any] = ["instructions": question.text]
+    switch question.kind {
+    case .binary:
+      entry["type"] = "noul"
+    case .choice(let options):
+      entry["type"] = "choice"
+      entry["criteria"] = Dictionary(uniqueKeysWithValues: options.map { ($0, NSNull()) })
+    case .score(let levels):
+      entry["type"] = "score"
+      entry["criteria"] = scoreCriteria(question, levels: levels)
+    }
+    return entry
+  }
+
+  static func scoreCriteria(_ question: JudgeQuestion, levels: [String]) -> [String] {
+    question.levelDescriptions ?? levels
+  }
+
+  static func json(_ sub: JevSubQuestion) -> [String: Any] {
+    var entry: [String: Any] = ["type": sub.type.rawValue]
+    switch sub.instructions {
+    case .text(let text):
+      entry["instructions"] = text
+    case .prompt(let question, let focus):
+      var prompt: [String: Any] = ["question": question]
+      if let focus { prompt["focus"] = focus }
+      entry["instructions"] = prompt
+    }
+    if let criteria = sub.criteria {
+      entry["criteria"] = Dictionary(
+        uniqueKeysWithValues: criteria.map { ($0.answer, json($0.criterion)) })
+    }
+    return entry
+  }
+
+  static func json(_ criterion: JevCriterion) -> Any {
+    switch criterion {
+    case .text(let text): text
+    case .examples(let what, let examples): ["what": what, "examples": examples] as [String: Any]
+    case .exclusions(let what, let notFor): ["what": what, "not_for": notFor] as [String: Any]
+    }
   }
 
   /// UTF-8 bytes of the serialized state over 3: a conservative bound for code (design §9).
   static func estimatedStateTokens(_ subject: JudgeSubject, questions: JudgeQuestionSet) -> Int {
-    let data =
-      (try? JSONSerialization.data(
-        withJSONObject: state(subject, questions: questions),
-        options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
-    return (data.count + 2) / 3
+    (serialized(state(subject, questions: questions)).utf8.count + 2) / 3
   }
 }
 
@@ -512,14 +593,10 @@ enum JevReply {
       throw .malformedReply(
         "Jev served \(body.model), not the requested \(model); pin a model version")
     }
-    var answers: [JudgeAnswer] = []
-    for question in questions.questions {
-      guard let answer = body.answers[question.id] else { continue }
-      answers.append(
-        JudgeAnswer(
-          question: question.id, distribution: try distribution(answer, for: question),
-          rationale: nil))
-    }
+    let answers =
+      questions.rendering == nil
+      ? try asWritten(body.answers, for: questions)
+      : try rendered(body.answers, for: questions)
     let validated: [JudgeAnswer]
     do {
       validated = try JudgeAnswers.validate(answers, for: questions)
@@ -536,6 +613,59 @@ enum JevReply {
         costUSD: cost, wallMilliseconds: wallMilliseconds, servedModel: body.model))
   }
 
+  private static func asWritten(_ replies: [String: Answer], for questions: JudgeQuestionSet)
+    throws(JudgeError) -> [JudgeAnswer]
+  {
+    var answers: [JudgeAnswer] = []
+    for question in questions.questions {
+      guard let answer = replies[question.id] else { continue }
+      answers.append(
+        JudgeAnswer(
+          question: question.id, distribution: try distribution(answer, for: question),
+          rationale: nil))
+    }
+    return answers
+  }
+
+  /// Rebuilds each question from its sub-answers by the rendering's rule, so callers see the
+  /// set's questions only.
+  private static func rendered(_ replies: [String: Answer], for questions: JudgeQuestionSet)
+    throws(JudgeError) -> [JudgeAnswer]
+  {
+    guard let rendering = JevRendering.questions(for: questions) else {
+      throw .notConfigured("\(questions.versionedID) has no Jev rendering")
+    }
+    var answers: [JudgeAnswer] = []
+    for question in questions.questions {
+      guard let native = rendering.first(where: { $0.question == question.id }) else {
+        throw .notConfigured("the Jev rendering of \(questions.versionedID) skips \(question.id)")
+      }
+      var subAnswers: [String: JevSubAnswer] = [:]
+      for key in native.answerKeys {
+        switch replies[key] {
+        case .noul(let p)?: subAnswers[key] = .noul(p)
+        case .choice(let probabilities)?: subAnswers[key] = .choice(probabilities)
+        case .score?: throw .malformedReply("\(key): Jev answered with the wrong answer type")
+        case nil: break
+        }
+      }
+      do {
+        answers.append(
+          JudgeAnswer(
+            question: question.id,
+            distribution: try JevRendering.combine(native, question: question, answers: subAnswers),
+            rationale: nil))
+      } catch {
+        switch error {
+        case .missing(let key): throw .malformedReply("Jev's reply has no answer for \(key)")
+        case .wrongType(let key):
+          throw .malformedReply("\(key): Jev answered with the wrong answer type or option")
+        }
+      }
+    }
+    return answers
+  }
+
   private static func distribution(_ answer: Answer, for question: JudgeQuestion)
     throws(JudgeError) -> [String: Double]
   {
@@ -545,16 +675,20 @@ enum JevReply {
     case (.choice, .choice(let probabilities)):
       return probabilities
     case (.score(let levels), .score(let probabilities, let legend)):
+      // Jev echoes each level string as sent, so the legend is checked against those strings.
+      let sent = JevRequest.scoreCriteria(question, levels: levels)
       let expected = Dictionary(
-        uniqueKeysWithValues: levels.enumerated().map { ("\($0.offset)", $0.element) })
+        uniqueKeysWithValues: sent.enumerated().map { ("\($0.offset)", $0.element) })
       guard legend == expected else {
         throw .malformedReply(
           "\(question.id): Jev's Score legend \(legend.sorted { $0.key < $1.key }) doesn't "
-            + "match the levels \(levels)")
+            + "match the levels sent \(sent)")
       }
+      let byIndex = Dictionary(
+        uniqueKeysWithValues: levels.enumerated().map { ("\($0.offset)", $0.element) })
       var mapped: [String: Double] = [:]
       for (index, p) in probabilities {
-        guard let level = expected[index] else {
+        guard let level = byIndex[index] else {
           throw .malformedReply("\(question.id): Jev scored level \(index), which has no option")
         }
         mapped[level] = p
@@ -609,6 +743,10 @@ public struct CachingJudge: Judge {
 
   public var identity: JudgeIdentity { inner.identity }
 
+  public func renderedQuestions(for questions: JudgeQuestionSet) -> String? {
+    inner.renderedQuestions(for: questions)
+  }
+
   public func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
   {
@@ -621,7 +759,9 @@ public struct CachingJudge: Judge {
   {
     let clock = ContinuousClock()
     let start = clock.now
-    let key = JudgeCacheKey.make(subject: subject, questions: questions, identity: identity)
+    let key = JudgeCacheKey.make(
+      subject: subject, questions: questions, identity: identity,
+      renderedQuestions: inner.renderedQuestions(for: questions))
     if let cached = cache.answers(forKey: key),
       let valid = try? JudgeAnswers.validate(cached, for: questions)
     {

@@ -371,4 +371,54 @@ struct JudgeBlockCalibrationTests {
     let reason = try #require(Self.reason(Self.evaluate(items, threshold: 0.95)))
     #expect(reason.contains("true-positive rate 0.00 (0/10)"))
   }
+
+  // MARK: - A set based on another version
+
+  static func evaluateNative(
+    _ items: [Item], labels: String = "test-quality@1", jev: String, claude: String
+  ) -> JudgeBlockCalibration.Decision {
+    JudgeBlockCalibration.evaluate(
+      question: question, in: .testsJev, model: pin, blockThreshold: threshold,
+      set: set(items, questionSet: labels),
+      jev: recording(items, backend: "jev", model: pin, questionSet: jev) { $0.jev },
+      claude: recording(items, backend: "claude", model: "claude-sonnet-5-5", questionSet: claude) {
+        $0.claude
+      })
+  }
+
+  @Test(
+    "a Jev recording of @2-jev passes with @1's labels and Claude's @1 recording — catches labels and Claude's answers that stop counting for the rendering based on them"
+  )
+  func basedOnVersionCounts() {
+    let items = Self.items(positives: 10, negatives: 20)
+    let decision = Self.evaluateNative(
+      items, jev: "test-quality@2-jev", claude: "test-quality@1")
+    guard case .passes(let rates) = decision else {
+      Issue.record("expected a pass, got \(decision)")
+      return
+    }
+    #expect(rates.positives == 10)
+    #expect(rates.negatives == 20)
+  }
+
+  @Test(
+    "a Jev recording of @1 fails a @2-jev calibration naming both ids, and so does Claude's @2-jev one — catches 1 rendering's recording calibrating another"
+  )
+  func otherRenderingFails() throws {
+    let items = Self.items(positives: 10, negatives: 20)
+    let jevOld = try #require(
+      Self.reason(
+        Self.evaluateNative(items, jev: "test-quality@1", claude: "test-quality@1")))
+    #expect(jevOld.contains("test-quality@1") && jevOld.contains("test-quality@2-jev"))
+    let claudeNative = try #require(
+      Self.reason(
+        Self.evaluateNative(items, jev: "test-quality@2-jev", claude: "test-quality@2-jev")))
+    #expect(claudeNative.contains("test-quality@2-jev") && claudeNative.contains("test-quality@1"))
+    let nativeLabels = try #require(
+      Self.reason(
+        Self.evaluateNative(
+          items, labels: "test-quality@2-jev", jev: "test-quality@2-jev",
+          claude: "test-quality@1")))
+    #expect(nativeLabels.contains("labels target test-quality@2-jev"))
+  }
 }
