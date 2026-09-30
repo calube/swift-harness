@@ -231,3 +231,18 @@ Commits and gate: surface 8d71137, behaviour 2f0d598, 32a44db; gate 20260930T223
 - A Jev block at or above `block_threshold` is `major` with a Claude-written reason; if Claude fails, the block stays `major` with the template reason and a missing-reason note. An escalated answer carries Claude's rationale and makes no reason call. A failed escalation leaves the Jev answer `minor`.
 - Findings name the identity that decided them (`claude/<model>` or `jev/<model>`). Advisory reasons name the `@2-jev` sub-question in `failureScenario`.
 - `judge bench --backend cascade:<jev model>,<claude model>[#<set@v>]`: the result's backend is `cascade`, its model `<jev>,<claude>`. Each case records which questions escalated (`JudgeBenchmarkReply.escalations`), and its usage sums both backends. The rendered page adds "Escalations to Claude", and the estimate adds a Claude ceiling row.
+
+## Wave 9
+
+### `judge-benchmark-sonnet-vs-jev`
+
+Commits and gate: 47bb7f1, db95be5, 924ff24, 7ccd2a2; gate 20260930T235004Z-31d8fc8f.
+- Results: `evals/results/2026-09-30-judge-benchmark/`, 1 benchmark JSON per dataset and `summary.md` from `bench-render`. The labels are Opus agent labels. The design-calibration dataset is skipped (issue #9), and the evals dataset waits for the evals trial.
+- `J/recording.json` is recorded at `claude-sonnet-5-5` and `J/recording-jev.json` at `jev-1.13.0` on `test-quality@2-jev`, both over all 66 cases. Each baseline names its `servedModels`.
+- Every floor in `baseline.json` and `baseline-jev.json` is the lower Wilson 95% bound of its recording's tune-split precision or recall, rounded down to 0.05. A test recomputes each one. With 2 to 7 tune positives per question the floors are low; `asserts-implementation` is the weak spot, with 2 tune positives.
+- Cascade bands in `JudgeCascade`: `fails-if-broken` 0.40 < p < 0.90, `asserts-implementation` 0.30 < p < 0.95, swept on the tune split. A test fails when a constant differs from the summary.
+- Spend: about $3 of Claude and $0.05 of Jev.
+
+### `playbook-documents-the-jev-backend`
+
+Commit 63135d2. `plugin/docs/testing-playbook.md` §5.4 documents the Jev backend as it is on main.
