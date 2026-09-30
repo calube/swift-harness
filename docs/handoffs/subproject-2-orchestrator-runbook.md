@@ -386,3 +386,35 @@ When the push bar needs `ready` on `main`, start that run at the beginning of th
   wait for its exit with kqueue `EVFILT_PROC`/`NOTE_EXIT` under a named deadline, not a sleep.
 - **Cap load reproduction.** The flaky tests are the harness's own, not a consumer's, so 3 loaded trials to see the
   failure and 3 to confirm the fix is enough (the user's call).
+
+## Lessons from the Jev judge run (2026-09-30)
+
+- **Gate main after every orchestrator commit, docs included.** A docs-only checkpoint that added the Jev interfaces
+  note passed `swiftgate prose` but broke a docs-lint test, because `docs/index.md` didn't link the new file. Run
+  `check --tier push`, not just `prose`, before telling workers main is green.
+- **Edit main with the Edit tool, not `sed` on a line number.** A `sed '448s…'` meant for a comment replaced
+  `case claude` and left main unbuildable for 3 minutes. Match the exact old text instead. When main breaks, fix it in
+  a new commit rather than amending, and tell running workers which sha to merge.
+- **Chain a commit and its checks with `&&`, and read what comes back.** A `grep` over gate output printed nothing
+  once, and a prose finding slipped into a commit. Write gate output to a file, print the verdict line, and check the
+  exit code.
+- **Park a test that needs a person's input on its own branch.** A labels test that can only pass after the user
+  labels goes last on its task's branch. Merge the commit before it, and keep the test on a named branch
+  (`labels-test-awaiting-person-labels`). Merging it would turn main red.
+- **Surface-check RED on struct-returning stubs is accepted.** Several tasks couldn't express a stub that returns a
+  new struct in an allowed stub form. Accept it when the prove at the surface still shows every new test failing on
+  an assertion.
+- **Stress generators swamp every other worker.** A flake worker ran 64 `yes` processes, and load reached 216.
+  Another worker's gate then hit `swift test`'s 900 s timeout, and main's gate went BLOCKED for 49 minutes. Cap stress
+  runs at about 2× the core count, and let nothing else gate while they run.
+- **A test near its wall-clock budget is a latent flake.** `skill_gate_walks_test.mjs` took 55 s against its 60 s
+  timeout. The fix split it in two, one cold build each, rather than raising the global budget.
+- **Keep secrets in the Keychain, and have workers read them inside the command.** The TypeSafe key lives under
+  service `TYPESAFE_API_KEY`. A worker runs `TYPESAFE_API_KEY="$(security find-generic-password -a "$USER" -s
+  TYPESAFE_API_KEY -w)" <cmd>`, and before committing it greps the diff for the key value and for `apikey_`.
+- **Delegated approvals go in the plan.** While the user was away, the orchestrator approved design §13 and a
+  benchmark spend cap of 25 USD. The plan's decisions table records each as "orchestrator, under the user's
+  delegation", so the user can review every one on return.
+- **A research spike can change the plan.** A 400-call study found that Jev needed its own question design. The
+  orchestrator committed the study under `evals/results/`, added a design section and plan tasks, and approved them,
+  instead of benchmarking a design that couldn't win.

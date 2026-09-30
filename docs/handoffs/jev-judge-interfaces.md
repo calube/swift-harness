@@ -182,3 +182,14 @@ Commits and gate: surface 32e2727, behaviour 972ec00; gate 20260930T184430Z-a5b7
 - Missing reason: failureScenario = "Claude's reason is missing: <why>", and the block stands.
 - `KeylessProcessRunner` strips every backend's key variable from Claude's environment. `liveJudge(root:runner:)` uses the sonnet alias.
 - OPEN for ready-check-cascades-jev-to-claude: advisory reasons must name the @2-jev sub-question that drove the answer (§13.3). It needs A/Judge.swift, JevRendering.swift and JudgePolicy.
+
+## Wave 6
+
+### `judge-ask-answers-any-question-set`
+
+Commits and gate: surface 156e336, behaviour 8f4b88c, 10b7690; gate 20260930T204119Z-461752b1; 14/14 tests proved.
+- `judge` is a command group; `tests` is the default, so `swiftgate judge [--ready]` is unchanged.
+- `judge ask --input <file|-> [--backend claude|jev] [--model <id>] [--send-to <host>] [--no-cache]` (`--judge-backend` and `--judge-model` are aliases). Output is always JSON.
+- Input: {schemaVersion:1, questionSet:"<id@v>" | inlineQuestionSet:{…dataset format…}, subjects:[{id,source,context,declaredTier?}]}. `inlineQuestionSet` requires `flag`.
+- Output: compact sorted {schemaVersion:1, questionSet, identity:{backend,model}, subjects:[{id, answers:[{question,distribution,rationale?}], usage|null}]}.
+- Exit codes: 0 answered; 2 bad input, config or host (`<field>: <reason>` on stderr); 3 backend failure; 64 unparseable flag. The eval invocation is in `judge ask --help`.
