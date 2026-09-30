@@ -1,0 +1,140 @@
+{
+  "model": "jev-1.13.0",
+  "state": {
+    "subject_kind": "a Swift test function from an iOS app built with The Composable Architecture, and the production code change it covers",
+    "test_name": {
+      "full": "loadProfile returns the profile — catches loadProfile not returning the profile",
+      "behavior": "loadProfile returns the profile",
+      "catches": "catches loadProfile not returning the profile"
+    },
+    "test_source": "@Test(\"loadProfile returns the profile — catches loadProfile not returning the profile\")\nfunc loadsProfile() async throws {\n  let api = APIClient(fetchProfile: { Profile(name: \"Ada\") })\n  let profile = try await api.fetchProfile()\n  #expect(profile.name == \"Ada\")\n}\n",
+    "assertions": [
+      "#expect(profile.name == \"Ada\")"
+    ],
+    "code_under_test": "+  public func loadProfile() async throws -> Profile {\n+    let profile = try await api.fetchProfile()\n+    return Profile(name: profile.name.trimmingCharacters(in: .whitespaces))\n+  }\n",
+    "declared_tier": "T1"
+  },
+  "questions": {
+    "fails-if-broken.runs-changed-code": {
+      "type": "noul",
+      "instructions": {
+        "question": "Does `test_source` run a function, property or reducer action that `code_under_test` adds or modifies?",
+        "focus": "Calling a method on a fake, stub, mock or spy does not count, even when the method has the same name as changed code."
+      },
+      "criteria": {
+        "true": "The test runs at least one line the change adds or modifies.",
+        "false": {
+          "what": "The test never runs the changed lines",
+          "examples": [
+            "it only calls closures, fakes, stubs, mocks or spies it set up itself",
+            "it calls a method on a test double that has the same name as the changed function",
+            "it calls code the change does not touch"
+          ]
+        }
+      }
+    },
+    "fails-if-broken.checks-named-result": {
+      "type": "noul",
+      "instructions": {
+        "question": "Does an assertion in `assertions` compare the result that `test_name.behavior` describes with an expected value?",
+        "focus": "Find the value or state the name talks about, then look for an assertion on it."
+      },
+      "criteria": {
+        "true": {
+          "what": "An assertion checks the very value, state or output the name talks about",
+          "examples": [
+            "the name is about a total and the test asserts the total",
+            "the name is about a message shown and the test asserts that message in state",
+            "the name says a method is called and the test asserts the call"
+          ]
+        },
+        "false": {
+          "what": "The result the name describes is never compared",
+          "examples": [
+            "the assertions check other fields of the same object",
+            "the assertions check setup values or a test double's own value",
+            "the only assertion checks that something exists or is true"
+          ]
+        }
+      }
+    },
+    "tier": {
+      "type": "choice",
+      "instructions": "Which tier does this test belong in? T1: host unit test of logic (reducers, pure functions, clients with fakes). T2: simulator test of rendering or platform integration (snapshots, views). T3: end-to-end UI flow (XCUITest).",
+      "criteria": {
+        "T1": null,
+        "T2": null,
+        "T3": null
+      }
+    },
+    "name-specificity.catches-adds": {
+      "type": "choice",
+      "instructions": {
+        "question": "What does `test_name.catches` say beyond `test_name.behavior`?",
+        "focus": "Judge the wording of the name only."
+      },
+      "criteria": {
+        "nothing": {
+          "what": "Only that the behavior fails, breaks or does not happen, or failures, bugs, problems or regressions in general; or there is no catches part",
+          "examples": [
+            "fetchUser returns the user — catches fetchUser not returning the user",
+            "settings works — catches settings bugs",
+            "encodes the date — catches encoding failures",
+            "testRefresh"
+          ]
+        },
+        "condition": {
+          "what": "A specific input, case or area where it goes wrong, but not what anyone would see",
+          "examples": [
+            "catches a bug in leap years",
+            "catches wrong handling of offline mode"
+          ]
+        },
+        "symptom": {
+          "what": "What a user or caller would see go wrong",
+          "examples": [
+            "catches shoppers billed twice for one order",
+            "catches the map staying blank after location access is granted"
+          ]
+        }
+      }
+    },
+    "asserts-implementation.call-details": {
+      "type": "noul",
+      "instructions": {
+        "question": "Does an assertion in `assertions` check how many times, in what order, or with which arguments the production code called a collaborator, spy or helper?"
+      },
+      "criteria": {
+        "true": {
+          "what": "Asserts a call count, a call order, a call's arguments, or that a method was called",
+          "examples": [
+            "#expect(mock.methodsCalled == [\"connect\", \"send\"])",
+            "#expect(api.requestCount == 2)",
+            "#expect(queue.didCallFlush)"
+          ]
+        },
+        "false": {
+          "what": "Asserts results the feature produces",
+          "not_for": [
+            "the test itself calling a mock or stub and comparing what it returns",
+            "the value the feature saves, sends or shows when that value is the feature's result",
+            "TestStore send or receive with the state it produces",
+            "advancing a test clock and checking what happened after the delay"
+          ]
+        }
+      }
+    },
+    "asserts-implementation.private-state": {
+      "type": "noul",
+      "instructions": "Does an entry in `assertions` read a private, underscored or testing-only property that callers of the code cannot see?",
+      "criteria": {
+        "true": "Reads a property like `_pendingQueue` or `_retainCountForTesting`, or other internal bookkeeping.",
+        "false": "Reads only public results, returned values, or TestStore state."
+      }
+    },
+    "asserts-implementation.log-text": {
+      "type": "noul",
+      "instructions": "Does an entry in `assertions` compare the exact text of a log or debug message?"
+    }
+  }
+}

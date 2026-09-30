@@ -390,6 +390,123 @@ Observed behavior the adapter relies on:
 - A state over the model's limit is 400, not 422, with `{"detail": {"error_type":
   "max_tokens_exceeded"}}` and no count; the adapter's own estimate refuses it before sending.
 
+### `test-quality@2-jev` and described Score levels
+
+Captured 2026-09-30 17:39 UTC with the same `curl`, key and command as above (design §13.2 to §13.4).
+The request inputs come from code, not by hand. `test_name` and `assertions` are what the gate's
+own parser returns: `SwiftGateDomain/Judge/JudgeTestSubjectParts.swift` compiled on its own into a
+helper that reads a test's source on stdin.
+
+```sh
+cat > "$SCRATCH/main.swift" <<'SWIFT'
+import Foundation
+let source = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
+struct Parts: Encodable {
+  let test_name: JudgeTestName
+  let assertions: [String]
+}
+let encoder = JSONEncoder()
+encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+let parts = Parts(test_name: JudgeTestName.parse(source: source), assertions: JudgeAssertions.extract(source: source))
+FileHandle.standardOutput.write(try encoder.encode(parts))
+SWIFT
+swiftc -O -o "$SCRATCH/judge-parts" \
+  ../../../Sources/SwiftGateDomain/Judge/JudgeTestSubjectParts.swift "$SCRATCH/main.swift"
+python3 "$SCRATCH/build_requests.py" "$SCRATCH/judge-parts" "$(git rev-parse --show-toplevel)"
+```
+
+`build_requests.py`, run from this directory:
+
+```python
+import json, subprocess, sys
+
+parts_tool, root = sys.argv[1], sys.argv[2]
+cases = root + "/plugin/gate/Fixtures/judge/cases/"
+study = json.load(open(root + "/evals/results/2026-09-30-jev-question-design/questions.json"))
+base = json.load(open("jev-request-test-quality.json"))
+
+
+def sub_questions():
+    out = {}
+    for q in study["questions"]:
+        for sub in q["jev"]["subQuestions"]:
+            key = q["id"] if q["id"] == "tier" else q["id"] + "." + sub["id"]
+            body = {k: v for k, v in sub.items() if k != "id"}
+            if q["id"] == "tier":
+                body = dict(base["questions"]["tier"])
+            out[key] = body
+    return out
+
+
+def native(case):
+    source = open(cases + case + "/Test.swift.txt").read()
+    parts = json.loads(subprocess.run([parts_tool], input=source.encode(), capture_output=True, check=True).stdout)
+    state = {
+        "subject_kind": base["state"]["subject_kind"],
+        "test_name": {k: parts["test_name"].get(k) for k in ("full", "behavior", "catches")},
+        "test_source": source,
+        "assertions": parts["assertions"],
+        "code_under_test": open(cases + case + "/Change.diff").read(),
+        "declared_tier": "T1",
+    }
+    return {"model": base["model"], "state": state, "questions": sub_questions()}
+
+
+def levels():
+    request = json.loads(json.dumps(base))
+    question = request["questions"]["name-specificity"]
+    clauses = question["instructions"].split("? ", 1)[1].rstrip(".").split("; ")
+    assert [c.split(":")[0] for c in clauses] == question["criteria"], clauses
+    question["criteria"] = clauses
+    return request
+
+
+def write(name, request):
+    with open("jev-request-" + name + ".json", "w") as f:
+        json.dump(request, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+write("test-quality-2-jev-good", native("counter-increment"))
+write("test-quality-2-jev-useless", native("own-double"))
+write("test-quality-levels", levels())
+```
+
+The sub-questions come from the study's `questions.json` unchanged, and equal the JSON block in
+design §13.3 key for key. Both cases declare `T1` in `gate/Fixtures/judge/labels.json`. `tier` is
+the `@1` question as the adapter already sends it.
+
+| Request | Subject | Questions |
+|---|---|---|
+| `jev-request-test-quality-2-jev-good.json` | `counter-increment`: `test_source` from `Test.swift.txt`, `code_under_test` from `Change.diff`, `declared_tier` `T1` | `test-quality@2-jev`: 6 sub-questions keyed `<question id>.<sub-question id>` (5 Noul, 1 Choice) and `tier` |
+| `jev-request-test-quality-2-jev-useless.json` | `own-double`, the same way | the same |
+| `jev-request-test-quality-levels.json` | `jev-request-test-quality.json` with only `name-specificity`'s `criteria` changed: each level with its clause from the question's text, as in `"vague: names no symptom or restates the behavior"` | `test-quality@1` |
+
+| File | Capture | Status | Served `model` |
+|---|---|---|---|
+| `jev-test-quality-2-jev-good.reply.json`, `.status` | `<name>` = `test-quality-2-jev-good` | 200 | `jev-1.13.0` |
+| `jev-test-quality-2-jev-useless.reply.json`, `.status` | `<name>` = `test-quality-2-jev-useless` | 200 | `jev-1.13.0` |
+| `jev-test-quality-levels.reply.json`, `.status` | `<name>` = `test-quality-levels` | 200 | `jev-1.13.0` |
+
+Observed behavior the `@2-jev` rendering relies on:
+
+- Dotted question keys (`fails-if-broken.runs-changed-code`) come back unchanged as the keys of
+  `answers`, in the order sent; `tier` sits beside them under its own id.
+- An object `instructions` (`question` and `focus`) and object `criteria` (`true`/`false` with
+  `what`, `examples` or `not_for`) are accepted for Noul, and a Choice keyed by option names with
+  object values answers with `probabilities` keyed by those names. A Noul with no `criteria`
+  (`log-text`) is accepted.
+- The combination rules separate the 2 cases: `fails-if-broken` gives `p_no` 0.06 for
+  `counter-increment` and 0.90 for `own-double` (from `runs-changed-code` 0.1), and
+  `asserts-implementation` gives `p_yes` 0.11 and 0.05.
+- `name-specificity.catches-adds` answers `condition` (0.79) for `counter-increment`, whose
+  label is `specific`, and `nothing` (0.90) for `own-double`.
+- A Score `legend` echoes each level string exactly as sent, description included:
+  `legend["0"]` is `"vague: names no symptom or restates the behavior"`. A legend check compares
+  it with the sent strings, not the bare level names.
+- `usage.output_tokens` is 203 for both `@2-jev` requests and 99 for both `@1` requests, so it
+  tracks the question count, not the answers.
+
 ## Review
 
 | File | Capture |
