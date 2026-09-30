@@ -338,7 +338,7 @@ Observed behavior the adapter relies on:
 TypeSafe's `POST https://api.typesafe.ai/v1/systemone`, captured 2026-09-30 with `curl` 8.7.1 and
 the user's key in `TYPESAFE_API_KEY`. Each command runs from `plugin/gate/Tests/Fixtures/Judge`
 under `bash`; the key reaches `curl` through a process substitution, so it never appears in an
-argument list, and no response or request headers are recorded. `<name>` is the file stem below.
+argument list, and the capture keeps no request or response headers. `<name>` is the file stem below.
 
 ```sh
 curl -sS -o jev-<name>.reply.json -w '%{http_code}\n' \
@@ -347,7 +347,7 @@ curl -sS -o jev-<name>.reply.json -w '%{http_code}\n' \
   --data-binary @jev-request-<name>.json https://api.typesafe.ai/v1/systemone > jev-<name>.status
 ```
 
-The request inputs are built, not captured, from real subjects, in the shape design §4.1 gives:
+A script builds the request inputs from real subjects, in the shape design §4.1 gives:
 `state` holds `subject_kind` (the question set's `subjectDescription`), `subject`, `context` and,
 for tests, `declared_tier`; each question's `instructions` is its `JudgeQuestion.text` unchanged.
 
@@ -369,16 +369,16 @@ for tests, `declared_tier`; each question's `instructions` is its `JudgeQuestion
 
 Observed behavior the adapter relies on:
 
-- A `.status` file holds the HTTP status and a newline; the reply body is exactly what the server
-  sent, compact JSON with no trailing newline.
-- `jev-latest` is served as `jev-1.13.0`: the reply's `model` is the resolved id, never the alias.
+- A `.status` file holds the HTTP status and a newline; the reply body is what the server sent,
+  byte for byte, compact JSON with no trailing newline.
+- The server answers `jev-latest` with `jev-1.13.0`: the reply's `model` is the resolved id, never the alias.
 - Question keys with hyphens (`fails-if-broken`, `name-specificity`) come back unchanged as the
-  keys of `answers`, but the server may reorder them and the options inside `probabilities`.
+  keys of `answers`. The server may reorder the options inside `probabilities` (`T3` came first).
 - A Noul answer is `{"type": "noul", "noul": p}`, with no `confidence`.
 - A Choice answer is `{"type": "choice", "choice", "confidence", "probabilities"}`, with
   `probabilities` keyed by the option names sent in `criteria`.
 - A Score answer is `{"type": "score", "score", "confidence", "legend", "probabilities"}`.
-  `legend` and `probabilities` are keyed by the level index as a string, `"0"` first, and
+  The level index, as a string, keys `legend` and `probabilities`, `"0"` first, and
   `legend["i"]` is the text of level `i` in the order `criteria` listed them. `score` is the
   probability-weighted index and `confidence` can be 0 while `probabilities` are spread.
 - No answer carries a reason, rationale or any text beyond the option and level names.
