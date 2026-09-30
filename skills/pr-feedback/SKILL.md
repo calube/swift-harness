@@ -62,7 +62,7 @@ landed after the human approval. "The bot found nothing" is not a reachable exit
    it with `git blame` on the flagged line. Read the ledger at the start of every round. Without
    it each round starts from zero and the same class of finding gets different answers.
 2. **Triage by severity.**
-   - Critical or high severity (a bot's top two levels), or anything a human raised: validate and fix now, test first.
+   - Critical or high severity (a bot's top two levels), or anything a human raised: triage and validate first. If validation finds a warranted, in-scope bug, fix it now, test first; otherwise push back or defer per the stance above.
    - A medium-severity finding that is a real bug in the PR's stated contract: fix it.
    - A hypothetical medium-severity finding (needs a state no code path writes, or is polish outside the PR's purpose):
      reply once, record a follow-up, resolve. Don't implement it.
@@ -84,8 +84,8 @@ landed after the human approval. "The bot found nothing" is not a reachable exit
 Done when all of these hold:
 
 - `"$SG" check --tier ready --json` is `GREEN` on the current head (CI is local-only here).
-- No new critical or high finding in the last two bot rounds.
-- Zero unresolved threads; every remaining medium finding is fixed or answered with a recorded follow-up.
+- The latest bot review of the current head, taken after the last behavior change, has no new critical or high finding. One clean review after the last fix is enough, so you never need a re-trigger the rules above forbid.
+- Zero unresolved threads, except human threads you answered with evidence and left open for the reviewer; report those as waiting on them. Every remaining medium finding is fixed or answered with a recorded follow-up.
 - Any human approval covers the current head, or you've told the user it's stale.
 
 Then stop and report: rounds, findings by severity, the share that were fix-induced, themes and
@@ -98,7 +98,7 @@ GitHub's REST reply endpoint does not resolve a thread; the GraphQL mutation doe
 by the database id of its first comment:
 
 ```bash
-gh api graphql -f query='query($o:String!,$r:String!,$p:Int!){repository(owner:$o,name:$r){pullRequest(number:$p){reviewThreads(first:50){nodes{id isResolved comments(first:1){nodes{databaseId}}}}}}}' -f o=<owner> -f r=<repo> -F p=<pr>
+gh api graphql -f query='query($o:String!,$r:String!,$p:Int!,$endCursor:String){repository(owner:$o,name:$r){pullRequest(number:$p){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor}nodes{id isResolved comments(first:1){nodes{databaseId}}}}}}}' --paginate -f o=<owner> -f r=<repo> -F p=<pr>
 gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{id isResolved}}}' -f id=<thread-node-id>
 ```
 
