@@ -22,7 +22,8 @@
 //   file_exists path (a glob over files the run created), exists
 //   command    run: a shell command in the final workspace; passes on exit 0, and when
 //              stdout_match is set, only if stdout matches it. Hidden tests go here.
-//   llm        criteria in the body; the judge model votes 3 times, 2 PASS votes pass
+//   llm        criteria in the body; focus (trace | last_message), diff; the judge model votes
+//              3 times, 2 PASS votes pass
 // A case's `keep` frontmatter, a regex over workspace-relative paths, copies matching files to
 // <raw>/<case>/<arm>-<trial>/kept/ before the workspace is deleted.
 // Any grader may set `arm: with-only`: the without arm reports it and leaves it out of the score.
@@ -47,6 +48,8 @@ export function loadCase(dir) {
         return { name: file.replace(/\.md$/, ''), weight: 1, ...g.data, criteria: g.body }
       })
     : []
+  // A bad focus fails at load, before the trial pays for a session the judge can't grade.
+  for (const g of graders) if (g.type === 'llm') judgeFocus(g)
   return {
     dir, name, prompt: body, graders,
     maxTurns: data.max_turns ?? 10,
@@ -174,10 +177,27 @@ export function digest(messages, limit = 60000) {
   return all.length <= limit ? all : `${all.slice(0, limit / 2)}\n[… ${all.length - limit} characters cut …]\n${all.slice(-limit / 2)}`
 }
 
-// The digest cuts each message at 1,500 characters, so the final message, which many rubrics
-// judge, also goes in whole.
+// The judge sees what the rubric's `focus` grades. `trace` (the default) gets the digest, the
+// final message and the diff; the digest cuts each message at 1,500 characters, so the final
+// message, which many rubrics judge, also goes in whole. `last_message` gets the final message
+// alone, so earlier turns can't sway a verdict on its shape, plus the diff when the rubric sets
+// `diff: true`.
+const FOCUSES = ['trace', 'last_message']
+export function judgeFocus(grader) {
+  const focus = grader.focus ?? 'trace'
+  if (!FOCUSES.includes(focus)) throw new Error(`llm grader ${grader.name ?? ''} has focus ${JSON.stringify(focus)}; expected ${FOCUSES.join(' or ')}`)
+  return focus
+}
+
 export function judgePrompt(grader, run) {
-  return `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}\n\nRun transcript digest:\n${digest(run.messages)}\n\nFinal message, in full:\n${lastMessage(run.messages).slice(0, 20000)}\n\nFinal diff:\n${run.diffText.slice(0, 20000)}`
+  const focus = judgeFocus(grader)
+  const head = `You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\nRubric:\n${grader.criteria}`
+  const final = `Final message, in full:\n${lastMessage(run.messages).slice(0, 20000)}`
+  const diff = `Final diff:\n${run.diffText.slice(0, 20000)}`
+  const parts = focus === 'trace'
+    ? [head, `Run transcript digest:\n${digest(run.messages)}`, final, diff]
+    : [head, final, ...(grader.diff === true ? [diff] : [])]
+  return parts.join('\n\n')
 }
 
 async function gradeLLM(grader, run, opts) {

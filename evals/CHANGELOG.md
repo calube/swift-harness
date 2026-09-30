@@ -1,5 +1,13 @@
 # Eval changelog
 
+## 2026-09-30
+
+- **The session judge reads the rubric's `focus`.** A `focus: last_message` rubric now gets the
+  final message alone, with no transcript digest and no diff, so an earlier turn can't sway it.
+  Only `headless-shape` sets it, and no result under `results/` graded it, so every recorded
+  judged result stays comparable. `focus: trace` rubrics get the same judge input as before. A rubric can add
+  `diff: true` to see the diff with the final message; none does yet.
+
 ## 2026-09-27
 
 - **`review-accuracy` confirming run** after the severity, dedupe and pre-existing fix, all 5

@@ -7,7 +7,8 @@
 // `after` call never happened; a tool_used input_match matching a skill whose args only mention
 // the name; a command grader passing on a non-zero exit; the judge digest dropping hook feedback;
 // a trial scored while the gate was still building and every hook was off; a judge failing a
-// long final message it only saw the first 1,500 characters of.
+// long final message it only saw the first 1,500 characters of; a last_message rubric judged on
+// the whole trace, so an earlier turn sways a verdict on the final message.
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -85,6 +86,23 @@ assert.equal(hooksInactive('{"additionalContext":"Session id: abc"}'), false)
 const longFinal = 'questions '.repeat(250) + 'END-OF-MESSAGE'
 const finalRun = run([line({ type: 'assistant', message: { content: [{ type: 'text', text: longFinal }] } })])
 assert.match(judgePrompt({ criteria: 'x' }, finalRun), /END-OF-MESSAGE/, 'the judge sees a long final message whole')
+
+const say = (text) => line({ type: 'assistant', message: { content: [{ type: 'text', text }] } })
+const twoTurns = run([say('EARLIER-TURN says the plan was created'), say('FINAL-QUESTIONS')], { diffText: 'DIFF-BODY' })
+const lastOnly = judgePrompt({ criteria: 'x', focus: 'last_message' }, twoTurns)
+assert.match(lastOnly, /FINAL-QUESTIONS/)
+assert.doesNotMatch(lastOnly, /EARLIER-TURN/, 'a last_message judge sees no earlier turn')
+assert.doesNotMatch(lastOnly, /DIFF-BODY/, 'a last_message judge sees no diff unless its rubric asks for one')
+assert.match(judgePrompt({ criteria: 'x', focus: 'last_message', diff: true }, twoTurns), /Final diff:\nDIFF-BODY$/)
+const tracePrompt =
+  'You grade one run of a coding agent against a rubric. Reply with PASS or FAIL on the first line, then 1 or 2 sentences of reason.\n\n' +
+  'Rubric:\nx\n\nRun transcript digest:\nASSISTANT: EARLIER-TURN says the plan was created\nASSISTANT: FINAL-QUESTIONS\n\n' +
+  'Final message, in full:\nFINAL-QUESTIONS\n\nFinal diff:\nDIFF-BODY'
+assert.equal(judgePrompt({ criteria: 'x', focus: 'trace' }, twoTurns), tracePrompt, 'a trace judge input stays as earlier results saw it')
+assert.equal(judgePrompt({ criteria: 'x' }, twoTurns), tracePrompt, 'a rubric with no focus is judged on the trace')
+assert.throws(() => judgePrompt({ criteria: 'x', focus: 'hooks' }, twoTurns), /focus/)
+const headless = loadCase(join(resolve(here, '../sessions'), 'skills/design/headless-frame-questions'))
+assert.equal(headless.graders.find((g) => g.name === 'headless-shape').focus, 'last_message', 'the rubric focus reaches the judge')
 
 const kws = mkdtempSync(join(tmpdir(), 'keep-ws-'))
 mkdirSync(join(kws, '.harness/runs/r1/review-findings'), { recursive: true })
