@@ -1,6 +1,6 @@
 # Calibrate design fixtures
 
-Each file here is copied unmodified from a real `swiftgate calibrate design` run.
+Each file here comes unmodified from a real `swiftgate calibrate design` run.
 
 ## `kept-sonnet.json`
 

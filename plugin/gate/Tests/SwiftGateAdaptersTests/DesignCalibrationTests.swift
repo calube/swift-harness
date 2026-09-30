@@ -115,14 +115,17 @@ struct DesignCalibrationTests {
     #expect(try CalibrationRecord.decode(Data(encoded.utf8)) == record)
     #expect(encoded.contains("\"model\" : \"opus\""))
     #expect(record.judge == nil)
-    let current = CalibrationRecord(
-      contentHash: "abc", hashedFiles: [], modelOverride: nil, passedAt: record.passedAt,
-      cases: [
-        .init(
-          agent: "design-drafter", caseName: "c", model: "opus",
-          servedModels: ["claude-opus-5-5"], answers: [])
-      ],
-      judge: .init(backend: .jev, model: "jev-1.13.0", servedModels: ["jev-1.13.0"]))
+    let current = try CalibrationRecord.decode(
+      Data(
+        """
+        {"schemaVersion": 3, "contentHash": "abc", "hashedFiles": [],
+         "passedAt": "2026-09-21T12:00:00Z",
+         "judge": {"backend": "jev", "model": "jev-1.13.0", "servedModels": ["jev-1.13.0"]},
+         "cases": [{"agent": "design-drafter", "case": "c", "model": "opus",
+                    "servedModels": ["claude-opus-5-5"], "answers": []}]}
+        """.utf8))
+    #expect(current.judge?.backend == .jev)
+    #expect(current.cases.first?.servedModels == ["claude-opus-5-5"])
     let currentText = String(decoding: try current.encoded(), as: UTF8.self)
     #expect(try CalibrationRecord.decode(Data(currentText.utf8)) == current)
     #expect(currentText.contains("\"backend\" : \"jev\""))
