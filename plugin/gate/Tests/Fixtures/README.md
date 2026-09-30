@@ -492,16 +492,16 @@ Observed behavior the `@2-jev` rendering relies on:
 
 - Dotted question keys (`fails-if-broken.runs-changed-code`) come back unchanged as the keys of
   `answers`, in the order sent; `tier` sits beside them under its own id.
-- An object `instructions` (`question` and `focus`) and object `criteria` (`true`/`false` with
-  `what`, `examples` or `not_for`) are accepted for Noul, and a Choice keyed by option names with
-  object values answers with `probabilities` keyed by those names. A Noul with no `criteria`
-  (`log-text`) is accepted.
+- The server takes a Noul with an object `instructions` (`question` and `focus`) and object
+  `criteria` (`true`/`false` with `what`, `examples` or `not_for`), and a Noul with no `criteria`
+  (`log-text`). A Choice keyed by option names with object values answers with `probabilities`
+  keyed by those names.
 - The combination rules separate the 2 cases: `fails-if-broken` gives `p_no` 0.06 for
   `counter-increment` and 0.90 for `own-double` (from `runs-changed-code` 0.1), and
   `asserts-implementation` gives `p_yes` 0.11 and 0.05.
 - `name-specificity.catches-adds` answers `condition` (0.79) for `counter-increment`, whose
   label is `specific`, and `nothing` (0.90) for `own-double`.
-- A Score `legend` echoes each level string exactly as sent, description included:
+- A Score `legend` echoes each level string as sent, byte for byte, description included:
   `legend["0"]` is `"vague: names no symptom or restates the behavior"`. A legend check compares
   it with the sent strings, not the bare level names.
 - `usage.output_tokens` is 203 for both `@2-jev` requests and 99 for both `@1` requests, so it
