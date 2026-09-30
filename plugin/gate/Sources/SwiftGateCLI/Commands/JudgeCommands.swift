@@ -210,7 +210,10 @@ struct JudgeCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "judge",
     abstract: "Ask the configured judge about changed tests, or any question set.",
-    subcommands: [JudgeTestsCommand.self, JudgeAskCommand.self],
+    subcommands: [
+      JudgeTestsCommand.self, JudgeAskCommand.self, JudgeBenchCommand.self,
+      JudgeBenchRenderCommand.self,
+    ],
     defaultSubcommand: JudgeTestsCommand.self)
 }
 
