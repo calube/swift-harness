@@ -3,7 +3,8 @@ import Testing
 
 @testable import SwiftGateDomain
 
-@Suite("judge dataset: 1 shape, a hash over labels and labellers, person-only views, the fixed split")
+@Suite(
+  "judge dataset: 1 shape, a hash over labels and labellers, person-only views, the fixed split")
 struct JudgeDatasetTests {
   static let tests = JudgeQuestionSet.tests.versionedID
 
@@ -34,21 +35,22 @@ struct JudgeDatasetTests {
 
   static var inlineSet: [String: Any] {
     [
-    "id": "rubric", "version": 1, "subjectDescription": "a transcript slice",
-    "questions": [
-      [
-        "id": "cites-source", "text": "Does the answer cite its source?", "kind": "binary",
-        "flag": ["option": "no"],
+      "id": "rubric", "version": 1, "subjectDescription": "a transcript slice",
+      "questions": [
+        [
+          "id": "cites-source", "text": "Does the answer cite its source?", "kind": "binary",
+          "flag": ["option": "no"],
+        ],
+        [
+          "id": "tone", "text": "How direct is the answer?", "kind": "score",
+          "options": ["evasive", "hedged", "direct"], "flag": ["option": "evasive"],
+        ],
       ],
-      [
-        "id": "tone", "text": "How direct is the answer?", "kind": "score",
-        "options": ["evasive", "hedged", "direct"], "flag": ["option": "evasive"],
-      ],
-    ],
     ]
   }
 
-  @Test("changing 1 label, 1 labeller or 1 source changes the hash — catches a hash over sources only")
+  @Test(
+    "changing 1 label, 1 labeller or 1 source changes the hash — catches a hash over sources only")
   func hashCoversLabelsLabellersAndSources() throws {
     let base = try Self.dataset([
       Self.item("case-0", labels: [Self.tests: Self.label()]),
@@ -81,7 +83,9 @@ struct JudgeDatasetTests {
     #expect(try hash == Self.dataset([b, a]).hash)
   }
 
-  @Test("the canonical JSON decodes back to the same dataset and hash — catches an encoding the decoder can't read")
+  @Test(
+    "the canonical JSON decodes back to the same dataset and hash — catches an encoding the decoder can't read"
+  )
   func canonicalJSONRoundTrips() throws {
     let data = try Self.json([
       "schemaVersion": 1, "id": "rubric-trial", "inlineQuestionSet": Self.inlineSet,
@@ -89,7 +93,9 @@ struct JudgeDatasetTests {
         [
           "id": "slice-1", "source": "answer", "context": "question",
           "labels": [
-            "rubric@1": ["labeller": "person", "expected": ["cites-source": "no", "tone": "direct"]]
+            "rubric@1": [
+              "labeller": "person", "expected": ["cites-source": "no", "tone": "direct"],
+            ]
           ],
         ]
       ],
@@ -100,11 +106,16 @@ struct JudgeDatasetTests {
     #expect(again == dataset)
     #expect(again.hash == dataset.hash)
     #expect(dataset.questions.versionedID == "rubric@1")
-    #expect(dataset.questions.questions.map(\.options) == [["yes", "no"], ["evasive", "hedged", "direct"]])
+    #expect(
+      dataset.questions.questions.map(\.options) == [
+        ["yes", "no"], ["evasive", "hedged", "direct"],
+      ])
     #expect(dataset.cases.first?.labels["rubric@1"]?.labeller == .person)
   }
 
-  @Test("a built-in question set decodes from its versioned id — catches a dataset that must restate the built-in questions")
+  @Test(
+    "a built-in question set decodes from its versioned id — catches a dataset that must restate the built-in questions"
+  )
   func builtInQuestionSetByID() throws {
     let data = try Self.json([
       "schemaVersion": 1, "id": "comments", "questionSet": "comments@1",
@@ -122,19 +133,24 @@ struct JudgeDatasetTests {
     #expect(dataset.cases.first?.labels["comments@1"]?.labeller == .agent)
   }
 
-  @Test("a label naming an option its question lacks fails naming both — catches a label the scorer would count as a miss")
+  @Test(
+    "a label naming an option its question lacks fails naming both — catches a label the scorer would count as a miss"
+  )
   func unknownOptionNamesQuestionAndOption() throws {
     var bad = Self.label().expected
     bad["fails-if-broken"] = "maybe"
 
-    #expect(throws: JudgeDatasetError.unknownOption(
-      caseID: "case-0", question: "fails-if-broken", option: "maybe", options: ["yes", "no"])
+    #expect(
+      throws: JudgeDatasetError.unknownOption(
+        caseID: "case-0", question: "fails-if-broken", option: "maybe", options: ["yes", "no"])
     ) {
       try Self.dataset([
-        Self.item("case-0", labels: [Self.tests: JudgeDatasetLabel(labeller: .agent, expected: bad)])
+        Self.item(
+          "case-0", labels: [Self.tests: JudgeDatasetLabel(labeller: .agent, expected: bad)])
       ])
     }
-    let message = "\(JudgeDatasetError.unknownOption(caseID: "case-0", question: "fails-if-broken", option: "maybe", options: ["yes", "no"]))"
+    let message =
+      "\(JudgeDatasetError.unknownOption(caseID: "case-0", question: "fails-if-broken", option: "maybe", options: ["yes", "no"]))"
     #expect(message.contains("fails-if-broken") && message.contains("maybe"))
   }
 
@@ -142,13 +158,16 @@ struct JudgeDatasetTests {
     "labels for an unknown question, an unknown question set, or a repeated case id fail naming it — catches a typo dropping labels"
   )
   func rejectsUnknownQuestionsSetsAndDuplicates() throws {
-    #expect(throws: JudgeDatasetError.unknownQuestion(
-      caseID: "case-0", questionSet: Self.tests, question: "fails-if-brokn")
+    #expect(
+      throws: JudgeDatasetError.unknownQuestion(
+        caseID: "case-0", questionSet: Self.tests, question: "fails-if-brokn")
     ) {
       try Self.dataset([
         Self.item(
           "case-0",
-          labels: [Self.tests: JudgeDatasetLabel(labeller: .agent, expected: ["fails-if-brokn": "no"])])
+          labels: [
+            Self.tests: JudgeDatasetLabel(labeller: .agent, expected: ["fails-if-brokn": "no"])
+          ])
       ])
     }
     #expect(throws: JudgeDatasetError.unknownQuestionSet("test-quality@9")) {
@@ -162,7 +181,9 @@ struct JudgeDatasetTests {
     }
   }
 
-  @Test("a dataset JSON with an unknown key or schema version fails — catches a misspelt field read as absent")
+  @Test(
+    "a dataset JSON with an unknown key or schema version fails — catches a misspelt field read as absent"
+  )
   func rejectsUnknownKeysAndSchemas() throws {
     let item: [String: Any] = [
       "id": "c-1", "source": "// x", "context": "", "labeler": "person",
@@ -170,7 +191,8 @@ struct JudgeDatasetTests {
     ]
     #expect(throws: JudgeDatasetError.self) {
       try JudgeDataset.decode(
-        try Self.json(["schemaVersion": 1, "id": "d", "questionSet": "comments@1", "cases": [item]]))
+        try Self.json(["schemaVersion": 1, "id": "d", "questionSet": "comments@1", "cases": [item]])
+      )
     }
     #expect(throws: JudgeDatasetError.unsupportedSchema(2)) {
       try JudgeDataset.decode(
@@ -178,7 +200,9 @@ struct JudgeDatasetTests {
     }
   }
 
-  @Test("an inline question whose flag isn't 1 of its options fails naming the question — catches a flag that never fires")
+  @Test(
+    "an inline question whose flag isn't 1 of its options fails naming the question — catches a flag that never fires"
+  )
   func inlineFlagMustBeAnOption() throws {
     var set = Self.inlineSet
     set["questions"] = [
@@ -218,7 +242,9 @@ struct JudgeDatasetTests {
     #expect(dataset.summary.hash == dataset.hash)
   }
 
-  @Test("each case's split is JudgeCaseSplit's, and the summary counts them — catches a second split rule")
+  @Test(
+    "each case's split is JudgeCaseSplit's, and the summary counts them — catches a second split rule"
+  )
   func splitComesFromJudgeCaseSplit() throws {
     // case-0, case-1, case-4 report; case-2, case-3 tune (SHA-256 first byte against 0x55).
     let ids = ["case-0", "case-1", "case-2", "case-3", "case-4"]
@@ -226,7 +252,10 @@ struct JudgeDatasetTests {
 
     #expect(dataset.cases.map(\.split) == ids.map(JudgeCaseSplit.of))
     #expect(dataset.summary.splits == JudgeDatasetSplitCounts(tune: 2, report: 3))
-    #expect(JudgeReportCases(dataset.benchmarkCases(.all)).cases.map(\.id) == ["case-0", "case-1", "case-4"])
+    #expect(
+      JudgeReportCases(dataset.benchmarkCases(.all)).cases.map(\.id) == [
+        "case-0", "case-1", "case-4",
+      ])
   }
 
   @Test(
@@ -251,7 +280,9 @@ struct JudgeDatasetTests {
     #expect(dataset.benchmarkCases(.personOnly).count == 1)
   }
 
-  @Test("a case is asked only the questions it has labels for — catches a seed asked another seed's questions")
+  @Test(
+    "a case is asked only the questions it has labels for — catches a seed asked another seed's questions"
+  )
   func questionsForACaseAreItsLabelledOnes() throws {
     let data = try Self.json([
       "schemaVersion": 1, "id": "rubric-trial", "inlineQuestionSet": Self.inlineSet,

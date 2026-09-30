@@ -67,7 +67,9 @@ struct JudgeDatasetLoaderTests {
     #expect(dataset.summary.labellers.person == people)
   }
 
-  @Test("a labels.json case with no labeller loads as an agent's — catches a missing labeller read as a person")
+  @Test(
+    "a labels.json case with no labeller loads as an agent's — catches a missing labeller read as a person"
+  )
   func missingLabellerIsAgent() throws {
     let repository = try TempRoot()
     try repository.write(
@@ -88,7 +90,9 @@ struct JudgeDatasetLoaderTests {
     #expect(dataset.benchmarkCases(.all).count == 1)
   }
 
-  @Test("a labelled case with no directory fails naming its path — catches labels scored without a subject")
+  @Test(
+    "a labelled case with no directory fails naming its path — catches labels scored without a subject"
+  )
   func labelledCaseWithoutDirectoryFails() throws {
     let repository = try TempRoot()
     try repository.write(
@@ -153,7 +157,9 @@ struct JudgeDatasetLoaderTests {
     #expect(dataset.benchmarkCases(.personOnly).isEmpty)
   }
 
-  @Test("a run missing a seed's kept reply fails naming the seed — catches a dataset silently short of a seed")
+  @Test(
+    "a run missing a seed's kept reply fails naming the seed — catches a dataset silently short of a seed"
+  )
   func storedRepliesMissingReplyNamesTheSeed() throws {
     let repository = try TempRoot()
     try Self.seed(repository)
@@ -165,11 +171,14 @@ struct JudgeDatasetLoaderTests {
         return false
       }
       return agent == "design-drafter" && seed == "supported-claim"
-        && path.hasSuffix("design-drafter/supported-claim.txt") && "\(error)".contains("supported-claim")
+        && path.hasSuffix("design-drafter/supported-claim.txt")
+        && "\(error)".contains("supported-claim")
     }
   }
 
-  @Test("a dataset JSON file with an option its question lacks fails naming the file, question and option — catches a bad label loaded")
+  @Test(
+    "a dataset JSON file with an option its question lacks fails naming the file, question and option — catches a bad label loaded"
+  )
   func fileWithUnknownOptionFailsNamingBoth() throws {
     let repository = try TempRoot()
     try repository.write(
@@ -189,7 +198,9 @@ struct JudgeDatasetLoaderTests {
     }
   }
 
-  @Test("a dataset JSON file loads to the same dataset its canonical JSON decodes to — catches a file loader that drops fields")
+  @Test(
+    "a dataset JSON file loads to the same dataset its canonical JSON decodes to — catches a file loader that drops fields"
+  )
   func fileLoadsTheDataset() throws {
     let repository = try TempRoot()
     try repository.write(

@@ -243,6 +243,10 @@ public struct JudgeDataset: Sendable, Equatable {
     }
   }
 
+  /// The key of the labels this dataset's question set reads: its own versioned id. A rendering
+  /// that asks the same questions another way reads its base set's labels here.
+  public var labelsVersion: String { questions.versionedID }
+
   /// Sorted keys, no escaped slashes, cases in id order, and every labeller written out, so the
   /// same dataset always has the same bytes however its file was written.
   public var canonicalJSON: Data {
@@ -275,7 +279,7 @@ public struct JudgeDataset: Sendable, Equatable {
   /// The cases labelled for the dataset's question set, in dataset order; `.personOnly` keeps
   /// only a person's labels.
   public func benchmarkCases(_ labels: JudgeDatasetLabels) -> [JudgeBenchmarkCase] {
-    let version = questions.versionedID
+    let version = labelsVersion
     return cases.compactMap { item in
       guard let label = item.labels[version] else { return nil }
       if labels == .personOnly, label.labeller != .person { return nil }
@@ -288,14 +292,14 @@ public struct JudgeDataset: Sendable, Equatable {
   /// asked a question only another case is labelled on.
   public func questions(for item: JudgeDatasetCase) -> JudgeQuestionSet {
     let set = questions
-    let labelled = item.labels[set.versionedID]?.expected ?? [:]
+    let labelled = item.labels[labelsVersion]?.expected ?? [:]
     return JudgeQuestionSet(
       id: set.id, version: set.version, subjectDescription: set.subjectDescription,
       questions: set.questions.filter { labelled[$0.id] != nil })
   }
 
   public var summary: JudgeDatasetSummary {
-    let version = questions.versionedID
+    let version = labelsVersion
     let labelled = cases.compactMap { item in item.labels[version].map { (item, $0) } }
     func count(_ labeller: JudgeDatasetLabeller) -> Int {
       labelled.filter { $0.1.labeller == labeller }.count
