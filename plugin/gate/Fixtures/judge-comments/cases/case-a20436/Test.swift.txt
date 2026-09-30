@@ -1,0 +1,1 @@
+// Each state's visible text (not colour alone) names its own state and no other's.

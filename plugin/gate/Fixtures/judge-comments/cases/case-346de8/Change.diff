@@ -1,0 +1,6 @@
+    case score([String])
+  }
+
+  /// Which answer marks the subject as a problem.
+  public enum Flag: Sendable, Hashable {
+    /// The probability of this option.

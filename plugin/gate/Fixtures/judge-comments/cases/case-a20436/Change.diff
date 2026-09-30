@@ -1,0 +1,6 @@
+    #expect(blockedLI.contains(LedgerRender.statusLabel(.blocked)))
+    #expect(!blockedLI.contains(LedgerRender.statusLabel(.abandoned)))
+    #expect(abandonedLI.contains(LedgerRender.statusLabel(.abandoned)))
+    #expect(!abandonedLI.contains(LedgerRender.statusLabel(.blocked)))
+    #expect(pendingLI.contains(LedgerRender.statusLabel(.pending)))
+    #expect(!pendingLI.contains(LedgerRender.statusLabel(.blocked)))

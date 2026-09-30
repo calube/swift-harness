@@ -1,0 +1,6 @@
+    return JudgeBlockCalibration.flagFires(
+      question, expected: expected, declaredTier: declaredTier ?? "")
+  }
+
+  static func tally(_ question: String, _ scored: [ScoredCase], unscored: Int, threshold: Double)
+    -> JudgeQuestionMetrics

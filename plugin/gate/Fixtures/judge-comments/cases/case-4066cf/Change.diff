@@ -1,0 +1,6 @@
+  private static func isSerializedSuite(_ attributes: AttributeListSyntax) -> Bool {
+    attributes.contains { element in
+      guard let attribute = element.as(AttributeSyntax.self),
+        ["Suite", "Testing.Suite"].contains(attribute.attributeName.trimmedDescription),
+        case .argumentList(let arguments) = attribute.arguments
+      else { return false }

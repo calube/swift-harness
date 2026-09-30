@@ -1,0 +1,1 @@
+/// `design-lint <doc>`): the caller — the FS adapter — reads every file docs-lint scans and hands

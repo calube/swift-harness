@@ -1,0 +1,6 @@
+  /// set of more than 2, is never a pair.
+  static func isInterfaceLivePair(_ modules: Set<String>) -> Bool {
+    guard modules.count == 2 else { return false }
+    let sorted = modules.sorted()
+    return sorted[0] + "Live" == sorted[1]
+  }

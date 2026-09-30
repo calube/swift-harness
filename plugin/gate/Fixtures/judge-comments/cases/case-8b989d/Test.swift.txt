@@ -1,0 +1,1 @@
+/// carries its Mermaid diagrams, and every section — plus the document as a whole — stays inside

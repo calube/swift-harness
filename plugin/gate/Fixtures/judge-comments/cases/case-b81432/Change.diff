@@ -1,0 +1,6 @@
+  /// `{schemaVersion, touchedModules, newModules, newDependencies}`); research-lane reuses that
+  /// decoder rather than taking touched-module names as a second, independently-typed CLI input.
+  private static func frameAnswersJSON(touching modules: [String]) -> String {
+    let names = modules.map { "\"\($0)\"" }.joined(separator: ", ")
+    return
+      "{\"schemaVersion\": 1, \"touchedModules\": [\(names)], \"newModules\": [], "

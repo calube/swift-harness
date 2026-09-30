@@ -1,0 +1,6 @@
+  static let outsideLive = RuleScope { unit in
+    guard let role = unit.scope?.role, !unit.isTestFile else { return false }
+    return role != .clientLive
+  }
+
+  /// Every classified production module except the log and tracing Live modules, which are the

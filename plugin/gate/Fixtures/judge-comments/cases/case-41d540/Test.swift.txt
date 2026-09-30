@@ -1,0 +1,1 @@
+/// same adapters `arch` uses (`ConfigLoader`, `ModuleGraphLoader`) — no second loader — so the

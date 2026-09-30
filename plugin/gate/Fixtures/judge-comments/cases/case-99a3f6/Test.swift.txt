@@ -1,0 +1,1 @@
+/// before building; the proof base, where the surface's stubs exist, can still load it.

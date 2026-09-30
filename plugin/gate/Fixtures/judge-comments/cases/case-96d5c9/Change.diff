@@ -1,0 +1,6 @@
+  let assertingHelpers: Set<String>
+
+  init(_ unit: SourceUnit) {
+    self.unit = unit
+    tests = TestFunction.all(in: unit)
+    let testIDs = Set(tests.map(\.decl.id))

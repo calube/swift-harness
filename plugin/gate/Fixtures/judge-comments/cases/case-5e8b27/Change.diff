@@ -1,0 +1,5 @@
+    #expect(Self.sampleTask.actualLines == nil)
+    let absentPass = try encoder.encode(Self.sampleTask)
+    #expect(!String(decoding: absentPass, as: UTF8.self).contains("actualLines"))
+    #expect(try JSONDecoder().decode(LedgerTask.self, from: absentPass).actualLines == nil)
+  }

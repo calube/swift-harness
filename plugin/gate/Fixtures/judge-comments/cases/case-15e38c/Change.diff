@@ -1,0 +1,6 @@
+    let root = Fixture.checkoutRoot.appending(path: "bin/..").path
+    let context = try await sessionContext(environment: ["CLAUDE_PLUGIN_ROOT": root])
+
+    let line = try #require(
+      context.split(separator: "\n").first { $0.hasPrefix(Self.referenceDocsPrefix) },
+      "no reference docs line in: \(context)")

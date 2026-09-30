@@ -1,0 +1,6 @@
+    // path outside the module graph (no Package.swift target claims it) is production input too
+    // when it's one of the harness's own stamped resources — a template a test can guard — so it
+    // reverts alongside the Swift sources instead of silently keeping the change under test.
+    var reverted: [String] = []
+    var copied: [String] = []
+    for path in changed {

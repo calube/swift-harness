@@ -1,0 +1,6 @@
+    /// doesn't have fails here by name rather than as an opaque exit code.
+    func record(_ design: String, extra: [String] = []) async throws -> ProcessOutput {
+      let arguments =
+        ["evidence", "cache", "record", "--design", design, "--cache-home", cacheHome, "--json"]
+        + extra
+      do {

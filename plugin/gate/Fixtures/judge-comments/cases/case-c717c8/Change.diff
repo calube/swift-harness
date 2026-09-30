@@ -1,0 +1,5 @@
+enum ModuleGraphRun {
+  enum Outcome: Sendable, Equatable {
+    case dumped(String)
+    case failed(message: String)
+  }

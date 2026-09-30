@@ -1,0 +1,6 @@
+    // spawns, got slower.
+    let slowGit = LiveGit(
+      runner: FakeProcessRunner { _ in
+        Self.burnCPU(for: .milliseconds(120))
+        return ProcessOutput(status: .exited(0), stdout: ".git\n")
+      },

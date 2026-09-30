@@ -1,0 +1,6 @@
+  /// description is free prose and may contain "tier" itself (e.g. "no tier annotation").
+  private static let tierSeparator = " — tier "
+
+  private static func parseTestPlanBullet(_ bullet: MarkdownDocument.Bullet) -> TestPlanBullet? {
+    guard let id = bullet.id else { return nil }
+    guard let tierRange = bullet.remainder.range(of: tierSeparator) else {

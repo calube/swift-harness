@@ -1,0 +1,1 @@
+/// exits 0 and decides through this JSON, never through exit code 2, so the decision and its

@@ -1,0 +1,6 @@
+    // `Package.resolved`, which a hook denies an agent to do by hand.
+    var arguments = ["test", "--only-use-versions-from-resolved-file"]
+    arguments.append(request.parallel ? "--parallel" : "--no-parallel")
+    if request.codeCoverage { arguments.append("--enable-code-coverage") }
+    arguments += ["--xunit-output", request.xunitOutputPath]
+    for filter in request.filters { arguments += ["--filter", filter] }

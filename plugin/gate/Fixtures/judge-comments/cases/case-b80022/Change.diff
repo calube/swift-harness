@@ -1,0 +1,6 @@
+/// and turns the result into the rule-id-shaped identifiers `expected.json` names.
+private enum SeedRunners {
+  // MARK: evidence check
+
+  static func evidenceCheck(caseDirectory: URL) async -> SeedRunOutcome {
+    let design = "docs/example/designs/seed.md"

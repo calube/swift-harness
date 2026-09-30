@@ -1,0 +1,6 @@
+  @MainActor
+  func testIncrementAndDecrementUpdateTheDisplayedCount() {
+    let app = XCUIApplication()
+    app.launch()
+
+    let value = app.staticTexts["counter.value"]

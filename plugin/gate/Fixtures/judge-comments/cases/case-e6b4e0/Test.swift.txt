@@ -1,0 +1,1 @@
+// burning real CPU first — standing in for a hook whose own logic, or a child process it

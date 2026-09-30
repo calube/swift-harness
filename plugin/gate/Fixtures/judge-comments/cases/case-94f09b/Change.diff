@@ -1,0 +1,6 @@
+/// and an override set in a dependency context is the one a feature reads.
+@Suite
+struct APIClientTests {
+  @Test(
+    "the test value fails an unstubbed call instead of answering — catches a feature test passing on a made-up fact it never stubbed"
+  )

@@ -1,0 +1,6 @@
+  ///
+  /// - Every dependency must name another task in `tasks`, checked before any layering happens,
+  ///   so a cycle and a missing dependency are never conflated.
+  /// - A task's layer is one past the deepest layer of its deps (no deps → layer 0). Layering
+  ///   stalls exactly when what's left forms a cycle.
+  /// - Within a layer, tasks are placed id-ascending into the first wave (started in this layer)

@@ -1,0 +1,1 @@
+/// `ModuleGraphLoader` that `arch`, `design-scope` and SessionStart use.

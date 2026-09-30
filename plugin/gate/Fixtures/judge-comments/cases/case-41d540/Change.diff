@@ -1,0 +1,6 @@
+/// counts `DesignScope.deriveFacts` computes are checked against the repository's real modules,
+/// never hand-counted by whatever wrote the frame-answers file.
+enum DesignScopeRun {
+  enum Outcome: Sendable, Equatable {
+    case recommended(DesignScopeReport)
+    case failed(message: String)

@@ -1,0 +1,1 @@
+// Parallel tests open and close descriptors too; a leak of even 1 per run clears this margin.

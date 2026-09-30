@@ -1,0 +1,1 @@
+/// | Relative links | every relative link — any extension, or none — resolves against the repo's tracked files |

@@ -1,0 +1,6 @@
+  public func log(
+    _ level: LogLevel,
+    _ message: StaticString,
+    category: String,
+    _ attributes: @autoclosure () -> [LogAttribute] = []
+  ) {

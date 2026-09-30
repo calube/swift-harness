@@ -1,0 +1,1 @@
+// pin (a revision missing from the remote) resolves silently to something else and rewrites

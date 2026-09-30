@@ -1,0 +1,6 @@
+    try repo.write(EvidenceRepo.source, EvidenceRepo.original)
+
+    let atHead = await repo.check(at: "HEAD")
+    #expect(
+      try jsonLines(atHead) == [
+        StrictLine(id: "ev-queue-enqueue-is-async", status: .stale, loc: nil)

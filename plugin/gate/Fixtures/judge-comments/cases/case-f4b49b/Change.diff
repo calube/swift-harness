@@ -1,0 +1,6 @@
+    #expect(text.contains("Client-side queue [ev-tca-effect-run-supports-cancellation]"))
+  }
+
+  // MARK: - Research lane: all 5 spec §5.10 parts, plus the evidence reuse cache
+
+  /// A `--cache-home` unique to the calling test, so cache reads/writes never touch a real

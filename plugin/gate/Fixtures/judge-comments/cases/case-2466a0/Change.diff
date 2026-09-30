@@ -1,0 +1,6 @@
+enum BuildLoop {
+  /// `nil` when `session` holds `slug`'s lock; otherwise the refusal to return.
+  static func authorize<Report>(
+    _ command: String, slug: String, session: String?, git: any Git
+  ) async -> BuildLoopResult<Report>? {
+    guard let refusal = await IndexSetAuthority.check(slug: slug, session: session, git: git)

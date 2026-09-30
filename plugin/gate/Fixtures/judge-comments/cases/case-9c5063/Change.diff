@@ -1,0 +1,6 @@
+  /// its own runs. A run already in `destination` counts as kept, since run ids are unique.
+  /// - Throws: when this store's runs directory exists but can't be listed.
+  public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
+    let files = FileManager.default
+    let source = worktreeRoot.appending(path: RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let names: [String]

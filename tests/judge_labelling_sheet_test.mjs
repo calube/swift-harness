@@ -1,11 +1,16 @@
-// Checks the tool that turns the filled-in blind labelling sheet into the judge's labels.json.
+// Checks the tool that turns the filled-in blind labelling sheets (the test-quality set and the
+// comment set) into each set's labels.json.
 // Run: node tests/judge_labelling_sheet_test.mjs
 // Regressions caught: a person's answer recorded as the agent's or not at all, an answer that isn't
-// one of the question's options written as a label, a skipped question filled in with a guess, and
-// a sheet that asks something other than what the judge asks.
+// one of the question's options written as a label, a skipped question filled in with a guess, a
+// sheet that asks something other than what the judge asks, and a comment case that lost the
+// commit and path it came from.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { applySheet, formatLabels, questions, renderSheet, sheetKey } from './judge_labelling_sheet.mjs'
+import {
+  applyCommentSheet, applySheet, commentQuestions, formatLabels, questions, renderCommentSheet, renderSheet,
+  sheetKey,
+} from './judge_labelling_sheet.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 
@@ -18,6 +23,20 @@ function agentCase(id) {
 }
 
 const labels = { cases: [agentCase('old-case')], questionSet: 'test-quality@1', schema: 1 }
+
+const commentLabels = { cases: [], questionSet: 'comments@1', schema: 1 }
+const comments = [
+  {
+    id: 'case-0a1b2c', commit: 'a'.repeat(40), path: 'plugin/gate/Sources/A/A.swift',
+    comment: '// Retries once because the first request after a cold start is dropped.',
+    context: 'func send() {\n  retry(1)\n}',
+  },
+  {
+    id: 'case-3d4e5f', commit: 'b'.repeat(40), path: 'examples/SampleApp/App/B.swift',
+    comment: '/// Adds one to the count.', context: 'func increment() { count += 1 }',
+  },
+]
+const commentIds = comments.map((item) => item.id)
 const cases = [
   { id: 'old-case', declaredTier: 'T1', test: '@Test("a — catches b")\nfunc a() {}\n', diff: '+let a = 1\n' },
   { id: 'case-abc123', declaredTier: 'T2', test: '@Test("c — catches d")\nfunc c() {}\n', diff: '+let c = 2\n' },
@@ -89,6 +108,69 @@ const tests = {
       assert.ok(source.includes(`id: "${id}",`), `${id} is not a judge question`)
       assert.ok(source.includes(`"${text}"`), `${id}'s text differs from the judge's`)
     }
+  },
+
+  'a filled comment sheet produces person labels with exactly the answers given — catches a person\'s comment answers recorded as the agent\'s or dropped'() {
+    let sheet = renderCommentSheet({ cases: comments })
+    sheet = fill(sheet, 'case-0a1b2c', { 'loses-fact': 'yes', 'right-size': 'yes' })
+    sheet = fill(sheet, 'case-3d4e5f', { 'loses-fact': 'no', 'right-size': '' })
+    const result = applyCommentSheet({ labels: commentLabels, sheet, caseIds: commentIds })
+    assert.deepEqual(result.errors, [])
+    assert.deepEqual(result.labels, {
+      cases: [
+        { expected: { 'loses-fact': 'yes', 'right-size': 'yes' }, id: 'case-0a1b2c', labeller: 'person' },
+        { expected: { 'loses-fact': 'no' }, id: 'case-3d4e5f', labeller: 'person' },
+      ],
+      questionSet: 'comments@1', schema: 1,
+    })
+    assert.equal(result.person, 2)
+  },
+
+  'an unfilled comment sheet labels nothing — catches an agent\'s or a default answer written for a person'() {
+    const result = applyCommentSheet({ labels: commentLabels, sheet: renderCommentSheet({ cases: comments }), caseIds: commentIds })
+    assert.deepEqual(result.errors, [])
+    assert.deepEqual(result.labels, commentLabels)
+  },
+
+  'a comment answer that isn\'t yes or no is rejected and nothing is written — catches a typo shipped as a comment label'() {
+    const sheet = fill(renderCommentSheet({ cases: comments }), 'case-3d4e5f', { 'loses-fact': 'yes', 'right-size': 'maybe' })
+    const result = applyCommentSheet({ labels: commentLabels, sheet, caseIds: commentIds })
+    assert.equal(result.errors.length, 1)
+    assert.match(result.errors[0], /right-size is 'maybe', not one of yes, no/)
+    assert.deepEqual(result.labels, commentLabels)
+  },
+
+  'the comment sheet shows each case\'s comment, code and source but no case id, and a missing source or case is an error — catches an unblinded sheet or a case that lost where it came from'() {
+    const sheet = renderCommentSheet({ cases: comments })
+    assert.doesNotMatch(sheet, /case-0a1b2c|case-3d4e5f/)
+    for (const item of comments) {
+      assert.ok(sheet.includes(item.comment), 'the comment is missing')
+      assert.ok(sheet.includes(item.context), 'the code after it is missing')
+      assert.ok(sheet.includes(`Source: ${item.commit} ${item.path}`), 'the source is missing')
+    }
+    const noSource = sheet.replace(`Source: ${comments[1].commit} ${comments[1].path}`, '')
+    const lost = applyCommentSheet({ labels: commentLabels, sheet: noSource, caseIds: commentIds })
+    assert.match(lost.errors.join('\n'), /source line is missing/)
+    const partial = renderCommentSheet({ cases: [comments[0]] })
+    const result = applyCommentSheet({ labels: commentLabels, sheet: partial, caseIds: commentIds })
+    assert.match(result.errors.join('\n'), /case-3d4e5f/)
+  },
+
+  'the comment sheet asks the comment judge\'s questions word for word — catches a sheet whose questions drifted from the judge\'s'() {
+    const source = readFileSync(`${root}plugin/gate/Sources/SwiftGateDomain/Judge/Judge.swift`, 'utf8')
+      .replace(/"\s*\n\s*\+\s*"/g, '')
+    assert.deepEqual(commentQuestions.map((q) => q.id), ['loses-fact', 'right-size'])
+    for (const { id, text } of commentQuestions) {
+      assert.ok(source.includes(`id: "${id}",`), `${id} is not a judge question`)
+      assert.ok(source.includes(`"${text}"`), `${id}'s text differs from the judge's`)
+    }
+    const sheet = renderCommentSheet({ cases: comments })
+    for (const { id, text } of commentQuestions) assert.ok(sheet.includes(`- ${id}: ${text}`), `${id} is not asked`)
+  },
+
+  'formatting the committed comment labels reproduces the file byte for byte — catches a rewrite that reorders or reformats every comment label'() {
+    const text = readFileSync(`${root}plugin/gate/Fixtures/judge-comments/labels.json`, 'utf8')
+    assert.equal(formatLabels(JSON.parse(text)), text)
   },
 
   'formatting the committed labels reproduces the file byte for byte — catches a rewrite that reorders or reformats every label'() {

@@ -1,0 +1,6 @@
+public struct ReadinessFIFO: Sendable {
+  private let directory: URL
+  public var path: String { directory.appending(path: "ready").path }
+
+  public init() throws {
+    let token = UUID().uuidString  // swiftgate:allow det.uuid-init — unique directory

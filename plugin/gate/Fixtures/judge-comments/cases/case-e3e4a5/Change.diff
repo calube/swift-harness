@@ -1,0 +1,5 @@
+private struct ResolvedWrite {
+  static let recordedCommand = "\"swiftgate check --tier fast 2>&1 | tail -25\""
+  static let resolved = "Packages/Feed/Package.resolved"
+
+  let harness: HookHarness

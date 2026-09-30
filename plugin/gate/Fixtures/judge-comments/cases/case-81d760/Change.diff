@@ -1,0 +1,6 @@
+public enum ManifestDeclarationsReader {
+  public static func isManifest(_ path: String) -> Bool {
+    ManifestDiff.isManifest(path)
+  }
+
+  public static func read(_ text: String) -> ManifestReading {

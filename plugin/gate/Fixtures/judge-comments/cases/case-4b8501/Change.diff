@@ -1,0 +1,6 @@
+  func isRetryable(_ error: any Error) -> Bool {
+    switch error {
+    case HTTPError.unacceptableStatus(let status): status == 429 || (500..<600).contains(status)
+    case is URLError: true
+    default: false
+    }

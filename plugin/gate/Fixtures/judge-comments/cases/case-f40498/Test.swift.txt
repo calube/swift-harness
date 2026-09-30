@@ -1,0 +1,1 @@
+/// path's own candidate sibling is checked, never a directory listing, so the hook stays fast

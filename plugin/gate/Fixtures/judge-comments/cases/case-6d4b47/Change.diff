@@ -1,0 +1,6 @@
+  public static let modulesTouchedDeepThreshold = 4
+
+  /// Turns frame answers into graph facts, checked against `graph`. Deterministic: duplicate
+  /// names are checked first (`touchedModules` then `newModules`, first offender reported), then
+  /// every touched module must already be in the graph, then no new module may already be in the
+  /// graph.
