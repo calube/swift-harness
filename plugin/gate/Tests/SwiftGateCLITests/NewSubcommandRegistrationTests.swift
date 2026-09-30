@@ -67,6 +67,18 @@ struct NewSubcommandRegistrationTests {
       "set"
     ),
     ("calibrate design", ["calibrate", "design"], "design"),
+    ("judge", ["judge"], "tests"),
+    ("judge --ready", ["judge", "--ready"], "tests"),
+    ("judge tests --ready", ["judge", "tests", "--ready"], "tests"),
+    ("judge ask", ["judge", "ask", "--input", "-"], "ask"),
+    (
+      "judge ask --backend",
+      [
+        "judge", "ask", "--input", "input.json", "--backend", "jev", "--model", "jev-1.13.0",
+        "--send-to", "api.typesafe.ai", "--no-cache",
+      ],
+      "ask"
+    ),
     (
       "build start",
       ["build", "start", "example-plan", "--preset", "interview", "--session", "session-123"],
@@ -169,6 +181,7 @@ struct NewSubcommandRegistrationTests {
     "plan-lint",
     "design-render",
     "calibrate design",
+    "judge", "judge --ready", "judge tests --ready", "judge ask", "judge ask --backend",
     "build start", "build next", "build finish", "build check-return", "build proof-bases",
     "build record-gate",
     "build merge",
