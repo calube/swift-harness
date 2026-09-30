@@ -253,10 +253,17 @@ public enum JudgePolicy {
         let p = flaggedProbability(question, answer: answer, subject: subject),
         p >= thresholds.advisory
       else { continue }
-      let blocks = question.mayBlock && atReadyTier && p >= thresholds.block
+      let confident = question.mayBlock && p >= thresholds.block
+      let refusal =
+        confident ? blockAuthority.refusal(question: question.id, identity: identity) : nil
+      let blocks = confident && atReadyTier && refusal == nil
       var message =
         "\(question.problem) (p=\(String(format: "%.2f", p)), \(identity.backend)/\(identity.model))"
-      if !blocks, question.mayBlock, p >= thresholds.block {
+      if let refusal {
+        message +=
+          "; advisory: \(identity.backend) has no passing block calibration for \(question.id) "
+          + "on \(identity.model): \(refusal)"
+      } else if confident, !blocks {
         message += "; blocks at the ready tier"
       }
       findings.append(

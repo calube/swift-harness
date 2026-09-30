@@ -64,6 +64,77 @@ struct JudgeTests {
     #expect(found.allSatisfy { $0.severity == .minor })
   }
 
+  static let jev = JudgeIdentity(backend: "jev", model: "jev-1.13.0")
+  static let passing = JudgeBlockCalibration.Decision.passes(
+    JudgeBlockCalibration.Rates(
+      positives: 10, negatives: 20, jevTruePositives: 10, jevTrueNegatives: 20,
+      claudeTruePositives: 10, claudeTrueNegatives: 20))
+
+  static func jevFindings(
+    _ answers: [JudgeAnswer], authority: JudgeBlockAuthority, ready: Bool = true
+  ) throws -> [Finding] {
+    try JudgePolicy.findings(
+      subject: subject, answers: answers, questions: .tests, thresholds: thresholds,
+      identity: jev, atReadyTier: ready, blockAuthority: authority)
+  }
+
+  @Test(
+    "with no calibration evaluated, a jev answer at p=0.99 is minor at ready and says why while claude's is major — catches a Jev block by a caller that forgot the calibration, or Claude's blocks downgraded"
+  )
+  func jevWithoutDecisionIsAdvisory() throws {
+    let claude = try JudgePolicy.findings(
+      subject: Self.subject, answers: Self.answers(failsIfBroken: 0.99), questions: .tests,
+      thresholds: Self.thresholds, identity: Self.identity, atReadyTier: true,
+      blockAuthority: .standing)
+    #expect(claude.map(\.severity) == [.major])
+    let found = try Self.jevFindings(Self.answers(failsIfBroken: 0.99), authority: .standing)
+    #expect(found.map(\.severity) == [.minor])
+    #expect(
+      found.first?.message.contains(
+        "advisory: jev has no passing block calibration for fails-if-broken on jev-1.13.0") == true)
+  }
+
+  @Test(
+    "a failed decision keeps a jev answer minor and carries its reason — catches a Jev block with no recording"
+  )
+  func jevFailedDecisionIsAdvisory() throws {
+    let found = try Self.jevFindings(
+      Self.answers(failsIfBroken: 0.99),
+      authority: .perQuestion(["fails-if-broken": .fails(reason: "no recording from jev")]))
+    #expect(found.map(\.severity) == [.minor])
+    #expect(
+      found.first?.message.contains(
+        "advisory: jev has no passing block calibration for fails-if-broken on jev-1.13.0: "
+          + "no recording from jev") == true)
+    #expect(found.first?.message.contains("blocks at the ready tier") == false)
+  }
+
+  @Test(
+    "a passing decision for asserts-implementation leaves fails-if-broken minor — catches a calibration read per backend, not per question"
+  )
+  func jevDecisionIsPerQuestion() throws {
+    let found = try Self.jevFindings(
+      Self.answers(failsIfBroken: 0.99),
+      authority: .perQuestion(["asserts-implementation": Self.passing]))
+    #expect(found.map(\.severity) == [.minor])
+  }
+
+  @Test(
+    "a passing decision lets a jev answer block at ready, and only at ready, where no decision leaves it minor — catches a calibrated Jev never blocking, or blocking a push run"
+  )
+  func jevPassingDecisionBlocks() throws {
+    let undecided = try Self.jevFindings(
+      Self.answers(failsIfBroken: 0.99), authority: .perQuestion([:]))
+    #expect(undecided.map(\.severity) == [.minor])
+    let authority = JudgeBlockAuthority.perQuestion(["fails-if-broken": Self.passing])
+    let ready = try Self.jevFindings(Self.answers(failsIfBroken: 0.99), authority: authority)
+    #expect(ready.map(\.severity) == [.major])
+    #expect(ready.first?.message.contains("advisory") == false)
+    let push = try Self.jevFindings(
+      Self.answers(failsIfBroken: 0.99), authority: authority, ready: false)
+    #expect(push.map(\.severity) == [.minor])
+  }
+
   @Test("the rationale becomes the failure scenario — catches findings with no reason attached")
   func rationaleCarried() throws {
     let found = try Self.findings(Self.answers(failsIfBroken: 0.95), ready: true)

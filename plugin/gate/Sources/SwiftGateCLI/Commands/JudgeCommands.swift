@@ -72,7 +72,10 @@ enum TestJudgeCheck {
             $0, runner: LiveProcessRunner(),
             cacheDirectory: root.appending(path: FileJudgeCache.directoryName))
         },
-        diff: git)
+        diff: git,
+        harnessRoot: ProcessInfo.processInfo.environment[SelfTestCommand.harnessRootVariable].map {
+          URL(filePath: $0, directoryHint: .isDirectory)
+        })
     }
   }
 
@@ -80,9 +83,12 @@ enum TestJudgeCheck {
     _ environment: ChangedTestChecks.Environment, graph: ModuleGraph, config: Config,
     base: String, atReadyTier: Bool, dependencies: Dependencies
   ) async -> [Finding] {
-    guard case .enabled(_, let thresholds, _) = config.judge,
+    guard case .enabled(let backend, let thresholds, _) = config.judge,
       let judge = dependencies.makeJudge(config.judge)
     else { return [] }
+    let needsCalibration =
+      backend.needsBlockCalibration
+      || JudgeBackend(rawValue: judge.identity.backend)?.needsBlockCalibration == true
     let selection: ChangedTestChecks.Selection
     switch await ChangedTestChecks.select(environment, graph: graph, base: base) {
     case .failure(let reason): return note("judge not run: \(reason.text)")
@@ -123,12 +129,20 @@ enum TestJudgeCheck {
     switch await JudgeBatch.answer(subjects, questions: .tests, judge: judge) {
     case .failure(let error): return note("judge not run: \(error)")
     case .success(let answers):
+      let authority: JudgeBlockAuthority =
+        needsCalibration
+        ? .perQuestion(
+          JudgeCalibrationFiles.blockDecisions(
+            harnessRoot: dependencies.harnessRoot, questions: .tests,
+            model: judge.identity.model, blockThreshold: thresholds.block))
+        : .standing
       var findings: [Finding] = []
       for subject in subjects {
         findings +=
           (try? JudgePolicy.findings(
             subject: subject, answers: answers[subject.id] ?? [], questions: .tests,
-            thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier)) ?? []
+            thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier,
+            blockAuthority: authority)) ?? []
       }
       return findings
     }

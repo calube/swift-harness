@@ -445,7 +445,10 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
 
   /// Whether a confident answer may block `ready` only with a passing ``JudgeBlockCalibration``.
   public var needsBlockCalibration: Bool {
-    false
+    switch self {
+    case .claude: false
+    case .jev: true
+    }
   }
 }
 
