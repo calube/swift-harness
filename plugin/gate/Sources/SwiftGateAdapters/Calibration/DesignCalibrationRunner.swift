@@ -256,14 +256,87 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
 
   public static let directoryName = "calibrate-design"
 
-  public let root: URL
   public let runID: String
+  public let directory: URL
   public let mode: Mode
 
   public init(root: URL, runID: String, mode: Mode) {
-    self.root = root
     self.runID = runID
     self.mode = mode
+    self.directory = root.appending(
+      path: RunLayout.runDirectory(for: runID) + Self.directoryName, directoryHint: .isDirectory)
+  }
+
+  /// A reply's path relative to the worktree root, as messages name it.
+  public func replyPath(agent: String, seed: String) -> String {
+    path(agent: agent, seed: seed, "txt")
+  }
+
+  public func metadataPath(agent: String, seed: String) -> String {
+    path(agent: agent, seed: seed, "json")
+  }
+
+  private func path(agent: String, seed: String, _ suffix: String) -> String {
+    "\(RunLayout.runDirectory(for: runID))\(Self.directoryName)/\(agent)/\(seed).\(suffix)"
+  }
+
+  private func file(agent: String, seed: String, _ suffix: String) -> URL {
+    directory.appending(path: "\(agent)/\(seed).\(suffix)", directoryHint: .notDirectory)
+  }
+
+  /// `<seed>.json`: `requestedModel` is what the run passed to `--model`, often an alias;
+  /// `servedModels` are the `modelUsage` keys of the CLI's reply, the ids that actually answered.
+  struct Metadata: Codable, Equatable {
+    static let currentSchemaVersion = 1
+    let schemaVersion: Int
+    let requestedModel: String
+    let servedModels: [String]
+  }
+
+  struct Stored {
+    let reply: String
+    let metadata: Metadata
+  }
+
+  func keep(_ reply: String, metadata: Metadata, agent: String, seed: String)
+    throws(CalibrationCaseError)
+  {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    do {
+      try FileManager.default.createDirectory(
+        at: directory.appending(path: agent, directoryHint: .isDirectory),
+        withIntermediateDirectories: true)
+      try Data(reply.utf8).write(to: file(agent: agent, seed: seed, "txt"), options: .atomic)
+      try encoder.encode(metadata).write(
+        to: file(agent: agent, seed: seed, "json"), options: .atomic)
+    } catch {
+      throw .blocked("can't keep the reply at \(replyPath(agent: agent, seed: seed)): \(error)")
+    }
+  }
+
+  func stored(agent: String, seed: String) throws(CalibrationCaseError) -> Stored {
+    let replyPath = replyPath(agent: agent, seed: seed)
+    guard let data = try? Data(contentsOf: file(agent: agent, seed: seed, "txt")) else {
+      throw .blocked("no kept reply at \(replyPath) to replay")
+    }
+    guard let reply = String(data: data, encoding: .utf8) else {
+      throw .blocked("the kept reply at \(replyPath) isn't UTF-8")
+    }
+    let metadataPath = metadataPath(agent: agent, seed: seed)
+    let metadata: Metadata
+    do {
+      metadata = try JSONDecoder().decode(
+        Metadata.self, from: Data(contentsOf: file(agent: agent, seed: seed, "json")))
+    } catch {
+      throw .blocked("can't read the kept models at \(metadataPath): \(error)")
+    }
+    guard metadata.schemaVersion == Metadata.currentSchemaVersion else {
+      throw .blocked(
+        "\(metadataPath) has schemaVersion \(metadata.schemaVersion); this swiftgate reads "
+          + "\(Metadata.currentSchemaVersion)")
+    }
+    return Stored(reply: reply, metadata: metadata)
   }
 }
 
@@ -276,6 +349,10 @@ public struct DesignCalibrationRunner: Sendable {
     public let result: CalibrationRecord.CaseResult
     public let costUSD: Double?
     public let durationMilliseconds: Int?
+    /// The ids the CLI says served the agent, beside `result.model`, the one it was asked for.
+    public let servedModels: [String]
+    /// Where the reply is kept, when the run keeps or replays replies.
+    public let replyPath: String?
   }
 
   public static let judgeSubjectDescription =
@@ -290,6 +367,7 @@ public struct DesignCalibrationRunner: Sendable {
   /// Every agent's model for this run in place of its frontmatter's; a pass made with one is
   /// never fresh.
   public let modelOverride: String?
+  public let replies: DesignCalibrationReplies?
 
   public init(
     runner: any ProcessRunner, unpinnedModel: String = CalibrationModel.unpinned,
@@ -302,6 +380,7 @@ public struct DesignCalibrationRunner: Sendable {
     self.modelOverride = modelOverride
     self.executable = executable
     self.timeout = timeout
+    self.replies = replies
     self.judge = ClaudeCLIJudge(runner: runner, model: judgeModel, executable: executable)
   }
 
@@ -312,7 +391,24 @@ public struct DesignCalibrationRunner: Sendable {
   public func run(agent: DesignCalibrationSeeds.Agent, seed: DesignCalibrationSeeds.Case)
     async throws(CalibrationCaseError) -> CaseRun
   {
-    let reply = try await runAgent(agent, input: seed.input)
+    let reply: Reply
+    let model: String
+    if let replies, replies.mode == .replay {
+      let stored = try replies.stored(agent: agent.name, seed: seed.name)
+      reply = Reply(
+        result: stored.reply, costUSD: nil, durationMilliseconds: nil,
+        servedModels: stored.metadata.servedModels)
+      model = stored.metadata.requestedModel
+    } else {
+      model = self.model(of: agent)
+      reply = try await runAgent(agent, input: seed.input)
+      try replies?.keep(
+        reply.result,
+        metadata: .init(
+          schemaVersion: DesignCalibrationReplies.Metadata.currentSchemaVersion,
+          requestedModel: model, servedModels: reply.servedModels),
+        agent: agent.name, seed: seed.name)
+    }
     var answers: [CalibrationRecord.QuestionResult] = []
     let returned = Self.jsonObject(in: reply.result)
     for check in seed.label.checks {
@@ -375,9 +471,10 @@ public struct DesignCalibrationRunner: Sendable {
       (order.firstIndex(of: $0.question) ?? 0) < (order.firstIndex(of: $1.question) ?? 0)
     }
     return CaseRun(
-      result: .init(
-        agent: agent.name, caseName: seed.name, model: model(of: agent), answers: answers),
-      costUSD: reply.costUSD, durationMilliseconds: reply.durationMilliseconds)
+      result: .init(agent: agent.name, caseName: seed.name, model: model, answers: answers),
+      costUSD: reply.costUSD, durationMilliseconds: reply.durationMilliseconds,
+      servedModels: reply.servedModels,
+      replyPath: replies?.replyPath(agent: agent.name, seed: seed.name))
   }
 
   // MARK: - The agent
@@ -386,6 +483,7 @@ public struct DesignCalibrationRunner: Sendable {
     let result: String
     let costUSD: Double?
     let durationMilliseconds: Int?
+    let servedModels: [String]
   }
 
   func invocation(_ agent: DesignCalibrationSeeds.Agent, input: String) -> ProcessInvocation {
@@ -431,7 +529,8 @@ public struct DesignCalibrationRunner: Sendable {
     }
     return Reply(
       result: result, costUSD: object["total_cost_usd"] as? Double,
-      durationMilliseconds: object["duration_ms"] as? Int)
+      durationMilliseconds: object["duration_ms"] as? Int,
+      servedModels: (object["modelUsage"] as? [String: Any] ?? [:]).keys.sorted())
   }
 
   /// The agent's reply is one JSON object, possibly fenced.
