@@ -204,6 +204,8 @@ enum DiffSections {
   }
 }
 
+typealias JudgeTestsCommand = JudgeCommand
+
 struct JudgeCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "judge",
