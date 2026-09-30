@@ -2,6 +2,20 @@
 
 What each merged wave of [the Jev judge plan](../plans/2026-09-30-jev-judge-backend-plan.md) exposes to later waves: types, formats, flags, exit codes and constraints. Each wave appends a section when it merges.
 
+## Decision change, 2026-09-30
+
+The user changed 2 decisions after wave 7; they override the wave notes below where they differ. See the plan's
+last decisions row and the design's §7.
+- No block calibration. Jev blocks `ready` on its own when a blocking question's answer reaches `block_threshold`.
+  `JudgeBlockCalibration`, `JudgeCalibrationFiles.blockDecisions` and `blockAuthority: .perQuestion` stop deciding
+  blocks; the code change that removes the gate records its exact API here when it merges.
+- The cascade escalates only `.uncertain`; `.uncalibratedBlock` goes.
+- Unchanged: the Claude reason on every block and the missing-reason note, the pin `jev-1.13.0`, `send_to` and
+  `TYPESAFE_API_KEY`.
+- Labels: an Opus agent labelled both sheets blind (66 test-quality cases, 80 comments), imported as
+  `labeller: agent`. No person labels will come. The orchestrator drops the parked branches
+  `labels-test-awaiting-person-labels` and `comment-labels-test-awaiting-person-labels`. The benchmark runs on the agent labels and says so.
+
 ## Wave 1
 
 ### `jev-replies-are-captured`
