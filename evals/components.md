@@ -21,8 +21,8 @@ up.
 
 What already exists, and stays: `tests/*.mjs` check agent and workflow files for structure
 (model, tools, output schema) with no model calls. `calibrate design` runs 1 labelled seed per
-design agent on every push. `gate/Fixtures/judge` holds labelled cases for the test judge. The
-evals below grow those seeds into sets large enough to measure a rate.
+design agent on every push. `plugin/gate/Fixtures/judge` holds labelled cases for the test judge.
+The evals below grow those seeds into sets large enough to measure a rate.
 
 ## Skills
 
@@ -53,7 +53,7 @@ failed case.
 |---|---|---|
 | `concurrency` | seeded data races, actor isolation leaks, a `Sendable` claim that is false, missing cancellation; clean async code | recall, precision, findings per clean diff |
 | `architecture` | a feature importing a `*Live` module in a way the gate can't see, wrong module kind, a reducer doing IO; clean diffs | same |
-| `test-quality` | tests that pass for the wrong reason, over-mocked tests, a name that doesn't say what broke; the `gate/Fixtures/judge` cases as a start | same, plus agreement with the existing judge labels |
+| `test-quality` | tests that pass for the wrong reason, over-mocked tests, a name that doesn't say what broke; the `plugin/gate/Fixtures/judge` cases as a start | same, plus agreement with the existing judge labels |
 | `api-errors` | swallowed errors, a public type that leaks an implementation detail, an error with no recovery path; clean APIs | same |
 | `swiftui` | state held in the wrong place, identity bugs in `ForEach`, work in `body`; plus a diff with no SwiftUI, where the agent must not run | same, plus a run check on the no-SwiftUI diff |
 | `verifier` | each reviewer's findings on the diffs above, half real and half invented, labelled | real findings kept (it must not drop them) and invented findings dropped, reported apart |
@@ -107,7 +107,7 @@ clean corpus, which is where a false positive shows up.
 
 The `judge.*` rules come from a model, so they need judge calibration instead: at least 30
 labelled cases per rule, with true-positive and true-negative rates, rechecked when the judge's
-prompt or model changes. `gate/Fixtures/judge` is the start of that set.
+prompt or model changes. `plugin/gate/Fixtures/judge` is the start of that set.
 
 ## Order
 
