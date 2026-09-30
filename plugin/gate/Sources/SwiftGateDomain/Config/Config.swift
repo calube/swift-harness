@@ -450,6 +450,28 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
     case .jev: true
     }
   }
+
+  /// The third-party host this backend sends test source to, which `[judge] send_to` must name
+  /// before the backend runs. `nil` when there is no such host to name.
+  public var egressHost: String? {
+    nil
+  }
+
+  /// The versioned model used when `[judge] model` is unset. `nil` when the adapter picks its own
+  /// default.
+  public var pinnedModel: String? {
+    nil
+  }
+
+  /// The environment variable the backend reads its API key from; config never holds the key.
+  public var keyVariable: String? {
+    nil
+  }
+
+  /// Whether `model` names one fixed model rather than an alias that can move to a new one.
+  public func isPinned(_ model: String) -> Bool {
+    false
+  }
 }
 
 /// Probability thresholds: `p >= block` may block at the `ready` tier; `advisory <= p < block` is

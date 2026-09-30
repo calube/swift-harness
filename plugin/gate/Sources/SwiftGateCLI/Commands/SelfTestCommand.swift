@@ -1318,6 +1318,9 @@ private enum BuildSeedRunners {
     case .duplicateName: "duplicate-name"
     case .tooManyFlows: "too-many-flows"
     case .judgeThresholdsInverted: "judge-thresholds-inverted"
+    case .judgeHostNotNamed, .judgeHostMismatch, .judgeHostUnused, .judgeModelNotPinned,
+      .judgeSecretInConfig:
+      ""
     }
   }
 }
