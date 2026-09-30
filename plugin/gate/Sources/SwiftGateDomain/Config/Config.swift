@@ -487,7 +487,12 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
   /// the backend needs one, a host that isn't exactly ``egressHost``, or a host where the backend
   /// sends nowhere. `nil` when it allows it.
   public func egressIssue(sendTo: String?, path: String) -> ConfigIssue? {
-    nil
+    guard let host = egressHost else {
+      return sendTo == nil ? nil : .judgeHostUnused(path: path, backend: self)
+    }
+    guard let sendTo else { return .judgeHostNotNamed(path: path, backend: self, host: host) }
+    return sendTo == host
+      ? nil : .judgeHostMismatch(path: path, value: sendTo, backend: self, host: host)
   }
 
   /// Whether `model` names one fixed model rather than an alias that can move to a new one.

@@ -194,12 +194,9 @@ public enum ConfigSchema {
     let sendToReadable = table["send_to"] == nil || sendTo != nil
     if sendToReadable, rawBackend == "none" || backend != nil {
       let sendToPath = "\(path).send_to"
-      if let backend, let host = backend.egressHost {
-        if let sendTo, sendTo != host {
-          reader.issues.append(
-            .judgeHostMismatch(path: sendToPath, value: sendTo, backend: backend, host: host))
-        } else if sendTo == nil {
-          reader.issues.append(.judgeHostNotNamed(path: sendToPath, backend: backend, host: host))
+      if let backend {
+        if let issue = backend.egressIssue(sendTo: sendTo, path: sendToPath) {
+          reader.issues.append(issue)
         }
       } else if sendTo != nil {
         reader.issues.append(.judgeHostUnused(path: sendToPath, backend: backend))

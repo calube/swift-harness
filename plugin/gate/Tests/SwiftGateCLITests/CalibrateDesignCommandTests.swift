@@ -986,4 +986,59 @@ struct CalibrateDesignCommandTests {
       try #require(repository.data(DesignCalibrationLayout.recordPath)))
     #expect(decoded.judge?.backend == .claude)
   }
+
+  static func command(_ arguments: [String]) throws -> CalibrateDesignCommand {
+    try #require(
+      try CalibrateCommand.parseAsRoot(["design"] + arguments) as? CalibrateDesignCommand)
+  }
+
+  @Test(
+    "--judge-backend jev with no host named, by flag or config, is refused with exit 2 saying what to add — catches replies sent to TypeSafe without the user naming it"
+  )
+  func jevWithoutHostIsRefused() throws {
+    let command = try Self.command(["--judge-backend", "jev"])
+
+    let refusal = try #require(command.egressRefusal(configuredJudge: nil))
+    let claudeConfigured = command.egressRefusal(
+      configuredJudge: .enabled(
+        backend: .claude, thresholds: JudgeThresholds(advisory: 0.5, block: 0.9)))
+
+    #expect(refusal.contains("--send-to api.typesafe.ai"))
+    #expect(refusal.contains("send_to = \"api.typesafe.ai\""))
+    #expect(claudeConfigured == refusal)
+    #expect(try Self.exitCode(.blocked(reason: refusal)) == 2)
+  }
+
+  @Test(
+    "--send-to naming a lookalike of TypeSafe's host is refused naming the only allowed host — catches a typo'd or hostile host passing as consent"
+  )
+  func lookalikeHostIsRefused() throws {
+    for host in ["api.typesafe.ai.example.com", "typesafe.ai", "api.typesafe.al"] {
+      let command = try Self.command(["--judge-backend", "jev", "--send-to", host])
+
+      let refusal = command.egressRefusal(configuredJudge: nil)
+
+      #expect(refusal?.contains("\"\(host)\" is not the host") == true, "\(host)")
+      #expect(refusal?.contains("\"api.typesafe.ai\"") == true, "\(host)")
+    }
+  }
+
+  @Test(
+    "jev with --send-to api.typesafe.ai or a [judge] config naming it is accepted, and the Claude judge needs no host — catches consent given but refused"
+  )
+  func namedHostIsAccepted() throws {
+    let flagged = try Self.command(["--judge-backend", "jev", "--send-to", "api.typesafe.ai"])
+    let configured = try Self.command(["--judge-backend", "jev"])
+    let claude = try Self.command([])
+
+    #expect(flagged.egressRefusal(configuredJudge: nil) == nil)
+    #expect(
+      configured.egressRefusal(
+        configuredJudge: .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.5, block: 0.9))) == nil)
+    #expect(claude.egressRefusal(configuredJudge: nil) == nil)
+    #expect(
+      try Self.command(["--send-to", "api.typesafe.ai"]).egressRefusal(configuredJudge: nil)
+        != nil)
+  }
 }

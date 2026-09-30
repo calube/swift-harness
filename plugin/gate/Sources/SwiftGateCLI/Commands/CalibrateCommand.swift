@@ -29,11 +29,12 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
       + "<agent>/<case>.txt, with the requested and served models in <case>.json. `--replay <run "
       + "id>` judges those replies instead of running the agents, and never writes the record. "
       + "`--judge-backend jev` judges through Jev with TYPESAFE_API_KEY, which sends each "
-      + "judged reply to api.typesafe.ai; push never counts a pass judged by any but the default "
-      + "Claude judge. "
+      + "judged reply to api.typesafe.ai, so it needs `--send-to api.typesafe.ai` or a [judge] "
+      + "config naming that host; push never counts a pass judged by any but the default Claude "
+      + "judge. "
       + "Exit 0 all labels met (record written, unless replayed), 1 on a missed label or a seed "
-      + "defect (record untouched), 2 when claude can't run or answer, a seed can't be read, or "
-      + "a replayed reply is missing.")
+      + "defect (record untouched), 2 when claude can't run or answer, a seed can't be read, a "
+      + "replayed reply is missing, or a remote judge's host isn't named.")
 
   @Option(
     help: ArgumentHelp(
@@ -69,7 +70,17 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
   /// Why the judge these flags name may not send replies where it would, given the repository's
   /// `[judge]` config; `nil` when it may.
   func egressRefusal(configuredJudge: JudgeConfig?) -> String? {
-    ""
+    // A config that loaded has already had its `send_to` checked against the backend's host.
+    if sendTo == nil, case .enabled(let configured, _, _) = configuredJudge,
+      configured == judgeBackend, configured.egressHost != nil
+    {
+      return nil
+    }
+    guard let issue = judgeBackend.egressIssue(sendTo: sendTo, path: "--send-to") else {
+      return nil
+    }
+    guard case .judgeHostNotNamed(_, _, let host) = issue else { return "\(issue)" }
+    return "\(issue), or pass --send-to \(host)"
   }
 
   /// The judge these flags name, built by the judge factory.
@@ -103,6 +114,13 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
     let runID = RunID.make(startedAt: now, suffix: UInt32.random(in: .min ... .max))
     let replies = DesignCalibrationReplies(
       root: root, runID: replay ?? runID, mode: replay == nil ? .keep : .replay)
+    let configuredJudge = try? StaticCheckInputs.loadConfig(root: root).get()?.judge
+    if let refusal = egressRefusal(configuredJudge: configuredJudge) {
+      try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
+        .blocked(reason: "calibrate design: \(refusal)")
+      }
+      return
+    }
     let runner = LiveProcessRunner()
     let judge = judge(runner: runner)
     try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
