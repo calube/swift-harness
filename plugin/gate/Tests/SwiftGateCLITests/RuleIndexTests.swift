@@ -65,7 +65,8 @@ struct RuleIndexTests {
       // Same reason: a literal, not `HostTestEvidenceRules.resolvedFileStaleRuleID`.
       "swiftgate.resolved-file-stale",
       SimulatorTestCheck.nothingSelectedRuleID, ResolvedScopes.fallbackRuleID, SelfTest.ruleID,
-      JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, KnownIdSourceFindings.ruleID,
+      JudgeSelfTest.ruleID, JudgeSelfTest.metricsRuleID, JudgeSelfTest.staleRuleID,
+      KnownIdSourceFindings.ruleID,
       PushDocGates.staleClaimRuleID, PushDocGates.statusUnknownRuleID,
       PushDocGates.blockedRuleID, PushDocGates.summaryRuleID, CalibrationFreshness.staleRuleID,
       CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
