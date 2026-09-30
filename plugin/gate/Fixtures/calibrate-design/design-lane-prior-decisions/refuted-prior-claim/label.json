@@ -27,7 +27,7 @@
         },
         {
           "path": "citation.loc",
-          "prefix": "docs/library/designs/book-cache."
+          "prefix": "docs/library/designs/book-cache.evidence/claims.jsonl:L4-"
         }
       ]
     }

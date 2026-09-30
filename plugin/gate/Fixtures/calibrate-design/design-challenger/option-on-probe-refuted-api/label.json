@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "checks": [
     {
-      "id": "gating-finding-at-decision",
+      "id": "gating-finding",
       "kind": "present",
       "array": "findings",
       "where": [
@@ -12,14 +12,18 @@
             "blocker",
             "major"
           ]
-        },
-        {
-          "path": "location.anchor",
-          "oneOf": [
-            "decision"
-          ]
         }
       ]
+    },
+    {
+      "id": "gating-finding-on-failed-probe",
+      "kind": "judge",
+      "text": "What do the blocker and major findings say about the probe verdicts of the APIs the chosen option calls?",
+      "options": [
+        "an API it calls failed its probe or doesn't exist",
+        "its APIs passed their probes, or no finding says"
+      ],
+      "expected": "an API it calls failed its probe or doesn't exist"
     }
   ]
 }
