@@ -16,6 +16,17 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
   case duplicateName(path: String, name: String)
   case tooManyFlows(count: Int, max: Int)
   case judgeThresholdsInverted(advisory: Double, block: Double)
+  /// A backend that sends test source to a third-party host, with no `send_to` naming that host.
+  case judgeHostNotNamed(path: String, backend: JudgeBackend, host: String)
+  /// `send_to` names a host other than the one the backend sends to.
+  case judgeHostMismatch(path: String, value: String, backend: JudgeBackend, host: String)
+  /// `send_to` set while the backend is off (`nil`) or sends to no host a repository names.
+  case judgeHostUnused(path: String, backend: JudgeBackend?)
+  /// A model alias where the backend needs a versioned id, since an alias moves without a change
+  /// in the repository.
+  case judgeModelNotPinned(path: String, value: String, backend: JudgeBackend, pin: String)
+  /// A key named like a credential; `.swiftgate.toml` is committed, so a key never goes there.
+  case judgeSecretInConfig(path: String)
 
   /// Why a module entry needs a `reason`.
   public enum ReasonRule: Sendable, Equatable {
@@ -28,7 +39,10 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
     case .unknownKey(let path), .missingKey(let path), .wrongType(let path, _, _),
       .emptyValue(let path), .outOfRange(let path, _, _), .unknownModuleKind(let path, _),
       .unknownJudgeBackend(let path, _), .unknownEnumValue(let path, _, _),
-      .missingReason(let path, _, _), .duplicateName(let path, _):
+      .missingReason(let path, _, _), .duplicateName(let path, _),
+      .judgeHostNotNamed(let path, _, _), .judgeHostMismatch(let path, _, _, _),
+      .judgeHostUnused(let path, _), .judgeModelNotPinned(let path, _, _, _),
+      .judgeSecretInConfig(let path):
       path
     case .unsupportedSchema: "schema"
     case .tooManyFlows: "flows"
@@ -68,6 +82,25 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
       "flows: \(count) flows declared, pyramid.max_flows is \(max)"
     case .judgeThresholdsInverted(let advisory, let block):
       "judge: advisory_threshold \(advisory) is above block_threshold \(block)"
+    case .judgeHostNotNamed(let path, let backend, let host):
+      "\(path): backend \"\(backend.rawValue)\" sends test source to \(host); add "
+        + "send_to = \"\(host)\" to [judge] to allow it"
+    case .judgeHostMismatch(let path, let value, let backend, let host):
+      "\(path): \"\(value)\" is not the host backend \"\(backend.rawValue)\" sends to "
+        + "(allowed: \"\(host)\")"
+    case .judgeHostUnused(let path, let backend?):
+      "\(path): backend \"\(backend.rawValue)\" sends to no host named here; remove send_to"
+    case .judgeHostUnused(let path, nil):
+      "\(path): the judge is off, so send_to allows nothing; remove it"
+    case .judgeModelNotPinned(let path, let value, let backend, let pin):
+      "\(path): \"\(value)\" is an alias that can move to a new \(backend.rawValue) model; "
+        + "pin a versioned id such as \"\(pin)\", or remove model to use \"\(pin)\""
+    case .judgeSecretInConfig(let path):
+      "\(path): looks like a credential, and \(Config.fileName) is committed; set the key in "
+        + "the environment ("
+        + JudgeBackend.allCases.compactMap { backend in
+          backend.keyVariable.map { "\(backend.rawValue): \($0)" }
+        }.joined(separator: ", ") + ") and remove it here"
     }
   }
 }

@@ -20,6 +20,44 @@ struct ConfigTests {
     }
   }
 
+  @Test(
+    "a Jev judge built in code with the jev-latest alias fails naming the pin, and a versioned id builds — catches the pin rule living only in the file reader"
+  )
+  func codeBuiltJevConfigNeedsAPin() throws {
+    func config(_ model: String) throws -> Config {
+      try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        judge: .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9), model: model))
+    }
+    #expect {
+      _ = try config("jev-latest")
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .judgeModelNotPinned(
+          path: "judge.model", value: "jev-latest", backend: .jev, pin: "jev-1.13.0")
+      ]
+    }
+    #expect(try config("jev-2.0.10").judge != .disabled)
+  }
+
+  @Test(
+    "only a Jev id of three numeric parts is pinned, and Claude's aliases stay allowed — catches an alias or a malformed version passing as a pin"
+  )
+  func jevPinShape() {
+    for pinned in ["jev-1.13.0", "jev-10.0.123"] {
+      #expect(JudgeBackend.jev.isPinned(pinned), "\(pinned)")
+    }
+    for alias in [
+      "jev-latest", "jev-preview", "jev-1.13", "jev-1.13.0.1", "jev-1..0", "jev-1.13.0-rc1",
+      "jev-١.٢.٣", "Jev-1.13.0", "1.13.0",
+    ] {
+      #expect(!JudgeBackend.jev.isPinned(alias), "\(alias)")
+    }
+    #expect(JudgeBackend.claude.isPinned("sonnet"))
+  }
+
   @Test("schema reports a non-table document instead of trapping — catches crash on bad input")
   func nonTableDocument() {
     #expect {

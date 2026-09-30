@@ -206,6 +206,12 @@ public struct Config: Sendable, Equatable {
           .judgeThresholdsInverted(advisory: thresholds.advisory, block: thresholds.block))
       }
     }
+    if case .enabled(let backend, _, let model?) = judge, let pin = backend.pinnedModel,
+      !backend.isPinned(model)
+    {
+      issues.append(
+        .judgeModelNotPinned(path: "judge.model", value: model, backend: backend, pin: pin))
+    }
     for (index, path) in exclude.enumerated() {
       requireRepoRelativePath(
         path, "exclude[\(index)]", allowed: "a repository-relative directory")
@@ -448,6 +454,47 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
     switch self {
     case .claude: false
     case .jev: true
+    }
+  }
+
+  /// The third-party host this backend sends test source to, which `[judge] send_to` must name
+  /// before the backend runs. `nil` when there is no such host to name.
+  public var egressHost: String? {
+    switch self {
+    case .claude: nil
+    case .jev: "api.typesafe.ai"
+    }
+  }
+
+  /// The versioned model used when `[judge] model` is unset. `nil` when the adapter picks its own
+  /// default.
+  public var pinnedModel: String? {
+    switch self {
+    case .claude: nil
+    case .jev: "jev-1.13.0"
+    }
+  }
+
+  /// The environment variable the backend reads its API key from; config never holds the key.
+  public var keyVariable: String? {
+    switch self {
+    case .claude: nil
+    case .jev: "TYPESAFE_API_KEY"
+    }
+  }
+
+  /// Whether `model` names one fixed model rather than an alias that can move to a new one.
+  public func isPinned(_ model: String) -> Bool {
+    switch self {
+    case .claude:
+      return true
+    case .jev:
+      // TypeSafe versions are `jev-<major>.<minor>.<patch>`; `jev-latest` and `jev-preview` move.
+      guard model.hasPrefix("jev-") else { return false }
+      let parts = model.dropFirst("jev-".count).split(
+        separator: ".", omittingEmptySubsequences: false)
+      return parts.count == 3
+        && parts.allSatisfy { !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } }
     }
   }
 }

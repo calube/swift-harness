@@ -344,6 +344,131 @@ struct TOMLConfigDecoderTests {
     #expect(found == [.unknownJudgeBackend(path: "judge.backend", value: "gpt")])
   }
 
+  static func judge(_ lines: String...) -> String {
+    minimal + "[judge]\nadvisory_threshold = 0.6\nblock_threshold = 0.9\n"
+      + lines.joined(separator: "\n") + "\n"
+  }
+
+  @Test(
+    "backend jev with no send_to fails naming judge.send_to and the line to add — catches a copied backend line sending code to a new host"
+  )
+  func jevNeedsSendTo() {
+    let found = issues(Self.judge("backend = \"jev\""))
+
+    #expect(
+      found == [.judgeHostNotNamed(path: "judge.send_to", backend: .jev, host: "api.typesafe.ai")])
+    #expect(found.first?.description.contains("add send_to = \"api.typesafe.ai\"") == true)
+  }
+
+  @Test(
+    "backend jev with send_to naming any other host fails with the allowed host — catches a lookalike host passing a prefix, suffix or case-folded match"
+  )
+  func jevRejectsLookalikeHosts() {
+    for host in [
+      "api.typesafe.ai.example.com", "https://api.typesafe.ai", "API.typesafe.ai", "typesafe.ai",
+      "api.typesafe.ai ", "evil-api.typesafe.ai",
+    ] {
+      let found = issues(Self.judge("backend = \"jev\"", "send_to = \"\(host)\""))
+      #expect(
+        found == [
+          .judgeHostMismatch(
+            path: "judge.send_to", value: host, backend: .jev, host: "api.typesafe.ai")
+        ], "\(host)")
+      #expect(found.first?.description.contains("(allowed: \"api.typesafe.ai\")") == true)
+    }
+  }
+
+  @Test(
+    "send_to with backend claude or none fails — catches a send_to key that silently means nothing"
+  )
+  func sendToWithoutJev() {
+    #expect(
+      issues(Self.judge("backend = \"claude\"", "send_to = \"api.typesafe.ai\""))
+        == [.judgeHostUnused(path: "judge.send_to", backend: .claude)])
+    #expect(
+      issues(Self.judge("backend = \"none\"", "send_to = \"api.typesafe.ai\""))
+        == [.judgeHostUnused(path: "judge.send_to", backend: nil)])
+    for backend: JudgeBackend? in [.claude, nil] {
+      let message = ConfigIssue.judgeHostUnused(path: "judge.send_to", backend: backend).description
+      #expect(message.hasPrefix("judge.send_to: "))
+      #expect(message.contains("remove"))
+    }
+  }
+
+  @Test(
+    "a send_to of the wrong type or beside an unknown backend reports only that first problem — catches one mistake reported twice"
+  )
+  func sendToReportsOnce() {
+    #expect(
+      issues(Self.judge("backend = \"jev\"", "send_to = 1"))
+        == [.wrongType(path: "judge.send_to", expected: "string", found: "integer")])
+    #expect(
+      issues(Self.judge("backend = \"gpt\"", "send_to = \"api.typesafe.ai\""))
+        == [.unknownJudgeBackend(path: "judge.backend", value: "gpt")])
+  }
+
+  @Test(
+    "a jev model alias fails naming the alias and the default pin, and a versioned id passes — catches thresholds tuned on one model applied to another"
+  )
+  func jevModelMustBePinned() throws {
+    for alias in ["jev-latest", "jev-preview", "jev", "jev-1", "jev-1.13.x", ""] {
+      let found = issues(
+        Self.judge("backend = \"jev\"", "send_to = \"api.typesafe.ai\"", "model = \"\(alias)\""))
+      #expect(
+        found == [
+          .judgeModelNotPinned(path: "judge.model", value: alias, backend: .jev, pin: "jev-1.13.0")
+        ], "\(alias)")
+      #expect(found.first?.description.contains("\"\(alias)\"") == true)
+      #expect(found.first?.description.contains("\"jev-1.13.0\"") == true)
+    }
+    let pinned = try decoder.decode(
+      Self.judge("backend = \"jev\"", "send_to = \"api.typesafe.ai\"", "model = \"jev-1.12.0\""))
+    #expect(
+      pinned.judge
+        == .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9),
+          model: "jev-1.12.0"))
+    let claudeAlias = try decoder.decode(Self.judge("backend = \"claude\"", "model = \"sonnet\""))
+    #expect(
+      claudeAlias.judge
+        == .enabled(
+          backend: .claude, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9),
+          model: "sonnet"))
+  }
+
+  @Test(
+    "a valid jev table decodes with no model, which resolves to the jev-1.13.0 pin — catches the opt-in rejecting its own correct form"
+  )
+  func validJevTable() throws {
+    let config = try decoder.decode(
+      Self.judge("backend = \"jev\"", "send_to = \"api.typesafe.ai\""))
+
+    #expect(
+      config.judge
+        == .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9), model: nil))
+    #expect(JudgeBackend.jev.pinnedModel == "jev-1.13.0")
+  }
+
+  @Test(
+    "a credential-like key in [judge] fails naming TYPESAFE_API_KEY and never echoing the value — catches an API key committed in config"
+  )
+  func judgeRejectsSecrets() {
+    let sentinel = "sk-sentinel-4f1c"
+    for key in ["api_key", "TYPESAFE_API_KEY", "token", "secret", "password", "apiKey"] {
+      let found = issues(
+        Self.judge("backend = \"jev\"", "send_to = \"api.typesafe.ai\"", "\(key) = \"\(sentinel)\"")
+      )
+      #expect(found == [.judgeSecretInConfig(path: "judge.\(key)")], "\(key)")
+      let message = found.map(\.description).joined()
+      #expect(message.contains("TYPESAFE_API_KEY"), "\(key)")
+      #expect(!message.contains(sentinel))
+    }
+    #expect(
+      issues(Self.judge("backend = \"jev\"", "send_to = \"api.typesafe.ai\"", "host = \"x\""))
+        == [.unknownKey(path: "judge.host")])
+  }
+
   @Test("TOML syntax error reports line and column — catches a parse failure reported as valid")
   func syntaxError() {
     #expect {
