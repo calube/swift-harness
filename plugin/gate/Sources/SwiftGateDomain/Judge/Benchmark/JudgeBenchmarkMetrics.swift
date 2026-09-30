@@ -34,8 +34,8 @@ public struct JudgeSplitCases<Kind: JudgeSplitKind>: Sendable, Equatable {
   public let excluded: Int
 
   public init(_ all: [JudgeBenchmarkCase]) {
-    self.cases = []
-    self.excluded = 0
+    cases = all.filter { JudgeCaseSplit.of($0.id) == Kind.split }
+    excluded = all.count - cases.count
   }
 }
 
@@ -157,15 +157,31 @@ public enum JudgeBenchmarkMetrics {
     threshold: Double, seed: UInt64 = JudgeBootstrap.seed,
     resamples: Int = JudgeBootstrap.resamples
   ) -> JudgeQuestionBenchmark {
-    let none = JudgeProportion(count: 0, n: 0)
+    let (scored, unscored) = score(question, cases: cases.cases, run: run)
+    let counts = tally(question.id, scored, unscored: unscored, threshold: threshold)
+    let points = scored.map { (p: $0.meanFlagged, positive: $0.positive) }
+    let curve = reliability(points)
     return JudgeQuestionBenchmark(
-      question: question.id, identity: run.identity, threshold: threshold,
-      counts: JudgeQuestionMetrics(
-        question: question.id, truePositives: 0, falsePositives: 0, falseNegatives: 0,
-        trueNegatives: 0, unscored: 0),
-      precision: none, truePositiveRate: none, trueNegativeRate: none, accuracy: none,
-      brier: .undefined(.noCases, n: 0), reliability: [],
-      calibrationError: .undefined(.noCases, n: 0), stability: .tooFewRepeats(0))
+      question: question.id, identity: run.identity, threshold: threshold, counts: counts,
+      precision: JudgeProportion(
+        count: counts.truePositives, n: counts.truePositives + counts.falsePositives),
+      truePositiveRate: JudgeProportion(
+        count: counts.truePositives, n: counts.truePositives + counts.falseNegatives),
+      trueNegativeRate: JudgeProportion(
+        count: counts.trueNegatives, n: counts.trueNegatives + counts.falsePositives),
+      accuracy: JudgeProportion(count: scored.filter(\.correct).count, n: scored.count),
+      brier: .of(
+        mean(scored.map(\.brier)), n: scored.count,
+        interval: JudgeBootstrap.interval(cases: scored.count, resamples: resamples, seed: seed) {
+          draw in mean(draw.map { scored[$0].brier })
+        }),
+      reliability: curve.bins,
+      calibrationError: .of(
+        curve.calibrationError, n: scored.count,
+        interval: JudgeBootstrap.interval(cases: scored.count, resamples: resamples, seed: seed) {
+          draw in reliability(draw.map { points[$0] }).calibrationError
+        }),
+      stability: stability(scored, repeats: run.repeats.count, threshold: threshold))
   }
 
   public static func compare(
@@ -173,38 +189,281 @@ public enum JudgeBenchmarkMetrics {
     _ second: JudgeBenchmarkRun, threshold: Double, seed: UInt64 = JudgeBootstrap.seed,
     resamples: Int = JudgeBootstrap.resamples
   ) -> JudgeBackendComparison {
-    let none = JudgeEstimate.undefined(.noCases, n: 0)
+    let a = Dictionary(
+      score(question, cases: cases.cases, run: first).scored.map { ($0.id, $0) },
+      uniquingKeysWith: { kept, _ in kept })
+    let b = Dictionary(
+      score(question, cases: cases.cases, run: second).scored.map { ($0.id, $0) },
+      uniquingKeysWith: { kept, _ in kept })
+    let pairs = cases.cases.compactMap { item in
+      a[item.id].flatMap { left in b[item.id].map { (left, $0) } }
+    }
+    let n = pairs.count
+    func estimate(_ statistic: @escaping ([Int]) -> Double?) -> JudgeEstimate {
+      .of(
+        statistic(Array(0..<n)), n: n,
+        interval: JudgeBootstrap.interval(
+          cases: n, resamples: resamples, seed: seed, statistic: statistic))
+    }
+    func difference(_ metric: @escaping ([ScoredCase]) -> Double?) -> JudgeEstimate {
+      estimate { draw in
+        guard let left = metric(draw.map { pairs[$0].0 }),
+          let right = metric(draw.map { pairs[$0].1 })
+        else { return nil }
+        return left - right
+      }
+    }
+    let decisions = pairs.map {
+      ($0.0.decision(at: threshold), $0.1.decision(at: threshold))
+    }
+    var kappaEstimate = kappa(decisions.map(\.0), decisions.map(\.1))
+    if let value = kappaEstimate.value {
+      kappaEstimate = .defined(
+        value, n: n,
+        interval: JudgeBootstrap.interval(cases: n, resamples: resamples, seed: seed) { draw in
+          kappa(draw.map { decisions[$0].0 }, draw.map { decisions[$0].1 }).value
+        })
+    }
     return JudgeBackendComparison(
-      question: question.id, first: first.identity, second: second.identity, kappa: none,
-      brierDifference: none, calibrationErrorDifference: none, accuracyDifference: none,
-      truePositiveRateDifference: none, trueNegativeRateDifference: none)
+      question: question.id, first: first.identity, second: second.identity,
+      kappa: kappaEstimate,
+      brierDifference: difference { mean($0.map(\.brier)) },
+      calibrationErrorDifference: difference {
+        reliability($0.map { (p: $0.meanFlagged, positive: $0.positive) }).calibrationError
+      },
+      accuracyDifference: difference {
+        JudgeProportion(count: $0.filter(\.correct).count, n: $0.count).value
+      },
+      truePositiveRateDifference: difference { cases in
+        let positives = cases.filter(\.positive)
+        return JudgeProportion(
+          count: positives.filter { $0.decision(at: threshold) }.count, n: positives.count
+        ).value
+      },
+      trueNegativeRateDifference: difference { cases in
+        let negatives = cases.filter { !$0.positive }
+        return JudgeProportion(
+          count: negatives.filter { !$0.decision(at: threshold) }.count, n: negatives.count
+        ).value
+      })
   }
 
   public static func usage(cases: JudgeReportCases, run: JudgeBenchmarkRun)
     -> JudgeUsageBenchmark
   {
-    let none = JudgeEstimate.undefined(.noCases, n: 0)
+    var requestWall: [Int] = []
+    var caseWall: [Int] = []
+    var backendTime: [Int] = []
+    var inputTokens: [Int] = []
+    var outputTokens: [Int] = []
+    var costs: [Double] = []
+    var costedJudgments = 0
+    for repeatAnswers in run.repeats {
+      for item in cases.cases {
+        guard let replies = repeatAnswers[item.id], !replies.isEmpty else { continue }
+        let usages = replies.map(\.usage)
+        requestWall += usages.compactMap { $0?.wallMilliseconds }
+        backendTime += usages.compactMap { $0?.backendMilliseconds }
+        // A case's total counts only when every request behind it reported the field, so a
+        // partial sum never passes for a whole one.
+        if let walls = all(usages.map { $0?.wallMilliseconds }) { caseWall.append(sum(walls)) }
+        if let input = all(usages.map { $0?.inputTokens }) { inputTokens.append(sum(input)) }
+        if let output = all(usages.map { $0?.outputTokens }) { outputTokens.append(sum(output)) }
+        if let cost = all(usages.map { $0?.costUSD }) {
+          costs.append(cost.reduce(0, +))
+          costedJudgments += Set(replies.flatMap(\.answers).map(\.question)).count
+        }
+      }
+    }
+    let totalCost = costs.reduce(0, +)
     return JudgeUsageBenchmark(
-      identity: run.identity, requestLatency: JudgePercentiles([]),
-      caseLatency: JudgePercentiles([]), backendLatency: JudgePercentiles([]),
-      inputTokensPerCase: none, outputTokensPerCase: none, costPerCase: none,
-      costPerThousandJudgments: none)
+      identity: run.identity, requestLatency: JudgePercentiles(requestWall),
+      caseLatency: JudgePercentiles(caseWall), backendLatency: JudgePercentiles(backendTime),
+      inputTokensPerCase: .of(mean(inputTokens.map(Double.init)), n: inputTokens.count),
+      outputTokensPerCase: .of(mean(outputTokens.map(Double.init)), n: outputTokens.count),
+      costPerCase: .of(mean(costs), n: costs.count),
+      costPerThousandJudgments: .of(
+        costedJudgments == 0 ? nil : totalCost / Double(costedJudgments) * 1000,
+        n: costedJudgments))
   }
 
   public static func sweep(
     _ question: JudgeQuestion, cases: JudgeTuneCases, run: JudgeBenchmarkRun,
     thresholds: [Double]
   ) -> [JudgeThresholdPoint] {
-    []
+    let (scored, unscored) = score(question, cases: cases.cases, run: run)
+    return thresholds.map { threshold in
+      let counts = tally(question.id, scored, unscored: unscored, threshold: threshold)
+      return JudgeThresholdPoint(
+        threshold: threshold, counts: counts,
+        truePositiveRate: JudgeProportion(
+          count: counts.truePositives, n: counts.truePositives + counts.falseNegatives),
+        trueNegativeRate: JudgeProportion(
+          count: counts.trueNegatives, n: counts.trueNegatives + counts.falsePositives))
+    }
   }
 
   /// Cohen's κ between 2 raters' decisions on the same subjects, paired by position.
   public static func kappa(_ first: [Bool], _ second: [Bool]) -> JudgeEstimate {
-    JudgeEstimate(value: nil, undefined: nil, n: 0, interval: nil)
+    let n = min(first.count, second.count)
+    guard n > 0 else { return .undefined(.noCases, n: 0) }
+    let pairs = zip(first, second)
+    let total = Double(n)
+    let observed = Double(pairs.filter { $0 == $1 }.count) / total
+    let firstYes = Double(first.prefix(n).filter { $0 }.count) / total
+    let secondYes = Double(second.prefix(n).filter { $0 }.count) / total
+    let chance = firstYes * secondYes + (1 - firstYes) * (1 - secondYes)
+    guard chance < 1 else { return .undefined(.chanceAgreementIsCertain, n: n) }
+    return .defined((observed - chance) / (1 - chance), n: n)
   }
 
   /// `bins` equal-width bins of the flagged probability, and the expected calibration error.
   public static func reliability(_ points: [(p: Double, positive: Bool)]) -> JudgeReliability {
-    JudgeReliability(bins: [], calibrationError: nil)
+    var members = Array(repeating: [(p: Double, positive: Bool)](), count: bins)
+    for point in points {
+      members[min(bins - 1, max(0, Int(point.p * Double(bins))))].append(point)
+    }
+    let table = members.enumerated().map { index, inBin in
+      JudgeReliabilityBin(
+        lower: Double(index) / Double(bins), upper: Double(index + 1) / Double(bins),
+        meanPredicted: mean(inBin.map(\.p)),
+        observed: JudgeProportion(count: inBin.filter(\.positive).count, n: inBin.count))
+    }
+    guard !points.isEmpty else { return JudgeReliability(bins: table, calibrationError: nil) }
+    let error = table.reduce(0.0) { total, bin in
+      guard let predicted = bin.meanPredicted, let observed = bin.observed.value else {
+        return total
+      }
+      return total + Double(bin.observed.n) / Double(points.count) * abs(observed - predicted)
+    }
+    return JudgeReliability(bins: table, calibrationError: error)
+  }
+
+  /// A labelled case every repeat answered.
+  struct ScoredCase {
+    let id: String
+    let positive: Bool
+    let flagged: [Double]
+    let mostLikely: [String?]
+    let meanFlagged: Double
+    let brier: Double
+    let correct: Bool
+
+    /// The majority over repeats; a tie goes to the mean flagged probability.
+    func decision(at threshold: Double) -> Bool {
+      let fired = flagged.filter { $0 >= threshold }.count
+      if 2 * fired == flagged.count { return meanFlagged >= threshold }
+      return 2 * fired > flagged.count
+    }
+  }
+
+  /// A case scores only with a label for the question and an answer in every repeat, so every
+  /// case's decision rests on the same number of repeats.
+  static func score(_ question: JudgeQuestion, cases: [JudgeBenchmarkCase], run: JudgeBenchmarkRun)
+    -> (scored: [ScoredCase], unscored: Int)
+  {
+    var scored: [ScoredCase] = []
+    var unscored = 0
+    for item in cases {
+      let subject = JudgeSubject(
+        id: item.id, file: item.id, line: 1, source: "", context: "",
+        declaredTier: item.declaredTier)
+      let answers = run.repeats.map { repeatAnswers in
+        repeatAnswers[item.id]?.lazy.flatMap(\.answers).first { $0.question == question.id }
+      }
+      guard let expected = item.expected[question.id], !answers.isEmpty,
+        let found = all(answers),
+        let flagged = all(
+          found.map { JudgePolicy.flaggedProbability(question, answer: $0, subject: subject) }),
+        let positive = flagFires(question, expected: expected, declaredTier: item.declaredTier)
+      else {
+        unscored += 1
+        continue
+      }
+      let options = question.options
+      let meanAnswer = JudgeAnswer(
+        question: question.id,
+        distribution: Dictionary(
+          uniqueKeysWithValues: options.map { option in
+            (option, found.reduce(0) { $0 + $1.probability(of: option) } / Double(found.count))
+          }),
+        rationale: nil)
+      scored.append(
+        ScoredCase(
+          id: item.id, positive: positive, flagged: flagged,
+          mostLikely: found.map { $0.mostLikely(among: options) },
+          meanFlagged: flagged.reduce(0, +) / Double(flagged.count),
+          brier: options.reduce(0) { total, option in
+            let error = meanAnswer.probability(of: option) - (option == expected ? 1 : 0)
+            return total + error * error
+          },
+          correct: meanAnswer.mostLikely(among: options) == expected))
+    }
+    return (scored, unscored)
+  }
+
+  /// The block calibration's rule for which side a label is on; `nil` for a tier question on a
+  /// case with no declared tier.
+  static func flagFires(_ question: JudgeQuestion, expected: String, declaredTier: String?)
+    -> Bool?
+  {
+    if case .notDeclaredTier = question.flag {
+      guard let declaredTier else { return nil }
+      return JudgeBlockCalibration.flagFires(
+        question, expected: expected, declaredTier: declaredTier)
+    }
+    // An option flag never reads the declared tier.
+    return JudgeBlockCalibration.flagFires(
+      question, expected: expected, declaredTier: declaredTier ?? "")
+  }
+
+  static func tally(_ question: String, _ scored: [ScoredCase], unscored: Int, threshold: Double)
+    -> JudgeQuestionMetrics
+  {
+    var tp = 0
+    var fp = 0
+    var fn = 0
+    var tn = 0
+    for item in scored {
+      switch (item.decision(at: threshold), item.positive) {
+      case (true, true): tp += 1
+      case (true, false): fp += 1
+      case (false, true): fn += 1
+      case (false, false): tn += 1
+      }
+    }
+    return JudgeQuestionMetrics(
+      question: question, truePositives: tp, falsePositives: fp, falseNegatives: fn,
+      trueNegatives: tn, unscored: unscored)
+  }
+
+  static func stability(_ scored: [ScoredCase], repeats: Int, threshold: Double)
+    -> JudgeStability
+  {
+    guard repeats >= minimumRepeats else { return .tooFewRepeats(repeats) }
+    let flips = scored.filter { item in
+      Set(item.flagged.map { $0 >= threshold }).count > 1 || Set(item.mostLikely).count > 1
+    }
+    let deviations = scored.map { item in
+      let spread = item.flagged.reduce(0) { total, p in
+        total + (p - item.meanFlagged) * (p - item.meanFlagged)
+      }
+      return (spread / Double(item.flagged.count)).squareRoot()
+    }
+    return .measured(
+      repeats: repeats, flips: JudgeProportion(count: flips.count, n: scored.count),
+      meanStandardDeviation: .of(mean(deviations), n: scored.count))
+  }
+
+  static func mean(_ values: [Double]) -> Double? {
+    values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
+  }
+
+  static func sum(_ values: [Int]) -> Int { values.reduce(0, +) }
+
+  /// Every value, or `nil` if any is missing.
+  static func all<Value>(_ values: [Value?]) -> [Value]? {
+    let found = values.compactMap { $0 }
+    return found.count == values.count ? found : nil
   }
 }

@@ -34,15 +34,16 @@ public struct JudgeProportion: Sendable, Equatable, Codable {
   }
 
   /// `nil` when `n` is 0: a rate with nothing under it is neither 0 nor 1.
-  public var value: Double? { nil }
+  public var value: Double? { n == 0 ? nil : Double(count) / Double(n) }
 
-  public var undefined: JudgeUndefined? { nil }
+  public var undefined: JudgeUndefined? { n == 0 ? .noCases : nil }
 
   /// The Wilson 95% interval; `nil` when `n` is 0.
-  public var wilson: JudgeInterval? { nil }
+  public var wilson: JudgeInterval? { JudgeWilson.interval(count: count, n: n) }
 
   public var description: String {
-    ""
+    guard let value else { return "undefined (\(count)/\(n))" }
+    return "\(JudgeBlockCalibration.format(value)) (\(count)/\(n))"
   }
 }
 
@@ -66,6 +67,11 @@ public struct JudgeEstimate: Sendable, Equatable, Codable {
   public static func undefined(_ reason: JudgeUndefined, n: Int) -> JudgeEstimate {
     JudgeEstimate(value: nil, undefined: reason, n: n, interval: nil)
   }
+
+  /// `.noCases` when `value` is `nil`.
+  static func of(_ value: Double?, n: Int, interval: JudgeInterval? = nil) -> JudgeEstimate {
+    value.map { .defined($0, n: n, interval: interval) } ?? .undefined(.noCases, n: n)
+  }
 }
 
 public enum JudgeWilson {
@@ -74,7 +80,14 @@ public enum JudgeWilson {
 
   /// The Wilson score interval for `count` successes out of `n`; `nil` when `n` is 0.
   public static func interval(count: Int, n: Int) -> JudgeInterval? {
-    nil
+    guard n > 0 else { return nil }
+    let total = Double(n)
+    let p = Double(count) / total
+    let z2 = z * z
+    let denominator = 1 + z2 / total
+    let center = (p + z2 / (2 * total)) / denominator
+    let half = z * (p * (1 - p) / total + z2 / (4 * total * total)).squareRoot() / denominator
+    return JudgeInterval(lower: max(0, center - half), upper: min(1, center + half))
   }
 }
 
@@ -83,10 +96,20 @@ public enum JudgeWilson {
 public struct JudgeSeededGenerator: RandomNumberGenerator, Sendable {
   private var state: UInt64
 
-  public init(seed: UInt64) { self.state = seed }
+  public init(seed: UInt64) { state = seed }
 
   public mutating func next() -> UInt64 {
-    state
+    state &+= 0x9E37_79B9_7F4A_7C15
+    var z = state
+    z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
+    return z ^ (z >> 31)
+  }
+
+  /// A uniform index below `bound`, by the high word of a full-width multiply, so it doesn't
+  /// depend on the standard library's `random(in:using:)`.
+  mutating func index(below bound: Int) -> Int {
+    Int(next().multipliedFullWidth(by: UInt64(bound)).high)
   }
 }
 
@@ -104,7 +127,20 @@ public enum JudgeBootstrap {
     cases: Int, resamples: Int = resamples, seed: UInt64 = seed,
     statistic: ([Int]) -> Double?
   ) -> JudgeInterval? {
-    nil
+    guard cases > 0, resamples > 0 else { return nil }
+    var generator = JudgeSeededGenerator(seed: seed)
+    var values: [Double] = []
+    values.reserveCapacity(resamples)
+    for _ in 0..<resamples {
+      let draw = (0..<cases).map { _ in generator.index(below: cases) }
+      if let value = statistic(draw) { values.append(value) }
+    }
+    guard !values.isEmpty else { return nil }
+    values.sort()
+    return JudgeInterval(
+      lower: values[JudgePercentile.rank(perMille: 25, of: values.count) - 1],
+      upper: values[JudgePercentile.rank(perMille: 975, of: values.count) - 1],
+      resamples: values.count)
   }
 }
 
@@ -112,7 +148,14 @@ public enum JudgeBootstrap {
 public enum JudgePercentile {
   /// `nil` for no values.
   public static func of(_ values: [Int], percent: Int) -> Int? {
-    nil
+    guard !values.isEmpty else { return nil }
+    return values.sorted()[rank(perMille: percent * 10, of: values.count) - 1]
+  }
+
+  /// The 1-based nearest rank, ceil(perMille × count / 1000), computed in integers so 95% of 20
+  /// is exactly rank 19.
+  static func rank(perMille: Int, of count: Int) -> Int {
+    max(1, min(count, (perMille * count + 999) / 1000))
   }
 }
 
@@ -123,8 +166,8 @@ public struct JudgePercentiles: Sendable, Equatable, Codable {
   public let p95: Int?
 
   public init(_ milliseconds: [Int]) {
-    self.n = 0
-    self.p50 = nil
-    self.p95 = nil
+    n = milliseconds.count
+    p50 = JudgePercentile.of(milliseconds, percent: 50)
+    p95 = JudgePercentile.of(milliseconds, percent: 95)
   }
 }
