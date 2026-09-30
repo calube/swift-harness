@@ -8,6 +8,9 @@ public enum JudgeError: Error, Sendable, Equatable {
   case backend(String)
   /// The backend's reply didn't match the question set.
   case malformedReply(String)
+  /// The subject's state is over the backend's size limit, by the adapter's estimate or by the
+  /// backend's own refusal. The caller slices the state; the adapter never trims it.
+  case stateTooLarge(estimatedTokens: Int)
   case process(ProcessRunnerError)
 
   /// The judge failing says nothing about the code.
@@ -46,7 +49,9 @@ public enum JudgeFactory {
   public static let defaultModel = "sonnet"
 
   public static func make(
-    _ config: JudgeConfig, runner: any ProcessRunner, cacheDirectory: URL?
+    _ config: JudgeConfig, runner: any ProcessRunner, cacheDirectory: URL?,
+    transport: any HTTPTransport = URLSessionTransport(),
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> (any Judge)? {
     guard case .enabled(let backend, _, let model) = config else { return nil }
     let judge: any Judge =
@@ -248,6 +253,13 @@ public struct JevJudge: Judge {
   public let identity: JudgeIdentity
 
   public init(model: String) {
+    identity = JudgeIdentity(backend: JudgeBackend.jev.rawValue, model: model)
+  }
+
+  public init(
+    model: String, transport: any HTTPTransport, environment: [String: String],
+    clock: any RetryClock = LiveRetryClock(), timeout: Duration = .seconds(30)
+  ) {
     identity = JudgeIdentity(backend: JudgeBackend.jev.rawValue, model: model)
   }
 
