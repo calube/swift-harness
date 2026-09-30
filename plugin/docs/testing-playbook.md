@@ -177,7 +177,7 @@ Some slop only a reader sees: vacuous or restated regression names, tests couple
 
 ### 5.4 Judge seam: `swiftgate judge`
 
-The judgment layer sits behind a `Judge` protocol. Its contract is typed questions in, calibrated probabilities out. No free-form prose verdicts.
+A `Judge` protocol takes typed questions and returns calibrated probabilities, never free-form verdicts.
 
 | Question | Answer type |
 |---|---|
@@ -186,12 +186,24 @@ The judgment layer sits behind a `Judge` protocol. Its contract is typed questio
 | How specific is the regression name (vague / partial / specific)? | score → level + p |
 | Does it assert implementation details rather than behavior? | binary → p |
 
-- **Inputs:** test source, the diff it covers, a versioned question set. **Output:** per-test findings in the gate's JSON schema: question, answer, probability, and a one-line rationale when the backend gives one.
-- **Policy is thresholds:** p ≥ `block_threshold` may block at `ready`; between `advisory_threshold` and `block_threshold` is advisory; below is ignored. The judge alone never makes a run RED below `ready`.
-- **Cache:** keyed by hash of test, diff, question-set version, backend and model. Re-runs are stable and free. Only new or changed tests are judged.
-- **Calibration:** `gate/Fixtures/judge/` holds labeled useless and good tests. `swiftgate self-test --judge` reports precision and recall per question and fails if a question-set or backend change makes them worse.
-- **Commands:** `swiftgate judge [--ready]` asks about the new and changed host tests; `check --tier ready` runs it with the ready policy, and on a `git commit` Claude runs, the PreToolUse hook asks the comment questions about the staged comments (advisory). `swiftgate self-test --judge` scores the stored recording offline; `--judge-backend claude --record` re-asks the live backend and replaces it. `[judge] model` picks the backend's model (default `sonnet`). `backend = "jev"` parses but reports BLOCKED until its adapter exists. A backend failure is a non-gating `judge.not-run` note.
-- **Opt-in:** `[judge] backend = "none"` is the default. A remote backend sends test source off the machine, so each repository turns it on deliberately and must set both thresholds.
+- **In:** test source, its diff, a versioned question set. **Out:** findings with question, answer, probability, any rationale, and the deciding backend.
+- **Policy is thresholds:** on a blocking question (rows 1, 4), p ≥ `block_threshold` may block at `ready`; from `advisory_threshold` up is advisory; the gate drops the rest. Below `ready`, the judge never turns a run RED.
+- **Cache:** keyed by test, diff, questions as sent, backend and model.
+- **Calibration:** `gate/Fixtures/judge/` holds labeled good and useless tests plus 1 recording per backend. `swiftgate self-test --judge` scores each offline and fails if per-question precision or recall drops; `--judge-backend <backend> --record` re-records it live.
+- **Commands:** `swiftgate judge [--ready]` asks about new and changed host tests; `check --tier ready` runs it. The commit hook asks advisory comment questions. `judge ask --input <file>` asks any question set and prints JSON with no policy. A backend failure is a non-gating `judge.not-run` note.
+- **Opt-in:** off by default (`backend = "none"`). A remote backend sends test source off the machine, so each repository opts in and sets both thresholds.
+
+| `[judge] backend` | `claude` | `jev` (TypeSafe's Jev, over HTTP) |
+|---|---|---|
+| Model | `model`, default `sonnet` | pinned `jev-1.13.0`; config refuses an alias such as `jev-latest` |
+| Egress | the `claude` CLI | `send_to = "api.typesafe.ai"` required |
+| Key | none in swiftgate | `TYPESAFE_API_KEY` in the environment; config refuses a key |
+| Question set | `test-quality@1` | `test-quality@2-jev`: narrower sub-questions, scored on `@1`'s labels |
+| Recording | `recording.json` | `recording-jev.json` |
+| `judge bench` arm | `claude:claude-sonnet-5-5` | `jev:jev-1.13.0#test-quality@2-jev`; `cascade:jev-1.13.0,claude-sonnet-5-5` for both |
+
+- **Jev blocks, Claude settles:** a Jev answer at or above `block_threshold` on a blocking question blocks `ready`, with no calibration step. Claude writes the reason; if it can't, the block keeps the template reason and `failureScenario` says why. When Jev's p falls in the uncertain band, Claude answers in `@1`'s words instead; if Claude fails, Jev's answer stays advisory.
+- **Benchmark:** `judge bench` scores each `--backend` arm; `judge bench-render` prints the comparison. Before setting Jev's thresholds, run the benchmark first; its summary lists the bands.
 
 ## 6. Library notes for tests
 
