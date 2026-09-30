@@ -1,14 +1,15 @@
 // Checks the tool that turns the filled-in blind labelling sheets (the test-quality set and the
 // comment set) into each set's labels.json.
 // Run: node tests/judge_labelling_sheet_test.mjs
-// Regressions caught: a person's answer recorded as the agent's or not at all, an answer that isn't
+// Regressions caught: a person's answer recorded as the agent's or not at all, an agent's answers
+// recorded as a person's, an answer that isn't
 // one of the question's options written as a label, a skipped question filled in with a guess, a
 // sheet that asks something other than what the judge asks, and a comment case that lost the
 // commit and path it came from.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
-  applyCommentSheet, applySheet, commentQuestions, formatLabels, questions, renderCommentSheet, renderSheet,
+  applyCommentSheet, applySheet, commentQuestions, fillSheet, formatLabels, questions, renderCommentSheet, renderSheet,
   sheetKey,
 } from './judge_labelling_sheet.mjs'
 
@@ -166,6 +167,50 @@ const tests = {
     }
     const sheet = renderCommentSheet({ cases: comments })
     for (const { id, text } of commentQuestions) assert.ok(sheet.includes(`- ${id}: ${text}`), `${id} is not asked`)
+  },
+
+  'answers from a file fill the sheet and apply as agent labels — catches an agent\'s answers recorded as a person\'s'() {
+    const sheet = renderSheet({ labels, cases })
+    const number = sheet.includes(`## Case 1 · key ${sheetKey('case-abc123')}`) ? 1 : 2
+    const filled = fillSheet(sheet, [{
+      case: number, key: sheetKey('case-abc123'),
+      answers: { 'fails-if-broken': 'yes', tier: 'T2', 'name-specificity': 'partial', 'asserts-implementation': 'no' },
+    }])
+    assert.deepEqual(filled.errors, [])
+    const result = applySheet({ labels, sheet: filled.sheet, caseIds, labeller: 'agent' })
+    assert.deepEqual(result.errors, [])
+    assert.deepEqual(result.labels.cases, [
+      agentCase('old-case'),
+      {
+        declaredTier: 'T2', id: 'case-abc123', label: 'good', labeller: 'agent',
+        expected: { 'fails-if-broken': 'yes', tier: 'T2', 'name-specificity': 'partial', 'asserts-implementation': 'no' },
+      },
+    ])
+    assert.equal(result.person, 0)
+  },
+
+  'a skipped answer in the file leaves that question unlabelled — catches a null or skipped answer written as a label'() {
+    const filled = fillSheet(renderCommentSheet({ cases: comments }), [
+      { key: sheetKey('case-0a1b2c'), answers: { 'loses-fact': 'yes', 'right-size': null } },
+      { key: sheetKey('case-3d4e5f'), answers: { 'loses-fact': null, 'right-size': null } },
+    ])
+    assert.deepEqual(filled.errors, [])
+    const result = applyCommentSheet({ labels: commentLabels, sheet: filled.sheet, caseIds: commentIds, labeller: 'agent' })
+    assert.deepEqual(result.errors, [])
+    assert.deepEqual(result.labels.cases, [{ expected: { 'loses-fact': 'yes' }, id: 'case-0a1b2c', labeller: 'agent' }])
+  },
+
+  'a file answer for a key, case number or question the sheet lacks, or over a filled line, is an error — catches answers landing on the wrong case or overwriting a person\'s'() {
+    const sheet = renderCommentSheet({ cases: comments })
+    const key = sheetKey('case-0a1b2c')
+    const number = sheet.includes(`## Case 1 · key ${key}`) ? 1 : 2
+    const errors = (entries, text = sheet) => fillSheet(text, entries).errors.join('\n')
+    assert.match(errors([{ key: 'ffffffff', answers: { 'loses-fact': 'yes' } }]), /ffffffff/)
+    assert.match(errors([{ case: 3 - number, key, answers: { 'loses-fact': 'yes' } }]), /case number/)
+    assert.match(errors([{ key, answers: { 'tier': 'T1' } }]), /tier/)
+    assert.match(errors([{ key, answers: { 'loses-fact': 'yes' } }, { key, answers: { 'right-size': 'no' } }]), /twice/)
+    const answered = fill(sheet, 'case-0a1b2c', { 'loses-fact': 'no' })
+    assert.match(errors([{ key, answers: { 'loses-fact': 'yes' } }], answered), /already answered/)
   },
 
   'formatting the committed comment labels reproduces the file byte for byte — catches a rewrite that reorders or reformats every comment label'() {
