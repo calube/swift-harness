@@ -2,6 +2,7 @@
 
 Status: accepted by the user, 2026-09-30, with the Jev judge backend design
 (`docs/designs/2026-09-30-jev-judge-backend-design.md`) and the 5 decisions in its §12.
+Amended by the user later on 2026-09-30: see "Amended 2026-09-30" at the end.
 
 ## Context
 
@@ -61,3 +62,15 @@ into 1 Noul per clause, before anything else moves.
   replies.
 - Jev's service, rate limits and prices can change without notice. A Jev outage costs a `judge.not-run` note,
   never a RED gate.
+
+## Amended 2026-09-30
+
+The user changed 2 decisions later that day; the sections above stay as accepted.
+
+1. **Let Jev cook.** Jev may block `ready` on its own at the block threshold, with no calibration and no person
+   labels. The cascade escalates only uncertain answers. The Claude reason, the pin, `send_to` and
+   `TYPESAFE_API_KEY` stay.
+2. **Agent labels stand.** An Opus agent labelled the sheets blind, as `labeller: agent`. The benchmark reports
+   on them for information and says they may favour Claude.
+
+Why: the user won't label, so the bar could never pass.

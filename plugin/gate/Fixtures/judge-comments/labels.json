@@ -1,5 +1,618 @@
 {
-  "cases": [],
+  "cases": [
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-0303c5",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-074c1f",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-082803",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-08baef",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-091391",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-0f0620",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-1236e6",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-12ed08",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-15e38c",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-16a918",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-175197",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-1d4db9",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-254a5d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-273fcd",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-29de19",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-2dc66c",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-346de8",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-35d692",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "right-size": "yes"
+      },
+      "id": "case-4066cf",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-41d540",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no"
+      },
+      "id": "case-46a5c5",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "yes"
+      },
+      "id": "case-4b8501",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-506263",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-548703",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-56630d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-56a7c0",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-5caf8c",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-5cf9b4",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "no"
+      },
+      "id": "case-5e8b27",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-64d5a9",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-682f9c",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "right-size": "yes"
+      },
+      "id": "case-6d4b47",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-7308c9",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "no"
+      },
+      "id": "case-7743f8",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "no"
+      },
+      "id": "case-78717b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-79454d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-7b135e",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-802b14",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-81d760",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-84cf40",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-8b989d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-8e29f0",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "yes"
+      },
+      "id": "case-8f2af3",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-92e781",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-94f09b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-96d5c9",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-97a69e",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-988810",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-98f528",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-99a3f6",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-9c5063",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-9ca1b5",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-a20436",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "no"
+      },
+      "id": "case-a501b0",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-a85e6a",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-a9aed6",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-b3ab21",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "no",
+        "right-size": "yes"
+      },
+      "id": "case-b55028",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-b57aa5",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-b7b81d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-b7e45c",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-b80022",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "no"
+      },
+      "id": "case-b81432",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-c1f80b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "right-size": "yes"
+      },
+      "id": "case-c717c8",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-ca3116",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-d214bf",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-e61193",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-e6b4e0",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-e88911",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-e9b68b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-ea645b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-eb015d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-ec033d",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-f40498",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-f4b49b",
+      "labeller": "agent"
+    },
+    {
+      "expected": {
+        "loses-fact": "yes",
+        "right-size": "yes"
+      },
+      "id": "case-fa4be9",
+      "labeller": "agent"
+    }
+  ],
   "questionSet": "comments@1",
   "schema": 1
 }

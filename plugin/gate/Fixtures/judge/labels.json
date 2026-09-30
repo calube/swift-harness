@@ -263,6 +263,531 @@
       "id": "logger-text-coupling",
       "label": "useless",
       "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-574e3a",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-277d33",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-e64c8b",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-a6f159",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-93fe9c",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-db1b45",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-fe09f3",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-b93034",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "partial",
+        "tier": "T1"
+      },
+      "id": "case-c5276f",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-260aa3",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T3",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "partial",
+        "tier": "T2"
+      },
+      "id": "case-c4354f",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T2"
+      },
+      "id": "case-ec67cf",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-3d100f",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-ff12ee",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-401e9f",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-e9f4f5",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-a4d740",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T2"
+      },
+      "id": "case-2569f2",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T2"
+      },
+      "id": "case-9e63a6",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-7bbfdf",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-5e44c5",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T3",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-54ed4b",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-408f1a",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-5778d5",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-1d1de2",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "partial",
+        "tier": "T1"
+      },
+      "id": "case-e88fb3",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T3",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T3"
+      },
+      "id": "case-7e8258",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-fa9b3c",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-ef3239",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-387fa2",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T3"
+      },
+      "id": "case-0bd1b3",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T1"
+      },
+      "id": "case-a07140",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-6077a8",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-16a0e2",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "vague",
+        "tier": "T3"
+      },
+      "id": "case-e0ffb4",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-bea4db",
+      "label": "good",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-a1d5f0",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T2"
+      },
+      "id": "case-2e7a20",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-88cfe5",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T2",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "yes",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-5fab6d",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "partial",
+        "tier": "T2"
+      },
+      "id": "case-ad08e1",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T3",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-b8c208",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "yes",
+        "fails-if-broken": "yes",
+        "name-specificity": "vague",
+        "tier": "T2"
+      },
+      "id": "case-d8b98a",
+      "label": "useless",
+      "labeller": "agent"
+    },
+    {
+      "declaredTier": "T1",
+      "expected": {
+        "asserts-implementation": "no",
+        "fails-if-broken": "no",
+        "name-specificity": "specific",
+        "tier": "T1"
+      },
+      "id": "case-89ea7f",
+      "label": "useless",
+      "labeller": "agent"
     }
   ],
   "questionSet": "test-quality@1",
