@@ -1,0 +1,8 @@
+@Test("muteTapped mutes — catches muteTapped not muting")
+func mutes() async {
+  let store = TestStore(initialState: Player.State(isMuted: false, volume: 0.8)) { Player() }
+  await store.send(.muteTapped) {
+    $0.isMuted = true
+    $0.volume = 0
+  }
+}

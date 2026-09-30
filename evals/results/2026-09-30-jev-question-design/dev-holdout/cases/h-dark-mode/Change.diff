@@ -1,0 +1,3 @@
++  case let .darkModeToggled(isOn):
++    state.isDark = isOn
++    return .run { _ in await settings.setBool(isOn, "isDark") }

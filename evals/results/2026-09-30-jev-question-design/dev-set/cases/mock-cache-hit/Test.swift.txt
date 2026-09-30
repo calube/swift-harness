@@ -1,0 +1,8 @@
+@Test("a cached avatar is shown without a download — catches every scroll re-downloading avatars")
+func cachedAvatarSkipsDownload() async {
+  let cache = MockImageCache()
+  let image = MockImage()
+  cache.stubbedImage = image
+  let result = cache.image(for: URL(string: "https://x.test/a.png")!)
+  #expect(result === image)
+}

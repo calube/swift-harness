@@ -1,0 +1,1 @@
++  public static func text(for count: Int) -> String { count > 99 ? "99+" : String(count) }

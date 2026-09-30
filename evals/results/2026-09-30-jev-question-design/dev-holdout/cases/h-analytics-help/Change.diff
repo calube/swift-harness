@@ -1,0 +1,3 @@
++  case .helpTapped:
++    state.destination = .help(HelpSheet.State())
++    return .run { _ in await analytics.track(.init(name: "help_tapped")) }

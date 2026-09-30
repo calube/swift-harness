@@ -1,0 +1,1 @@
++  public lazy var label: String = formatter.string(from: amount)

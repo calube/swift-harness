@@ -1,0 +1,7 @@
++  case .startTapped:
++    state.status = .uploading
++    return .run { send in
++      do { try await backupClient.upload() }
++      catch { try await clock.sleep(for: .seconds(2)); try await backupClient.upload() }
++      await send(.uploadFinished)
++    }

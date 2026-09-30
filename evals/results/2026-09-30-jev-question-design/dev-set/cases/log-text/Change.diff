@@ -1,0 +1,5 @@
++  public func upload(_ photos: [Photo], to bucket: String) async throws {
++    logger.info("Uploading \(photos.count) files to bucket \(bucket)")
++    for photo in photos { try await api.put(photo, bucket) }
++    logger.info("Upload complete")
++  }

@@ -1,0 +1,3 @@
++  public func makeDetail(id: Int) -> DetailViewModel {
++    DetailViewModel(id: id, api: api, analytics: analytics)
++  }

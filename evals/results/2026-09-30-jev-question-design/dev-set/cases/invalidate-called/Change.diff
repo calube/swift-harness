@@ -1,0 +1,4 @@
++  public func logout() async {
++    await repository.invalidate()
++    token = nil
++  }

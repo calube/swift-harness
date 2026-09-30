@@ -1,0 +1,1 @@
++  public var kilometers: Double { miles * 1.609344 }

@@ -1,0 +1,6 @@
++  public static func tip(for amount: Decimal, percent: Int) -> Decimal {
++    var raw = amount * Decimal(percent) / 100
++    var rounded = Decimal()
++    NSDecimalRound(&rounded, &raw, 2, .plain)
++    return rounded
++  }

@@ -1,0 +1,13 @@
+@Test("three seconds on the clock lowers the timer from 10 to 7 — catches a workout timer that never counts down")
+func ticksDown() async {
+  let clock = TestClock()
+  let store = TestStore(initialState: Workout.State(remaining: 10)) { Workout() } withDependencies: {
+    $0.continuousClock = clock
+  }
+  await store.send(.start) { $0.isRunning = true }
+  await clock.advance(by: .seconds(3))
+  await store.receive(\.tick) { $0.remaining = 9 }
+  await store.receive(\.tick) { $0.remaining = 8 }
+  await store.receive(\.tick) { $0.remaining = 7 }
+  await store.send(.stop) { $0.isRunning = false }
+}

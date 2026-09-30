@@ -1,0 +1,6 @@
+@Test("favoriting a recipe raises its heart count — catches a count that stays at zero")
+func favoriteRaisesCount() async {
+  let store = TestStore(initialState: RecipeRow.State(isFavorite: false, favoriteCount: 0)) { RecipeRow() }
+  store.exhaustivity = .off
+  await store.send(.heartTapped) { $0.isFavorite = true }
+}

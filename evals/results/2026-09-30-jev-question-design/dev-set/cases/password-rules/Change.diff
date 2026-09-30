@@ -1,0 +1,6 @@
++  public static func violations(in password: String) -> [PasswordRule] {
++    var out: [PasswordRule] = []
++    if password.count < 8 { out.append(.tooShort) }
++    if !password.contains(where: \.isNumber) { out.append(.noDigit) }
++    return out
++  }

@@ -1,0 +1,6 @@
++  public func user(id: Int) async throws -> User {
++    if let cached = _storage[id] { return cached }
++    let user = try await api.user(id)
++    _storage[id] = user
++    return user
++  }

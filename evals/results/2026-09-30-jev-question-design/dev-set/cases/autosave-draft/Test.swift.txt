@@ -1,0 +1,12 @@
+@Test("pausing typing for 2s saves the draft — catches a half-written reply lost when the app is killed")
+func savesDraftAfterPause() async {
+  let clock = TestClock()
+  let saved = LockIsolated<[Draft]>([])
+  let store = TestStore(initialState: Compose.State()) { Compose() } withDependencies: {
+    $0.continuousClock = clock
+    $0.drafts.save = { draft in saved.withValue { $0.append(draft) } }
+  }
+  await store.send(.textChanged("see you at 6")) { $0.text = "see you at 6" }
+  await clock.advance(by: .seconds(2))
+  #expect(saved.value == [Draft(text: "see you at 6")])
+}

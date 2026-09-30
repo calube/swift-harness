@@ -1,0 +1,1 @@
++  public static func fahrenheit(fromCelsius c: Double) -> Double { c * 9 / 5 + 32 }

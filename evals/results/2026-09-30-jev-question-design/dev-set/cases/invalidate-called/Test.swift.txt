@@ -1,0 +1,8 @@
+@Test("logout invalidates the repository — catches a problem in logout")
+func logoutInvalidates() async {
+  let repo = SpyRepository()
+  let session = Session(repository: repo)
+  await session.logout()
+  #expect(repo.didCallInvalidate)
+  #expect(repo.invalidateCallCount == 1)
+}

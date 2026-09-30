@@ -1,0 +1,3 @@
++  public func isExpired(now: Date) -> Bool {
++    now.timeIntervalSince(issuedAt) > 3_600
++  }

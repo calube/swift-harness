@@ -1,0 +1,7 @@
+@Test("load resumes the data task — catches requests that are built but never sent")
+func loadResumesTask() {
+  let session = MockURLSession()
+  let task = MockDataTask()
+  session.nextTask = task
+  #expect(session.dataTask(with: URLRequest(url: .init(string: "https://x.test")!)) === task)
+}

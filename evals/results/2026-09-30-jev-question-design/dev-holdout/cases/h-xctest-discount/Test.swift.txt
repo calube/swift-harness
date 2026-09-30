@@ -1,0 +1,4 @@
+func testStudentDiscount() {
+  let price = Pricing.price(base: 40, for: .student)
+  XCTAssertEqual(price, 30)
+}

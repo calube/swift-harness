@@ -1,0 +1,3 @@
++  case let .listLoaded(chats):
++    state.chats = chats.sorted { $0.updated > $1.updated }
++    return .none

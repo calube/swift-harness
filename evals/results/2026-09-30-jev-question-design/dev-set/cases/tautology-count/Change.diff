@@ -1,0 +1,4 @@
++  public func deduplicated() -> TagList {
++    var seen = Set<String>()
++    return TagList(values.filter { seen.insert($0).inserted })
++  }

@@ -1,0 +1,6 @@
++  case .refreshPulled:
++    return .run { send in await send(.ratesLoaded(try await ratesClient.fetch())) }
++  case let .ratesLoaded(rates):
++    state.rates = rates
++    state.updatedAt = now
++    return .none

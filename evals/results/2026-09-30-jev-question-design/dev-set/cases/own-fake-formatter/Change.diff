@@ -1,0 +1,4 @@
++  public static func string(from seconds: Int) -> String {
++    let h = seconds / 3_600, m = (seconds % 3_600) / 60
++    return h > 0 ? "\(h)h \(m)m" : "\(m)m"
++  }

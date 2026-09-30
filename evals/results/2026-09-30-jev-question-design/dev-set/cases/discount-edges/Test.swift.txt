@@ -1,0 +1,6 @@
+@Test("coupon totals — catches a bug with coupons past their expiry date")
+func expiredCouponIgnored() {
+  let now = Date(timeIntervalSince1970: 2_000)
+  let coupon = Coupon(percent: 20, expires: now.addingTimeInterval(-1))
+  #expect(Checkout.total(subtotal: 50, coupon: coupon, now: now) == 50)
+}
