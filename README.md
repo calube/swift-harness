@@ -61,23 +61,23 @@ flowchart LR
 
 **The harness checks itself.**
 
-- Every rule has a seeded violation, and `swiftgate self-test` proves each one fires and that
+- Every code rule has a seeded violation, and `swiftgate self-test` proves each one fires and that
   clean code passes.
 - A test checks the rule table in `standards.md` against the rule registries, so a rule can't ship
   undocumented.
 - Editing any design or build agent's prompt blocks `git push` until `swiftgate calibrate` passes
   that agent again on labelled cases, with the same model.
-- Hook latency is a tested budget: under 50ms of CPU on the PreToolUse path, even on a loaded
-  machine.
+- Hook latency is a tested budget: the fastest of several PreToolUse runs stays under 50ms of CPU,
+  even on a loaded machine.
 
 **Parallel agents, 1 source of truth.**
 
 - `plan-schedule` orders tasks into waves where no 2 tasks write the same files, and `/build` runs
   each one in its own warm git worktree. A single orchestrator lock and a ledger that rejects
   illegal status changes keep parallel sessions from trampling each other.
-- Subagents never hit a permission prompt. The hook allows or denies every call a subagent makes,
-  with a reason the agent can act on.
-- A time-budgeted preset stops starting tasks at minute 30 and has green code on `main` by 38.
+- Subagents never hit a permission prompt. The hook allows or denies every shell, edit, write and
+  web call a subagent makes, with a reason the agent can act on.
+- A time-budgeted preset starts only required tasks after minute 30 and cuts off at minute 38.
 
 **The gate checks designs like code.**
 
@@ -140,7 +140,7 @@ full record is in [`docs/e2e-report.md`](docs/e2e-report.md).
   first attempt failed both and exposed 7 defects. After the fixes, both passed with no questions:
   31m 45s ($2.75) and 12m 28s ($1.02).
 - **The gate tests itself.** `swiftgate` carries about 2,300 Swift Testing cases against fixtures
-  captured from real tool runs, never hand-written. `swiftgate self-test` proves every rule fires
+  captured from real tool runs, never hand-written. `swiftgate self-test` proves every code rule fires
   on its seeded violation and passes clean code.
 
 Next: [evals](evals/README.md) that measure the harness across many tasks and trials, with and

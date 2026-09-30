@@ -8,11 +8,11 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 ## Agents can't cheat the gate
 
 - **Subagents never prompt.** A background subagent can't answer a permission prompt, so the
-  PreToolUse hook decides every call a subagent makes. It denies writes outside the repository's
+  PreToolUse hook allows or denies every shell, edit, write and web call a subagent makes. It denies writes outside the repository's
   checkouts, build worker writes to the main checkout, and writes to `.git` and `.claude`, each
   with a reason the agent can act on.
 - **Guards read the shell command, not its text.** The hook splits compound commands and sees env
-  prefixes. It denies `simctl erase` or `delete all`, which would hit other sessions' simulators,
+  prefixes. It denies `simctl erase all` and `simctl delete all`, which would hit other sessions' simulators,
   deleting the global DerivedData, raw `xcodebuild`, and edits to `Package.resolved`, `.xcresult`
   bundles or snapshot references.
 - **The Stop hook has a strike policy.** A RED fast tier blocks the stop, and the hook skips content
@@ -27,12 +27,12 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   body is empty, an empty default, or a forward to existing code. Reducers return `.none` and
   views are `EmptyView`. A later slice can't add a target the surface lacks.
 - **Escape hatches carry a reason.** `// swiftgate:allow <rule> — <reason>` on the same line waives
-  1 finding. A bare allow is itself a finding, and reports count every waiver.
+  1 rule on that line. A bare allow is itself a finding, and reports count every waiver.
 - **Ids don't leak.** `swiftgate comments --commit-msg` rejects plan, ledger and design ids in commit
   messages, and a testlint rule does the same for test names. The pre-commit comment check also
   catches restated code, diff narration and TODOs with no link.
-- **Async tests need a deadline.** A testlint rule flags an async test that can hang with no
-  timeout.
+- **Written-out scripts need a deadline.** A testlint rule flags a script or source that a test
+  writes out and that waits forever.
 
 ## Tests have to earn their place
 
@@ -45,26 +45,26 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **`stress`** runs new and changed tests N times. One failing run is RED.
 - **`impact` and `coverage`** require a test change for every changed Core, client or Live module,
   and require T1 tests alone to cover the changed lines.
-- **`testlint`** flags tests that assert nothing, restate the code, sleep, or sit in the wrong
-  tier, and UI tests that map to no listed flow.
-- **`judge`** asks a model about what static checks can't see: vacuous names, over-mocking, the
-  wrong level. It is off by default, because a remote backend sends test source off the machine.
+- **`testlint`** flags tests that assert nothing, have assertions that can't fail, sleep, or sit in
+  the wrong tier, and UI tests that map to no listed flow.
+- **`judge`** asks a model what static checks can't see: whether a test would fail if the
+  behaviour broke, vague names, assertions on implementation details, and the wrong tier. It is off by default, because a remote backend sends test source off the machine.
   It caches answers, and it stays advisory below the ready tier.
 
 ## The harness checks itself
 
-- **`self-test`** proves every rule trips on its seeded violations and passes the clean
+- **`self-test`** proves every code rule trips on its seeded violations and passes the clean
   `examples/SampleApp`. `--judge` measures the judge's precision and recall per question against
   a stored recording.
 - **A test guards the rule index.** A test checks the rule id table in `standards.md` against the rule
   registries, so a rule can't ship undocumented or linger after removal.
-- **Prompt edits need recalibration.** The push tier hashes the design and build agent prompts and
-  workflows, and compares the hash with the last passing `swiftgate calibrate` record. Any edit, or
+- **Prompt edits need recalibration.** The push tier hashes the design agents and workflows and the
+  build worker and fixer prompts, and compares the hash with the last passing `swiftgate calibrate` record. Any edit, or
   a record from a different model, blocks the push until calibration passes again.
 - **`calibrate design|build`** runs each design agent, the build worker and the fixer against
   labelled seed cases and reports pass or fail per agent.
-- **Hook latency has a tested budget.** Tests hold the PreToolUse fast path under 50ms of CPU, with
-  4 CPU-burning processes loading the machine.
+- **Hook latency has a tested budget.** Tests hold the fastest of several PreToolUse runs under 50ms of
+  CPU, with 4 CPU-burning processes loading the machine.
 - **The ready tier validates the plugin.** `claude plugin validate --strict` runs on `plugin/`,
   and every warning gates.
 - **Fixtures come from real runs.** Every fixture under `plugin/gate/Tests/Fixtures/` comes
@@ -79,14 +79,14 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **The ledger is a state machine.** `swiftgate ledger set` rejects a status change the current
   status can't make. `swiftgate index set` updates the cross-plan index under a file lock.
 - **Waves never collide.** `swiftgate plan-schedule` builds topological waves, then splits them so
-  no 2 tasks in a wave write the same files, capped at the preset's parallelism. It recomputes
+  no 2 tasks in a wave write the same files, capped at the plan's `max_parallel`. It recomputes
   waves itself rather than trusting a stored list.
 - **The build executor checks every return.** `swiftgate build check-return` verifies a worker's
   return against git and rejects a missing or extra key. A merge conflict or a red `main` goes to
   a fixer agent in its own worktree, and a merge can be undone.
 - **Time budgets have phases.** A build moves from normal to no new starts to cutoff, computed
-  from the run record. The `interview` preset allows 38 minutes and stops new starts 8 minutes
-  before the end. It runs `prove` and `mutate` once in the final gate
+  from the run record. The `interview` preset allows 38 minutes and starts only required tasks in
+  the last 8. It runs `prove` and `mutate` once in the final gate
   ([ADR 0004](adrs/0004-proof-and-mutation-may-run-once-in-the-final-gate.md)).
 - **Worktrees start warm.** `swiftgate worktree create` clones a warm build into each task's
   worktree, and `warm-check` refuses when there is none. `swiftgate gc` prunes stale per-worktree
@@ -98,8 +98,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 
 ## The gate checks designs like code
 
-- **Evidence carries a hash.** `swiftgate evidence capture` records each design claim against a
-  file or a command's output. `evidence check` re-verifies every claim at HEAD, against its file
+- **Evidence carries a hash.** `swiftgate evidence capture` runs a command and records its output
+  and hash as a claim. `evidence check` re-verifies every claim at HEAD, against its file
   and `Package.resolved`.
 - **`probe`** compiles a design's API snippets in a scratch package pinned to `Package.resolved`,
   so claims about SDK and package APIs are build-proven.
@@ -109,8 +109,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **`design-scope` and `design-lint`.** Scope picks a depth (quick, standard or deep) from the
   frame answers. Lint checks sections, evidence tags, id forms, word budgets and Mermaid syntax.
 - **The verifier works blind.** It gets a reviewer's findings but never its
-  reasoning, and reproduces each one. Deep designs add a pre-mortem and a challenger that asks
-  whether the design is the best one, not only a complete one.
+  reasoning, and reproduces each one. Standard designs get a challenger that asks whether the design
+  is the best one, not only a complete one. Deep designs add a pre-mortem.
 
 ## Evidence you can paste into a PR
 
