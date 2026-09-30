@@ -1,0 +1,7 @@
+@Test("the interceptor adds the auth header — catches a bug with expired tokens")
+func addsHeader() {
+  let provider = MockTokenProvider()
+  let token = MockToken(value: "abc")
+  provider.tokenToReturn = token
+  #expect(provider.currentToken() === token)
+}

@@ -1,0 +1,5 @@
+@Test("converts — catches conversion failures")
+func converts() {
+  #expect(Temperature.fahrenheit(fromCelsius: 100) == 212)
+  #expect(Temperature.fahrenheit(fromCelsius: -40) == -40)
+}

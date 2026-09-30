@@ -1,0 +1,9 @@
+@Test("tapping Help opens the help sheet — catches the Help button doing nothing")
+func helpOpensSheet() async {
+  let analytics = AnalyticsSpy()
+  let store = TestStore(initialState: Home.State()) { Home() } withDependencies: { $0.analytics = analytics.client }
+  store.exhaustivity = .off
+  await store.send(.helpTapped)
+  #expect(analytics.events.map(\.name) == ["help_tapped"])
+  #expect(analytics.trackCallCount == 1)
+}

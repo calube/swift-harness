@@ -1,0 +1,4 @@
++  public static func parse(_ data: Data) throws -> Product {
++    let raw = try JSONDecoder().decode(RawProduct.self, from: data)
++    return Product(name: raw.name, price: Decimal(string: raw.price) ?? 0)
++  }

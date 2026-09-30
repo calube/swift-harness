@@ -1,0 +1,22 @@
++  /// Only failures a later attempt can plausibly fix: transport errors, throttling, and 5xx.
++  func isRetryable(_ error: any Error) -> Bool {
++    switch error {
++    case HTTPError.unacceptableStatus(let status): status == 429 || (500..<600).contains(status)
++    case is URLError: true
++    default: false
++    }
++  }
++
++  func delay(beforeRetry retry: Int) -> Duration {
++    baseDelay * (1 << (retry - 1))
++  }
+@@
++    var attempt = 1
++    while true {
++      do {
++        return try await operation()
++      } catch where attempt < policy.maxAttempts && policy.isRetryable(error) {
++        try await clock.sleep(for: policy.delay(beforeRetry: attempt))
++        attempt += 1
++      }
++    }

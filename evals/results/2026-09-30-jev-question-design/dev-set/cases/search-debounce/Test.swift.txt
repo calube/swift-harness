@@ -1,0 +1,12 @@
+@Test("typing two characters within 300ms sends one search — catches a request per keystroke")
+func debouncesQuery() async {
+  let clock = TestClock()
+  let store = TestStore(initialState: Search.State()) { Search() } withDependencies: {
+    $0.continuousClock = clock
+    $0.searchClient.search = { query in [Result(title: query)] }
+  }
+  await store.send(.queryChanged("s")) { $0.query = "s" }
+  await store.send(.queryChanged("sw")) { $0.query = "sw" }
+  await clock.advance(by: .milliseconds(300))
+  await store.receive(\.searchResponse) { $0.results = [Result(title: "sw")] }
+}

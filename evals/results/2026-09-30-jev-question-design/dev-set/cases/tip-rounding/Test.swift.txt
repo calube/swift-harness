@@ -1,0 +1,5 @@
+@Test("a 15% tip on $10.05 rounds to $1.51 — catches diners shown a tip one cent short")
+func tipRoundsHalfUp() {
+  let tip = TipCalculator.tip(for: Decimal(string: "10.05")!, percent: 15)
+  #expect(tip == Decimal(string: "1.51")!)
+}

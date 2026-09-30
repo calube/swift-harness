@@ -1,0 +1,9 @@
+@Test("counter controls carry accessibility identifiers — catches UI tests losing their handles")
+func identifiers() {
+  let store = Store(initialState: CounterFeature.State()) { CounterFeature() }
+
+  let description = String(describing: CounterView(store: store).body)
+
+  #expect(description.contains("counter.increment"))
+  #expect(description.contains("counter.decrement"))
+}

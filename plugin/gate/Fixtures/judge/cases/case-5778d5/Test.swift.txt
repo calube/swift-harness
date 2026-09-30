@@ -1,0 +1,5 @@
+@Test("draw works — catches draw bugs")
+func draw() {
+  let board: [Player?] = [.x, .o, .x, .x, .o, .o, .o, .x, .x]
+  #expect(GameState.outcome(of: board) == .draw)
+}

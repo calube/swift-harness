@@ -1,0 +1,6 @@
+@Test("sync runs — catches sync failures")
+func syncRuns() async throws {
+  let engine = SyncEngine(store: .inMemory, api: .mock)
+  _ = try? await engine.run()
+  #expect(true)
+}

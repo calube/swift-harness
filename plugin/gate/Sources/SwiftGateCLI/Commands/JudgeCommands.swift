@@ -10,7 +10,8 @@ enum JudgeBatch {
   static let maxConcurrent = 4
 
   static func answer(
-    _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge
+    _ subjects: [JudgeSubject], questions: JudgeQuestionSet, judge: any Judge,
+    maxConcurrent: Int = maxConcurrent
   ) async -> Result<[String: [JudgeAnswer]], JudgeError> {
     await withTaskGroup(of: (String, Result<[JudgeAnswer], JudgeError>).self) { group in
       var pending = subjects[...]
@@ -239,19 +240,47 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
 
   static let live = ConfiguredCommitCommentJudge(
     makeJudge: { config, root in
-      let cache = root.appending(path: FileJudgeCache.directoryName)
-      guard case .enabled(.claude, _, let model) = config else {
-        return JudgeFactory.make(config, runner: LiveProcessRunner(), cacheDirectory: cache)
-      }
-      let claude = ClaudeCLIJudge(
-        runner: LiveProcessRunner(), model: model ?? JudgeFactory.defaultModel, timeout: timeout)
-      return CachingJudge(claude, cache: FileJudgeCache(directory: cache))
+      judge(
+        for: config, root: root, transport: URLSessionTransport(),
+        environment: ProcessInfo.processInfo.environment, clock: LiveRetryClock())
     },
     git: { LiveGit(runner: LiveProcessRunner(), repositoryRoot: $0.path) })
 
+  /// The configured backend held to the hook's timeout, wrapped in the cache under `root`.
+  static func judge(
+    for config: JudgeConfig, root: URL, transport: any HTTPTransport,
+    environment: [String: String], clock: any RetryClock
+  ) -> (any Judge)? {
+    guard case .enabled(let backend, _, let configured) = config else { return nil }
+    let model = configured ?? backend.pinnedModel
+    let judge: any Judge =
+      switch backend {
+      case .claude:
+        ClaudeCLIJudge(
+          runner: LiveProcessRunner(), model: model ?? JudgeFactory.defaultModel,
+          timeout: timeout)
+      case .jev:
+        JevJudge(
+          model: model ?? JevPin.model, transport: transport, environment: environment,
+          clock: clock, timeout: timeout)
+      }
+    return CachingJudge(
+      judge, cache: FileJudgeCache(directory: root.appending(path: FileJudgeCache.directoryName)))
+  }
+
+  /// Comments asked at once. Each Jev request is 1 HTTP call well under TypeSafe's rate limit, so
+  /// every capped comment goes in 1 round and the hook waits for 1 request; each Claude answer is
+  /// a `claude` process, so those keep the shared bound.
+  static func concurrency(_ backend: JudgeBackend) -> Int {
+    switch backend {
+    case .claude: JudgeBatch.maxConcurrent
+    case .jev: maxComments
+    }
+  }
+
   func review(root: URL) async -> String? {
     guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root),
-      case .enabled(_, let thresholds, _) = config.judge,
+      case .enabled(let backend, let thresholds, _) = config.judge,
       let judge = makeJudge(config.judge, root)
     else { return nil }
     let subjects: [JudgeSubject]
@@ -261,7 +290,9 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
       return nil
     }
     guard !subjects.isEmpty else { return nil }
-    switch await JudgeBatch.answer(subjects, questions: .comments, judge: judge) {
+    switch await JudgeBatch.answer(
+      subjects, questions: .comments, judge: judge, maxConcurrent: Self.concurrency(backend))
+    {
     case .failure(let error):
       return "Comment judge not run: \(error)"
     case .success(let answers):

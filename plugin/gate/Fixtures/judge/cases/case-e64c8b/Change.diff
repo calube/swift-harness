@@ -1,0 +1,13 @@
++  static func severity(of level: LogLevel) -> Int {
++    switch level {
++    case .debug: 0
++    case .info: 1
++    case .notice: 2
++    case .error: 3
++    case .fault: 4
++    }
++  }
+@@
++    let minimum = OSLogRendering.severity(of: minimumLevel)
++    return Self(
++      isEnabled: { level, _ in OSLogRendering.severity(of: level) >= minimum },

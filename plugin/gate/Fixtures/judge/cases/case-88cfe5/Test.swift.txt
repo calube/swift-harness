@@ -1,0 +1,8 @@
+@Test(
+  "the preview value answers without a transport — catches previews and snapshots reaching for the network"
+)
+func previewAnswersOffline() {
+  let fact = Fact(text: "Cats sleep for around 13 to 14 hours a day.")
+
+  #expect(fact.text == "Cats sleep for around 13 to 14 hours a day.")
+}

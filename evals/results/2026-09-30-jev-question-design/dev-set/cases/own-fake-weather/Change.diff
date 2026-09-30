@@ -1,0 +1,5 @@
++  public func temperatureText(locale: Locale) async throws -> String {
++    let weather = try await client.current()
++    let f = weather.celsius * 9 / 5 + 32
++    return locale.region == .unitedStates ? "\(Int(f))°F" : "\(Int(weather.celsius))°C"
++  }

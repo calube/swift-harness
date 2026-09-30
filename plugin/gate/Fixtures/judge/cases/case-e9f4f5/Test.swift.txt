@@ -1,0 +1,19 @@
+@Test(
+  "reads the test tree and build results with the Xcode 26.2 subcommands — catches the reader calling a subcommand 26.2 does not have"
+)
+func invocations() async throws {
+  let runner = replaying("fail")
+
+  let contents = try await LiveXcresultReader(runner: runner).read(bundlePath: "/r/T2.xcresult")
+
+  #expect(
+    runner.invocations.map { [$0.executable] + $0.arguments } == [
+      [
+        "/usr/bin/xcrun", "xcresulttool", "get", "test-results", "tests", "--path",
+        "/r/T2.xcresult",
+      ],
+      ["/usr/bin/xcrun", "xcresulttool", "get", "build-results", "--path", "/r/T2.xcresult"],
+    ])
+  #expect(contents.testResults == (try Fixture.data("Xcresult/fail.tests.json")))
+  #expect(contents.buildResults == (try Fixture.data("Xcresult/fail.build-results.json")))
+}

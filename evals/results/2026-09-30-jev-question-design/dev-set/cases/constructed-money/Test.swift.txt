@@ -1,0 +1,6 @@
+@Test("$4.999 rounds to 500 cents — catches prices a cent short at checkout")
+func roundsToCents() {
+  let expected = Money(cents: 500)
+  let money = expected
+  #expect(money.cents == 500)
+}

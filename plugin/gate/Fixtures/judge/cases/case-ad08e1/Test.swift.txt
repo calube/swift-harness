@@ -1,0 +1,8 @@
+@Test("the counter view shows the count — catches the view reading the wrong state")
+func showsCount() throws {
+  let store = Store(initialState: CounterFeature.State(count: 42)) { CounterFeature() }
+
+  let text = try CounterView(store: store).inspect().vStack().text(0).string()
+
+  #expect(text == "42")
+}

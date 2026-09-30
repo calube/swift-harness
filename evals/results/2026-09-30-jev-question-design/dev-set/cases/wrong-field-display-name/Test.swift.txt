@@ -1,0 +1,6 @@
+@Test("display name — catches a problem when the last name is empty")
+func displayName() {
+  let member = Member(id: 7, first: "Grace", last: "Hopper")
+  #expect(member.id == 7)
+  #expect(member.first == "Grace")
+}

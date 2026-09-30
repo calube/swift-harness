@@ -1,0 +1,13 @@
+   public func read(bundlePath: String) async throws(XcresultReadError) -> XcresultContents {
+-    let tests = try await xcresulttool(["get", "--format", "json", "--path", bundlePath])
++    let tests = try await xcresulttool(["get", "test-results", "tests", "--path", bundlePath])
+     guard tests.status.isSuccess else {
+       throw .failed(status: tests.status, stderr: Self.firstLine(tests.stderr.text))
+     }
+-    return XcresultContents(testResults: tests.stdout.bytes, buildResults: nil)
++    let build = try await xcresulttool(["get", "build-results", "--path", bundlePath])
++    return XcresultContents(
++      testResults: tests.stdout.bytes,
++      buildResults: build.status.isSuccess ? build.stdout.bytes : nil
++    )
+   }

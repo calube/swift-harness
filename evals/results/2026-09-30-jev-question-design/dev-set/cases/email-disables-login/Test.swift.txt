@@ -1,0 +1,8 @@
+@Test("an email without an @ keeps Log In disabled — catches users submitting a malformed email")
+func invalidEmailDisablesLogin() async {
+  let store = TestStore(initialState: SignIn.State(password: "hunter22")) { SignIn() }
+  await store.send(.emailChanged("ada.example.com")) {
+    $0.email = "ada.example.com"
+    $0.isLoginEnabled = false
+  }
+}

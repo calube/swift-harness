@@ -1,0 +1,15 @@
+@Test("fact failure — catches failures")
+func factFailure() async {
+  let records = LockIsolated<[LogRecord]>([])
+  let store = TestStore(initialState: CounterFeature.State(count: 2)) {
+    CounterFeature()
+  } withDependencies: {
+    $0.apiClient.randomFact = { throw FactUnavailable() }
+    $0.logClient.emit = { record in records.withValue { $0.append(record) } }
+  }
+
+  await store.send(.factButtonTapped) { $0.isLoadingFact = true }
+  await store.receive(\.factFailed) { $0.isLoadingFact = false }
+  #expect(records.value.first?.message == "fact request failed")
+  #expect(records.value.first?.category == "Counter")
+}

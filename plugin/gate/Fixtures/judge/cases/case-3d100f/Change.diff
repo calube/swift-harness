@@ -1,0 +1,9 @@
++    case .humanPlaced(let cell):
++      guard next.outcome == .inProgress, next.board.indices.contains(cell), next.board[cell] == nil
++      else { return state }
++      next.board[cell] = .x
++      next.outcome = GameState.outcome(of: next.board)
++      guard next.outcome == .inProgress else { return next }
++      let empty = next.board.indices.filter { next.board[$0] == nil }
++      next.board[empty[next.rng.nextIndex(below: empty.count)]] = .o
++      next.outcome = GameState.outcome(of: next.board)

@@ -1,0 +1,3 @@
++  case let .reminderTimeChosen(hour):
++    state.reminderHour = hour
++    return .run { _ in await notifications.schedule(DateComponents(hour: hour, minute: 0)) }

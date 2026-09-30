@@ -1,0 +1,13 @@
+@Test(
+  "an mmdc that can't launch means not on PATH and validates nothing — catches design-lint blocking where mmdc is absent"
+)
+func launchFailureIsNotOnPath() async {
+  let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+    throw .launchFailed(executable: invocation.executable, reason: "not found")
+  }
+
+  let outcome = await MermaidValidation.validate(fences: Self.fences, runner: runner)
+
+  #expect(outcome == .notOnPath)
+  #expect(runner.invocations.count == 1)
+}

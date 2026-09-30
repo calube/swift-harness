@@ -1,0 +1,5 @@
+@Test("sort works — catches sort not working")
+func sortsContacts() {
+  let sorted = ContactSorter.sorted([Contact(last: "Zhu"), Contact(last: "Abe"), Contact(last: "Lee")])
+  #expect(sorted.map(\.last) == ["Abe", "Lee", "Zhu"])
+}

@@ -1,0 +1,5 @@
+@Test("parses the price field — catches problems parsing prices")
+func parsesPrice() throws {
+  let product = try? Product.parse(Data(#"{"name":"Mug","price":"12.50"}"#.utf8))
+  #expect(product != nil)
+}

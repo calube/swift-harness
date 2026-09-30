@@ -1,0 +1,14 @@
+ extension LogClient {
+   public func log(
+     _ level: LogLevel,
+     _ message: StaticString,
+     category: String,
+-    _ attributes: [LogAttribute] = []
++    _ attributes: @autoclosure () -> [LogAttribute] = []
+   ) {
+     guard isEnabled(level, category) else { return }
+     emit(
+-      LogRecord(level: level, category: category, message: "\(message)", attributes: attributes))
++      LogRecord(level: level, category: category, message: "\(message)", attributes: attributes()))
+   }
+ }

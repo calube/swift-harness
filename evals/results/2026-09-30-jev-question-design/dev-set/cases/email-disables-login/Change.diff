@@ -1,0 +1,4 @@
++  case let .emailChanged(email):
++    state.email = email
++    state.isLoginEnabled = email.contains("@") && !state.password.isEmpty
++    return .none

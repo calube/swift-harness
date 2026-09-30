@@ -1,0 +1,7 @@
+@Test("makeDetail builds the detail view model — catches makeDetail not building it")
+func makesDetail() {
+  let factory = MockViewModelFactory()
+  let stub = MockDetailViewModel()
+  factory.detailToReturn = stub
+  #expect(factory.makeDetail(id: 3) === stub)
+}

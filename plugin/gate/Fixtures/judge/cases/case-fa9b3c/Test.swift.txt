@@ -1,0 +1,5 @@
+@Test("status codes — catches status bugs")
+func statusCodes() {
+  let codes = [200, 204, 299]
+  #expect(codes.allSatisfy { (200..<300).contains($0) })
+}

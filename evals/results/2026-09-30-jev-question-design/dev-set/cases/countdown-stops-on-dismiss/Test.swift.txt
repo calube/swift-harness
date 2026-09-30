@@ -1,0 +1,12 @@
+@Test("leaving the screen stops the countdown — catches the timer ticking in the background")
+func dismissCancelsTimer() async {
+  let clock = TestClock()
+  let store = TestStore(initialState: Countdown.State(remaining: 10)) { Countdown() } withDependencies: {
+    $0.continuousClock = clock
+  }
+  await store.send(.onAppear)
+  await clock.advance(by: .seconds(1))
+  await store.receive(\.tick) { $0.remaining = 9 }
+  await store.send(.onDisappear)
+  await clock.advance(by: .seconds(5))
+}

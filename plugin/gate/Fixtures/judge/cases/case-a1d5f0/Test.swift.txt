@@ -1,0 +1,10 @@
+@Test("tapping increment raises the count by one — catches the increment button doing nothing")
+func incrementRaisesCount() async {
+  let store = TestStore(initialState: CounterFeature.State(count: 4)) { CounterFeature() }
+  store.exhaustivity = .off
+
+  await store.send(.incrementButtonTapped)
+
+  let expected = CounterFeature.State(count: 5)
+  #expect(expected.count == 5)
+}

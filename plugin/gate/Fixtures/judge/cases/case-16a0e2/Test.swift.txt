@@ -1,0 +1,8 @@
+@Test("one tap reads as singular — catches the counter label saying 1 taps")
+func singularLabel() async {
+  let store = TestStore(initialState: CounterFeature.State()) { CounterFeature() }
+
+  await store.send(.incrementButtonTapped) { $0.count = 1 }
+
+  #expect(store.state.countLabel == "1 tap")
+}

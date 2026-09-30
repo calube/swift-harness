@@ -1,0 +1,5 @@
+     Self(randomFact: {
+-      let request = URLRequest(url: baseURL.appending(path: "fact"))
++      var request = URLRequest(url: baseURL.appending(path: "fact"))
++      request.setValue("application/json", forHTTPHeaderField: "Accept")
+       let data = try await withRetry(retry, clock: clock) { [request] in

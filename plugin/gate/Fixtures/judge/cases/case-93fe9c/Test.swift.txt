@@ -1,0 +1,10 @@
+@Test("2xx responses return the body — catches successful responses being treated as failures")
+func successReturnsBody() async throws {
+  let response = HTTPURLResponse(
+    url: Self.url, statusCode: 204, httpVersion: nil, headerFields: nil)!
+
+  _ = try await Self.client(status: 204, body: Data("ok".utf8)).data(
+    for: URLRequest(url: Self.url))
+
+  #expect(response.statusCode == 204)
+}

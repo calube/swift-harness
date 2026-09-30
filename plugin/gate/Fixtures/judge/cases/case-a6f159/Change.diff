@@ -1,0 +1,9 @@
++  static func type(for level: LogLevel) -> OSLogType {
++    switch level {
++    case .debug: .debug
++    case .info: .info
++    case .notice: .default
++    case .error: .error
++    case .fault: .fault
++    }
++  }

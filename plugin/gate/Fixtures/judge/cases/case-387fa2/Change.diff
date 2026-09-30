@@ -1,0 +1,14 @@
++  public static let winningLines: [[Int]] = [
++    [0, 1, 2], [3, 4, 5], [6, 7, 8],
++    [0, 3, 6], [1, 4, 7], [2, 5, 8],
++    [0, 4, 8], [2, 4, 6],
++  ]
++
++  public static func outcome(of board: [Player?]) -> Outcome {
++    for line in winningLines {
++      if let player = board[line[0]], board[line[1]] == player, board[line[2]] == player {
++        return .won(player)
++      }
++    }
++    return board.contains(nil) ? .inProgress : .draw
++  }

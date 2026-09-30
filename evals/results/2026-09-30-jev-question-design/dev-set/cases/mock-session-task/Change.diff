@@ -1,0 +1,4 @@
++  public func load(_ request: URLRequest) {
++    let task = session.dataTask(with: request)
++    task.resume()
++  }

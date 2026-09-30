@@ -1,0 +1,174 @@
+{
+ "schema": 1,
+ "questionSet": "test-quality@1",
+ "cases": [
+  {
+   "id": "h-own-fake-rates",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-wrong-field-eta",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-mock-token",
+   "kind": "mock-mock",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-dark-mode",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-upload-backoff",
+   "kind": "good-timing",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-analytics-help",
+   "kind": "impl-collab",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-private-inflight",
+   "kind": "impl-private",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-convert-vague",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-existence-receipt",
+   "kind": "existence",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-reminder-schedule",
+   "kind": "good-spy-output",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-badge-partial",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-constructed-sort",
+   "kind": "constructed",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-xctest-discount",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "h-wrong-field-favorite",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  }
+ ]
+}

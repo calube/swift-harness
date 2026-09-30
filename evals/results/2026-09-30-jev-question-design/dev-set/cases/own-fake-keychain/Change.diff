@@ -1,0 +1,5 @@
++  public func signOut() async {
++    keychain.remove("auth")
++    await api.revoke()
++    currentUser = nil
++  }

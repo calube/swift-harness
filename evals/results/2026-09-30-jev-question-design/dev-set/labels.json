@@ -1,0 +1,486 @@
+{
+ "schema": 1,
+ "questionSet": "test-quality@1",
+ "cases": [
+  {
+   "id": "tip-rounding",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "email-disables-login",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "feed-retry-backoff",
+   "kind": "good-timing",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "search-debounce",
+   "kind": "good-timing",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "order-status-unknown",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "relative-just-now",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "countdown-stops-on-dismiss",
+   "kind": "good-timing",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "password-rules",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "autosave-draft",
+   "kind": "good-spy-output",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "empty-inbox-state",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "sort-works",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "xctest-name-only",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "discount-edges",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "streak-reset",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "vague-good-toggle",
+   "kind": "good",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "timer-ticks",
+   "kind": "good-timing",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "own-fake-weather",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "own-fake-search",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "own-fake-clock",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "own-fake-keychain",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "own-fake-formatter",
+   "kind": "own-fake",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "wrong-field-tax",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "wrong-field-error-message",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "wrong-field-display-name",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "wrong-field-badge",
+   "kind": "wrong-field",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "mock-session-task",
+   "kind": "mock-mock",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "mock-factory-vm",
+   "kind": "mock-mock",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "mock-cache-hit",
+   "kind": "mock-mock",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "mock-repo-service",
+   "kind": "mock-mock",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "partial",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "existence-rows",
+   "kind": "existence",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "existence-parse",
+   "kind": "existence",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "constructed-money",
+   "kind": "constructed",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "no-assertion-sync",
+   "kind": "no-assert",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "tautology-count",
+   "kind": "tautology",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "vague",
+    "asserts-implementation": "no",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "spy-call-order",
+   "kind": "impl-order",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "formatter-call-count",
+   "kind": "impl-count",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "cache-internal-storage",
+   "kind": "impl-private",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "specific",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "log-text",
+   "kind": "impl-log",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "no",
+    "name-specificity": "specific",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "invalidate-called",
+   "kind": "impl-collab",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  },
+  {
+   "id": "encoder-args",
+   "kind": "impl-args",
+   "declaredTier": "T1",
+   "expected": {
+    "fails-if-broken": "yes",
+    "name-specificity": "vague",
+    "asserts-implementation": "yes",
+    "tier": "T1"
+   },
+   "labeller": "agent"
+  }
+ ]
+}

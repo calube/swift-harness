@@ -1,0 +1,8 @@
++@DependencyClient
++public struct APIClient: Sendable {
++  public var randomFact: @Sendable () async throws -> Fact
++}
++
++extension APIClient: TestDependencyKey {
++  public static let testValue = APIClient()
++}

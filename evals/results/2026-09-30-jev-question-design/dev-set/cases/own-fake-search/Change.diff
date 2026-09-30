@@ -1,0 +1,7 @@
++  case let .searchTapped:
++    return .run { [query = state.query] send in
++      await send(.searchResponse(try await searchClient.search(query.lowercased())))
++    }
++  case let .searchResponse(results):
++    state.results = results.filter { !$0.title.isEmpty }
++    return .none

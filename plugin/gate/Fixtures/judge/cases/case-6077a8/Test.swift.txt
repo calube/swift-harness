@@ -1,0 +1,6 @@
+@Test("non-2xx responses throw the status code — catches error pages being decoded as data")
+func failureStatusThrows() async {
+  await #expect(throws: (any Error).self) {
+    try await Self.client(status: 500).data(for: URLRequest(url: Self.url))
+  }
+}

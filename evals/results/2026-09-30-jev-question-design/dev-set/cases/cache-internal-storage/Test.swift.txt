@@ -1,0 +1,8 @@
+@Test("fetching a user twice hits the network once — catches duplicate profile requests")
+func cachesUser() async throws {
+  let loader = UserLoader(api: .mock)
+  _ = try await loader.user(id: 1)
+  _ = try await loader.user(id: 1)
+  #expect(loader._storage.count == 1)
+  #expect(loader._storage.keys.first == 1)
+}

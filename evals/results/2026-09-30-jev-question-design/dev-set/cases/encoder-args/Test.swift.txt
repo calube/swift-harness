@@ -1,0 +1,8 @@
+@Test("encodes the payload — catches encoding failures")
+func encodesPayload() throws {
+  let encoder = SpyEncoder()
+  let request = try CreateNote.request(Note(id: 1, text: "hi"), encoder: encoder)
+  #expect(encoder.encodedTypes == ["Note"])
+  #expect(encoder.encodeCallCount == 1)
+  _ = request
+}

@@ -1,0 +1,7 @@
++  case let .textChanged(text):
++    state.text = text
++    return .run { _ in
++      try await clock.sleep(for: .seconds(2))
++      try await drafts.save(Draft(text: text))
++    }
++    .cancellable(id: CancelID.autosave, cancelInFlight: true)

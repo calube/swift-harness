@@ -1,0 +1,5 @@
++  public func run() async throws -> SyncReport {
++    let remote = try await api.changes(since: store.cursor)
++    try store.apply(remote)
++    return SyncReport(applied: remote.count)
++  }

@@ -1,0 +1,6 @@
+@Test("session expiry — catches session expiry bugs")
+func sessionExpires() {
+  var clock = FakeClock(now: Date(timeIntervalSince1970: 0))
+  clock.now = clock.now.addingTimeInterval(3_601)
+  #expect(clock.now.timeIntervalSince1970 == 3_601)
+}

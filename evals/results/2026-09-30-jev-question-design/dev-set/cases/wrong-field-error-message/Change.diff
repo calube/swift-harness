@@ -1,0 +1,4 @@
++  case .saveResponse(.failure):
++    state.isSaving = false
++    state.errorMessage = "Couldn't save"
++    return .none

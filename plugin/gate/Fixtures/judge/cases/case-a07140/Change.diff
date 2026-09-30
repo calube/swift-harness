@@ -1,0 +1,20 @@
+       case .factButtonTapped:
+-        return .none
++        state.isLoadingFact = true
++        return .run { [count = state.count, apiClient, log] send in
++          do {
++            await send(.factResponse(try await apiClient.randomFact().text))
++          } catch {
++            log.log(.error, "fact request failed", category: "Counter", [.public("count", count)])
++            await send(.factFailed)
++          }
++        }
++
++      case .factResponse(let fact):
++        state.isLoadingFact = false
++        state.fact = fact
++        return .none
++
++      case .factFailed:
++        state.isLoadingFact = false
++        return .none
