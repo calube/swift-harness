@@ -1,0 +1,1 @@
+// Spec §9: at `sketch`, no research lane or claim checker ran, so a Decision bullet may stay

@@ -1,0 +1,1 @@
+/// harness ships and its own commands read — a stamped template, a self-test seed — so it

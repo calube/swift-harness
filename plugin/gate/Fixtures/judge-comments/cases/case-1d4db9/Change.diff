@@ -1,0 +1,5 @@
+/// paths. Pointers only; each repository's `.harness/plans/index.json` stays canonical (spec §4.2).
+public struct ProjectRegistry: Sendable, Equatable {
+  public static let schema = 1
+  /// Relative to the home directory.
+  public static let path = ".swift-harness/projects.json"

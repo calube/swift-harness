@@ -1,0 +1,1 @@
+// A directory that can't be written to can't have its entries unlinked.

@@ -1,0 +1,6 @@
+/// decimal character reference (Mermaid's own escape convention for label text, e.g. `#93;` for
+/// `]`), so a task id can never reopen Mermaid's own grammar (closing a node early, forging an
+/// edge) or, once Mermaid's `htmlLabels` renders the label, reach the page as live markup.
+enum MermaidLabel {
+  static func escape(_ text: String) -> String {
+    var result = ""

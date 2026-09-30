@@ -1,0 +1,1 @@
+/// `message` is a `StaticString` so user data can only enter through privacy-tagged attributes.

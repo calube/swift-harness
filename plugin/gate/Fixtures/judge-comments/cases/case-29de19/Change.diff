@@ -1,0 +1,6 @@
+    // reverts alongside the Swift sources instead of silently keeping the change under test.
+    var reverted: [String] = []
+    var copied: [String] = []
+    for path in changed {
+      guard path.hasPrefix(prefix) else { continue }
+      let relative = String(path.dropFirst(prefix.count))

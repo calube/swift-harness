@@ -1,0 +1,5 @@
+    let fromFirst = try Claims.reusable(
+      Claims.packageClaim("ev-first-repo-effect-cancels", text: text, quote: quote))
+    let fromSecond = try Claims.reusable(
+      Claims.packageClaim(
+        "ev-second-repo-effect-cancels", text: text, quote: quote, lines: "L90-L99"))

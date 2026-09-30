@@ -1,0 +1,6 @@
+/// `ContextPack` (`SwiftGateDomain`); this type only reads files and hands their untouched
+/// contents to the domain builders.
+public enum ContextPackFiles {
+  public enum Failure: Error, Sendable, Equatable {
+    case unreadable(path: String)
+  }

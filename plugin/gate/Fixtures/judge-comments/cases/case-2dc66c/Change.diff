@@ -1,0 +1,6 @@
+    // in the repository's own code, never an environment problem, even when the compiler's note
+    // can't name a real file: it must never read as no-evidence, which would let the Stop hook
+    // release on a test that doesn't compile.
+    let macroLocated = log.macroExpansionErrors.map { error -> (String, Int?, String) in
+      let path = error.file.flatMap(relative).flatMap { $0.contains(".build/") ? nil : $0 }
+      return (path ?? evidence.packagePath, path != nil ? error.line : nil, error.message)

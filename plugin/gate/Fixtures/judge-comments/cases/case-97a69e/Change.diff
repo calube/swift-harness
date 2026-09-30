@@ -1,0 +1,6 @@
+enum KnownIdSourceFindings {
+  static let ruleID = "comments.id-source-unreadable"
+
+  static func make(_ unreadable: [KnownIdSources.UnreadableSource]) -> [Finding] {
+    unreadable.compactMap { source in
+      try? Finding(

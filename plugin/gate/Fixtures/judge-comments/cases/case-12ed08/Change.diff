@@ -1,0 +1,6 @@
+      #expect(!FileManager.default.fileExists(atPath: marker))
+
+      let capturePath = try #require(report.capturePath)
+      let onDisk = try Data(contentsOf: root.appending(path: capturePath))
+      #expect(String(decoding: onDisk, as: UTF8.self).contains(payload))
+    }

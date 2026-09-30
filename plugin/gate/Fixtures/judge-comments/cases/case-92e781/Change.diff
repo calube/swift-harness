@@ -1,0 +1,6 @@
+    #expect(after - before < runs / 2, "\(after - before) more descriptors open after \(runs) runs")
+  }
+
+  @Test(
+    "a run returns once the child exits and its output closes, not after the drain limit — catches the parent holding a pipe's write end so every run waits out the limit"
+  )

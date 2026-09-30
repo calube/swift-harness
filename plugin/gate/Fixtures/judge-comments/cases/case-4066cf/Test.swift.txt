@@ -1,0 +1,1 @@
+/// `@Suite(.serialized, …)` in any argument position.

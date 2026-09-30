@@ -1,0 +1,1 @@
+/// depends on `--role` (checked in ``ContextPackRun``, not by ArgumentParser) — a single option

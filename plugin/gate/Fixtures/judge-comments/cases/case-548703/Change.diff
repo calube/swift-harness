@@ -1,0 +1,6 @@
+/// base at the surface commit of the task that added the API it calls.
+enum BuildProofBasesRun {
+  static func run(slug: String, git: any Git) async -> BuildLoopResult<BuildProofBasesReport> {
+    let command = "build proof-bases"
+    let plan: PlanStateLayout.Plan
+    do {

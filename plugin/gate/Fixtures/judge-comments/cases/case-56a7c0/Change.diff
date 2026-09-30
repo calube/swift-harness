@@ -1,0 +1,6 @@
+  /// A missing or unreadable config file counts as "no section": ``StaticCheckInputs/loadConfig``
+  /// already turns a malformed one into its own blocking or red outcome before this ever runs.
+  private static func hasDocsSection(root: URL) -> Bool {
+    let url = root.appending(path: Config.fileName, directoryHint: .notDirectory)
+    guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+    for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {

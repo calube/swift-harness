@@ -1,0 +1,1 @@
+// A macro expansion (for example `#expect(try …)` in a non-throwing test) is a compile error

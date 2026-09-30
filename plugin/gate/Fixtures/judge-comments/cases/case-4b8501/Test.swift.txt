@@ -1,0 +1,1 @@
+/// Only failures a later attempt can plausibly fix: transport errors, throttling, and 5xx.

@@ -1,0 +1,6 @@
+  /// excluded directory, build output, or a hidden directory.
+  public func isExcluded(_ relativePath: String) -> Bool {
+    let components = relativePath.split(separator: "/").dropLast()
+    var prefix = ""
+    for component in components {
+      prefix = prefix.isEmpty ? String(component) : "\(prefix)/\(component)"

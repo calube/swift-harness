@@ -1,0 +1,6 @@
+
+    let outcome = await CommentsCheck.run(
+      root: repo.root, git: repo.git, swiftPM: ScopeResolution.liveSwiftPM(root: repo.root))
+    guard case .checked(let result) = outcome else {
+      Issue.record("expected checked, got \(outcome)")
+      return

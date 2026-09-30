@@ -1,0 +1,1 @@
+/// The interface's contract with the features that depend on it: tests must stub what they use,

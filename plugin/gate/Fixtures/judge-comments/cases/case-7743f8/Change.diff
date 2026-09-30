@@ -1,0 +1,6 @@
+  @discardableResult
+  private func git(_ arguments: [String]) async throws(CalibrationCaseError) -> String {
+    let output = try await run(arguments)
+    guard output.status.isSuccess else {
+      throw .blocked(
+        "git \(arguments.joined(separator: " ")) exited \(output.status): "

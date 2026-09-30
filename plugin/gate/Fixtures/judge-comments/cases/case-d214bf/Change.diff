@@ -1,0 +1,6 @@
+public enum GameEngine {
+  public static func step(_ state: GameState, _ input: GameInput) -> GameState {
+    var next = state
+    switch input {
+    case .reset:
+      next.board = Array(repeating: nil, count: GameState.cellCount)

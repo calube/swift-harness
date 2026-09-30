@@ -1,0 +1,6 @@
+/// | Router reachability | every `docs/` doc is reachable from `docs/index.md` |
+///
+/// Unlike ``DesignLintSections`` and its siblings, this rule reads the *whole* docs corpus at
+/// once — reference integrity and reachability are cross-file by nature — so the input is every
+/// file's path and raw text (§5.10's "no IO in the domain": the FS read lives in the CLI's
+/// `DocsTreeReader` adapter, not here). Two decisions worth stating for later readers:

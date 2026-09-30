@@ -1,0 +1,6 @@
+///   applies statically.
+/// - At most `pyramid.max_flows` UI tests run. The config already caps the flow list; this caps
+///   the tests, so one flow cannot quietly grow into a suite.
+/// - Every declared flow has a test: a critical flow without one is a gap, not a pass.
+public enum FlowCoverage {
+  public static let unmappedRuleID = "t3.unmapped-flow"

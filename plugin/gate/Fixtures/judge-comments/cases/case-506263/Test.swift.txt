@@ -1,0 +1,1 @@
+// Half deleted and holding a directory it may not empty, so neither git nor a plain delete

@@ -1,0 +1,6 @@
+    .target(
+      name: "CounterUI",
+      dependencies: [
+        "CounterCore",
+        .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
+      ]

@@ -1,0 +1,6 @@
+/// group keeps the command's argument surface in one place instead of duplicating it per role.
+struct ContextPackOptions: ParsableArguments {
+  @Option(help: "The agent role the pack is sliced for (spec §5.10).")
+  var role: String
+
+  @Option(help: "Distinguishes several packs of the same role, e.g. a worker's task id.")

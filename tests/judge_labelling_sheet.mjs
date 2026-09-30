@@ -1,7 +1,11 @@
-// The blind labelling sheet for the judge's test-quality set (`plugin/gate/Fixtures/judge/`).
+// The blind labelling sheets for the judge's labelled sets: the test-quality set
+// (`plugin/gate/Fixtures/judge/`) and the comment set (`plugin/gate/Fixtures/judge-comments/`).
 //
-//   node tests/judge_labelling_sheet.mjs apply    reads the filled-in labelling-sheet.md, writes labels.json
-//   node tests/judge_labelling_sheet.mjs render   rewrites labelling-sheet.md with every case, answers blank
+//   node tests/judge_labelling_sheet.mjs apply [set]    reads each filled-in labelling-sheet.md, writes its labels.json
+//   node tests/judge_labelling_sheet.mjs render [set]   rewrites each labelling-sheet.md with every case, answers blank
+//
+// `set` is `test-quality` or `comments`; without it, the command covers both, and `apply` writes
+// neither file when either sheet has an error.
 //
 // `apply` records each answered case with labeller "person" and only the answers given; a blank
 // answer leaves that question unlabelled. A case with no answers keeps its entry, or stays out of
@@ -13,6 +17,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const applyCommand = 'node tests/judge_labelling_sheet.mjs apply'
+export const applyCommentsCommand = `${applyCommand} comments`
 
 const subject = 'a Swift test function from an iOS app built with The Composable Architecture, and the '
   + 'production code change it covers'
@@ -101,9 +106,10 @@ export function renderSheet({ cases }) {
   return lines.join('\n').trimEnd() + '\n'
 }
 
-export function parseSheet(text) {
+// Walks the sheet's case sections, skipping fenced text, and hands every other line of a case to
+// `onLine(current, line)`; `start(number, key)` makes the object that holds a case's parse.
+function scanSheet(text, start, onLine) {
   const cases = []
-  const errors = []
   let current
   let fenceMarker
   for (const line of text.split('\n')) {
@@ -119,23 +125,37 @@ export function parseSheet(text) {
     }
     const heading = line.match(/^## Case (\d+) · key ([0-9a-f]{8})\s*$/)
     if (heading) {
-      current = { number: Number(heading[1]), key: heading[2], tier: undefined, answers: {} }
+      current = start(Number(heading[1]), heading[2])
       cases.push(current)
       continue
     }
-    if (!current) continue
-    const lives = line.match(/^The subject currently lives in (T[123])\.\s*$/)
-    if (lives) {
-      current.tier = lives[1]
-      continue
-    }
-    const answer = line.match(/^Answer ([a-z-]+):[ \t]*(.*?)\s*$/)
-    if (!answer) continue
-    const [, question, value] = answer
-    if (!options[question]) errors.push(`case ${current.number}: unknown question ${question}`)
-    else if (question in current.answers) errors.push(`case ${current.number}: ${question} answered twice`)
-    else current.answers[question] = value
+    if (current) onLine(current, line)
   }
+  return cases
+}
+
+// Records `Answer <question>: <value>` into `current.answers`, or an error for an unknown or
+// repeated question.
+function readAnswer(current, line, known, errors) {
+  const answer = line.match(/^Answer ([a-z-]+):[ \t]*(.*?)\s*$/)
+  if (!answer) return
+  const [, question, value] = answer
+  if (!known[question]) errors.push(`case ${current.number}: unknown question ${question}`)
+  else if (question in current.answers) errors.push(`case ${current.number}: ${question} answered twice`)
+  else current.answers[question] = value
+}
+
+export function parseSheet(text) {
+  const errors = []
+  const cases = scanSheet(
+    text,
+    (number, key) => ({ number, key, tier: undefined, answers: {} }),
+    (current, line) => {
+      const lives = line.match(/^The subject currently lives in (T[123])\.\s*$/)
+      if (lives) current.tier = lives[1]
+      else readAnswer(current, line, options, errors)
+    },
+  )
   return { cases, errors }
 }
 
@@ -201,6 +221,133 @@ export function applySheet({ labels, sheet, caseIds }) {
   return { labels: merged, errors, person: merged.cases.filter((item) => item.labeller === 'person').length }
 }
 
+// The comment judge's questions (`JudgeQuestionSet.comments`), word for word; the test holds them
+// to its source.
+export const commentQuestions = [
+  {
+    id: 'loses-fact',
+    text: 'If this comment were deleted, would a reader lose a fact they cannot recover from the '
+      + 'code (a non-obvious why, a footgun warning, a contract, a suppression reason)?',
+    options: ['yes', 'no'],
+  },
+  {
+    id: 'right-size',
+    text: 'Is the comment the right size for the fact it carries (no restated code, no history '
+      + 'narration, no padding)?',
+    options: ['yes', 'no'],
+  },
+]
+const commentOptions = Object.fromEntries(commentQuestions.map((question) => [question.id, question.options]))
+const commentSubject = 'a comment added to Swift source, with the code around it'
+
+// `cases`: [{id, commit, path, comment, context}]: the comment exactly as the commit added it and
+// the 6 lines after it, the state the commit hook's judge sends. The ids never appear on the sheet;
+// the commit and path appear only on each case's `Source:` line, the one record of where it came from.
+export function renderCommentSheet({ cases }) {
+  const lines = [
+    '# Comment labelling sheet',
+    '',
+    'When every answer is in, turn the sheet into `labels.json` from the repository root with:',
+    '',
+    '```sh',
+    applyCommentsCommand,
+    '```',
+    '',
+    'You are labelling blind: each case shows only a comment a commit added to this repository\'s',
+    'Swift, and the 6 lines of code after it, exactly as the commit hook\'s judge sees them. Case',
+    'numbers and keys say nothing about the answer, and the order is arbitrary.',
+    '',
+    'How to fill it in:',
+    '',
+    `- The subject of every case is ${commentSubject}.`,
+    '- For each case, write `yes` or `no` after each `Answer <question>:` line.',
+    '- Leave an answer empty to skip that question for that case. A case with every answer',
+    '  empty is skipped entirely.',
+    '- Answer from the text shown only. The `Source:` line names the commit and file each comment',
+    '  came from so the set can be checked against history; you don\'t need to open them.',
+    '- Don\'t open the case directories, and don\'t edit anything outside the answer lines: the',
+    '  `key` on each case heading is how the answers find their case, and the `Source:` line must',
+    '  stay as it is.',
+    '',
+    'The command records every answered case with `labeller: "person"` and refuses the whole sheet',
+    'if any answer isn\'t `yes` or `no`.',
+    '',
+  ]
+  const ordered = [...cases].sort((a, b) => sheetKey(a.id).localeCompare(sheetKey(b.id)))
+  ordered.forEach((item, index) => {
+    lines.push(
+      `## Case ${index + 1} · key ${sheetKey(item.id)}`, '',
+      'Comment:', '', fence(item.comment, 'swift'), '',
+      'The code after it:', '', fence(item.context, 'swift'), '',
+      'Questions:', '',
+      ...commentQuestions.map((q) => `- ${q.id}: ${q.text} Options: ${q.options.join(', ')}.`), '',
+      ...commentQuestions.map((q) => `Answer ${q.id}:`), '',
+      `Source: ${item.commit} ${item.path}`, '',
+    )
+  })
+  return lines.join('\n').trimEnd() + '\n'
+}
+
+export function parseCommentSheet(text) {
+  const errors = []
+  const cases = scanSheet(
+    text,
+    (number, key) => ({ number, key, source: undefined, answers: {} }),
+    (current, line) => {
+      const source = line.match(/^Source: ([0-9a-f]{40}) (\S+)\s*$/)
+      if (source) current.source = { commit: source[1], path: source[2] }
+      else readAnswer(current, line, commentOptions, errors)
+    },
+  )
+  return { cases, errors }
+}
+
+// Returns the labels unchanged whenever `errors` is non-empty.
+export function applyCommentSheet({ labels, sheet, caseIds }) {
+  const parsed = parseCommentSheet(sheet)
+  const errors = [...parsed.errors]
+  const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
+  const existing = new Set(labels.cases.map((item) => item.id))
+  const answered = new Map()
+  const onSheet = new Set()
+  for (const item of parsed.cases) {
+    const where = `case ${item.number} (key ${item.key})`
+    const id = byKey.get(item.key)
+    if (!id) {
+      errors.push(`${where}: no case directory has this key`)
+      continue
+    }
+    onSheet.add(id)
+    if (!item.source) {
+      errors.push(`${where}: the source line is missing or changed`)
+      continue
+    }
+    const missing = commentQuestions.map((q) => q.id).filter((q) => !(q in item.answers))
+    if (missing.length) {
+      errors.push(`${where}: the answer lines for ${missing.join(', ')} are gone`)
+      continue
+    }
+    const expected = {}
+    for (const [question, value] of Object.entries(item.answers)) {
+      if (value === '') continue
+      if (!commentOptions[question].includes(value)) {
+        errors.push(`${where}: ${question} is '${value}', not one of ${commentOptions[question].join(', ')}`)
+        continue
+      }
+      expected[question] = value
+    }
+    if (Object.keys(expected).length) answered.set(id, { expected, id, labeller: 'person' })
+  }
+  const unlisted = caseIds.filter((id) => !onSheet.has(id))
+  if (unlisted.length) errors.push(`${unlisted.length} cases aren't on the sheet: ${unlisted.join(', ')}`)
+  if (errors.length) return { labels, errors, person: 0 }
+  const cases = labels.cases.map((item) => answered.get(item.id) ?? item)
+  // In id order, so the file doesn't depend on the sheet's order.
+  const added = [...answered.values()].filter((item) => !existing.has(item.id)).sort((a, b) => a.id.localeCompare(b.id))
+  const merged = { ...labels, cases: [...cases, ...added] }
+  return { labels: merged, errors, person: merged.cases.filter((item) => item.labeller === 'person').length }
+}
+
 function sortedKeys(value) {
   if (Array.isArray(value)) return value.map(sortedKeys)
   if (value && typeof value === 'object') {
@@ -214,51 +361,114 @@ export function formatLabels(labels) {
   return JSON.stringify(sortedKeys(labels), null, 2) + '\n'
 }
 
+function caseDirectories(caseRoot) {
+  return readdirSync(caseRoot).filter((name) => statSync(join(caseRoot, name)).isDirectory()).sort()
+}
+
+// Each set's directory, and how its sheet applies and renders. Neither writes a file, so a bare
+// `apply` can refuse both files when either sheet has an error.
+function sets(root) {
+  return {
+    'test-quality': {
+      directory: join(root, 'plugin/gate/Fixtures/judge'),
+      apply: applySheet,
+      render({ labels, sheetPath, caseRoot, caseIds }) {
+        const declared = new Map(labels.cases.map((item) => [item.id, item.declaredTier]))
+        if (existsSync(sheetPath)) {
+          const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
+          for (const item of parseSheet(readFileSync(sheetPath, 'utf8')).cases) {
+            const id = byKey.get(item.key)
+            if (id && item.tier && !declared.has(id)) declared.set(id, item.tier)
+          }
+        }
+        const missing = caseIds.filter((id) => !declared.has(id))
+        if (missing.length) return { error: `no current tier for ${missing.join(', ')}: add them to the sheet by hand first` }
+        const cases = caseIds.map((id) => ({
+          id, declaredTier: declared.get(id),
+          test: readFileSync(join(caseRoot, id, 'Test.swift.txt'), 'utf8'),
+          diff: readFileSync(join(caseRoot, id, 'Change.diff'), 'utf8'),
+        }))
+        return { sheet: renderSheet({ labels, cases }) }
+      },
+    },
+    comments: {
+      directory: join(root, 'plugin/gate/Fixtures/judge-comments'),
+      apply: applyCommentSheet,
+      render({ sheetPath, caseRoot, caseIds }) {
+        // The commit and path live only on the sheet, so a re-render carries them over.
+        const sources = new Map()
+        if (existsSync(sheetPath)) {
+          const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
+          for (const item of parseCommentSheet(readFileSync(sheetPath, 'utf8')).cases) {
+            const id = byKey.get(item.key)
+            if (id && item.source) sources.set(id, item.source)
+          }
+        }
+        const missing = caseIds.filter((id) => !sources.has(id))
+        if (missing.length) return { error: `no source for ${missing.join(', ')}: add them to the sheet by hand first` }
+        const cases = caseIds.map((id) => ({
+          id, ...sources.get(id),
+          comment: readFileSync(join(caseRoot, id, 'Test.swift.txt'), 'utf8'),
+          context: readFileSync(join(caseRoot, id, 'Change.diff'), 'utf8'),
+        }))
+        return { sheet: renderCommentSheet({ cases }) }
+      },
+    },
+  }
+}
+
 function main(argv) {
-  const root = fileURLToPath(new URL('..', import.meta.url))
-  const judge = join(root, 'plugin/gate/Fixtures/judge')
-  const labelsPath = join(judge, 'labels.json')
-  const sheetPath = join(judge, 'labelling-sheet.md')
-  const caseRoot = join(judge, 'cases')
-  const caseIds = readdirSync(caseRoot).filter((name) => statSync(join(caseRoot, name)).isDirectory()).sort()
-  const labels = JSON.parse(readFileSync(labelsPath, 'utf8'))
-  if (argv[0] === 'apply') {
-    const result = applySheet({ labels, sheet: readFileSync(sheetPath, 'utf8'), caseIds })
-    if (result.errors.length) {
-      console.error(`labels.json not written:\n  ${result.errors.join('\n  ')}`)
-      return 1
-    }
-    writeFileSync(labelsPath, formatLabels(result.labels))
-    const unlabelled = caseIds.length - result.labels.cases.length
-    console.log(`${result.person} person-labelled cases of ${result.labels.cases.length} in labels.json; `
-      + `${unlabelled} case directories have no label yet`)
-    return 0
+  const all = sets(fileURLToPath(new URL('..', import.meta.url)))
+  const [command, only] = argv
+  if (!['apply', 'render'].includes(command) || (only !== undefined && !all[only]) || argv.length > 2) {
+    console.error('usage: node tests/judge_labelling_sheet.mjs apply | render [test-quality | comments]')
+    return 2
   }
-  if (argv[0] === 'render') {
-    const declared = new Map(labels.cases.map((item) => [item.id, item.declaredTier]))
-    if (existsSync(sheetPath)) {
-      const byKey = new Map(caseIds.map((id) => [sheetKey(id), id]))
-      for (const item of parseSheet(readFileSync(sheetPath, 'utf8')).cases) {
-        const id = byKey.get(item.key)
-        if (id && item.tier && !declared.has(id)) declared.set(id, item.tier)
-      }
+  const files = Object.entries(all).filter(([name]) => only === undefined || name === only).map(([name, set]) => {
+    const caseRoot = join(set.directory, 'cases')
+    return {
+      name, set, caseRoot,
+      labelsPath: join(set.directory, 'labels.json'),
+      sheetPath: join(set.directory, 'labelling-sheet.md'),
+      caseIds: caseDirectories(caseRoot),
     }
-    const missing = caseIds.filter((id) => !declared.has(id))
-    if (missing.length) {
-      console.error(`no current tier for ${missing.join(', ')}: add them to the sheet by hand first`)
-      return 1
-    }
-    const cases = caseIds.map((id) => ({
-      id, declaredTier: declared.get(id),
-      test: readFileSync(join(caseRoot, id, 'Test.swift.txt'), 'utf8'),
-      diff: readFileSync(join(caseRoot, id, 'Change.diff'), 'utf8'),
+  })
+  if (command === 'apply') {
+    const results = files.map((file) => ({
+      file,
+      result: file.set.apply({
+        labels: JSON.parse(readFileSync(file.labelsPath, 'utf8')),
+        sheet: readFileSync(file.sheetPath, 'utf8'),
+        caseIds: file.caseIds,
+      }),
     }))
-    writeFileSync(sheetPath, renderSheet({ labels, cases }))
-    console.log(`wrote ${cases.length} cases to labelling-sheet.md`)
+    const failed = results.filter(({ result }) => result.errors.length)
+    if (failed.length) {
+      for (const { file, result } of failed) {
+        console.error(`${file.name}: labels.json not written:\n  ${result.errors.join('\n  ')}`)
+      }
+      if (results.length > failed.length) console.error('no labels.json written, since a sheet has an error')
+      return 1
+    }
+    for (const { file, result } of results) {
+      writeFileSync(file.labelsPath, formatLabels(result.labels))
+      const unlabelled = file.caseIds.length - result.labels.cases.length
+      console.log(`${file.name}: ${result.person} person-labelled cases of ${result.labels.cases.length} in `
+        + `labels.json; ${unlabelled} case directories have no label yet`)
+    }
     return 0
   }
-  console.error('usage: node tests/judge_labelling_sheet.mjs apply | render')
-  return 2
+  for (const file of files) {
+    const labels = JSON.parse(readFileSync(file.labelsPath, 'utf8'))
+    const rendered = file.set.render({ labels, sheetPath: file.sheetPath, caseRoot: file.caseRoot, caseIds: file.caseIds })
+    if (rendered.error) {
+      console.error(`${file.name}: ${rendered.error}`)
+      return 1
+    }
+    writeFileSync(file.sheetPath, rendered.sheet)
+    console.log(`${file.name}: wrote ${file.caseIds.length} cases to labelling-sheet.md`)
+  }
+  return 0
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) process.exit(main(process.argv.slice(2)))

@@ -1,0 +1,5 @@
+final class ScriptedTransport: Sendable {
+  enum Reply: Sendable {
+    case status(Int, Data = Data())
+    case transportError(URLError.Code)
+  }
