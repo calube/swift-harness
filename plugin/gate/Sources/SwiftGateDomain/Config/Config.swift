@@ -442,6 +442,11 @@ public enum JudgeBackend: String, Sendable, Equatable, CaseIterable {
   case claude
   /// Accepted so the choice is explicit; the adapter reports BLOCKED until it is built.
   case jev
+
+  /// Whether a confident answer may block `ready` only with a passing ``JudgeBlockCalibration``.
+  public var needsBlockCalibration: Bool {
+    false
+  }
 }
 
 /// Probability thresholds: `p >= block` may block at the `ready` tier; `advisory <= p < block` is

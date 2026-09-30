@@ -52,6 +52,18 @@ enum TestJudgeCheck {
   struct Dependencies: Sendable {
     let makeJudge: @Sendable (JudgeConfig) -> (any Judge)?
     let diff: any DiffReading
+    /// The harness checkout whose labels and recordings decide whether a backend that needs a
+    /// block calibration may block; `nil` when none is known.
+    let harnessRoot: URL?
+
+    init(
+      makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
+      harnessRoot: URL? = nil
+    ) {
+      self.makeJudge = makeJudge
+      self.diff = diff
+      self.harnessRoot = harnessRoot
+    }
 
     static func live(root: URL, git: LiveGit) -> Dependencies {
       Dependencies(

@@ -9,17 +9,31 @@ public struct JudgeCalibrationSet: Sendable, Equatable, Codable {
       case useless
     }
 
+    /// Who chose the case's labels. Only a person's labels count toward a block calibration.
+    public enum Labeller: String, Sendable, Codable {
+      case person
+      case agent
+    }
+
     public let id: String
     public let label: Label
     public let declaredTier: String
     /// Question id → the option a correct judge picks.
     public let expected: [String: String]
+    public var labeller: Labeller { .agent }
 
     public init(id: String, label: Label, declaredTier: String, expected: [String: String]) {
       self.id = id
       self.label = label
       self.declaredTier = declaredTier
       self.expected = expected
+    }
+
+    public init(
+      id: String, label: Label, declaredTier: String, expected: [String: String],
+      labeller: Labeller
+    ) {
+      self.init(id: id, label: label, declaredTier: declaredTier, expected: expected)
     }
   }
 

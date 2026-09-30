@@ -243,7 +243,8 @@ public enum JudgePolicy {
 
   public static func findings(
     subject: JudgeSubject, answers: [JudgeAnswer], questions: JudgeQuestionSet,
-    thresholds: JudgeThresholds, identity: JudgeIdentity, atReadyTier: Bool
+    thresholds: JudgeThresholds, identity: JudgeIdentity, atReadyTier: Bool,
+    blockAuthority: JudgeBlockAuthority = .standing
   ) throws(ReportContractViolation) -> [Finding] {
     let byQuestion = Dictionary(answers.map { ($0.question, $0) }, uniquingKeysWith: { a, _ in a })
     var findings: [Finding] = []
