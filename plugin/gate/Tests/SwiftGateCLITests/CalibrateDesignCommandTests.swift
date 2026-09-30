@@ -171,11 +171,12 @@ struct CalibrateDesignCommandTests {
     }
   }
 
-  static func run(_ repository: Repository, runner: FakeProcessRunner) async
-    -> StaticCheckOutcome
-  {
+  static func run(
+    _ repository: Repository, runner: FakeProcessRunner,
+    replies: DesignCalibrationReplies? = nil
+  ) async -> StaticCheckOutcome {
     await CalibrateDesignRun.run(
-      root: repository.root, runner: runner, model: "sonnet", now: passedAt)
+      root: repository.root, runner: runner, model: "sonnet", now: passedAt, replies: replies)
   }
 
   /// The record as the JSON push reads.
@@ -307,6 +308,18 @@ struct CalibrateDesignCommandTests {
       try Self.recordedModels(repository) == [
         "design-challenger/refuted-api haiku", "design-claim-checker/overstated-claim haiku",
       ])
+    let runs = repository.root.appending(path: RunLayout.runsDirectory)
+    let reported = try FileManager.default.contentsOfDirectory(atPath: runs.path).filter {
+      FileManager.default.fileExists(
+        atPath: runs.appending(path: "\($0)/\(RunLayout.reportFileName)").path)
+    }
+    #expect(reported.count == 1)
+    let kept = try #require(
+      reported.first.map {
+        repository.data(
+          "\(RunLayout.runDirectory(for: $0))calibrate-design/design-challenger/refuted-api.txt")
+      })
+    #expect(kept == Data(reply.utf8))
   }
 
   @Test(
@@ -521,6 +534,175 @@ struct CalibrateDesignCommandTests {
     #expect(arguments[tools + 1] == "")
     #expect(!arguments.contains("--json-schema"))
     #expect(arguments.contains("--restricted"))
+  }
+
+  // MARK: - Kept replies and replay
+
+  static let keptRunID = "20260930T120000Z-0000abcd"
+
+  static func replies(_ repository: Repository, _ mode: DesignCalibrationReplies.Mode)
+    -> DesignCalibrationReplies
+  {
+    DesignCalibrationReplies(root: repository.root, runID: keptRunID, mode: mode)
+  }
+
+  static func keptPath(agent: String, seed: String, _ suffix: String) -> String {
+    "\(RunLayout.runDirectory(for: keptRunID))calibrate-design/\(agent)/\(seed).\(suffix)"
+  }
+
+  static func agentRuns(_ runner: FakeProcessRunner) -> [ProcessInvocation] {
+    runner.invocations.filter { !isJudge($0) }
+  }
+
+  @Test(
+    "a live run keeps each agent's reply byte for byte with the requested and served models, and names both — catches a trimmed, re-encoded or lost reply leaving a miss undiagnosable"
+  )
+  func liveRunKeepsEachReply() async throws {
+    let repository = try Repository.calibrated()
+    let replies = [
+      "TOKEN-A":
+        "  ```json\n{\"verdicts\": [{\"id\": \"ev-case\", \"status\": \"overstated\"}]}\n```\n\n— ✓ done  \n",
+      "TOKEN-B": "{\"verdicts\": [{\"id\": \"ev-case\", \"status\": \"overstated\"}]}\r\n\t",
+    ]
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      let stdin = Self.stdin(invocation)
+      guard let (_, reply) = replies.first(where: { stdin.contains($0.key) }) else {
+        return ProcessOutput(status: .exited(1), stdout: "", stderr: "unscripted case")
+      }
+      return ProcessOutput(status: .exited(0), stdout: Self.envelope(result: reply))
+    }
+
+    let outcome = await Self.run(
+      repository, runner: runner, replies: Self.replies(repository, .keep))
+
+    #expect(try Self.exitCode(outcome) == 0)
+    for (agent, seed, token, model) in [
+      ("design-claim-checker", "overstated-claim", "TOKEN-A", "opus"),
+      ("design-challenger", "refuted-api", "TOKEN-B", "sonnet"),
+    ] {
+      let kept = repository.data(Self.keptPath(agent: agent, seed: seed, "txt"))
+      #expect(kept == Data(try #require(replies[token]).utf8), "\(agent)/\(seed)")
+      let metadataData = try #require(
+        repository.data(Self.keptPath(agent: agent, seed: seed, "json")))
+      let metadata = try #require(
+        try JSONSerialization.jsonObject(with: metadataData) as? [String: Any])
+      #expect(metadata["requestedModel"] as? String == model)
+      #expect(metadata["servedModels"] as? [String] == ["claude-haiku-4-5-20251001"])
+      let usage = Self.findings(outcome).first {
+        $0.ruleID == "calibrate-design.usage" && $0.message.hasPrefix("\(agent)/\(seed) ")
+      }
+      #expect(usage?.message.contains("served claude-haiku-4-5-20251001") == true)
+      #expect(
+        usage?.message.contains(Self.keptPath(agent: agent, seed: seed, "txt")) == true)
+    }
+  }
+
+  @Test(
+    "a replay runs no agent and judges the kept replies to the same answers as the live run — catches a replay that re-runs the agents"
+  )
+  func replayJudgesKeptReplies() async throws {
+    let repository = try Repository.calibrated()
+    try repository.judgedDrafter(expected: "unverified")
+    let live = await Self.run(
+      repository,
+      runner: Self.recorded(
+        ["TOKEN-A": "supported", "TOKEN-B": "overstated"], judgedProbability: 0.6),
+      replies: Self.replies(repository, .keep))
+    // Agents that would answer differently, so a replay that re-runs them can't match.
+    let replayRunner = Self.recorded(
+      ["TOKEN-A": "overstated", "TOKEN-B": "supported"], judgedProbability: 0.6)
+
+    let replay = await Self.run(
+      repository, runner: replayRunner, replies: Self.replies(repository, .replay))
+
+    #expect(Self.agentRuns(replayRunner).isEmpty)
+    #expect(replayRunner.invocations.filter(Self.isJudge).count == 1)
+    #expect(try Self.exitCode(replay) == 1)
+    let missed = { (outcome: StaticCheckOutcome) in
+      Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }.map(\.message)
+    }
+    #expect(missed(live).count == 2)
+    #expect(missed(replay) == missed(live))
+  }
+
+  @Test(
+    "a replay with a missing reply blocks with exit 2 naming the seed, before any agent runs — catches a gap filled by a live agent run or skipped"
+  )
+  func replayWithMissingReplyBlocks() async throws {
+    let repository = try Repository.calibrated()
+    _ = await Self.run(
+      repository, runner: Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"]),
+      replies: Self.replies(repository, .keep))
+    let kept = Self.keptPath(agent: "design-challenger", seed: "refuted-api", "txt")
+    try #require(repository.data(kept) != nil)
+    try FileManager.default.removeItem(at: repository.root.appending(path: kept))
+    let runner = Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"])
+
+    let outcome = await Self.run(
+      repository, runner: runner, replies: Self.replies(repository, .replay))
+
+    #expect(try Self.exitCode(outcome) == 2)
+    let reason = try #require(Self.blockedReason(outcome))
+    #expect(reason.contains("design-challenger/refuted-api"))
+    #expect(reason.contains(Self.keptPath(agent: "design-challenger", seed: "refuted-api", "txt")))
+    #expect(Self.agentRuns(runner).isEmpty)
+  }
+
+  @Test(
+    "a replay whose kept model record is unreadable blocks with exit 2 naming the file — catches a replay reporting a miss on a model nobody recorded"
+  )
+  func replayWithUnreadableMetadataBlocks() async throws {
+    let repository = try Repository.calibrated()
+    _ = await Self.run(
+      repository, runner: Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"]),
+      replies: Self.replies(repository, .keep))
+    let metadata = Self.keptPath(agent: "design-claim-checker", seed: "overstated-claim", "json")
+    try repository.write(
+      metadata, #"{"schemaVersion": 2, "requestedModel": "opus", "servedModels": []}"#)
+
+    let outcome = await Self.run(
+      repository, runner: Self.recorded([:]), replies: Self.replies(repository, .replay))
+
+    #expect(try Self.exitCode(outcome) == 2)
+    #expect(Self.blockedReason(outcome)?.contains(metadata) == true)
+  }
+
+  @Test(
+    "a passing replay leaves last-pass.json byte-identical and says so — catches stored replies refreshing the record without running the agents"
+  )
+  func passingReplyLeavesRecordUnchanged() async throws {
+    let repository = try Repository.calibrated()
+    let live = await Self.run(
+      repository, runner: Self.recorded(["TOKEN-A": "overstated", "TOKEN-B": "overstated"]),
+      replies: Self.replies(repository, .keep))
+    #expect(try Self.exitCode(live) == 0)
+    let previous = "{\"previous\": \"record\"}\n"
+    try repository.write(DesignCalibrationLayout.recordPath, previous)
+
+    let replay = await Self.run(
+      repository, runner: Self.recorded([:]), replies: Self.replies(repository, .replay))
+
+    #expect(try Self.exitCode(replay) == 0)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == Data(previous.utf8))
+    let passed = Self.findings(replay).first { $0.ruleID == "calibrate-design.passed" }
+    #expect(passed?.message.contains("replay of \(Self.keptRunID)") == true)
+    #expect(passed?.message.contains("left untouched") == true)
+  }
+
+  @Test(
+    "--replay takes a run id and refuses --model or a path — catches a replay claiming an override it never ran, or reading outside .harness/runs"
+  )
+  func replayOptionValidation() throws {
+    let parsed = try CalibrateCommand.parseAsRoot(["design", "--replay", Self.keptRunID])
+    #expect((parsed as? CalibrateDesignCommand)?.replay == Self.keptRunID)
+    for arguments in [
+      ["design", "--replay", Self.keptRunID, "--model", "haiku"],
+      ["design", "--replay", "../elsewhere"],
+    ] {
+      #expect(throws: (any Error).self, "\(arguments)") {
+        try CalibrateCommand.parseAsRoot(arguments)
+      }
+    }
   }
 
   // MARK: - Seed and runner failures

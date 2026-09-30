@@ -23,9 +23,13 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
       + "a judged answer passes at p >= 0.7. When every label is met it writes "
       + "\(DesignCalibrationLayout.recordPath) with each case's model and the content hash of "
       + "\(DesignCalibrationLayout.agentsDirectory)/design-*.md and "
-      + "\(DesignCalibrationLayout.workflowsDirectory)/design-*.js. Exit 0 all labels met (record written), "
-      + "1 on a missed label or a seed defect (record untouched), 2 when claude can't run or "
-      + "answer, or a seed can't be read.")
+      + "\(DesignCalibrationLayout.workflowsDirectory)/design-*.js. Each agent's reply is kept "
+      + "unmodified at \(RunLayout.runsDirectory)/<run id>/\(DesignCalibrationReplies.directoryName)/"
+      + "<agent>/<case>.txt, with the requested and served models in <case>.json. `--replay <run "
+      + "id>` judges those replies instead of running the agents, and never writes the record. "
+      + "Exit 0 all labels met (record written, unless replayed), 1 on a missed label or a seed "
+      + "defect (record untouched), 2 when claude can't run or answer, a seed can't be read, or "
+      + "a replayed reply is missing.")
 
   @Option(
     help: ArgumentHelp(
@@ -33,16 +37,36 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
         + "record it writes never counts as fresh."))
   var model: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "Judge the replies an earlier run kept under .harness/runs/<run id>/ instead of running "
+        + "the agents.",
+      valueName: "run id"))
+  var replay: String?
+
   @OptionGroup var output: OutputOptions
+
+  func validate() throws {
+    guard let replay else { return }
+    guard RunID.isValid(replay) else {
+      throw ValidationError("--replay takes a run id under \(RunLayout.runsDirectory)/")
+    }
+    guard model == nil else {
+      throw ValidationError("--replay judges replies already made; it can't take --model")
+    }
+  }
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let now = Date()  // swiftgate:allow det.date-init — the CLI edge stamps when the pass ran
-    try await StaticCheckRun.execute(root: root, format: output.format) {
+    let runID = RunID.make(startedAt: now, suffix: UInt32.random(in: .min ... .max))
+    let replies = DesignCalibrationReplies(
+      root: root, runID: replay ?? runID, mode: replay == nil ? .keep : .replay)
+    try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
       await CalibrateDesignRun.run(
         root: root, runner: LiveProcessRunner(), model: CalibrationModel.unpinned,
         modelOverride: model, now: now,
-        concurrentCases: CalibrateDesignRun.defaultConcurrentCases)
+        concurrentCases: CalibrateDesignRun.defaultConcurrentCases, replies: replies)
     }
   }
 }
@@ -108,20 +132,24 @@ enum CalibrateDesignRun {
   ///   - modelOverride: every agent's model instead of its own, for experiments.
   static func run(
     root: URL, runner: any ProcessRunner, model: String, modelOverride: String? = nil,
-    now: Date, concurrentCases: Int = 1
+    now: Date, concurrentCases: Int = 1, replies: DesignCalibrationReplies? = nil
   ) async -> StaticCheckOutcome {
     let calibration = DesignCalibrationRunner(
-      runner: runner, unpinnedModel: model, modelOverride: modelOverride)
+      runner: runner, unpinnedModel: model, modelOverride: modelOverride, replies: replies)
     return await CalibrationRun.run(
       root: root, seeds: DesignCalibrationSeeds.load(root: root),
-      modelOverride: calibration.modelOverride, now: now, concurrentCases: concurrentCases
+      modelOverride: calibration.modelOverride, now: now, concurrentCases: concurrentCases,
+      replayOf: replies?.mode == .replay ? replies?.runID : nil
     ) { agent, seed throws(CalibrationCaseError) in
       let run = try await calibration.run(agent: agent, seed: seed)
-      return .init(
-        result: run.result,
-        note: CalibrationRun.usage(
-          "\(agent.name)/\(seed.name) on \(calibration.model(of: agent))", costUSD: run.costUSD,
-          durationMilliseconds: run.durationMilliseconds))
+      var what = "\(agent.name)/\(seed.name) on \(run.result.model)"
+      if !run.servedModels.isEmpty {
+        what += " (served \(run.servedModels.joined(separator: ", ")))"
+      }
+      var note = CalibrationRun.usage(
+        what, costUSD: run.costUSD, durationMilliseconds: run.durationMilliseconds)
+      if let replyPath = run.replyPath { note += "; reply at \(replyPath)" }
+      return .init(result: run.result, note: note)
     }
   }
 }
@@ -181,9 +209,11 @@ enum CalibrationRun {
   }
 
   /// Runs up to `concurrentCases` cases at once, and judges them in seed order.
+  /// - Parameter replayOf: the run whose kept replies were judged. A replay proves nothing about
+  ///   the agents, so it never writes the record.
   static func run<Label>(
     root: URL, seeds: CalibrationSeeds<Label>, modelOverride: String?, now: Date,
-    concurrentCases: Int = 1,
+    concurrentCases: Int = 1, replayOf: String? = nil,
     runCase:
       @escaping @Sendable (CalibrationSeeds<Label>.Agent, CalibrationSeeds<Label>.Case)
       async throws(CalibrationCaseError) -> CaseRun
@@ -268,6 +298,16 @@ enum CalibrationRun {
     }
     if !missed.isEmpty { return checked(missed + notes) }
 
+    let agents = Set(results.map(\.agent)).count
+    if let replayOf {
+      return checked(
+        make(
+          suite, .passed, .nit, file: suite.recordPath,
+          "replay of \(replayOf): \(results.count) case(s) across \(agents) agent(s) met every "
+            + "label; \(suite.recordPath) is left untouched, since a replay runs no agent")
+          + notes)
+    }
+
     let hashed: [CalibrationHash.File]
     do {
       hashed = try CalibrationHash.discover(root: root, suite: suite)
@@ -285,7 +325,6 @@ enum CalibrationRun {
       return .blocked(
         reason: "calibrate \(suite.rawValue): can't write \(suite.recordPath): \(error)")
     }
-    let agents = Set(results.map(\.agent)).count
     return checked(
       make(
         suite, .passed, .nit, file: suite.recordPath,
