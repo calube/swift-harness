@@ -53,6 +53,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case testResult = "test.result"
   /// 1 read or write of an on-disk answer cache.
   case cacheLookup = "cache.lookup"
+  /// 1 API message's token counts, read from a Claude Code transcript.
+  case agentUsage = "agent.usage"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -61,6 +63,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .hookDecision: .hook
     case .testResult: .test
     case .cacheLookup: .cache
+    case .agentUsage: .usage
     }
   }
 }
@@ -72,6 +75,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case hook
   case test
   case cache
+  case usage
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -91,6 +95,8 @@ public enum HarnessRoute: String, Sendable, Codable, CaseIterable {
   case check
   /// A Claude Code hook call.
   case hook
+  /// `swiftgate events ingest` reading transcripts.
+  case ingest
 }
 
 public enum HarnessHook: String, Sendable, Codable, CaseIterable {
@@ -121,6 +127,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case hookDecision(HookDecisionEvent)
   case testResult(TestResultEvent)
   case cacheLookup(CacheLookupEvent)
+  case agentUsage(AgentUsageEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -131,6 +138,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .hookDecision: .hookDecision
     case .testResult: .testResult
     case .cacheLookup: .cacheLookup
+    case .agentUsage: .agentUsage
     }
   }
 }
@@ -335,6 +343,8 @@ extension HarnessEvent: Codable {
       payload = .testResult(try c.decode(TestResultEvent.self, forKey: .payload))
     case .cacheLookup:
       payload = .cacheLookup(try c.decode(CacheLookupEvent.self, forKey: .payload))
+    case .agentUsage:
+      payload = .agentUsage(try c.decode(AgentUsageEvent.self, forKey: .payload))
     }
   }
 
@@ -357,6 +367,7 @@ extension HarnessEvent: Codable {
     case .hookDecision(let hook): try c.encode(hook, forKey: .payload)
     case .testResult(let result): try c.encode(result, forKey: .payload)
     case .cacheLookup(let lookup): try c.encode(lookup, forKey: .payload)
+    case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     }
   }
 }
