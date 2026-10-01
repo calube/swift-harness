@@ -316,9 +316,12 @@ Events live in the worktree that produced them, under its `.harness/events/`. Wh
 deletes a merged task worktree, it already copies the worktree's run directories into the main checkout
 (`keepRuns`). Beside that, it copies the worktree's whole `.harness/events/` to the main checkout's
 `.harness/events/imported/<storeID>/`. If that directory exists and the source holds more bytes, the copy goes to
-a temporary directory and replaces it with 1 rename; otherwise `remove` keeps it. The remove report names a failed copy, and removal still goes ahead, as it does for runs.
+a temporary directory and replaces it with 1 rename; otherwise `remove` keeps it. When the copy fails, `remove` first moves the worktree's `.harness/events/` to `.harness/events/unkept/<storeID>/`,
+or to the git common dir's `swift-harness/unkept-events/<storeID>/` across volumes. The judge's audit trail
+survives, and the report names the path; `remove` loses the events only when the move fails too. Removal still goes
+ahead, as it does for runs (user, 2026-09-30).
 
-The reader reads `.harness/events/` and every `imported/<storeID>/` below it, and deduplicates by `eventID`. The
+The reader reads `.harness/events/`, every `imported/<storeID>/` and every `unkept/<storeID>/` below it, and deduplicates by `eventID`. The
 other stores stay where they are: `history.jsonl` per checkout, `phases.jsonl` per design run, build `events.jsonl`
 and the ledger in the git common dir, task returns under `.harness/build/`. The reader joins them by run id,
 build run, task and time.
