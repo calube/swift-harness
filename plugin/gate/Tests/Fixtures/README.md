@@ -954,6 +954,33 @@ never pair into a flip. Copied at `5a0ab30`, from the repository root of the wor
 
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/gate.jsonl` printed 0.
 
+`Events/hook.jsonl` is the hook stream the real `swiftgate hook` command wrote at `22168f8`, in a
+scratch git repository whose `.swiftgate.toml` names 1 SwiftPM package `Pkg` with 1 library
+target. No Claude Code session ran the hooks in this repository, which has no hook stream, so
+1 session's payloads were piped to the command by hand, in this order: `session-start`; a
+`pre-tool-use` Write of `Pkg/Package.resolved` (denied by `guard.package-resolved`) and then
+the `post-tool-use` for the same Write input, the bypass the hooks section counts; a
+`pre-tool-use` Bash `xcodebuild test -scheme App` (denied by `guard.raw-xcodebuild`); a
+`pre-tool-use` and `post-tool-use` Write of `Pkg/Sources/Capture/B.swift`; and `stop`. Each was
+piped from the scratch repository's root:
+
+```sh
+printf '%s' '{"session_id":"<uuid>","cwd":"<scratch>","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"<scratch>/Pkg/Package.resolved","content":"{}"}}' \
+  | <worktree>/plugin/bin/swiftgate hook pre-tool-use
+/bin/cp -f <scratch>/.harness/events/hook.jsonl plugin/gate/Tests/Fixtures/Events/hook.jsonl
+```
+
+`Events/cache.jsonl` is the cache stream a sibling worktree's own push-tier gate runs wrote at
+its `51e7777` (2 manifest keys: 2 misses, 2 stores, 8 hits). Copied from the repository root
+of this worktree:
+
+```sh
+/bin/cp -f <sibling worktree>/.harness/events/cache.jsonl plugin/gate/Tests/Fixtures/Events/cache.jsonl
+```
+
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/hook.jsonl Events/cache.jsonl`
+printed 0 for each.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
