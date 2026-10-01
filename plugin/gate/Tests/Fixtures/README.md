@@ -942,6 +942,18 @@ for event in escalated.log.events + blocked.log.events { try files.append(event)
 
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/judge.jsonl` printed 0.
 
+`Events/gate.jsonl` is the gate stream of this repository's main checkout as its own push-tier
+runs wrote it between the gate-run events merging and `5a0ab30`: 7 `gate.run` lines and their 70
+`gate.step` lines. Every run is dirty with no tree hash, because the checkout held an untracked
+file, and the 4th run is RED followed by a GREEN, so a test shows that runs with no tree hash
+never pair into a flip. Copied at `5a0ab30`, from the repository root of the worktree:
+
+```sh
+/bin/cp -f <main checkout>/.harness/events/gate.jsonl plugin/gate/Tests/Fixtures/Events/gate.jsonl
+```
+
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/gate.jsonl` printed 0.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
