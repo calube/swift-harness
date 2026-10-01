@@ -1,8 +1,8 @@
 # Harness telemetry: implementation plan
 
 <!-- RESUME
-Status (2026-09-30): DRAFT, not started. The design waits for the user's approval; no wave starts before it, and
-none before the `judge-emits-judgement-events` branch (the shared `HarnessEvent` envelope, its writer and
+Status (2026-09-30): the user approved the design and asked to build now. Tasks with no deps start first; none
+that touches the event store starts before the `judge-emits-judgement-events` branch (the shared `HarnessEvent` envelope, its writer and
 `.harness/events/`) merges to main.
 Spec: docs/designs/2026-09-30-harness-telemetry-design.md. Read its RESUME header, §3, §5 and §14.
 Scope: the payload guard, rotation, sealed LZFSE segments, indexes and rollups on the envelope's store; the
@@ -29,7 +29,7 @@ within them.
 | Location | design §9 | Per worktree; `worktree remove` copies `.harness/events/` to main's `.harness/events/imported/<storeID>/` beside `keepRuns`. Existing stores keep their formats; the reader joins them | user, 2026-09-30 |
 | Ignored | the judge audit-log branch adds `.harness/events/` to `.gitignore` | This plan adds it to `plugin/templates/gitignore` only | orchestrator, 2026-09-30 |
 | Envelope | the `judge-emits-judgement-events` branch | `HarnessEvent`, its writer protocol and file store are used as merged. Where this plan names "the envelope's file store", the task uses that branch's type name | — |
-| Opt-out reach | design §14 row 6 | The opt-out lives in the writer factory, so it silences the judge kinds too | the user to confirm |
+| Opt-out reach | design §14 row 6 | The opt-out lives in the writer factory and covers every kind except the judge's, which stays on as an audit trail | user, 2026-09-30 |
 | Worker transcripts | design §14 row 7 | The build skill passes the Workflow transcript directory to `events ingest` at each completion; the path is never stored | the user to confirm |
 | Summary sections | 6 tasks add sections | `events-list-and-summary-read-every-store` declares every section with an empty implementation that prints "no events yet"; each later task fills only its own section file, so the registry isn't a hot file | — |
 | Compression | Foundation's `NSData.compressed(using: .lzfse)` | No new dependency. The gate runs on macOS only | — |

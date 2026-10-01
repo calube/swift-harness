@@ -1,8 +1,7 @@
 # swift-harness: harness telemetry
 
 <!-- RESUME
-Status: DRAFT 2026-09-30. The user decided the 4 questions in §14 on 2026-09-30; the design waits for the user's
-approval of the whole.
+Status: APPROVED 2026-09-30 by the user, with the 4 questions in §14 and the judge-log question decided.
 Why: the user asked for telemetry "to self improve" the harness. Today time, cost, wrong gates, flakes, stuck
 workers and halts are measured by hand after a run, and token cost isn't measured at all.
 Builds on: the shared event envelope from the `judge-emits-judgement-events` branch (`HarnessEvent`, the append-only
@@ -101,7 +100,8 @@ caused it: a `gate.step` and each `test.result` point at their `gate.run`; a `bu
 
 `[telemetry]` is a new config table with 1 key, `enabled`, a boolean that defaults to `true`. Any other key in the
 table fails config as an unknown key under `swiftgate.config`, as every table does. With `enabled = false` the
-writer factory hands every emitter a no-op writer, so the store gets no event of any kind, the judge kinds included; `events ingest`
+writer factory hands every emitter except the judge's a no-op writer. The judge kinds are an audit trail of decisions
+that can block a merge, so the judge writes them whenever `[judge]` names a backend. `events ingest`
 refuses with a message naming the key; `events list` and `summary` still read whatever exists. Outside a
 project with `.swiftgate.toml`, no command writes events, as hooks already do nothing there.
 
@@ -407,5 +407,5 @@ resumes can't both close 1 halt.
 | 3 | How many per-test results? | All of them, for every gate run, not a sample. The store is built for that volume: rotation, compressed sealed segments, indexes and rollups (§8) | user, 2026-09-30 |
 | 4 | Where do events live? | Per worktree, copied up to main on merge the way `keepRuns` copies run directories. Existing stores stay as they are, and the reader joins them | user, 2026-09-30 |
 | 5 | Is `.harness/events/` committed? | No: git-ignored, added by the judge audit-log branch | orchestrator, 2026-09-30 |
-| 6 | Does `enabled = false` silence the judge kinds too? | Yes: the opt-out sits in the shared writer factory, so it covers every kind | design; the user to confirm |
+| 6 | Does `enabled = false` silence the judge kinds too? | No: the judge log is an audit trail of decisions that can block a merge, so it is written whenever a judge is configured. The opt-out covers every other kind | user, 2026-09-30 |
 | 7 | Where do worker transcripts come from? | The session record keeps the main session's path; the Workflow tool prints each worker's directory, which the build skill passes to `events ingest` at completion. The directory is read, never stored | design; the user to confirm |
