@@ -26,6 +26,9 @@ struct HookDependencies: Sendable {
   var sweep: any OrphanCloneSweeping
   var commitJudge: any CommitCommentJudging
   var environment: [String: String]
+  /// Where each call's `hook.decision` goes, asked only after the hook has decided, so reading
+  /// the config it needs never delays a decision; `nil` records none.
+  var telemetry: @Sendable () -> HookTelemetry? = { nil }
 
   static func live(root: URL, environment: [String: String]) -> HookDependencies {
     let runner = LiveProcessRunner()
@@ -38,7 +41,63 @@ struct HookDependencies: Sendable {
       sweep: ScratchWorktreeOrphanSweep(
         scratch: LiveScratchWorktrees(runner: runner, repositoryRoot: root.path)),
       commitJudge: ConfiguredCommitCommentJudge.live,
-      environment: environment)
+      environment: environment, telemetry: { HookTelemetry.live(root: root) })
+  }
+}
+
+/// The project's event writer and the store identity whose salt hashes tool input.
+struct HookTelemetry: Sendable {
+  var events: any HarnessEventWriting
+  /// Read only after the hook has decided; creates the store's identity on first use.
+  var identity: @Sendable () throws(HarnessEventWriteError) -> EventStoreIdentity
+
+  /// `nil` for a root with no loadable `.swiftgate.toml`, or with `[telemetry] enabled = false`,
+  /// so neither writes anything, the store's identity included.
+  static func live(root: URL) -> HookTelemetry? {
+    guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root) else { return nil }
+    let events = EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
+    guard !(events is DisabledEventWriter) else { return nil }
+    return HookTelemetry(
+      events: events,
+      identity: { () throws(HarnessEventWriteError) in
+        try EventSegmentStore(root: root).identity()
+      })
+  }
+
+  /// Writes `hook.decision` for 1 call; a failure is the 1 line returned, never thrown.
+  func record(
+    _ event: HookEvent, payload: HookPayload, input: Data, result: HookResult, milliseconds: Int,
+    at time: Date
+  ) -> String? {
+    do throws(HarnessEventWriteError) {
+      let salt = try identity().salt
+      let eventID = UUID().uuidString  // swiftgate:allow det.uuid-init — an id need only be unique
+      let decision = HookDecisionEvent(
+        event: event, tool: HookDecisionEvent.toolName(payload.toolName),
+        decision: HookDecisionEvent.decision(stdout: result.stdout),
+        ruleIDs: HookDecisionEvent.ruleIDs(stdout: result.stdout), milliseconds: milliseconds,
+        sessionID: HookDecisionEvent.sessionID(payload.sessionID),
+        inputHash: HookInputHash.of(payload: input, salt: salt))
+      try events.append(
+        HarnessEvent(
+          eventID: eventID, time: time,
+          source: HarnessEventSource(route: .hook, hook: HarnessHook(event)),
+          payload: .hookDecision(decision)))
+      return nil
+    } catch {
+      return "swiftgate: hook event not written: \(error)"
+    }
+  }
+}
+
+extension HarnessHook {
+  init(_ event: HookEvent) {
+    switch event {
+    case .sessionStart: self = .sessionStart
+    case .preToolUse: self = .preToolUse
+    case .postToolUse: self = .postToolUse
+    case .stop: self = .stop
+    }
   }
 }
 
@@ -118,6 +177,25 @@ enum HookRunner {
       let root = ProjectRoot.locate(from: URL(filePath: payload.cwd, directoryHint: .isDirectory))
     else { return .silent }
     let dependencies = dependencies(root)
+    let clock = ContinuousClock()
+    let start = clock.now
+    var result = await dispatch(event, payload, root: root, dependencies: dependencies)
+    let milliseconds = GateRun.milliseconds(clock.now - start)
+    // The event follows the decision, and its failure is 1 line on stderr, which on exit 0 only
+    // reaches the debug log: telemetry never delays or sways what the hook decided.
+    if let telemetry = dependencies.telemetry(),
+      let warning = telemetry.record(
+        event, payload: payload, input: input, result: result, milliseconds: milliseconds,
+        at: Date())
+    {
+      result.stderr = ([result.stderr].compactMap { $0 } + [warning]).joined(separator: "\n")
+    }
+    return result
+  }
+
+  private static func dispatch(
+    _ event: HookEvent, _ payload: HookPayload, root: URL, dependencies: HookDependencies
+  ) async -> HookResult {
     switch event {
     case .sessionStart:
       return .output(await SessionStartHook.run(payload, root: root, dependencies: dependencies))
