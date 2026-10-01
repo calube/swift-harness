@@ -67,9 +67,109 @@ public struct TranscriptUsageError: Error, Sendable, Equatable, CustomStringConv
 /// Reads usage counts from a Claude Code transcript: `message.id`, `message.model`,
 /// `message.usage` and `timestamp` of each assistant line, and no other key.
 public enum TranscriptUsage {
-  /// Each distinct message in `data`, in the order first seen.
+  /// The model id Claude Code gives a message it wrote itself, with no API call behind it.
+  public static let syntheticModel = "<synthetic>"
+
+  /// Each distinct message in `data`, in the order first seen. Claude Code writes 1 line per
+  /// content block, each with the whole message's usage, so a repeated id counts once; a repeat
+  /// whose usage differs fails, since summing either would be a guess. Lines other than assistant
+  /// messages, and synthetic messages, are skipped. So is a last line with no newline that isn't
+  /// JSON: the session may still be writing it, and the next ingest reads it whole.
   public static func messages(in data: Data) throws(TranscriptUsageError) -> [TranscriptMessage] {
-    []
+    let lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+    let endsWithNewline = data.last == UInt8(ascii: "\n")
+    var messages: [TranscriptMessage] = []
+    var seen: [String: TokenUsage] = [:]
+    for (index, line) in lines.enumerated() where !line.isEmpty {
+      let number = index + 1
+      guard let object = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any]
+      else {
+        if index == lines.count - 1, !endsWithNewline { break }
+        throw TranscriptUsageError(line: number, reason: "not a JSON object")
+      }
+      guard object["type"] as? String == "assistant" else { continue }
+      guard let message = try assistantMessage(object, line: number) else { continue }
+      if let earlier = seen[message.messageID] {
+        guard earlier == message.usage else {
+          throw TranscriptUsageError(
+            line: number, reason: "repeats an earlier message id with different usage")
+        }
+        continue
+      }
+      seen[message.messageID] = message.usage
+      messages.append(message)
+    }
+    return messages
+  }
+
+  private static func assistantMessage(_ object: [String: Any], line: Int)
+    throws(TranscriptUsageError) -> TranscriptMessage?
+  {
+    func malformed(_ what: String) -> TranscriptUsageError {
+      TranscriptUsageError(line: line, reason: "assistant line has \(what)")
+    }
+    guard let message = object["message"] as? [String: Any] else {
+      throw malformed("no `message` object")
+    }
+    guard let model = message["model"] as? String else { throw malformed("no `message.model`") }
+    if model == syntheticModel { return nil }
+    guard isModelID(model) else { throw malformed("a `message.model` that isn't a model id") }
+    guard let id = message["id"] as? String, isMessageID(id) else {
+      throw malformed("no `message.id` of letters, digits, `_` and `-`")
+    }
+    guard let text = object["timestamp"] as? String,
+      let time = try? Date(text, strategy: timeFormat)
+    else { throw malformed("no ISO 8601 `timestamp`") }
+    guard let usage = message["usage"] as? [String: Any] else {
+      throw malformed("no `message.usage` object")
+    }
+    func count(_ value: Any?, _ key: String) throws(TranscriptUsageError) -> Int {
+      // JSONSerialization reads `true` as an NSNumber too; only a whole, non-negative number counts.
+      guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+        let whole = Int(exactly: number.doubleValue), whole >= 0
+      else { throw malformed("no whole, non-negative `message.usage.\(key)`") }
+      return whole
+    }
+    let cacheCreation = try count(
+      usage["cache_creation_input_tokens"], "cache_creation_input_tokens")
+    var oneHour = 0
+    if let split = usage["cache_creation"] {
+      guard let split = split as? [String: Any] else {
+        throw malformed("a `message.usage.cache_creation` that isn't an object")
+      }
+      let key = "ephemeral_1h_input_tokens"
+      oneHour = try count(split[key] ?? 0, "cache_creation.\(key)")
+      guard oneHour <= cacheCreation else {
+        throw malformed("more 1-hour cache writes than cache writes")
+      }
+    }
+    return TranscriptMessage(
+      messageID: id, model: model, time: time,
+      usage: TokenUsage(
+        input: try count(usage["input_tokens"], "input_tokens"),
+        output: try count(usage["output_tokens"], "output_tokens"),
+        cacheCreation: cacheCreation, cacheCreation1h: oneHour,
+        cacheRead: try count(usage["cache_read_input_tokens"], "cache_read_input_tokens")))
+  }
+
+  private static let timeFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+  /// Letters, digits, `_` and `-`, at most 128 bytes.
+  static func isMessageID(_ text: String) -> Bool {
+    isIdentifier(text, extra: [UInt8(ascii: "_"), UInt8(ascii: "-")])
+  }
+
+  /// A model id as Claude Code and the providers spell it: letters, digits and `-._:@[]`.
+  static func isModelID(_ text: String) -> Bool {
+    isIdentifier(text, extra: Set("-._:@[]".utf8))
+  }
+
+  static func isIdentifier(_ text: String, extra: Set<UInt8>) -> Bool {
+    (1...128).contains(text.utf8.count)
+      && text.utf8.allSatisfy {
+        (0x30...0x39).contains($0) || (0x41...0x5A).contains($0) || (0x61...0x7A).contains($0)
+          || extra.contains($0)
+      }
   }
 }
 
@@ -178,6 +278,46 @@ public enum UsageIngest {
     sessionID: String, transcripts: [UsageTranscript], buildRun: String?, stored: Set<String>,
     prices: ModelPriceTable
   ) -> UsageIngestPlan {
-    UsageIngestPlan(events: [], messagesRead: 0, alreadyStored: 0, unpriced: [])
+    var events: [HarnessEvent] = []
+    var read: Set<String> = []
+    var alreadyStored = 0
+    var unpriced: [String: [UnpricedReason: Int]] = [:]
+    for transcript in transcripts {
+      for message in transcript.messages where read.insert(message.messageID).inserted {
+        if stored.contains(message.messageID) {
+          alreadyStored += 1
+          continue
+        }
+        var cost: Double?
+        switch prices.price(model: message.model, usage: message.usage) {
+        case .priced(let usd): cost = usd
+        case .unpriced(let reason): unpriced[message.model, default: [:]][reason, default: 0] += 1
+        }
+        let usage = AgentUsageEvent(
+          sessionID: sessionID, agent: transcript.agent, agentID: transcript.agentID,
+          role: transcript.role, task: transcript.task, buildRun: buildRun, model: message.model,
+          messageID: message.messageID, messageTime: message.time,
+          inputTokens: message.usage.input, outputTokens: message.usage.output,
+          cacheCreationTokens: message.usage.cacheCreation,
+          cacheReadTokens: message.usage.cacheRead, costUSD: cost, priceTable: prices.version)
+        events.append(
+          HarnessEvent(
+            eventID: eventID(sessionID: sessionID, messageID: message.messageID),
+            time: message.time, source: HarnessEventSource(route: .ingest),
+            payload: .agentUsage(usage)))
+      }
+    }
+    return UsageIngestPlan(
+      events: events, messagesRead: read.count, alreadyStored: alreadyStored,
+      unpriced: unpriced.keys.sorted().flatMap { model in
+        (unpriced[model] ?? [:]).map { UnpricedModel(model: model, messages: $1, reason: $0) }
+          .sorted { "\($0.reason)" < "\($1.reason)" }
+      })
+  }
+
+  /// The same message of the same session always gets the same id, so a store imported from
+  /// another worktree joins it rather than doubling it.
+  public static func eventID(sessionID: String, messageID: String) -> String {
+    "usage-\(sessionID)-\(messageID)"
   }
 }

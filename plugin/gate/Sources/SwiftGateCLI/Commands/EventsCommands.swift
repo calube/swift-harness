@@ -125,8 +125,9 @@ extension HarnessEventKind: ExpressibleByArgument {}
 struct EventsCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "events",
-    abstract: "Read the harness's events from every store under .harness/events/.",
-    subcommands: [EventsListCommand.self, EventsSummaryCommand.self])
+    abstract:
+      "Read the harness's events from every store under .harness/events/, and ingest agent usage.",
+    subcommands: [EventsListCommand.self, EventsSummaryCommand.self, EventsIngestCommand.self])
 }
 
 struct EventsListCommand: ParsableCommand {
@@ -196,9 +197,154 @@ enum EventsIngestRun {
     var buildRun: String?
   }
 
+  static let command = "swiftgate events ingest"
+
+  /// Exit 0 with what was stored; 2 for telemetry off, no config, a bad flag value, an unreadable
+  /// session record or transcript, a malformed usage line, or a failed write.
   static func make(options: Options, root: URL, prices: ModelPriceTable = .current)
     -> EventsCommandOutput
   {
-    EventsCommandOutput(stdout: "", stderr: "", status: 0)
+    func refused(_ why: String, stderr: String = "") -> EventsCommandOutput {
+      EventsCommandOutput(stdout: "", stderr: stderr + "\(command): \(why)\n", status: 2)
+    }
+    switch StaticCheckInputs.loadConfig(root: root) {
+    case .success(nil):
+      return refused("no .swiftgate.toml here; ingest records events only in a project")
+    case .failure(let failure):
+      return refused("the config can't be read: \(failure.outcome)")
+    case .success(let config?):
+      guard config.telemetry.enabled else {
+        return refused(
+          "telemetry is off ([telemetry] enabled = false); set telemetry.enabled to true to "
+            + "record agent usage")
+      }
+    }
+    guard HookDecisionEvent.sessionID(options.session) != nil else {
+      return refused("--session \(options.session) is not a session id")
+    }
+    if let task = options.task, HookDecisionEvent.sessionID(task) == nil {
+      return refused("--task \(task) is not a task id of letters, digits, `_` and `-`")
+    }
+    if let buildRun = options.buildRun, !RunID.isValid(buildRun) {
+      return refused("--build-run \(buildRun) is not a build run id")
+    }
+
+    let transcriptPath: String
+    do {
+      guard
+        let record = try SessionRecordStore(worktreeRoot: root).record(sessionID: options.session)
+      else {
+        return refused("no session record for \(options.session)")
+      }
+      guard let path = record.transcriptPath else {
+        return refused("the session record for \(options.session) names no transcript")
+      }
+      transcriptPath = path
+    } catch {
+      return refused("the session record for \(options.session) can't be read")
+    }
+
+    // With worker transcripts the tags describe the workers; without, the session itself.
+    let workerTags = options.workflowTranscripts != nil
+    var transcripts: [UsageTranscript] = []
+    do throws(TranscriptReadError) {
+      let reader = TranscriptReader()
+      var files = try reader.session(at: URL(filePath: transcriptPath)).map {
+        (file: $0, tagged: !workerTags)
+      }
+      if let directory = options.workflowTranscripts {
+        files += try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
+          .map { (file: $0, tagged: true) }
+      }
+      for (file, tagged) in files {
+        do throws(TranscriptUsageError) {
+          transcripts.append(
+            UsageTranscript(
+              agent: file.agent, agentID: file.agentID,
+              role: tagged ? options.role : nil, task: tagged ? options.task : nil,
+              messages: try TranscriptUsage.messages(in: file.data)))
+        } catch {
+          return refused("\(file.label), \(error)")
+        }
+      }
+    } catch {
+      return refused(error.description)
+    }
+
+    let read = EventStoreReader(files: LiveEventStoreFiles(root: root))
+      .read(EventQuery(kinds: [.agentUsage]))
+    let stored = Set(
+      read.events.compactMap { stored -> String? in
+        guard case .agentUsage(let usage) = stored.event.payload,
+          usage.sessionID == options.session
+        else { return nil }
+        return usage.messageID
+      })
+    let damage = EventsDamage.lines(read.damage, command: "events ingest")
+    let plan = UsageIngest.plan(
+      sessionID: options.session, transcripts: transcripts, buildRun: options.buildRun,
+      stored: stored, prices: prices)
+    if !plan.events.isEmpty {
+      do throws(HarnessEventWriteError) {
+        try EventWriterFactory.make(root: root, enabled: true).append(contentsOf: plan.events)
+      } catch {
+        return refused("agent.usage not written: \(error)", stderr: damage)
+      }
+    }
+    var lines = [
+      "events ingest: \(plan.messagesRead) messages read, \(plan.events.count) new, "
+        + "\(plan.alreadyStored) already stored"
+    ]
+    for model in plan.unpriced {
+      let why =
+        switch model.reason {
+        case .unknownModel: "not in the price table \(prices.version)"
+        case .missingRates(let classes):
+          "price table \(prices.version) has no \(classes.map(\.rawValue).joined(separator: ", ")) rate"
+        }
+      lines.append("no costUSD for \(model.model), \(model.messages) messages: \(why)")
+    }
+    return EventsCommandOutput(
+      stdout: lines.joined(separator: "\n"), stderr: damage, status: 0)
   }
 }
+
+struct EventsIngestCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "ingest",
+    abstract: "Store each assistant message's token counts and cost from a session's transcripts.",
+    discussion:
+      "Reads, offline, the transcript the session record names, its subagents' transcripts, and "
+      + "with --workflow-transcripts every agent-*.jsonl in that directory. Only message ids, "
+      + "model ids, usage counts and times are kept: no transcript text, prompt, tool input or "
+      + "path. A message already stored for the session is skipped, so ingesting again adds "
+      + "nothing. --role and --task tag the workflow transcripts when given, else the session's. "
+      + "Exit 0 stored; 2 when [telemetry] enabled = false, outside a project, for a bad flag "
+      + "value, an unreadable record or transcript, a malformed usage line or a failed write.")
+
+  @Option(help: "The Claude Code session id whose record names its transcript.")
+  var session: String
+
+  @Option(help: "A directory of a Workflow's agent-*.jsonl worker transcripts.")
+  var workflowTranscripts: String?
+
+  @Option(help: "What the tagged agents worked as.")
+  var role: AgentRole?
+
+  @Option(help: "The plan task id the agents worked on.")
+  var task: String?
+
+  @Option(name: .customLong("build-run"), help: "The build run id the usage belongs to.")
+  var buildRun: String?
+
+  func run() throws {
+    try EventsCommandRunner.finish(
+      EventsIngestRun.make(
+        options: EventsIngestRun.Options(
+          session: session, workflowTranscripts: workflowTranscripts, role: role, task: task,
+          buildRun: buildRun),
+        root: EventsCommandRunner.root))
+  }
+}
+
+extension AgentRole: ExpressibleByArgument {}
