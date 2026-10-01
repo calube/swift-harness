@@ -86,6 +86,13 @@ enum EventsSummaryRun {
   }
 }
 
+extension EventsSummaryRun {
+  /// Every registered section, with wrong gates joined to `builds`.
+  static func sections(builds: BuildJoin) -> [any EventSummarySection] {
+    []
+  }
+}
+
 /// Damage on stderr, 1 line per damaged line or file, so it's never dropped unannounced.
 enum EventsDamage {
   static func lines(_ damage: [EventDamage], command: String) -> String {

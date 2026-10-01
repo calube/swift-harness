@@ -144,7 +144,12 @@ public struct WrongGateFindings: Sendable, Equatable {
 
 /// Gates that were wrong: flips, overturned findings and misses.
 public struct WrongGatesSection: EventSummarySection {
-  public init() {}
+  /// The build state misses join task gates to; `nil` when it wasn't read.
+  public let builds: BuildJoin?
+
+  public init(builds: BuildJoin? = nil) {
+    self.builds = builds
+  }
 
   public var id: EventSummarySectionID { .wrongGates }
 
