@@ -73,10 +73,11 @@ public struct LiveSwiftPM: SwiftPM {
   ///   - queryTimeout: for `describe` and `--show-codecov-path`, which may resolve dependencies.
   ///   - manifestCache: where `describe` and `dump-package` answers are kept between processes;
   ///     `nil` to ask `swift` every time.
+  ///   - cacheEvents: records the manifest cache's lookups; `nil` records none.
   public init(
     runner: any ProcessRunner, repositoryRoot: String, executable: String = "swift",
     queryTimeout: Duration = .seconds(300), testTimeout: Duration = .seconds(900),
-    manifestCache: URL? = nil
+    manifestCache: URL? = nil, cacheEvents: CacheEventRecorder? = nil
   ) {
     self.runner = runner
     self.repositoryRoot = repositoryRoot
@@ -84,7 +85,7 @@ public struct LiveSwiftPM: SwiftPM {
     self.queryTimeout = queryTimeout
     self.testTimeout = testTimeout
     self.manifestCache = manifestCache.map {
-      ManifestAnswerCache(directory: $0, repositoryRoot: repositoryRoot)
+      ManifestAnswerCache(directory: $0, repositoryRoot: repositoryRoot, events: cacheEvents)
     }
   }
 

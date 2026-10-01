@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import SwiftGateDomain
 
 /// SwiftPM's answers about a package's manifest (`describe`, `dump-package`), kept on disk so a
 /// hook or pre-commit run does not pay a `swift` process per package each time. An answer is
@@ -12,21 +13,42 @@ struct ManifestAnswerCache: Sendable {
 
   let directory: URL
   let repositoryRoot: String
+  /// Where each lookup's `cache.lookup` goes; `nil` records none.
+  var events: CacheEventRecorder? = nil
 
+  /// Records a `miss` or a `hit` once the answer is known; a manifest it can't read has no key
+  /// and records nothing.
   func answer(_ command: String, packageDirectory: String) -> Data? {
-    guard let key = key(command, packageDirectory: packageDirectory),
-      let stored = try? Data(contentsOf: file(command, packageDirectory: packageDirectory)),
+    guard let key = key(command, packageDirectory: packageDirectory) else { return nil }
+    guard let stored = try? Data(contentsOf: file(command, packageDirectory: packageDirectory)),
       let newline = stored.firstIndex(of: UInt8(ascii: "\n")),
       stored[..<newline].elementsEqual(key.utf8)
-    else { return nil }
-    return stored[stored.index(after: newline)...]
+    else {
+      events?.record(CacheLookupEvent(cache: .manifest, outcome: .miss, keyHash: key))
+      return nil
+    }
+    let answer = stored[stored.index(after: newline)...]
+    events?.record(
+      CacheLookupEvent(
+        cache: .manifest, outcome: .hit, keyHash: key,
+        answerHash: CacheLookupHash.answer(Data(answer))))
+    return answer
   }
 
+  /// Records a `store` only when the answer reached the disk.
   func store(_ output: Data, _ command: String, packageDirectory: String) {
     guard let key = key(command, packageDirectory: packageDirectory) else { return }
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try? (Data("\(key)\n".utf8) + output).write(
-      to: file(command, packageDirectory: packageDirectory), options: .atomic)
+    do {
+      try (Data("\(key)\n".utf8) + output).write(
+        to: file(command, packageDirectory: packageDirectory), options: .atomic)
+    } catch {
+      return
+    }
+    events?.record(
+      CacheLookupEvent(
+        cache: .manifest, outcome: .store, keyHash: key,
+        answerHash: CacheLookupHash.answer(output)))
   }
 
   private func file(_ command: String, packageDirectory: String) -> URL {
@@ -56,5 +78,50 @@ struct ManifestAnswerCache: Sendable {
 
   private static func hex(_ data: Data) -> String {
     SHA256.hash(data: data).prefix(16).map { String(format: "%02x", $0) }.joined()
+  }
+}
+
+/// Writes `cache.lookup` events for a cache. Recording comes after the cache has its answer and
+/// never changes it: a failed write is 1 line to ``report``, never thrown to the cache's caller.
+public struct CacheEventRecorder: Sendable {
+  private let events: @Sendable () -> (any HarnessEventWriting)?
+  private let report: @Sendable (String) -> Void
+  private let now: @Sendable () -> Date
+  private let newEventID: @Sendable () -> String
+
+  /// - Parameters:
+  ///   - events: asked at each record, so a process that never touches the cache never reads
+  ///     the config it needs; `nil` records nothing.
+  ///   - report: gets the 1 line a failed write prints.
+  public init(
+    events: @escaping @Sendable () -> (any HarnessEventWriting)?,
+    report: @escaping @Sendable (String) -> Void = CacheEventRecorder.standardError,
+    now: @escaping @Sendable () -> Date = {
+      Date()  // swiftgate:allow det.date-init — stamps the event
+    },
+    newEventID: @escaping @Sendable () -> String = {
+      UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
+    }
+  ) {
+    self.events = events
+    self.report = report
+    self.now = now
+    self.newEventID = newEventID
+  }
+
+  public static let standardError: @Sendable (String) -> Void = { line in
+    FileHandle.standardError.write(Data("\(line)\n".utf8))
+  }
+
+  public func record(_ lookup: CacheLookupEvent) {
+    guard let writer = events() else { return }
+    do throws(HarnessEventWriteError) {
+      try writer.append(
+        HarnessEvent(
+          eventID: newEventID(), time: now(), source: HarnessEventSource(route: nil),
+          payload: .cacheLookup(lookup)))
+    } catch {
+      report("swiftgate: cache event not written: \(error)")
+    }
   }
 }

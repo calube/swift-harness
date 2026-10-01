@@ -66,6 +66,21 @@ enum ScopeResolution {
   static func liveSwiftPM(root: URL) -> any SwiftPM {
     LiveSwiftPM(
       runner: LiveProcessRunner(), repositoryRoot: CanonicalPath.of(root),
-      manifestCache: root.appending(path: manifestCacheDirectory, directoryHint: .isDirectory))
+      manifestCache: root.appending(path: manifestCacheDirectory, directoryHint: .isDirectory),
+      cacheEvents: .live(root: root))
+  }
+}
+
+extension CacheEventRecorder {
+  /// The project's writer, looked up at each record so a hook that never asks a cache never
+  /// reads the config: nothing for a root with no loadable `.swiftgate.toml`, and a writer that
+  /// keeps nothing under `[telemetry] enabled = false`.
+  static func live(root: URL) -> CacheEventRecorder {
+    CacheEventRecorder(events: {
+      guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root) else {
+        return nil
+      }
+      return EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
+    })
   }
 }

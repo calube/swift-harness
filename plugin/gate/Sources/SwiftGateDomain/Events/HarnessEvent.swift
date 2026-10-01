@@ -51,6 +51,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case hookDecision = "hook.decision"
   /// 1 test case of a recorded gate run.
   case testResult = "test.result"
+  /// 1 read or write of an on-disk answer cache.
+  case cacheLookup = "cache.lookup"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -58,6 +60,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .gateRun, .gateStep: .gate
     case .hookDecision: .hook
     case .testResult: .test
+    case .cacheLookup: .cache
     }
   }
 }
@@ -68,6 +71,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case gate
   case hook
   case test
+  case cache
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -116,6 +120,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case gateStep(GateStepEvent)
   case hookDecision(HookDecisionEvent)
   case testResult(TestResultEvent)
+  case cacheLookup(CacheLookupEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -125,6 +130,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .gateStep: .gateStep
     case .hookDecision: .hookDecision
     case .testResult: .testResult
+    case .cacheLookup: .cacheLookup
     }
   }
 }
@@ -327,6 +333,8 @@ extension HarnessEvent: Codable {
       payload = .hookDecision(try c.decode(HookDecisionEvent.self, forKey: .payload))
     case .testResult:
       payload = .testResult(try c.decode(TestResultEvent.self, forKey: .payload))
+    case .cacheLookup:
+      payload = .cacheLookup(try c.decode(CacheLookupEvent.self, forKey: .payload))
     }
   }
 
@@ -348,6 +356,7 @@ extension HarnessEvent: Codable {
     case .gateStep(let step): try c.encode(step, forKey: .payload)
     case .hookDecision(let hook): try c.encode(hook, forKey: .payload)
     case .testResult(let result): try c.encode(result, forKey: .payload)
+    case .cacheLookup(let lookup): try c.encode(lookup, forKey: .payload)
     }
   }
 }

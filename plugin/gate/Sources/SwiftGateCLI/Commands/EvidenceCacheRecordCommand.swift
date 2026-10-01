@@ -121,7 +121,8 @@ enum EvidenceCacheRecordRun {
       replaced = replacedClaims(before: before.claims, after: claims)
     }
 
-    let store = EvidenceCacheStore(home: URL(filePath: cacheHome, directoryHint: .isDirectory))
+    let store = EvidenceCacheStore(
+      home: URL(filePath: cacheHome, directoryHint: .isDirectory), events: .live(root: root))
     var skipped: [Skip] = []
     var refuted: [ReusableClaim] = []
     var supported: [ReusableClaim] = []
