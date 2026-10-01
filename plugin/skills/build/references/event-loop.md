@@ -220,7 +220,7 @@ Each completion notice, whatever the task's outcome, first runs:
 ```
 
 It reads the token counts of the workflow's agents from `<transcripts>`, tagged with the task, and
-this session's own, all under `<run>`, so `events summary --build-run <run>` prices the build by
+this session's own, tagged `orchestrator`, all under `<run>`, so `events summary --build-run <run>` prices the build by
 role, task and model. Ingesting again adds nothing, so a retried task's second completion stores
 only its new messages. Only ids, model ids, counts and times are kept: no transcript text or path.
 

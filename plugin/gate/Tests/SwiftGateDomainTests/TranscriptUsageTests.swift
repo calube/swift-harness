@@ -262,4 +262,73 @@ struct TranscriptUsageTests {
       try TranscriptUsage.messages(in: Data(notTorn.utf8))
     }
   }
+
+  /// The subagent session's transcripts, the main one tagged `role`.
+  static func tagged(_ role: AgentRole?) throws -> [UsageTranscript] {
+    try transcripts(subagentSession).map {
+      UsageTranscript(
+        agent: $0.agent, agentID: $0.agentID, role: $0.agent == .main ? role : nil, task: nil,
+        messages: $0.messages)
+    }
+  }
+
+  @Test(
+    "a stored message with no role is retagged once by a plan that gives it a role, superseding its event, and a tagged or roleless one is not — catches a role lost to idempotency or a tagged message retagged"
+  )
+  func untaggedStoredMessageIsRetagged() throws {
+    let old = Self.usages(
+      UsageIngest.plan(
+        sessionID: Self.subagentSession, transcripts: try Self.tagged(nil), buildRun: nil,
+        stored: [], prices: .current))
+    let ids = Set(old.map(\.messageID))
+    let main = try #require(old.first { $0.agent == .main }).messageID
+    let plan = UsageIngest.plan(
+      sessionID: Self.subagentSession, transcripts: try Self.tagged(.orchestrator),
+      buildRun: "20261001T040911Z-13708165", stored: ids, untagged: ids, prices: .current)
+    #expect(plan.retagged == 2)
+    #expect(plan.alreadyStored == 1)
+    #expect(plan.events.count == 2)
+    let original = UsageIngest.eventID(sessionID: Self.subagentSession, messageID: main)
+    let event = try #require(plan.events.first { $0.parentID == original })
+    #expect(event.eventID == original + "-orchestrator")
+    #expect(Self.usages(plan).allSatisfy { $0.role == .orchestrator && $0.agent == .main })
+
+    let roleless = UsageIngest.plan(
+      sessionID: Self.subagentSession, transcripts: try Self.tagged(nil), buildRun: nil,
+      stored: ids, untagged: ids, prices: .current)
+    #expect(roleless.events.isEmpty)
+    #expect(roleless.retagged == 0)
+    let alreadyTagged = UsageIngest.plan(
+      sessionID: Self.subagentSession, transcripts: try Self.tagged(.review), buildRun: nil,
+      stored: ids, untagged: [], prices: .current)
+    #expect(alreadyTagged.events.isEmpty)
+    #expect(alreadyTagged.alreadyStored == 3)
+  }
+
+  @Test(
+    "resolving stored copies keeps 1 per session and message, the tagged one in either order, and the same role between 2 tagged ones whichever comes first — catches a retagged message counted twice"
+  )
+  func resolvedKeepsTheTaggedCopy() throws {
+    let untagged = try Self.usages(Self.plan(Self.subagentSession))
+    let tagged = Self.usages(
+      UsageIngest.plan(
+        sessionID: Self.subagentSession, transcripts: try Self.tagged(.orchestrator),
+        buildRun: nil, stored: [], prices: .current))
+    let review = Self.usages(
+      UsageIngest.plan(
+        sessionID: Self.subagentSession, transcripts: try Self.tagged(.review), buildRun: nil,
+        stored: [], prices: .current))
+    let other = try Self.usages(Self.plan(Self.plainSession))
+    for usages in [untagged + tagged + other, other + tagged + untagged] {
+      let kept = UsageIngest.resolved(usages)
+      #expect(kept.count == 4)
+      #expect(kept.filter { $0.role == .orchestrator }.count == 2)
+      #expect(Set(kept.map(\.messageID)).count == 4)
+    }
+    for usages in [tagged + review, review + tagged] {
+      #expect(
+        UsageIngest.resolved(usages).filter { $0.agent == .main }.map(\.role)
+          == [.orchestrator, .orchestrator])
+    }
+  }
 }

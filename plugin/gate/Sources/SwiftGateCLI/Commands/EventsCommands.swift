@@ -274,24 +274,28 @@ enum EventsIngestRun {
       return refused("the session record for \(options.session) can't be read")
     }
 
-    // With worker transcripts the tags describe the workers; without, the session itself.
-    let workerTags = options.workflowTranscripts != nil
+    // With worker transcripts, --role and --task describe the workers, and the session running
+    // them is the orchestrator; without, they describe the session itself.
+    let sessionTags: (role: AgentRole?, task: String?) =
+      options.workflowTranscripts == nil ? (options.role, options.task) : (.orchestrator, nil)
     var transcripts: [UsageTranscript] = []
     do throws(TranscriptReadError) {
       let reader = TranscriptReader()
-      var files = try reader.session(at: URL(filePath: transcriptPath)).map {
-        (file: $0, tagged: !workerTags)
-      }
+      var files: [(file: TranscriptFile, role: AgentRole?, task: String?)] = []
+      // Workers first: the first transcript to hold a message tags it, and a worker's file may
+      // also sit under the session's own subagents.
       if let directory = options.workflowTranscripts {
         files += try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
-          .map { (file: $0, tagged: true) }
+          .map { ($0, options.role, options.task) }
       }
-      for (file, tagged) in files {
+      files += try reader.session(at: URL(filePath: transcriptPath)).map {
+        ($0, sessionTags.role, sessionTags.task)
+      }
+      for (file, role, task) in files {
         do throws(TranscriptUsageError) {
           transcripts.append(
             UsageTranscript(
-              agent: file.agent, agentID: file.agentID,
-              role: tagged ? options.role : nil, task: tagged ? options.task : nil,
+              agent: file.agent, agentID: file.agentID, role: role, task: task,
               messages: try TranscriptUsage.messages(in: file.data)))
         } catch {
           return refused("\(file.label), \(error)")
@@ -303,17 +307,18 @@ enum EventsIngestRun {
 
     let read = EventStoreReader(files: LiveEventStoreFiles(root: root))
       .read(EventQuery(kinds: [.agentUsage]))
-    let stored = Set(
-      read.events.compactMap { stored -> String? in
+    let stored = UsageIngest.resolved(
+      read.events.compactMap { stored -> AgentUsageEvent? in
         guard case .agentUsage(let usage) = stored.event.payload,
           usage.sessionID == options.session
         else { return nil }
-        return usage.messageID
+        return usage
       })
     let damage = EventsDamage.lines(read.damage, command: "events ingest")
     let plan = UsageIngest.plan(
       sessionID: options.session, transcripts: transcripts, buildRun: options.buildRun,
-      stored: stored, prices: prices)
+      stored: Set(stored.map(\.messageID)),
+      untagged: Set(stored.filter { $0.role == nil }.map(\.messageID)), prices: prices)
     if !plan.events.isEmpty {
       do throws(HarnessEventWriteError) {
         try EventWriterFactory.make(root: root, enabled: true).append(contentsOf: plan.events)
@@ -322,7 +327,8 @@ enum EventsIngestRun {
       }
     }
     var lines = [
-      "events ingest: \(plan.messagesRead) messages read, \(plan.events.count) new, "
+      "events ingest: \(plan.messagesRead) messages read, "
+        + "\(plan.events.count - plan.retagged) new, \(plan.retagged) retagged, "
         + "\(plan.alreadyStored) already stored"
     ]
     for model in plan.unpriced {
@@ -348,7 +354,9 @@ struct EventsIngestCommand: ParsableCommand {
       + "with --workflow-transcripts every agent-*.jsonl in that directory. Only message ids, "
       + "model ids, usage counts and times are kept: no transcript text, prompt, tool input or "
       + "path. A message already stored for the session is skipped, so ingesting again adds "
-      + "nothing. --role and --task tag the workflow transcripts when given, else the session's. "
+      + "nothing, except that a message stored with no role is retagged by an ingest that gives "
+      + "it one. With --workflow-transcripts, --role and --task tag the workers and the session's "
+      + "own messages are tagged orchestrator; without, they tag the session's. "
       + "Exit 0 stored; 2 when [telemetry] enabled = false, outside a project, for a bad flag "
       + "value, an unreadable record or transcript, a malformed usage line or a failed write.")
 
