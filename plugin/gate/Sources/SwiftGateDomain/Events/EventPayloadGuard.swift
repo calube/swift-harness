@@ -32,6 +32,7 @@ public enum EventPayloadGuard {
     case .test: .enforced
     case .cache: .enforced
     case .usage: .enforced
+    case .build: .enforced
     }
   }
 

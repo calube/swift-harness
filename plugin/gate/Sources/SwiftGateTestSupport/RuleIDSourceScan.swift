@@ -37,6 +37,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "test.result": "a harness event kind",
     "cache.lookup": "a harness event kind",
     "agent.usage": "a harness event kind",
+    "build.halt": "a harness event kind",
+    "build.resume": "a harness event kind",
     "simulator.device": "a `.swiftgate.toml` key a config error names",
     "simulator.os": "a `.swiftgate.toml` key a config error names",
     "docs.budgets.design": "a `.swiftgate.toml` key a config error names",

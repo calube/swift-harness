@@ -41,6 +41,7 @@ public struct JudgeEventFilter: Sendable, Equatable {
       case .judgeCall(let call): if call.backend != backend { return false }
       case .gateRun, .gateStep: return false
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: return false
+      case .buildHalt, .buildResume: return false
       }
     }
     return true
@@ -192,6 +193,7 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       case .judgeCall(let call): calls.append(call)
       case .gateRun, .gateStep: continue
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: continue
+      case .buildHalt, .buildResume: continue
       }
     }
     func counts<Key: CaseIterable & Hashable & Codable & Sendable>(_ keys: [Key]) -> [Count<Key>] {
