@@ -80,12 +80,15 @@ public struct CostSection: EventSummarySection {
     var judgeCalls: [JudgeCallEvent] = []
     for stored in input.events {
       switch stored.event.payload {
-      case .agentUsage(let usage):
-        if let buildRun = input.query.buildRunID, usage.buildRun != buildRun { continue }
-        usages.append(usage)
+      case .agentUsage(let usage): usages.append(usage)
       case .judgeCall(let call): judgeCalls.append(call)
       default: continue
       }
+    }
+    // Resolved before the build-run filter: an untagged copy may name the run its retag names.
+    usages = UsageIngest.resolved(usages)
+    if let buildRun = input.query.buildRunID {
+      usages = usages.filter { $0.buildRun == buildRun }
     }
     var lines: [String] = []
     if let buildRun = input.query.buildRunID, !judgeCalls.isEmpty {

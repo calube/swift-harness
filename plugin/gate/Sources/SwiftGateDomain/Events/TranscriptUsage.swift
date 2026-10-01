@@ -259,34 +259,50 @@ public struct UsageIngestPlan: Sendable, Equatable {
   public let messagesRead: Int
   /// Messages skipped because the store already holds their id for the session.
   public let alreadyStored: Int
+  /// Of ``events``, those that supersede a copy stored with no role.
+  public let retagged: Int
   public let unpriced: [UnpricedModel]
 
   public init(
-    events: [HarnessEvent], messagesRead: Int, alreadyStored: Int, unpriced: [UnpricedModel]
+    events: [HarnessEvent], messagesRead: Int, alreadyStored: Int, retagged: Int = 0,
+    unpriced: [UnpricedModel]
   ) {
     self.events = events
     self.messagesRead = messagesRead
     self.alreadyStored = alreadyStored
+    self.retagged = retagged
     self.unpriced = unpriced
   }
 }
 
 /// From a session's transcripts to the `agent.usage` events not stored yet.
 public enum UsageIngest {
-  /// `stored` is every message id the store already holds for `sessionID`.
+  /// `stored` is every message id the store already holds for `sessionID`; `untagged` is those
+  /// of them whose copy ``resolved(_:)`` keeps has no role. An untagged message read here with a
+  /// role gets a second event that supersedes it, so an ingest from before the role was known
+  /// doesn't leave its cost unattributed. A message is only ever retagged from no role.
   public static func plan(
     sessionID: String, transcripts: [UsageTranscript], buildRun: String?, stored: Set<String>,
-    prices: ModelPriceTable
+    untagged: Set<String> = [], prices: ModelPriceTable
   ) -> UsageIngestPlan {
     var events: [HarnessEvent] = []
     var read: Set<String> = []
     var alreadyStored = 0
+    var retagged = 0
     var unpriced: [String: [UnpricedReason: Int]] = [:]
     for transcript in transcripts {
       for message in transcript.messages where read.insert(message.messageID).inserted {
+        let original = eventID(sessionID: sessionID, messageID: message.messageID)
+        var id = original
+        var supersedes: String?
         if stored.contains(message.messageID) {
-          alreadyStored += 1
-          continue
+          guard let role = transcript.role, untagged.contains(message.messageID) else {
+            alreadyStored += 1
+            continue
+          }
+          id = "\(original)-\(role.rawValue)"
+          supersedes = original
+          retagged += 1
         }
         var cost: Double?
         switch prices.price(model: message.model, usage: message.usage) {
@@ -302,13 +318,13 @@ public enum UsageIngest {
           cacheReadTokens: message.usage.cacheRead, costUSD: cost, priceTable: prices.version)
         events.append(
           HarnessEvent(
-            eventID: eventID(sessionID: sessionID, messageID: message.messageID),
-            time: message.time, source: HarnessEventSource(route: .ingest),
+            eventID: id, parentID: supersedes, time: message.time,
+            source: HarnessEventSource(route: .ingest),
             payload: .agentUsage(usage)))
       }
     }
     return UsageIngestPlan(
-      events: events, messagesRead: read.count, alreadyStored: alreadyStored,
+      events: events, messagesRead: read.count, alreadyStored: alreadyStored, retagged: retagged,
       unpriced: unpriced.keys.sorted().flatMap { model in
         (unpriced[model] ?? [:]).map { UnpricedModel(model: model, messages: $1, reason: $0) }
           .sorted { "\($0.reason)" < "\($1.reason)" }
@@ -319,5 +335,32 @@ public enum UsageIngest {
   /// another worktree joins it rather than doubling it.
   public static func eventID(sessionID: String, messageID: String) -> String {
     "usage-\(sessionID)-\(messageID)"
+  }
+
+  /// 1 copy of each message of each session, in the order first seen: one with a role over one
+  /// without, since a retagged message keeps its untagged copy beside the one superseding it.
+  /// Between 2 copies with a role, the first role in ``AgentRole`` order, so the choice doesn't
+  /// hang on which store was read first.
+  public static func resolved(_ usages: [AgentUsageEvent]) -> [AgentUsageEvent] {
+    struct Key: Hashable {
+      let session: String
+      let message: String
+    }
+    let order = Dictionary(uniqueKeysWithValues: AgentRole.allCases.enumerated().map { ($1, $0) })
+    func rank(_ usage: AgentUsageEvent) -> Int {
+      usage.role.flatMap { order[$0] } ?? AgentRole.allCases.count
+    }
+    var kept: [AgentUsageEvent] = []
+    var index: [Key: Int] = [:]
+    for usage in usages {
+      let key = Key(session: usage.sessionID, message: usage.messageID)
+      guard let at = index[key] else {
+        index[key] = kept.count
+        kept.append(usage)
+        continue
+      }
+      if rank(usage) < rank(kept[at]) { kept[at] = usage }
+    }
+    return kept
   }
 }

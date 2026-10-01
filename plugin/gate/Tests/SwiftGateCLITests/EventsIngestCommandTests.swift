@@ -10,6 +10,38 @@ import Testing
 struct EventsIngestCommandTests {
   static let plainSession = "5812f394-1a00-4182-a6ec-fa7944ec92fb"
   static let subagentSession = "a9349a9c-0ea7-41a9-bd3a-8792745db8b1"
+  static let buildRun = "20261001T040911Z-13708165"
+
+  /// A captured envelope's `total_cost_usd` and its 1 model's `modelUsage` token counts.
+  struct Envelope {
+    let cost: Double
+    let tokens: [String: Int]
+  }
+
+  static func envelope(_ session: String) throws -> Envelope {
+    let url = Fixture.directory.appending(path: "Transcripts/\(session).envelope.json")
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    let models = try #require(object["modelUsage"] as? [String: [String: Any]])
+    let usage = try #require(models["claude-opus-5-5"])
+    return Envelope(
+      cost: try #require(object["total_cost_usd"] as? Double),
+      tokens: [
+        "input-tokens": try #require(usage["inputTokens"] as? Int),
+        "output-tokens": try #require(usage["outputTokens"] as? Int),
+        "cache-write-tokens": try #require(usage["cacheCreationInputTokens"] as? Int),
+        "cache-read-tokens": try #require(usage["cacheReadInputTokens"] as? Int),
+      ])
+  }
+
+  /// `metrics`' token counts, by the cost section's metric names.
+  static func tokens(_ metrics: [String: EventSummaryMetric]?) -> [String: Int] {
+    var tokens: [String: Int] = [:]
+    for name in ["input-tokens", "output-tokens", "cache-write-tokens", "cache-read-tokens"] {
+      tokens[name] = metrics?[name].map { Int($0.value) }
+    }
+    return tokens
+  }
 
   /// A project and, outside it, a copy of the captured transcripts laid out as Claude Code
   /// keeps them, with a session record for each session naming its transcript.
@@ -42,12 +74,41 @@ struct EventsIngestCommandTests {
 
     func ingest(
       _ session: String, workflow: String? = nil, role: AgentRole? = nil, task: String? = nil,
-      prices: ModelPriceTable = .current
+      buildRun: String? = nil, prices: ModelPriceTable = .current
     ) -> EventsCommandOutput {
       EventsIngestRun.make(
         options: EventsIngestRun.Options(
-          session: session, workflowTranscripts: workflow, role: role, task: task, buildRun: nil),
+          session: session, workflowTranscripts: workflow, role: role, task: task,
+          buildRun: buildRun),
         root: repo.root, prices: prices)
+    }
+
+    /// The build skill's call after a task completes.
+    func buildIngest(_ session: String, workflow: String, task: String) -> EventsCommandOutput {
+      ingest(
+        session, workflow: workflow, role: .buildWorker, task: task,
+        buildRun: EventsIngestCommandTests.buildRun)
+    }
+
+    /// The ship skill's call before its summary.
+    func shipIngest(_ session: String) -> EventsCommandOutput {
+      ingest(session, role: .orchestrator, buildRun: EventsIngestCommandTests.buildRun)
+    }
+
+    /// The cost section's metrics by group, then by name, as `events summary --json` prints them.
+    func costMetrics(buildRun: String? = nil) throws -> [[String]: [String: EventSummaryMetric]] {
+      let output = EventsSummaryRun.make(
+        files: LiveEventStoreFiles(root: repo.root), query: EventQuery(buildRunID: buildRun),
+        json: true, now: Date(), sections: [CostSection()])
+      #expect(output.status == 0, "\(output.stderr)")
+      let report = try JSONDecoder().decode(EventSummaryReport.self, from: Data(output.stdout.utf8))
+      let section = try #require(report.sections.first { $0.id == .cost })
+      var metrics: [[String]: [String: EventSummaryMetric]] = [:]
+      for metric in section.metrics {
+        #expect(metrics[metric.group]?[metric.name] == nil, "\(metric.group) \(metric.name)")
+        metrics[metric.group, default: [:]][metric.name] = metric
+      }
+      return metrics
     }
 
     var usages: [AgentUsageEvent] {
@@ -92,14 +153,13 @@ struct EventsIngestCommandTests {
   }
 
   @Test(
-    "--workflow-transcripts reads each agent file as agent: subagent with its id and the --role and --task, leaving the session's own lines untagged — catches a worker's usage filed as the orchestrator's"
+    "--workflow-transcripts tags each agent file as a subagent with its id, --role, --task and --build-run, and the session's own messages as orchestrator with the build run and no task — catches a build's orchestrator cost left untagged"
   )
   func workflowTranscriptsAreSubagents() throws {
     let scenario = try Scenario()
     defer { scenario.remove() }
     let workflow = scenario.transcripts.appending(path: "\(Self.subagentSession)/subagents").path
-    let output = scenario.ingest(
-      Self.plainSession, workflow: workflow, role: .buildWorker, task: "some-task")
+    let output = scenario.buildIngest(Self.plainSession, workflow: workflow, task: "some-task")
     #expect(output.status == 0, "\(output.stderr)")
     let byAgent = Dictionary(grouping: scenario.usages, by: \.agent)
     let subagent = try #require(byAgent[.subagent]?.first)
@@ -107,11 +167,93 @@ struct EventsIngestCommandTests {
     #expect(subagent.agentID == "a705c5b0d3c2b4f5b")
     #expect(subagent.role == .buildWorker)
     #expect(subagent.task == "some-task")
+    #expect(subagent.buildRun == Self.buildRun)
     #expect(subagent.sessionID == Self.plainSession)
     let main = try #require(byAgent[.main]?.first)
     #expect(byAgent[.main]?.count == 1)
-    #expect(main.role == nil)
+    #expect(main.role == .orchestrator)
     #expect(main.task == nil)
+    #expect(main.buildRun == Self.buildRun)
+  }
+
+  @Test(
+    "2 build-style ingests then a ship-style one give each message's cost once, the session's under orchestrator and the worker's under build-worker and its first task, with the session's tokens equal to its envelope — catches orchestrator cost reported as no role"
+  )
+  func buildThenShipCountsEachMessageOnce() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflow = scenario.transcripts.appending(path: "\(Self.subagentSession)/subagents").path
+    #expect(scenario.buildIngest(Self.plainSession, workflow: workflow, task: "first").status == 0)
+    #expect(scenario.buildIngest(Self.plainSession, workflow: workflow, task: "second").status == 0)
+    let ship = scenario.shipIngest(Self.plainSession)
+    #expect(ship.status == 0, "\(ship.stderr)")
+    #expect(ship.stdout.contains("0 new"), "\(ship.stdout)")
+
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    #expect(metrics[["total"]]?["messages"]?.value == 2)
+    #expect(metrics[["role", "no role"]] == nil)
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 1)
+    #expect(metrics[["role", "build-worker"]]?["messages"]?.value == 1)
+    #expect(metrics[["task", "first"]]?["messages"]?.value == 1)
+    #expect(metrics[["task", "second"]] == nil)
+    let envelope = try Self.envelope(Self.plainSession)
+    #expect(Self.tokens(metrics[["role", "orchestrator"]]) == envelope.tokens)
+    let orchestrator = try #require(metrics[["role", "orchestrator"]]?["cost-usd"]?.value)
+    #expect(abs(orchestrator - envelope.cost) <= 0.01 * envelope.cost, "\(orchestrator)")
+    let worker = try #require(metrics[["role", "build-worker"]]?["cost-usd"]?.value)
+    let total = try #require(metrics[["total"]]?["cost-usd"]?.value)
+    #expect(abs(total - (orchestrator + worker)) < 1e-12, "\(total)")
+  }
+
+  @Test(
+    "an untagged copy from an older ingest is tagged once by the next ingest that gives it a role, and the summary counts the message once, under its role — catches a message counted twice or left with no role"
+  )
+  func olderUntaggedCopyIsSupersededOnce() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflow = scenario.transcripts.appending(path: "\(Self.subagentSession)/subagents").path
+    #expect(scenario.ingest(Self.plainSession).status == 0)
+    #expect(scenario.usages.map(\.role) == [nil])
+
+    let first = scenario.buildIngest(Self.plainSession, workflow: workflow, task: "first")
+    #expect(first.status == 0, "\(first.stderr)")
+    #expect(first.stdout.contains("1 retagged"), "\(first.stdout)")
+    let second = scenario.buildIngest(Self.plainSession, workflow: workflow, task: "second")
+    #expect(second.stdout.contains("0 new, 0 retagged, 2 already stored"), "\(second.stdout)")
+    let ship = scenario.shipIngest(Self.plainSession)
+    #expect(ship.stdout.contains("0 new, 0 retagged, 1 already stored"), "\(ship.stdout)")
+    #expect(scenario.usages.count == 3)
+
+    for buildRun in [nil, Self.buildRun] {
+      let metrics = try scenario.costMetrics(buildRun: buildRun)
+      #expect(metrics[["total"]]?["messages"]?.value == 2, "\(String(describing: buildRun))")
+      #expect(metrics[["role", "no role"]] == nil, "\(String(describing: buildRun))")
+      #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 1)
+      #expect(metrics[["build-run", "no build run"]] == nil)
+      #expect(
+        Self.tokens(metrics[["role", "orchestrator"]])
+          == (try Self.envelope(Self.plainSession)).tokens)
+    }
+  }
+
+  @Test(
+    "a worker transcript that is also under the session's own subagents keeps the worker's tags, and the session's totals equal its envelope — catches a worker's usage filed as the orchestrator's"
+  )
+  func workerTagsWinOverTheSession() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflow = scenario.transcripts.appending(path: "\(Self.subagentSession)/subagents").path
+    #expect(
+      scenario.buildIngest(Self.subagentSession, workflow: workflow, task: "first").status == 0)
+    #expect(scenario.shipIngest(Self.subagentSession).status == 0)
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 2)
+    #expect(metrics[["role", "build-worker"]]?["messages"]?.value == 1)
+    #expect(metrics[["task", "first"]]?["messages"]?.value == 1)
+    let envelope = try Self.envelope(Self.subagentSession)
+    #expect(Self.tokens(metrics[["total"]]) == envelope.tokens)
+    let total = try #require(metrics[["total"]]?["cost-usd"]?.value)
+    #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total)")
   }
 
   @Test(
