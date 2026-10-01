@@ -53,6 +53,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case testResult = "test.result"
   /// 1 read or write of an on-disk answer cache.
   case cacheLookup = "cache.lookup"
+  /// 1 API message's token counts, read from a Claude Code transcript.
+  case agentUsage = "agent.usage"
   /// A build stopped to wait on a person.
   case buildHalt = "build.halt"
   /// A person answered a build's halt.
@@ -65,6 +67,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .hookDecision: .hook
     case .testResult: .test
     case .cacheLookup: .cache
+    case .agentUsage: .usage
     case .buildHalt, .buildResume: .build
     }
   }
@@ -77,6 +80,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case hook
   case test
   case cache
+  case usage
   case build
 
   public var fileName: String { "\(rawValue).jsonl" }
@@ -97,6 +101,8 @@ public enum HarnessRoute: String, Sendable, Codable, CaseIterable {
   case check
   /// A Claude Code hook call.
   case hook
+  /// `swiftgate events ingest` reading transcripts.
+  case ingest
 }
 
 public enum HarnessHook: String, Sendable, Codable, CaseIterable {
@@ -127,6 +133,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case hookDecision(HookDecisionEvent)
   case testResult(TestResultEvent)
   case cacheLookup(CacheLookupEvent)
+  case agentUsage(AgentUsageEvent)
   case buildHalt(BuildHaltEvent)
   case buildResume(BuildResumeEvent)
 
@@ -139,6 +146,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .hookDecision: .hookDecision
     case .testResult: .testResult
     case .cacheLookup: .cacheLookup
+    case .agentUsage: .agentUsage
     case .buildHalt: .buildHalt
     case .buildResume: .buildResume
     }
@@ -345,6 +353,8 @@ extension HarnessEvent: Codable {
       payload = .testResult(try c.decode(TestResultEvent.self, forKey: .payload))
     case .cacheLookup:
       payload = .cacheLookup(try c.decode(CacheLookupEvent.self, forKey: .payload))
+    case .agentUsage:
+      payload = .agentUsage(try c.decode(AgentUsageEvent.self, forKey: .payload))
     case .buildHalt:
       payload = .buildHalt(try c.decode(BuildHaltEvent.self, forKey: .payload))
     case .buildResume:
@@ -371,6 +381,7 @@ extension HarnessEvent: Codable {
     case .hookDecision(let hook): try c.encode(hook, forKey: .payload)
     case .testResult(let result): try c.encode(result, forKey: .payload)
     case .cacheLookup(let lookup): try c.encode(lookup, forKey: .payload)
+    case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     case .buildHalt(let halt): try c.encode(halt, forKey: .payload)
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
     }
