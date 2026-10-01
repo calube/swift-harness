@@ -20,9 +20,7 @@ public struct EventStoreFileError: Error, Sendable, Equatable, CustomStringConve
     self.reason = reason
   }
 
-  public var description: String {
-    ""
-  }
+  public var description: String { "\(path): \(reason)" }
 }
 
 extension HarnessEventStream: Codable {}
@@ -73,7 +71,17 @@ public enum EventSummarySectionID: String, Sendable, Codable, CaseIterable {
   case store
 
   public var title: String {
-    ""
+    switch self {
+    case .cost: "Cost"
+    case .gateTime: "Gate time"
+    case .wrongGates: "Wrong gates"
+    case .tests: "Flaky and slow tests"
+    case .hooks: "Hooks"
+    case .caches: "Caches"
+    case .halts: "Halts"
+    case .judge: "Judge"
+    case .store: "Store"
+    }
   }
 }
 
@@ -155,7 +163,7 @@ public struct EventSummarySectionReport: Sendable, Equatable, Codable {
     id: EventSummarySectionID, state: State, lines: [String], metrics: [EventSummaryMetric]
   ) {
     self.id = id
-    self.title = ""
+    self.title = id.title
     self.state = state
     self.lines = lines
     self.metrics = metrics
@@ -184,11 +192,31 @@ public struct EventSummaryReport: Sendable, Equatable, Codable {
   }
 
   public func render() -> String {
-    ""
+    var scope = ["\(events) events"]
+    if let since { scope.append("since \(since.formatted(HarnessEventJSON.timeFormat))") }
+    if let runID { scope.append("run \(runID)") }
+    if let buildRunID { scope.append("build run \(buildRunID)") }
+    var text = "events summary: \(scope.joined(separator: ", "))\n"
+    for section in sections {
+      text += "\n## \(section.title)\n"
+      switch section.state {
+      case .noEvents: text += "no events yet\n"
+      case .reported: text += section.lines.map { "\($0)\n" }.joined()
+      }
+    }
+    text += "\n## Damage\n"
+    text += damage.isEmpty ? "none\n" : damage.map { "\($0)\n" }.joined()
+    return text
   }
 
   public func encoded() throws -> Data {
-    Data()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .custom { date, encoder in
+      var container = encoder.singleValueContainer()
+      try container.encode(date.formatted(HarnessEventJSON.timeFormat))
+    }
+    return try encoder.encode(self)
   }
 }
 
@@ -204,6 +232,12 @@ public enum EventSummary {
     _ input: EventSummaryInput, sections: [any EventSummarySection] = sections
   ) -> EventSummaryReport {
     EventSummaryReport(
-      since: nil, runID: nil, buildRunID: nil, events: 0, sections: [], damage: [])
+      since: input.query.since, runID: input.query.runID, buildRunID: input.query.buildRunID,
+      events: input.events.count,
+      sections: sections.map {
+        $0.summarize(input)
+          ?? EventSummarySectionReport(id: $0.id, state: .noEvents, lines: [], metrics: [])
+      },
+      damage: input.damage)
   }
 }

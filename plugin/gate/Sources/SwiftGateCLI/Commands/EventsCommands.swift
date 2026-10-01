@@ -17,7 +17,23 @@ enum EventsQueryInput {
     command: String, kinds: [HarnessEventKind], since: String?, runID: String?,
     buildRunID: String?, now: Date
   ) throws(EventsQueryInputError) -> EventQuery {
-    EventQuery()
+    func refused(_ why: String) -> EventsQueryInputError {
+      EventsQueryInputError(message: "swiftgate \(command): \(why)")
+    }
+    var start: Date?
+    if let since {
+      guard let parsed = EventQuery.since(since, now: now) else {
+        throw refused(
+          "--since \(since) is not a duration such as 7d, 12h or 30m, an ISO 8601 time or a run id")
+      }
+      start = parsed
+    }
+    if let runID, !RunID.isValid(runID) { throw refused("--run \(runID) is not a run id") }
+    if let buildRunID, !RunID.isValid(buildRunID) {
+      throw refused("--build-run \(buildRunID) is not a build run id")
+    }
+    return EventQuery(
+      kinds: kinds.isEmpty ? nil : Set(kinds), since: start, runID: runID, buildRunID: buildRunID)
   }
 }
 
@@ -28,7 +44,18 @@ struct EventsQueryInputError: Error, Equatable {
 /// `events list`: every matching event as 1 JSON line, oldest first; damage on stderr.
 enum EventsListRun {
   static func make(files: any EventStoreFileReading, query: EventQuery) -> EventsCommandOutput {
-    EventsCommandOutput(stdout: "", stderr: "", status: 0)
+    let read = EventStoreReader(files: files).read(query)
+    var stdout = Data()
+    do {
+      for stored in read.events { stdout.append(try HarnessEventJSON.encodeLine(stored.event)) }
+    } catch {
+      return EventsCommandOutput(
+        stdout: "", stderr: "swiftgate events list: could not encode an event: \(error)\n",
+        status: 2)
+    }
+    return EventsCommandOutput(
+      stdout: String(decoding: stdout.dropLast(), as: UTF8.self),
+      stderr: EventsDamage.lines(read.damage, command: "events list"), status: 0)
   }
 }
 
@@ -38,7 +65,58 @@ enum EventsSummaryRun {
     files: any EventStoreFileReading, query: EventQuery, json: Bool, now: Date,
     sections: [any EventSummarySection] = EventSummary.sections
   ) -> EventsCommandOutput {
-    EventsCommandOutput(stdout: "", stderr: "", status: 0)
+    let read = EventStoreReader(files: files).read(query)
+    let report = EventSummary.make(
+      EventSummaryInput(
+        events: read.events, query: query, store: read.facts, damage: read.damage, files: files,
+        now: now),
+      sections: sections)
+    guard json else {
+      return EventsCommandOutput(stdout: report.render(), stderr: "", status: 0)
+    }
+    do {
+      return EventsCommandOutput(
+        stdout: String(decoding: try report.encoded(), as: UTF8.self),
+        stderr: EventsDamage.lines(read.damage, command: "events summary"), status: 0)
+    } catch {
+      return EventsCommandOutput(
+        stdout: "", stderr: "swiftgate events summary: could not encode the summary: \(error)\n",
+        status: 2)
+    }
+  }
+}
+
+/// Damage on stderr, 1 line per damaged line or file, so it's never dropped unannounced.
+enum EventsDamage {
+  static func lines(_ damage: [EventDamage], command: String) -> String {
+    damage.map { "swiftgate \(command): damage: \($0)\n" }.joined()
+  }
+}
+
+/// Prints an `events` command's output and exits with its status.
+enum EventsCommandRunner {
+  static var root: URL {
+    URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+  }
+
+  static func finish(_ output: EventsCommandOutput) throws {
+    if !output.stderr.isEmpty { FileHandle.standardError.write(Data(output.stderr.utf8)) }
+    if !output.stdout.isEmpty { Console.write(output.stdout) }
+    if output.status != 0 { throw ExitCode(output.status) }
+  }
+
+  static func query(
+    command: String, kinds: [HarnessEventKind], since: String?, runID: String?,
+    buildRunID: String?
+  ) throws -> EventQuery {
+    do throws(EventsQueryInputError) {
+      return try EventsQueryInput.query(
+        command: command, kinds: kinds, since: since, runID: runID, buildRunID: buildRunID,
+        now: Date())
+    } catch {
+      FileHandle.standardError.write(Data("\(error.message)\n".utf8))
+      throw ExitCode(2)
+    }
   }
 }
 
@@ -69,7 +147,12 @@ struct EventsListCommand: ParsableCommand {
   @Option(name: .customLong("run"), help: "Only events of this gate run id.")
   var runID: String?
 
-  func run() throws {}
+  func run() throws {
+    let query = try EventsCommandRunner.query(
+      command: "events list", kinds: kind, since: since, runID: runID, buildRunID: nil)
+    try EventsCommandRunner.finish(
+      EventsListRun.make(files: LiveEventStoreFiles(root: EventsCommandRunner.root), query: query))
+  }
 }
 
 struct EventsSummaryCommand: ParsableCommand {
@@ -93,5 +176,12 @@ struct EventsSummaryCommand: ParsableCommand {
   @Flag(help: "Print the summary as JSON.")
   var json = false
 
-  func run() throws {}
+  func run() throws {
+    let query = try EventsCommandRunner.query(
+      command: "events summary", kinds: [], since: since, runID: runID, buildRunID: buildRunID)
+    try EventsCommandRunner.finish(
+      EventsSummaryRun.make(
+        files: LiveEventStoreFiles(root: EventsCommandRunner.root), query: query, json: json,
+        now: Date()))
+  }
 }

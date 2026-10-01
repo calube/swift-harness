@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SwiftGateDomain
 
@@ -10,15 +11,34 @@ public struct LiveEventStoreFiles: EventStoreFileReading {
   }
 
   public func read(_ path: String) throws(EventStoreFileError) -> Data? {
-    nil
+    do {
+      return try Data(contentsOf: root.appending(path: path))
+    } catch CocoaError.fileReadNoSuchFile {
+      return nil
+    } catch {
+      throw EventStoreFileError(path: path, reason: error.localizedDescription)
+    }
   }
 
   public func list(_ directory: String) throws(EventStoreFileError) -> [String] {
-    []
+    do {
+      return try FileManager.default.contentsOfDirectory(
+        atPath: root.appending(path: directory).path
+      ).sorted()
+    } catch CocoaError.fileReadNoSuchFile {
+      return []
+    } catch {
+      throw EventStoreFileError(path: directory, reason: error.localizedDescription)
+    }
   }
 
   public func size(_ path: String) throws(EventStoreFileError) -> Int? {
-    nil
+    var info = stat()
+    guard stat(root.appending(path: path).path, &info) == 0 else {
+      if errno == ENOENT { return nil }
+      throw EventStoreFileError(path: path, reason: String(cString: strerror(errno)))
+    }
+    return Int(info.st_size)
   }
 }
 
@@ -47,6 +67,163 @@ public struct EventStoreReader: Sendable {
   }
 
   public func read(_ query: EventQuery) -> EventStoreRead {
-    EventStoreRead(events: [], damage: [], facts: .init())
+    var damage: [EventDamage] = []
+    func unreadable(_ error: EventStoreFileError) {
+      damage.append(
+        EventDamage(file: error.path, line: nil, kind: .unreadableFile, detail: error.reason))
+    }
+    let imported = "\(RunLayout.eventsDirectory)/imported"
+    var stores = [RunLayout.eventsDirectory]
+    do throws(EventStoreFileError) {
+      stores += try files.list(imported).filter { !$0.hasPrefix(".") }.map { "\(imported)/\($0)" }
+    } catch {
+      unreadable(error)
+    }
+    var batches: [[StoredEvent]] = []
+    var streams: [HarnessEventStream: EventStoreFacts.Stream] = [:]
+    var dropped: [HarnessEventKind: [EventPayloadGuard.Reason: Int]] = [:]
+    for store in stores {
+      do throws(EventStoreFileError) {
+        for (kind, reasons) in try droppedCounts(store).dropped {
+          dropped[kind, default: [:]].merge(reasons, uniquingKeysWith: +)
+        }
+      } catch {
+        unreadable(error)
+      }
+      for stream in HarnessEventStream.allCases {
+        let read = read(stream, in: store, query: query)
+        damage += read.damage
+        batches.append(read.events.filter { query.keeps($0.event) })
+        let total = streams[stream]
+        streams[stream] = EventStoreFacts.Stream(
+          stream: stream, activeBytes: (total?.activeBytes ?? 0) + read.facts.activeBytes,
+          sealedSegments: (total?.sealedSegments ?? 0) + read.facts.sealedSegments,
+          sealedBytes: (total?.sealedBytes ?? 0) + read.facts.sealedBytes)
+      }
+    }
+    return EventStoreRead(
+      events: EventQuery.merge(batches), damage: damage,
+      facts: EventStoreFacts(
+        streams: HarnessEventStream.allCases.compactMap { streams[$0] },
+        dropped: EventDropCounts(dropped: dropped), stores: stores.count))
+  }
+
+  private struct StreamRead {
+    var events: [StoredEvent] = []
+    var damage: [EventDamage] = []
+    var facts: EventStoreFacts.Stream
+  }
+
+  /// 1 store's `stream`: its size whatever the query, and the events of every segment the query
+  /// may match, then of the active file.
+  private func read(_ stream: HarnessEventStream, in store: String, query: EventQuery)
+    -> StreamRead
+  {
+    let active = "\(store)/\(stream.fileName)"
+    let sealed = "\(store)/sealed/\(stream.rawValue)"
+    var result = StreamRead(
+      facts: EventStoreFacts.Stream(
+        stream: stream, activeBytes: 0, sealedSegments: 0, sealedBytes: 0))
+    func unreadable(_ error: EventStoreFileError, _ kind: EventDamage.Kind = .unreadableFile) {
+      result.damage.append(
+        EventDamage(file: error.path, line: nil, kind: kind, detail: error.reason))
+    }
+    let wanted = query.streams.contains(stream)
+    var segments: [Int: Set<String>] = [:]
+    do throws(EventStoreFileError) {
+      for name in try files.list(sealed) {
+        guard let file = EventSegmentLayout.file(named: name) else { continue }
+        switch file {
+        case .plain(let sequence), .compressed(let sequence), .index(let sequence):
+          segments[sequence, default: []].insert(name)
+        }
+      }
+    } catch {
+      unreadable(error)
+    }
+    var sealedBytes = 0
+    for (sequence, names) in segments.sorted(by: { $0.key < $1.key }) {
+      let plain = "\(sealed)/\(EventSegmentLayout.plainName(sequence))"
+      let compressed = "\(sealed)/\(EventSegmentLayout.compressedName(sequence))"
+      do throws(EventStoreFileError) {
+        let onDisk =
+          names.contains(EventSegmentLayout.compressedName(sequence)) ? compressed : plain
+        sealedBytes += try files.size(onDisk) ?? 0
+      } catch {
+        unreadable(error)
+      }
+      guard wanted else { continue }
+      if names.contains(EventSegmentLayout.indexName(sequence)) {
+        let indexPath = "\(sealed)/\(EventSegmentLayout.indexName(sequence))"
+        do throws(EventStoreFileError) {
+          if let data = try files.read(indexPath) {
+            let index: EventSegmentIndex
+            do {
+              index = try EventSegmentIndex.decode(data)
+            } catch {
+              throw EventStoreFileError(path: indexPath, reason: "\(error)")
+            }
+            if !query.mayMatch(index) { continue }
+          }
+        } catch {
+          // Without its index the segment is read whole, so nothing it holds is lost.
+          unreadable(error, .unreadableIndex)
+        }
+      }
+      do throws(EventStoreFileError) {
+        guard
+          let (path, data) = try segment(
+            plain: names.contains(EventSegmentLayout.plainName(sequence)) ? plain : nil,
+            compressed: compressed)
+        else {
+          continue
+        }
+        let lines = EventLines.decode(data, file: path)
+        result.events += lines.events
+        result.damage += lines.damage
+      } catch {
+        unreadable(error)
+      }
+    }
+    var activeBytes = 0
+    do throws(EventStoreFileError) {
+      activeBytes = try files.size(active) ?? 0
+      if wanted, let data = try files.read(active) {
+        let lines = EventLines.decode(data, file: active)
+        result.events += lines.events
+        result.damage += lines.damage
+      }
+    } catch {
+      unreadable(error)
+    }
+    result.facts = EventStoreFacts.Stream(
+      stream: stream, activeBytes: activeBytes, sealedSegments: segments.count,
+      sealedBytes: sealedBytes)
+    return result
+  }
+
+  /// A segment's lines and the file they came from: the plain file while it's there, since a
+  /// sealer may have been stopped before removing it, else the decompressed one.
+  private func segment(plain: String?, compressed: String) throws(EventStoreFileError)
+    -> (String, Data)?
+  {
+    // A listed plain file can be sealed and removed before it's read.
+    if let plain, let data = try files.read(plain) { return (plain, data) }
+    guard let packed = try files.read(compressed) else { return nil }
+    do {
+      return (compressed, try (packed as NSData).decompressed(using: .lzfse) as Data)
+    } catch {
+      throw EventStoreFileError(path: compressed, reason: "decompress: \(error)")
+    }
+  }
+
+  private func droppedCounts(_ store: String) throws(EventStoreFileError) -> EventDropCounts {
+    let path = "\(store)/dropped.json"
+    guard let data = try files.read(path) else { return EventDropCounts() }
+    do {
+      return try JSONDecoder().decode(EventDropCounts.self, from: data)
+    } catch {
+      throw EventStoreFileError(path: path, reason: "\(error)")
+    }
   }
 }
