@@ -28,6 +28,7 @@ public enum EventPayloadGuard {
     switch stream {
     case .judge: .exempt
     case .gate: .enforced
+    case .hook: .enforced
     }
   }
 

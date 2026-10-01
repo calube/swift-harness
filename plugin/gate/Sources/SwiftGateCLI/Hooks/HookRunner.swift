@@ -26,6 +26,9 @@ struct HookDependencies: Sendable {
   var sweep: any OrphanCloneSweeping
   var commitJudge: any CommitCommentJudging
   var environment: [String: String]
+  /// Where each call's `hook.decision` goes, asked only after the hook has decided, so reading
+  /// the config it needs never delays a decision; `nil` records none.
+  var telemetry: @Sendable () -> HookTelemetry? = { nil }
 
   static func live(root: URL, environment: [String: String]) -> HookDependencies {
     let runner = LiveProcessRunner()
@@ -40,6 +43,23 @@ struct HookDependencies: Sendable {
       commitJudge: ConfiguredCommitCommentJudge.live,
       environment: environment)
   }
+}
+
+/// The project's event writer and the store identity whose salt hashes tool input.
+struct HookTelemetry: Sendable {
+  var events: any HarnessEventWriting
+  /// Read only after the hook has decided; creates the store's identity on first use.
+  var identity: @Sendable () throws(HarnessEventWriteError) -> EventStoreIdentity
+
+  /// `nil` for a root with no loadable `.swiftgate.toml`, or with `[telemetry] enabled = false`,
+  /// so neither writes anything, the store's identity included.
+  static func live(root: URL) -> HookTelemetry? { nil }
+
+  /// Writes `hook.decision` for 1 call; a failure is the 1 line returned, never thrown.
+  func record(
+    _ event: HookEvent, payload: HookPayload, input: Data, result: HookResult, milliseconds: Int,
+    at time: Date
+  ) -> String? { nil }
 }
 
 /// Removes simulator clones whose owning process died (spec §4.4). SessionStart calls it; the
