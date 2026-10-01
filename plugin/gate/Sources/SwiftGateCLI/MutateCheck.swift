@@ -38,6 +38,23 @@ enum MutateCheck {
     _ environment: Environment, graph: ModuleGraph, config: Config, base: String,
     context: GateRun.Context
   ) async -> ChangedTestJudgement {
+    var derivedData = GateDerivedData.none
+    let (judgement, milliseconds) = await GateRun.timed {
+      await mutate(
+        environment, graph: graph, config: config, base: base, context: context,
+        derivedData: &derivedData)
+    }
+    context.steps.record(
+      .mutate, tier: .t1, milliseconds: milliseconds, verdict: judgement.verdict,
+      derivedData: derivedData)
+    return judgement
+  }
+
+  /// - Parameter derivedData: set from the build directories the scratch trees are seeded from.
+  private static func mutate(
+    _ environment: Environment, graph: ModuleGraph, config: Config, base: String,
+    context: GateRun.Context, derivedData: inout GateDerivedData
+  ) async -> ChangedTestJudgement {
     let clock = ContinuousClock()
     let start = clock.now
     let mergeBase: String
@@ -118,6 +135,8 @@ enum MutateCheck {
         mutant: mutant, originalText: text, mutatedText: mutated,
         selections: selections[mutant.file] ?? [])
     }
+    derivedData = HostTestCheck.derivedData(
+      jobs.flatMap(\.selections), root: environment.root)
     let workers = MutationWorkers.count(
       configured: environment.workers ?? config.mutation.maxWorkers, cores: environment.cores,
       mutants: jobs.count { !$0.selections.isEmpty })

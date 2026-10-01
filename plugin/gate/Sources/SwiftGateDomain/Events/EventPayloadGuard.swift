@@ -27,6 +27,7 @@ public enum EventPayloadGuard {
   public static func policy(for stream: HarnessEventStream) -> Policy {
     switch stream {
     case .judge: .exempt
+    case .gate: .enforced
     }
   }
 

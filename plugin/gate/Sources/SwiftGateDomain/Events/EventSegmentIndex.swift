@@ -47,7 +47,7 @@ extension HarnessEventStream {
   /// The active file's size at which the write that reached it rotates it into a segment.
   public var rotationBytes: Int {
     switch self {
-    case .judge: EventSegmentLayout.standardRotationBytes
+    case .judge, .gate: EventSegmentLayout.standardRotationBytes
     }
   }
 }

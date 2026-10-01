@@ -70,6 +70,8 @@ enum SimulatorTestCheck {
     let runner = SimulatorTestRunner(
       devices: dependencies.makeDevices(config.simulator), xcodebuild: dependencies.xcodebuild,
       reader: dependencies.reader, root: root)
+    let derivedData = GateStepCollector.derivedData(
+      buildDirectories: jobs.map { SimulatorTestRunner.derivedDataPath(root: root, job: $0) })
     let (results, milliseconds) = await GateRun.timed {
       await runner.run(jobs, tier: tier, outputDirectory: context.directory, recording: recording)
     }
@@ -99,6 +101,9 @@ enum SimulatorTestCheck {
     if extra.contains(where: { $0.severity.failsGate }) {
       combined.tier = try combined.tier.merging(.red)
     }
+    context.steps.record(
+      .simulator, tier: tier, milliseconds: milliseconds, verdict: combined.tier.verdict,
+      derivedData: derivedData)
     return GateRunParts(tiers: [combined.tier], findings: combined.findings + extra)
   }
 

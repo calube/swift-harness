@@ -17,15 +17,22 @@ enum GateRun {
     let runID: String
     /// Where the run's logs and reports go.
     let directory: URL
+    /// Each step the run times hands its timing here, for the run's `gate.step` events.
+    var steps = GateStepCollector()
   }
 
   /// - Parameters:
   ///   - steps: `ready` steps a lower `check` tier added, recorded in the run's history line.
   ///   - proofBases: the refs `prove` retried at, recorded in the run's history line.
   ///   - base: the ref `--base` named, resolved to a sha and recorded in the run's history line.
+  ///   - checkTier: the `check` tier this run gates at, as its events' source.
+  ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
+  ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
   static func execute(
     root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
     proofBases: [String]? = nil, base: String? = nil, git: (any Git)? = nil,
+    checkTier: CheckTier? = nil, events: (any HarnessEventWriting)? = nil,
+    workingTree: (any WorkingTreeReading)? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
@@ -33,10 +40,9 @@ enum GateRun {
     let startedAt = Date()
     let start = clock.now
     let runID = RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
-    let store = RunStore(worktreeRoot: root)
     let directory: URL
     do {
-      directory = try store.runDirectory(for: runID)
+      directory = try RunStore(worktreeRoot: root).runDirectory(for: runID)
     } catch {
       // Artifacts are diagnostics; without the run directory they go to a temporary one.
       directory = FileManager.default.temporaryDirectory.appending(
@@ -48,7 +54,9 @@ enum GateRun {
     let resolvedFilesBefore = await ResolvedFileGuard.snapshot(root: root, git: git)
     let headCommit = await headCommit(git: git)
     let resolvedBase = await resolved(base: base, git: git)
-    var parts = try await body(Context(runID: runID, directory: directory))
+    let telemetry = await telemetry(root: root, events: events, workingTree: workingTree)
+    let context = Context(runID: runID, directory: directory)
+    var parts = try await body(context)
     let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
     if let finding = try ResolvedFileGuard.finding(
       before: resolvedFilesBefore, after: resolvedFilesAfter)
@@ -58,16 +66,54 @@ enum GateRun {
     let report = try RunReport(
       runID: runID, durationMilliseconds: milliseconds(clock.now - start), tiers: parts.tiers,
       findings: parts.findings, allowances: parts.allowances)
-    do {
-      try store.record(
+    record { () throws(RunStoreError) in
+      try RunStore(worktreeRoot: root, events: telemetry.events).record(
         report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
-        headCommit: headCommit, base: resolvedBase)
-    } catch {
-      FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
+        headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
+        dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier)
     }
     Console.write(try ReportRenderer.render(report, format: format))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
+  }
+
+  /// Where a run's events go, and the tree it starts on. `events` stands in for the project's
+  /// writer; without it, a root with no loadable `.swiftgate.toml` gets no writer, and
+  /// `[telemetry] enabled = false` gets one that keeps nothing. The tree is read only for a
+  /// writer that keeps events; a git failure says so on stderr and leaves it unknown.
+  static func telemetry(
+    root: URL, events: (any HarnessEventWriting)?, workingTree: (any WorkingTreeReading)?
+  ) async -> (events: (any HarnessEventWriting)?, tree: WorkingTreeState?) {
+    let writer: (any HarnessEventWriting)?
+    if let events {
+      writer = events
+    } else if case .success(let config?) = StaticCheckInputs.loadConfig(root: root) {
+      writer = EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
+    } else {
+      writer = nil
+    }
+    guard let writer, !(writer is DisabledEventWriter) else { return (writer, nil) }
+    let reader = workingTree ?? LiveWorkingTree(runner: LiveProcessRunner(), root: root)
+    do {
+      return (writer, try await reader.state())
+    } catch {
+      FileHandle.standardError.write(
+        Data("swiftgate: could not read the working tree to record with the run: \(error)\n".utf8))
+      return (writer, nil)
+    }
+  }
+
+  /// Runs `write`, a run's record. A failure prints 1 line and never changes the run's verdict:
+  /// the record is diagnostics, and its events more so.
+  static func record(_ write: () throws(RunStoreError) -> Void) {
+    do throws(RunStoreError) {
+      try write()
+    } catch .eventsUnwritten(let failure) {
+      FileHandle.standardError.write(
+        Data("swiftgate: gate events not written: \(failure)\n".utf8))
+    } catch {
+      FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
+    }
   }
 
   /// The commit the run starts at, so its report and history line name what it gated. `nil` in a

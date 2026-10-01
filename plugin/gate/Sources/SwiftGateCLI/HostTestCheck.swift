@@ -22,6 +22,15 @@ enum HostTestCheck {
     }
   }
 
+  /// Whether every selected package's SwiftPM build directory exists yet.
+  static func derivedData(_ selections: [HostTestSelection], root: URL) -> GateDerivedData {
+    GateStepCollector.derivedData(
+      buildDirectories: selections.map {
+        root.appending(path: $0.packagePath, directoryHint: .isDirectory)
+          .appending(path: ".build", directoryHint: .isDirectory)
+      })
+  }
+
   static func run(
     _ selections: [HostTestSelection], root: URL, swiftPM: any SwiftPM, outputDirectory: URL,
     readCoverage: Bool
