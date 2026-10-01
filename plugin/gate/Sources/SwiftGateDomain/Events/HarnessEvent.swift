@@ -49,6 +49,10 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case gateStep = "gate.step"
   /// 1 call of a Claude Code hook.
   case hookDecision = "hook.decision"
+  /// 1 test case of a recorded gate run.
+  case testResult = "test.result"
+  /// 1 read or write of an on-disk answer cache.
+  case cacheLookup = "cache.lookup"
   /// 1 API message's token counts, read from a Claude Code transcript.
   case agentUsage = "agent.usage"
 
@@ -57,6 +61,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .judgeDecision, .judgeCall: .judge
     case .gateRun, .gateStep: .gate
     case .hookDecision: .hook
+    case .testResult: .test
+    case .cacheLookup: .cache
     case .agentUsage: .usage
     }
   }
@@ -67,6 +73,8 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case judge
   case gate
   case hook
+  case test
+  case cache
   case usage
 
   public var fileName: String { "\(rawValue).jsonl" }
@@ -117,6 +125,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case gateRun(GateRunEvent)
   case gateStep(GateStepEvent)
   case hookDecision(HookDecisionEvent)
+  case testResult(TestResultEvent)
+  case cacheLookup(CacheLookupEvent)
   case agentUsage(AgentUsageEvent)
 
   public var kind: HarnessEventKind {
@@ -126,6 +136,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .gateRun: .gateRun
     case .gateStep: .gateStep
     case .hookDecision: .hookDecision
+    case .testResult: .testResult
+    case .cacheLookup: .cacheLookup
     case .agentUsage: .agentUsage
     }
   }
@@ -327,6 +339,10 @@ extension HarnessEvent: Codable {
       payload = .gateStep(try c.decode(GateStepEvent.self, forKey: .payload))
     case .hookDecision:
       payload = .hookDecision(try c.decode(HookDecisionEvent.self, forKey: .payload))
+    case .testResult:
+      payload = .testResult(try c.decode(TestResultEvent.self, forKey: .payload))
+    case .cacheLookup:
+      payload = .cacheLookup(try c.decode(CacheLookupEvent.self, forKey: .payload))
     case .agentUsage:
       payload = .agentUsage(try c.decode(AgentUsageEvent.self, forKey: .payload))
     }
@@ -349,6 +365,8 @@ extension HarnessEvent: Codable {
     case .gateRun(let run): try c.encode(run, forKey: .payload)
     case .gateStep(let step): try c.encode(step, forKey: .payload)
     case .hookDecision(let hook): try c.encode(hook, forKey: .payload)
+    case .testResult(let result): try c.encode(result, forKey: .payload)
+    case .cacheLookup(let lookup): try c.encode(lookup, forKey: .payload)
     case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     }
   }

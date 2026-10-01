@@ -49,6 +49,8 @@ extension HarnessEventStream {
     switch self {
     case .judge, .gate: EventSegmentLayout.standardRotationBytes
     case .hook: EventSegmentLayout.standardRotationBytes
+    case .test: EventSegmentLayout.largeRotationBytes
+    case .cache: EventSegmentLayout.standardRotationBytes
     case .usage: EventSegmentLayout.standardRotationBytes
     }
   }
