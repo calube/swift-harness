@@ -868,3 +868,47 @@ printf 'est_lines_max = 400\n' > bounds.txt
   --module-graph graph.txt --task-sizing-bounds bounds.txt
 cp .harness/context-pack/decomposer.md <fixtures>/context-pack/design-decomposer.pack.txt
 ```
+
+## Transcripts
+
+Claude Code transcripts and `--output-format json` envelopes from 2 throwaway sessions, for
+transcript usage ingest. Captured with Claude Code 2.1.285 on model `claude-opus-5-5`, each from a
+fresh empty directory made by `mktemp -d`, never from a real working session:
+
+```sh
+cd "$(mktemp -d)"
+claude -p 'Reply with the single word ok.' --output-format json > plain.envelope.json
+claude -p 'In one reply, first write the single word launching, then use the Agent tool exactly once to launch 1 subagent whose only task is to reply with the single word ok. Do nothing else. After it returns, reply with the single word ok.' --output-format json > subagent.envelope.json
+```
+
+Claude Code wrote each session's transcript to `~/.claude/projects/<cwd slug>/<session_id>.jsonl`,
+and the subagent's to `~/.claude/projects/<cwd slug>/<session_id>/subagents/agent-<agentId>.jsonl`,
+beside an `agent-<agentId>.meta.json` the fixtures leave out. The fixtures keep that layout under
+`Transcripts/`, named by the envelope's `session_id`:
+
+| File | Holds |
+|---|---|
+| `5812f394-….envelope.json` | the plain session's envelope, whole, pretty-printed with `jq .` |
+| `5812f394-….jsonl` | its transcript: 1 user line, 1 assistant line |
+| `a9349a9c-….envelope.json` | the subagent session's envelope, whole, pretty-printed with `jq .` |
+| `a9349a9c-….jsonl` | its transcript: the first assistant message is 2 lines (text, then `tool_use`) with 1 `message.id` and the same usage on both |
+| `a9349a9c-…/subagents/agent-a705c5b0d3c2b4f5b.jsonl` | the subagent's transcript, every line `isSidechain: true` |
+
+This `jq` program filters each transcript, `jq -c "$F" <transcript> > <fixture>`:
+
+```sh
+F='select(.type=="assistant" or .type=="user") | {type, timestamp, isSidechain, message: (.message | {id, model, usage, content} | with_entries(select(.value != null)))}'
+```
+
+The filter drops every other line type (`attachment`, `queue-operation`, `last-prompt`, `cost-state`,
+`atis-latch`) and every other key, including `cwd`, `gitBranch`, `sessionId`, `uuid` and `version`.
+`message.content` stays: the prompts and replies are the throwaway text above, and a test needs text to
+prove ingest doesn't store it. The fixtures keep the envelopes whole; they hold no path. After the copy,
+`grep -rniE '/Users|/private|/tmp|caleb|@[a-z]+\.|swift-harness|home' Transcripts` matched nothing.
+
+Usage deduplicated by `message.id` across the session transcript and its subagent transcripts equals
+the envelope's `modelUsage` token counts. The 2 envelopes cost `total_cost_usd`
+0.0478712 and 0.0525826. A third throwaway subagent session, not kept because its messages were 1
+line each, cost 0.1193102 for 6 input, 124 output, 22096 cache-write and 31631 cache-read tokens.
+The 3 envelopes solve, with no remainder, to $4 input, $5 5-minute cache write and $0.20 cache read
+per 1M tokens, assuming output at 5 times input ($20).
