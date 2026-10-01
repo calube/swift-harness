@@ -971,8 +971,40 @@ grep '"gate.run"' .harness/events/gate.jsonl > plugin/gate/Tests/Fixtures/Events
 event id, parent id and the run id so the copies are distinct runs; outcomes, durations, times and
 the tree hash stay as captured. The timing of the flaky and slow-test section used 50 such
 copies. The test ids `privateVarRoot`, `privateTmpPathIsFlagged`, `usersPathIsFlagged`,
-`usersHitRaisesToBlocker` and `privateReference` match `grep -ciE '/Users|/private|/tmp|caleb|swift-harness'`;
-they are test names, and no line holds a path.
+`usersHitRaisesToBlocker` and `privateReference` match the path grep above. They are test names,
+and no line holds a path.
+
+`Events/hook.jsonl` is the hook stream the real `swiftgate hook` command wrote at `22168f8`, in a
+scratch git repository whose `.swiftgate.toml` names 1 SwiftPM package `Pkg` with 1 library
+target. This repository has no hook stream, because no Claude Code session runs the plugin's
+hooks here. So the capture piped 1 session's payloads to the command by hand, from the scratch
+repository's root, in this order:
+
+1. `session-start`.
+2. `pre-tool-use` for a Write of `Pkg/Package.resolved`, which `guard.package-resolved` denies.
+3. `post-tool-use` for the same Write input: the bypass the hooks section counts.
+4. `pre-tool-use` for Bash `xcodebuild test -scheme App`, which `guard.raw-xcodebuild` denies.
+5. `pre-tool-use` and `post-tool-use` for a Write of `Pkg/Sources/Capture/B.swift`.
+6. `stop`.
+
+Step 2, as an example, and the copy:
+
+```sh
+printf '%s' '{"session_id":"<uuid>","cwd":"<scratch>","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"<scratch>/Pkg/Package.resolved","content":"{}"}}' \
+  | <worktree>/plugin/bin/swiftgate hook pre-tool-use
+/bin/cp -f <scratch>/.harness/events/hook.jsonl plugin/gate/Tests/Fixtures/Events/hook.jsonl
+```
+
+`Events/cache.jsonl` is the cache stream a sibling worktree's own push-tier gate runs wrote at
+its `51e7777` (2 manifest keys: 2 misses, 2 stores, 8 hits). Copied from the repository root
+of this worktree:
+
+```sh
+/bin/cp -f <sibling worktree>/.harness/events/cache.jsonl plugin/gate/Tests/Fixtures/Events/cache.jsonl
+```
+
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/hook.jsonl Events/cache.jsonl`
+printed 0 for each.
 
 ## GateRun
 
