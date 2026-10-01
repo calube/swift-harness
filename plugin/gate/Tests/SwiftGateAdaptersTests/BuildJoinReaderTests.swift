@@ -46,9 +46,14 @@ struct BuildJoinReaderTests {
 
     func writeRun(
       plan name: String, runID: String = BuildJoinReaderTests.runID, returns: [TaskReturn],
-      events: [BuildEvent]
+      events: [BuildEvent], withRecord: Bool = true
     ) throws {
       let run = plan(name).appending(path: "build/\(runID)", directoryHint: .isDirectory)
+      if withRecord {
+        try write(
+          BuildRunJSON.encode(BuildJoinReaderTests.record(plan: name, runID: runID)),
+          to: run.appending(path: "run.json"))
+      }
       for taskReturn in returns {
         try write(
           TaskReturnJSON.encode(taskReturn),
@@ -60,6 +65,14 @@ struct BuildJoinReaderTests {
     }
 
     func remove() { repo.remove() }
+  }
+
+  static func record(plan: String, runID: String) -> BuildRunRecord {
+    BuildRunRecord(
+      runID: runID, plan: plan, startedAt: at, presetName: "standard",
+      preset: BuildPreset(
+        designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger, mergeGate: .push,
+        workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend))
   }
 
   static func taskReturn(_ task: String, runID: String) -> TaskReturn {
@@ -94,8 +107,26 @@ struct BuildJoinReaderTests {
       join.runs == [
         BuildJoin.Run(
           plan: "telemetry", runID: Self.runID, writeSets: ["feature": ["Sources/Feature/"]],
-          returns: ["feature": taskReturn], events: Self.events)
+          returns: ["feature": taskReturn], events: Self.events,
+          record: Self.record(plan: "telemetry", runID: Self.runID))
       ])
+  }
+
+  @Test(
+    "a build run with no run.json is still read, with no record and the missing file listed as damage — catches a run without its preset replayed on a guessed maxParallel or dropped silently"
+  )
+  func missingRunRecordIsDamage() async throws {
+    let state = try await PlanState.make()
+    defer { state.remove() }
+    try state.writeLedger(plan: "telemetry", writeSets: ["feature": ["Sources/Feature/"]])
+    try state.writeRun(plan: "telemetry", returns: [], events: Self.events, withRecord: false)
+
+    let join = BuildJoinReader(commonDirectory: state.common).read(buildRunID: nil)
+
+    let path = "\(BuildJoinReader.plansDirectory)/telemetry/build/\(Self.runID)/run.json"
+    #expect(join.damage == [BuildJoinDamage(path: path, reason: "missing run.json")])
+    #expect(join.runs.map(\.events) == [Self.events])
+    #expect(join.runs.first?.record == nil)
   }
 
   @Test(

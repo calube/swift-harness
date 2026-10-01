@@ -27,16 +27,19 @@ public struct BuildJoin: Sendable, Equatable {
     public let returns: [String: TaskReturn]
     /// `events.jsonl` in file order.
     public let events: [BuildEvent]
+    /// `run.json`, with the preset the run used; `nil` when it didn't read, which is damage.
+    public let record: BuildRunRecord?
 
     public init(
       plan: String, runID: String, writeSets: [String: [String]], returns: [String: TaskReturn],
-      events: [BuildEvent]
+      events: [BuildEvent], record: BuildRunRecord? = nil
     ) {
       self.plan = plan
       self.runID = runID
       self.writeSets = writeSets
       self.returns = returns
       self.events = events
+      self.record = record
     }
   }
 

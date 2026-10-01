@@ -87,9 +87,15 @@ enum EventsSummaryRun {
 }
 
 extension EventsSummaryRun {
-  /// Every registered section, with wrong gates joined to `builds`.
+  /// Every registered section, with wrong gates and halts joined to `builds`.
   static func sections(builds: BuildJoin) -> [any EventSummarySection] {
-    EventSummary.sections.map { $0.id == .wrongGates ? WrongGatesSection(builds: builds) : $0 }
+    EventSummary.sections.map {
+      switch $0.id {
+      case .wrongGates: WrongGatesSection(builds: builds)
+      case .halts: HaltsSection(builds: builds)
+      default: $0
+      }
+    }
   }
 
   /// The build state under the git common dir; a common dir git can't name is damage.
