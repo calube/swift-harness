@@ -259,14 +259,18 @@ public struct UsageIngestPlan: Sendable, Equatable {
   public let messagesRead: Int
   /// Messages skipped because the store already holds their id for the session.
   public let alreadyStored: Int
+  /// Of ``events``, those that supersede a copy stored with no role.
+  public let retagged: Int
   public let unpriced: [UnpricedModel]
 
   public init(
-    events: [HarnessEvent], messagesRead: Int, alreadyStored: Int, unpriced: [UnpricedModel]
+    events: [HarnessEvent], messagesRead: Int, alreadyStored: Int, retagged: Int = 0,
+    unpriced: [UnpricedModel]
   ) {
     self.events = events
     self.messagesRead = messagesRead
     self.alreadyStored = alreadyStored
+    self.retagged = retagged
     self.unpriced = unpriced
   }
 }
@@ -276,7 +280,7 @@ public enum UsageIngest {
   /// `stored` is every message id the store already holds for `sessionID`.
   public static func plan(
     sessionID: String, transcripts: [UsageTranscript], buildRun: String?, stored: Set<String>,
-    prices: ModelPriceTable
+    untagged: Set<String> = [], prices: ModelPriceTable
   ) -> UsageIngestPlan {
     var events: [HarnessEvent] = []
     var read: Set<String> = []
@@ -319,5 +323,10 @@ public enum UsageIngest {
   /// another worktree joins it rather than doubling it.
   public static func eventID(sessionID: String, messageID: String) -> String {
     "usage-\(sessionID)-\(messageID)"
+  }
+
+  /// 1 copy of each message of each session.
+  public static func resolved(_ usages: [AgentUsageEvent]) -> [AgentUsageEvent] {
+    usages
   }
 }
