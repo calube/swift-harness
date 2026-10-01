@@ -912,3 +912,32 @@ the envelope's `modelUsage` token counts. The 2 envelopes cost `total_cost_usd`
 line each, cost 0.1193102 for 6 input, 124 output, 22096 cache-write and 31631 cache-read tokens.
 The 3 envelopes solve, with no remainder, to $4 input, $5 5-minute cache write and $0.20 cache read
 per 1M tokens, assuming output at 5 times input ($20).
+
+## Events
+
+`Events/judge.jsonl` is a judge audit log as the writer at `bbf0c62` wrote it, before the store
+rotated or sealed anything, so a test can show that log still reads. It holds 24 lines: the
+cascade-escalation and Jev-block routes of `JudgeEventsTests`, each run once through
+`TestJudgeCheck.run` with the fake Jev and fake Claude reason judge those tests use, both given a
+956-byte, 3-line reason. A test file added for the capture and removed after it ran this at
+`bbf0c62`, from `plugin/gate`:
+
+```sh
+CAPTURE_JUDGE_LOG_ROOT=<scratch> swift test --filter CaptureJudgeLogTemp
+cp <scratch>/.harness/events/judge.jsonl Tests/Fixtures/Events/judge.jsonl
+```
+
+Its body was:
+
+```swift
+let files = HarnessEventFiles(root: URL(filePath: out, directoryHint: .isDirectory))
+let escalated = try await JudgeEventsTests.judged(
+  judge: Steps.judge(Steps.jev, flagged: 0.5, rationale: nil),
+  reasonJudge: Steps.reasonJudge(flagged: 0.95, rationale: reason, asked: Steps.Asked()))
+let blocked = try await JudgeEventsTests.judged(
+  judge: Steps.judge(Steps.jev, flagged: ["fails-if-broken": 0.95], otherwise: 0.1),
+  reasonJudge: Steps.reasonJudge(flagged: 0.1, rationale: reason, asked: Steps.Asked()))
+for event in escalated.log.events + blocked.log.events { try files.append(event) }
+```
+
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/judge.jsonl` printed 0.
