@@ -46,10 +46,33 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   var keptRuns: [String]? = nil
   /// `remove`: runs it couldn't copy, which the removal then deleted. Absent when there are none.
   var unkeptRuns: [UnkeptRun]? = nil
+  /// `remove`: the worktree's event store as the main checkout now holds it. Absent when the
+  /// worktree had no events or the copy failed.
+  var events: CopiedEvents? = nil
+  /// `remove`: why the worktree's events couldn't be copied, and where they were moved instead,
+  /// or why that failed too and they were lost.
+  var unkeptEvents: UnkeptEvents? = nil
 
   struct UnkeptRun: Sendable, Equatable, Encodable {
     let runId: String
     let reason: String
+  }
+
+  struct UnkeptEvents: Sendable, Equatable, Encodable {
+    let copyError: String
+    /// Where the worktree's `.harness/events/` was moved whole; `nil` when it wasn't.
+    let movedTo: String?
+    /// Why the move failed too, so the events were removed with the worktree.
+    let moveError: String?
+  }
+
+  struct CopiedEvents: Sendable, Equatable, Encodable {
+    let storeID: String
+    /// Checkout-relative: `.harness/events/imported/<storeID>`.
+    let path: String
+    let bytes: Int
+    /// `false` when an earlier copy with at least as many bytes was kept instead.
+    let copied: Bool
   }
 }
 

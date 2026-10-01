@@ -8,13 +8,18 @@ struct GCSummary: Sendable, Equatable, Encodable {
   var removed: [String] = []
   var orphanClones: [String] = []
   var errors: [String] = []
+  /// Sealed segments, indexes and rollups removed by `--events`, relative to the root.
+  var removedEvents: [String] = []
 }
 
 /// `gc`: prunes this worktree's stale DerivedData and run directories and deletes simulator
 /// clones whose owning process died (spec §4.4). Only paths under `.harness/` are ever removed.
 enum GCRun {
+  /// - Parameter eventsOlderThanDays: `nil` leaves every event file; a count removes each sealed
+  ///   segment whose index's last time is older.
   static func run(
-    root: URL, maxAgeDays: Int, now: Date, sweepOrphans: () async throws -> [String]
+    root: URL, maxAgeDays: Int, eventsOlderThanDays: Int? = nil, now: Date,
+    sweepOrphans: () async throws -> [String]
   ) async -> GCSummary {
     var summary = GCSummary()
     let entries =

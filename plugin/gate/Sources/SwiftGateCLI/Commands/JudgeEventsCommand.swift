@@ -10,8 +10,12 @@ struct JudgeEventsReport: Equatable {
   let status: Int32
 
   /// Reads the judge stream, the shared log or 1 run's copy, and summarizes what `filter` keeps.
+  /// - Parameters:
+  ///   - files: the checkout's event stores, read for the shared log.
+  ///   - reader: 1 run's copy, read for `runID`.
   static func make(
-    reader: any HarnessEventReading, runID: String?, filter: JudgeEventFilter, json: Bool
+    files: any EventStoreFileReading, reader: any HarnessEventReading, runID: String?,
+    filter: JudgeEventFilter, json: Bool
   ) -> JudgeEventsReport {
     let path = reader.path(.judge, runID: runID)
     func refused(_ why: String) -> JudgeEventsReport {
@@ -88,7 +92,7 @@ struct JudgeEventsCommand: ParsableCommand {
       start = parsed
     }
     let report = JudgeEventsReport.make(
-      reader: HarnessEventFiles(root: root), runID: runID,
+      files: LiveEventStoreFiles(root: root), reader: HarnessEventFiles(root: root), runID: runID,
       filter: JudgeEventFilter(since: start, route: route, backend: backend), json: json)
     if !report.stderr.isEmpty { FileHandle.standardError.write(Data(report.stderr.utf8)) }
     if !report.stdout.isEmpty { Console.write(report.stdout) }

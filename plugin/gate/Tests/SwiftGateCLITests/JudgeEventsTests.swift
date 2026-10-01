@@ -265,9 +265,11 @@ struct JudgeEventsTests {
     for event in judged.log.events { try files.append(event) }
 
     let shared = JudgeEventsReport.make(
-      reader: files, runID: nil, filter: JudgeEventFilter(), json: false)
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil, filter: JudgeEventFilter(),
+      json: false)
     let run = JudgeEventsReport.make(
-      reader: files, runID: Self.runID, filter: JudgeEventFilter(), json: true)
+      files: LiveEventStoreFiles(root: root), reader: files, runID: Self.runID,
+      filter: JudgeEventFilter(), json: true)
 
     #expect(shared.status == 0)
     #expect(shared.stdout.contains("fails-if-broken"))
@@ -298,11 +300,13 @@ struct JudgeEventsTests {
 
     try (line + Data("{\"schemaVersion\":1,\"even".utf8)).write(to: file)
     let torn = JudgeEventsReport.make(
-      reader: files, runID: nil, filter: JudgeEventFilter(), json: false)
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil, filter: JudgeEventFilter(),
+      json: false)
     try Data(String(decoding: line, as: UTF8.self).replacing("{", with: "{\"mystery\":0,").utf8)
       .write(to: file)
     let unknown = JudgeEventsReport.make(
-      reader: files, runID: nil, filter: JudgeEventFilter(), json: false)
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil, filter: JudgeEventFilter(),
+      json: false)
 
     #expect(torn.status == 0)
     #expect(torn.stdout.contains("torn"))
@@ -325,7 +329,8 @@ struct JudgeEventsTests {
     let events = try HarnessEventJSON.decode(legacy).events.count
 
     let before = JudgeEventsReport.make(
-      reader: HarnessEventFiles(root: root), runID: nil, filter: JudgeEventFilter(), json: true)
+      files: LiveEventStoreFiles(root: root), reader: HarnessEventFiles(root: root), runID: nil,
+      filter: JudgeEventFilter(), json: true)
     let files = HarnessEventFiles(root: root, rotationBytes: { _ in legacy.count })
     try files.append(
       HarnessEvent(
@@ -333,7 +338,8 @@ struct JudgeEventsTests {
         source: HarnessEventSource(route: .judgeTests),
         payload: .judgeDecision(HarnessEventTestsSupport.decision())))
     let after = JudgeEventsReport.make(
-      reader: files, runID: nil, filter: JudgeEventFilter(), json: true)
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil, filter: JudgeEventFilter(),
+      json: true)
 
     #expect(before.status == 0)
     #expect(after.status == 0, "\(after.stderr)")
