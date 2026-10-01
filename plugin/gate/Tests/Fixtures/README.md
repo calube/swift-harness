@@ -954,6 +954,26 @@ never pair into a flip. Copied at `5a0ab30`, from the repository root of the wor
 
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/gate.jsonl` printed 0.
 
+`Events/test-run.jsonl.lzfse` is the `test.result` stream of 1 real push-tier run on this
+repository, LZFSE-compressed (122 KB, 1.37 MB of lines): 2,677 results, 2,673 passed and 4
+skipped. `Events/test-run-gate.jsonl` is the same run's `gate.run` line, GREEN on a clean tree
+with its tree hash. Captured at `4285f1e` (run `20261001T044910Z-f9efb34a`), from the repository
+root of a fresh worktree that had run no gate before:
+
+```sh
+plugin/bin/swiftgate check --tier push
+compression_tool -encode -a lzfse -i .harness/events/test.jsonl \
+  -o plugin/gate/Tests/Fixtures/Events/test-run.jsonl.lzfse
+grep '"gate.run"' .harness/events/gate.jsonl > plugin/gate/Tests/Fixtures/Events/test-run-gate.jsonl
+```
+
+`TestRollupStoreTests` builds its stores from copies of this run: each copy rewrites only every
+event id, parent id and the run id so the copies are distinct runs; outcomes, durations, times and
+the tree hash stay as captured. The timing of the flaky and slow-test section used 50 such
+copies. The test ids `privateVarRoot`, `privateTmpPathIsFlagged`, `usersPathIsFlagged`,
+`usersHitRaisesToBlocker` and `privateReference` match `grep -ciE '/Users|/private|/tmp|caleb|swift-harness'`;
+they are test names, and no line holds a path.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
