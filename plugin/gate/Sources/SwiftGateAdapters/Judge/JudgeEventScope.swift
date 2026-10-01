@@ -76,8 +76,9 @@ public struct JudgeEventScope: Sendable {
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> JudgeEventScope {
     JudgeEventScope(
-      log: HarnessEventFiles(root: root), now: { Date() },
-      newID: { UUID().uuidString.lowercased() },
+      log: HarnessEventFiles(root: root),
+      now: { Date() },  // swiftgate:allow det.date-init — stamps the event
+      newID: { UUID().uuidString },  // swiftgate:allow det.uuid-init — ids need only be unique
       source: source, runID: runID,
       secrets: JudgeBackend.allCases.compactMap { $0.keyVariable.flatMap { environment[$0] } })
   }

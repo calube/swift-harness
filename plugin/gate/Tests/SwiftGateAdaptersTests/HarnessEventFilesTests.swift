@@ -42,12 +42,13 @@ struct HarnessEventFilesTests {
     defer { try? FileManager.default.removeItem(at: root) }
     let files = HarnessEventFiles(root: root)
 
-    await withTaskGroup(of: Void.self) { group in
+    try await withThrowingTaskGroup(of: Void.self) { group in
       for writer in 0..<16 {
         group.addTask {
-          for index in 0..<40 { try? files.append(Self.call("w\(writer)-\(index)")) }
+          for index in 0..<40 { try files.append(Self.call("w\(writer)-\(index)")) }
         }
       }
+      try await group.waitForAll()
     }
 
     for runID in [nil, "20260930T120000Z-0000abcd"] {
@@ -98,9 +99,14 @@ struct HarnessEventFilesTests {
         .response(HTTPResponse(status: 500, body: Data("bad key \(key)".utf8)))
       ]), environment: [JevPin.keyVariable: key], clock: FakeRetryClock())
 
-    await JudgeEventScope.bind(scope) {
-      _ = try? await good.measuredAnswer(Self.subject, questions: .tests)
-      _ = try? await echoing.measuredAnswer(Self.subject, questions: .tests)
+    let failure = try await JudgeEventScope.bind(scope) { () async throws -> JudgeError? in
+      _ = try await good.measuredAnswer(Self.subject, questions: .tests)
+      do throws(JudgeError) {
+        _ = try await echoing.measuredAnswer(Self.subject, questions: .tests)
+        return nil
+      } catch {
+        return error
+      }
     }
 
     #expect(log.calls.count == 2)
@@ -110,7 +116,8 @@ struct HarnessEventFilesTests {
     #expect(answered.answers?.count == 4)
     #expect(answered.costUSD != nil)
     #expect(answered.subject == JudgeEventSubject(Self.subject))
-    #expect(log.calls.last?.error?.kind != nil)
+    #expect(failure != nil)
+    #expect(log.calls.last?.error?.kind == .malformedReply)
     #expect(log.calls.last?.answers == nil)
     #expect(log.events.allSatisfy { $0.source.route == .judgeAsk })
     let text = try log.events.map {
