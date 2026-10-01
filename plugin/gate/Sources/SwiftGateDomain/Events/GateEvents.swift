@@ -57,7 +57,8 @@ public struct GateStepTiming: Sendable, Equatable {
 }
 
 /// The working tree a run started on. A dirty tree has no tree hash: untracked and modified files
-/// can change a verdict without changing `HEAD`, so it never matches another run.
+/// can change a verdict without changing `HEAD`, so it never matches another run. Files under a
+/// `.harness/` directory are the harness's own state and don't make a tree dirty.
 public struct WorkingTreeState: Sendable, Equatable {
   /// `HEAD^{tree}` on a clean tree; `nil` on a dirty one, or before the first commit.
   public let treeHash: String?
