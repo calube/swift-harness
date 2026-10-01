@@ -956,13 +956,18 @@ never pair into a flip. Copied at `5a0ab30`, from the repository root of the wor
 
 `Events/hook.jsonl` is the hook stream the real `swiftgate hook` command wrote at `22168f8`, in a
 scratch git repository whose `.swiftgate.toml` names 1 SwiftPM package `Pkg` with 1 library
-target. No Claude Code session ran the hooks in this repository, which has no hook stream, so
-1 session's payloads were piped to the command by hand, in this order: `session-start`; a
-`pre-tool-use` Write of `Pkg/Package.resolved` (denied by `guard.package-resolved`) and then
-the `post-tool-use` for the same Write input, the bypass the hooks section counts; a
-`pre-tool-use` Bash `xcodebuild test -scheme App` (denied by `guard.raw-xcodebuild`); a
-`pre-tool-use` and `post-tool-use` Write of `Pkg/Sources/Capture/B.swift`; and `stop`. Each was
-piped from the scratch repository's root:
+target. This repository has no hook stream, because no Claude Code session runs the plugin's
+hooks here. So the capture piped 1 session's payloads to the command by hand, from the scratch
+repository's root, in this order:
+
+1. `session-start`.
+2. `pre-tool-use` for a Write of `Pkg/Package.resolved`, which `guard.package-resolved` denies.
+3. `post-tool-use` for the same Write input: the bypass the hooks section counts.
+4. `pre-tool-use` for Bash `xcodebuild test -scheme App`, which `guard.raw-xcodebuild` denies.
+5. `pre-tool-use` and `post-tool-use` for a Write of `Pkg/Sources/Capture/B.swift`.
+6. `stop`.
+
+Step 2, as an example, and the copy:
 
 ```sh
 printf '%s' '{"session_id":"<uuid>","cwd":"<scratch>","hook_event_name":"PreToolUse","tool_name":"Write","tool_input":{"file_path":"<scratch>/Pkg/Package.resolved","content":"{}"}}' \

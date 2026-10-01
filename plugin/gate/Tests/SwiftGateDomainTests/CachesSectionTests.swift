@@ -50,6 +50,18 @@ struct CachesSectionTests {
     #expect(replaced.n == 4)
     #expect(report.lines.contains("  stale keys: 1 of 2 keys (n=2)"))
     #expect(report.lines.contains(Self.invisibleNote))
+
+    let many = try Self.report(
+      (0..<11).flatMap { index in
+        ["a", "b"].map { answer in
+          Self.lookup(
+            "\(index)\(answer)", .manifest, .store, key: "key\(index)", answer: answer,
+            at: Double(index))
+        }
+      })
+    #expect(GateTimeSectionTests.metric(many, "stale-keys", ["manifest"])?.value == 11)
+    #expect(many.lines.contains("    and 1 more"))
+    #expect(many.lines.count { $0.hasPrefix("    key ") } == 10)
   }
 
   @Test(

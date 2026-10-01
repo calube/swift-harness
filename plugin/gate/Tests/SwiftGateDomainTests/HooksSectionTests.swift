@@ -98,6 +98,10 @@ struct HooksSectionTests {
     #expect(Self.metric(report, "blocks", ["rule", "no rule"])?.value == 1)
     #expect(report.lines.contains("pre-tool-use: p50 4 ms, p95 6 ms, sd 2 ms (n=3)"))
 
+    let quiet = try Self.report([Self.hook("q", .preToolUse, .allow, at: 0)])
+    #expect(quiet.lines.contains("blocks per rule: no blocks (n=0)"))
+    #expect(Self.metric(quiet, "bypassed", ["bypassed"])?.n == 0)
+
     #expect(HooksSection().summarize(GateTimeSectionTests.input([])) == nil)
   }
 
