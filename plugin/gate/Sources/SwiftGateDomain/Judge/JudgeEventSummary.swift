@@ -60,10 +60,19 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     public let pass: Int
     public let error: Int
     public let escalated: Int
+    /// The blocks, by who wrote their reason.
+    public let blockReasons: [Count<JudgeReasonSource>]
+    /// Escalated decisions where both backends gave a probability: the agreement's n.
+    public let escalationsCompared: Int
+    /// Of those, the ones where Claude's probability fell in the same band as the first
+    /// backend's: pass below the advisory threshold, block at or above the block threshold,
+    /// advisory between.
+    public let escalationsAgreed: Int
 
     public init(
       question: String, backend: JudgeBackend, judgements: Int, block: Int, advisory: Int,
-      pass: Int, error: Int, escalated: Int
+      pass: Int, error: Int, escalated: Int, blockReasons: [Count<JudgeReasonSource>] = [],
+      escalationsCompared: Int = 0, escalationsAgreed: Int = 0
     ) {
       self.question = question
       self.backend = backend
@@ -73,6 +82,9 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       self.pass = pass
       self.error = error
       self.escalated = escalated
+      self.blockReasons = blockReasons
+      self.escalationsCompared = escalationsCompared
+      self.escalationsAgreed = escalationsAgreed
     }
   }
 
@@ -105,6 +117,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
   public struct BackendRow: Sendable, Equatable, Codable {
     public let backend: JudgeBackend
     public let calls: Int
+    /// Calls that weren't cache hits: the latency's n.
+    public let reachedCalls: Int
     public let cacheHits: Int
     public let errors: Int
     /// Nearest-rank, over calls that weren't cache hits; `nil` with none.
@@ -116,10 +130,11 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
 
     public init(
       backend: JudgeBackend, calls: Int, cacheHits: Int, errors: Int, latencyP50Ms: Int?,
-      latencyP95Ms: Int?, costUSD: Double, callsWithoutCost: Int
+      latencyP95Ms: Int?, costUSD: Double, callsWithoutCost: Int, reachedCalls: Int = 0
     ) {
       self.backend = backend
       self.calls = calls
+      self.reachedCalls = reachedCalls
       self.cacheHits = cacheHits
       self.errors = errors
       self.latencyP50Ms = latencyP50Ms
@@ -148,6 +163,9 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
   /// Decisions Jev answered first that went to Claude, of all Jev decisions.
   public let escalated: Int
   public let jevDecisions: Int
+  /// Escalated decisions with both probabilities, and those that agreed (see ``QuestionRow``).
+  public let escalationsCompared: Int
+  public let escalationsAgreed: Int
   public let blocks: [Block]
   public let decisionErrors: [Count<JudgeEventError.Kind>]
   public let callErrors: [Count<JudgeEventError.Kind>]
@@ -159,7 +177,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     events: Int, unattributed: Int, routes: [Count<HarnessRoute>], questions: [QuestionRow],
     decisions: [Count<JudgeDecision>], escalated: Int, jevDecisions: Int, blocks: [Block],
     decisionErrors: [Count<JudgeEventError.Kind>], callErrors: [Count<JudgeEventError.Kind>],
-    backends: [BackendRow], costUSD: Double, tornLastLine: Bool
+    backends: [BackendRow], costUSD: Double, tornLastLine: Bool, escalationsCompared: Int = 0,
+    escalationsAgreed: Int = 0
   ) {
     self.events = events
     self.unattributed = unattributed
@@ -168,6 +187,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     self.decisions = decisions
     self.escalated = escalated
     self.jevDecisions = jevDecisions
+    self.escalationsCompared = escalationsCompared
+    self.escalationsAgreed = escalationsAgreed
     self.blocks = blocks
     self.decisionErrors = decisionErrors
     self.callErrors = callErrors
@@ -179,6 +200,17 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
   /// `escalated` over `jevDecisions`; `nil` with no Jev decisions.
   public var escalationShare: Double? {
     jevDecisions == 0 ? nil : Double(escalated) / Double(jevDecisions)
+  }
+
+  /// `escalationsAgreed` over `escalationsCompared`; `nil` with none compared.
+  public var agreement: Double? {
+    nil
+  }
+
+  /// What the summary says about the events it holds, under whatever header the reader prints.
+  /// - Parameter listBlocks: whether to list each block with its reason, or only count them.
+  public func bodyLines(listBlocks: Bool = true) -> [String] {
+    []
   }
 
   public static func make(_ read: HarnessEventJSON.Read, filter: JudgeEventFilter)
