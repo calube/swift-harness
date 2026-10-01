@@ -82,6 +82,7 @@ struct GateTimeSectionTests {
       Self.run("c", command: "check push", ms: 2_000, tiers: tiers0, at: 20),
       Self.step("c1", run: "c", .test, tier: .t1, ms: 500, derivedData: .cold, at: 21),
       Self.run("d", command: "check pre-commit", ms: 50, tiers: [], at: 30),
+      Self.step("x1", run: "unread", .lint, tier: .t0, ms: 9, derivedData: .none, at: 31),
     ]
 
     let report = try #require(GateTimeSection().summarize(Self.input(events)))
@@ -106,6 +107,8 @@ struct GateTimeSectionTests {
     #expect(cold.n == 2)
     #expect(Self.metric(report, "p95", ["check push", "T1", "test", "cold"])?.value == 500)
     #expect(Self.metric(report, "p50", ["check push", "no tier", "resolve", "none"])?.n == 1)
+    #expect(Self.metric(report, "p50", ["no command", "T0", "lint", "none"])?.value == 9)
+    #expect(report.lines.contains("no command: no gate.run read"))
     #expect(report.metrics.allSatisfy { $0.unit == .milliseconds && $0.n > 0 })
     #expect(report.lines.contains { $0.hasPrefix("check push:") && $0.contains("(n=3)") })
     #expect(report.lines.contains { $0.contains("test, cold") && $0.contains("(n=2)") })
