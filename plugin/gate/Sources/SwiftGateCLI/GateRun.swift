@@ -170,7 +170,9 @@ final class TestResultCollector: Sendable {
 
   init() {}
 
-  func record(_ cases: [TestCaseResult]) {}
+  func record(_ cases: [TestCaseResult]) {
+    results.withLock { $0.append(contentsOf: cases) }
+  }
 
   var cases: [TestCaseResult] { results.withLock { $0 } }
 }

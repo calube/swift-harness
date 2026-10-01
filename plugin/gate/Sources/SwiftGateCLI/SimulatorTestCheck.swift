@@ -85,10 +85,11 @@ enum SimulatorTestCheck {
       case .ran(let job, let evidence):
         let outcome = SimulatorTestEvidenceRules.evaluate(evidence)
         outcomes.append(outcome)
+        // An unreadable bundle gives no cases; the evidence rules already report it.
+        let cases = try? XcresultTestResults.parse(evidence.testResults).testCases
+        context.tests.record((cases ?? []).compactMap { TestCaseResult($0, tier: tier) })
         // A run that proved nothing says nothing about which flows have tests.
-        if tier == .t3, outcome.verdict != .blocked,
-          let cases = try? XcresultTestResults.parse(evidence.testResults).testCases
-        {
+        if tier == .t3, outcome.verdict != .blocked, let cases {
           let file = if case .app(let path) = job.container { path } else { "." }
           extra += FlowCoverage.findings(
             uiTests: cases.filter(\.isUITest).map(\.identifier), flows: config.flows,

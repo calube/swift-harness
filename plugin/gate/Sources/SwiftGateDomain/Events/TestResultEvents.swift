@@ -33,27 +33,55 @@ public struct TestCaseResult: Sendable, Equatable {
 
   /// A case from a `swift test` xUnit report, whose class name is `<target>.<suite>…`.
   public init(_ testCase: XUnitTestCase, tier: Tier) {
+    let parts = testCase.className.split(separator: ".", omittingEmptySubsequences: false)
+      .map(String.init)
+    let target = parts.first ?? testCase.className
+    let outcome: TestResultOutcome =
+      switch testCase.outcome {
+      case .passed: .passed
+      case .failed: .failed
+      case .skipped: .skipped
+      }
     self.init(
-      test: testCase.name, target: "", tier: tier, outcome: .passed, milliseconds: nil)
+      test: Self.identifier(target: target, suites: Array(parts.dropFirst()), name: testCase.name),
+      target: target, tier: tier, outcome: outcome, milliseconds: testCase.milliseconds)
   }
 
   /// A case from a result bundle, whose identifier is `<suite>…/<name>()`. `nil` for a result
   /// this reader doesn't know, which the tier's own rules already report.
   public init?(_ testCase: XcresultTestCase, tier: Tier) {
-    nil
+    let outcome: TestResultOutcome
+    switch testCase.result {
+    case .passed: outcome = .passed
+    case .failed: outcome = .failed
+    case .skipped: outcome = .skipped
+    case .expectedFailure: outcome = .expectedFailure
+    case .other: return nil
+    }
+    let parts = testCase.identifier.split(separator: "/", omittingEmptySubsequences: false)
+      .map(String.init)
+    self.init(
+      test: Self.identifier(
+        target: testCase.targetName, suites: Array(parts.dropLast()),
+        name: parts.last ?? testCase.identifier),
+      target: testCase.targetName, tier: tier, outcome: outcome,
+      milliseconds: testCase.milliseconds)
   }
 
   /// Every case in `evidence`'s readable xUnit reports. An unreadable report gives none; the
   /// tier's own rules already report it.
   public static func cases(in evidence: HostTestEvidence) -> [TestCaseResult] {
-    []
+    [evidence.xctestReport, evidence.swiftTestingReport].compactMap(\.self).flatMap { data in
+      ((try? XUnitReport.parse(data)) ?? []).map { TestCaseResult($0, tier: .t1) }
+    }
   }
 
   /// `<target>.<suites joined by />/<name>`, or `<target>.<name>` with no suite. A name's empty
   /// trailing `()` is dropped: an xUnit report names an XCTest method without it, a result bundle
   /// with it.
   public static func identifier(target: String, suites: [String], name: String) -> String {
-    ([target] + suites + [name]).joined(separator: ".")
+    let name = name.hasSuffix("()") ? String(name.dropLast(2)) : name
+    return "\(target)." + (suites + [name]).joined(separator: "/")
   }
 }
 
@@ -69,8 +97,15 @@ public struct TestResultEvent: Sendable, Equatable, Codable {
   public let milliseconds: Int?
 
   public init(_ result: TestCaseResult) {
-    self.test = result.test
-    self.testHashed = false
+    // The payload guard would drop the whole event; a hash keeps the result and still joins runs.
+    if EventPayloadGuard.rejection(inJSON: result.test) == nil {
+      self.test = result.test
+      self.testHashed = false
+    } else {
+      let digest = SHA256.hash(data: Data(result.test.utf8))
+      self.test = "sha256:" + digest.map { String(format: "%02x", $0) }.joined()
+      self.testHashed = true
+    }
     self.target = result.target
     self.tier = result.tier
     self.outcome = result.outcome

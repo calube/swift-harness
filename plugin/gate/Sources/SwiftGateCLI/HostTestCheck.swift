@@ -46,6 +46,7 @@ enum HostTestCheck {
       switch result {
       case .ran(let evidence, let coverage):
         outcomes.append(HostTestEvidenceRules.evaluate(evidence))
+        context.tests.record(TestCaseResult.cases(in: evidence))
         if let coverage { exports.append(coverage) }
       case .failed(let packagePath, let error):
         outcomes.append(
