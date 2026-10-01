@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import Synchronization
 
 /// What a multi-tier command produced, before it becomes a ``RunReport``.
 struct GateRunParts: Sendable {
@@ -19,6 +20,9 @@ enum GateRun {
     let directory: URL
     /// Each step the run times hands its timing here, for the run's `gate.step` events.
     var steps = GateStepCollector()
+    /// Each test tier hands its parsed cases here, for the run's `test.result` events. They never
+    /// enter the report.
+    var tests = TestResultCollector()
   }
 
   /// - Parameters:
@@ -70,7 +74,8 @@ enum GateRun {
       try RunStore(worktreeRoot: root, events: telemetry.events).record(
         report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
-        dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier)
+        dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
+        testResults: context.tests.cases)
     }
     Console.write(try ReportRenderer.render(report, format: format))
     let status = report.verdict.exitCode
@@ -156,6 +161,18 @@ enum GateRun {
     let value = try await body()
     return (value, milliseconds(clock.now - start))
   }
+}
+
+/// The test cases 1 gate run's tiers reported, in the order the tiers handed them over. Tiers
+/// can finish on several tasks, so recording is locked.
+final class TestResultCollector: Sendable {
+  private let results = Mutex<[TestCaseResult]>([])
+
+  init() {}
+
+  func record(_ cases: [TestCaseResult]) {}
+
+  var cases: [TestCaseResult] { results.withLock { $0 } }
 }
 
 /// Paths changed since a ref, relative to this project's root (which may sit inside a larger

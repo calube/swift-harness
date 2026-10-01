@@ -329,7 +329,7 @@ enum CheckRun {
     let selections = HostTestCheck.selections(plan: plan, graph: graph)
     let derivedData = HostTestCheck.derivedData(selections, root: root)
     let t1 = try await HostTestCheck.run(
-      selections, root: root, swiftPM: swiftPM, outputDirectory: context.directory,
+      selections, root: root, swiftPM: swiftPM, context: context,
       readCoverage: coverage)
     context.steps.record(
       .test, tier: .t1, milliseconds: t1.tier.durationMilliseconds, verdict: t1.tier.verdict,

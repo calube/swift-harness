@@ -85,7 +85,7 @@ enum CoverageCheck {
     let plan = TierPlan(changedPaths: added.map(\.path), graph: repository.graph, tier: .t1)
     let t1 = try await HostTestCheck.run(
       HostTestCheck.selections(plan: plan, graph: repository.graph), root: root,
-      swiftPM: swiftPM, outputDirectory: context.directory, readCoverage: true)
+      swiftPM: swiftPM, context: context, readCoverage: true)
     let judgement = try judge(
       graph: repository.graph, config: repository.config, added: added,
       exports: t1.coverageExports, root: root)

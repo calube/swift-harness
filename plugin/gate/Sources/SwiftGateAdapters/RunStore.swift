@@ -78,13 +78,15 @@ public struct RunStore: Sendable {
   ///   - dirty: whether it started on a dirty tree; `nil` when git couldn't say.
   ///   - gateSteps: each timed step, 1 `gate.step` apiece.
   ///   - checkTier: the `check` tier the run gated at, as the events' source.
+  ///   - testResults: each test case the run's tiers reported, 1 `test.result` apiece, in the
+  ///     same batch as the run's other events.
   /// - Throws: ``RunStoreError/eventsUnwritten(_:)`` when only the events failed, after the run
   ///   is recorded.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
-    checkTier: CheckTier? = nil
+    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = []
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now

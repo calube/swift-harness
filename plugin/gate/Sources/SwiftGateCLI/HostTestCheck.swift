@@ -32,13 +32,13 @@ enum HostTestCheck {
   }
 
   static func run(
-    _ selections: [HostTestSelection], root: URL, swiftPM: any SwiftPM, outputDirectory: URL,
+    _ selections: [HostTestSelection], root: URL, swiftPM: any SwiftPM, context: GateRun.Context,
     readCoverage: Bool
   ) async throws(ReportContractViolation) -> Result {
     let clock = ContinuousClock()
     let start = clock.now
     let results = await HostTestRunner(swiftPM: swiftPM, root: root).run(
-      selections, outputDirectory: outputDirectory.appending(path: "t1"),
+      selections, outputDirectory: context.directory.appending(path: "t1"),
       readCoverage: readCoverage)
     var outcomes: [HostTestOutcome] = []
     var exports: [Data] = []

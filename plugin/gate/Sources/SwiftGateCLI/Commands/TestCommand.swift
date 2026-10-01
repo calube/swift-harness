@@ -69,7 +69,7 @@ enum TestCheck {
     }
     let result = try await HostTestCheck.run(
       HostTestCheck.selections(plan: plan, graph: repository.graph), root: root,
-      swiftPM: swiftPM, outputDirectory: context.directory, readCoverage: false)
+      swiftPM: swiftPM, context: context, readCoverage: false)
     return GateRunParts(tiers: [result.tier], findings: result.findings)
   }
 
