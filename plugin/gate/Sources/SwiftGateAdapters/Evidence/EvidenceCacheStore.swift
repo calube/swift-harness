@@ -32,12 +32,17 @@ public struct EvidenceCacheStore: Sendable {
   public let layout: EvidenceCacheLayout
   private let lock: any CountingLock
   private let timeout: Duration
+  private var events: CacheEventRecorder? = nil
 
   /// - Parameters:
   ///   - home: the directory standing in for `~`; the cache lives at
   ///     `<home>/.swift-harness/evidence-cache`.
   ///   - lock: defaults to a capacity-1 ``FileCountingLock`` in the cache root.
-  public init(home: URL, lock: (any CountingLock)? = nil, timeout: Duration = .seconds(30)) {
+  ///   - events: records each store, reuse and tombstone; `nil` records none.
+  public init(
+    home: URL, lock: (any CountingLock)? = nil, timeout: Duration = .seconds(30),
+    events: CacheEventRecorder? = nil
+  ) {
     let layout = EvidenceCacheLayout(home: home.path)
     self.layout = layout
     self.lock =

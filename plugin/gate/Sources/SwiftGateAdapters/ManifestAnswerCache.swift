@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import SwiftGateDomain
 
 /// SwiftPM's answers about a package's manifest (`describe`, `dump-package`), kept on disk so a
 /// hook or pre-commit run does not pay a `swift` process per package each time. An answer is
@@ -12,6 +13,8 @@ struct ManifestAnswerCache: Sendable {
 
   let directory: URL
   let repositoryRoot: String
+  /// Where each lookup's `cache.lookup` goes; `nil` records none.
+  var events: CacheEventRecorder? = nil
 
   func answer(_ command: String, packageDirectory: String) -> Data? {
     guard let key = key(command, packageDirectory: packageDirectory),
@@ -57,4 +60,37 @@ struct ManifestAnswerCache: Sendable {
   private static func hex(_ data: Data) -> String {
     SHA256.hash(data: data).prefix(16).map { String(format: "%02x", $0) }.joined()
   }
+}
+
+/// Writes `cache.lookup` events for a cache. Recording comes after the cache has its answer and
+/// never changes it: a failed write is 1 line to ``report``, never thrown to the cache's caller.
+public struct CacheEventRecorder: Sendable {
+  private let events: @Sendable () -> (any HarnessEventWriting)?
+  private let report: @Sendable (String) -> Void
+  private let now: @Sendable () -> Date
+  private let newEventID: @Sendable () -> String
+
+  /// - Parameters:
+  ///   - events: asked at each record, so a process that never touches the cache never reads
+  ///     the config it needs; `nil` records nothing.
+  ///   - report: gets the 1 line a failed write prints.
+  public init(
+    events: @escaping @Sendable () -> (any HarnessEventWriting)?,
+    report: @escaping @Sendable (String) -> Void = CacheEventRecorder.standardError,
+    now: @escaping @Sendable () -> Date = {
+      Date()  // swiftgate:allow det.date-init — stamps the event
+    },
+    newEventID: @escaping @Sendable () -> String = {
+      UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
+    }
+  ) {
+    self.events = events
+    self.report = report
+    self.now = now
+    self.newEventID = newEventID
+  }
+
+  public static let standardError: @Sendable (String) -> Void = { _ in }
+
+  public func record(_ lookup: CacheLookupEvent) {}
 }
