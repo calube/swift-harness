@@ -412,6 +412,10 @@ When the push bar needs `ready` on `main`, start that run at the beginning of th
 - **Keep secrets in the Keychain, and have workers read them inside the command.** The TypeSafe key lives under
   service `TYPESAFE_API_KEY`. A worker runs `TYPESAFE_API_KEY="$(security find-generic-password -a "$USER" -s
   TYPESAFE_API_KEY -w)" <cmd>`, and before committing it greps the diff for the key value and for `apikey_`.
+- **Wait on the gate binary, not on a command-line word.** A wait like `until ! pgrep -f 'proof-bas[e]'` matches every
+  other waiter, because each waiting shell's command line also holds the prove command it runs next, so waiters block
+  each other. Match the cached binary's path instead:
+  `until ! pgrep -f '\.cache/swift-harness/bin/.*--proof-base' >/dev/null; do /bin/sleep 20; done`.
 - **Delegated approvals go in the plan.** While the user was away, the orchestrator approved design §13 and a
   benchmark spend cap of 25 USD. The plan's decisions table records each as "orchestrator, under the user's
   delegation", so the user can review every one on return.
