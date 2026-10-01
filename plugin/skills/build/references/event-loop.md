@@ -11,6 +11,7 @@ Contents:
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
+- [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
 - [Design conflict](#design-conflict)
 - [Stall watch](#stall-watch): a worker that stops without returning
@@ -23,7 +24,8 @@ Contents:
 Keep these in the conversation; none of them is a file:
 
 - the plan's source (its design doc, or its spec page) and its plan surface, from `plan.json`;
-- per running task: its Workflow task id, its stall watch's task id, `worktree`, `branch`;
+- per running task: its Workflow task id, its stall watch's task id, `worktree`, `branch` and
+  `<transcripts>`, the transcript directory the Workflow tool printed;
 - the order tasks merged in, for the fixer's second return;
 - the ledger page's file path, `.harness/design-render/<slug>-ledger.html`.
 
@@ -208,6 +210,24 @@ the findings or the answer's words.
 | abandon, drop, stop the build, stop them now, stop | `abandon` |
 | an amend through the design skill | `amend` |
 | go on, go on without it, leave it blocked, let them finish, finish anyway | `continue` |
+
+## Recording usage
+
+Each completion notice, whatever the task's outcome, first runs:
+
+```
+"$SG" events ingest --session <session> --workflow-transcripts <transcripts> --role build-worker --task <task> --build-run <run>
+```
+
+It reads the token counts of the workflow's agents from `<transcripts>`, tagged with the task, and
+this session's own, all under `<run>`, so `events summary --build-run <run>` prices the build by
+role, task and model. Ingesting again adds nothing, so a retried task's second completion stores
+only its new messages. Only ids, model ids, counts and times are kept: no transcript text or path.
+
+Telemetry never stops the build. With `[telemetry] enabled = false` the command exits 2 and says
+`telemetry is off`: the repo opted out, so say nothing and go on. Any other non-zero exit, such as a
+missing session record or a malformed transcript line, prints 1 line: keep it for the report, and
+go on with the completion step.
 
 ## Task halts
 

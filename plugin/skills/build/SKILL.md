@@ -28,6 +28,7 @@ The long form of every step, the halt options and the resume rules are in
 | `<plans>` | `$(git rev-parse --git-common-dir)/swift-harness/plans` |
 | `<run>` | the `runId` that `build start` or `build next` prints |
 | `<returns>` | `<plans>/<slug>/build/<run>/returns/` |
+| `<transcripts>` | per task, the transcript directory the Workflow tool printed when it launched the task |
 | `<surfaceCommit>` | `plan.json`'s `surfaceCommit`: the plan surface, when the plan has one (step 1) |
 
 ## Halt and ask
@@ -101,15 +102,19 @@ For each task in `toStart`:
 4. Launch `workflows/build-task.js` with the Workflow tool, in the background, with the
    [args](references/event-loop.md#launch) the task and preset give. Keep the task id the tool
    returns, for its completion notice and for `TaskStop`.
-5. Start the task's [stall watch](references/event-loop.md#stall-watch) on the transcript
-   directory the Workflow tool printed.
+5. Start the task's [stall watch](references/event-loop.md#stall-watch) on `<transcripts>`, the
+   transcript directory the Workflow tool printed.
 
 A non-zero exit at any of these halts that task alone. `refused` tasks never start: list them for
 the user once. Then wait for a completion notice.
 
 ## 3. On each completion
 
-Handle notices one at a time: merges run in completion order.
+Handle notices one at a time: merges run in completion order. First record the task's agent usage,
+whatever its outcome:
+`"$SG" events ingest --session <session> --workflow-transcripts <transcripts> --role build-worker --task <task> --build-run <run>`.
+Telemetry never stops the build: an exit 2 that says `telemetry is off` means the repo opted out,
+so say nothing; any other non-zero exit prints 1 line for the report, and the step goes on.
 
 1. A null or thrown workflow halts that task. Otherwise write the return and check it:
    `"$SG" build check-return <file> --plan <slug> --session <session> --json`. Exit 0 passes; any
@@ -153,7 +158,7 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
 ## Report
 
 The ledger page link, then: tasks done, and the unfinished ones with their status from `build finish`;
-each halt and the user's answer; the green-main baseline taken without asking, as
+each halt and the user's answer; each failed `events ingest` line; the green-main baseline taken without asking, as
 `rule: file` per finding; the `ready` verdict and run id; wall time against the budget;
 `resume` when the index stays `building`. The claim stays with this session.
 

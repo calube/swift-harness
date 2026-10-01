@@ -184,6 +184,12 @@ no build run to name, so it isn't timed.
    a gate.
 2. `"$SG" stats --build <run> --plan <plan>` for each task's wall time and the total against the
    preset's budget.
+3. Record this session's usage, then print the build's summary:
+   `"$SG" events ingest --session <session> --role orchestrator --build-run <run>`, then
+   `"$SG" events summary --build-run <run>`, and print its output as it comes: the build's cost,
+   gate time, stuck points and slot use. Telemetry never stops the report: an exit 2 that says
+   `telemetry is off` means the repo opted out, so say nothing of it; any other non-zero exit of
+   either prints 1 line, and the report goes on.
 
 End with the ledger page link or its path, then the design doc and its tier, or at `none` the spec page path
 and `<surface>`. List the tasks done, the unfinished
