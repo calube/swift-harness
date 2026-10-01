@@ -185,3 +185,20 @@ struct EventsSummaryCommand: ParsableCommand {
         now: Date()))
   }
 }
+
+/// `events ingest`: each assistant message of a session's transcripts as 1 `agent.usage`.
+enum EventsIngestRun {
+  struct Options: Equatable {
+    var session: String
+    var workflowTranscripts: String?
+    var role: AgentRole?
+    var task: String?
+    var buildRun: String?
+  }
+
+  static func make(options: Options, root: URL, prices: ModelPriceTable = .current)
+    -> EventsCommandOutput
+  {
+    EventsCommandOutput(stdout: "", stderr: "", status: 0)
+  }
+}
