@@ -43,18 +43,38 @@ public struct EventStoreFacts: Sendable, Equatable, Codable {
     }
   }
 
+  /// Sealed `test.result` segments counted from their indexes instead of read, because a rollup
+  /// covers them.
+  public struct RolledUpTests: Sendable, Equatable, Codable {
+    public let segments: Int
+    public let lines: Int
+    /// The segments' uncompressed lines' size.
+    public let bytes: Int
+
+    public init(segments: Int, lines: Int, bytes: Int) {
+      self.segments = segments
+      self.lines = lines
+      self.bytes = bytes
+    }
+  }
+
   /// Summed over the worktree's store and every imported one.
   public let streams: [Stream]
   /// Every store's `dropped.json`, summed.
   public let dropped: EventDropCounts
   /// The worktree's store plus each imported store.
   public let stores: Int
+  /// `nil` when every matching sealed `test.result` segment was read.
+  public let rolledUpTests: RolledUpTests?
 
-  public init(streams: [Stream] = [], dropped: EventDropCounts = EventDropCounts(), stores: Int = 0)
-  {
+  public init(
+    streams: [Stream] = [], dropped: EventDropCounts = EventDropCounts(), stores: Int = 0,
+    rolledUpTests: RolledUpTests? = nil
+  ) {
     self.streams = streams
     self.dropped = dropped
     self.stores = stores
+    self.rolledUpTests = rolledUpTests
   }
 }
 
@@ -87,7 +107,8 @@ public enum EventSummarySectionID: String, Sendable, Codable, CaseIterable {
 
 /// What every section reads.
 public struct EventSummaryInput: Sendable {
-  /// The events the query kept, deduplicated, oldest first.
+  /// The events the query kept, deduplicated, oldest first. Results in a sealed `test` segment
+  /// with a rollup may be left out and counted in ``EventStoreFacts/rolledUpTests`` instead.
   public let events: [StoredEvent]
   public let query: EventQuery
   public let store: EventStoreFacts
@@ -233,7 +254,7 @@ public enum EventSummary {
   ) -> EventSummaryReport {
     EventSummaryReport(
       since: input.query.since, runID: input.query.runID, buildRunID: input.query.buildRunID,
-      events: input.events.count,
+      events: input.events.count + (input.store.rolledUpTests?.lines ?? 0),
       sections: sections.map {
         $0.summarize(input)
           ?? EventSummarySectionReport(id: $0.id, state: .noEvents, lines: [], metrics: [])

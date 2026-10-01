@@ -19,14 +19,22 @@ public struct StoreSection: EventSummarySection {
     var metrics: [EventSummaryMetric] = []
     var lines = ["stores: \(stores) (this worktree's and \(max(0, stores - 1)) imported)"]
     let byKind = Dictionary(grouping: input.events, by: \.event.kind)
+    let rolledUp = store.rolledUpTests
     for kind in HarnessEventKind.allCases {
-      guard let events = byKind[kind] else { continue }
-      let bytes = events.reduce(0) { $0 + $1.bytes }
+      let counted = kind == .testResult ? rolledUp : nil
+      guard byKind[kind] != nil || counted != nil else { continue }
+      let events = byKind[kind] ?? []
+      let bytes = events.reduce(counted?.bytes ?? 0) { $0 + $1.bytes }
+      let n = events.count + (counted?.lines ?? 0)
       metrics.append(
         EventSummaryMetric(
-          name: "bytes", group: [kind.rawValue], value: Double(bytes), unit: .bytes,
-          n: events.count))
-      lines.append("\(kind.rawValue): \(bytes) bytes (n=\(events.count))")
+          name: "bytes", group: [kind.rawValue], value: Double(bytes), unit: .bytes, n: n))
+      lines.append("\(kind.rawValue): \(bytes) bytes (n=\(n))")
+    }
+    if let rolledUp {
+      lines.append(
+        "\(HarnessEventKind.testResult.rawValue) counted from \(rolledUp.segments) sealed segment "
+          + "indexes; with --since, whole segments")
     }
     for stream in streams {
       let group = [stream.stream.rawValue]
