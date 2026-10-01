@@ -72,7 +72,8 @@ public struct XcresultTestResults: Sendable, Equatable {
       cases.append(
         XcresultTestCase(
           identifier: node.nodeIdentifier ?? node.name, targetName: target ?? "",
-          result: result(node.result), messages: failureMessages(node), isUITest: isUITest))
+          result: result(node.result), messages: failureMessages(node), isUITest: isUITest,
+          milliseconds: node.durationInSeconds.flatMap { Int(exactly: ($0 * 1000).rounded()) }))
     default:
       for child in node.children ?? [] {
         collect(child, target: target, isUITest: isUITest, into: &cases)
@@ -111,6 +112,7 @@ public struct XcresultTestResults: Sendable, Equatable {
     let nodeType: String
     let nodeIdentifier: String?
     let result: String?
+    let durationInSeconds: Double?
     let children: [RawNode]?
   }
 }
