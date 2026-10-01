@@ -99,13 +99,10 @@ struct HarnessEventFilesTests {
         .response(HTTPResponse(status: 500, body: Data("bad key \(key)".utf8)))
       ]), environment: [JevPin.keyVariable: key], clock: FakeRetryClock())
 
-    let failure = try await JudgeEventScope.bind(scope) { () async throws -> JudgeError? in
+    try await JudgeEventScope.bind(scope) { () async throws in
       _ = try await good.measuredAnswer(Self.subject, questions: .tests)
-      do throws(JudgeError) {
+      await #expect(throws: JudgeError.self) {
         _ = try await echoing.measuredAnswer(Self.subject, questions: .tests)
-        return nil
-      } catch {
-        return error
       }
     }
 
@@ -116,7 +113,6 @@ struct HarnessEventFilesTests {
     #expect(answered.answers?.count == 4)
     #expect(answered.costUSD != nil)
     #expect(answered.subject == JudgeEventSubject(Self.subject))
-    #expect(failure != nil)
     #expect(log.calls.last?.error?.kind == .malformedReply)
     #expect(log.calls.last?.answers == nil)
     #expect(log.events.allSatisfy { $0.source.route == .judgeAsk })
