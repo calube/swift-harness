@@ -1,7 +1,7 @@
 import Foundation
 
 /// A repository's `.swiftgate.toml`, validated. Every instance satisfies the cross-field rules in
-/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:docs:plan:buildPresets:profile:exclude:)``;
+/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:docs:plan:buildPresets:profile:exclude:telemetry:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
 public struct Config: Sendable, Equatable {
   /// Where the config lives, relative to the repository root.
@@ -35,6 +35,7 @@ public struct Config: Sendable, Equatable {
   /// Repository-relative directories that whole-repository checks skip, such as fixtures that
   /// violate the rules on purpose.
   public let exclude: [String]
+  public let telemetry: TelemetryConfig
 
   public init(
     xcode: String,
@@ -52,7 +53,8 @@ public struct Config: Sendable, Equatable {
     plan: PlanConfig = PlanConfig(),
     buildPresets: [String: BuildPreset] = [:],
     profile: String? = nil,
-    exclude: [String] = []
+    exclude: [String] = [],
+    telemetry: TelemetryConfig = TelemetryConfig()
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
@@ -76,6 +78,7 @@ public struct Config: Sendable, Equatable {
     self.buildPresets = buildPresets
     self.profile = profile
     self.exclude = exclude
+    self.telemetry = telemetry
   }
 
   /// The preset a repository with no `[harness] profile` builds with.
@@ -401,6 +404,16 @@ public struct Budgets: Sendable, Equatable {
     self.t2 = t2
     self.t3 = t3
     self.stopHook = stopHook
+  }
+}
+
+/// `[telemetry]`: whether harness events are written under `.harness/events/`. Events stay on the
+/// machine; no key sends them anywhere. The judge's audit events ignore this switch.
+public struct TelemetryConfig: Sendable, Equatable {
+  public let enabled: Bool
+
+  public init(enabled: Bool = true) {
+    self.enabled = enabled
   }
 }
 
