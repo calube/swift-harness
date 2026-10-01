@@ -53,7 +53,7 @@ struct RuleIndexTests {
     let judge =
       (JudgeQuestionSet.tests.questions + JudgeQuestionSet.comments.questions).map {
         JudgePolicy.ruleIDPrefix + $0.id
-      } + [TestJudgeCheck.notRunRuleID]
+      } + [TestJudgeCheck.notRunRuleID, TestJudgeCheck.eventsUnwrittenRuleID]
     let harness = [
       FormatCheck.parseRuleID, RuleEngine.allowMissingReasonRuleID, BudgetCheck.ruleID,
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,

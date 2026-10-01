@@ -100,14 +100,17 @@ public struct ClaudeCLIJudge: Judge {
   public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> JudgeReply
   {
-    let output: ProcessOutput
-    do {
-      output = try await runner.run(invocation(subject, questions: questions))
-    } catch {
-      throw .process(error)
+    try await JudgeCallEvents.observe(identity, subject: subject, questions: questions) {
+      () throws(JudgeError) -> JudgeReply in
+      let output: ProcessOutput
+      do throws(ProcessRunnerError) {
+        output = try await runner.run(invocation(subject, questions: questions))
+      } catch {
+        throw .process(error)
+      }
+      return try ClaudeJudgeReply.parseReply(
+        output.stdout.bytes, stderr: output.stderr.text, for: questions)
     }
-    return try ClaudeJudgeReply.parseReply(
-      output.stdout.bytes, stderr: output.stderr.text, for: questions)
   }
 
   func invocation(_ subject: JudgeSubject, questions: JudgeQuestionSet) -> ProcessInvocation {
@@ -291,6 +294,15 @@ public struct JevJudge: Judge {
   /// and `nil` for any other model, whose price this harness doesn't know.
   public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> JudgeReply
+  {
+    try await JudgeCallEvents.observe(identity, subject: subject, questions: questions) {
+      () throws(JudgeError) -> JudgeReply in
+      try await ask(subject, questions: questions)
+    }
+  }
+
+  private func ask(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
+    -> JudgeReply
   {
     guard let key else {
       throw .notConfigured("set \(JevPin.keyVariable) to use the Jev judge backend")
@@ -773,10 +785,12 @@ public struct CachingJudge: Judge {
     if let cached = cache.answers(forKey: key),
       let valid = try? JudgeAnswers.validate(cached, for: questions)
     {
-      return JudgeReply(
-        answers: valid,
-        usage: JudgeUsage(
-          costUSD: 0, wallMilliseconds: JudgeUsage.milliseconds(clock.now - start), cached: true))
+      return try await JudgeCallEvents.observe(identity, subject: subject, questions: questions) {
+        JudgeReply(
+          answers: valid,
+          usage: JudgeUsage(
+            costUSD: 0, wallMilliseconds: JudgeUsage.milliseconds(clock.now - start), cached: true))
+      }
     }
     let reply = try await inner.measuredAnswer(subject, questions: questions)
     cache.store(reply.answers, forKey: key)

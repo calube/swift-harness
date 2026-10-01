@@ -197,10 +197,12 @@ struct JudgeAskCommand: AsyncParsableCommand {
     let judge =
       JudgeFactory.make(config, runner: runner, cacheDirectory: nil, environment: environment)
       ?? ClaudeCLIJudge(runner: runner, model: choice.model)
-    switch await JudgeAsk.answer(
-      data, judge: JudgeAsk.caching(judge, root: root, noCache: noCache),
-      secrets: JudgeBackend.allCases.compactMap { $0.keyVariable.flatMap { environment[$0] } })
-    {
+    let answered = try await JudgeEventRoute.run(root: root, route: .judgeAsk) {
+      await JudgeAsk.answer(
+        data, judge: JudgeAsk.caching(judge, root: root, noCache: noCache),
+        secrets: JudgeBackend.allCases.compactMap { $0.keyVariable.flatMap { environment[$0] } })
+    }
+    switch answered {
     case .failure(let refusal): throw Self.fail(refusal)
     case .success(let json): Console.write(String(decoding: json, as: UTF8.self))
     }

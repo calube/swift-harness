@@ -202,8 +202,9 @@ A `Judge` protocol takes typed questions and returns calibrated probabilities, n
 | Recording | `recording.json` | `recording-jev.json` |
 | `judge bench` arm | `claude:claude-sonnet-5-5` | `jev:jev-1.13.0#test-quality@2-jev`; `cascade:jev-1.13.0,claude-sonnet-5-5` for both |
 
-- **Jev blocks, Claude settles:** a Jev answer at or above `block_threshold` on a blocking question blocks `ready`, with no calibration step. Claude writes the reason; if it can't, the block keeps the template reason and `failureScenario` says why. When Jev's p falls in the uncertain band, Claude answers in `@1`'s words instead; if Claude fails, Jev's answer stays advisory.
-- **Benchmark:** `judge bench` scores each `--backend` arm; `judge bench-render` prints the comparison. Before setting Jev's thresholds, run the benchmark first; its summary lists the bands.
+- **Jev blocks, Claude settles:** a Jev answer at or above `block_threshold` on a blocking question blocks `ready` without calibration. Claude writes the reason; if it can't, the block keeps the template reason and `failureScenario` says why. When Jev's p falls in the uncertain band, Claude answers in `@1`'s words; if Claude fails, Jev's answer stays advisory.
+- **Benchmark:** `judge bench` scores each `--backend` arm; `judge bench-render` prints the comparison. Run it before setting Jev's thresholds; it lists the bands.
+- **Audit log:** `judge events`; see [judge-audit.md](judge-audit.md).
 
 ## 6. Library notes for tests
 

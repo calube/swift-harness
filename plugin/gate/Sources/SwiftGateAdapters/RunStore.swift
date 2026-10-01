@@ -142,29 +142,12 @@ public struct RunStore: Sendable {
     return RunKeepOutcome(kept: kept, unkept: unkept)
   }
 
-  /// Several sessions can share a worktree, so each record is one `O_APPEND` write made under an
-  /// exclusive `flock`; lines never interleave.
+  /// Several sessions can share a worktree, so each record is 1 append-only line.
   private func append(_ line: Data, to path: String) throws(RunStoreError) {
-    let fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o644)
-    guard fd >= 0 else { throw Self.posixError("open", path) }
-    defer { close(fd) }
-    guard flock(fd, LOCK_EX) == 0 else { throw Self.posixError("flock", path) }
-    defer { flock(fd, LOCK_UN) }
-    var offset = 0
-    while offset < line.count {
-      let written = line.withUnsafeBytes { buffer -> Int in
-        guard let base = buffer.baseAddress else { return 0 }
-        return write(fd, base + offset, buffer.count - offset)
-      }
-      if written < 0 {
-        if errno == EINTR { continue }
-        throw Self.posixError("write", path)
-      }
-      offset += written
+    do throws(AppendOnlyFile.Failure) {
+      try AppendOnlyFile.append(line, to: path)
+    } catch {
+      throw .io(operation: error.operation, path: path, reason: error.detail)
     }
-  }
-
-  private static func posixError(_ operation: String, _ path: String) -> RunStoreError {
-    .io(operation: operation, path: path, reason: String(cString: strerror(errno)))
   }
 }

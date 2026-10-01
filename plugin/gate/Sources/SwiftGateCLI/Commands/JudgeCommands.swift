@@ -66,6 +66,8 @@ enum JudgeBatch {
 /// the ready tier; at ready, a confident answer to a blocking question is a gating finding.
 enum TestJudgeCheck {
   static let notRunRuleID = "judge.not-run"
+  /// The judge's events couldn't be written; the verdict stands.
+  static let eventsUnwrittenRuleID = "judge-events.unwritten"
   /// Diff context per test is capped so one huge change can't blow the prompt.
   static let maxContextCharacters = 12_000
 
@@ -78,15 +80,18 @@ enum TestJudgeCheck {
     let reasonJudge: (any Judge)?
     /// Values no reason may carry, such as the Jev key.
     let secrets: [String]
+    /// Where the judge's events go; `nil` writes none.
+    let events: JudgeEventScope?
 
     init(
       makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
-      reasonJudge: (any Judge)? = nil, secrets: [String] = []
+      reasonJudge: (any Judge)? = nil, secrets: [String] = [], events: JudgeEventScope? = nil
     ) {
       self.makeJudge = makeJudge
       self.diff = diff
       self.reasonJudge = reasonJudge
       self.secrets = secrets
+      self.events = events
     }
 
     static func live(root: URL, git: LiveGit) -> Dependencies {
@@ -100,13 +105,18 @@ enum TestJudgeCheck {
         reasonJudge: JudgeBlockReason.liveJudge(root: root),
         secrets: JudgeBackend.allCases.compactMap {
           $0.keyVariable.flatMap { ProcessInfo.processInfo.environment[$0] }
-        })
+        },
+        events: JudgeEventScope.live(root: root, source: HarnessEventSource(route: nil)))
     }
   }
 
+  /// - Parameters:
+  ///   - route: what asked, for the events; `nil` names `judge tests`, with or without `--ready`.
+  ///   - runID: the run the events belong to.
   static func run(
     _ environment: ChangedTestChecks.Environment, graph: ModuleGraph, config: Config,
-    base: String, atReadyTier: Bool, dependencies: Dependencies
+    base: String, atReadyTier: Bool, dependencies: Dependencies, route: HarnessRoute? = nil,
+    runID: String? = nil
   ) async -> [Finding] {
     guard case .enabled(let backend, let thresholds, _) = config.judge,
       let judge = dependencies.makeJudge(config.judge)
@@ -148,25 +158,30 @@ enum TestJudgeCheck {
             context: String(context.prefix(maxContextCharacters)), declaredTier: "T1"))
       }
     }
-    if backend == .jev {
-      return await cascaded(
-        subjects, jev: judge, thresholds: thresholds, atReadyTier: atReadyTier,
-        dependencies: dependencies)
+    let route = route ?? (atReadyTier ? .judgeTestsReady : .judgeTests)
+    var scope = dependencies.events
+    if scope != nil {
+      scope?.source = HarnessEventSource(route: route, tier: route == .checkReady ? .ready : nil)
+      scope?.runID = runID
+      scope?.head = try? await environment.git.revision("HEAD")
+      scope?.base = selection.mergeBase
+      scope?.secrets += dependencies.secrets
     }
-    switch await JudgeBatch.answer(subjects, questions: .tests, judge: judge) {
-    case .failure(let error): return note("judge not run: \(error)")
-    case .success(let answers):
-      var findings: [Finding] = []
-      for subject in subjects {
-        findings +=
-          (try? JudgePolicy.findings(
-            subject: subject, answers: answers[subject.id] ?? [], questions: .tests,
-            thresholds: thresholds, identity: judge.identity, atReadyTier: atReadyTier)) ?? []
+    let questions: JudgeQuestionSet = backend == .jev ? .testsJev : .tests
+    let asked = subjects
+    let context = JudgeEventRecord(
+      scope: scope, subjects: asked, questions: questions, thresholds: thresholds,
+      atReadyTier: atReadyTier, identity: judge.identity)
+    return await context.record { decisionIDs in
+      if backend == .jev {
+        return await cascaded(
+          asked, jev: judge, thresholds: thresholds, atReadyTier: atReadyTier,
+          dependencies: dependencies, decisionIDs: decisionIDs)
       }
-      return await JudgeBlockReason.attach(
-        findings, subjects: subjects, answers: answers, questions: .tests,
-        identity: judge.identity, reasonJudge: dependencies.reasonJudge,
-        redacting: dependencies.secrets)
+      return await JudgedSubjects.plain(
+        asked, questions: questions, judge: judge, thresholds: thresholds,
+        atReadyTier: atReadyTier, reasonJudge: dependencies.reasonJudge,
+        secrets: dependencies.secrets, decisionIDs: decisionIDs)
     }
   }
 
@@ -175,20 +190,39 @@ enum TestJudgeCheck {
   /// reason.
   static func cascaded(
     _ subjects: [JudgeSubject], jev: any Judge, thresholds: JudgeThresholds, atReadyTier: Bool,
-    dependencies: Dependencies
-  ) async -> [Finding] {
+    dependencies: Dependencies, decisionIDs: [JudgeDecisions.Key: String] = [:]
+  ) async -> JudgedSubjects {
     let questions = JudgeQuestionSet.testsJev
     let cascade = CascadingJudge(
       jev: jev, claude: dependencies.reasonJudge, base: .tests,
       policy: CascadingJudge.Policy(thresholds: thresholds, atReadyTier: atReadyTier))
+    let bands = JudgeCascade.bands(for: questions.versionedID)
+    let outcomes = JudgedSubjects.Outcomes()
     let replies: [String: CascadingJudge.Reply]
     switch await JudgeBatch.each(
       subjects,
       { subject throws(JudgeError) in
-        try await cascade.cascade(subject, questions: questions)
+        do throws(JudgeError) {
+          let reply = try await cascade.cascade(subject, questions: questions)
+          outcomes.set(
+            subject.id,
+            .answered(
+              identity: reply.jevIdentity, answers: reply.jev.answers,
+              cascade: JudgeDecisions.Cascade(
+                plan: reply.plan, claude: reply.claude, claudeIdentity: reply.claudeIdentity,
+                bands: bands)))
+          return reply
+        } catch {
+          outcomes.set(
+            subject.id, .failed(identity: jev.identity, JudgeEventError(error, by: jev.identity)))
+          throw error
+        }
       })
     {
-    case .failure(let error): return note("judge not run: \(error)")
+    case .failure(let error):
+      return JudgedSubjects(
+        findings: note("judge not run: \(error)"), outcomes: outcomes.all,
+        batchFailure: JudgeEventError(error, by: jev.identity), reasons: [:])
     case .success(let found): replies = found
     }
     var found: [(finding: Finding, byClaude: Bool)] = []
@@ -212,16 +246,19 @@ enum TestJudgeCheck {
         ?? []
       found += findings.map { ($0, byClaude.contains($0.ruleID)) }
     }
-    let reasoned = await JudgeBlockReason.attach(
+    let reasoned = await JudgeBlockReason.attachReporting(
       found.filter { !$0.byClaude }.map(\.finding), subjects: subjects,
       answers: replies.mapValues(\.jev.answers), questions: .tests, identity: jev.identity,
-      reasonJudge: dependencies.reasonJudge, redacting: dependencies.secrets)
-    var next = reasoned.makeIterator()
-    return found.compactMap { item in item.byClaude ? item.finding : next.next() }
+      reasonJudge: dependencies.reasonJudge, redacting: dependencies.secrets,
+      decisionIDs: decisionIDs)
+    var next = reasoned.findings.makeIterator()
+    return JudgedSubjects(
+      findings: found.compactMap { item in item.byClaude ? item.finding : next.next() },
+      outcomes: outcomes.all, batchFailure: nil, reasons: reasoned.reasons)
   }
 
   /// A judge that can't run is reported, never gating: it says nothing about the code.
-  private static func note(_ message: String) -> [Finding] {
+  static func note(_ message: String) -> [Finding] {
     (try? Finding(
       ruleID: notRunRuleID, severity: .minor, file: ".", line: nil, message: message,
       failureScenario: nil)).map { [$0] } ?? []
@@ -258,7 +295,7 @@ struct JudgeCommand: AsyncParsableCommand {
     abstract: "Ask the configured judge about changed tests, or any question set.",
     subcommands: [
       JudgeTestsCommand.self, JudgeAskCommand.self, JudgeBenchCommand.self,
-      JudgeBenchRenderCommand.self,
+      JudgeBenchRenderCommand.self, JudgeEventsCommand.self,
     ],
     defaultSubcommand: JudgeTestsCommand.self)
 }
@@ -283,7 +320,8 @@ struct JudgeTestsCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
-    try await StaticCheckRun.execute(root: root, format: output.format) {
+    let runID = RunID.make(startedAt: Date(), suffix: UInt32.random(in: .min ... .max))
+    try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
       let config: Config
       switch StaticCheckInputs.loadConfig(root: root) {
       case .failure(let failure): return failure.outcome
@@ -304,7 +342,7 @@ struct JudgeTestsCommand: AsyncParsableCommand {
       }
       let findings = await TestJudgeCheck.run(
         .live(root: root, git: git, swiftPM: swiftPM), graph: graph, config: config, base: base,
-        atReadyTier: ready, dependencies: .live(root: root, git: git))
+        atReadyTier: ready, dependencies: .live(root: root, git: git), runID: runID)
       return .checked(RuleRunResult(findings: findings, allowances: []))
     }
   }
@@ -321,6 +359,8 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
 
   let makeJudge: @Sendable (JudgeConfig, URL) -> (any Judge)?
   let git: @Sendable (URL) -> any Git
+  /// Where the comment judge's events go for a repository; `nil` writes none.
+  var events: @Sendable (URL) -> JudgeEventScope? = { _ in nil }
 
   static let live = ConfiguredCommitCommentJudge(
     makeJudge: { config, root in
@@ -328,7 +368,8 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
         for: config, root: root, transport: URLSessionTransport(),
         environment: ProcessInfo.processInfo.environment, clock: LiveRetryClock())
     },
-    git: { LiveGit(runner: LiveProcessRunner(), repositoryRoot: $0.path) })
+    git: { LiveGit(runner: LiveProcessRunner(), repositoryRoot: $0.path) },
+    events: { JudgeEventScope.live(root: $0, source: HarnessEventSource(route: .commentHook)) })
 
   /// The configured backend held to the hook's timeout, wrapped in the cache under `root`.
   static func judge(
@@ -374,21 +415,31 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
       return nil
     }
     guard !subjects.isEmpty else { return nil }
-    switch await JudgeBatch.answer(
-      subjects, questions: .comments, judge: judge, maxConcurrent: Self.concurrency(backend))
-    {
-    case .failure(let error):
-      return "Comment judge not run: \(error)"
-    case .success(let answers):
-      let findings = subjects.flatMap { subject in
-        (try? JudgePolicy.findings(
-          subject: subject, answers: answers[subject.id] ?? [], questions: .comments,
-          thresholds: thresholds, identity: judge.identity, atReadyTier: false)) ?? []
-      }
-      guard !findings.isEmpty else { return nil }
-      return "Comment judge (advisory; propose the edit, never block):\n"
-        + findings.map { "- \($0.file):\($0.line ?? 0) \($0.message)" }.joined(separator: "\n")
+    var scope = events(root)
+    scope?.source = HarnessEventSource(route: .commentHook, hook: .preToolUse)
+    let record = JudgeEventRecord(
+      scope: scope, subjects: subjects, questions: .comments, thresholds: thresholds,
+      atReadyTier: false, identity: judge.identity)
+    let concurrency = Self.concurrency(backend)
+    let found = await record.record { decisionIDs in
+      await JudgedSubjects.plain(
+        subjects, questions: .comments, judge: judge, thresholds: thresholds, atReadyTier: false,
+        reasonJudge: nil, secrets: [], decisionIDs: decisionIDs, maxConcurrent: concurrency)
     }
+    let unwritten = found.filter { $0.ruleID == TestJudgeCheck.eventsUnwrittenRuleID }
+      .map { "Comment judge events: \($0.message)" }
+    if let notRun = found.first(where: { $0.ruleID == TestJudgeCheck.notRunRuleID }) {
+      return
+        ([notRun.message.replacing("judge not run: ", with: "Comment judge not run: ")]
+        + unwritten).joined(separator: "\n")
+    }
+    let findings = found.filter { $0.ruleID.hasPrefix(JudgePolicy.ruleIDPrefix) }
+    guard !findings.isEmpty else {
+      return unwritten.isEmpty ? nil : unwritten.joined(separator: "\n")
+    }
+    return "Comment judge (advisory; propose the edit, never block):\n"
+      + findings.map { "- \($0.file):\($0.line ?? 0) \($0.message)" }.joined(separator: "\n")
+      + unwritten.map { "\n" + $0 }.joined()
   }
 
   /// Staged comments on added lines, with the code that follows each, capped.
