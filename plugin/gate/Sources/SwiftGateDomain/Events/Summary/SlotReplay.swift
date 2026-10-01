@@ -29,16 +29,47 @@ public struct SlotReplay: Sendable, Equatable {
 
   /// Replays `events`, which are in file order, with `maxParallel` slots.
   public init(events: [BuildEvent], maxParallel: Int, now: Date) {
-    self.maxParallel = maxParallel
-    self.idleSlotMilliseconds = 0
-    self.spanMilliseconds = 0
-    self.starts = [:]
-    self.openAtEnd = false
-    self.transitions = 0
+    let transitions: [BuildEvent.Transition] = events.compactMap {
+      guard case .transition(let transition) = $0 else { return nil }
+      return transition
+    }
+    var running = Set<String>()
+    var starts: [String: Int] = [:]
+    var idle = 0.0
+    var previous: Date?
+    // Free slots are counted per interval between transitions, so 1 task on 3 slots leaves 2
+    // idle for its whole run, whatever the number of tasks.
+    func advance(to time: Date) {
+      if let previous, time > previous {
+        idle += Double(max(0, maxParallel - running.count)) * time.timeIntervalSince(previous)
+      }
+      if previous.map({ time > $0 }) ?? true { previous = time }
+    }
+    for transition in transitions {
+      advance(to: transition.at)
+      if transition.to == .inProgress {
+        if !running.contains(transition.task) { starts[transition.task, default: 0] += 1 }
+        running.insert(transition.task)
+      } else {
+        running.remove(transition.task)
+      }
+    }
+    let first = transitions.map(\.at).min()
+    let openAtEnd = !running.isEmpty
+    if openAtEnd { advance(to: now) }
+    let span = first.flatMap { start in previous.map { $0.timeIntervalSince(start) } } ?? 0
+    self.init(
+      maxParallel: maxParallel, idleSlotMilliseconds: Self.milliseconds(idle),
+      spanMilliseconds: Self.milliseconds(span), starts: starts, openAtEnd: openAtEnd,
+      transitions: transitions.count)
   }
 
   /// Each task's starts after its first.
   public var retries: [String: Int] {
-    [:]
+    starts.filter { $0.value > 1 }.mapValues { $0 - 1 }
+  }
+
+  private static func milliseconds(_ seconds: TimeInterval) -> Int {
+    Int(exactly: (seconds * 1000).rounded()) ?? 0
   }
 }

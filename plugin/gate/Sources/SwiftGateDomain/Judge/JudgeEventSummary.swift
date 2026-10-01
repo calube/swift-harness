@@ -71,8 +71,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
 
     public init(
       question: String, backend: JudgeBackend, judgements: Int, block: Int, advisory: Int,
-      pass: Int, error: Int, escalated: Int, blockReasons: [Count<JudgeReasonSource>] = [],
-      escalationsCompared: Int = 0, escalationsAgreed: Int = 0
+      pass: Int, error: Int, escalated: Int, blockReasons: [Count<JudgeReasonSource>],
+      escalationsCompared: Int, escalationsAgreed: Int
     ) {
       self.question = question
       self.backend = backend
@@ -129,8 +129,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     public let callsWithoutCost: Int
 
     public init(
-      backend: JudgeBackend, calls: Int, cacheHits: Int, errors: Int, latencyP50Ms: Int?,
-      latencyP95Ms: Int?, costUSD: Double, callsWithoutCost: Int, reachedCalls: Int = 0
+      backend: JudgeBackend, calls: Int, reachedCalls: Int, cacheHits: Int, errors: Int,
+      latencyP50Ms: Int?, latencyP95Ms: Int?, costUSD: Double, callsWithoutCost: Int
     ) {
       self.backend = backend
       self.calls = calls
@@ -175,10 +175,10 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
 
   public init(
     events: Int, unattributed: Int, routes: [Count<HarnessRoute>], questions: [QuestionRow],
-    decisions: [Count<JudgeDecision>], escalated: Int, jevDecisions: Int, blocks: [Block],
+    decisions: [Count<JudgeDecision>], escalated: Int, jevDecisions: Int,
+    escalationsCompared: Int, escalationsAgreed: Int, blocks: [Block],
     decisionErrors: [Count<JudgeEventError.Kind>], callErrors: [Count<JudgeEventError.Kind>],
-    backends: [BackendRow], costUSD: Double, tornLastLine: Bool, escalationsCompared: Int = 0,
-    escalationsAgreed: Int = 0
+    backends: [BackendRow], costUSD: Double, tornLastLine: Bool
   ) {
     self.events = events
     self.unattributed = unattributed
@@ -204,13 +204,7 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
 
   /// `escalationsAgreed` over `escalationsCompared`; `nil` with none compared.
   public var agreement: Double? {
-    nil
-  }
-
-  /// What the summary says about the events it holds, under whatever header the reader prints.
-  /// - Parameter listBlocks: whether to list each block with its reason, or only count them.
-  public func bodyLines(listBlocks: Bool = true) -> [String] {
-    []
+    escalationsCompared == 0 ? nil : Double(escalationsAgreed) / Double(escalationsCompared)
   }
 
   public static func make(_ read: HarnessEventJSON.Read, filter: JudgeEventFilter)
@@ -246,30 +240,38 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       func count(_ decision: JudgeDecision) -> Int {
         group.filter { $0.decision == decision }.count
       }
+      let agreements = group.compactMap(agrees)
       rows.append(
         QuestionRow(
           question: key.question, backend: key.backend, judgements: group.count,
           block: count(.block), advisory: count(.advisory), pass: count(.pass),
-          error: count(.error), escalated: group.filter(\.escalated).count))
+          error: count(.error), escalated: group.filter(\.escalated).count,
+          blockReasons: counts(group.filter { $0.decision == .block }.map(\.reasonSource)),
+          escalationsCompared: agreements.count,
+          escalationsAgreed: agreements.filter { $0 }.count))
     }
     rows.sort { ($0.question, $0.backend.rawValue) < ($1.question, $1.backend.rawValue) }
     let backends = JudgeBackend.allCases.compactMap { backend -> BackendRow? in
       let mine = calls.filter { $0.backend == backend }
       guard !mine.isEmpty else { return nil }
       let reached = mine.filter { !$0.cacheHit }.map(\.latencyMs)
+      let latency = TimingStats(milliseconds: reached)
       return BackendRow(
-        backend: backend, calls: mine.count, cacheHits: mine.filter(\.cacheHit).count,
+        backend: backend, calls: mine.count, reachedCalls: reached.count,
+        cacheHits: mine.filter(\.cacheHit).count,
         errors: mine.filter { $0.error != nil }.count,
-        latencyP50Ms: percentile(0.5, of: reached), latencyP95Ms: percentile(0.95, of: reached),
+        latencyP50Ms: latency?.p50, latencyP95Ms: latency?.p95,
         costUSD: mine.compactMap(\.costUSD).reduce(0, +),
         callsWithoutCost: mine.filter { $0.costUSD == nil }.count)
     }
     let jev = decisions.map(\.decision).filter { $0.backend == .jev }
+    let agreements = decisions.map(\.decision).compactMap(agrees)
     return JudgeEventSummary(
       events: events.count, unattributed: events.filter { $0.source.route == nil }.count,
       routes: counts(events.compactMap(\.source.route)), questions: rows,
       decisions: counts(decisions.map(\.decision.decision)),
       escalated: jev.filter(\.escalated).count, jevDecisions: jev.count,
+      escalationsCompared: agreements.count, escalationsAgreed: agreements.filter { $0 }.count,
       blocks: decisions.filter { $0.decision.decision == .block }.map { event, decision in
         Block(
           eventID: event.eventID, runID: event.runID, file: decision.subject.file,
@@ -282,23 +284,35 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       costUSD: backends.map(\.costUSD).reduce(0, +), tornLastLine: read.tornLastLine)
   }
 
-  /// Nearest-rank percentile of `values`; `nil` when empty.
-  public static func percentile(_ fraction: Double, of values: [Int]) -> Int? {
-    guard !values.isEmpty else { return nil }
-    let sorted = values.sorted()
-    let rank = Int((fraction * Double(sorted.count)).rounded(.up))
-    return sorted[min(max(rank, 1), sorted.count) - 1]
+  /// Whether Claude's answer to an escalated decision fell in the same band as the first
+  /// backend's; `nil` when the decision wasn't escalated or either probability is missing.
+  static func agrees(_ decision: JudgeDecisionEvent) -> Bool? {
+    guard decision.escalated, let first = decision.p, let second = decision.escalation?.p else {
+      return nil
+    }
+    func band(_ p: Double) -> JudgeDecision {
+      p >= decision.thresholds.block
+        ? .block : p >= decision.thresholds.advisory ? .advisory : .pass
+    }
+    return band(first) == band(second)
   }
 
   /// The summary as text, for a reader at a terminal.
   public func render(source: String) -> String {
-    func money(_ value: Double) -> String { String(format: "$%.4f", value) }
-    func ms(_ value: Int?) -> String { value.map { "\($0) ms" } ?? "n/a" }
     var lines = ["Judge events in \(source): \(events)"]
     if tornLastLine {
       lines.append("The last line is torn (a write in flight, or cut short); it isn't counted.")
     }
     guard events > 0 else { return (lines + ["No judge events match."]).joined(separator: "\n") }
+    return (lines + bodyLines()).joined(separator: "\n")
+  }
+
+  /// What the summary says about the events it holds, under whatever header the reader prints.
+  /// - Parameter listBlocks: whether to list each block with its reason, or only count them.
+  public func bodyLines(listBlocks: Bool = true) -> [String] {
+    func money(_ value: Double) -> String { String(format: "$%.4f", value) }
+    func ms(_ value: Int?) -> String { value.map { "\($0) ms" } ?? "n/a" }
+    var lines: [String] = []
     if !routes.isEmpty {
       lines.append(
         "Routes: " + routes.map { "\($0.key.rawValue) \($0.count)" }.joined(separator: ", "))
@@ -309,9 +323,20 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       lines.append(
         "Decisions per question and backend (block / advisory / pass / error, escalated):")
       for row in questions {
-        lines.append(
+        var line =
           "  \(row.question) [\(row.backend.rawValue)]: \(row.judgements) — \(row.block) / "
-            + "\(row.advisory) / \(row.pass) / \(row.error), escalated \(row.escalated)")
+          + "\(row.advisory) / \(row.pass) / \(row.error), escalated \(row.escalated) of "
+          + "\(row.judgements)"
+        if !row.blockReasons.isEmpty {
+          line +=
+            "; block reasons: "
+            + row.blockReasons.map { "\($0.key.rawValue) \($0.count)" }.joined(separator: ", ")
+        }
+        if row.escalationsCompared > 0 {
+          line +=
+            "; Claude agreed on \(row.escalationsAgreed) of \(row.escalationsCompared) escalations"
+        }
+        lines.append(line)
       }
     }
     if let share = escalationShare {
@@ -319,7 +344,13 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
         "Escalation: escalated \(escalated) of \(jevDecisions) Jev decisions "
           + "(\(Int((share * 100).rounded()))%)")
     }
-    if !blocks.isEmpty {
+    if let agreement {
+      lines.append(
+        "Agreement: Claude agreed with the first answer on \(escalationsAgreed) of "
+          + "\(escalationsCompared) escalations (\(Int((agreement * 100).rounded()))%), "
+          + "comparing each answer's band against the decision's thresholds")
+    }
+    if listBlocks, !blocks.isEmpty {
       lines.append("")
       lines.append("Blocks:")
       for block in blocks {
@@ -346,6 +377,6 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       }
     }
     lines.append("Cost: \(money(costUSD))")
-    return lines.joined(separator: "\n")
+    return lines
   }
 }

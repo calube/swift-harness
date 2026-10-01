@@ -197,7 +197,8 @@ struct HarnessEventTests {
       summary.questions.first { $0.question == "fails-if-broken" && $0.backend == .jev }
         == JudgeEventSummary.QuestionRow(
           question: "fails-if-broken", backend: .jev, judgements: 2, block: 1, advisory: 1,
-          pass: 0, error: 0, escalated: 1))
+          pass: 0, error: 0, escalated: 1, blockReasons: [.init(key: .claude, count: 1)],
+          escalationsCompared: 0, escalationsAgreed: 0))
     #expect(summary.blocks.map(\.reason) == ["never compares the product"])
     #expect(summary.blocks.map(\.reasonSource) == [.claude])
     #expect(summary.decisionErrors == [.init(key: .backend, count: 1)])

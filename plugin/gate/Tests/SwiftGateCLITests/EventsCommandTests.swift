@@ -58,11 +58,27 @@ struct EventsCommandTests {
   }
 
   @Test(
-    "summary's sections join wrong gates to the build state the command read, damage included, and keep every other section — catches the summary reporting misses without the build join"
+    "summary's sections join wrong gates and halts to the build state the command read, damage included, and keep every other section — catches the summary reporting misses or idle slots without the build join"
   )
   func summaryJoinsWrongGatesToTheBuildState() throws {
+    let buildRun = "20261001T000000Z-build001"
+    let replayed = BuildJoin.Run(
+      plan: "p", runID: buildRun, writeSets: [:], returns: [:],
+      events: [
+        .transition(
+          BuildEvent.Transition(task: "a", from: .pending, to: .inProgress, at: Self.now)),
+        .transition(
+          BuildEvent.Transition(
+            task: "a", from: .inProgress, to: .done, at: Self.now.addingTimeInterval(600))),
+      ],
+      record: BuildRunRecord(
+        runID: buildRun, plan: "p", startedAt: Self.now, presetName: "standard",
+        preset: BuildPreset(
+          designTier: .standard, maxParallel: 2, review: .full, taskGate: .ledger,
+          mergeGate: .push, workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0,
+          onDesignConflict: .amend)))
     let builds = BuildJoin(
-      source: BuildJoinReader.plansDirectory, runs: [],
+      source: BuildJoinReader.plansDirectory, runs: [replayed],
       damage: [BuildJoinDamage(path: "swift-harness/plans/p/ledger.json", reason: "missing ledger")]
     )
     let sections = EventsSummaryRun.sections(builds: builds)
@@ -84,6 +100,10 @@ struct EventsCommandTests {
     #expect(
       wrongGates.lines.contains(
         "build state damage: swift-harness/plans/p/ledger.json: missing ledger"))
+    let halts = try #require(sections.first { $0.id == .halts }?.summarize(input))
+    #expect(
+      halts.metrics.first { $0.name == "idle-slot-ms" && $0.group == [buildRun] }?.value
+        == 600_000)
   }
 
   @Test(

@@ -1,7 +1,8 @@
 import Foundation
 import SwiftGateDomain
 
-/// Reads every build run's task returns, its plan's ledger write sets and its `events.jsonl` from
+/// Reads every build run's task returns, its plan's ledger write sets, its `run.json` and its
+/// `events.jsonl` from
 /// the plans' shared state under the git common dir, read only. A file that doesn't read is
 /// listed as damage and the rest of its run is still read.
 public struct BuildJoinReader: Sendable {
@@ -72,8 +73,20 @@ public struct BuildJoinReader: Sendable {
     } else {
       damage.append(BuildJoinDamage(path: logPath, reason: "missing build log"))
     }
+    var record: BuildRunRecord?
+    let recordPath = "\(runPath)/run.json"
+    if let data = read(recordPath, damage: &damage) {
+      do {
+        record = try BuildRunJSON.decode(data)
+      } catch {
+        damage.append(BuildJoinDamage(path: recordPath, reason: "undecodable run.json: \(error)"))
+      }
+    } else {
+      damage.append(BuildJoinDamage(path: recordPath, reason: "missing run.json"))
+    }
     return BuildJoin.Run(
-      plan: plan, runID: runID, writeSets: writeSets, returns: returns, events: events)
+      plan: plan, runID: runID, writeSets: writeSets, returns: returns, events: events,
+      record: record)
   }
 
   private func ledgerWriteSets(

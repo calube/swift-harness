@@ -1006,6 +1006,31 @@ of this worktree:
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/hook.jsonl Events/cache.jsonl`
 printed 0 for each.
 
+`Events/build.jsonl` is the build stream the real `swiftgate build halt` and `build resume` commands
+wrote, built with their code as at `cb810e0`, in a scratch git repository whose `.swiftgate.toml`
+names 1 package and leaves `[telemetry]` at its default. It holds 2 answered halts (`question`
+answered `retry` after 3,053 ms, `gate-red` answered `continue` after 2,043 ms) and 1 halt of the
+whole run (`budget`) that nothing answered, so a test can show an open halt listed with its age.
+From the scratch repository's root, with `G=<worktree>/plugin/bin/swiftgate` and
+`R=20261001T090000Z-0c0ffee1`:
+
+```sh
+$G build halt --run $R --task parse-config --reason question
+/bin/sleep 3
+$G build resume --run $R --task parse-config --answer retry
+$G build halt --run $R --task render-report --reason gate-red
+/bin/sleep 2
+$G build resume --run $R --task render-report --answer continue
+$G build halt --run $R --reason budget
+/bin/cp -f .harness/events/build.jsonl <worktree>/plugin/gate/Tests/Fixtures/Events/build.jsonl
+```
+
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/build.jsonl` printed 0.
+
+`Events/judge.jsonl` repeats its event ids across its 2 captured runs, because the fake judges
+number their events from 1 in each run. A test that decodes the file reads all 24 lines; `events
+summary`, which deduplicates by event id, keeps the first 12.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
