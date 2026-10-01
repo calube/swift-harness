@@ -1,7 +1,17 @@
 # Harness telemetry: implementation plan
 
 <!-- RESUME
-Status (2026-09-30): the user approved the design and asked to build now. Tasks with no deps start first; none
+Status (2026-10-01): DONE. Every task below has merged; the design follows the code, and
+docs/handoffs/harness-telemetry-interfaces.md records what shipped. Open follow-ups:
+- `RepositoryScriptTests.shim()` failed once on `rm` ("Directory not empty" on `sid-cache/stamps`), not reproduced.
+- 2 node walk tests (`skill_gate_walks_test.mjs`, `skill_surface_baseline_walk_test.mjs`) each timed out once at
+  their 60 s budget under load and passed on rerun; the wall-clock budget is the likely cause.
+- `RepositoryScriptTests/shim` is the slowest test at p95 139 s (n=6).
+- `gate.run` lists finding paths but not the rule behind each, so a task miss can't say which rule named which path.
+- Orchestrator usage the build skill's per-task ingest stores is untagged; tag the session's own messages
+  `orchestrator` when `--workflow-transcripts` is given.
+- The reader doesn't read the git common dir's `swift-harness/unkept-events/` fallback.
+History (2026-09-30): the user approved the design and asked to build now. Tasks with no deps start first; none
 that touches the event store starts before the `judge-emits-judgement-events` branch (the shared `HarnessEvent` envelope, its writer and
 `.harness/events/`) merges to main.
 Spec: docs/designs/2026-09-30-harness-telemetry-design.md. Read its RESUME header, §3, §5 and §14.

@@ -55,6 +55,13 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # block_threshold = 0.9
 # send_to = "api.typesafe.ai"  # with backend = "jev" only
 
+# Local telemetry: gate runs, steps and test results, hook decisions, cache lookups, build halts
+# and agent token counts, as JSON lines under .harness/events/. On by default; nothing leaves the
+# machine. `enabled = false` stops every kind except the judge's audit log, which a configured
+# [judge] always writes. See the plugin's docs/telemetry.md.
+# [telemetry]
+# enabled = false
+
 # Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
 # [plan]
 # max_parallel = 3
