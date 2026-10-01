@@ -22,16 +22,20 @@ public struct XcresultTestCase: Sendable, Equatable {
   public let messages: [String]
   /// The case ran in a UI test bundle (an XCUITest), not a unit test bundle.
   public let isUITest: Bool
+  /// The node's `durationInSeconds`, rounded to the nearest millisecond; `nil` when the node
+  /// carried none.
+  public let milliseconds: Int?
 
   public init(
     identifier: String, targetName: String, result: Result, messages: [String],
-    isUITest: Bool = false
+    isUITest: Bool = false, milliseconds: Int? = nil
   ) {
     self.identifier = identifier
     self.targetName = targetName
     self.result = result
     self.messages = messages
     self.isUITest = isUITest
+    self.milliseconds = milliseconds
   }
 }
 

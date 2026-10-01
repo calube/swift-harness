@@ -15,11 +15,15 @@ public struct XUnitTestCase: Sendable, Equatable {
   public let className: String
   public let name: String
   public let outcome: Outcome
+  /// The case's `time` attribute, rounded to the nearest millisecond; `nil` when the report
+  /// gave none.
+  public let milliseconds: Int?
 
-  public init(className: String, name: String, outcome: Outcome) {
+  public init(className: String, name: String, outcome: Outcome, milliseconds: Int? = nil) {
     self.className = className
     self.name = name
     self.outcome = outcome
+    self.milliseconds = milliseconds
   }
 
   /// The test target (module) the case belongs to: `className` up to its first `.`.
