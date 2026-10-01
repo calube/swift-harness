@@ -11,6 +11,7 @@ page or through an area index below.
 | Seeing everything the harness does, with the command behind each capability | [`capabilities.md`](capabilities.md) |
 | Writing or reviewing Swift code against the harness's rules | [`plugin/docs/standards.md`](../plugin/docs/standards.md) |
 | Writing or reviewing tests (tiers, red/green, snapshots, flake stress) | [`plugin/docs/testing-playbook.md`](../plugin/docs/testing-playbook.md) |
+| Turning on the test-quality judge, choosing Claude or Jev, or measuring backends with `judge bench` | [`plugin/docs/testing-playbook.md`](../plugin/docs/testing-playbook.md) §5.4, then the [judge benchmark summary](../evals/results/2026-09-30-judge-benchmark/summary.md) |
 | Working on or debugging a Claude Code hook | [`plugin/docs/hooks.md`](../plugin/docs/hooks.md) |
 | Changing what a reviewer or verifier returns | [`plugin/docs/review-contract.md`](../plugin/docs/review-contract.md) |
 | Moving a file into or out of the shipped plugin | [ADR 0002](adrs/0002-consumer-plugin-in-plugin-dir.md): consumers get `plugin/`, contributors the rest |

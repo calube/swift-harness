@@ -120,7 +120,13 @@ rather than suggested.
 - **Tests must catch mutants.** `swiftgate mutate` flips conditions and boundaries on changed lines,
   and `swiftgate reach` runs each test alone to show it touches the module it claims to test.
 - **Slop is a finding.** Tests that assert nothing, are tautological, sleep, or sit in the wrong
-  tier fail `swiftgate testlint`. A judge agent reviews what static checks can't see.
+  tier fail `swiftgate testlint`.
+- **An opt-in judge reads what static checks can't.** `swiftgate judge` asks a model whether a test
+  would fail if its behaviour broke, plus 3 more questions, and gets probabilities back. It's off
+  until a repository opts in, because it sends test source off the machine. The backend is Claude,
+  or TypeSafe's Jev (`[judge] backend = "jev"`, pinned to `jev-1.13.0`, key in `TYPESAFE_API_KEY`).
+  Jev blocks `ready` on its own at or above `block_threshold`, with a reason Claude writes, and
+  hands the answers it's unsure of to Claude.
 - **Verdicts come from the test reports**, not from the exit code.
 
 ## Proof
@@ -142,6 +148,12 @@ full record is in [`docs/e2e-report.md`](docs/e2e-report.md).
 - **The gate tests itself.** `swiftgate` carries about 2,300 Swift Testing cases against fixtures
   captured from real tool runs, never hand-written. `swiftgate self-test` proves every code rule fires
   on its seeded violation and passes clean code.
+- **A benchmark compares the judge's backends.** `swiftgate judge bench` asked Sonnet 5.5, Jev
+  and the Jev-to-Claude cascade about 66 labelled tests, 3 times each. On the 44 report cases, the
+  cascade matched or beat Sonnet on both blocking questions, at about a quarter of its cost per case
+  ($0.00135 against $0.00523, n=132 each). An Opus agent wrote the labels, which may favour Claude,
+  and 10 positives per question can't separate the arms. The
+  [summary](evals/results/2026-09-30-judge-benchmark/summary.md) has every rate with its n.
 
 Next: [evals](evals/README.md) that measure the harness across many tasks and trials, with and
 without it. They're planned, not running yet.
@@ -245,7 +257,8 @@ Run `swiftgate <subcommand> --help` for any of these.
 |---|---|
 | Gate tiers | `check`, `test`, `stats` |
 | Static checks | `lint`, `arch`, `testlint`, `impact`, `comments`, `coverage`, `module-graph` |
-| Test proof | `prove`, `mutate`, `reach`, `stress`, `judge`, `snapshots` |
+| Test proof | `prove`, `mutate`, `reach`, `stress`, `snapshots` |
+| Judge | `judge` (changed tests), `judge ask`, `judge bench`, `judge bench-render` |
 | Design | `design-scope`, `design-lint`, `design-diff`, `design-render`, `design-telemetry`, `evidence`, `probe` |
 | Plan and build | `plan`, `plan-schedule`, `plan-lint`, `ledger`, `index`, `build`, `worktree`, `context-pack` |
 | Fast modes | `sprint`, `spec-page`, `surface-check` |
