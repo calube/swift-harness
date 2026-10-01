@@ -1,7 +1,7 @@
 # What swift-harness does
 
 A tour of every shipped capability, grouped by the problem it solves, with the command or file
-behind each one. The [README](../README.md) carries the highlights; this page carries the rest.
+behind each one. The [README](../README.md) has the highlights.
 Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and hook behaviour in
 [`plugin/docs/hooks.md`](../plugin/docs/hooks.md).
 
@@ -27,7 +27,7 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   body is empty, an empty default, or a forward to existing code. Reducers return `.none` and
   views are `EmptyView`. A later slice can't add a target the surface lacks.
 - **Escape hatches carry a reason.** `// swiftgate:allow <rule> — <reason>` on the same line waives
-  1 rule on that line. A bare allow is itself a finding, and reports count every waiver.
+  1 rule there. A bare allow is itself a finding, and reports count every waiver.
 - **Ids don't leak.** `swiftgate comments --commit-msg` rejects plan, ledger and design ids in commit
   messages, and a testlint rule does the same for test names. The pre-commit comment check also
   catches restated code, diff narration and TODOs with no link.
@@ -44,18 +44,22 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   module it claims to test is RED.
 - **`stress`** runs new and changed tests N times. One failing run is RED.
 - **`impact` and `coverage`** require a test change for every changed Core, client or Live module,
-  and require T1 tests alone to cover the changed lines.
+  and T1 tests alone to cover the changed lines.
 - **`testlint`** flags tests that assert nothing, have assertions that can't fail, sleep, or sit in
   the wrong tier, and UI tests that map to no listed flow.
 - **`judge`** asks a model what static checks can't see: whether a test would fail if the
-  behaviour broke, vague names, assertions on implementation details, and the wrong tier. It is off by default, because a remote backend sends test source off the machine.
-  It caches answers, and it stays advisory below the ready tier.
+  behaviour broke, vague names, implementation-detail assertions and the wrong tier. It's
+  opt-in, because it sends test source off the machine, and advisory below `ready`. The backend is
+  Claude or TypeSafe's Jev
+  ([playbook §5.4](../plugin/docs/testing-playbook.md#54-judge-seam-swiftgate-judge)). Jev blocks
+  on its own with a reason Claude writes, and hands its uncertain answers to Claude. `judge ask`
+  prints any question set's answers as JSON, and `judge bench` scores backends on labelled cases
+  ([first run](../evals/results/2026-09-30-judge-benchmark/summary.md)).
 
 ## The harness checks itself
 
 - **`self-test`** proves every code rule trips on its seeded violations and passes the clean
-  `examples/SampleApp`. `--judge` measures the judge's precision and recall per question against
-  a stored recording.
+  `examples/SampleApp`. `--judge` scores each backend's recording per question against its floors.
 - **A test guards the rule index.** A test checks the rule id table in `standards.md` against the rule
   registries, so a rule can't ship undocumented or linger after removal.
 - **Prompt edits need recalibration.** The push tier hashes the design agents and workflows and the
@@ -63,8 +67,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   a record from a different model, blocks the push until calibration passes again.
 - **`calibrate design|build`** runs each design agent, the build worker and the fixer against
   labelled seed cases and reports pass or fail per agent.
-- **Hook latency has a tested budget.** Tests hold the fastest of several PreToolUse runs under 50ms of
-  CPU, with 4 CPU-burning processes loading the machine.
+- **Hook latency has a tested budget.** The fastest of several PreToolUse runs stays under 50ms of
+  CPU on a loaded machine.
 - **The ready tier validates the plugin.** `claude plugin validate --strict` runs on `plugin/`,
   and every warning gates.
 - **Fixtures come from real runs.** Every fixture under `plugin/gate/Tests/Fixtures/` comes
@@ -79,8 +83,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **The ledger is a state machine.** `swiftgate ledger set` rejects a status change the current
   status can't make. `swiftgate index set` updates the cross-plan index under a file lock.
 - **Waves never collide.** `swiftgate plan-schedule` builds topological waves, then splits them so
-  no 2 tasks in a wave write the same files, capped at the plan's `max_parallel`. It recomputes
-  waves itself rather than trusting a stored list.
+  no 2 tasks in a wave write the same files, capped at the plan's `max_parallel`. It never
+  trusts a stored wave list.
 - **The build executor checks every return.** `swiftgate build check-return` verifies a worker's
   return against git and rejects a missing or extra key. A merge conflict or a red `main` goes to
   a fixer agent in its own worktree, and a merge can be undone.
@@ -115,8 +119,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 ## Evidence you can paste into a PR
 
 - **`review-synth`** dedupes verified findings and returns merge, fix-then-merge or
-  refactor-needed. It lists findings on lines the change didn't touch as
-  pre-existing, and they never count. A focus nobody reviewed shows as NOT REVIEWED. With `--design` it returns ready, revise
+  refactor-needed. Findings on lines the change didn't touch are
+  pre-existing and never count. A focus nobody reviewed shows as NOT REVIEWED. With `--design` it returns ready, revise
   or rethink, plus the reviewers to re-run.
 - **`design-render`** renders a design as a page with diagrams, options, evidence badges and
   approval. `--ledger` renders the task graph, a wave timeline and a requirement by task coverage
@@ -131,13 +135,13 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   cache hits. `--build` adds wall time per task.
 - **`design-telemetry`** records each design run. Tokens no tool reported are null with a reason,
   never 0.
-- **`doctor`** checks the Xcode pin, toolchain, runtime, disk and shim. It also flags a plugin that
+- **`doctor`** checks the Xcode pin, toolchain, runtime, disk and shim, and flags a plugin
   changed on disk since the session loaded it.
 - **SessionStart context.** Each session starts with the module map and kinds, the Xcode pin, and
   the resume line of every active plan.
 - **`/swift-harness:status`** lists active plans across every bootstrapped repository on the
   machine.
-- **`bootstrap`** is a dry run by default, and a re-run with nothing to change is a no-op. It
+- **`bootstrap`** is a dry run by default; a re-run with nothing to change is a no-op. It
   infers `.swiftgate.toml` from the repository and names what it can't infer.
 - **`docs-lint` and `prose`** check links, router reachability, dangling ids, word budgets and
   plain-English rules. Both run in the push tier.
