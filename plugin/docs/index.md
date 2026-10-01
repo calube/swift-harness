@@ -12,5 +12,6 @@ into a committed file.
 | Writing or judging a test: tiers T0–T3, naming, red/green proof, snapshots, flows | [`testing-playbook.md`](testing-playbook.md) |
 | Reading what a reviewer or verifier returned, or why a finding was dropped | [`review-contract.md`](review-contract.md) |
 | Working out why a Claude Code hook denied, blocked or added context | [`hooks.md`](hooks.md) |
+| Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |
 
 Your repository's `docs/index.md` routes its own docs (designs, plans, ADRs); this page doesn't.

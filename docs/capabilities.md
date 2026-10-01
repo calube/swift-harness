@@ -7,8 +7,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 
 ## Agents can't cheat the gate
 
-- **Subagents never prompt.** A background subagent can't answer a permission prompt, so the
-  PreToolUse hook allows or denies every shell, edit, write and web call a subagent makes. It denies writes outside the repository's
+- **Subagents never prompt.** The PreToolUse hook allows or denies every shell, edit, write and
+  web call a subagent makes. It denies writes outside the repository's
   checkouts, build worker writes to the main checkout, and writes to `.git` and `.claude`, each
   with a reason the agent can act on.
 - **Guards read the shell command, not its text.** The hook splits compound commands and sees env
@@ -21,8 +21,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **Verdicts come from test reports.** `swiftgate test` reads xcresult bundles and test reports,
   not exit codes. It flags missing evidence, skips with no reason, and runs with no tests. A
   configured test retry is its own finding, because retries hide flakes.
-- **Package pins hold.** Every build and test the gate runs uses the committed `Package.resolved`.
-  A run that rewrote it, or found it stale, is a finding.
+- **Package pins hold.** Every gate build uses the committed `Package.resolved`; a run that
+  rewrote it, or found it stale, is a finding.
 - **Surface commits add API and nothing else.** `swiftgate surface-check <commit>` proves every new
   body is empty, an empty default, or a forward to existing code. Reducers return `.none` and
   views are `EmptyView`. A later slice can't add a target the surface lacks.
@@ -71,8 +71,7 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   CPU on a loaded machine.
 - **The ready tier validates the plugin.** `claude plugin validate --strict` runs on `plugin/`,
   and every warning gates.
-- **Fixtures come from real runs.** Every fixture under `plugin/gate/Tests/Fixtures/` comes
-  from a real tool run, and its directory's README records the capture command.
+- **Fixtures come from real runs,** and the fixtures README records each capture command.
 
 ## Parallel agents, 1 source of truth
 
@@ -95,10 +94,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **Worktrees start warm.** `swiftgate worktree create` clones a warm build into each task's
   worktree, and `warm-check` refuses when there is none. `swiftgate gc` prunes stale per-worktree
   DerivedData, old runs and orphaned simulator clones.
-- **Agents get verbatim context.** `swiftgate context-pack --role` builds anchor-selected slices of
-  the design, plan and standards for each agent role, and never summarises. It fails rather than
-  write a thin pack. The module kinds a worker's write set touches pick which
-  standards it gets.
+- **Agents get verbatim context.** `swiftgate context-pack --role` slices the design, plan and
+  standards by anchor for each role, never summarises, and fails rather than write a thin pack.
 
 ## The gate checks designs like code
 
@@ -130,19 +127,23 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 
 ## Observability and operations
 
+- **Local telemetry, on by default.** Gate runs, every test result, hooks, caches, build halts and
+  token counts land in `.harness/events/`, with no source, prompt, key or outside path.
+  `events summary` reports cost, gate time, wrong verdicts, flaky tests, halts and the judge.
+  `[telemetry] enabled = false` opts out, except the judge's audit log
+  ([`telemetry.md`](../plugin/docs/telemetry.md)).
 - **`stats`** reports per-command, per-tier p50 and p95 against budgets from run history.
-  `--design` adds refute rate, reviewer precision, tokens and cost per agent, probe failures and
-  cache hits. `--build` adds wall time per task.
+  `--design` adds refute rate, reviewer precision, agent cost, probe failures and cache hits;
+  `--build` adds wall time per task.
 - **`design-telemetry`** records each design run. Tokens no tool reported are null with a reason,
   never 0.
-- **`doctor`** checks the Xcode pin, toolchain, runtime, disk and shim, and flags a plugin
-  changed on disk since the session loaded it.
-- **SessionStart context.** Each session starts with the module map and kinds, the Xcode pin, and
-  the resume line of every active plan.
-- **`/swift-harness:status`** lists active plans across every bootstrapped repository on the
-  machine.
-- **`bootstrap`** is a dry run by default; a re-run with nothing to change is a no-op. It
-  infers `.swiftgate.toml` from the repository and names what it can't infer.
+- **`doctor`** checks the Xcode pin, toolchain, runtime, disk and shim, and flags a plugin changed
+  since the session loaded it.
+- **SessionStart context** gives each session the module map and kinds, the Xcode pin, and every
+  active plan's resume line.
+- **`/swift-harness:status`** lists active plans across the machine's bootstrapped repositories.
+- **`bootstrap`** is a dry run by default, and a no-op with nothing to change. It infers
+  `.swiftgate.toml` and names what it can't infer.
 - **`docs-lint` and `prose`** check links, router reachability, dangling ids, word budgets and
   plain-English rules. Both run in the push tier.
 

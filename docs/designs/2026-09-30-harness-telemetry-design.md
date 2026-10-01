@@ -2,10 +2,13 @@
 
 <!-- RESUME
 Status: APPROVED 2026-09-30 by the user, with the 4 questions in §14 and the judge-log question decided.
+Built 2026-10-01: every kind, reader section and command below has merged. Where the code differed, this design now
+follows it, and the interfaces note records each difference:
+[`../handoffs/harness-telemetry-interfaces.md`](../handoffs/harness-telemetry-interfaces.md).
 Why: the user asked for telemetry "to self improve" the harness. Today time, cost, wrong gates, flakes, stuck
 workers and halts are measured by hand after a run, and token cost isn't measured at all.
 Builds on: the shared event envelope from the `judge-emits-judgement-events` branch (`HarnessEvent`, the append-only
-writer, `.harness/events/<kind>.jsonl`, `judge.decision` and `judge.call`). Nothing here starts before that merges.
+writer, `.harness/events/<stream>.jsonl`, `judge.decision` and `judge.call`).
 Plan: [`../plans/2026-09-30-harness-telemetry-plan.md`](../plans/2026-09-30-harness-telemetry-plan.md).
 Read first: this header, §3, §5 and §14.
 -->
@@ -73,40 +76,47 @@ stuck point, slot use and an overnight halt by hand, and 1 attempt's cost was "n
 
 The `judge-emits-judgement-events` branch defines, and this design uses unchanged:
 
-- `HarnessEvent {schemaVersion, eventID, parentID?, kind, time, runID?, head?, source: {route, tier?, hook?}, payload}`.
-- A generic append-only writer protocol, and its file store writing `.harness/events/<kind>.jsonl`.
+- `HarnessEvent {schemaVersion, eventID, parentID?, kind, time, runID?, head?, base?, source: {route?, tier?, hook?}, payload}`.
+- The writer protocol `HarnessEventWriting`, and its file store `HarnessEventFiles`.
 - The kinds `judge.decision` and `judge.call`, and `swiftgate judge events`.
 
-Every kind below fills `source.route` with the command that emitted it (`check`, `hook`, `build`,
-`events-ingest`), adding cases to the route type where it is closed. `parentID` links an event to the one that
-caused it: a `gate.step` and each `test.result` point at their `gate.run`; a `build.resume` points at its
-`build.halt`.
+Kinds map to streams through `HarnessEventKind.stream`, and each stream is 1 file,
+`.harness/events/<stream>.jsonl`: `judge` (both judge kinds), `gate` (`gate.run`, `gate.step`), `test`, `hook`,
+`cache`, `usage` and `build` (`build.halt`, `build.resume`).
+
+The gate kinds and `test.result` carry the route `check`, `hook.decision` the route `hook`, and `agent.usage` the
+route `ingest`. `cache.lookup`, `build.halt` and `build.resume` carry no route. `parentID` links an event to the
+one that caused it: a `gate.step` and each `test.result` point at their `gate.run`; a `build.resume` points at
+its `build.halt`.
 
 ### 4.2 What this design adds to the store
 
 - **A payload guard** in the writer's single write path. Every string value in a payload must be under 512 bytes, must
-  not start with `/` or `~`, and must not contain a newline. The writer drops a rejected event and counts it in
-  `.harness/events/dropped.json` by kind and reason; the emitting command prints 1 line naming the kind.
+  not start with `/` or `~`, and must not contain a newline. The writer drops a rejected event, counts it in
+  `.harness/events/dropped.json` by kind and reason, and throws `HarnessEventWriteError` naming both; the
+  emitting command prints 1 line. The judge stream is exempt: a judge reason can pass 512 bytes, and the audit
+  trail must not lose or truncate it, so the judge writes through `HarnessEventFiles`, outside the guard.
 - **Closed payload types.** Each kind's payload is its own `Codable` struct in `SwiftGateDomain`. Strings are ids
   of known shapes (rule id, test id, model id, hash, repo-relative path), or raw values of closed enums. No
   payload has a free-text field, a `[String: String]` map, or an environment value.
-- **Segments.** Each kind's active file rotates at a size threshold into a sealed segment (§8.2). Sealing never
+- **Segments.** Each stream's active file rotates at a size threshold into a sealed segment (§8.2). Sealing never
   deletes.
 - **A store identity.** `.harness/events/store.json` holds a random `storeID` and a random 32-byte `salt`,
-  created on first write. Copy-up (§9) names an imported store by its `storeID`; hook input hashes (§5.4) use
-  the salt.
+  created on first write, beside `store.lock`, which guards it and `dropped.json`. Copy-up (§9) names an
+  imported store by its `storeID`; hook input hashes (§5.4) use the salt.
 
 ### 4.3 On by default, off by config
 
 `[telemetry]` is a new config table with 1 key, `enabled`, a boolean that defaults to `true`. Any other key in the
-table fails config as an unknown key under `swiftgate.config`, as every table does. With `enabled = false` the
-writer factory hands every emitter except the judge's a no-op writer. The judge kinds are an audit trail of decisions
-that can block a merge, so the judge writes them whenever `[judge]` names a backend. `events ingest`
-refuses with a message naming the key; `events list` and `summary` still read whatever exists. Outside a
+table fails config as an unknown key under `swiftgate.config`, as every table does. With `enabled = false`,
+`EventWriterFactory.make(root:enabled:)` returns `DisabledEventWriter`, which writes nothing. The judge kinds are an
+audit trail of decisions that can block a merge, and the judge never goes through the factory, so it writes them
+whenever `[judge]` names a backend. `events ingest` exits 2 with a message naming `telemetry.enabled`; `build
+halt` and `resume` exit 0 with nothing recorded; `events list` and `summary` still read whatever exists. Outside a
 project with `.swiftgate.toml`, no command writes events, as hooks already do nothing there.
 
-`.harness/events/` goes into this repo's `.gitignore` (the judge branch adds it) and into `plugin/templates/gitignore`,
-which bootstrap writes into a consumer repo.
+`.harness/events/` is in this repo's `.gitignore` and in `plugin/templates/gitignore`, which bootstrap writes
+into a consumer repo. The commented `[telemetry]` table is in `plugin/templates/swiftgate.toml`.
 
 ## 5. Event kinds
 
@@ -115,11 +125,11 @@ but only the named place calls the writer.
 
 | Kind | Emit point | Payload |
 |---|---|---|
-| `gate.run` | `RunStore.record`, after the history append | `command`, `verdict`, `ms`, `treeHash?`, `dirty`, `base?`, `tiers`, `ruleCounts {ruleID: n}`, `findingPaths` (repo-relative, at most 200, plus `findingPathsTruncated`), `allowanceCounts`, `testCounts?` |
+| `gate.run` | `RunStore.record`, after the history append | `command?`, `verdict`, `ms`, `treeHash?`, `dirty?`, `tiers`, `ruleCounts {ruleID: n}`, `findingPaths` (repo-relative, at most 200, plus `findingPathsTruncated`), `allowanceCounts`, `testCounts?` |
 | `gate.step` | `RunStore.record`, 1 per step, after the `gate.run` | `tier?`, `step` (closed enum), `ms`, `verdict`, `derivedData` (`warm`, `cold`, `none`) |
-| `test.result` | `RunStore.record`, 1 per test case, in 1 batched write | `test` (normalized id), `target`, `tier`, `outcome` (`passed`, `failed`, `skipped`, `expectedFailure`), `ms?` |
+| `test.result` | `RunStore.record`, 1 per test case, in 1 batched write | `test` (normalized id), `testHashed?`, `target`, `tier`, `outcome` (`passed`, `failed`, `skipped`, `expectedFailure`), `ms?` |
 | `hook.decision` | `HookRunner.run`, around the event's hook | `event`, `tool?`, `decision` (`allow`, `block`, `ask`, `context`, `none`), `ruleIDs`, `ms`, `sessionID?`, `inputHash?` |
-| `cache.lookup` | `ManifestAnswerCache.answer` and `store`; `EvidenceCacheStore`'s record, reuse and tombstone methods | `cache` (`manifest`, `evidence-claim`, `evidence-verdict`), `outcome` (`hit`, `miss`, `store`, `tombstone`), `keyHash`, `answerHash?`, `tombstoneReason?` |
+| `cache.lookup` | `CacheEventRecorder`, called by `ManifestAnswerCache` and `EvidenceCacheStore` | `cache` (`manifest`, `evidence-claim`, `evidence-verdict`), `outcome` (`hit`, `miss`, `store`, `tombstone`), `keyHash`, `answerHash?`, `tombstoneReason?` |
 | `build.halt` | new `swiftgate build halt` | `buildRun`, `task?`, `reason` (closed enum) |
 | `build.resume` | new `swiftgate build resume` | `buildRun`, `task?`, `answer` (closed enum), `waitMs`; `parentID` is the halt |
 | `agent.usage` | new `swiftgate events ingest` | `sessionID`, `agent` (`main`, `subagent`), `agentID?`, `role?`, `task?`, `buildRun?`, `model`, `messageID`, `messageTime`, `inputTokens`, `outputTokens`, `cacheCreationTokens`, `cacheReadTokens`, `costUSD?`, `priceTable` |
@@ -139,9 +149,9 @@ join a RED to the files it named.
 
 ### 5.2 `gate.step`
 
-A step is 1 timed unit inside a tier: `resolve`, `build`, `test`, `coverage`, `lint`, `format`, `arch`, `docs`,
-`judge`, `prove`, `mutate`, `simulator`, and the rest of what `check` runs today. The step type is a closed enum
-that the task builds from the call sites that time a step. The places that already call `GateRun.timed` for a step hand their
+A step is 1 timed unit inside a tier. `GateStep` is a closed enum: `resolve`, `lint`, `testlint`, `arch`, `format`,
+`impact`, `test`, `coverage`, `app-build`, `reach`, `stress`, `prove`, `mutate`, `judge`, `simulator`, `docs`,
+`plugin-validate` and `record`. The places that already call `GateRun.timed` for a step hand their
 `(step, tier, ms, verdict)` to a run-scoped collector, and `GateRun.execute` passes the collected list to
 `RunStore.record`. `derivedData` is `warm` when the worktree's DerivedData directory existed before the step's
 build, `cold` when it didn't, and `none` for a step that builds nothing.
@@ -180,10 +190,11 @@ twice would double the rate.
 ### 5.6 `build.halt` and `build.resume`
 
 `swiftgate build halt --run <build run> [--task <task>] --reason <reason>` and `swiftgate build resume --run
-<build run> [--task <task>] --answer <answer>` write to the main checkout's store, where the orchestrator runs.
+<build run> [--task <task>] --answer <answer>` write to the main checkout's `.harness/events/build.jsonl`, where
+the orchestrator runs.
 Reasons: `question`, `stall`, `gate-red`, `merge-conflict`, `amend`, `budget`, `permission`. Answers: `retry`,
 `wait`, `abandon`, `amend`, `continue`. `resume` finds the newest open halt for the same run and task, sets
-`parentID` to it and computes `waitMs`; with no open halt it exits non-zero and writes nothing. The build and
+`parentID` to it and computes `waitMs`; with no open halt it exits 1 and writes nothing. The build and
 ship skills call both where they halt and resume today.
 
 Idle slots and retries need no new event: the reader replays the build run's `events.jsonl` transitions
@@ -194,7 +205,8 @@ against `maxParallel` from the run's preset.
 `swiftgate events ingest --session <id> [--workflow-transcripts <dir>] [--role <role>] [--task <task>] [--build-run <id>]`
 reads usage counts, offline, from:
 
-- the session's own transcript, at the `transcriptPath` the session record already keeps;
+- the session's own transcript, at the `transcriptPath` the session record already keeps, and its
+  `subagents/` transcripts;
 - with `--workflow-transcripts`, every `agent-*.jsonl` in the transcript directory the Workflow tool printed
   for a worker, which the build skill passes at each completion.
 
@@ -204,20 +216,22 @@ usage, so ingest deduplicates lines by `message.id`. Ingest is idempotent: it sk
 store for that session. Ingest stores no transcript text, tool input, path or prompt, and writes neither path
 anywhere.
 
-`costUSD` comes from a price table in `SwiftGateDomain`, keyed by model id, with its source and date. A model
-missing from the table gives `costUSD` absent and a line in the ingest output naming the model, never 0.
+`costUSD` comes from the price table in `ModelPrices.swift`, keyed by model id, with its source and version. A
+model or token class missing from the table gives `costUSD` absent and a line in the ingest output naming the
+model and the reason, never 0.
 `priceTable` records the table's version so a later price change can't rewrite old totals unnoticed.
 
 `role` is a closed enum: `orchestrator`, `design`, `plan`, `build-worker`, `review`, `qa`. Design and plan phase
-cost comes from joining `messageTime` into the phase windows of `phases.jsonl`.
+cost comes from joining `messageTime` into the phase windows of `phases.jsonl`. Those lines carry no time, so the
+reader lays each run's phases back to back from the run's start.
 
 ## 6. Readers
 
 ### 6.1 `swiftgate events list`
 
-`events list --kind <kind> [--since <duration|date>] [--run <id>] [--session <id>] [--json]` prints matching
-events as JSON lines, oldest first, from the active files, sealed segments and imported stores (§9). It's the raw
-access every query in §12 that `summary` doesn't cover builds on.
+`events list [--kind <kind>]... [--since 7d|12h|30m|<ISO time>|<run id>] [--run <id>]` prints matching events as
+JSON lines, oldest first, from the active files, sealed segments, and imported and unkept stores (§9). It lists
+damage on stderr. It's the raw access every query in §12 that `summary` doesn't cover builds on.
 
 ### 6.2 `swiftgate events summary`
 
@@ -227,17 +241,19 @@ access every query in §12 that `summary` doesn't cover builds on.
 |---|---|
 | Cost | `agent.usage` and `judge.call`, by role, agent, model, task and design phase |
 | Gate time | `gate.run` and `gate.step`: p50, p95, standard deviation and n per command, tier and step, warm vs cold |
-| Wrong gates | flips (§6.3), overturned findings and misses |
-| Flaky tests | §8.4 |
+| Wrong gates | flips (§6.3), overturned findings, tree misses and task misses |
+| Flaky and slow tests | §8.4, and p50, p95 and standard deviation of the slowest tests |
 | Hooks | latency p50 and p95 per event, blocks per rule, bypassed blocks |
 | Caches | hit rate and stale keys per cache, with the invisible-stale note |
-| Halts | wait per reason, idle slot-minutes, retries per task |
-| Judge | agreement and escalation share, from the judge kinds |
+| Halts | wait per reason, answers, open halts with their age, idle slot time, retries per task |
+| Judge | decisions, escalation share, blocks, agreement, latency, cache hits, errors and cost, shared with `judge events` |
 | Store | size per kind, sealed segments, dropped events, damaged lines |
 
 Every number carries its n, and a section with no events says so rather than printing zeros. The reader lists damage (a torn last
-line, an undecodable line, an unreadable segment) by file and line in a `damage` section and never drops it
-unannounced; the command still exits 0, since nothing here gates.
+line, an undecodable line, an unreadable segment, a missing rollup or ledger) by file and line in a `damage`
+section and never drops it unannounced. The command still exits 0, since nothing here gates. The reader never
+decodes a sealed `test` segment with a rollup: the store section counts its lines and bytes from its index, and
+says so.
 
 ### 6.3 Derived: flips, overturned findings, misses
 
@@ -245,9 +261,11 @@ unannounced; the command still exits 0, since nothing here gates.
   verdicts. A RED then GREEN flip marks every rule in the RED's `ruleCounts` as overturned for that tree.
 - **Overturned by an allow.** A RED for rule R naming path P, then a later run where `allowanceCounts[R]` rose
   and P is no longer named.
-- **Miss.** A task's gate run (from its task return) was GREEN, and a later `gate.run` on main is RED with a
-  finding path inside that task's write set (from the ledger, read only). The reader reports the task, the rule
-  and both run ids.
+- **Tree miss.** A GREEN, then a RED, on the same clean tree.
+- **Task miss.** A task's gate run (from its task return) was GREEN, and a later RED names a path in that task's
+  write set (from the ledger, read only) that its own GREEN didn't already name. The reader reports the task,
+  both run ids, the paths and the RED's rules above the GREEN's. `gate.run` lists finding paths but not the rule
+  behind each, so it can't say which rule named which path.
 
 ### 6.4 How `stats` relates
 
@@ -270,16 +288,15 @@ Code wrote them, and only counts leave the read.
 
 ### 8.1 Size
 
-This repo's push gate runs about 2,500 tests. A `test.result` line, envelope included, is about 330 bytes, so 1
-run writes about 0.8 MB. A heavy build day of 40 gate runs that test writes about 33 MB of raw lines. Repetitive
-JSON compresses well; the first store task measures the real ratio on a real gate run's lines and records it in
-the plan. App repos run far fewer tests per gate.
+This repo's push gate ran 2,653 test cases when measured. A `test.result` line, envelope included, averages 510
+bytes, so 1 run writes about 1.35 MB, and again to the run's own events copy. Recording took 127 ms. Real
+`test.result` lines compress about 9.7 times. App repos run far fewer tests per gate.
 
 ### 8.2 Rotation and sealing
 
-Each kind has an active file, `.harness/events/<kind>.jsonl`. After a write, under the same lock, the writer checks
-the file's size: past 16 MB for `test.result` or 4 MB for any other kind, it renames the file to
-`.harness/events/sealed/<kind>/<seq>.jsonl`, where `seq` is the next number in that directory. The writer then
+Each stream has an active file, `.harness/events/<stream>.jsonl`. After a write, under the same lock, the writer
+checks the file's size: past 16 MiB for `test` or 4 MiB for any other stream, it renames the file to
+`.harness/events/sealed/<stream>/<seq>.jsonl`, where `seq` is the next number in that directory. The writer then
 releases the lock, and the sealer compresses the segment with LZFSE to `<seq>.jsonl.lzfse`, writes `<seq>.index.json`,
 and removes the uncompressed file. A reader treats an uncompressed sealed file as readable, so a sealer killed
 halfway loses nothing.
@@ -292,11 +309,11 @@ span 2 segments.
 `<seq>.index.json` holds the segment's first and last time, line count, byte counts, SHA-256 of the
 uncompressed lines, and the run ids it holds. `--since` and `--run` read only the indexes to choose segments.
 
-For `test.result`, sealing also writes `<seq>.rollup.json`. It holds a test id dictionary and, per run, its
-`treeHash`, `dirty`, the indexes of tests that ran and those that failed or skipped. Per test, it holds n, ms sum,
-ms max and a fixed 32-bucket duration histogram. The flaky and slow-test sections read rollups plus the active file and never
-decompress a sealed segment. The reader rebuilds a missing or unreadable rollup from its segment on the
-next read and lists it under damage.
+For `test`, sealing also writes `<seq>.rollup.json`: each run's per-test outcomes and durations, so p95 is exact
+and `--since` and `--run` filter whole runs. Tree hash and dirty state come from the `gate.run` parent. The
+summary reads rollups plus the active file and never decompresses a sealed segment that has one. The reader
+rebuilds a missing rollup in memory and lists it under damage. `events list --kind test.result` still reads
+every segment.
 
 ### 8.4 Flake detection
 
@@ -307,8 +324,8 @@ each flaky test with its pass and fail counts and the run ids, and the share of 
 ### 8.5 Retention
 
 No command deletes events on its own: the user decided to keep every result. `swiftgate gc` touches events only with
-`--events --older-than <days>`, which removes sealed segments, their indexes and rollups whose last time is
-older, and never an active file. The summary's store section prints the size per kind, so growth is visible.
+`--events --older-than <days>` (at least 1), which removes sealed segments, their indexes and rollups whose last
+time is older, here and in every imported or unkept store, and never an active file. The summary's store section prints the size per kind, so growth is visible.
 
 ## 9. Location and merge copy-up
 
@@ -321,19 +338,20 @@ or to the git common dir's `swift-harness/unkept-events/<storeID>/` across volum
 survives, and the report names the path; `remove` loses the events only when the move fails too. Removal still goes
 ahead, as it does for runs (user, 2026-09-30).
 
-The reader reads `.harness/events/`, every `imported/<storeID>/` and every `unkept/<storeID>/` below it, and deduplicates by `eventID`. The
+The reader, `judge events` included, reads `.harness/events/`, every `imported/<storeID>/` and every
+`unkept/<storeID>/` below it, and deduplicates by `eventID`. It doesn't read the common dir's fallback yet. The
 other stores stay where they are: `history.jsonl` per checkout, `phases.jsonl` per design run, build `events.jsonl`
 and the ledger in the git common dir, task returns under `.harness/build/`. The reader joins them by run id,
 build run, task and time.
 
 ## 10. Concurrency
 
-Writers append under an exclusive `flock` on the kind's active file, in 1 `O_APPEND` write per event or batch,
+Writers append under an exclusive `flock` on the stream's active file, in 1 `O_APPEND` write per event or batch,
 as `RunStore.append` does today. Rotation's rename happens under that lock; compression and the index happen
 after, on a file nobody writes. Several sessions, hooks and gates can share a worktree; their lines never
 interleave. Readers take no lock. The reader skips a torn last line in an active file and counts it as damage, as
-`BuildEventLog.Damage` does for build events. `build halt` and `resume` serialize on the halt kind's lock, so 2
-resumes can't both close 1 halt.
+`BuildEventLog.Damage` does for build events. `build halt` and `resume` hold 1 lock, so 2 resumes can't both
+close 1 halt.
 
 ## 11. Consumers, and what not to collect
 
@@ -343,7 +361,7 @@ resumes can't both close 1 halt.
   the summary, so a build's cost, timeline, stuck points and slot use come from data.
 - **The build skill** runs `events ingest --workflow-transcripts <dir> --role build-worker --task <task>` at
   each worker's completion, and `build halt`/`resume` where it halts.
-- **The orchestrator's status table** cites `events summary --since <window> --json`.
+- **The orchestrator's status table** can cite `events summary --since <window> --json`.
 - **The evals runner** can read a case repo's `events summary --json` and `events list --kind agent.usage`
   before the runner deletes the case repo. The evals session owns `evals/runner/`; no task here edits it.
 - **A session improving the harness** reads `events summary --since 30d` and turns its worst numbers into
@@ -362,22 +380,22 @@ resumes can't both close 1 halt.
 | Question | Query |
 |---|---|
 | What did a build cost, by role, agent, model and task? | `swiftgate events summary --build-run <id>` (Cost) |
-| What did each design and plan phase cost? | `swiftgate events summary --since 7d --json`, `.cost.byPhase` |
+| What did each design and plan phase cost? | `swiftgate events summary --since 7d --json`, the `cost` section's metrics grouped `["phase", …]` |
 | Which gate verdicts flipped on an identical tree? | `swiftgate events summary --since 30d` (Wrong gates: flips) |
-| Which rules are most often overturned? | `swiftgate events summary --since 30d --json`, `.wrongGates.overturnedByRule` |
-| Which GREEN task gates missed a RED that landed later? | `swiftgate events summary --since 30d` (Wrong gates: misses) |
+| Which rules are most often overturned? | `swiftgate events summary --since 30d --json`, the `wrong-gates` section |
+| Which GREEN gates missed a RED that landed later? | `swiftgate events summary --build-run <id>` (Wrong gates: tree and task misses) |
 | Which step is slow, and how much does it vary? | `swiftgate events summary --since 14d` (Gate time) |
-| Does a cold DerivedData explain a slow merge gate? | `swiftgate events summary --since 14d --json`, `.gateTime.byStep[] \| select(.step=="build")`, warm vs cold |
-| Which tests flake, and how often? | `swiftgate events summary --since 30d` (Flaky tests) |
-| Which tests are slowest? | `swiftgate events summary --since 7d --json`, `.tests.slowest` |
+| Does a cold DerivedData explain a slow merge gate? | `swiftgate events summary --since 14d` (Gate time: each step's line names `warm` or `cold`) |
+| Which tests flake, and how often? | `swiftgate events summary --since 30d` (Flaky and slow tests) |
+| Which tests are slowest? | `swiftgate events summary --since 7d` (Flaky and slow tests) |
 | How long did halts wait, and why? | `swiftgate events summary --build-run <id>` (Halts) |
-| How many worker slots sat idle? | `swiftgate events summary --build-run <id> --json`, `.halts.idleSlotMinutes` |
-| Where did workers get stuck? | `swiftgate events list --kind build.halt --since 7d --json \| jq 'select(.payload.reason=="stall")'` |
+| How many worker slots sat idle? | `swiftgate events summary --build-run <id> --json`, the `halts` section's `idle-slot-ms` |
+| Where did workers get stuck? | `swiftgate events list --kind build.halt --since 7d \| jq 'select(.payload.reason=="stall")'` |
 | How slow are hooks, and which rules block most? | `swiftgate events summary --since 7d` (Hooks) |
-| Which blocks were bypassed? | `swiftgate events summary --since 7d --json`, `.hooks.bypassed` |
+| Which blocks were bypassed? | `swiftgate events summary --since 7d --json`, the `hooks` section's `bypassed` |
 | Do the caches hit, and are any stale? | `swiftgate events summary --since 7d` (Caches) |
 | How often does the judge escalate, and does it agree? | `swiftgate events summary --since 30d` (Judge), or `swiftgate judge events` |
-| Did 1 gate run's tests all pass, and how long did each take? | `swiftgate events list --kind test.result --run <run id> --json` |
+| Did 1 gate run's tests all pass, and how long did each take? | `swiftgate events list --kind test.result --run <run id>` |
 
 ## 13. Testing the harness
 

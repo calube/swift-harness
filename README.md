@@ -69,6 +69,12 @@ flowchart LR
   that agent again on labelled cases, with the same model.
 - Hook latency is a tested budget: the fastest of several PreToolUse runs stays under 50ms of CPU,
   even on a loaded machine.
+- The harness keeps local telemetry, on by default: gate runs and steps, every test result, hook
+  decisions, cache lookups, build halts and agent token counts. It records no source, prompt or key,
+  and nothing leaves the machine.
+  `swiftgate events summary` reports cost, gate time variance, verdicts that flipped or missed,
+  flaky and slow tests, and halt waits. `[telemetry] enabled = false` turns it off, except the
+  judge's audit log. Details: [`plugin/docs/telemetry.md`](plugin/docs/telemetry.md).
 
 **Parallel agents, 1 source of truth.**
 
@@ -258,7 +264,8 @@ Run `swiftgate <subcommand> --help` for any of these.
 | Gate tiers | `check`, `test`, `stats` |
 | Static checks | `lint`, `arch`, `testlint`, `impact`, `comments`, `coverage`, `module-graph` |
 | Test proof | `prove`, `mutate`, `reach`, `stress`, `snapshots` |
-| Judge | `judge` (changed tests), `judge ask`, `judge bench`, `judge bench-render` |
+| Judge | `judge` (changed tests), `judge ask`, `judge bench`, `judge bench-render`, `judge events` |
+| Telemetry | `events list`, `events summary`, `events ingest`, `build halt`, `build resume`, `gc --events` |
 | Design | `design-scope`, `design-lint`, `design-diff`, `design-render`, `design-telemetry`, `evidence`, `probe` |
 | Plan and build | `plan`, `plan-schedule`, `plan-lint`, `ledger`, `index`, `build`, `worktree`, `context-pack` |
 | Fast modes | `sprint`, `spec-page`, `surface-check` |
