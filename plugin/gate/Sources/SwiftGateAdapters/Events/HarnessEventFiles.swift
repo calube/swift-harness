@@ -18,6 +18,14 @@ public struct HarnessEventWriteError: Error, Sendable, Equatable, CustomStringCo
 /// Appends events to their streams. Any kind of event goes through 1 writer.
 public protocol HarnessEventWriting: Sendable {
   func append(_ event: HarnessEvent) throws(HarnessEventWriteError)
+  /// Appends `events` as 1 batch: a file writer makes 1 write per stream, so a batch never spans
+  /// 2 segments.
+  func append(contentsOf events: [HarnessEvent]) throws(HarnessEventWriteError)
+}
+
+extension HarnessEventWriting {
+  public func append(contentsOf events: [HarnessEvent]) throws(HarnessEventWriteError) {
+  }
 }
 
 public struct HarnessEventReadError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -44,9 +52,19 @@ public protocol HarnessEventReading: Sendable {
 /// never tear or interleave a line.
 public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
   public let root: URL
+  public let rotationBytes: @Sendable (HarnessEventStream) -> Int
+  public let guardPolicy: @Sendable (HarnessEventStream) -> EventPayloadGuard.Policy
 
-  public init(root: URL) {
+  public init(
+    root: URL,
+    rotationBytes: @escaping @Sendable (HarnessEventStream) -> Int = { $0.rotationBytes },
+    guardPolicy: @escaping @Sendable (HarnessEventStream) -> EventPayloadGuard.Policy = {
+      EventPayloadGuard.policy(for: $0)
+    }
+  ) {
     self.root = root
+    self.rotationBytes = rotationBytes
+    self.guardPolicy = guardPolicy
   }
 
   public func path(_ stream: HarnessEventStream, runID: String?) -> String {
