@@ -9,6 +9,7 @@ struct BuildCommand: ParsableCommand {
     subcommands: [
       BuildStartCommand.self, BuildNextCommand.self, BuildMergeCommand.self,
       BuildCheckReturnCommand.self, BuildProofBasesCommand.self,
-      BuildRecordGateCommand.self, BuildFinishCommand.self,
+      BuildRecordGateCommand.self, BuildFinishCommand.self, BuildHaltCommand.self,
+      BuildResumeCommand.self,
     ])
 }

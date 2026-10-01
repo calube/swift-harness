@@ -55,6 +55,10 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case cacheLookup = "cache.lookup"
   /// 1 API message's token counts, read from a Claude Code transcript.
   case agentUsage = "agent.usage"
+  /// A build stopped to wait on a person.
+  case buildHalt = "build.halt"
+  /// A person answered a build's halt.
+  case buildResume = "build.resume"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -64,6 +68,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .testResult: .test
     case .cacheLookup: .cache
     case .agentUsage: .usage
+    case .buildHalt, .buildResume: .build
     }
   }
 }
@@ -76,6 +81,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case test
   case cache
   case usage
+  case build
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -128,6 +134,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case testResult(TestResultEvent)
   case cacheLookup(CacheLookupEvent)
   case agentUsage(AgentUsageEvent)
+  case buildHalt(BuildHaltEvent)
+  case buildResume(BuildResumeEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -139,6 +147,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .testResult: .testResult
     case .cacheLookup: .cacheLookup
     case .agentUsage: .agentUsage
+    case .buildHalt: .buildHalt
+    case .buildResume: .buildResume
     }
   }
 }
@@ -345,6 +355,10 @@ extension HarnessEvent: Codable {
       payload = .cacheLookup(try c.decode(CacheLookupEvent.self, forKey: .payload))
     case .agentUsage:
       payload = .agentUsage(try c.decode(AgentUsageEvent.self, forKey: .payload))
+    case .buildHalt:
+      payload = .buildHalt(try c.decode(BuildHaltEvent.self, forKey: .payload))
+    case .buildResume:
+      payload = .buildResume(try c.decode(BuildResumeEvent.self, forKey: .payload))
     }
   }
 
@@ -368,6 +382,8 @@ extension HarnessEvent: Codable {
     case .testResult(let result): try c.encode(result, forKey: .payload)
     case .cacheLookup(let lookup): try c.encode(lookup, forKey: .payload)
     case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
+    case .buildHalt(let halt): try c.encode(halt, forKey: .payload)
+    case .buildResume(let resume): try c.encode(resume, forKey: .payload)
     }
   }
 }
