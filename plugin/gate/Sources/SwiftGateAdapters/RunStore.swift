@@ -86,6 +86,8 @@ public struct RunStore: Sendable {
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
     checkTier: CheckTier? = nil
   ) throws(RunStoreError) {
+    let clock = ContinuousClock()
+    let start = clock.now
     let directory = try runDirectory(for: report.runID)
     let reportFile = directory.appending(path: RunLayout.reportFileName)
     let reportData: Data
@@ -106,6 +108,46 @@ public struct RunStore: Sendable {
       throw .io(operation: "write", path: reportFile.path, reason: error.localizedDescription)
     }
     try append(line, to: historyFile.path)
+    guard let events else { return }
+    let elapsed = (clock.now - start).components
+    let recordStep = GateStepTiming(
+      step: .record, tier: nil,
+      milliseconds: Int(elapsed.seconds * 1000)
+        + Int(elapsed.attoseconds / 1_000_000_000_000_000),
+      verdict: .green, derivedData: .none)
+    do throws(HarnessEventWriteError) {
+      try events.append(
+        contentsOf: try gateEvents(
+          report, finishedAt: finishedAt, command: command, headCommit: headCommit, base: base,
+          treeHash: treeHash, dirty: dirty, steps: gateSteps + [recordStep],
+          checkTier: checkTier))
+    } catch {
+      throw .eventsUnwritten(error)
+    }
+  }
+
+  /// The run's `gate.run`, then each step's `gate.step` pointing at it.
+  private func gateEvents(
+    _ report: RunReport, finishedAt: Date, command: String?, headCommit: String?, base: String?,
+    treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?
+  ) throws(HarnessEventWriteError) -> [HarnessEvent] {
+    let payload: GateRunEvent
+    do {
+      payload = try GateRunEvent(report: report, command: command, treeHash: treeHash, dirty: dirty)
+    } catch {
+      throw HarnessEventWriteError(
+        path: RunLayout.eventsFile(.gate), reason: "gate.run: \(error)")
+    }
+    let source = HarnessEventSource(route: .check, tier: checkTier)
+    let run = HarnessEvent(
+      eventID: newEventID(), time: finishedAt, runID: report.runID, head: headCommit, base: base,
+      source: source, payload: .gateRun(payload))
+    return [run]
+      + steps.map { step in
+        HarnessEvent(
+          eventID: newEventID(), parentID: run.eventID, time: finishedAt, runID: report.runID,
+          head: headCommit, base: base, source: source, payload: .gateStep(GateStepEvent(step)))
+      }
   }
 
   public func readHistory() throws(RunStoreError) -> (
@@ -191,6 +233,45 @@ public struct LiveWorkingTree: WorkingTreeReading {
   }
 
   public func state() async throws(GitError) -> WorkingTreeState {
-    WorkingTreeState(treeHash: nil, dirty: false)
+    let status = try await git(["status", "--porcelain", "-z", "--untracked-files=normal"])
+    guard status.status.isSuccess else { throw Self.failure(status) }
+    if !status.stdout.bytes.isEmpty { return WorkingTreeState(treeHash: nil, dirty: true) }
+    let tree = try await git(["rev-parse", "--verify", "--quiet", "HEAD^{tree}"])
+    // `--quiet` makes a HEAD with no commit yet exit 1 with no diagnostics.
+    if tree.status == .exited(1), tree.stderr.bytes.isEmpty {
+      return WorkingTreeState(treeHash: nil, dirty: false)
+    }
+    guard tree.status.isSuccess else { throw Self.failure(tree) }
+    return WorkingTreeState(
+      treeHash: tree.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines), dirty: false)
+  }
+
+  private struct Output {
+    let arguments: [String]
+    let status: ExitStatus
+    let stdout: CapturedStream
+    let stderr: CapturedStream
+  }
+
+  /// `GIT_OPTIONAL_LOCKS=0` keeps `status` from refreshing the index under `index.lock`, which
+  /// a concurrent git command in the same worktree would contend on.
+  private func git(_ arguments: [String]) async throws(GitError) -> Output {
+    do {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments,
+          environmentOverlay: [
+            "LC_ALL": "C", "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
+          ],
+          workingDirectory: root.path, timeout: .seconds(60)))
+      return Output(
+        arguments: arguments, status: output.status, stdout: output.stdout, stderr: output.stderr)
+    } catch {
+      throw .process(error)
+    }
+  }
+
+  private static func failure(_ output: Output) -> GitError {
+    .commandFailed(arguments: output.arguments, status: output.status, stderr: output.stderr.text)
   }
 }

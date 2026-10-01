@@ -74,8 +74,13 @@ enum CheckRun {
     }
     let scopes: ResolvedScopes
     switch resolution {
-    case .failed(let outcome): return try t0Only(outcome, milliseconds: resolveMilliseconds)
-    case .resolved(let resolved): scopes = resolved
+    case .failed(let outcome):
+      context.steps.record(
+        .resolve, tier: nil, milliseconds: resolveMilliseconds, verdict: outcome.verdict)
+      return try t0Only(outcome, milliseconds: resolveMilliseconds)
+    case .resolved(let resolved):
+      context.steps.record(.resolve, tier: nil, milliseconds: resolveMilliseconds, verdict: .green)
+      scopes = resolved
     }
 
     let changed = await changedSinceMergeBase(git: git, base: base)
@@ -84,7 +89,7 @@ enum CheckRun {
     let t0 = try await runT0(
       root: root, swiftPM: swiftPM, git: git, formatter: dependencies.formatter,
       impact: tier.runsImpact(with: extraSteps), base: base, config: config, scopes: scopes,
-      changed: changed)
+      changed: changed, steps: context.steps)
     var parts = GateRunParts(
       tiers: [t0.tier], findings: t0.findings, allowances: t0.allowances)
 
@@ -124,8 +129,17 @@ enum CheckRun {
         // Before the scratch-tree steps: an app compile is cheaper than a proof and needs none.
         if extraSteps.contains(.appBuild) {
           let built = try await afterT1("app build", t1Tier) {
-            try await AppBuildCheck.run(
-              root: root, config: config, context: context, dependencies: dependencies.simulator)
+            let derivedData = GateStepCollector.derivedData(
+              buildDirectories: [AppBuildCheck.derivedDataDirectory(root: root)])
+            let (judgement, milliseconds) = try await GateRun.timed {
+              try await AppBuildCheck.run(
+                root: root, config: config, context: context, dependencies: dependencies.simulator
+              )
+            }
+            context.steps.record(
+              .appBuild, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict,
+              derivedData: derivedData)
+            return judgement
           }
           t1Tier = built.tier
           parts.findings += built.findings
@@ -161,9 +175,13 @@ enum CheckRun {
         }
         if tier == .ready {
           if let judge = dependencies.judge {
-            let judged = await TestJudgeCheck.run(
-              environment, graph: graph, config: config, base: base, atReadyTier: true,
-              dependencies: judge, route: .checkReady, runID: context.runID)
+            let (judged, milliseconds) = await GateRun.timed {
+              await TestJudgeCheck.run(
+                environment, graph: graph, config: config, base: base, atReadyTier: true,
+                dependencies: judge, route: .checkReady, runID: context.runID)
+            }
+            context.steps.record(
+              .judge, tier: .t1, milliseconds: milliseconds, verdict: gateVerdict(judged))
             if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
             parts.findings += judged
           }
@@ -188,13 +206,21 @@ enum CheckRun {
     // Design-doc evidence, calibration freshness and the docs gates need no module graph, so they
     // run independent of it.
     if tier != .fast {
-      parts.findings += try await PushDocGates.run(root: root, runner: dependencies.runner)
-      parts.findings += try CalibrationFreshness.run(root: root)
-      parts.findings += try await PushDocsLintProse.run(
-        root: root, runner: dependencies.runner, git: git, base: base)
+      let (docs, milliseconds) = try await GateRun.timed { () async throws -> [Finding] in
+        try await PushDocGates.run(root: root, runner: dependencies.runner)
+          + CalibrationFreshness.run(root: root)
+          + PushDocsLintProse.run(root: root, runner: dependencies.runner, git: git, base: base)
+      }
+      context.steps.record(.docs, tier: nil, milliseconds: milliseconds, verdict: gateVerdict(docs))
+      parts.findings += docs
     }
     if tier == .ready {
-      parts.findings += try await PluginValidateCheck.run(root: root, runner: dependencies.runner)
+      let (validated, milliseconds) = try await GateRun.timed {
+        try await PluginValidateCheck.run(root: root, runner: dependencies.runner)
+      }
+      context.steps.record(
+        .pluginValidate, tier: nil, milliseconds: milliseconds, verdict: gateVerdict(validated))
+      parts.findings += validated
     }
     for step in tier.pendingSteps {
       parts.findings.append(
@@ -204,6 +230,11 @@ enum CheckRun {
       parts.findings += try BudgetCheck.findings(tiers: parts.tiers, budgets: config.budgets)
     }
     return parts
+  }
+
+  /// RED when a finding gates, else GREEN: a step that reports only findings.
+  private static func gateVerdict(_ findings: [Finding]) -> Verdict {
+    findings.contains { $0.severity.failsGate } ? .red : .green
   }
 
   /// Runs `mutate` unless T1 is already RED: every mutant's unmutated baseline would fail, so
@@ -252,7 +283,7 @@ enum CheckRun {
   private static func runT0(
     root: URL, swiftPM: any SwiftPM, git: any Git, formatter: any SwiftFormatter,
     impact: Bool, base: String, config: Config?, scopes: ResolvedScopes,
-    changed: Result<[String], BlockedReason>
+    changed: Result<[String], BlockedReason>, steps: GateStepCollector
   ) async throws -> T0Result {
     let (outcomes, milliseconds) = await GateRun.timed { () async -> [StaticCheckOutcome] in
       let inputs: StaticCheckInputs.Loaded
@@ -262,14 +293,19 @@ enum CheckRun {
       }
       var outcomes = [
         scopes.appendingNotices(to: .checked(RuleRunResult(findings: [], allowances: []))),
-        LintCheck.evaluate(inputs), TestlintCheck.evaluate(inputs),
-        await ArchCheck.evaluate(inputs, swiftPM: swiftPM),
-        await FormatCheck.run(
-          changed: changed, root: root, excluded: config?.exclude ?? [], formatter: formatter),
+        await steps.timed(.lint, tier: .t0) { LintCheck.evaluate(inputs) },
+        await steps.timed(.testlint, tier: .t0) { TestlintCheck.evaluate(inputs) },
+        await steps.timed(.arch, tier: .t0) { await ArchCheck.evaluate(inputs, swiftPM: swiftPM) },
+        await steps.timed(.format, tier: .t0) {
+          await FormatCheck.run(
+            changed: changed, root: root, excluded: config?.exclude ?? [], formatter: formatter)
+        },
       ]
       if impact {
         outcomes.append(
-          await ImpactCheck.run(root: root, git: git, base: base, scopes: scopes.resolver))
+          await steps.timed(.impact, tier: .t0) {
+            await ImpactCheck.run(root: root, git: git, base: base, scopes: scopes.resolver)
+          })
       }
       return outcomes
     }
@@ -290,25 +326,37 @@ enum CheckRun {
       case .success(let changed): plan = TierPlan(changedPaths: changed, graph: graph, tier: .t1)
       }
     }
+    let selections = HostTestCheck.selections(plan: plan, graph: graph)
+    let derivedData = HostTestCheck.derivedData(selections, root: root)
     let t1 = try await HostTestCheck.run(
-      HostTestCheck.selections(plan: plan, graph: graph), root: root, swiftPM: swiftPM,
-      outputDirectory: context.directory, readCoverage: coverage)
+      selections, root: root, swiftPM: swiftPM, outputDirectory: context.directory,
+      readCoverage: coverage)
+    context.steps.record(
+      .test, tier: .t1, milliseconds: t1.tier.durationMilliseconds, verdict: t1.tier.verdict,
+      derivedData: derivedData)
     guard coverage else { return t1 }
 
     // Coverage is judged from the T1 run above: its exports are reused, never re-run.
-    switch await CoverageCheck.addedLines(git: git, base: base) {
-    case .failure(let reason):
-      return HostTestCheck.Result(
-        tier: try t1.tier.merging(.blocked),
-        findings: t1.findings + [try environment("coverage: \(reason.text)")],
-        coverageExports: t1.coverageExports)
-    case .success(let added):
-      let judgement = try CoverageCheck.judge(
-        graph: graph, config: config, added: added, exports: t1.coverageExports, root: root)
-      return HostTestCheck.Result(
-        tier: try t1.tier.merging(judgement.verdict), findings: t1.findings + judgement.findings,
-        coverageExports: t1.coverageExports)
+    let ((judged, verdict), milliseconds) = try await GateRun.timed {
+      () async throws -> (HostTestCheck.Result, Verdict) in
+      switch await CoverageCheck.addedLines(git: git, base: base) {
+      case .failure(let reason):
+        let result = HostTestCheck.Result(
+          tier: try t1.tier.merging(.blocked),
+          findings: t1.findings + [try environment("coverage: \(reason.text)")],
+          coverageExports: t1.coverageExports)
+        return (result, .blocked)
+      case .success(let added):
+        let judgement = try CoverageCheck.judge(
+          graph: graph, config: config, added: added, exports: t1.coverageExports, root: root)
+        let result = HostTestCheck.Result(
+          tier: try t1.tier.merging(judgement.verdict), findings: t1.findings + judgement.findings,
+          coverageExports: t1.coverageExports)
+        return (result, judgement.verdict)
+      }
     }
+    context.steps.record(.coverage, tier: .t1, milliseconds: milliseconds, verdict: verdict)
+    return judged
   }
 
   static func changedSinceMergeBase(git: any Git, base: String) async
@@ -715,6 +763,11 @@ enum CalibrationFreshness {
 enum AppBuildCheck {
   static let directory = "app-build"
 
+  static func derivedDataDirectory(root: URL) -> URL {
+    root.appending(path: HarnessGC.derivedDataDirectory, directoryHint: .isDirectory)
+      .appending(path: directory, directoryHint: .isDirectory)
+  }
+
   static func run(
     root: URL, config: Config, context: GateRun.Context,
     dependencies: SimulatorTestCheck.Dependencies
@@ -742,10 +795,7 @@ enum AppBuildCheck {
     let absolute = root.appending(path: containerPath).path
     let output = context.directory.appending(path: directory, directoryHint: .isDirectory)
     let bundle = output.appending(path: "\(config.appScheme).xcresult")
-    let derivedData = root.appending(
-      path: HarnessGC.derivedDataDirectory, directoryHint: .isDirectory
-    )
-    .appending(path: directory, directoryHint: .isDirectory)
+    let derivedData = derivedDataDirectory(root: root)
     try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
     try? FileManager.default.createDirectory(at: derivedData, withIntermediateDirectories: true)
     // `xcodebuild` refuses to overwrite a bundle, and an old one must never stand in for this run.
@@ -836,7 +886,7 @@ struct CheckCommand: AsyncParsableCommand {
     try await GateRun.execute(
       root: root, format: output.format, command: "check \(tier.rawValue)",
       steps: steps.isEmpty ? nil : steps.map(\.rawValue),
-      proofBases: proofBases.isEmpty ? nil : proofBases, base: base
+      proofBases: proofBases.isEmpty ? nil : proofBases, base: base, checkTier: tier
     ) { context in
       try await CheckRun.run(
         root: root, tier: tier, base: base, extraSteps: Set(steps), proofBases: proofBases,

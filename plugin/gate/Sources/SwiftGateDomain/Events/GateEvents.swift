@@ -134,10 +134,37 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
   public init(
     report: RunReport, command: String?, treeHash: String?, dirty: Bool?
   ) throws(ReportContractViolation) {
+    var ruleCounts: [String: Int] = [:]
+    for finding in report.findings { ruleCounts[finding.ruleID, default: 0] += 1 }
+    var allowanceCounts: [String: Int] = [:]
+    for allowance in report.allowances {
+      allowanceCounts[allowance.ruleID, default: 0] += allowance.count
+    }
+    // "." names the whole repository, not a file a finding can be joined to.
+    let files = Set(report.findings.map(\.file)).subtracting(["."])
+    let listable = files.filter(Self.isRepoRelative).sorted()
+    let paths = Array(listable.prefix(Self.maxFindingPaths))
+    let counted = report.tiers.compactMap(\.testCounts)
+    let testCounts: TestCounts? =
+      counted.isEmpty
+      ? nil
+      : try TestCounts(
+        passed: counted.reduce(0) { $0 + $1.passed }, failed: counted.reduce(0) { $0 + $1.failed },
+        skipped: counted.reduce(0) { $0 + $1.skipped })
     self.init(
-      command: command, verdict: report.verdict, milliseconds: 0, treeHash: nil, dirty: nil,
-      tiers: [], ruleCounts: [:], findingPaths: [], findingPathsTruncated: false,
-      allowanceCounts: [:], testCounts: nil)
+      command: command, verdict: report.verdict, milliseconds: report.durationMilliseconds,
+      treeHash: treeHash, dirty: dirty,
+      tiers: report.tiers.map {
+        GateRunTier(tier: $0.tier, verdict: $0.verdict, milliseconds: $0.durationMilliseconds)
+      },
+      ruleCounts: ruleCounts, findingPaths: paths, findingPathsTruncated: paths.count < files.count,
+      allowanceCounts: allowanceCounts, testCounts: testCounts)
+  }
+
+  /// A path the payload guard keeps: relative, 1 line, short.
+  private static func isRepoRelative(_ path: String) -> Bool {
+    !path.hasPrefix("/") && !path.hasPrefix("~") && !path.contains(where: \.isNewline)
+      && path.utf8.count < EventPayloadGuard.maxStringBytes
   }
 
   private enum CodingKeys: String, CodingKey {

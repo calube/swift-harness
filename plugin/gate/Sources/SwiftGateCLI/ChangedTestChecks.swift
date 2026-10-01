@@ -127,22 +127,31 @@ enum ChangedTestChecks {
     _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String] = [],
     context: GateRun.Context
   ) async -> ChangedTestJudgement {
+    var derivedData = GateDerivedData.none
     let (result, milliseconds) = await GateRun.timed {
       await proveUntimed(
-        environment, graph: graph, base: base, proofBases: proofBases, context: context)
+        environment, graph: graph, base: base, proofBases: proofBases, context: context,
+        derivedData: &derivedData)
     }
+    context.steps.record(
+      .prove, tier: .t1, milliseconds: milliseconds, verdict: result.judgement.verdict,
+      derivedData: derivedData)
     return result.withSummary(result.summary.map { "prove: \($0) (\(duration(milliseconds)))" })
   }
 
+  /// - Parameter derivedData: set from the selected packages' build directories before the
+  ///   change's own run builds them.
   private static func proveUntimed(
     _ environment: Environment, graph: ModuleGraph, base: String, proofBases: [String],
-    context: GateRun.Context
+    context: GateRun.Context, derivedData: inout GateDerivedData
   ) async -> SummarizedJudgement {
     let selection: Selection
     switch await select(environment, graph: graph, base: base) {
     case .failure(let reason): return .blocked(ProofRules.noEvidenceRuleID, reason.text)
     case .success(let found): selection = found
     }
+    derivedData = HostTestCheck.derivedData(
+      selection.packages.map(\.selection), root: environment.root)
     for proofBase in proofBases {
       do throws(GitError) {
         guard try await environment.git.isAncestor(proofBase, of: "HEAD") else {
@@ -329,12 +338,15 @@ enum ChangedTestChecks {
     _ environment: Environment, graph: ModuleGraph, base: String, iterations: Int,
     context: GateRun.Context
   ) async -> ChangedTestJudgement {
+    var derivedData = GateDerivedData.none
     let (result, milliseconds) = await GateRun.timed { () async -> SummarizedJudgement in
       let selection: Selection
       switch await select(environment, graph: graph, base: base) {
       case .failure(let reason): return .blocked(StressRules.noEvidenceRuleID, reason.text)
       case .success(let found): selection = found
       }
+      derivedData = HostTestCheck.derivedData(
+        selection.packages.map(\.selection), root: environment.root)
       guard !selection.packages.isEmpty else {
         return .note("stress: no new or changed host tests since \(base)")
       }
@@ -358,6 +370,9 @@ enum ChangedTestChecks {
         judgement: judgement,
         summary: "\(selection.tests.count) new or changed host tests × \(iterations) runs")
     }
+    context.steps.record(
+      .stress, tier: .t1, milliseconds: milliseconds, verdict: result.judgement.verdict,
+      derivedData: derivedData)
     return result.withSummary(result.summary.map { "stress: \($0) (\(duration(milliseconds)))" })
   }
 
@@ -368,12 +383,15 @@ enum ChangedTestChecks {
   static func reach(
     _ environment: Environment, graph: ModuleGraph, base: String, context: GateRun.Context
   ) async -> ChangedTestJudgement {
+    var derivedData = GateDerivedData.none
     let (result, milliseconds) = await GateRun.timed { () async -> SummarizedJudgement in
       let selection: Selection
       switch await select(environment, graph: graph, base: base) {
       case .failure(let reason): return .blocked(ReachRules.noDataRuleID, reason.text)
       case .success(let found): selection = found
       }
+      derivedData = HostTestCheck.derivedData(
+        selection.packages.map(\.selection), root: environment.root)
       guard !selection.packages.isEmpty else {
         return .note("reach: no new or changed host tests since \(base)")
       }
@@ -404,6 +422,9 @@ enum ChangedTestChecks {
         judgement: judgement,
         summary: "\(selection.tests.count) new or changed host tests run alone with coverage")
     }
+    context.steps.record(
+      .reach, tier: .t1, milliseconds: milliseconds, verdict: result.judgement.verdict,
+      derivedData: derivedData)
     return result.withSummary(result.summary.map { "reach: \($0) (\(duration(milliseconds)))" })
   }
 

@@ -1,0 +1,86 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 65896,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "T2: no simulator test target is selected",
+      "rule" : "swiftgate.nothing-selected",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "evidence check (push tier): 0 design doc(s) found, 0 approved or built and checked at HEAD.",
+      "rule" : "evidence-check.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "calibration freshness skipped: no plugin/agents/design-*.md in this repository, so there is no design agent to calibrate; no plugin/agents/build-fixer.md and plugin/agents/build-worker.md in this repository, so there is no build agent to calibrate.",
+      "rule" : "calibration-freshness.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".swiftgate.toml",
+      "line" : null,
+      "message" : "no [docs] table in .swiftgate.toml: docs-lint ran the generic families only, with default budgets and no repo-specific anchors.",
+      "rule" : "docs-lint.no-docs-section",
+      "severity" : "minor"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "docs",
+      "line" : null,
+      "message" : "no docs/ directory: docs-lint scanned an empty docs corpus (root AGENTS.md only, if present).",
+      "rule" : "docs-lint.no-docs-directory",
+      "severity" : "minor"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prose (push tier): 0 changed doc(s), 0 added line(s) since the merge base with HEAD checked.",
+      "rule" : "prose.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "T1 took 63.9s, over its 60s budget",
+      "rule" : "swiftgate.budget",
+      "severity" : "minor"
+    }
+  ],
+  "headCommit" : "b82667c22c34782bcfc752a3f43c90599e6f096e",
+  "runID" : "20261001T022747Z-c4785277",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 336,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "GREEN"
+    },
+    {
+      "durationMilliseconds" : 63975,
+      "testCounts" : {
+        "failed" : 0,
+        "passed" : 31,
+        "skipped" : 0
+      },
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

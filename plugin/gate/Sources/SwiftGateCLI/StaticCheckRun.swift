@@ -18,6 +18,7 @@ enum StaticCheckRun {
     let clock = ContinuousClock()
     let startedAt = Date()
     let start = clock.now
+    let telemetry = await GateRun.telemetry(root: root, events: events, workingTree: workingTree)
     let outcome = await check()
     let elapsed = clock.now - start
     let milliseconds =
@@ -26,11 +27,11 @@ enum StaticCheckRun {
     let runID = runID ?? RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
     let report = try StaticCheckReport.make(
       runID: runID, durationMilliseconds: milliseconds, outcome: outcome)
-    do {
-      try RunStore(worktreeRoot: root).record(report, finishedAt: Date())
-    } catch {
-      // History is diagnostics; failing to write it must not flip a verdict about the code.
-      FileHandle.standardError.write(Data("swiftgate: could not record run: \(error)\n".utf8))
+    // History is diagnostics; failing to write it must not flip a verdict about the code.
+    GateRun.record { () throws(RunStoreError) in
+      try RunStore(worktreeRoot: root, events: telemetry.events).record(
+        report, finishedAt: Date(), command: command, treeHash: telemetry.tree?.treeHash,
+        dirty: telemetry.tree?.dirty)
     }
     Console.write(try ReportRenderer.render(report, format: format))
     let status = report.verdict.exitCode

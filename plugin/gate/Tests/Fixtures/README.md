@@ -941,3 +941,19 @@ for event in escalated.log.events + blocked.log.events { try files.append(event)
 ```
 
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' Events/judge.jsonl` printed 0.
+
+## GateRun
+
+`GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
+record it and show which of its fields reach the `gate.run` event and which never do. Captured at
+`b82667c` with Xcode 26.2 (Swift 6.2.3), from the repository root:
+
+```sh
+cd examples/SampleApp
+../../plugin/bin/swiftgate check --tier push --base HEAD
+cp .harness/runs/<run id>/report.json ../../plugin/gate/Tests/Fixtures/GateRun/report.json
+```
+
+The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target selected with
+`--base HEAD`, and 7 findings across 7 rules naming the files `.`, `.swiftgate.toml` and `docs`.
+`grep -ciE '/Users|/private|/tmp|caleb|swift-harness' GateRun/report.json` printed 0.
