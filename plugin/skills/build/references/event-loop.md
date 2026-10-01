@@ -10,6 +10,7 @@ Contents:
 - [Launch](#launch): the workflow's args
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
+- [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
 - [Design conflict](#design-conflict)
 - [Stall watch](#stall-watch): a worker that stops without returning
@@ -179,6 +180,34 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
+
+## Recording halts
+
+Every halt after `build start` gets 1 `build halt` before the question and 1 `build resume` after
+the answer, so the wait from halt to answer is data. A halt nobody answers stays open in the
+events, which is the point: it shows how long the build sat. Pass `--task <task>` for a halt about
+1 task, and leave it out for a halt of the whole run; the resume names the same task, since it
+answers only the newest open halt of that run and task. `build resume` exits 1 and writes nothing
+when no halt is open for them. Only ids and the closed values below go in: never the question,
+the findings or the answer's words.
+
+| Halt | `--task` | `--reason` |
+|---|---|---|
+| a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
+| a `gate-red` return, or the fix merge's gate still red | the task | `gate-red` |
+| the fixer's merge still conflicted | the task | `merge-conflict` |
+| a `design-conflict` return | the reporting task | `amend` |
+| the time budget's cutoff with tasks running | none | `budget` |
+| the final gate not GREEN | none | `gate-red` |
+| any other halt: a null workflow, a failed check, `review-blocked`, a `build merge` or `--undo` exit, `proof-bases` exit 2, a resumed `in-progress` task | the task, when there is one | `question` |
+
+| Option the user picks | `--answer` |
+|---|---|
+| retry, stop and retry | `retry` |
+| wait | `wait` |
+| abandon, drop, stop the build, stop them now, stop | `abandon` |
+| an amend through the design skill | `amend` |
+| go on, go on without it, leave it blocked, let them finish, finish anyway | `continue` |
 
 ## Task halts
 

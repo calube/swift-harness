@@ -71,11 +71,36 @@ public enum BuildHalts {
   /// A halt of the whole run (`task` `nil`) is answered only by a resume of the whole run.
   public static func openHalt(in events: [HarnessEvent], buildRun: String, task: String?)
     -> HarnessEvent?
-  { nil }
+  {
+    open(in: events)
+      .filter {
+        guard case .buildHalt(let halt) = $0.payload else { return false }
+        return halt.buildRun == buildRun && halt.task == task
+      }
+      .last
+  }
 
   /// Every halt no resume answered yet, oldest first: each one is still waiting.
-  public static func open(in events: [HarnessEvent]) -> [HarnessEvent] { [] }
+  public static func open(in events: [HarnessEvent]) -> [HarnessEvent] {
+    var answered = Set<String>()
+    for event in events {
+      if case .buildResume = event.payload, let parent = event.parentID {
+        answered.insert(parent)
+      }
+    }
+    let halts = events.enumerated().filter {
+      guard case .buildHalt = $0.element.payload else { return false }
+      return !answered.contains($0.element.eventID)
+    }
+    // Ties keep write order, so the newest of 2 halts in 1 millisecond is the later line.
+    return halts.sorted { ($0.element.time, $0.offset) < ($1.element.time, $1.offset) }
+      .map(\.element)
+  }
 
   /// Whole milliseconds from `halt` to `resume`; `0` when the clock ran backwards.
-  public static func waitMilliseconds(from halt: Date, to resume: Date) -> Int { 0 }
+  public static func waitMilliseconds(from halt: Date, to resume: Date) -> Int {
+    let milliseconds = (resume.timeIntervalSince(halt) * 1000).rounded()
+    guard milliseconds > 0 else { return 0 }
+    return Int(exactly: milliseconds) ?? Int.max
+  }
 }

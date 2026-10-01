@@ -38,6 +38,14 @@ most 4 questions per prompt. Quote the failing command's `message` or its findin
 A headless session has no `AskUserQuestion`: end the turn with the questions and their options,
 recommended first. Never work around a halt by hand. The reference lists the options for each halt.
 
+Once `build start` has printed `<run>`, time every halt: just before asking,
+`"$SG" build halt --run <run> [--task <task>] --reason <reason>`; just after the answer, before
+acting on it, `"$SG" build resume --run <run> [--task <task>] --answer <answer>` with the same
+`--task`. A headless session records the halt and ends its turn; the resume comes when the answer
+does. Never pass question or answer text. Neither command's exit changes what happens next: a
+failure prints 1 line, so name it in the report. The reference maps each halt to its
+[reason and answers](references/event-loop.md#recording-halts).
+
 ## 1. Start
 
 1. `"$SG" doctor --session <session>`. A running session keeps the skills and agent prompts it

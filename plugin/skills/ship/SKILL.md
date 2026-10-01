@@ -171,7 +171,9 @@ Run `/swift-harness:plan <plan>`. The step ends when the plan's index status is 
 
 Run `/swift-harness:build <plan> --preset <preset>`. The build skill starts the run, merges each
 task, runs the final gate and finishes the run. Keep `<run>`. A halt the user answers inside the
-build, such as a retry, doesn't end this step. Stop only when the build skill stops.
+build, such as a retry, doesn't end this step. Stop only when the build skill stops. The build
+skill times each of its halts with `build halt` and `build resume`; a halt in an earlier step has
+no build run to name, so it isn't timed.
 
 ## 7. Report
 
@@ -185,5 +187,7 @@ build, such as a retry, doesn't end this step. Stop only when the build skill st
 
 End with the ledger page link or its path, then the design doc and its tier, or at `none` the spec page path
 and `<surface>`. List the tasks done, the unfinished
-ones with their status, and each halt with the user's answer. Give the final gate's verdict and run
+ones with their status, and each halt with the user's answer; when the build ran,
+`"$SG" events list --kind build.halt --kind build.resume --since <run>` gives each one's reason,
+answer and wait. Give the final gate's verdict and run
 id, and the wall time against `time_budget_min`. When the index stays `building`, name the resume command.
