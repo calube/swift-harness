@@ -99,8 +99,9 @@ public struct EventSegmentStore: Sendable {
     }
   }
 
-  /// Compresses each plain segment, writes its index, and removes the plain file. Each file
-  /// appears by an exclusive create, so 2 sealers of 1 segment leave 1 of each.
+  /// Compresses each plain segment, writes its index (and a `test.result` segment's rollup), and
+  /// removes the plain file. Each file appears by an exclusive create, so 2 sealers of 1 segment
+  /// leave 1 of each.
   public func sealPending(_ stream: HarnessEventStream) throws(HarnessEventWriteError) {
     let directory = sealedDirectory(stream)
     let names: [String]
@@ -151,6 +152,14 @@ public struct EventSegmentStore: Sendable {
         try Self.createExclusively(try index.encoded(), at: indexFile)
       } catch {
         throw failing(indexFile, error)
+      }
+    }
+    let rollupFile = directory.appending(path: EventSegmentLayout.rollupName(sequence))
+    if stream == .test, !FileManager.default.fileExists(atPath: rollupFile.path) {
+      do {
+        try Self.createExclusively(try TestRollup.make(segment: lines).encoded(), at: rollupFile)
+      } catch {
+        throw failing(rollupFile, error)
       }
     }
     guard unlink(plain.path) == 0 || errno == ENOENT else {
