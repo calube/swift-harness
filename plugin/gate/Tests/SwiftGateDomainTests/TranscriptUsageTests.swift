@@ -90,51 +90,29 @@ struct TranscriptUsageTests {
     #expect(messages.first?.time == (try Date("2026-10-01T01:02:33.145Z", strategy: .iso8601)))
   }
 
-  /// The envelope's cost left after every rate the table confirms, per output token.
-  static func outputRemainder(_ session: String) throws -> Double {
-    let envelope = try Self.envelope(session)
-    let rates = try #require(ModelPriceTable.current.usdPerMillion["claude-opus-5-5"])
-    func rate(_ key: TokenPriceClass) throws -> Double {
-      NSDecimalNumber(decimal: try #require(rates[key])).doubleValue / 1_000_000
-    }
-    let confirmed =
-      Double(envelope.input) * (try rate(.input))
-      + Double(envelope.cacheCreation) * (try rate(.cacheWrite5m))
-      + Double(envelope.cacheRead) * (try rate(.cacheRead))
-    return (envelope.cost - confirmed) / Double(envelope.output)
-  }
-
   @Test(
-    "the table's confirmed rates leave the same cost per output token in both envelopes, and a table completed with it prices the other session within 1% of its total_cost_usd — catches a wrong price key or a double-counted message"
+    "the current price table prices every captured message, each session within 1% of its envelope's total_cost_usd, and with the output rate taken out every message is stored without a cost naming that rate — catches a wrong price key, a missing rate, a double-counted message or unpriced usage stored as 0"
   )
-  func confirmedRatesExplainTheEnvelopes() throws {
-    let plain = try Self.outputRemainder(Self.plainSession)
-    let subagent = try Self.outputRemainder(Self.subagentSession)
-    #expect(plain > 0)
-    #expect(abs(plain - subagent) <= 0.01 * plain, "\(plain) vs \(subagent)")
+  func currentTableExplainsTheEnvelopes() throws {
+    for session in [Self.plainSession, Self.subagentSession] {
+      let usages = Self.usages(try Self.plan(session))
+      let costs = usages.compactMap(\.costUSD)
+      #expect(!usages.isEmpty)
+      #expect(costs.count == usages.count, "\(session)")
+      let envelope = try Self.envelope(session)
+      let total = costs.reduce(0, +)
+      #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
+    }
 
     var rates = try #require(ModelPriceTable.current.usdPerMillion["claude-opus-5-5"])
-    rates[.output] = Decimal(plain * 1_000_000)
-    let completed = ModelPriceTable(
-      version: "test", source: "test", usdPerMillion: ["claude-opus-5-5": rates])
-    let usages = Self.usages(try Self.plan(Self.subagentSession, prices: completed))
-    let costs = usages.compactMap(\.costUSD)
-    #expect(costs.count == usages.count)
-    let envelope = try Self.envelope(Self.subagentSession)
-    let total = costs.reduce(0, +)
-    #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
-  }
-
-  @Test(
-    "a rate the envelopes don't confirm leaves costUSD absent and names the model and the missing rate, while priceTable still names the table — catches unpriced usage stored as 0"
-  )
-  func unconfirmedRateLeavesCostAbsent() throws {
-    let plan = try Self.plan(Self.subagentSession)
+    #expect(rates.removeValue(forKey: .output) != nil)
+    let noOutput = ModelPriceTable(
+      version: "no-output", source: "test", usdPerMillion: ["claude-opus-5-5": rates])
+    let plan = try Self.plan(Self.subagentSession, prices: noOutput)
     let usages = Self.usages(plan)
     #expect(usages.count == 3)
     #expect(usages.allSatisfy { $0.costUSD == nil })
-    #expect(usages.allSatisfy { $0.priceTable == ModelPriceTable.current.version })
-    #expect(!ModelPriceTable.current.version.isEmpty)
+    #expect(usages.allSatisfy { $0.priceTable == "no-output" })
     #expect(
       plan.unpriced == [
         UnpricedModel(model: "claude-opus-5-5", messages: 3, reason: .missingRates([.output]))
