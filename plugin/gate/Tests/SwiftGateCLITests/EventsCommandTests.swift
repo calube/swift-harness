@@ -58,6 +58,35 @@ struct EventsCommandTests {
   }
 
   @Test(
+    "summary's sections join wrong gates to the build state the command read, damage included, and keep every other section — catches the summary reporting misses without the build join"
+  )
+  func summaryJoinsWrongGatesToTheBuildState() throws {
+    let builds = BuildJoin(
+      source: BuildJoinReader.plansDirectory, runs: [],
+      damage: [BuildJoinDamage(path: "swift-harness/plans/p/ledger.json", reason: "missing ledger")]
+    )
+    let sections = EventsSummaryRun.sections(builds: builds)
+    let run = HarnessEvent(
+      eventID: "run", time: Self.now, runID: "20261001T000000Z-00000001",
+      source: HarnessEventSource(route: .check, tier: .push),
+      payload: .gateRun(
+        GateRunEvent(
+          command: "check push", verdict: .green, milliseconds: 1, treeHash: nil, dirty: true,
+          tiers: [], ruleCounts: [:], findingPaths: [], findingPathsTruncated: false,
+          allowanceCounts: [:], testCounts: nil)))
+    let input = EventSummaryInput(
+      events: [StoredEvent(event: run, bytes: 1)], query: EventQuery(), store: EventStoreFacts(),
+      damage: [], files: LiveEventStoreFiles(root: Self.temporaryRoot()), now: Self.now)
+
+    let wrongGates = try #require(sections.first { $0.id == .wrongGates }?.summarize(input))
+
+    #expect(sections.map(\.id) == EventSummary.sections.map(\.id))
+    #expect(
+      wrongGates.lines.contains(
+        "build state damage: swift-harness/plans/p/ledger.json: missing ledger"))
+  }
+
+  @Test(
     "summary prints every section, \"no events yet\" for each empty one, the store section and the damage, exiting 0 — catches a section missing from the registry"
   )
   func summaryPrintsEverySection() throws {

@@ -144,7 +144,12 @@ public struct WrongGateFindings: Sendable, Equatable {
 
 /// Gates that were wrong: flips, overturned findings and misses.
 public struct WrongGatesSection: EventSummarySection {
-  public init() {}
+  /// The build state misses join task gates to; `nil` when it wasn't read.
+  public let builds: BuildJoin?
+
+  public init(builds: BuildJoin? = nil) {
+    self.builds = builds
+  }
 
   public var id: EventSummarySectionID { .wrongGates }
 
@@ -201,6 +206,94 @@ public struct WrongGatesSection: EventSummarySection {
           + "then run \(run(overturn.laterRunID)) waived "
           + overturn.paths.joined(separator: ", "))
     }
+    let misses = MissFindings(events: events, builds: builds)
+    metrics += missMetrics(misses)
+    lines += missLines(misses)
     return EventSummarySectionReport(id: id, state: .reported, lines: lines, metrics: metrics)
+  }
+
+  private func missMetrics(_ misses: MissFindings) -> [EventSummaryMetric] {
+    var metrics = [
+      EventSummaryMetric(
+        name: "tree-misses", group: [], value: Double(misses.treeMisses.count), unit: .count,
+        n: misses.reGatedGreens)
+    ]
+    if misses.reGatedGreens > 0 {
+      metrics.append(
+        EventSummaryMetric(
+          name: "tree-miss-rate", group: [],
+          value: Double(misses.treeMisses.count) / Double(misses.reGatedGreens), unit: .share,
+          n: misses.reGatedGreens))
+    }
+    guard let builds else { return metrics }
+    let missedTasks = Set(misses.taskMisses.map { [$0.buildRunID, $0.task] }).count
+    metrics += [
+      EventSummaryMetric(
+        name: "task-misses", group: [], value: Double(misses.taskMisses.count), unit: .count,
+        n: misses.comparedTasks),
+      EventSummaryMetric(
+        name: "uncompared-tasks", group: [], value: Double(misses.uncomparedTasks.count),
+        unit: .count, n: misses.comparedTasks + misses.uncomparedTasks.count),
+      EventSummaryMetric(
+        name: "build-join-damage", group: [], value: Double(builds.damage.count), unit: .count,
+        n: builds.runs.count),
+    ]
+    if misses.comparedTasks > 0 {
+      metrics.append(
+        EventSummaryMetric(
+          name: "task-miss-rate", group: [],
+          value: Double(missedTasks) / Double(misses.comparedTasks), unit: .share,
+          n: misses.comparedTasks))
+    }
+    return metrics
+  }
+
+  private func missLines(_ misses: MissFindings) -> [String] {
+    func run(_ id: String?) -> String { id ?? "unnamed run" }
+    func gate(_ command: String?, _ tiers: [Tier]) -> String {
+      "\(command ?? "no command") [\(tiers.map(\.rawValue).joined(separator: ","))]"
+    }
+    func rules(_ rules: [String]) -> String {
+      rules.isEmpty ? "no rule above the GREEN's" : rules.joined(separator: ", ")
+    }
+    var lines = [
+      "tree misses: \(misses.treeMisses.count) of \(misses.reGatedGreens) clean GREEN runs "
+        + "gated again on the same tree went RED (n=\(misses.reGatedGreens))"
+    ]
+    for miss in misses.treeMisses {
+      lines.append(
+        "tree miss: tree \(miss.treeHash.prefix(12)): GREEN \(gate(miss.greenCommand, miss.greenTiers)) "
+          + "run \(run(miss.greenRunID)), then RED \(gate(miss.redCommand, miss.redTiers)) run "
+          + "\(run(miss.redRunID)); \(rules(miss.rules))")
+    }
+    guard let builds else {
+      lines.append("task misses: not joined, build state not read")
+      return lines
+    }
+    if builds.runs.isEmpty, builds.damage.isEmpty {
+      lines.append("task misses: no build runs under \(builds.source) (n=0)")
+      return lines
+    }
+    lines.append(
+      "task misses: \(misses.taskMisses.count) in \(misses.comparedTasks) merged tasks with a "
+        + "clean GREEN gate (n=\(misses.comparedTasks)) over \(builds.runs.count) build runs; "
+        + "\(misses.uncomparedTasks.count) not compared")
+    for miss in misses.taskMisses {
+      lines.append(
+        "miss: task \(miss.task) (plan \(miss.plan), build run \(miss.buildRunID)): GREEN run "
+          + "\(miss.greenRunID), then RED run \(miss.redRunID) on main; \(rules(miss.rules)); "
+          + miss.paths.joined(separator: ", "))
+    }
+    for task in misses.uncomparedTasks {
+      lines.append(
+        "not compared: task \(task.task) (build run \(task.buildRunID)): \(task.reason.rawValue)")
+    }
+    if !misses.unjoinedRedRunIDs.isEmpty {
+      lines.append(
+        "RED gates on main with no gate.run event: "
+          + misses.unjoinedRedRunIDs.joined(separator: ", "))
+    }
+    lines += builds.damage.map { "build state damage: \($0)" }
+    return lines
   }
 }
