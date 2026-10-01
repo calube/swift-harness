@@ -163,7 +163,7 @@ enum CheckRun {
           if let judge = dependencies.judge {
             let judged = await TestJudgeCheck.run(
               environment, graph: graph, config: config, base: base, atReadyTier: true,
-              dependencies: judge)
+              dependencies: judge, route: .checkReady, runID: context.runID)
             if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
             parts.findings += judged
           }

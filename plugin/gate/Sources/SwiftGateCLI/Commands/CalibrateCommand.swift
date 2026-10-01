@@ -123,12 +123,14 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
     }
     let runner = LiveProcessRunner()
     let judge = judge(runner: runner)
-    try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
-      await CalibrateDesignRun.run(
-        root: root, runner: runner, model: CalibrationModel.unpinned,
-        modelOverride: model, now: now,
-        concurrentCases: CalibrateDesignRun.defaultConcurrentCases, replies: replies,
-        judge: judge)
+    try await JudgeEventRoute.run(root: root, route: .calibrateDesign, runID: runID) {
+      try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
+        await CalibrateDesignRun.run(
+          root: root, runner: runner, model: CalibrationModel.unpinned,
+          modelOverride: model, now: now,
+          concurrentCases: CalibrateDesignRun.defaultConcurrentCases, replies: replies,
+          judge: judge)
+      }
     }
   }
 }

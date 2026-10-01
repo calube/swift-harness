@@ -7,6 +7,7 @@ DerivedData/
 .DS_Store
 **/.harness/derived-data/
 **/.harness/judge-cache/
+**/.harness/events/
 **/.harness/cache/
 **/.harness/probe/
 **/.harness/context-pack/

@@ -1413,9 +1413,11 @@ struct SelfTestCommand: AsyncParsableCommand {
       let live = liveJudgeConfig.flatMap {
         JudgeFactory.make($0, runner: LiveProcessRunner(), cacheDirectory: nil)
       }
-      try await StaticCheckRun.execute(root: root, format: output.format) {
-        await JudgeSelfTest.run(
-          harnessRoot: root, judge: live, record: record, backend: judgeBackend ?? .claude)
+      try await JudgeEventRoute.run(root: root, route: .selfTest) {
+        try await StaticCheckRun.execute(root: root, format: output.format) {
+          await JudgeSelfTest.run(
+            harnessRoot: root, judge: live, record: record, backend: judgeBackend ?? .claude)
+        }
       }
       return
     }

@@ -143,12 +143,170 @@ public enum HarnessEventJSON {
   }
 
   public static func encodeLine(_ event: HarnessEvent) throws -> Data {
-    Data()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .custom { date, encoder in
+      var container = encoder.singleValueContainer()
+      try container.encode(date.formatted(Self.timeFormat))
+    }
+    var data = try encoder.encode(event)
+    data.append(UInt8(ascii: "\n"))
+    return data
   }
 
   /// Every event in `data`. A torn last line is reported; any other bad line, an unknown key at
   /// any depth, or a newer schema fails.
   public static func decode(_ data: Data) throws(HarnessEventDecodeError) -> Read {
-    Read(events: [], tornLastLine: false)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .custom { decoder in
+      let container = try decoder.singleValueContainer()
+      let text = try container.decode(String.self)
+      guard let date = try? Date(text, strategy: Self.timeFormat) else {
+        throw DecodingError.dataCorruptedError(
+          in: container, debugDescription: "`\(text)` isn't an ISO 8601 time")
+      }
+      return date
+    }
+    let lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
+    let endsWithNewline = data.last == UInt8(ascii: "\n")
+    var events: [HarnessEvent] = []
+    for (index, line) in lines.enumerated() where !line.isEmpty {
+      let number = index + 1
+      let isLast = index == lines.count - 1
+      do throws(HarnessEventDecodeError) {
+        events.append(try decodeLine(Data(line), number: number, decoder: decoder))
+      } catch {
+        // Only an unfinished final write is a tear; a whole line that fails is corruption.
+        if isLast, !endsWithNewline, case .invalid = error.reason {
+          return Read(events: events, tornLastLine: true)
+        }
+        throw error
+      }
+    }
+    return Read(events: events, tornLastLine: false)
+  }
+
+  /// Seconds to the millisecond, so events within 1 second still sort.
+  static let timeFormat = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+  private static func decodeLine(_ line: Data, number: Int, decoder: JSONDecoder)
+    throws(HarnessEventDecodeError) -> HarnessEvent
+  {
+    let object: Any
+    do {
+      object = try JSONSerialization.jsonObject(with: line)
+    } catch {
+      throw HarnessEventDecodeError(line: number, reason: .invalid("not JSON"))
+    }
+    if let version = (object as? [String: Any])?["schemaVersion"] as? Int,
+      version > HarnessEvent.schemaVersion
+    {
+      throw HarnessEventDecodeError(line: number, reason: .newerSchema(version))
+    }
+    let event: HarnessEvent
+    do {
+      event = try decoder.decode(HarnessEvent.self, from: line)
+    } catch {
+      throw HarnessEventDecodeError(line: number, reason: .invalid(describe(error)))
+    }
+    // A key this version doesn't know would be dropped by decoding, so it fails instead: whatever
+    // decoding kept, encoding writes back, and anything else in the line is unknown.
+    let known: Any
+    do {
+      known = try JSONSerialization.jsonObject(with: try encodeLine(event))
+    } catch {
+      throw HarnessEventDecodeError(line: number, reason: .invalid("\(error)"))
+    }
+    if let unknown = unknownKey(in: object, known: known, path: []) {
+      throw HarnessEventDecodeError(line: number, reason: .unknownKey(unknown))
+    }
+    return event
+  }
+
+  private static func unknownKey(in value: Any, known: Any, path: [String]) -> String? {
+    if let object = value as? [String: Any] {
+      let knownObject = known as? [String: Any] ?? [:]
+      for key in object.keys.sorted() where !(object[key] is NSNull) {
+        guard let knownValue = knownObject[key] else {
+          return (path + [key]).joined(separator: ".")
+        }
+        if let found = unknownKey(in: object[key] as Any, known: knownValue, path: path + [key]) {
+          return found
+        }
+      }
+    } else if let array = value as? [Any], let knownArray = known as? [Any] {
+      for (index, element) in array.enumerated() where index < knownArray.count {
+        if let found = unknownKey(
+          in: element, known: knownArray[index], path: path + ["\(index)"])
+        {
+          return found
+        }
+      }
+    }
+    return nil
+  }
+
+  private static func describe(_ error: any Error) -> String {
+    guard let error = error as? DecodingError else { return "\(error)" }
+    func at(_ context: DecodingError.Context) -> String {
+      let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+      return (path.isEmpty ? "" : "`\(path)`: ") + context.debugDescription
+    }
+    switch error {
+    case .keyNotFound(let key, let context):
+      return
+        "missing key `\((context.codingPath + [key]).map(\.stringValue).joined(separator: "."))`"
+    case .typeMismatch(_, let context), .valueNotFound(_, let context),
+      .dataCorrupted(let context):
+      return at(context)
+    @unknown default:
+      return "\(error)"
+    }
+  }
+}
+
+extension HarnessEvent: Codable {
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion, eventID, parentID, kind, time, runID, head, base, source, payload
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try c.decode(Int.self, forKey: .schemaVersion)
+    guard schemaVersion == Self.schemaVersion else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .schemaVersion, in: c,
+        debugDescription: "unsupported schemaVersion \(schemaVersion)")
+    }
+    eventID = try c.decode(String.self, forKey: .eventID)
+    parentID = try c.decodeIfPresent(String.self, forKey: .parentID)
+    time = try c.decode(Date.self, forKey: .time)
+    runID = try c.decodeIfPresent(String.self, forKey: .runID)
+    head = try c.decodeIfPresent(String.self, forKey: .head)
+    base = try c.decodeIfPresent(String.self, forKey: .base)
+    source = try c.decode(HarnessEventSource.self, forKey: .source)
+    switch try c.decode(HarnessEventKind.self, forKey: .kind) {
+    case .judgeDecision:
+      payload = .judgeDecision(try c.decode(JudgeDecisionEvent.self, forKey: .payload))
+    case .judgeCall:
+      payload = .judgeCall(try c.decode(JudgeCallEvent.self, forKey: .payload))
+    }
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(schemaVersion, forKey: .schemaVersion)
+    try c.encode(eventID, forKey: .eventID)
+    try c.encodeIfPresent(parentID, forKey: .parentID)
+    try c.encode(kind, forKey: .kind)
+    try c.encode(time, forKey: .time)
+    try c.encodeIfPresent(runID, forKey: .runID)
+    try c.encodeIfPresent(head, forKey: .head)
+    try c.encodeIfPresent(base, forKey: .base)
+    try c.encode(source, forKey: .source)
+    switch payload {
+    case .judgeDecision(let decision): try c.encode(decision, forKey: .payload)
+    case .judgeCall(let call): try c.encode(call, forKey: .payload)
+    }
   }
 }

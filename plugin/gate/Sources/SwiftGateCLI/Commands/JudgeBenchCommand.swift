@@ -480,7 +480,10 @@ struct JudgeBenchCommand: AsyncParsableCommand {
         $0.arm, runner: runner, environment: environment, questions: $0.questions)
     }
     let report: JudgeBenchmarkReport
-    switch await JudgeBench.run(plan, judges: judges, startedAt: Date()) {
+    let ran = try await JudgeEventRoute.run(root: root, route: .bench) {
+      await JudgeBench.run(plan, judges: judges, startedAt: Date())
+    }
+    switch ran {
     case .failure(let refusal): throw Self.fail(refusal, environment: environment)
     case .success(let found): report = found
     }

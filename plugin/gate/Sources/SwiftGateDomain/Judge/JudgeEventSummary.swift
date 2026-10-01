@@ -15,11 +15,33 @@ public struct JudgeEventFilter: Sendable, Equatable {
 
   /// A run id's start time, or an ISO 8601 time; `nil` for anything else.
   public static func since(_ text: String) -> Date? {
-    nil
+    if let time = try? Date(text, strategy: .iso8601) { return time }
+    if let time = try? Date(text, strategy: HarnessEventJSON.timeFormat) { return time }
+    // A run id starts with its start time, `yyyyMMddTHHmmssZ`, then `-<hex>`.
+    let parts = text.split(separator: "-", maxSplits: 1)
+    guard parts.count == 2, RunID.isValid(text) else { return nil }
+    let stamp = parts[0]
+    guard stamp.count == 16, stamp.dropFirst(8).first == "T", stamp.last == "Z" else { return nil }
+    let digits = stamp.filter(\.isNumber)
+    guard digits.count == 14 else { return nil }
+    func field(_ offset: Int, _ length: Int) -> String {
+      String(digits.dropFirst(offset).prefix(length))
+    }
+    return try? Date(
+      "\(field(0, 4))-\(field(4, 2))-\(field(6, 2))T\(field(8, 2)):\(field(10, 2)):\(field(12, 2))Z",
+      strategy: .iso8601)
   }
 
   public func keeps(_ event: HarnessEvent) -> Bool {
-    true
+    if let since, event.time < since { return false }
+    if let route, event.source.route != route { return false }
+    if let backend {
+      switch event.payload {
+      case .judgeDecision(let decision): if decision.backend != backend { return false }
+      case .judgeCall(let call): if call.backend != backend { return false }
+      }
+    }
+    return true
   }
 }
 
@@ -153,25 +175,139 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
 
   /// `escalated` over `jevDecisions`; `nil` with no Jev decisions.
   public var escalationShare: Double? {
-    nil
+    jevDecisions == 0 ? nil : Double(escalated) / Double(jevDecisions)
   }
 
   public static func make(_ read: HarnessEventJSON.Read, filter: JudgeEventFilter)
     -> JudgeEventSummary
   {
-    JudgeEventSummary(
-      events: 0, unattributed: 0, routes: [], questions: [], decisions: [], escalated: 0,
-      jevDecisions: 0, blocks: [], decisionErrors: [], callErrors: [], backends: [], costUSD: 0,
-      tornLastLine: false)
+    let events = read.events.filter(filter.keeps)
+    var decisions: [(event: HarnessEvent, decision: JudgeDecisionEvent)] = []
+    var calls: [JudgeCallEvent] = []
+    for event in events {
+      switch event.payload {
+      case .judgeDecision(let decision): decisions.append((event, decision))
+      case .judgeCall(let call): calls.append(call)
+      }
+    }
+    func counts<Key: CaseIterable & Hashable & Codable & Sendable>(_ keys: [Key]) -> [Count<Key>] {
+      Key.allCases.compactMap { key in
+        let count = keys.filter { $0 == key }.count
+        return count == 0 ? nil : Count(key: key, count: count)
+      }
+    }
+    struct RowKey: Hashable {
+      let question: String
+      let backend: JudgeBackend
+    }
+    let grouped: [RowKey: [JudgeDecisionEvent]] = Dictionary(
+      grouping: decisions.map(\.decision),
+      by: { RowKey(question: $0.question, backend: $0.backend) })
+    var rows: [QuestionRow] = []
+    for (key, group) in grouped {
+      func count(_ decision: JudgeDecision) -> Int {
+        group.filter { $0.decision == decision }.count
+      }
+      rows.append(
+        QuestionRow(
+          question: key.question, backend: key.backend, judgements: group.count,
+          block: count(.block), advisory: count(.advisory), pass: count(.pass),
+          error: count(.error), escalated: group.filter(\.escalated).count))
+    }
+    rows.sort { ($0.question, $0.backend.rawValue) < ($1.question, $1.backend.rawValue) }
+    let backends = JudgeBackend.allCases.compactMap { backend -> BackendRow? in
+      let mine = calls.filter { $0.backend == backend }
+      guard !mine.isEmpty else { return nil }
+      let reached = mine.filter { !$0.cacheHit }.map(\.latencyMs)
+      return BackendRow(
+        backend: backend, calls: mine.count, cacheHits: mine.filter(\.cacheHit).count,
+        errors: mine.filter { $0.error != nil }.count,
+        latencyP50Ms: percentile(0.5, of: reached), latencyP95Ms: percentile(0.95, of: reached),
+        costUSD: mine.compactMap(\.costUSD).reduce(0, +),
+        callsWithoutCost: mine.filter { $0.costUSD == nil }.count)
+    }
+    let jev = decisions.map(\.decision).filter { $0.backend == .jev }
+    return JudgeEventSummary(
+      events: events.count, unattributed: events.filter { $0.source.route == nil }.count,
+      routes: counts(events.compactMap(\.source.route)), questions: rows,
+      decisions: counts(decisions.map(\.decision.decision)),
+      escalated: jev.filter(\.escalated).count, jevDecisions: jev.count,
+      blocks: decisions.filter { $0.decision.decision == .block }.map { event, decision in
+        Block(
+          eventID: event.eventID, runID: event.runID, file: decision.subject.file,
+          line: decision.subject.line, question: decision.question,
+          decidedBy: decision.decidedBy, reasonSource: decision.reasonSource,
+          reason: decision.reason)
+      },
+      decisionErrors: counts(decisions.compactMap(\.decision.error?.kind)),
+      callErrors: counts(calls.compactMap(\.error?.kind)), backends: backends,
+      costUSD: backends.map(\.costUSD).reduce(0, +), tornLastLine: read.tornLastLine)
   }
 
   /// Nearest-rank percentile of `values`; `nil` when empty.
   public static func percentile(_ fraction: Double, of values: [Int]) -> Int? {
-    nil
+    guard !values.isEmpty else { return nil }
+    let sorted = values.sorted()
+    let rank = Int((fraction * Double(sorted.count)).rounded(.up))
+    return sorted[min(max(rank, 1), sorted.count) - 1]
   }
 
   /// The summary as text, for a reader at a terminal.
   public func render(source: String) -> String {
-    ""
+    func money(_ value: Double) -> String { String(format: "$%.4f", value) }
+    func ms(_ value: Int?) -> String { value.map { "\($0) ms" } ?? "n/a" }
+    var lines = ["Judge events in \(source): \(events)"]
+    if tornLastLine {
+      lines.append("The last line is torn (a write in flight, or cut short); it isn't counted.")
+    }
+    guard events > 0 else { return (lines + ["No judge events match."]).joined(separator: "\n") }
+    if !routes.isEmpty {
+      lines.append(
+        "Routes: " + routes.map { "\($0.key.rawValue) \($0.count)" }.joined(separator: ", "))
+    }
+    if unattributed > 0 { lines.append("Under no route: \(unattributed)") }
+    if !questions.isEmpty {
+      lines.append("")
+      lines.append(
+        "Decisions per question and backend (block / advisory / pass / error, escalated):")
+      for row in questions {
+        lines.append(
+          "  \(row.question) [\(row.backend.rawValue)]: \(row.judgements) — \(row.block) / "
+            + "\(row.advisory) / \(row.pass) / \(row.error), escalated \(row.escalated)")
+      }
+    }
+    if let share = escalationShare {
+      lines.append(
+        "Escalation: escalated \(escalated) of \(jevDecisions) Jev decisions "
+          + "(\(Int((share * 100).rounded()))%)")
+    }
+    if !blocks.isEmpty {
+      lines.append("")
+      lines.append("Blocks:")
+      for block in blocks {
+        lines.append(
+          "  \(block.file):\(block.line) \(block.question) by \(block.decidedBy), reason from "
+            + "\(block.reasonSource.rawValue): \(block.reason ?? "none")"
+            + (block.runID.map { " (run \($0))" } ?? ""))
+      }
+    }
+    for (label, errors) in [("Decision errors", decisionErrors), ("Call errors", callErrors)]
+    where !errors.isEmpty {
+      lines.append(
+        "\(label): " + errors.map { "\($0.key.rawValue) \($0.count)" }.joined(separator: ", "))
+    }
+    if !backends.isEmpty {
+      lines.append("")
+      lines.append("Calls per backend (latency over calls that reached it):")
+      for row in backends {
+        lines.append(
+          "  \(row.backend.rawValue): \(row.calls) calls, \(row.cacheHits) cache hits, "
+            + "\(row.errors) errors; p50 \(ms(row.latencyP50Ms)), p95 \(ms(row.latencyP95Ms)); "
+            + "cost \(money(row.costUSD))"
+            + (row.callsWithoutCost > 0 ? " (\(row.callsWithoutCost) calls reported none)" : ""))
+      }
+    }
+    lines.append("Cost: \(money(costUSD))")
+    return lines.joined(separator: "\n")
   }
 }

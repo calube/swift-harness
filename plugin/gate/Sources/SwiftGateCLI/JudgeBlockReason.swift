@@ -25,8 +25,22 @@ enum JudgeBlockReason {
     questions: JudgeQuestionSet, identity: JudgeIdentity, reasonJudge: (any Judge)?,
     redacting secrets: [String]
   ) async -> [Finding] {
+    await attachReporting(
+      findings, subjects: subjects, answers: answers, questions: questions, identity: identity,
+      reasonJudge: reasonJudge, redacting: secrets
+    ).findings
+  }
+
+  /// ``attach(_:subjects:answers:questions:identity:reasonJudge:redacting:)``, also saying how each
+  /// reason call went. Each call is made under the event scope as a `reason`, caused by the
+  /// decision `decisionIDs` names for its subject and question.
+  static func attachReporting(
+    _ findings: [Finding], subjects: [JudgeSubject], answers: [String: [JudgeAnswer]],
+    questions: JudgeQuestionSet, identity: JudgeIdentity, reasonJudge: (any Judge)?,
+    redacting secrets: [String], decisionIDs: [JudgeDecisions.Key: String] = [:]
+  ) async -> (findings: [Finding], reasons: [JudgeDecisions.Key: JudgeDecisions.Reason]) {
     guard JudgeBackend(rawValue: identity.backend)?.writesReasons == false else {
-      return findings
+      return (findings, [:])
     }
     let bySite = Dictionary(
       subjects.map { (Site(file: $0.file, line: $0.line), $0) }, uniquingKeysWith: { a, _ in a })
@@ -40,22 +54,29 @@ enum JudgeBlockReason {
       else { continue }
       requests.append(Request(index: index, subject: subject, question: question))
     }
-    guard !requests.isEmpty else { return findings }
-    let outcomes = await reasons(for: requests, set: questions, judge: reasonJudge)
+    guard !requests.isEmpty else { return (findings, [:]) }
+    let outcomes = await reasons(
+      for: requests, set: questions, judge: reasonJudge, decisionIDs: decisionIDs)
     var result = findings
+    var reported: [JudgeDecisions.Key: JudgeDecisions.Reason] = [:]
     for (index, outcome) in outcomes {
       let finding = findings[index]
       let message: String
       let reason: String
+      let key = requests.first { $0.index == index }.map {
+        JudgeDecisions.Key(subject: $0.subject.id, question: $0.question.id)
+      }
       switch outcome {
       case .written(let rationale, let p, let by):
         message =
           finding.message + "; reason from \(by.backend)/\(by.model) (claude p="
           + String(format: "%.2f", p) + ")"
         reason = rationale
+        if let key { reported[key] = .written }
       case .missing(let why):
         message = finding.message
-        reason = missingPrefix + why
+        reason = missingPrefix + why.message
+        if let key { reported[key] = .missing(why) }
       }
       // Rebuilt from a valid finding's own fields, so the report contract still holds.
       result[index] =
@@ -64,7 +85,7 @@ enum JudgeBlockReason {
           line: finding.line, message: redact(message, secrets),
           failureScenario: redact(reason, secrets))) ?? finding
     }
-    return result
+    return (result, reported)
   }
 
   /// The set Claude is asked for 1 finding's reason: that question alone, under its own id so its
@@ -90,21 +111,37 @@ enum JudgeBlockReason {
 
   private enum Outcome: Sendable {
     case written(String, p: Double, by: JudgeIdentity)
-    case missing(String)
+    case missing(JudgeEventError)
   }
 
   private static func reasons(
-    for requests: [Request], set: JudgeQuestionSet, judge: (any Judge)?
+    for requests: [Request], set: JudgeQuestionSet, judge: (any Judge)?,
+    decisionIDs: [JudgeDecisions.Key: String]
   ) async -> [(Int, Outcome)] {
     guard let judge else {
-      return requests.map { ($0.index, .missing("no Claude judge is available")) }
+      return requests.map {
+        (
+          $0.index,
+          .missing(JudgeEventError(kind: .noJudge, message: "no Claude judge is available"))
+        )
+      }
     }
+    let scope = JudgeEventScope.current
     return await withTaskGroup(of: (Int, Outcome).self) { group in
       var pending = requests[...]
       var outcomes: [(Int, Outcome)] = []
       func enqueue() {
         guard let request = pending.popFirst() else { return }
-        group.addTask { (request.index, await reason(for: request, set: set, judge: judge)) }
+        let parent = decisionIDs[
+          JudgeDecisions.Key(subject: request.subject.id, question: request.question.id)]
+        group.addTask {
+          (
+            request.index,
+            await JudgeEventScope.bind(scope?.calling(.reason, parentID: parent)) {
+              await reason(for: request, set: set, judge: judge)
+            }
+          )
+        }
       }
       for _ in 0..<JudgeBatch.maxConcurrent { enqueue() }
       for await outcome in group {
@@ -123,15 +160,20 @@ enum JudgeBlockReason {
     do throws(JudgeError) {
       answers = try await judge.answer(request.subject, questions: asked)
     } catch {
-      return .missing(error.explanation(by: judge.identity))
+      return .missing(JudgeEventError(error, by: judge.identity))
     }
     let name = judge.identity.backend
     guard let answer = answers.first(where: { $0.question == request.question.id }),
       let p = JudgePolicy.flaggedProbability(
         request.question, answer: answer, subject: request.subject)
-    else { return .missing("\(name) gave no answer to \(request.question.id)") }
+    else {
+      return .missing(
+        JudgeEventError(
+          kind: .noAnswer, message: "\(name) gave no answer to \(request.question.id)"))
+    }
     guard let rationale = answer.rationale, !rationale.isEmpty else {
-      return .missing("\(name) answered without a rationale")
+      return .missing(
+        JudgeEventError(kind: .noRationale, message: "\(name) answered without a rationale"))
     }
     return .written(rationale, p: p, by: judge.identity)
   }

@@ -1,4 +1,6 @@
 import ArgumentParser
+import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 
 enum SwiftGateVersion {
@@ -31,6 +33,33 @@ struct SwiftGate: AsyncParsableCommand {
       DesignTelemetryCommand.self,
     ]
   )
+
+  /// Every command runs under a judge event scope naming no route, so a judge call from a route
+  /// that never names itself is still recorded, and counted as unattributed.
+  static func main() async {
+    let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    let scope = JudgeEventScope(
+      log: StderrReportingLog(inner: HarnessEventFiles(root: root)), now: { Date() },
+      newID: { UUID().uuidString.lowercased() }, source: HarnessEventSource(route: nil),
+      secrets: JudgeBackend.allCases.compactMap {
+        $0.keyVariable.flatMap { ProcessInfo.processInfo.environment[$0] }
+      })
+    await JudgeEventScope.bind(scope) { await Self.main(nil) }
+  }
+}
+
+/// Says on stderr when an event can't be written, for a scope no route reports for.
+struct StderrReportingLog: HarnessEventWriting {
+  let inner: any HarnessEventWriting
+
+  func append(_ event: HarnessEvent) throws(HarnessEventWriteError) {
+    do throws(HarnessEventWriteError) {
+      try inner.append(event)
+    } catch {
+      FileHandle.standardError.write(Data("swiftgate: judge event not written: \(error)\n".utf8))
+      throw error
+    }
+  }
 }
 
 /// A command registered ahead of its behavior task is a stub until that task lands (one task per

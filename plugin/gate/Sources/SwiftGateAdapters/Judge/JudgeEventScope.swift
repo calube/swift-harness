@@ -24,7 +24,7 @@ public final class HarnessEventFailures: Sendable {
 
   public var all: [HarnessEventWriteError] { failures.withLock { $0 } }
 
-  func record(_ failure: HarnessEventWriteError) {
+  public func record(_ failure: HarnessEventWriteError) {
     failures.withLock { $0.append(failure) }
   }
 }
@@ -98,7 +98,18 @@ public struct JudgeEventScope: Sendable {
   }
 
   /// Writes `event`; a failure is kept in ``failures``, never thrown.
-  public func emit(_ event: HarnessEvent) {}
+  public func emit(_ event: HarnessEvent) {
+    do throws(HarnessEventWriteError) {
+      try log.append(event)
+    } catch {
+      failures.record(error)
+    }
+    if case .judgeCall(let call) = event.payload {
+      let recorded = JudgeDecisions.RecordedCall(
+        eventID: event.eventID, parentID: event.parentID, call: call)
+      for recorder in recorders { recorder.record(recorded) }
+    }
+  }
 
   /// An event under this scope's run, commit and route.
   public func event(_ payload: HarnessEventPayload, eventID: String, parentID: String?)
@@ -111,9 +122,21 @@ public struct JudgeEventScope: Sendable {
 
   /// Runs `body` with `scope` bound, or unbound when `scope` is `nil`.
   public static func bind<T: Sendable, Failure: Error>(
-    _ scope: JudgeEventScope?, _ body: () async throws(Failure) -> T
+    _ scope: JudgeEventScope?, isolation: isolated (any Actor)? = #isolation,
+    _ body: () async throws(Failure) -> T
   ) async throws(Failure) -> T {
-    try await body()
+    guard let scope else { return try await body() }
+    // `withValue` rethrows untyped, so the typed error crosses it inside a `Result`.
+    let result: Result<T, Failure> = await $current.withValue(
+      scope,
+      operation: {
+        do throws(Failure) {
+          return .success(try await body())
+        } catch {
+          return .failure(error)
+        }
+      }, isolation: isolation)
+    return try result.get()
   }
 }
 
@@ -142,6 +165,45 @@ public enum JudgeCallEvents {
     _ identity: JudgeIdentity, subject: JudgeSubject, questions: JudgeQuestionSet,
     _ body: () async throws(JudgeError) -> JudgeReply
   ) async throws(JudgeError) -> JudgeReply {
-    try await body()
+    guard let scope = JudgeEventScope.current else { return try await body() }
+    let clock = ContinuousClock()
+    let start = clock.now
+    let result: Result<JudgeReply, JudgeError>
+    do throws(JudgeError) {
+      result = .success(try await body())
+    } catch {
+      result = .failure(error)
+    }
+    let measured = JudgeUsage.milliseconds(clock.now - start)
+    guard let backend = JudgeBackend(rawValue: identity.backend) else {
+      scope.failures.record(
+        HarnessEventWriteError(
+          path: "judge.call", reason: "`\(identity.backend)` is not a judge backend"))
+      return try result.get()
+    }
+    let usage = try? result.get().usage
+    let answers = (try? result.get().answers)?.map {
+      JudgeAnswer(
+        question: $0.question, distribution: $0.distribution,
+        rationale: $0.rationale.map { JudgeDecisions.redact($0, scope.secrets) })
+    }
+    let error: JudgeEventError? =
+      switch result {
+      case .success: nil
+      case .failure(let failure):
+        JudgeEventError(
+          kind: JudgeEventError(failure, by: identity).kind,
+          message: JudgeDecisions.redact(failure.explanation(by: identity), scope.secrets))
+      }
+    let call = JudgeCallEvent(
+      role: scope.role, backend: backend, model: identity.model, servedModel: usage?.servedModel,
+      questionSet: questions.versionedID,
+      questions: questions.questions.map { JudgeEventQuestion(id: $0.id, blocking: $0.mayBlock) },
+      subject: JudgeEventSubject(subject), answers: answers, cacheHit: usage?.cached ?? false,
+      latencyMs: usage?.wallMilliseconds ?? measured, backendMs: usage?.backendMilliseconds,
+      costUSD: usage?.costUSD, inputTokens: usage?.inputTokens, outputTokens: usage?.outputTokens,
+      error: error)
+    scope.emit(scope.event(.judgeCall(call), eventID: scope.newID(), parentID: scope.parentID))
+    return try result.get()
   }
 }

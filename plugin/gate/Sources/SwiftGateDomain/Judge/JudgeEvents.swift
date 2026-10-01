@@ -361,11 +361,134 @@ public enum JudgeDecisions {
   public static func make(_ inputs: Inputs, ids: [Key: String]) -> [(
     eventID: String, decision: JudgeDecisionEvent
   )] {
-    []
+    inputs.subjects.flatMap { subject in
+      inputs.questions.questions.compactMap { question -> (String, JudgeDecisionEvent)? in
+        let key = Key(subject: subject.id, question: question.id)
+        guard let id = ids[key] else { return nil }
+        return (id, decision(key: key, id: id, subject: subject, question: question, inputs))
+      }
+    }
+  }
+
+  private static func decision(
+    key: Key, id: String, subject: JudgeSubject, question: JudgeQuestion, _ inputs: Inputs
+  ) -> JudgeDecisionEvent {
+    let secrets = inputs.secrets
+    func clean(_ text: String?) -> String? { text.map { redact($0, secrets) } }
+    func clean(_ error: JudgeEventError?) -> JudgeEventError? {
+      error.map { JudgeEventError(kind: $0.kind, message: redact($0.message, secrets)) }
+    }
+    let mine = inputs.calls.filter { $0.call.subject.id == subject.id }
+    let answerCall = mine.last { $0.call.role == .answer }
+    let escalationCalls = mine.filter { $0.call.role == .escalation }
+    let reasonCalls = mine.filter { $0.call.role == .reason && $0.parentID == id }
+    let outcome = inputs.outcomes[subject.id]
+    let identity: JudgeIdentity
+    let answers: [JudgeAnswer]?
+    let cascade: Cascade?
+    var error: JudgeEventError?
+    switch outcome {
+    case .answered(let who, let found, let found2):
+      identity = who
+      answers = found
+      cascade = found2
+    case .failed(let who, let failure):
+      identity = who
+      answers = nil
+      cascade = nil
+      error = failure
+    case nil:
+      identity = inputs.identity
+      answers = nil
+      cascade = nil
+    }
+    if error == nil, let batch = inputs.batchFailure {
+      error = JudgeEventError(
+        kind: .abandoned, message: "the judge stopped after another call failed: \(batch.message)")
+    }
+    let answer = answers?.first { $0.question == question.id }
+    let p = answer.flatMap {
+      JudgePolicy.flaggedProbability(question, answer: $0, subject: subject)
+    }
+    let band = cascade?.bands[question.id]
+    let escalated = cascade.map { $0.plan.step(for: question.id) != .keep } ?? false
+    var escalation: JudgeEscalationEvent?
+    var decidingAnswer = answer
+    var decidedBy = identity
+    if escalated, let cascade {
+      let claudeCall = escalationCalls.last?.call
+      let backend = JudgeBackend(rawValue: cascade.claudeIdentity.backend) ?? .claude
+      switch cascade.claude {
+      case .answered(let claudeAnswers):
+        if let replaced = claudeAnswers.first(where: { $0.question == question.id }) {
+          decidingAnswer = replaced
+          decidedBy = cascade.claudeIdentity
+          escalation = JudgeEscalationEvent(
+            backend: backend, model: cascade.claudeIdentity.model,
+            servedModel: claudeCall?.servedModel, distribution: replaced.distribution,
+            p: JudgePolicy.flaggedProbability(question, answer: replaced, subject: subject),
+            rationale: clean(replaced.rationale), error: nil)
+        } else {
+          escalation = JudgeEscalationEvent(
+            backend: backend, model: cascade.claudeIdentity.model,
+            servedModel: claudeCall?.servedModel, distribution: nil, p: nil, rationale: nil,
+            error: JudgeEventError(
+              kind: .noAnswer, message: "claude gave no answer for \(question.id)"))
+        }
+      case .failed(let why):
+        escalation = JudgeEscalationEvent(
+          backend: backend, model: cascade.claudeIdentity.model, servedModel: nil,
+          distribution: nil, p: nil, rationale: nil,
+          error: clean(claudeCall?.error ?? JudgeEventError(kind: .noJudge, message: why)))
+      }
+    }
+    let finding = inputs.findings.first {
+      $0.ruleID == JudgePolicy.ruleIDPrefix + question.id && $0.file == subject.file
+        && $0.line == subject.line
+    }
+    let decision: JudgeDecision =
+      if error != nil {
+        .error
+      } else if let finding {
+        finding.severity.failsGate ? .block : .advisory
+      } else {
+        .pass
+      }
+    let reason = error == nil ? clean(finding?.failureScenario) : nil
+    var reasonError: JudgeEventError?
+    let reasonSource: JudgeReasonSource
+    if decision == .error || finding == nil || reason == nil {
+      reasonSource = .none
+    } else if let written = inputs.reasons[key] {
+      switch written {
+      case .written: reasonSource = .claude
+      case .missing(let why):
+        reasonSource = .template
+        reasonError = clean(why)
+      }
+    } else if JudgeBackend(rawValue: decidedBy.backend)?.writesReasons == true {
+      reasonSource = .claude
+    } else {
+      reasonSource = .template
+    }
+    let used = ([answerCall] + (escalated ? escalationCalls : []) + reasonCalls).compactMap { $0 }
+    return JudgeDecisionEvent(
+      subject: JudgeEventSubject(subject), questionSet: inputs.questions.versionedID,
+      questionSetVersion: inputs.questions.version, question: question.id,
+      blocking: question.mayBlock, atReadyTier: inputs.atReadyTier,
+      backend: JudgeBackend(rawValue: identity.backend) ?? .claude, model: identity.model,
+      servedModel: answerCall?.call.servedModel, distribution: answer?.distribution, p: p,
+      thresholds: JudgeEventThresholds(inputs.thresholds), band: band,
+      inBand: band.map { band in p.map(band.contains) ?? false }, escalated: escalated,
+      escalation: escalation, decision: decision, severity: error == nil ? finding?.severity : nil,
+      decidedBy: "\(decidedBy.backend)/\(decidedBy.model)", reasonSource: reasonSource,
+      reason: reason, reasonError: reasonError, rationale: clean(decidingAnswer?.rationale),
+      cacheHit: answerCall?.call.cacheHit ?? false,
+      calls: used.map { JudgeCallSummary(eventID: $0.eventID, call: $0.call) }, error: clean(error))
   }
 
   /// `text` with every secret replaced.
   public static func redact(_ text: String, _ secrets: [String]) -> String {
-    text
+    secrets.filter { !$0.isEmpty }.reduce(text) { $0.replacing($1, with: "<redacted>") }
   }
 }

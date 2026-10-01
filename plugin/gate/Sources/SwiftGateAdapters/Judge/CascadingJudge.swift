@@ -67,7 +67,13 @@ public struct CascadingJudge: Judge {
   public func cascade(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> Reply
   {
-    let jevReply = try await jev.measuredAnswer(subject, questions: questions)
+    // The Jev call's event id becomes the parent of the escalation it causes.
+    let scope = JudgeEventScope.current
+    let jevCalls = JudgeCallRecorder()
+    let jevReply = try await JudgeEventScope.bind(scope?.recording(into: jevCalls)) {
+      () throws(JudgeError) -> JudgeReply in
+      try await jev.measuredAnswer(subject, questions: questions)
+    }
     let plan = JudgeCascade.plan(
       subject: subject, jev: jevReply.answers, questions: questions,
       bands: JudgeCascade.bands(for: questions.versionedID), thresholds: policy.thresholds,
@@ -80,8 +86,12 @@ public struct CascadingJudge: Judge {
     guard !plan.escalated.isEmpty else { return reply(.answered([]), nil) }
     guard let claude else { return reply(.failed(Self.noClaude), nil) }
     do throws(JudgeError) {
-      let answered = try await claude.measuredAnswer(
-        subject, questions: Self.claudeQuestions(plan.escalated, base: base))
+      let asked = Self.claudeQuestions(plan.escalated, base: base)
+      let answered = try await JudgeEventScope.bind(
+        scope?.calling(.escalation, parentID: jevCalls.calls.last?.eventID)
+      ) { () throws(JudgeError) -> JudgeReply in
+        try await claude.measuredAnswer(subject, questions: asked)
+      }
       return reply(.answered(answered.answers), answered)
     } catch {
       return reply(.failed(error.explanation(by: claude.identity)), nil)
