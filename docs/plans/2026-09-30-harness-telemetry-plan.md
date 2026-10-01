@@ -8,8 +8,6 @@ docs/handoffs/harness-telemetry-interfaces.md records what shipped. Open follow-
   their 60 s budget under load and passed on rerun; the wall-clock budget is the likely cause.
 - `RepositoryScriptTests/shim` is the slowest test at p95 139 s (n=6).
 - `gate.run` lists finding paths but not the rule behind each, so a task miss can't say which rule named which path.
-- Orchestrator usage the build skill's per-task ingest stores is untagged; tag the session's own messages
-  `orchestrator` when `--workflow-transcripts` is given.
 - The reader doesn't read the git common dir's `swift-harness/unkept-events/` fallback.
 History (2026-09-30): the user approved the design and asked to build now. Tasks with no deps start first; none
 that touches the event store starts before the `judge-emits-judgement-events` branch (the shared `HarnessEvent` envelope, its writer and
