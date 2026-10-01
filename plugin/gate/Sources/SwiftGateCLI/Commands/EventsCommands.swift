@@ -65,7 +65,7 @@ enum EventsSummaryRun {
     files: any EventStoreFileReading, query: EventQuery, json: Bool, now: Date,
     sections: [any EventSummarySection] = EventSummary.sections
   ) -> EventsCommandOutput {
-    let read = EventStoreReader(files: files).read(query)
+    let read = EventStoreReader(files: files).read(query, sealedTests: .indexesWhereRolledUp)
     let report = EventSummary.make(
       EventSummaryInput(
         events: read.events, query: query, store: read.facts, damage: read.damage, files: files,
