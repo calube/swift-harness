@@ -25,6 +25,7 @@ public protocol HarnessEventWriting: Sendable {
 
 extension HarnessEventWriting {
   public func append(contentsOf events: [HarnessEvent]) throws(HarnessEventWriteError) {
+    for event in events { try append(event) }
   }
 }
 
@@ -67,31 +68,99 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
     self.guardPolicy = guardPolicy
   }
 
+  private var store: EventSegmentStore {
+    EventSegmentStore(root: root, rotationBytes: rotationBytes)
+  }
+
   public func path(_ stream: HarnessEventStream, runID: String?) -> String {
     root.appending(
       path: runID.map { RunLayout.runEventsFile(stream, runID: $0) } ?? RunLayout.eventsFile(stream)
     ).path
   }
 
-  /// To the shared log, then to the run's copy when the event names a valid run.
   public func append(_ event: HarnessEvent) throws(HarnessEventWriteError) {
-    let shared = path(event.kind.stream, runID: nil)
-    let line: Data
-    do {
-      line = try HarnessEventJSON.encodeLine(event)
-    } catch {
-      throw HarnessEventWriteError(path: shared, reason: "encode: \(error)")
-    }
-    var paths = [shared]
-    if let runID = event.runID, RunID.isValid(runID) {
-      paths.append(path(event.kind.stream, runID: runID))
-    }
-    for path in paths {
-      do throws(AppendOnlyFile.Failure) {
-        try AppendOnlyFile.append(line, to: path, creatingDirectory: true)
-      } catch {
-        throw HarnessEventWriteError(path: path, reason: error.reason)
+    try append(contentsOf: [event])
+  }
+
+  /// Guards each event, then makes 1 write per stream to the shared log and 1 per run copy. An
+  /// event the guard rejects is counted in `dropped.json` and left out; the others are written,
+  /// then the call throws naming each dropped kind and reason.
+  public func append(contentsOf events: [HarnessEvent]) throws(HarnessEventWriteError) {
+    guard !events.isEmpty else { return }
+    var accepted: [HarnessEvent] = []
+    var dropped: [String] = []
+    for event in events {
+      if guardPolicy(event.kind.stream) == .enforced {
+        let reason: EventPayloadGuard.Reason?
+        do {
+          reason = try EventPayloadGuard.rejection(of: event)
+        } catch {
+          throw HarnessEventWriteError(
+            path: path(event.kind.stream, runID: nil), reason: "encode: \(error)")
+        }
+        if let reason {
+          try store.countDropped(event.kind, reason)
+          dropped.append("\(event.kind.rawValue) \(reason.rawValue)")
+          continue
+        }
       }
+      accepted.append(event)
+    }
+    var shared: [(HarnessEventStream, Data)] = []
+    var copies: [(String, Data)] = []
+    for event in accepted {
+      let stream = event.kind.stream
+      let line: Data
+      do {
+        line = try HarnessEventJSON.encodeLine(event)
+      } catch {
+        throw HarnessEventWriteError(path: path(stream, runID: nil), reason: "encode: \(error)")
+      }
+      Self.add(line, under: stream, to: &shared)
+      if let runID = event.runID, RunID.isValid(runID) {
+        Self.add(line, under: path(stream, runID: runID), to: &copies)
+      }
+    }
+    // Every write is tried, so a log that fails, or a segment that won't seal, costs no run its
+    // copy; the first failure is thrown after.
+    var failure: HarnessEventWriteError?
+    for (stream, lines) in shared {
+      do throws(HarnessEventWriteError) {
+        try store.append(lines, to: stream)
+      } catch {
+        failure = failure ?? error
+      }
+    }
+    for (path, lines) in copies {
+      do throws(AppendOnlyFile.Failure) {
+        try AppendOnlyFile.append(lines, to: path, creatingDirectory: true)
+      } catch {
+        failure = failure ?? HarnessEventWriteError(path: path, reason: error.reason)
+      }
+    }
+    if let failure { throw failure }
+    if !shared.isEmpty,
+      !FileManager.default.fileExists(
+        atPath: root.appending(path: EventSegmentLayout.storeFile).path)
+    {
+      _ = try store.identity()
+    }
+    if !dropped.isEmpty {
+      throw HarnessEventWriteError(
+        path: root.appending(path: EventSegmentLayout.droppedFile).path,
+        reason: "the payload guard dropped \(dropped.count) of \(events.count) events: "
+          + dropped.joined(separator: ", "))
+    }
+  }
+
+  /// Appends `line` to `key`'s bytes, keeping keys in first-seen order.
+  private static func add<Key: Equatable>(
+    _ line: Data, under key: Key, to groups: inout [(Key, Data)]
+  ) {
+    if let at = groups.firstIndex(where: { $0.0 == key }) {
+      groups[at].1.append(line)
+    } else {
+      groups.append((key, line))
     }
   }
 
@@ -101,6 +170,7 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
     if let runID, !RunID.isValid(runID) {
       throw HarnessEventReadError(path: runID, reason: "not a run id")
     }
+    guard let runID else { return try store.read(stream) }
     let path = path(stream, runID: runID)
     do {
       return try Data(contentsOf: URL(filePath: path))
@@ -138,9 +208,14 @@ enum AppendOnlyFile {
     defer { close(fd) }
     guard flock(fd, LOCK_EX) == 0 else { throw posixFailure("flock") }
     defer { flock(fd, LOCK_UN) }
+    try writeAll(line, to: fd)
+  }
+
+  /// Writes all of `data` to `fd`, resuming after a partial write or an interrupt.
+  static func writeAll(_ data: Data, to fd: Int32) throws(Failure) {
     var offset = 0
-    while offset < line.count {
-      let written = line.withUnsafeBytes { buffer -> Int in
+    while offset < data.count {
+      let written = data.withUnsafeBytes { buffer -> Int in
         guard let base = buffer.baseAddress else { return 0 }
         return write(fd, base + offset, buffer.count - offset)
       }
@@ -152,7 +227,7 @@ enum AppendOnlyFile {
     }
   }
 
-  private static func posixFailure(_ operation: String) -> Failure {
+  static func posixFailure(_ operation: String) -> Failure {
     Failure(operation: operation, detail: String(cString: strerror(errno)))
   }
 }

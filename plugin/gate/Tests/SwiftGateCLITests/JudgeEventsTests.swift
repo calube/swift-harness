@@ -312,6 +312,43 @@ struct JudgeEventsTests {
   }
 
   @Test(
+    "judge events reads a log the writer wrote before segments existed, before and after a write seals it, and prints Claude's long reasons — catches today's audit log unreadable after rotation"
+  )
+  func eventsReportReadsLegacyLog() throws {
+    let root = Self.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let legacy = try Fixture.data("Events/judge.jsonl")
+    let file = root.appending(path: RunLayout.eventsFile(.judge))
+    try FileManager.default.createDirectory(
+      at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try legacy.write(to: file)
+    let events = try HarnessEventJSON.decode(legacy).events.count
+
+    let before = JudgeEventsReport.make(
+      reader: HarnessEventFiles(root: root), runID: nil, filter: JudgeEventFilter(), json: true)
+    let files = HarnessEventFiles(root: root, rotationBytes: { _ in legacy.count })
+    try files.append(
+      HarnessEvent(
+        eventID: "after", time: Date(timeIntervalSince1970: 1_790_000_000),
+        source: HarnessEventSource(route: .judgeTests),
+        payload: .judgeDecision(HarnessEventTestsSupport.decision())))
+    let after = JudgeEventsReport.make(
+      reader: files, runID: nil, filter: JudgeEventFilter(), json: true)
+
+    #expect(before.status == 0)
+    #expect(after.status == 0, "\(after.stderr)")
+    #expect(!FileManager.default.fileExists(atPath: file.path))
+    let decoded = try [before, after].map {
+      try JSONDecoder().decode(JudgeEventSummary.self, from: Data($0.stdout.utf8))
+    }
+    #expect(decoded.map(\.events) == [events, events + 1])
+    #expect(
+      decoded.allSatisfy { summary in
+        summary.blocks.contains { ($0.reason?.utf8.count ?? 0) > 512 }
+      })
+  }
+
+  @Test(
     "the repository's .gitignore and the template new repositories copy both ignore .harness/events/ — catches the audit log committed"
   )
   func eventsAreIgnored() throws {

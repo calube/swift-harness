@@ -6,7 +6,7 @@ import SwiftGateDomain
 /// opt-out never reaches it.
 public enum EventWriterFactory {
   public static func make(root: URL, enabled: Bool) -> any HarnessEventWriting {
-    HarnessEventFiles(root: root)
+    enabled ? HarnessEventFiles(root: root) : DisabledEventWriter()
   }
 }
 
@@ -15,4 +15,6 @@ public struct DisabledEventWriter: HarnessEventWriting {
   public init() {}
 
   public func append(_ event: HarnessEvent) throws(HarnessEventWriteError) {}
+
+  public func append(contentsOf events: [HarnessEvent]) throws(HarnessEventWriteError) {}
 }
