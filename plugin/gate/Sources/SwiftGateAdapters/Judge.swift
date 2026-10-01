@@ -131,22 +131,24 @@ public struct ClaudeCLIJudge: Judge {
 }
 
 public enum ClaudeJudgePrompt {
-  /// One object per question, one probability per option plus a rationale; no other keys.
+  /// One object per question under its ``JudgeQuestionKeys`` key, one probability per option plus
+  /// a rationale; no other keys.
   public static func schema(for questions: JudgeQuestionSet) -> String {
+    let keys = JudgeQuestionKeys(questions)
     var properties: [String: Any] = [:]
     for question in questions.questions {
       var answer: [String: Any] = ["rationale": ["type": "string"]]
       for option in question.options {
         answer[option] = ["type": "number", "minimum": 0, "maximum": 1]
       }
-      properties[question.id] = [
+      properties[keys.key(for: question.id)] = [
         "type": "object", "additionalProperties": false,
         "required": question.options + ["rationale"], "properties": answer,
       ]
     }
     let schema: [String: Any] = [
       "type": "object", "additionalProperties": false,
-      "required": questions.questions.map(\.id), "properties": properties,
+      "required": questions.questions.map { keys.key(for: $0.id) }, "properties": properties,
     ]
     let data =
       (try? JSONSerialization.data(withJSONObject: schema, options: [.sortedKeys])) ?? Data()
@@ -162,9 +164,11 @@ public enum ClaudeJudgePrompt {
       "",
       "Questions:",
     ]
+    let keys = JudgeQuestionKeys(questions)
     for question in questions.questions {
       lines.append(
-        "- \(question.id): \(question.text) Options: \(question.options.joined(separator: ", ")).")
+        "- \(keys.key(for: question.id)): \(question.text) Options: "
+          + "\(question.options.joined(separator: ", ")).")
     }
     if let tier = subject.declaredTier {
       lines += ["", "The subject currently lives in \(tier)."]
@@ -226,9 +230,10 @@ public enum ClaudeJudgeReply {
     guard let structured = envelope["structured_output"] as? [String: Any] else {
       throw .malformedReply("the result envelope has no structured_output")
     }
+    let keys = JudgeQuestionKeys(questions)
     var answers: [JudgeAnswer] = []
     for question in questions.questions {
-      guard let reply = structured[question.id] as? [String: Any] else {
+      guard let reply = structured[keys.key(for: question.id)] as? [String: Any] else {
         throw .malformedReply("no answer for \(question.id)")
       }
       var distribution: [String: Double] = [:]
@@ -416,11 +421,13 @@ enum JevRequest {
     return state
   }
 
-  /// The `questions` object: each question as written, or, for a rendered set, each
-  /// sub-question under `<question id>.<sub-question id>`.
+  /// The `questions` object: each question as written under its ``JudgeQuestionKeys`` key, or, for
+  /// a rendered set, each sub-question under `<question id>.<sub-question id>`.
   static func questions(_ questions: JudgeQuestionSet) throws(JudgeError) -> [String: Any] {
     guard questions.rendering != nil else {
-      return Dictionary(uniqueKeysWithValues: questions.questions.map { ($0.id, asWritten($0)) })
+      let keys = JudgeQuestionKeys(questions)
+      return Dictionary(
+        uniqueKeysWithValues: questions.questions.map { (keys.key(for: $0.id), asWritten($0)) })
     }
     guard let rendering = JevRendering.questions(for: questions) else {
       throw .notConfigured("\(questions.versionedID) has no Jev rendering")
@@ -616,9 +623,10 @@ enum JevReply {
   private static func asWritten(_ replies: [String: Answer], for questions: JudgeQuestionSet)
     throws(JudgeError) -> [JudgeAnswer]
   {
+    let keys = JudgeQuestionKeys(questions)
     var answers: [JudgeAnswer] = []
     for question in questions.questions {
-      guard let answer = replies[question.id] else { continue }
+      guard let answer = replies[keys.key(for: question.id)] else { continue }
       answers.append(
         JudgeAnswer(
           question: question.id, distribution: try distribution(answer, for: question),
