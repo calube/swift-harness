@@ -66,7 +66,16 @@ public struct EventStoreReader: Sendable {
     self.files = files
   }
 
-  public func read(_ query: EventQuery) -> EventStoreRead {
+  /// How the reader treats a sealed `test.result` segment.
+  public enum SealedTests: Sendable, Equatable {
+    /// Decode its lines, like any other segment's.
+    case lines
+    /// When its rollup and index are there, count it from its index without opening it, for a
+    /// reader whose only per-result consumer reads rollups.
+    case indexesWhereRolledUp
+  }
+
+  public func read(_ query: EventQuery, sealedTests: SealedTests = .lines) -> EventStoreRead {
     var damage: [EventDamage] = []
     func unreadable(_ error: EventStoreFileError) {
       damage.append(

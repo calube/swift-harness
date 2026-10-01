@@ -43,18 +43,38 @@ public struct EventStoreFacts: Sendable, Equatable, Codable {
     }
   }
 
+  /// Sealed `test.result` segments counted from their indexes instead of read, because a rollup
+  /// covers them.
+  public struct RolledUpTests: Sendable, Equatable, Codable {
+    public let segments: Int
+    public let lines: Int
+    /// The segments' uncompressed lines' size.
+    public let bytes: Int
+
+    public init(segments: Int, lines: Int, bytes: Int) {
+      self.segments = segments
+      self.lines = lines
+      self.bytes = bytes
+    }
+  }
+
   /// Summed over the worktree's store and every imported one.
   public let streams: [Stream]
   /// Every store's `dropped.json`, summed.
   public let dropped: EventDropCounts
   /// The worktree's store plus each imported store.
   public let stores: Int
+  /// `nil` when every matching sealed `test.result` segment was read.
+  public let rolledUpTests: RolledUpTests?
 
-  public init(streams: [Stream] = [], dropped: EventDropCounts = EventDropCounts(), stores: Int = 0)
-  {
+  public init(
+    streams: [Stream] = [], dropped: EventDropCounts = EventDropCounts(), stores: Int = 0,
+    rolledUpTests: RolledUpTests? = nil
+  ) {
     self.streams = streams
     self.dropped = dropped
     self.stores = stores
+    self.rolledUpTests = rolledUpTests
   }
 }
 
