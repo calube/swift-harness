@@ -89,7 +89,23 @@ enum EventsSummaryRun {
 extension EventsSummaryRun {
   /// Every registered section, with wrong gates joined to `builds`.
   static func sections(builds: BuildJoin) -> [any EventSummarySection] {
-    []
+    EventSummary.sections.map { $0.id == .wrongGates ? WrongGatesSection(builds: builds) : $0 }
+  }
+
+  /// The build state under the git common dir; a common dir git can't name is damage.
+  static func builds(buildRunID: String?) async -> BuildJoin {
+    do {
+      let common = try await BuildLoop.git().commonDirectory()
+      return BuildJoinReader(commonDirectory: URL(filePath: common, directoryHint: .isDirectory))
+        .read(buildRunID: buildRunID)
+    } catch {
+      return BuildJoin(
+        source: BuildJoinReader.plansDirectory, runs: [],
+        damage: [
+          BuildJoinDamage(
+            path: BuildJoinReader.plansDirectory, reason: "no git common dir: \(error)")
+        ])
+    }
   }
 }
 
@@ -163,7 +179,7 @@ struct EventsListCommand: ParsableCommand {
   }
 }
 
-struct EventsSummaryCommand: ParsableCommand {
+struct EventsSummaryCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "summary",
     abstract: "Summarize the events: cost, gate time, wrong gates, tests, hooks, caches, halts, "
@@ -184,13 +200,14 @@ struct EventsSummaryCommand: ParsableCommand {
   @Flag(help: "Print the summary as JSON.")
   var json = false
 
-  func run() throws {
+  func run() async throws {
     let query = try EventsCommandRunner.query(
       command: "events summary", kinds: [], since: since, runID: runID, buildRunID: buildRunID)
+    let builds = await EventsSummaryRun.builds(buildRunID: buildRunID)
     try EventsCommandRunner.finish(
       EventsSummaryRun.make(
         files: LiveEventStoreFiles(root: EventsCommandRunner.root), query: query, json: json,
-        now: Date()))
+        now: Date(), sections: EventsSummaryRun.sections(builds: builds)))
   }
 }
 
