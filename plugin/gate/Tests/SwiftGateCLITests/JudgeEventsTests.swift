@@ -252,7 +252,7 @@ struct JudgeEventsTests {
   }
 
   @Test(
-    "judge events reads the shared log and 1 run's copy, prints decisions and blocks with reasons, and exits 0 — catches a run's judgements unreadable after the fact"
+    "judge events reads the shared log with a removed worktree's imported copy, and 1 run's copy, prints decisions and blocks with reasons, and exits 0 — catches a run's judgements unreadable after the fact"
   )
   func eventsReportReadsLog() async throws {
     let root = Self.temporaryRoot()
@@ -263,6 +263,15 @@ struct JudgeEventsTests {
       reasonJudge: Steps.reasonJudge(
         flagged: 0.1, rationale: "never compared", asked: Steps.Asked()))
     for event in judged.log.events { try files.append(event) }
+    let imported = root.appending(path: "\(EventCopyUp.importedDirectory)/worktree-store")
+    try HarnessEventFiles(root: imported.deletingLastPathComponent()).append(
+      HarnessEvent(
+        eventID: "worktree-only", time: Date(timeIntervalSince1970: 1_790_000_000),
+        source: HarnessEventSource(route: .judgeTests),
+        payload: .judgeDecision(HarnessEventTestsSupport.decision())))
+    try FileManager.default.moveItem(
+      at: imported.deletingLastPathComponent().appending(path: RunLayout.eventsDirectory),
+      to: imported)
 
     let shared = JudgeEventsReport.make(
       files: LiveEventStoreFiles(root: root), reader: files, runID: nil, filter: JudgeEventFilter(),
@@ -274,6 +283,11 @@ struct JudgeEventsTests {
     #expect(shared.status == 0)
     #expect(shared.stdout.contains("fails-if-broken"))
     #expect(shared.stdout.contains("never compared"))
+    let sharedJSON = JudgeEventsReport.make(
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil,
+      filter: JudgeEventFilter(), json: true)
+    let all = try JSONDecoder().decode(JudgeEventSummary.self, from: Data(sharedJSON.stdout.utf8))
+    #expect(all.events == judged.log.events.count + 1)
     #expect(run.status == 0)
     let summary = try JSONDecoder().decode(JudgeEventSummary.self, from: Data(run.stdout.utf8))
     #expect(summary.events == judged.log.events.count)
@@ -282,7 +296,7 @@ struct JudgeEventsTests {
   }
 
   @Test(
-    "judge events exits 2 naming an unknown key, and reports a torn last line with exit 0 — catches a log from a newer writer misread, or a write in flight failing the reader"
+    "judge events exits 2 naming an unknown key, in its own log or an imported one, and reports a torn last line with exit 0 — catches a log from a newer writer misread, or a write in flight failing the reader"
   )
   func eventsReportStrictness() throws {
     let root = Self.temporaryRoot()
@@ -313,6 +327,19 @@ struct JudgeEventsTests {
     #expect(unknown.status == 2)
     #expect(unknown.stderr.contains("mystery"))
     #expect(unknown.stderr.contains(file.lastPathComponent))
+
+    try line.write(to: file)
+    let importedFile = root.appending(
+      path: "\(EventCopyUp.importedDirectory)/worktree-store/\(HarnessEventStream.judge.fileName)")
+    try FileManager.default.createDirectory(
+      at: importedFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(String(decoding: line, as: UTF8.self).replacing("{", with: "{\"mystery\":0,").utf8)
+      .write(to: importedFile)
+    let importedUnknown = JudgeEventsReport.make(
+      files: LiveEventStoreFiles(root: root), reader: files, runID: nil,
+      filter: JudgeEventFilter(), json: false)
+    #expect(importedUnknown.status == 2)
+    #expect(importedUnknown.stderr.contains("imported/worktree-store"), "\(importedUnknown.stderr)")
   }
 
   @Test(
@@ -326,7 +353,9 @@ struct JudgeEventsTests {
     try FileManager.default.createDirectory(
       at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
     try legacy.write(to: file)
-    let events = try HarnessEventJSON.decode(legacy).events.count
+    // The capture ran 2 routes with the same fake id generator, so ids repeat across them; the
+    // reader counts each id once.
+    let events = Set(try HarnessEventJSON.decode(legacy).events.map(\.eventID)).count
 
     let before = JudgeEventsReport.make(
       files: LiveEventStoreFiles(root: root), reader: HarnessEventFiles(root: root), runID: nil,

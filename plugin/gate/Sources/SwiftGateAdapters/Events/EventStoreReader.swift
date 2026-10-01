@@ -56,7 +56,7 @@ public struct EventStoreRead: Sendable, Equatable {
   }
 }
 
-/// Reads `.harness/events/` and every `imported/<storeID>/` below it: each stream's sealed
+/// Reads `.harness/events/` and every `imported/<storeID>/` and `unkept/<storeID>/` below it: each stream's sealed
 /// segments, then its active file. A segment whose index rules it out of the query is never
 /// opened. Takes no lock: writers only append and rename.
 public struct EventStoreReader: Sendable {
@@ -72,12 +72,13 @@ public struct EventStoreReader: Sendable {
       damage.append(
         EventDamage(file: error.path, line: nil, kind: .unreadableFile, detail: error.reason))
     }
-    let imported = "\(RunLayout.eventsDirectory)/imported"
     var stores = [RunLayout.eventsDirectory]
-    do throws(EventStoreFileError) {
-      stores += try files.list(imported).filter { !$0.hasPrefix(".") }.map { "\(imported)/\($0)" }
-    } catch {
-      unreadable(error)
+    for parent in ["imported", "unkept"].map({ "\(RunLayout.eventsDirectory)/\($0)" }) {
+      do throws(EventStoreFileError) {
+        stores += try files.list(parent).filter { !$0.hasPrefix(".") }.map { "\(parent)/\($0)" }
+      } catch {
+        unreadable(error)
+      }
     }
     var batches: [[StoredEvent]] = []
     var streams: [HarnessEventStream: EventStoreFacts.Stream] = [:]

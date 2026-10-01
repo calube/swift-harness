@@ -196,6 +196,7 @@ enum WorktreeRun {
     }
     let report = Reporter(command: command, slug: slug, task: task, names: names)
     var keeping = KeptRuns()
+    var events = KeptEvents()
     do throws(GitWorkspaceError) {
       guard try await workspace.branchExists(names.branch) else {
         return report.refused("branch \(names.branch) doesn't exist")
@@ -206,6 +207,7 @@ enum WorktreeRun {
       }
       if FileManager.default.fileExists(atPath: names.path) {
         keeping = keepRuns(of: names)
+        events = copyEvents(of: names)
         try await workspace.removeWorktree(at: names.path, force: false)
       }
       try await workspace.deleteBranch(names.branch)
@@ -215,8 +217,60 @@ enum WorktreeRun {
     return WorktreeReport(
       command: command, plan: slug, task: task, status: .removed, verdict: .green, holder: nil,
       worktree: names.path, branch: names.branch, cloned: nil, missing: nil,
-      message: "removed \(names.path) and branch \(names.branch)" + keeping.message,
-      keptRuns: keeping.kept, unkeptRuns: keeping.unkept.isEmpty ? nil : keeping.unkept)
+      message: "removed \(names.path) and branch \(names.branch)" + keeping.message
+        + events.message,
+      keptRuns: keeping.kept, unkeptRuns: keeping.unkept.isEmpty ? nil : keeping.unkept,
+      events: events.copied, unkeptEvents: events.unkept)
+  }
+
+  /// What `remove` did with a worktree's `.harness/events/`.
+  private struct KeptEvents {
+    var copied: WorktreeReport.CopiedEvents?
+    var unkept: WorktreeReport.UnkeptEvents?
+    var message = ""
+  }
+
+  /// Copies the worktree's event store into the main checkout's imports, so its judge audit log
+  /// and telemetry outlive it. A copy that fails is named; removal still goes ahead, as for runs.
+  private static func copyEvents(of names: TaskWorktree) -> KeptEvents {
+    let copyUp = EventCopyUp(
+      source: URL(filePath: names.path, directoryHint: .isDirectory),
+      destination: URL(filePath: names.mainCheckout, directoryHint: .isDirectory))
+    let outcome: EventCopyUpOutcome
+    do throws(EventCopyUpError) {
+      outcome = try copyUp.run()
+    } catch {
+      let reason = "\(error)"
+      // The judge's audit trail must outlive the worktree, so its events move whole instead.
+      let common = URL(filePath: names.mainCheckout, directoryHint: .isDirectory)
+        .appending(path: ".git", directoryHint: .isDirectory)
+      do throws(EventCopyUpError) {
+        let moved = try copyUp.moveAside(commonDirectory: common)
+        return KeptEvents(
+          unkept: .init(copyError: reason, movedTo: moved, moveError: nil),
+          message: "; couldn't copy its events (\(reason))"
+            + (moved.map { ", moved them to \($0)" } ?? ""))
+      } catch {
+        return KeptEvents(
+          unkept: .init(copyError: reason, movedTo: nil, moveError: "\(error)"),
+          message: "; couldn't copy its events (\(reason)) or move them aside (\(error)): "
+            + "its events were lost with the worktree")
+      }
+    }
+    switch outcome {
+    case .nothing:
+      return KeptEvents()
+    case .copied(let storeID, let bytes):
+      let path = "\(EventCopyUp.importedDirectory)/\(storeID)"
+      return KeptEvents(
+        copied: .init(storeID: storeID, path: path, bytes: bytes, copied: true),
+        message: "; copied its events (\(bytes) bytes) to \(path)")
+    case .kept(let storeID, let bytes):
+      let path = "\(EventCopyUp.importedDirectory)/\(storeID)"
+      return KeptEvents(
+        copied: .init(storeID: storeID, path: path, bytes: bytes, copied: false),
+        message: "; kept the earlier copy of its events in \(path)")
+    }
   }
 
   /// What `remove` copied out of a worktree's `.harness/runs/` before deleting it.
@@ -501,7 +555,10 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
     abstract: "Remove a merged task's worktree and branch, or with --fix its fix worktree.",
     discussion:
       "Before removing, copies each gate run under the worktree's .harness/runs/ into the main "
-      + "checkout's, naming any it couldn't. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
+      + "checkout's, and its .harness/events/ to the main checkout's "
+      + ".harness/events/imported/<storeID>/; when that copy fails, moves them to "
+      + ".harness/events/unkept/<storeID>/ (or the git common dir's "
+      + "swift-harness/unkept-events/<storeID>/), naming any it couldn't keep. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
       + "the ledger, or its branch is missing or not merged into main; 2 for a missing flag or a "
       + "failed git step, such as a worktree with uncommitted changes.")
 
