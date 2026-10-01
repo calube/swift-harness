@@ -12,11 +12,33 @@ public struct JudgeQuestionKeys: Sendable, Equatable {
   private let keyByID: [String: String]
   private let idByKey: [String: String]
 
+  /// A safe id is its own key, so a built-in set's request is unchanged. Any other id goes out as
+  /// its safe characters plus a hash of the whole id. If 2 keys still coincide, every question
+  /// goes out under its position instead, so no 2 questions ever share a key.
   public init(_ questions: JudgeQuestionSet) {
-    var keyByID: [String: String] = [:]
-    for question in questions.questions { keyByID[question.id] = question.id }
-    self.keyByID = keyByID
-    idByKey = Dictionary(keyByID.map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+    var ids: [String] = []
+    var seen: Set<String> = []
+    for question in questions.questions where seen.insert(question.id).inserted {
+      ids.append(question.id)
+    }
+    var keys = ids.map { Self.isSafe($0) ? $0 : Self.derivedKey($0) }
+    if Set(keys).count != keys.count {
+      keys = ids.indices.map { "q-\($0 + 1)" }
+    }
+    keyByID = Dictionary(uniqueKeysWithValues: zip(ids, keys))
+    idByKey = Dictionary(uniqueKeysWithValues: zip(keys, ids))
+  }
+
+  static let hashLength = 12
+
+  /// The id's safe characters, each other one as `_`, cut so that `-` and the first 12 hex digits
+  /// of the id's SHA-256 fit in 64.
+  static func derivedKey(_ id: String) -> String {
+    let readable = String(
+      String.UnicodeScalarView(id.unicodeScalars.map { isSafe($0) ? $0 : "_" })
+    ).prefix(maxLength - 1 - hashLength)
+    let hash = SHA256.hash(data: Data(id.utf8)).map { String(format: "%02x", $0) }.joined()
+    return "\(readable)-\(hash.prefix(hashLength))"
   }
 
   /// Whether `key` is 1 to 64 ASCII letters, digits, `_` or `-`: inside what Claude's API accepts,
