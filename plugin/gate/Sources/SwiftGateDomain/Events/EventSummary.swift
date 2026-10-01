@@ -107,7 +107,8 @@ public enum EventSummarySectionID: String, Sendable, Codable, CaseIterable {
 
 /// What every section reads.
 public struct EventSummaryInput: Sendable {
-  /// The events the query kept, deduplicated, oldest first.
+  /// The events the query kept, deduplicated, oldest first. Results in a sealed `test` segment
+  /// with a rollup may be left out and counted in ``EventStoreFacts/rolledUpTests`` instead.
   public let events: [StoredEvent]
   public let query: EventQuery
   public let store: EventStoreFacts
@@ -253,7 +254,7 @@ public enum EventSummary {
   ) -> EventSummaryReport {
     EventSummaryReport(
       since: input.query.since, runID: input.query.runID, buildRunID: input.query.buildRunID,
-      events: input.events.count,
+      events: input.events.count + (input.store.rolledUpTests?.lines ?? 0),
       sections: sections.map {
         $0.summarize(input)
           ?? EventSummarySectionReport(id: $0.id, state: .noEvents, lines: [], metrics: [])

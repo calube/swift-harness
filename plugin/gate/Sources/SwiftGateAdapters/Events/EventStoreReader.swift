@@ -92,6 +92,7 @@ public struct EventStoreReader: Sendable {
     var batches: [[StoredEvent]] = []
     var streams: [HarnessEventStream: EventStoreFacts.Stream] = [:]
     var dropped: [HarnessEventKind: [EventPayloadGuard.Reason: Int]] = [:]
+    var rolledUp: EventStoreFacts.RolledUpTests?
     for store in stores {
       do throws(EventStoreFileError) {
         for (kind, reasons) in try droppedCounts(store).dropped {
@@ -101,8 +102,14 @@ public struct EventStoreReader: Sendable {
         unreadable(error)
       }
       for stream in HarnessEventStream.allCases {
-        let read = read(stream, in: store, query: query)
+        let read = read(stream, in: store, query: query, sealedTests: sealedTests)
         damage += read.damage
+        if let counted = read.rolledUp {
+          rolledUp = EventStoreFacts.RolledUpTests(
+            segments: (rolledUp?.segments ?? 0) + counted.segments,
+            lines: (rolledUp?.lines ?? 0) + counted.lines,
+            bytes: (rolledUp?.bytes ?? 0) + counted.bytes)
+        }
         batches.append(read.events.filter { query.keeps($0.event) })
         let total = streams[stream]
         streams[stream] = EventStoreFacts.Stream(
@@ -115,20 +122,21 @@ public struct EventStoreReader: Sendable {
       events: EventQuery.merge(batches), damage: damage,
       facts: EventStoreFacts(
         streams: HarnessEventStream.allCases.compactMap { streams[$0] },
-        dropped: EventDropCounts(dropped: dropped), stores: stores.count))
+        dropped: EventDropCounts(dropped: dropped), stores: stores.count, rolledUpTests: rolledUp))
   }
 
   private struct StreamRead {
     var events: [StoredEvent] = []
     var damage: [EventDamage] = []
     var facts: EventStoreFacts.Stream
+    var rolledUp: EventStoreFacts.RolledUpTests?
   }
 
   /// 1 store's `stream`: its size whatever the query, and the events of every segment the query
   /// may match, then of the active file.
-  private func read(_ stream: HarnessEventStream, in store: String, query: EventQuery)
-    -> StreamRead
-  {
+  private func read(
+    _ stream: HarnessEventStream, in store: String, query: EventQuery, sealedTests: SealedTests
+  ) -> StreamRead {
     let active = "\(store)/\(stream.fileName)"
     let sealed = "\(store)/sealed/\(stream.rawValue)"
     var result = StreamRead(
@@ -140,8 +148,10 @@ public struct EventStoreReader: Sendable {
     }
     let wanted = query.streams.contains(stream)
     var segments: [Int: Set<String>] = [:]
+    var rollups = Set<String>()
     do throws(EventStoreFileError) {
       for name in try files.list(sealed) {
+        if name.hasSuffix(".rollup.json") { rollups.insert(name) }
         guard let file = EventSegmentLayout.file(named: name) else { continue }
         switch file {
         case .plain(let sequence), .compressed(let sequence), .index(let sequence):
@@ -163,22 +173,32 @@ public struct EventStoreReader: Sendable {
         unreadable(error)
       }
       guard wanted else { continue }
+      var index: EventSegmentIndex?
       if names.contains(EventSegmentLayout.indexName(sequence)) {
         let indexPath = "\(sealed)/\(EventSegmentLayout.indexName(sequence))"
         do throws(EventStoreFileError) {
           if let data = try files.read(indexPath) {
-            let index: EventSegmentIndex
             do {
               index = try EventSegmentIndex.decode(data)
             } catch {
               throw EventStoreFileError(path: indexPath, reason: "\(error)")
             }
-            if !query.mayMatch(index) { continue }
           }
+          if let index, !query.mayMatch(index) { continue }
         } catch {
           // Without its index the segment is read whole, so nothing it holds is lost.
           unreadable(error, .unreadableIndex)
         }
+      }
+      // The flaky and slow-test section reads the rollup; the store needs only the index's counts.
+      if sealedTests == .indexesWhereRolledUp, stream == .test, let index,
+        rollups.contains(EventSegmentLayout.rollupName(sequence))
+      {
+        result.rolledUp = EventStoreFacts.RolledUpTests(
+          segments: (result.rolledUp?.segments ?? 0) + 1,
+          lines: (result.rolledUp?.lines ?? 0) + index.lines,
+          bytes: (result.rolledUp?.bytes ?? 0) + index.bytes)
+        continue
       }
       do throws(EventStoreFileError) {
         guard
