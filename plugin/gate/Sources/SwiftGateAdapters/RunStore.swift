@@ -35,7 +35,7 @@ public struct RunKeepOutcome: Sendable, Equatable {
 
 /// Persists runs under a worktree's `.harness/runs/`: one directory per run holding its logs and
 /// `report.json`, plus the shared `history.jsonl`. With an event writer, each record also writes
-/// the run's `gate.run` and its `gate.step`s.
+/// the run's `gate.run`, its `gate.step`s and its `test.result`s.
 public struct RunStore: Sendable {
   public let worktreeRoot: URL
   /// `nil` records no events.
@@ -78,13 +78,15 @@ public struct RunStore: Sendable {
   ///   - dirty: whether it started on a dirty tree; `nil` when git couldn't say.
   ///   - gateSteps: each timed step, 1 `gate.step` apiece.
   ///   - checkTier: the `check` tier the run gated at, as the events' source.
+  ///   - testResults: each test case the run's tiers reported, 1 `test.result` apiece, in the
+  ///     same batch as the run's other events.
   /// - Throws: ``RunStoreError/eventsUnwritten(_:)`` when only the events failed, after the run
   ///   is recorded.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
-    checkTier: CheckTier? = nil
+    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = []
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now
@@ -120,16 +122,18 @@ public struct RunStore: Sendable {
         contentsOf: try gateEvents(
           report, finishedAt: finishedAt, command: command, headCommit: headCommit, base: base,
           treeHash: treeHash, dirty: dirty, steps: gateSteps + [recordStep],
-          checkTier: checkTier))
+          checkTier: checkTier, testResults: testResults))
     } catch {
       throw .eventsUnwritten(error)
     }
   }
 
-  /// The run's `gate.run`, then each step's `gate.step` pointing at it.
+  /// The run's `gate.run`, then each step's `gate.step` and each case's `test.result` pointing
+  /// at it.
   private func gateEvents(
     _ report: RunReport, finishedAt: Date, command: String?, headCommit: String?, base: String?,
-    treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?
+    treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?,
+    testResults: [TestCaseResult]
   ) throws(HarnessEventWriteError) -> [HarnessEvent] {
     let payload: GateRunEvent
     do {
@@ -142,12 +146,13 @@ public struct RunStore: Sendable {
     let run = HarnessEvent(
       eventID: newEventID(), time: finishedAt, runID: report.runID, head: headCommit, base: base,
       source: source, payload: .gateRun(payload))
-    return [run]
-      + steps.map { step in
-        HarnessEvent(
-          eventID: newEventID(), parentID: run.eventID, time: finishedAt, runID: report.runID,
-          head: headCommit, base: base, source: source, payload: .gateStep(GateStepEvent(step)))
-      }
+    func child(_ payload: HarnessEventPayload) -> HarnessEvent {
+      HarnessEvent(
+        eventID: newEventID(), parentID: run.eventID, time: finishedAt, runID: report.runID,
+        head: headCommit, base: base, source: source, payload: payload)
+    }
+    return [run] + steps.map { child(.gateStep(GateStepEvent($0))) }
+      + testResults.map { child(.testResult(TestResultEvent($0))) }
   }
 
   public func readHistory() throws(RunStoreError) -> (

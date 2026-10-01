@@ -29,6 +29,7 @@ public enum EventPayloadGuard {
     case .judge: .exempt
     case .gate: .enforced
     case .hook: .enforced
+    case .test: .enforced
     }
   }
 
