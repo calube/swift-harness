@@ -16,6 +16,7 @@ public enum ConfigSchema {
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
         "budgets", "clients", "modules", "judge", "docs", "plan", "build", "harness", "exclude",
+        "telemetry",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -305,7 +306,10 @@ public enum ConfigSchema {
   private static func readTelemetry(_ reader: inout Reader, _ root: [String: ConfigValue])
     -> TelemetryConfig
   {
-    TelemetryConfig(enabled: false)
+    let path = "telemetry"
+    guard let table = reader.table(root, path, at: "") else { return TelemetryConfig() }
+    reader.rejectUnknownKeys(in: table, at: path, allowed: ["enabled"])
+    return TelemetryConfig(enabled: reader.bool(table, "enabled", at: path) ?? true)
   }
 
   private static func readBuild(_ reader: inout Reader, _ root: [String: ConfigValue])
