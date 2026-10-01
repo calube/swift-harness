@@ -66,6 +66,8 @@ enum JudgeBatch {
 /// the ready tier; at ready, a confident answer to a blocking question is a gating finding.
 enum TestJudgeCheck {
   static let notRunRuleID = "judge.not-run"
+  /// The judge's events couldn't be written; the verdict stands.
+  static let eventsUnwrittenRuleID = "judge-events.unwritten"
   /// Diff context per test is capped so one huge change can't blow the prompt.
   static let maxContextCharacters = 12_000
 
@@ -78,15 +80,18 @@ enum TestJudgeCheck {
     let reasonJudge: (any Judge)?
     /// Values no reason may carry, such as the Jev key.
     let secrets: [String]
+    /// Where the judge's events go; `nil` writes none.
+    let events: JudgeEventScope?
 
     init(
       makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
-      reasonJudge: (any Judge)? = nil, secrets: [String] = []
+      reasonJudge: (any Judge)? = nil, secrets: [String] = [], events: JudgeEventScope? = nil
     ) {
       self.makeJudge = makeJudge
       self.diff = diff
       self.reasonJudge = reasonJudge
       self.secrets = secrets
+      self.events = events
     }
 
     static func live(root: URL, git: LiveGit) -> Dependencies {
@@ -104,9 +109,13 @@ enum TestJudgeCheck {
     }
   }
 
+  /// - Parameters:
+  ///   - route: what asked, for the events; `nil` names `judge tests`, with or without `--ready`.
+  ///   - runID: the run the events belong to.
   static func run(
     _ environment: ChangedTestChecks.Environment, graph: ModuleGraph, config: Config,
-    base: String, atReadyTier: Bool, dependencies: Dependencies
+    base: String, atReadyTier: Bool, dependencies: Dependencies, route: HarnessRoute? = nil,
+    runID: String? = nil
   ) async -> [Finding] {
     guard case .enabled(let backend, let thresholds, _) = config.judge,
       let judge = dependencies.makeJudge(config.judge)
@@ -321,6 +330,8 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
 
   let makeJudge: @Sendable (JudgeConfig, URL) -> (any Judge)?
   let git: @Sendable (URL) -> any Git
+  /// Where the comment judge's events go for a repository; `nil` writes none.
+  var events: @Sendable (URL) -> JudgeEventScope? = { _ in nil }
 
   static let live = ConfiguredCommitCommentJudge(
     makeJudge: { config, root in

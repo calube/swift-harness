@@ -664,6 +664,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `mutate.survived`, `mutate.killed`, `mutate.unviable`, `mutate.no-evidence`, `mutate.bare-equivalent`, `mutate.summary` | playbook §5.2 |
 | `judge.fails-if-broken`, `judge.tier`, `judge.name-specificity`, `judge.asserts-implementation`, `judge.not-run` | playbook §5.4 |
 | `judge.loses-fact`, `judge.right-size` | K1 (the commit-comment judge) |
+| `judge-events.unwritten` | playbook §5.4: the judge's events couldn't be written; a nit, the verdict stands |
 
 ### Harness and environment
 

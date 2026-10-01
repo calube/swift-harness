@@ -10,13 +10,16 @@ public final class FakeJudge: Judge {
 
   public let identity: JudgeIdentity
   private let handler: Handler
+  private let usage: JudgeUsage?
   private let asked = Mutex<[JudgeSubject]>([])
 
+  /// - Parameter usage: what every call reports it cost; `nil` reports only the wall time.
   public init(
     identity: JudgeIdentity = JudgeIdentity(backend: "fake", model: "fake"),
-    handler: @escaping Handler
+    usage: JudgeUsage? = nil, handler: @escaping Handler
   ) {
     self.identity = identity
+    self.usage = usage
     self.handler = handler
   }
 
@@ -25,12 +28,24 @@ public final class FakeJudge: Judge {
   public func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
     -> [JudgeAnswer]
   {
-    asked.withLock { $0.append(subject) }
-    let answers = try handler(subject, questions)
-    do {
-      return try JudgeAnswers.validate(answers, for: questions)
-    } catch {
-      throw .malformedReply("\(error)")
+    try await measuredAnswer(subject, questions: questions).answers
+  }
+
+  /// Reports itself like a real backend, so a route's events can be tested with fakes.
+  public func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> JudgeReply
+  {
+    try await JudgeCallEvents.observe(identity, subject: subject, questions: questions) {
+      () throws(JudgeError) -> JudgeReply in
+      asked.withLock { $0.append(subject) }
+      let answers = try handler(subject, questions)
+      do {
+        return JudgeReply(
+          answers: try JudgeAnswers.validate(answers, for: questions),
+          usage: usage ?? JudgeUsage(wallMilliseconds: 0))
+      } catch {
+        throw .malformedReply("\(error)")
+      }
     }
   }
 

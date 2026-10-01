@@ -29,6 +29,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "harness.profile": "a `.swiftgate.toml` key a config error names",
     "jev-1.13.0": "a pinned judge model id",
     "judge.model": "a `.swiftgate.toml` key a config error names",
+    "judge.call": "a harness event kind",
+    "judge.decision": "a harness event kind",
     "simulator.device": "a `.swiftgate.toml` key a config error names",
     "simulator.os": "a `.swiftgate.toml` key a config error names",
     "docs.budgets.design": "a `.swiftgate.toml` key a config error names",
