@@ -38,16 +38,26 @@ public struct ModelPriceTable: Sendable, Equatable {
     self.usdPerMillion = usdPerMillion
   }
 
-  /// Only rates the captured `claude -p` envelopes confirm. Those envelopes solve, with no
-  /// remainder, to these 3 rates; they don't pin the output rate or show a 1-hour cache write, so
-  /// neither is here and a message using either is stored without a cost.
+  /// Anthropic's first-party list prices. Cache writes are 1.25 times input for 5 minutes and 2
+  /// times for 1 hour. Haiku 4.5's cache-read rate is only given as "about 0.1 times input", so
+  /// it's left out and a Haiku message that reads the cache is stored without a cost. The captured
+  /// `claude -p` envelopes' `total_cost_usd` agree with every Opus 5.5 rate they exercise.
   public static let current = ModelPriceTable(
-    version: "2026-09-30",
+    version: "2026-10-01",
     source:
-      "total_cost_usd of 3 claude -p envelopes from Claude Code 2.1.285, captured 2026-10-01; "
-      + "see the Transcripts fixtures",
+      "claude-api skill of Claude Code 2.1.285: its Current Models table (cached 2026-09-25) for "
+      + "input, output and cache-read rates, and its prompt-caching reference for cache writes",
     usdPerMillion: [
-      "claude-opus-5-5": [.input: 4, .cacheWrite5m: 5, .cacheRead: Decimal(2) / 10]
+      "claude-opus-5-5": [
+        .input: 4, .output: 20, .cacheWrite5m: 5, .cacheWrite1h: 8, .cacheRead: Decimal(2) / 10,
+      ],
+      "claude-sonnet-5-5": [
+        .input: 2, .output: 10, .cacheWrite5m: Decimal(25) / 10, .cacheWrite1h: 4,
+        .cacheRead: Decimal(2) / 10,
+      ],
+      "claude-haiku-4-5": [
+        .input: 1, .output: 5, .cacheWrite5m: Decimal(125) / 100, .cacheWrite1h: 2,
+      ],
     ])
 
   /// The sum of each class's tokens times its rate, or why there is none. A class the message
