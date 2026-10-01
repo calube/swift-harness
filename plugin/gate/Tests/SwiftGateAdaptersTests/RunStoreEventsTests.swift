@@ -216,6 +216,48 @@ struct RunStoreEventsTests {
     #expect(untracked == WorkingTreeState(treeHash: nil, dirty: true))
     #expect(modified == WorkingTreeState(treeHash: nil, dirty: true))
   }
+
+  @Test(
+    "an untracked file under .harness/ at any depth leaves the tree clean with its tree hash — catches the harness's own state marking every run dirty"
+  )
+  func harnessStateIsNotSource() async throws {
+    let repository = try await TemporaryGitRepository()
+    defer { repository.remove() }
+    try repository.write("Sources/A.swift", "let a = 1\n")
+    _ = try await repository.commitAll("first")
+    let reader = LiveWorkingTree(runner: repository.runner, root: repository.root)
+    let tree = try await repository.git("rev-parse", "HEAD^{tree}")
+
+    try repository.write(".harness/runs/stray.json", "{}\n")
+    let topLevel = try await reader.state()
+    try repository.write("Packages/A/.harness/x", "x\n")
+    let nested = try await reader.state()
+
+    #expect(topLevel == WorkingTreeState(treeHash: tree, dirty: false))
+    #expect(nested == WorkingTreeState(treeHash: tree, dirty: false))
+  }
+
+  @Test(
+    "beside harness state, an untracked source file or a modified tracked file still makes the tree dirty — catches an ignore wider than .harness/"
+  )
+  func sourceBesideHarnessStateIsDirty() async throws {
+    let repository = try await TemporaryGitRepository()
+    defer { repository.remove() }
+    try repository.write("Sources/A.swift", "let a = 1\n")
+    _ = try await repository.commitAll("first")
+    let reader = LiveWorkingTree(runner: repository.runner, root: repository.root)
+    try repository.write(".harness/runs/stray.json", "{}\n")
+    try repository.write("Packages/A/.harness/x", "x\n")
+
+    try repository.write("Sources/X.swift", "let x = 1\n")
+    let untrackedSource = try await reader.state()
+    try repository.delete("Sources/X.swift")
+    try repository.write("Sources/A.swift", "let a = 2\n")
+    let modified = try await reader.state()
+
+    #expect(untrackedSource == WorkingTreeState(treeHash: nil, dirty: true))
+    #expect(modified == WorkingTreeState(treeHash: nil, dirty: true))
+  }
 }
 
 /// Event ids `event-1`, `event-2`, … in the order asked.

@@ -229,6 +229,10 @@ public protocol WorkingTreeReading: Sendable {
 
 /// ``WorkingTreeReading`` over `git status --porcelain` and `git rev-parse HEAD^{tree}`.
 public struct LiveWorkingTree: WorkingTreeReading {
+  /// The harness's own state is never source and can't change a build, so anything under a
+  /// `.harness/` directory, at any depth, leaves the tree clean.
+  static let harnessStateExcluded = ":(exclude,glob)**/.harness/**"
+
   private let runner: any ProcessRunner
   private let root: URL
 
@@ -238,7 +242,9 @@ public struct LiveWorkingTree: WorkingTreeReading {
   }
 
   public func state() async throws(GitError) -> WorkingTreeState {
-    let status = try await git(["status", "--porcelain", "-z", "--untracked-files=normal"])
+    let status = try await git([
+      "status", "--porcelain", "-z", "--untracked-files=normal", "--", Self.harnessStateExcluded,
+    ])
     guard status.status.isSuccess else { throw Self.failure(status) }
     if !status.stdout.bytes.isEmpty { return WorkingTreeState(treeHash: nil, dirty: true) }
     let tree = try await git(["rev-parse", "--verify", "--quiet", "HEAD^{tree}"])
