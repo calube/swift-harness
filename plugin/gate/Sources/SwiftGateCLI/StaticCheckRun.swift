@@ -6,8 +6,13 @@ import SwiftGateDomain
 /// Shared driver for T0 commands: times the check, builds and records the report, prints it, and
 /// exits with the verdict's status.
 enum StaticCheckRun {
+  /// - Parameters:
+  ///   - command: the command that ran, for its `gate.run` event.
+  ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
+  ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
   static func execute(
-    root: URL, format: OutputFormat, runID: String? = nil,
+    root: URL, format: OutputFormat, runID: String? = nil, command: String? = nil,
+    events: (any HarnessEventWriting)? = nil, workingTree: (any WorkingTreeReading)? = nil,
     check: () async -> StaticCheckOutcome
   ) async throws {
     let clock = ContinuousClock()

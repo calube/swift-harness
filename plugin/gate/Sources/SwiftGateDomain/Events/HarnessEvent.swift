@@ -43,10 +43,15 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case judgeDecision = "judge.decision"
   /// 1 call to a judge backend, or 1 answer served from the judge cache.
   case judgeCall = "judge.call"
+  /// 1 recorded gate run.
+  case gateRun = "gate.run"
+  /// 1 timed step of a recorded gate run.
+  case gateStep = "gate.step"
 
   public var stream: HarnessEventStream {
     switch self {
     case .judgeDecision, .judgeCall: .judge
+    case .gateRun, .gateStep: .gate
     }
   }
 }
@@ -54,6 +59,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
 /// 1 append-only file of events, shared by every kind that names it.
 public enum HarnessEventStream: String, Sendable, CaseIterable {
   case judge
+  case gate
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -69,6 +75,8 @@ public enum HarnessRoute: String, Sendable, Codable, CaseIterable {
   /// Benchmark calls, which an analysis of live decisions leaves out.
   case bench
   case selfTest = "self-test"
+  /// A gate run's record.
+  case check
 }
 
 public enum HarnessHook: String, Sendable, Codable, CaseIterable {
@@ -91,11 +99,15 @@ public struct HarnessEventSource: Sendable, Equatable, Codable {
 public enum HarnessEventPayload: Sendable, Equatable {
   case judgeDecision(JudgeDecisionEvent)
   case judgeCall(JudgeCallEvent)
+  case gateRun(GateRunEvent)
+  case gateStep(GateStepEvent)
 
   public var kind: HarnessEventKind {
     switch self {
     case .judgeDecision: .judgeDecision
     case .judgeCall: .judgeCall
+    case .gateRun: .gateRun
+    case .gateStep: .gateStep
     }
   }
 }
@@ -290,6 +302,10 @@ extension HarnessEvent: Codable {
       payload = .judgeDecision(try c.decode(JudgeDecisionEvent.self, forKey: .payload))
     case .judgeCall:
       payload = .judgeCall(try c.decode(JudgeCallEvent.self, forKey: .payload))
+    case .gateRun:
+      payload = .gateRun(try c.decode(GateRunEvent.self, forKey: .payload))
+    case .gateStep:
+      payload = .gateStep(try c.decode(GateStepEvent.self, forKey: .payload))
     }
   }
 
@@ -307,6 +323,8 @@ extension HarnessEvent: Codable {
     switch payload {
     case .judgeDecision(let decision): try c.encode(decision, forKey: .payload)
     case .judgeCall(let call): try c.encode(call, forKey: .payload)
+    case .gateRun(let run): try c.encode(run, forKey: .payload)
+    case .gateStep(let step): try c.encode(step, forKey: .payload)
     }
   }
 }

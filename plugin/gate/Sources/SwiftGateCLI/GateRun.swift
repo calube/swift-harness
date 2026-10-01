@@ -17,15 +17,22 @@ enum GateRun {
     let runID: String
     /// Where the run's logs and reports go.
     let directory: URL
+    /// Each step the run times hands its timing here, for the run's `gate.step` events.
+    var steps = GateStepCollector()
   }
 
   /// - Parameters:
   ///   - steps: `ready` steps a lower `check` tier added, recorded in the run's history line.
   ///   - proofBases: the refs `prove` retried at, recorded in the run's history line.
   ///   - base: the ref `--base` named, resolved to a sha and recorded in the run's history line.
+  ///   - checkTier: the `check` tier this run gates at, as its events' source.
+  ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
+  ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
   static func execute(
     root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
     proofBases: [String]? = nil, base: String? = nil, git: (any Git)? = nil,
+    checkTier: CheckTier? = nil, events: (any HarnessEventWriting)? = nil,
+    workingTree: (any WorkingTreeReading)? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
