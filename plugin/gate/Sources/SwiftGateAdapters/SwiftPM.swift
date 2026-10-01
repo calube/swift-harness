@@ -85,7 +85,7 @@ public struct LiveSwiftPM: SwiftPM {
     self.queryTimeout = queryTimeout
     self.testTimeout = testTimeout
     self.manifestCache = manifestCache.map {
-      ManifestAnswerCache(directory: $0, repositoryRoot: repositoryRoot)
+      ManifestAnswerCache(directory: $0, repositoryRoot: repositoryRoot, events: cacheEvents)
     }
   }
 

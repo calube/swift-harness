@@ -32,7 +32,7 @@ public struct EvidenceCacheStore: Sendable {
   public let layout: EvidenceCacheLayout
   private let lock: any CountingLock
   private let timeout: Duration
-  private var events: CacheEventRecorder? = nil
+  private let events: CacheEventRecorder?
 
   /// - Parameters:
   ///   - home: the directory standing in for `~`; the cache lives at
@@ -51,17 +51,24 @@ public struct EvidenceCacheStore: Sendable {
         directory: URL(filePath: layout.root, directoryHint: .isDirectory), name: Self.lockName,
         capacity: 1)
     self.timeout = timeout
+    self.events = events
   }
 
   @discardableResult
   public func record(_ claim: ReusableClaim, origin: EvidenceCacheOrigin)
     async throws(EvidenceCacheStoreError) -> EvidenceCacheWrite
   {
-    try await append(to: claim.bucket) { contents in
+    let write = try await append(to: claim.bucket) { contents in
       if let reason = contents.tombstones[claim.fingerprint] { return .skip(.tombstoned(reason)) }
       if contents.claim(claim.fingerprint) != nil { return .skip(.alreadyCached) }
       return .append(.claim(claim, origin: origin))
     }
+    if write == .appended {
+      recordLookup(
+        .evidenceClaim, .store, bucket: claim.bucket, claim.fingerprint,
+        answerHash: CacheLookupHash.answer(claim: claim.claim))
+    }
+    return write
   }
 
   @discardableResult
@@ -70,22 +77,40 @@ public struct EvidenceCacheStore: Sendable {
   ) async throws(EvidenceCacheStoreError) -> EvidenceCacheWrite {
     let fingerprint = claim.fingerprint
     guard fingerprint.quoteHash != nil else { throw .missingQuote(claimID: claim.claim.id) }
-    return try await append(to: .verdicts) { contents in
+    let write = try await append(to: .verdicts) { contents in
       if let reason = contents.tombstones[fingerprint] { return .skip(.tombstoned(reason)) }
       if contents.verdicts[fingerprint] != nil { return .skip(.alreadyCached) }
       return .append(.verdict(fingerprint, verdict: verdict, origin: origin))
     }
+    if write == .appended {
+      recordLookup(
+        .evidenceVerdict, .store, bucket: .verdicts, fingerprint,
+        answerHash: CacheLookupHash.answer(verdict: verdict))
+    }
+    return write
   }
 
+  /// Records a `hit` carrying the hash of the claim the cache holds.
   public func markReused(_ claim: ReusableClaim) async throws(EvidenceCacheStoreError) {
     let fingerprint = claim.fingerprint
-    try await markReused(fingerprint, in: claim.bucket) { $0.claim(fingerprint) != nil }
+    let answerHash = try await markReused(fingerprint, in: claim.bucket) { contents in
+      contents.claim(fingerprint).map {
+        .live(answerHash: CacheLookupHash.answer(claim: $0.claim.claim))
+      }
+    }
+    recordLookup(.evidenceClaim, .hit, bucket: claim.bucket, fingerprint, answerHash: answerHash)
   }
 
+  /// Records a `hit` carrying the hash of the verdict the cache holds.
   public func markVerdictReused(_ fingerprint: EvidenceFingerprint)
     async throws(EvidenceCacheStoreError)
   {
-    try await markReused(fingerprint, in: .verdicts) { $0.verdicts[fingerprint] != nil }
+    let answerHash = try await markReused(fingerprint, in: .verdicts) { contents in
+      contents.verdicts[fingerprint].map {
+        .live(answerHash: CacheLookupHash.answer(verdict: $0.verdict))
+      }
+    }
+    recordLookup(.evidenceVerdict, .hit, bucket: .verdicts, fingerprint, answerHash: answerHash)
   }
 
   /// Hides the claim in its own pin's file. The same text and quote under another pin, and the
@@ -93,11 +118,16 @@ public struct EvidenceCacheStore: Sendable {
   public func tombstone(_ claim: ReusableClaim, reason: EvidenceCacheTombstoneReason)
     async throws(EvidenceCacheStoreError)
   {
-    try await append(to: claim.bucket) { contents in
+    let write = try await append(to: claim.bucket) { contents in
       if let existing = contents.tombstones[claim.fingerprint] {
         return .skip(.tombstoned(existing))
       }
       return .append(.tombstone(claim.fingerprint, reason: reason))
+    }
+    if write == .appended {
+      recordLookup(
+        .evidenceClaim, .tombstone, bucket: claim.bucket, claim.fingerprint,
+        tombstoneReason: reason)
     }
   }
 
@@ -114,19 +144,39 @@ public struct EvidenceCacheStore: Sendable {
     case skip(EvidenceCacheWrite)
   }
 
+  /// A live entry, with the hash of the answer it serves.
+  private struct Served {
+    let answerHash: String?
+
+    static func live(answerHash: String?) -> Served { Served(answerHash: answerHash) }
+  }
+
+  /// The served answer's hash, read under the same lock as the reuse line it writes.
   private func markReused(
     _ fingerprint: EvidenceFingerprint, in bucket: EvidenceCacheBucket,
-    isLive: (EvidenceCacheContents) -> Bool
-  ) async throws(EvidenceCacheStoreError) {
-    var missing = false
+    served: (EvidenceCacheContents) -> Served?
+  ) async throws(EvidenceCacheStoreError) -> String? {
+    var found: Served?
     try await append(to: bucket) { contents in
-      guard isLive(contents) else {
-        missing = true
-        return .skip(.alreadyCached)
-      }
+      guard let live = served(contents) else { return .skip(.alreadyCached) }
+      found = live
       return .append(.reuse(fingerprint))
     }
-    if missing { throw .notCached(fingerprint) }
+    guard let found else { throw .notCached(fingerprint) }
+    return found.answerHash
+  }
+
+  /// After the cache file is written and its lock released, so recording never holds the lock.
+  private func recordLookup(
+    _ cache: CacheName, _ outcome: CacheLookupOutcome, bucket: EvidenceCacheBucket,
+    _ fingerprint: EvidenceFingerprint, answerHash: String? = nil,
+    tombstoneReason: EvidenceCacheTombstoneReason? = nil
+  ) {
+    events?.record(
+      CacheLookupEvent(
+        cache: cache, outcome: outcome,
+        keyHash: CacheLookupHash.evidenceKey(bucket: bucket, fingerprint: fingerprint),
+        answerHash: answerHash, tombstoneReason: tombstoneReason))
   }
 
   @discardableResult

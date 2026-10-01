@@ -62,7 +62,8 @@ enum ProbeCommandRun {
     }
 
     let builder = ProbeBuilder(
-      runner: runner, cache: EvidenceCacheStore(home: options.cacheHome),
+      runner: runner,
+      cache: EvidenceCacheStore(home: options.cacheHome, events: .live(root: root)),
       scratch: ProbeScratchLayout(worktreeRoot: root))
     let evidenceRoot = root.appending(
       path: EvidenceLayout(designDocPath: design).root, directoryHint: .isDirectory)

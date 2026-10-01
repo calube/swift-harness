@@ -16,20 +16,39 @@ struct ManifestAnswerCache: Sendable {
   /// Where each lookup's `cache.lookup` goes; `nil` records none.
   var events: CacheEventRecorder? = nil
 
+  /// Records a `miss` or a `hit` once the answer is known; a manifest it can't read has no key
+  /// and records nothing.
   func answer(_ command: String, packageDirectory: String) -> Data? {
-    guard let key = key(command, packageDirectory: packageDirectory),
-      let stored = try? Data(contentsOf: file(command, packageDirectory: packageDirectory)),
+    guard let key = key(command, packageDirectory: packageDirectory) else { return nil }
+    guard let stored = try? Data(contentsOf: file(command, packageDirectory: packageDirectory)),
       let newline = stored.firstIndex(of: UInt8(ascii: "\n")),
       stored[..<newline].elementsEqual(key.utf8)
-    else { return nil }
-    return stored[stored.index(after: newline)...]
+    else {
+      events?.record(CacheLookupEvent(cache: .manifest, outcome: .miss, keyHash: key))
+      return nil
+    }
+    let answer = stored[stored.index(after: newline)...]
+    events?.record(
+      CacheLookupEvent(
+        cache: .manifest, outcome: .hit, keyHash: key,
+        answerHash: CacheLookupHash.answer(Data(answer))))
+    return answer
   }
 
+  /// Records a `store` only when the answer reached the disk.
   func store(_ output: Data, _ command: String, packageDirectory: String) {
     guard let key = key(command, packageDirectory: packageDirectory) else { return }
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try? (Data("\(key)\n".utf8) + output).write(
-      to: file(command, packageDirectory: packageDirectory), options: .atomic)
+    do {
+      try (Data("\(key)\n".utf8) + output).write(
+        to: file(command, packageDirectory: packageDirectory), options: .atomic)
+    } catch {
+      return
+    }
+    events?.record(
+      CacheLookupEvent(
+        cache: .manifest, outcome: .store, keyHash: key,
+        answerHash: CacheLookupHash.answer(output)))
   }
 
   private func file(_ command: String, packageDirectory: String) -> URL {
@@ -90,7 +109,19 @@ public struct CacheEventRecorder: Sendable {
     self.newEventID = newEventID
   }
 
-  public static let standardError: @Sendable (String) -> Void = { _ in }
+  public static let standardError: @Sendable (String) -> Void = { line in
+    FileHandle.standardError.write(Data("\(line)\n".utf8))
+  }
 
-  public func record(_ lookup: CacheLookupEvent) {}
+  public func record(_ lookup: CacheLookupEvent) {
+    guard let writer = events() else { return }
+    do throws(HarnessEventWriteError) {
+      try writer.append(
+        HarnessEvent(
+          eventID: newEventID(), time: now(), source: HarnessEventSource(route: nil),
+          payload: .cacheLookup(lookup)))
+    } catch {
+      report("swiftgate: cache event not written: \(error)")
+    }
+  }
 }

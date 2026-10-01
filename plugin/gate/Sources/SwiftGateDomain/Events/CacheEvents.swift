@@ -50,17 +50,32 @@ public struct CacheLookupEvent: Sendable, Equatable, Codable {
 /// The hashes a `cache.lookup` carries, so every cache spells them the same way.
 public enum CacheLookupHash {
   /// Lowercase hex SHA-256 of an answer's bytes.
-  public static func answer(_ data: Data) -> String { "" }
+  public static func answer(_ data: Data) -> String { CaptureDigest.sha256Hex(data) }
 
   /// The hash of a cached claim as the cache serves it, so a hit can be matched to the store
   /// that wrote it. `nil` when the claim doesn't encode.
-  public static func answer(claim: Claim) -> String? { nil }
+  public static func answer(claim: Claim) -> String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return (try? encoder.encode(claim)).map(answer)
+  }
 
-  public static func answer(verdict: EvidenceCacheVerdict) -> String { "" }
+  public static func answer(verdict: EvidenceCacheVerdict) -> String {
+    answer(Data(verdict.rawValue.utf8))
+  }
 
   /// The evidence cache matches an entry on its file and the fingerprint's 2 digests; this is
   /// the SHA-256 of the 3 together, so the same fingerprint under 2 pins is 2 keys.
   public static func evidenceKey(bucket: EvidenceCacheBucket, fingerprint: EvidenceFingerprint)
     -> String
-  { "" }
+  {
+    let file =
+      switch bucket {
+      case .package(let pin): "package\0\(pin)"
+      case .sdk(let pin): "sdk\0\(pin)"
+      case .verdicts: "verdicts"
+      }
+    return answer(
+      Data("\(file)\0\(fingerprint.textHash)\0\(fingerprint.quoteHash ?? "")".utf8))
+  }
 }
