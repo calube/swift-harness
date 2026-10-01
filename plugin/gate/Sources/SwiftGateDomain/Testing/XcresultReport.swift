@@ -22,16 +22,20 @@ public struct XcresultTestCase: Sendable, Equatable {
   public let messages: [String]
   /// The case ran in a UI test bundle (an XCUITest), not a unit test bundle.
   public let isUITest: Bool
+  /// The node's `durationInSeconds`, rounded to the nearest millisecond; `nil` when the node
+  /// carried none.
+  public let milliseconds: Int?
 
   public init(
     identifier: String, targetName: String, result: Result, messages: [String],
-    isUITest: Bool = false
+    isUITest: Bool = false, milliseconds: Int? = nil
   ) {
     self.identifier = identifier
     self.targetName = targetName
     self.result = result
     self.messages = messages
     self.isUITest = isUITest
+    self.milliseconds = milliseconds
   }
 }
 
@@ -68,7 +72,8 @@ public struct XcresultTestResults: Sendable, Equatable {
       cases.append(
         XcresultTestCase(
           identifier: node.nodeIdentifier ?? node.name, targetName: target ?? "",
-          result: result(node.result), messages: failureMessages(node), isUITest: isUITest))
+          result: result(node.result), messages: failureMessages(node), isUITest: isUITest,
+          milliseconds: node.durationInSeconds.flatMap { Int(exactly: ($0 * 1000).rounded()) }))
     default:
       for child in node.children ?? [] {
         collect(child, target: target, isUITest: isUITest, into: &cases)
@@ -107,6 +112,7 @@ public struct XcresultTestResults: Sendable, Equatable {
     let nodeType: String
     let nodeIdentifier: String?
     let result: String?
+    let durationInSeconds: Double?
     let children: [RawNode]?
   }
 }

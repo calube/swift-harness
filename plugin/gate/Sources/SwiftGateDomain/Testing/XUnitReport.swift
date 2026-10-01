@@ -15,11 +15,15 @@ public struct XUnitTestCase: Sendable, Equatable {
   public let className: String
   public let name: String
   public let outcome: Outcome
+  /// The case's `time` attribute, rounded to the nearest millisecond; `nil` when the report
+  /// gave none.
+  public let milliseconds: Int?
 
-  public init(className: String, name: String, outcome: Outcome) {
+  public init(className: String, name: String, outcome: Outcome, milliseconds: Int? = nil) {
     self.className = className
     self.name = name
     self.outcome = outcome
+    self.milliseconds = milliseconds
   }
 
   /// The test target (module) the case belongs to: `className` up to its first `.`.
@@ -58,7 +62,7 @@ private final class XUnitParserDelegate: NSObject, XMLParserDelegate {
   var sawRoot = false
   var openElements: [String] = []
 
-  private var current: (className: String, name: String)?
+  private var current: (className: String, name: String, milliseconds: Int?)?
   private var outcome: XUnitTestCase.Outcome = .passed
   private var skipText: String?
 
@@ -70,7 +74,10 @@ private final class XUnitParserDelegate: NSObject, XMLParserDelegate {
     switch elementName {
     case "testsuites": sawRoot = true
     case "testcase":
-      current = (attributes["classname"] ?? "", attributes["name"] ?? "")
+      current = (
+        attributes["classname"] ?? "", attributes["name"] ?? "",
+        attributes["time"].flatMap(Double.init).flatMap { Int(exactly: ($0 * 1000).rounded()) }
+      )
       outcome = .passed
     case "failure", "error":
       // The first failure is the one the report is about; later ones repeat the test's fate.
@@ -99,7 +106,9 @@ private final class XUnitParserDelegate: NSObject, XMLParserDelegate {
     case "testcase":
       if let current {
         cases.append(
-          XUnitTestCase(className: current.className, name: current.name, outcome: outcome))
+          XUnitTestCase(
+            className: current.className, name: current.name, outcome: outcome,
+            milliseconds: current.milliseconds))
       }
       current = nil
     default: break
