@@ -17,7 +17,7 @@ Prompt: design doc `docs/library/designs/bulk-import.md`, researched at commit
 ## Existing claims (`docs/library/designs/book-cache.evidence/claims.jsonl`, grep "batch insert")
 
 ```json
-{"id": "ev-grdb-insert-in-write-transaction", "lane": "packages", "text": "GRDB's DatabaseQueue.write runs its closure inside one transaction.", "citation": {"kind": "file", "loc": ".build/checkouts/GRDB.swift/GRDB/Core/DatabaseWriter.swift:L88-L88", "pin": "GRDB.swift@7.4.1", "quote": "/// Executes database operations in a transaction."}, "status": "supported"}
+{"id": "ev-grdb-insert-in-write-transaction", "lane": "packages", "text": "GRDB's DatabaseWriter.swift documents that it executes database operations in a transaction.", "citation": {"kind": "file", "loc": ".build/checkouts/GRDB.swift/GRDB/Core/DatabaseWriter.swift:L88-L88", "pin": "GRDB.swift@7.4.1", "quote": "/// Executes database operations in a transaction."}, "status": "supported"}
 ```
 
 ## Lane brief
