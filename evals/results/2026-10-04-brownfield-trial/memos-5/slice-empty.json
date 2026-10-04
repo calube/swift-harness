@@ -1,0 +1,20 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 202,
+  "findings" : [
+
+  ],
+  "runID" : "20261004T160113Z-0fdc35b8",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 103,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

@@ -1,0 +1,3 @@
+run: plan spec in /Users/caleb/Developer/trials/memos-5/.git/swift-harness/plans/spec/; spec /Users/caleb/Developer/trials/memos-5/.git/swift-harness/plans/spec/spec.md (copied); plan branch swift-harness/spec at 0d989707f82c33f74bb852edd8965ec88fcf041b; warm-up pid 89511 logging to /Users/caleb/Developer/trials/memos-5/.git/swift-harness/logs/warmup-spec.log; session 56eaccaa-db89-4023-ad6d-5c1a9e043420
+⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY or another auth source is set and takes precedence over your claude.ai login · Unset it to load your organization's connectors
+exit 0

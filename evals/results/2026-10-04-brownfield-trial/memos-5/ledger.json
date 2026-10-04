@@ -1,0 +1,127 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 4 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-limit-field",
+        "req-list-counts"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "share-view-limit-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/memos-5-spec-share-view-limit-contract",
+      "writeSet" : [
+        "proto/api/v1/memo_service.proto",
+        "proto/gen/",
+        "web/src/types/proto/",
+        "store/memo_share.go",
+        "store/driver.go",
+        "store/db/sqlite/memo_share.go",
+        "store/db/mysql/memo_share.go",
+        "store/db/postgres/memo_share.go"
+      ]
+    },
+    {
+      "branch" : "spec/share-view-limit-store",
+      "covers" : [
+        "req-count-views",
+        "req-limit-reached",
+        "req-migrations",
+        "req-list-counts"
+      ],
+      "deps" : [
+        "share-view-limit-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "share-view-limit-store",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/memos-5-spec-share-view-limit-store",
+      "writeSet" : [
+        "store/db/sqlite/memo_share.go",
+        "store/db/mysql/memo_share.go",
+        "store/db/postgres/memo_share.go",
+        "store/migration/",
+        "store/test/memo_share_test.go",
+        "store/test/migrator_test.go",
+        "store/test/migrator_upgrade_test.go",
+        "store/test/migrator_stable_upgrade_test.go",
+        "store/test/migrator_guardrail_test.go",
+        "store/schema_version_test.go",
+        "store/memo_share_test.go"
+      ]
+    },
+    {
+      "branch" : "spec/share-view-limit-api",
+      "covers" : [
+        "req-limit-field",
+        "req-count-views",
+        "req-limit-reached",
+        "req-list-counts"
+      ],
+      "deps" : [
+        "share-view-limit-store"
+      ],
+      "estLines" : 160,
+      "gate" : "slice",
+      "id" : "share-view-limit-api",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/memos-5-spec-share-view-limit-api",
+      "writeSet" : [
+        "server/api/v1/memo_share_service.go",
+        "server/api/v1/test/memo_share_service_test.go"
+      ]
+    },
+    {
+      "branch" : "spec/share-view-limit-web",
+      "covers" : [
+        "req-panel-choice",
+        "req-panel-text"
+      ],
+      "deps" : [
+        "share-view-limit-contract"
+      ],
+      "estLines" : 140,
+      "gate" : "slice",
+      "id" : "share-view-limit-web",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/memos-5-spec-share-view-limit-web",
+      "writeSet" : [
+        "web/src/components/MemoDetailSidebar/MemoSharePanel.tsx",
+        "web/src/hooks/useMemoShareQueries.ts",
+        "web/src/locales/",
+        "web/tests/memo-share-panel.test.tsx"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "share-view-limit-contract"
+    ],
+    [
+      "share-view-limit-store",
+      "share-view-limit-web"
+    ],
+    [
+      "share-view-limit-api"
+    ]
+  ]
+}
