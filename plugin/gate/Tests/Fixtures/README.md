@@ -985,10 +985,25 @@ jq '.[-1]' tools.json | sed "s#$ROOT#/REPO#g" > Transcripts/<session>.envelope.j
 The `/etc/hosts` result is the stock macOS file. After the copy, the grep above matched nothing in
 these 3 files.
 
-Here a message's repeated lines carry the same usage. The run view build's worker transcripts
-came from Workflow agents in the same Claude Code version, and the fixtures don't keep them. Their
-lines differed: the first message's 2 lines read `usage.output_tokens` 16, then 350. `events
-ingest` refused each with `repeats an earlier message id with different usage`.
+Here a message's repeated lines carry the same usage.
+
+### Streamed worker usage (`streamed/`)
+
+`streamed/agent-ad10c26c66ae4d738.jsonl` is 1 worker transcript of the run view build
+(`RunView/build-run-1/SOURCE`), the Workflow agent of task `counter-core-reset-and-decrement-floor`,
+Claude Code 2.1.288 on `claude-sonnet-5-5`. Claude Code wrote it to
+`~/.claude/projects/<cwd slug>/<session_id>/subagents/workflows/wf_4110cb4e-e8d/agent-ad10c26c66ae4d738.jsonl`.
+Its first 2 messages are 2 lines each with 1 `message.id`: input and cache counts repeat exactly,
+and `usage.output_tokens` reads 16, then 350, and 3, then 1077. Only the later line has a
+`stop_reason`, and its `usage.iterations` total agrees with it. The filter drops
+`message.content`, which held the scratch repository's paths, and keeps `stop_reason`:
+
+```sh
+F='select(.type=="assistant" or .type=="user") | {type, timestamp, isSidechain, message: (.message | {id, model, stop_reason, usage} | with_entries(select(.value != null)))}'
+jq -c "$F" <worker transcript> > Transcripts/streamed/agent-ad10c26c66ae4d738.jsonl
+```
+
+After the copy, the grep above matched nothing in it.
 
 ## Events
 

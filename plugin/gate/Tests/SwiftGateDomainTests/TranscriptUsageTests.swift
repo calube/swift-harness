@@ -231,18 +231,45 @@ struct TranscriptUsageTests {
     }
   }
 
+  static let streamedFile = "streamed/agent-ad10c26c66ae4d738.jsonl"
+
   @Test(
-    "2 lines of 1 message id with different usage fail naming the later line — catches a changed transcript format summed silently"
+    "a streamed message's lines count once with its last line's usage, in a captured worker transcript — catches a streamed message refused or its partial output counted"
+  )
+  func streamedMessageTakesTheFinalUsage() throws {
+    let messages = try TranscriptUsage.messages(in: Self.fixture(Self.streamedFile))
+    #expect(
+      messages.map(\.messageID) == [
+        "msg_011Cfgbsca2vDfeXAA3xW5aC", "msg_011Cfgbsrg6eSUfwoC9BaxNR",
+        "msg_011Cfgc2iZgcvz2f3pdcFwRM", "msg_011Cfgc2rQEVt329QaF1TiTP",
+      ])
+    #expect(messages.map(\.usage.output) == [350, 1077, 147, 526])
+    #expect(messages.map(\.usage.cacheCreation) == [11705, 7432, 3907, 232])
+    #expect(messages.map(\.usage.cacheRead) == [0, 11705, 19137, 23044])
+    #expect(messages.first?.time == (try Date("2026-10-04T04:55:55.637Z", strategy: .iso8601)))
+  }
+
+  @Test(
+    "a repeated message id whose input or cache counts differ, or whose output shrinks, fails naming the later line, while the captured streamed repeat reads — catches a conflicting duplicate taken for streaming"
   )
   func conflictingUsageFails() throws {
-    var lines = try Self.lines("\(Self.subagentSession).jsonl")
-    lines[2] = lines[2].replacingOccurrences(
-      of: "\"output_tokens\":119,", with: "\"output_tokens\":120,")
-    do {
-      _ = try TranscriptUsage.messages(in: Data((lines.joined(separator: "\n") + "\n").utf8))
-      Issue.record("no error")
-    } catch {
-      #expect(error.line == 3)
+    let lines = try Self.lines(Self.streamedFile)
+    #expect(try TranscriptUsage.messages(in: Self.fixture(Self.streamedFile)).count == 4)
+    let edits = [
+      ("\"usage\":{\"input_tokens\":2,", "\"usage\":{\"input_tokens\":3,"),
+      ("\"cache_read_input_tokens\":0,", "\"cache_read_input_tokens\":1,"),
+      ("\"output_tokens\":350,", "\"output_tokens\":15,"),
+    ]
+    for (from, to) in edits {
+      var edited = lines
+      #expect(edited[3].contains(from), "\(from)")
+      edited[3] = edited[3].replacingOccurrences(of: from, with: to)
+      do {
+        _ = try TranscriptUsage.messages(in: Data((edited.joined(separator: "\n") + "\n").utf8))
+        Issue.record("no error for \(to)")
+      } catch {
+        #expect(error.line == 4, "\(to)")
+      }
     }
   }
 

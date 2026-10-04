@@ -74,16 +74,17 @@ public enum TranscriptUsage {
   /// The model id Claude Code gives a message it wrote itself, with no API call behind it.
   public static let syntheticModel = "<synthetic>"
 
-  /// Each distinct message in `data`, in the order first seen. Claude Code writes 1 line per
-  /// content block, each with the whole message's usage, so a repeated id counts once; a repeat
-  /// whose usage differs fails, since summing either would be a guess. Lines other than assistant
-  /// messages, and synthetic messages, are skipped. So is a last line with no newline that isn't
-  /// JSON: the session may still be writing it, and the next ingest reads it whole.
+  /// Each distinct message in `data`, in the order first seen, at its first line's time. Claude
+  /// Code writes 1 line per content block, so a repeated id counts once, with its last line's
+  /// usage. A repeat whose input or cache counts differ, or whose output shrinks, fails, since
+  /// that can't be 1 message streaming. Lines other than assistant messages, and synthetic
+  /// messages, are skipped. So is a last line with no newline that isn't JSON: the session may
+  /// still be writing it, and the next ingest reads it whole.
   public static func messages(in data: Data) throws(TranscriptUsageError) -> [TranscriptMessage] {
     let lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
     let endsWithNewline = data.last == UInt8(ascii: "\n")
     var messages: [TranscriptMessage] = []
-    var seen: [String: TokenUsage] = [:]
+    var seen: [String: Int] = [:]
     for (index, line) in lines.enumerated() where !line.isEmpty {
       let number = index + 1
       guard let object = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any]
@@ -93,14 +94,29 @@ public enum TranscriptUsage {
       }
       guard object["type"] as? String == "assistant" else { continue }
       guard let message = try assistantMessage(object, line: number) else { continue }
-      if let earlier = seen[message.messageID] {
-        guard earlier == message.usage else {
+      if let index = seen[message.messageID] {
+        let earlier = messages[index]
+        // A streamed message's lines all repeat the request's input and cache counts, while
+        // output_tokens grows to the final count on the line that carries the stop reason.
+        guard earlier.usage.input == message.usage.input,
+          earlier.usage.cacheCreation == message.usage.cacheCreation,
+          earlier.usage.cacheCreation1h == message.usage.cacheCreation1h,
+          earlier.usage.cacheRead == message.usage.cacheRead
+        else {
           throw TranscriptUsageError(
-            line: number, reason: "repeats an earlier message id with different usage")
+            line: number,
+            reason: "repeats an earlier message id with different input or cache counts")
         }
+        guard message.usage.output >= earlier.usage.output else {
+          throw TranscriptUsageError(
+            line: number, reason: "repeats an earlier message id with fewer output tokens")
+        }
+        messages[index] = TranscriptMessage(
+          messageID: earlier.messageID, model: earlier.model, time: earlier.time,
+          usage: message.usage)
         continue
       }
-      seen[message.messageID] = message.usage
+      seen[message.messageID] = messages.count
       messages.append(message)
     }
     return messages
