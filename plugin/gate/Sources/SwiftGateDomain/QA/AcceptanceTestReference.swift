@@ -79,33 +79,46 @@ public struct AcceptanceTestReference: Sendable, Equatable {
             + "); name 1 as `\(Self.keyword) <area>: \(id)`")
       }
     }
-    guard let command = command(for: area, junitPath: junitPath) else {
+    guard let (command, bundle) = command(for: area, junitPath: junitPath, resultBundlePath)
+    else {
       return unresolved(
         "area `\(area.name)` can't run 1 test: "
           + (area.kind == .xcode
             ? "it has no test command to add `-only-testing:` to"
             : "its test_files has no `{tests}` or `{files}` to narrow its tests to `\(id)`"))
     }
-    return .success(AcceptanceTestCommand(area: area.name, root: area.root, command: command))
+    return .success(
+      AcceptanceTestCommand(
+        area: area.name, root: area.root, command: command, resultBundlePath: bundle))
   }
 
-  /// `test_files` with `{tests}`, then an `xcode` area's `test` with `-only-testing:`, then
-  /// `test_files` with `{files}`.
-  private func command(for area: BrownfieldArea, junitPath: String?) -> String? {
+  /// `test_files` with `{tests}`, then an `xcode` area's `test` with `-only-testing:` and any
+  /// `-resultBundlePath`, then `test_files` with `{files}`; with the bundle the command writes.
+  private func command(
+    for area: BrownfieldArea, junitPath: String?, _ resultBundlePath: String?
+  ) -> (String, String?)? {
     let quoted = ChangedTestIDs.shellQuoted(id)
     let junit = junitPath.map(ChangedTestIDs.shellQuoted)
     if let template = area.testFiles, template.contains("{tests}") {
       let selector = AreaTestID(name: id, selector: id, file: id, line: 1)
-      return ChangedTestIDs.expand(
-        template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: [selector]),
-        files: quoted, junit: junit)
+      return (
+        ChangedTestIDs.expand(
+          template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: [selector]),
+          files: quoted, junit: junit), nil
+      )
     }
     if area.kind == .xcode, let test = area.test {
-      return ChangedTestIDs.expand(test, tests: nil, files: nil, junit: junit)
+      let command =
+        ChangedTestIDs.expand(test, tests: nil, files: nil, junit: junit)
         + " -only-testing:\(quoted)"
+      guard let resultBundlePath else { return (command, nil) }
+      return (
+        command + " -resultBundlePath \(ChangedTestIDs.shellQuoted(resultBundlePath))",
+        resultBundlePath
+      )
     }
     if let template = area.testFiles, template.contains("{files}") {
-      return ChangedTestIDs.expand(template, tests: quoted, files: quoted, junit: junit)
+      return (ChangedTestIDs.expand(template, tests: quoted, files: quoted, junit: junit), nil)
     }
     return nil
   }

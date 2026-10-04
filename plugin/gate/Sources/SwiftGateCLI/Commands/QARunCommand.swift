@@ -382,12 +382,16 @@ enum QARunRun {
       let junit =
         row.layer == .acceptance
         ? qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path : nil
+      var resultBundle: String?
       if let junit, let test = AcceptanceTestReference.parse(row.check) {
         reference = test.id
-        switch areas.flatMap({ test.resolve(in: $0, junitPath: junit) }) {
+        let bundle = qaDirectory.appending(path: name.dropLast(".txt".count) + ".xcresult").path
+        switch areas.flatMap({ test.resolve(in: $0, junitPath: junit, resultBundlePath: bundle) })
+        {
         case .success(let resolved):
           program = .command(resolved.command)
           shown = resolved.command
+          resultBundle = resolved.resultBundlePath
           if resolved.root != "." { directory += "/" + resolved.root }
         case .failure(let unresolved):
           return QACheckOutcome(result: .unverified, message: "not run: \(unresolved.reason)")
@@ -433,10 +437,19 @@ enum QARunRun {
         end = .launchFailed(reason)
         status = "not started: \(reason)"
       }
+      var bundle: QACheckJudgement.ResultBundle?
+      if let resultBundle {
+        do {
+          let contents = try await dependencies.xcresults.read(bundlePath: resultBundle)
+          bundle = .tests(contents.testResults)
+        } catch {
+          bundle = .unread(error.message)
+        }
+      }
       let judgement = QACheckJudgement.judge(
         QACheckJudgement.Input(
           end: end, stdout: output.stdout, stderr: output.stderr,
-          report: junit.flatMap(JUnitReportFiles.read(at:)),
+          report: junit.flatMap(JUnitReportFiles.read(at:)), resultBundle: bundle,
           reference: reference, atBase: atBase,
           roots: [directory, workingDirectory, qaDirectory.path, planDirectory]))
       let result = judgement.result

@@ -91,8 +91,10 @@ struct QARunXcodeTestCountTests {
     #expect(atBase.rows.map(\.result) == [.red], "\(atBase.message) \(atBase.rows.map(\.message))")
     #expect(atBase.rows.first?.message == "exit 0, but no test matched `\(Self.id)`")
     #expect(after.rows.map(\.result) == [.unverified], "\(after.rows.map(\.message))")
-    let bundle = try repo.runDirectory(atBase)
-      .appending(path: "qa/01-req-reset.acceptance.xcresult").path
+    // A brownfield checkout keeps its runs under the git common dir.
+    let bundle = repo.root.appending(
+      path: ".git/swift-harness/runs/\(try #require(atBase.runID))/qa/01-req-reset.acceptance.xcresult"
+    ).path
     #expect(
       base.recorded.first?.program
         == .command(Self.test + " -only-testing:'\(Self.id)' -resultBundlePath '\(bundle)'"))
