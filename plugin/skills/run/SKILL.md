@@ -28,6 +28,7 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
 | `<run>` | the `runId` that `build start` prints in step 7 |
 | `<span>` | the span id `events span start` printed for the phase open now |
+| `<out>` | `<plan-dir>/out`, made with `mkdir -p` before its first use: the 1 place this run keeps a gate's or `qa run`'s JSON in a file, as `<out>/<name>.json`. Never a machine-wide temp directory, where another run's file of the same name is overwritten |
 
 The user's checked-out branch never moves and their tree never changes: no commit, no stash, no
 checkout there. Read the code there if you like; write only in `<checkout>` and the task worktrees.
@@ -67,6 +68,15 @@ stop `stop_starts_before_min` minutes before the end, and the cutoff comes 5 min
 No early deadline is a reason to skip a step: past one, finish that step at its smallest and go
 on. A contract with no GREEN `slice` by `noNewStartsAt` lets no task start: go to step 8 with
 nothing merged.
+
+## Foreground work
+
+A headless run ends when a turn ends with only background Bash work left, and that work dies
+with it: a gate cut short leaves no run and no verdict. So every `check`, `qa run`, `build
+cutoff` and area command runs in the foreground, with the Bash tool's `timeout` at 600000, its
+longest. Never pass `run_in_background` to one and never end one with a shell `&`. The 1 kind of
+background work in a run is the Workflow and Agent tool calls, which keep the session alive until
+they return; no timer runs beside them.
 
 ## 1. Read the spec
 
@@ -225,8 +235,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" ledger set <slug> <task> done --session <session> --json` and
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
-        `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, with `run_in_background`,
-        since a flow row boots a leased device. A row that reads `pass` there fails it with
+        `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, in the foreground like every
+        gate, though a flow row boots a leased device. A row that reads `pass` there fails it with
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
@@ -248,14 +258,14 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      and what you chose. An option that stops the build starts nothing new: let running tasks
      merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is
      never one of these halts: the next bullet decides it by rule.
-   - **The time box replaces the build skill's cutoff timer and its halt.** `build next` reports
-     the box in `timeBox`. After each `build next`, start the cutoff timer if none is running: a
-     Bash `/bin/sleep <timeBox.secondsToCutoff>` with `run_in_background`. Run
-     `"$SG" build cutoff <slug> --session <session> --json` when the timer fires, when any
-     `build next` reports `phase` `cutoff`, or when one reports `no-new-starts` with nothing in
+   - **The time box replaces the build skill's cutoff timer and its halt.** No timer runs: the
+     cutoff is a check at every step of the loop. `build next` reports the box in `timeBox`, and
+     `"$SG" run clock <slug> --json` reports its `phase`. Read `run clock` at each completion
+     notice, before each merge and its merge gate, and before each `qa run`. Run
+     `"$SG" build cutoff <slug> --session <session> --json` when `run clock` or any `build next`
+     reports `phase` `cutoff`, or when a `build next` reports `no-new-starts` with nothing in
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
-     sleep again for the seconds its message names. Its JSON decides every task, and you follow
-     it as written:
+     go on with the loop. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
         already set it `abandoned`, with the reason the report quotes.
      2. Merge each task in `finish`, in order, as the build loop's completion step does. A
@@ -345,4 +355,5 @@ step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its
 - Explorer and worker models are pinned ids, never aliases. The validation worker's Agent tool
   call is the 1 exception: that tool takes only aliases.
 - Every gate is a `swiftgate` command. Never hand-write a check or read a gate's verdict from its
-  exit status alone; read its JSON.
+  exit status alone; read its JSON, kept under `<out>` when kept in a file.
+- Gates and `qa run` run in the foreground, never in the background (Foreground work).

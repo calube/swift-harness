@@ -26,26 +26,29 @@ struct SimHoldCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let config: Config
-    do {
-      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
-        Self.log("sim hold: no \(ConfigLoader.fileName) in \(root.path)")
-        throw ExitCode(Verdict.blocked.exitCode)
-      }
-      config = loaded
-    } catch let error as ConfigLoadError {
-      Self.log("sim hold: \(error)")
+    let runner = LiveProcessRunner()
+    let target: SimTarget
+    let simulator: SimulatorConfig
+    do throws(SimUpFailure) {
+      target = try SimTargetLoader.load(worktree: root).get()
+      simulator = try await SimTargetLoader.simulator(
+        for: target,
+        simctl: LiveSimctl(
+          runner: runner,
+          timeouts: LiveSimctl.Timeouts(quick: .seconds(target.simctlTimeoutSeconds)))
+      ).get()
+    } catch {
+      Self.log("sim hold: \(error.message)")
       throw ExitCode(error.verdict.exitCode)
     }
-    let runner = LiveProcessRunner()
     let holder = SimHolder(
       devices: SimulatorClones.live(
-        config: config.simulator, runner: runner,
+        config: simulator, runner: runner,
         releaseClaims: SimulatorClones.agentDeviceClaimRelease(
           LiveAgentDevice(runner: runner), failed: { Self.log("sim hold: \($0)") })),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
-      holderPID: getpid(), timeout: .seconds(config.qa.sessionTimeoutMinutes * 60),
+      holderPID: getpid(), timeout: .seconds(target.sessionTimeoutMinutes * 60),
       log: Self.log)
     do {
       _ = try await holder.hold(runID: runID)

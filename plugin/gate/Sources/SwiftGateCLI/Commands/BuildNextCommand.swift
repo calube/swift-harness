@@ -27,7 +27,7 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
     let noNewStartsAt: Date
     let cutoffAt: Date
     let endsAt: Date
-    /// Whole seconds from now to ``cutoffAt``, 0 once it has passed: the cutoff timer's sleep.
+    /// Whole seconds from now to ``cutoffAt``, 0 once it has passed.
     let secondsToCutoff: Int
   }
 

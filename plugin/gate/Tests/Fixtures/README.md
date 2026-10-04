@@ -2643,6 +2643,21 @@ open(sys.argv[3], 'w').write(plan[:i] + section.rstrip('\\n') + '\\n\\n' + plan[
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/memos-4-validation-PLAN.md`
 matched nothing.
 
+## Brownfield trial: an iOS clone's config
+
+`BrownfieldTrial/aidoku-validation-config.toml` is the `config.toml` that `swiftgate discover
+--apply` and the orchestrator's `--set`s wrote for the iOS validation trial on `Aidoku/Aidoku`: 1
+`xcode` area with a project, a scheme, and a test command whose destination names the simulator.
+`sim up` reads its target from that area. From the repository root:
+
+```sh
+cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
+  plugin/gate/Tests/Fixtures/BrownfieldTrial/aidoku-validation-config.toml
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
+matched nothing.
+
 ## Node installs: 1 lockfile per package manager
 
 `NodeInstall/<manager>/` holds a 1-dependency `package.json` and the lockfile its manager wrote installing it:

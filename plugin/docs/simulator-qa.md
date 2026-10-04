@@ -20,7 +20,7 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 - the plugin root (`SWIFTGATE_HARNESS_ROOT`) is unset;
 - the schema file is missing, doesn't parse, uses a schema keyword the reader doesn't support or
   records another version than the pin;
-- `.swiftgate.toml` doesn't load;
+- the config (`.swiftgate.toml`, or a brownfield clone's `config.toml`) doesn't load;
 - the configured id file doesn't read or holds no single String-backed `AccessibilityID` enum with
   plain string raw values;
 - or a flow file doesn't read.
@@ -58,6 +58,10 @@ can still read GREEN, and `run report` repeats that count under its `final` line
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 [`simulator-qa-flows.md`](simulator-qa-flows.md).
+
+`sim up` and `sim hold` read `.swiftgate.toml`, or in a brownfield clone its 1 `xcode` area: the
+workspace or project, the scheme in its `test` command, and the device its `-destination` names,
+on the newest iOS runtime holding it. A clone with no `xcode` area, or several, is BLOCKED.
 
 ## qa adopt
 

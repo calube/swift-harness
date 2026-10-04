@@ -20,30 +20,23 @@ struct SimUpCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let config: Config
-    do {
-      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
-        try finish(
-          .failure(
-            SimUpFailure(
-              rule: .environment, message: "no \(ConfigLoader.fileName) in \(root.path)")))
-        return
-      }
-      config = loaded
-    } catch let error as ConfigLoadError {
-      print("sim up: \(error)")
-      throw ExitCode(error.verdict.exitCode)
+    let target: SimTarget
+    switch SimTargetLoader.load(worktree: root) {
+    case .success(let loaded): target = loaded
+    case .failure(let failure):
+      try finish(.failure(failure))
+      return
     }
     let runID = RunID.make(startedAt: Date(), suffix: UInt32.random(in: .min ... .max))
     let runner = LiveProcessRunner()
-    let maxConcurrent = config.simulator.maxConcurrent
+    let maxConcurrent = target.maxConcurrent
     let dependencies = SimUp.Dependencies(
       agentDevice: LiveAgentDevice(runner: runner),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       launcher: DetachedLauncher(), xcodebuild: LiveXcodebuild(runner: runner),
       simctl: LiveSimctl(
         runner: runner,
-        timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simulator.simctlTimeoutSeconds))),
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(target.simctlTimeoutSeconds))),
       bundles: AppBundleReader(), git: LiveGit(runner: runner, repositoryRoot: root.path),
       isAlive: SimulatorClones.processIsAlive, terminate: { _ = kill($0, SIGTERM) },
       slotHolders: {
@@ -51,7 +44,7 @@ struct SimUpCommand: AsyncParsableCommand {
           lockDirectory: FileCountingLock.defaultDirectory(), capacity: maxConcurrent)
       }, clock: .continuous(), now: { Date() })
     let request = SimUp.Request(
-      worktree: root, config: config, scenario: scenario, runID: runID,
+      worktree: root, target: target, scenario: scenario, runID: runID,
       simDirectory: StateRootResolver.resolve(worktree: root)
         .url(SimSession.directory(runID: runID), directoryHint: .isDirectory),
       derivedDataPath: Self.derivedDataDirectory(root: root).path,
