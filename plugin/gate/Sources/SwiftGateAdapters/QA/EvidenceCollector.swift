@@ -166,6 +166,7 @@ public struct EvidenceCollector: Sendable {
     case .container: containerDirectory
     case .video: FinalPassRecorder.videoFileName
     case .sheet: FinalPassRecorder.sheetFileName
+    case .activities: XCUITestFlowRecorder.activitiesFileName
     }
   }
 

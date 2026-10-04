@@ -38,6 +38,12 @@ public protocol XcresultReader: Sendable {
   /// `xcresulttool get build-results` alone, for a bundle `xcodebuild build` wrote: it holds no
   /// test tree.
   func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data
+  /// `xcresulttool get test-results activities` for 1 test, `<Class>/<method>()`.
+  func activities(bundlePath: String, testID: String) async throws(XcresultReadError) -> Data
+  /// `xcresulttool export attachments` for 1 test into `directory`, which it creates; returns the
+  /// `manifest.json` the export wrote there.
+  func exportAttachments(bundlePath: String, testID: String, to directory: String)
+    async throws(XcresultReadError) -> Data
 }
 
 public struct LiveXcresultReader: XcresultReader {
@@ -67,6 +73,18 @@ public struct LiveXcresultReader: XcresultReader {
       throw .failed(status: build.status, stderr: Self.firstLine(build.stderr.text))
     }
     return build.stdout.bytes
+  }
+
+  public func activities(bundlePath: String, testID: String) async throws(XcresultReadError)
+    -> Data
+  {
+    Data()
+  }
+
+  public func exportAttachments(bundlePath: String, testID: String, to directory: String)
+    async throws(XcresultReadError) -> Data
+  {
+    Data()
   }
 
   private func xcresulttool(_ arguments: [String]) async throws(XcresultReadError)

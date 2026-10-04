@@ -84,6 +84,7 @@ public struct RunStore: Sendable {
   ///     same batch as the run's other events.
   ///   - proofs: each changed test `prove` ran, 1 `prove.result` apiece, beside the
   ///     `test.result`s.
+  ///   - flows: each kept flow T3 ran, 1 `qa.flow` apiece, pointing at the `gate.run`.
   /// - Throws: ``RunStoreError/eventsUnwritten(_:)`` when only the events failed, after the run
   ///   is recorded.
   public func record(
@@ -91,7 +92,7 @@ public struct RunStore: Sendable {
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
     checkTier: CheckTier? = nil, testResults: [TestCaseResult] = [], baselineCount: Int? = nil,
-    proofs: [ProvedTest] = []
+    proofs: [ProvedTest] = [], flows: [QAFlowRecord] = []
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now

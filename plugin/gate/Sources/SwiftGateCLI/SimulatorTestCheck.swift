@@ -13,12 +13,28 @@ enum SimulatorTestCheck {
     let makeDevices: @Sendable (SimulatorConfig) -> any SimulatorDeviceProvider
     let xcodebuild: any Xcodebuild
     let reader: any XcresultReader
+    /// Turns T3's kept flows into `qa.flow` records; `nil` records none.
+    let keptFlows: XCUITestFlowRecorder?
+
+    init(
+      makeDevices: @escaping @Sendable (SimulatorConfig) -> any SimulatorDeviceProvider,
+      xcodebuild: any Xcodebuild, reader: any XcresultReader,
+      keptFlows: XCUITestFlowRecorder? = nil
+    ) {
+      self.makeDevices = makeDevices
+      self.xcodebuild = xcodebuild
+      self.reader = reader
+      self.keptFlows = keptFlows
+    }
 
     static func live() -> Dependencies {
       let runner = LiveProcessRunner()
+      let reader = LiveXcresultReader(runner: runner)
       return Dependencies(
         makeDevices: { SimulatorClones.live(config: $0, runner: runner) },
-        xcodebuild: LiveXcodebuild(runner: runner), reader: LiveXcresultReader(runner: runner))
+        xcodebuild: LiveXcodebuild(runner: runner), reader: reader,
+        keptFlows: XCUITestFlowRecorder(
+          reader: reader, agentDevice: LiveAgentDevice(runner: runner)))
     }
   }
 
