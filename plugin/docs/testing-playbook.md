@@ -186,24 +186,25 @@ A `Judge` protocol takes typed questions and returns calibrated probabilities, n
 | How specific is the regression name (vague / partial / specific)? | score → level + p |
 | Does it assert implementation details rather than behavior? | binary → p |
 
-- **In:** test source, its diff, a versioned question set. **Out:** findings with question, answer, probability, any rationale, and the deciding backend.
+- **In:** test source, diff, versioned question set. **Out:** findings with answer, probability, rationale and deciding backend.
 - **Policy is thresholds:** on a blocking question (rows 1, 4), p ≥ `block_threshold` may block at `ready`; from `advisory_threshold` up is advisory; the gate drops the rest. Below `ready`, the judge never turns a run RED.
 - **Cache:** keyed by test, diff, questions as sent, backend and model.
-- **Calibration:** `gate/Fixtures/judge/` holds labeled good and useless tests plus 1 recording per backend. `swiftgate self-test --judge` scores each offline and fails if per-question precision or recall drops; `--judge-backend <backend> --record` re-records it live.
-- **Commands:** `swiftgate judge [--ready]` asks about new and changed host tests; `check --tier ready` runs it. The commit hook asks advisory comment questions. `judge ask --input <file>` asks any question set and prints JSON with no policy. A backend failure is a non-gating `judge.not-run` note.
+- **Calibration:** `gate/Fixtures/judge/` holds labeled tests and 1 recording per backend; `swiftgate self-test --judge` scores each offline, failing on a per-question precision or recall drop, and `--judge-backend <backend> --record` re-records live.
+- **Commands:** `swiftgate judge [--ready]` judges new and changed host tests, as `check --tier ready` does; the commit hook asks advisory comment questions; `judge ask --input <file>` prints JSON answers to any question set, with no policy. Below `ready`, a backend failure is a non-gating `judge.not-run` note.
 - **Opt-in:** off by default (`backend = "none"`). A remote backend sends test source off the machine, so each repository opts in and sets both thresholds.
 
 | `[judge] backend` | `claude` | `jev` (TypeSafe's Jev, over HTTP) |
 |---|---|---|
 | Model | `model`, default `sonnet` | pinned `jev-1.13.0`; config refuses an alias such as `jev-latest` |
 | Egress | the `claude` CLI | `send_to = "api.typesafe.ai"` required |
-| Key | none in swiftgate | `TYPESAFE_API_KEY` in the environment; config refuses a key |
+| Key | none in swiftgate | `TYPESAFE_API_KEY` in the environment (`doctor` checks); config refuses a key |
 | Question set | `test-quality@1` | `test-quality@2-jev`: narrower sub-questions, scored on `@1`'s labels |
 | Recording | `recording.json` | `recording-jev.json` |
 | `judge bench` arm | `claude:claude-sonnet-5-5` | `jev:jev-1.13.0#test-quality@2-jev`; `cascade:jev-1.13.0,claude-sonnet-5-5` for both |
 
-- **Jev blocks, Claude settles:** a Jev answer at or above `block_threshold` on a blocking question blocks `ready` without calibration. Claude writes the reason; if it can't, the block keeps the template reason and `failureScenario` says why. When Jev's p falls in the uncertain band, Claude answers in `@1`'s words; if Claude fails, Jev's answer stays advisory.
-- **Benchmark:** `judge bench` scores each `--backend` arm; `judge bench-render` prints the comparison. Run it before setting Jev's thresholds; it lists the bands.
+- **Jev blocks, Claude settles:** Jev at or above `block_threshold` on a blocking question blocks `ready`, with Claude's reason, or the template's and a `failureScenario` saying why. In the uncertain band Claude answers in `@1`'s words; if it fails, Jev's answer stays advisory.
+- **Jev down at `ready`:** Claude takes the blocking questions a retried Jev can't answer; if Claude can't, `judge.blocked` makes the gate BLOCKED.
+- **Benchmark:** `judge bench` scores each `--backend` arm, `judge bench-render` compares them and lists the bands. Run it before setting Jev's thresholds.
 - **Audit log:** `judge events`; see [judge-audit.md](judge-audit.md).
 
 ## 6. Library notes for tests

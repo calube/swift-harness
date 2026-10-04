@@ -13,10 +13,10 @@ import Testing
 /// RED T1 can only come from the judge.
 @Suite("check --tier ready: judge step")
 struct CheckJudgeStepTests {
-  private static func ready(
+  static func ready(
     judge: FakeJudge?, config: String = JudgeCommandsTests.enabled,
     reasonJudge: (any Judge)? = nil, secrets: [String] = []
-  ) async throws -> (t1: TierResult, judged: [Finding]) {
+  ) async throws -> (t1: TierResult, judged: [Finding], steps: [GateStepTiming]) {
     let repository = try ProbeRepository(config: config)
     defer { repository.remove() }
     // The fixture's unnamed `@Test` would turn T0 RED and skip T1 before the judge is reached.
@@ -39,8 +39,9 @@ struct CheckJudgeStepTests {
       changed: [JudgeCommandsTests.testFile], mergeBase: "base",
       addedSince: [AddedLines(path: JudgeCommandsTests.testFile, ranges: [1...15])])
 
+    let context = repository.context()
     let parts = try await CheckRun.run(
-      root: repository.root, tier: .ready, base: "origin/main", context: repository.context(),
+      root: repository.root, tier: .ready, base: "origin/main", context: context,
       dependencies: CheckRun.Dependencies(
         root: repository.root, swiftPM: swiftPM, git: git, formatter: FakeSwiftFormatter(),
         simulator: .fake,
@@ -57,7 +58,10 @@ struct CheckJudgeStepTests {
             ), reasonJudge: reasonJudge, secrets: secrets)
         }))
     let t1 = try #require(parts.tiers.first { $0.tier == .t1 })
-    return (t1, parts.findings.filter { $0.ruleID.hasPrefix(JudgePolicy.ruleIDPrefix) })
+    return (
+      t1, parts.findings.filter { $0.ruleID.hasPrefix(JudgePolicy.ruleIDPrefix) },
+      context.steps.steps
+    )
   }
 
   @Test(

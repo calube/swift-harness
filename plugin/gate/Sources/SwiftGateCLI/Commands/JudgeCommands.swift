@@ -187,7 +187,8 @@ enum TestJudgeCheck {
 
   /// Jev asks its own rendering, and Claude answers each subject's uncertain blocking questions
   /// (design §13.5). A Claude-decided finding keeps Claude's rationale; a Jev block gets Claude's
-  /// reason.
+  /// reason. At `ready`, a subject Jev gives no answer for sends its blocking questions to Claude,
+  /// and leaves the step BLOCKED when Claude can't answer either.
   static func cascaded(
     _ subjects: [JudgeSubject], jev: any Judge, thresholds: JudgeThresholds, atReadyTier: Bool,
     dependencies: Dependencies, decisionIDs: [JudgeDecisions.Key: String] = [:]
@@ -197,21 +198,44 @@ enum TestJudgeCheck {
       jev: jev, claude: dependencies.reasonJudge, base: .tests,
       policy: CascadingJudge.Policy(thresholds: thresholds, atReadyTier: atReadyTier))
     let bands = JudgeCascade.bands(for: questions.versionedID)
+    let secrets = dependencies.secrets
+    // An escalation's failure can echo what Claude's process saw, so it's redacted like a reason.
+    func redacted(_ claude: JudgeCascade.ClaudeOutcome) -> JudgeCascade.ClaudeOutcome {
+      switch claude {
+      case .answered: claude
+      case .failed(let why): .failed(JudgeBlockReason.redact(why, secrets))
+      }
+    }
     let outcomes = JudgedSubjects.Outcomes()
-    let replies: [String: CascadingJudge.Reply]
+    let replies: [String: CascadingJudge.ReadyReply]
     switch await JudgeBatch.each(
       subjects,
       { subject throws(JudgeError) in
         do throws(JudgeError) {
-          let reply = try await cascade.cascade(subject, questions: questions)
-          outcomes.set(
-            subject.id,
-            .answered(
-              identity: reply.jevIdentity, answers: reply.jev.answers,
-              cascade: JudgeDecisions.Cascade(
-                plan: reply.plan, claude: reply.claude, claudeIdentity: reply.claudeIdentity,
-                bands: bands)))
-          return reply
+          let ready =
+            atReadyTier
+            ? try await cascade.readyCascade(subject, questions: questions)
+            : .cascaded(try await cascade.cascade(subject, questions: questions))
+          switch ready {
+          case .cascaded(let reply):
+            outcomes.set(
+              subject.id,
+              .answered(
+                identity: reply.jevIdentity, answers: reply.jev.answers,
+                cascade: JudgeDecisions.Cascade(
+                  plan: reply.plan, claude: reply.claude, claudeIdentity: reply.claudeIdentity,
+                  bands: bands)))
+          case .jevFailed(let failure):
+            outcomes.set(
+              subject.id,
+              .answered(
+                identity: failure.jevIdentity, answers: [],
+                cascade: JudgeDecisions.Cascade(
+                  plan: failure.plan, claude: failure.claude,
+                  claudeIdentity: failure.claudeIdentity, bands: bands,
+                  jevError: JudgeEventError(failure.error, by: failure.jevIdentity))))
+          }
+          return ready
         } catch {
           outcomes.set(
             subject.id, .failed(identity: jev.identity, JudgeEventError(error, by: jev.identity)))
@@ -226,35 +250,60 @@ enum TestJudgeCheck {
     case .success(let found): replies = found
     }
     var found: [(finding: Finding, byClaude: Bool)] = []
+    var jevAnswers: [String: [JudgeAnswer]] = [:]
+    var jevFailures: [CascadingJudge.JevFailure] = []
     for subject in subjects {
-      guard let reply = replies[subject.id] else { continue }
-      // An escalation's failure can echo what Claude's process saw, so it's redacted like a reason.
-      let claude: JudgeCascade.ClaudeOutcome =
-        switch reply.claude {
-        case .answered: reply.claude
-        case .failed(let why): .failed(JudgeBlockReason.redact(why, dependencies.secrets))
-        }
-      let byClaude = Set(
-        reply.decided.filter { $0.escalation != nil && $0.escalationFailure == nil }.map {
-          JudgePolicy.ruleIDPrefix + $0.answer.question
-        })
-      let findings =
-        (try? JudgeCascade.findings(
-          subject: subject, plan: reply.plan, jev: reply.jev.answers, claude: claude,
-          questions: questions, jevIdentity: reply.jevIdentity,
-          claudeIdentity: reply.claudeIdentity, thresholds: thresholds, atReadyTier: atReadyTier))
-        ?? []
-      found += findings.map { ($0, byClaude.contains($0.ruleID)) }
+      switch replies[subject.id] {
+      case nil: continue
+      case .cascaded(let reply)?:
+        jevAnswers[subject.id] = reply.jev.answers
+        let byClaude = Set(
+          reply.decided.filter { $0.escalation != nil && $0.escalationFailure == nil }.map {
+            JudgePolicy.ruleIDPrefix + $0.answer.question
+          })
+        let findings =
+          (try? JudgeCascade.findings(
+            subject: subject, plan: reply.plan, jev: reply.jev.answers,
+            claude: redacted(reply.claude), questions: questions,
+            jevIdentity: reply.jevIdentity, claudeIdentity: reply.claudeIdentity,
+            thresholds: thresholds, atReadyTier: atReadyTier)) ?? []
+        found += findings.map { ($0, byClaude.contains($0.ruleID)) }
+      case .jevFailed(let failure)?:
+        jevFailures.append(failure)
+        // Claude decided these, or nobody did: none gets a reason call.
+        let findings =
+          (try? JudgeCascade.jevFailedFindings(
+            subject: subject,
+            jevError: JudgeBlockReason.redact(
+              failure.error.explanation(by: failure.jevIdentity), secrets),
+            claude: redacted(failure.claude), questions: questions,
+            claudeIdentity: failure.claudeIdentity, thresholds: thresholds)) ?? []
+        found += findings.map { ($0, true) }
+      }
     }
     let reasoned = await JudgeBlockReason.attachReporting(
       found.filter { !$0.byClaude }.map(\.finding), subjects: subjects,
-      answers: replies.mapValues(\.jev.answers), questions: .tests, identity: jev.identity,
-      reasonJudge: dependencies.reasonJudge, redacting: dependencies.secrets,
-      decisionIDs: decisionIDs)
+      answers: jevAnswers, questions: .tests, identity: jev.identity,
+      reasonJudge: dependencies.reasonJudge, redacting: secrets, decisionIDs: decisionIDs)
     var next = reasoned.findings.makeIterator()
+    var findings = found.compactMap { item in item.byClaude ? item.finding : next.next() }
+    if let first = jevFailures.first {
+      let advisory = questions.questions.filter { !$0.mayBlock }.map(\.id)
+      findings += note(
+        "jev gave no answer for \(jevFailures.count) of \(subjects.count) tests ("
+          + JudgeBlockReason.redact(first.error.explanation(by: first.jevIdentity), secrets)
+          + "); their blocking questions went to claude, and their advisory questions ("
+          + advisory.joined(separator: ", ") + ") weren't asked")
+    }
     return JudgedSubjects(
-      findings: found.compactMap { item in item.byClaude ? item.finding : next.next() },
-      outcomes: outcomes.all, batchFailure: nil, reasons: reasoned.reasons)
+      findings: findings, outcomes: outcomes.all, batchFailure: nil, reasons: reasoned.reasons)
+  }
+
+  /// The judge step's verdict from its findings: RED when one gates, BLOCKED when neither
+  /// backend could answer a blocking question, else GREEN.
+  static func verdict(_ findings: [Finding]) -> Verdict {
+    if findings.contains(where: \.severity.failsGate) { return .red }
+    return findings.contains { $0.ruleID == JudgeCascade.blockedRuleID } ? .blocked : .green
   }
 
   /// A judge that can't run is reported, never gating: it says nothing about the code.
@@ -343,6 +392,11 @@ struct JudgeTestsCommand: AsyncParsableCommand {
       let findings = await TestJudgeCheck.run(
         .live(root: root, git: git, swiftPM: swiftPM), graph: graph, config: config, base: base,
         atReadyTier: ready, dependencies: .live(root: root, git: git), runID: runID)
+      if TestJudgeCheck.verdict(findings) == .blocked {
+        return .blocked(
+          reason: findings.filter { $0.ruleID == JudgeCascade.blockedRuleID }
+            .map { "\($0.file):\($0.line ?? 0) \($0.message)" }.joined(separator: "\n"))
+      }
       return .checked(RuleRunResult(findings: findings, allowances: []))
     }
   }

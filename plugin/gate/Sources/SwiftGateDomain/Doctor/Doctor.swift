@@ -75,13 +75,16 @@ public struct DoctorFacts: Sendable {
   public let mermaidCLIInstalled: Bool
   /// The session's plugin record against the tree on disk; `nil` when not gathered.
   public let pluginSession: PluginSessionFacts?
+  /// The names of the judge backends' key variables set to a non-empty value in doctor's
+  /// environment, never their values; `nil` when not gathered.
+  public let judgeKeysSet: Set<String>?
 
   public init(
     config: Config, xcodeVersionOutput: String?, swiftVersionOutput: String?,
     devices: Result<[SimulatorDevice], ProbeFailure>, freeBytes: Int64?, shim: ShimStatus,
     swiftLintInstalled: Bool, packages: [PackageManifest], resolvedVersions: [String: String],
     architectureFindings: [Finding], mermaidCLIInstalled: Bool,
-    pluginSession: PluginSessionFacts? = nil
+    pluginSession: PluginSessionFacts? = nil, judgeKeysSet: Set<String>? = nil
   ) {
     self.config = config
     self.xcodeVersionOutput = xcodeVersionOutput
@@ -95,6 +98,7 @@ public struct DoctorFacts: Sendable {
     self.architectureFindings = architectureFindings
     self.mermaidCLIInstalled = mermaidCLIInstalled
     self.pluginSession = pluginSession
+    self.judgeKeysSet = judgeKeysSet
   }
 }
 
@@ -183,6 +187,8 @@ public enum Doctor {
   public static let profileRuleID = "doctor.profile"
   public static let pluginChangedRuleID = "doctor.plugin-changed"
   public static let sessionRecordRuleID = "doctor.session-record"
+  /// `[judge] backend` names a backend whose key variable isn't set.
+  public static let judgeKeyRuleID = "doctor.judge-key"
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.
@@ -312,6 +318,18 @@ public enum Doctor {
 
     if let session = facts.pluginSession {
       check.findings += pluginSessionFindings(session)
+    }
+
+    if let set = facts.judgeKeysSet, case .enabled(let backend, _, _) = facts.config.judge,
+      let variable = backend.keyVariable, !set.contains(variable)
+    {
+      check.fail(
+        judgeKeyRuleID, configFile,
+        "[judge] backend = \"\(backend.rawValue)\" needs \(variable), which isn't set here, so "
+          + "the judge can't ask \(backend.rawValue): at ready its blocking questions go to claude "
+          + "and the advisory ones go unasked. Claude Code runs the gate in a non-interactive "
+          + "shell, so export \(variable) where one reads it (~/.zshenv, not ~/.zshrc), or set it "
+          + "under \"env\" in Claude Code's settings.json, then start a fresh session")
     }
 
     if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {

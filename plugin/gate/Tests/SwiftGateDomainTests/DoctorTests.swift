@@ -13,7 +13,8 @@ struct DoctorTests {
     xcode: String? = nil, swift: String? = nil, devices: [SimulatorDevice]? = [base],
     freeBytes: Int64? = 500_000_000_000, shim: ShimStatus = .current,
     swiftLint: Bool = true, mmdc: Bool = true, packages: [PackageManifest] = [],
-    resolved: [String: String] = [:], architecture: [Finding] = [], config: Config? = nil
+    resolved: [String: String] = [:], architecture: [Finding] = [], config: Config? = nil,
+    judgeKeysSet: Set<String>? = nil
   ) throws -> DoctorFacts {
     DoctorFacts(
       config: try config ?? SampleGraph.config(modules: []),
@@ -21,7 +22,8 @@ struct DoctorTests {
       swiftVersionOutput: try swift ?? Fixture.text("Doctor/swift-version.txt"),
       devices: devices.map { .success($0) } ?? .failure("simctl could not run"),
       freeBytes: freeBytes, shim: shim, swiftLintInstalled: swiftLint, packages: packages,
-      resolvedVersions: resolved, architectureFindings: architecture, mermaidCLIInstalled: mmdc)
+      resolvedVersions: resolved, architectureFindings: architecture, mermaidCLIInstalled: mmdc,
+      judgeKeysSet: judgeKeysSet)
   }
 
   private func ids(_ result: DoctorResult) -> [String] { result.findings.map(\.ruleID) }
@@ -45,6 +47,32 @@ struct DoctorTests {
     #expect(finding.severity == .nit)
     #expect(finding.message.contains("design-lint"))
     #expect(result.verdict == .green)
+  }
+
+  @Test(
+    "a jev judge with TYPESAFE_API_KEY unset is a RED doctor.judge-key finding naming it, while a set key or a claude judge is clean — catches a judge silently off for a missing key"
+  )
+  func jevWithoutKeyIsAnIssue() throws {
+    func config(_ backend: JudgeBackend) throws -> Config {
+      try Config(
+        xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+        simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+        judge: .enabled(
+          backend: backend, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9)))
+    }
+
+    let missing = Doctor.evaluate(try facts(config: config(.jev), judgeKeysSet: []))
+    let present = Doctor.evaluate(
+      try facts(config: config(.jev), judgeKeysSet: ["TYPESAFE_API_KEY"]))
+    let claude = Doctor.evaluate(try facts(config: config(.claude), judgeKeysSet: []))
+
+    let finding = try #require(missing.findings.first { $0.ruleID == Doctor.judgeKeyRuleID })
+    #expect(finding.severity == .major)
+    #expect(finding.file == Config.fileName)
+    #expect(finding.message.contains("TYPESAFE_API_KEY"))
+    #expect(missing.verdict == .red)
+    #expect(!ids(present).contains(Doctor.judgeKeyRuleID))
+    #expect(!ids(claude).contains(Doctor.judgeKeyRuleID))
   }
 
   @Test(

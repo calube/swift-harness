@@ -41,6 +41,8 @@ public struct JudgeEventQuestion: Sendable, Equatable, Codable {
 public struct JudgeEventError: Error, Sendable, Equatable, Codable {
   public enum Kind: String, Sendable, Codable, CaseIterable {
     case notConfigured, backend, malformedReply, stateTooLarge
+    /// The request got no reply: unreachable or timed out.
+    case transport
     case launchFailed, timedOut, cancelled
     /// The backend answered, but not the question asked.
     case noAnswer
@@ -144,10 +146,16 @@ public struct JudgeEscalationEvent: Sendable, Equatable, Codable {
   public let p: Double?
   public let rationale: String?
   public let error: JudgeEventError?
+  /// Why the question went to Claude; `nil` in events written before the cause was recorded,
+  /// which all escalated as uncertain.
+  public let cause: JudgeCascade.Escalation?
+  /// Jev's error, when Jev's failure is the cause.
+  public let jevError: JudgeEventError?
 
   public init(
     backend: JudgeBackend, model: String, servedModel: String?, distribution: [String: Double]?,
-    p: Double?, rationale: String?, error: JudgeEventError?
+    p: Double?, rationale: String?, error: JudgeEventError?,
+    cause: JudgeCascade.Escalation? = nil, jevError: JudgeEventError? = nil
   ) {
     self.backend = backend
     self.model = model
@@ -156,6 +164,8 @@ public struct JudgeEscalationEvent: Sendable, Equatable, Codable {
     self.p = p
     self.rationale = rationale
     self.error = error
+    self.cause = cause
+    self.jevError = jevError
   }
 }
 
@@ -290,15 +300,18 @@ public enum JudgeDecisions {
     public let claude: JudgeCascade.ClaudeOutcome
     public let claudeIdentity: JudgeIdentity
     public let bands: [String: JudgeCascade.Band]
+    /// Why Jev gave no answer, when it gave none and its blocking questions went to Claude.
+    public let jevError: JudgeEventError?
 
     public init(
       plan: JudgeCascade.Plan, claude: JudgeCascade.ClaudeOutcome, claudeIdentity: JudgeIdentity,
-      bands: [String: JudgeCascade.Band]
+      bands: [String: JudgeCascade.Band], jevError: JudgeEventError? = nil
     ) {
       self.plan = plan
       self.claude = claude
       self.claudeIdentity = claudeIdentity
       self.bands = bands
+      self.jevError = jevError
     }
   }
 
@@ -418,6 +431,9 @@ public enum JudgeDecisions {
     if escalated, let cascade {
       let claudeCall = escalationCalls.last?.call
       let backend = JudgeBackend(rawValue: cascade.claudeIdentity.backend) ?? .claude
+      let cause: JudgeCascade.Escalation? =
+        if case .escalate(let why) = cascade.plan.step(for: question.id) { why } else { nil }
+      let jevError = clean(cascade.jevError)
       switch cascade.claude {
       case .answered(let claudeAnswers):
         if let replaced = claudeAnswers.first(where: { $0.question == question.id }) {
@@ -427,20 +443,26 @@ public enum JudgeDecisions {
             backend: backend, model: cascade.claudeIdentity.model,
             servedModel: claudeCall?.servedModel, distribution: replaced.distribution,
             p: JudgePolicy.flaggedProbability(question, answer: replaced, subject: subject),
-            rationale: clean(replaced.rationale), error: nil)
+            rationale: clean(replaced.rationale), error: nil, cause: cause, jevError: jevError)
         } else {
           escalation = JudgeEscalationEvent(
             backend: backend, model: cascade.claudeIdentity.model,
             servedModel: claudeCall?.servedModel, distribution: nil, p: nil, rationale: nil,
             error: JudgeEventError(
-              kind: .noAnswer, message: "claude gave no answer for \(question.id)"))
+              kind: .noAnswer, message: "claude gave no answer for \(question.id)"),
+            cause: cause, jevError: jevError)
         }
       case .failed(let why):
         escalation = JudgeEscalationEvent(
           backend: backend, model: cascade.claudeIdentity.model, servedModel: nil,
           distribution: nil, p: nil, rationale: nil,
-          error: clean(claudeCall?.error ?? JudgeEventError(kind: .noJudge, message: why)))
+          error: clean(claudeCall?.error ?? JudgeEventError(kind: .noJudge, message: why)),
+          cause: cause, jevError: jevError)
       }
+    }
+    // Jev gave no answer, and no Claude answer stands in for it: nothing was decided.
+    if error == nil, decidingAnswer == nil, let jevError = cascade?.jevError {
+      error = jevError
     }
     let finding = inputs.findings.first {
       $0.ruleID == JudgePolicy.ruleIDPrefix + question.id && $0.file == subject.file

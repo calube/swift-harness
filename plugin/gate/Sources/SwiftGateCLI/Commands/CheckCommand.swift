@@ -180,9 +180,9 @@ enum CheckRun {
                 environment, graph: graph, config: config, base: base, atReadyTier: true,
                 dependencies: judge, route: .checkReady, runID: context.runID)
             }
-            context.steps.record(
-              .judge, tier: .t1, milliseconds: milliseconds, verdict: gateVerdict(judged))
-            if judged.contains(where: \.severity.failsGate) { t1Tier = try t1Tier.merging(.red) }
+            let verdict = TestJudgeCheck.verdict(judged)
+            context.steps.record(.judge, tier: .t1, milliseconds: milliseconds, verdict: verdict)
+            t1Tier = try t1Tier.merging(verdict)
             parts.findings += judged
           }
         }
