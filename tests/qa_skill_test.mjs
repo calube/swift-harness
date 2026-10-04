@@ -1,0 +1,293 @@
+// Checks the QA skill and its validation worker brief against the `swiftgate sim` and `qa`
+// commands they drive.
+// Run: node tests/qa_skill_test.mjs
+// Regressions caught: a QA skill naming a `sim` or `qa` command or flag the CLI doesn't have; a
+// flow that judges before `sim down` copies crash reports, or skips `sim down` on a failure; an
+// `agent-device` call that drives a device without the run's `--udid` and `--session`, or opens or
+// closes the app that `sim up` and `sim down` own; a verdict the skill states on its own; a flow
+// kept without asking, past `max_flows`, or without the typed accessibility ids; prepared
+// validation rows explored past instead of run first; a validation worker that writes outside its
+// test files and `.harness/qa/<plan>/`, or adds a contract name itself; and a skill tuned to one app.
+import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { parseFrontmatter } from './design_agents_test.mjs'
+import { checkInvocations, extractInvocations, swiftgateBinary } from './skill_commands_test.mjs'
+import { removeTempTree } from './temp_tree.mjs'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
+const SKILL = 'skills/qa/SKILL.md'
+const WORKER = 'skills/qa/references/validation-worker.md'
+const read = path => {
+  assert.ok(existsSync(join(root, path)), `no ${path}`)
+  return readFileSync(join(root, path), 'utf8')
+}
+const flat = text => text.replace(/\s+/g, ' ')
+
+// The `## ` section whose heading starts with `title`, without its heading line.
+function section(text, title) {
+  const at = text.split('\n## ').find(part => part.startsWith(title))
+  return at ? at.split('\n').slice(1).join('\n') : ''
+}
+
+// The first line of each `sim` step the skill runs, by subcommand.
+function simStepLines(text) {
+  const first = {}
+  for (const { line, words } of extractInvocations(text)) {
+    if (words[0] === 'sim' && words[1] && !(words[1] in first)) first[words[1]] = line
+  }
+  return first
+}
+
+/**
+ * Where a QA skill's flow steps fall short: `sim up`, then `sim snap`, then `sim down`, then
+ * `sim verify`, since `sim down` copies the crash reports `sim verify` names; `sim down` on every
+ * path; prepared rows through `qa run` before the first device; and a verdict taken only from
+ * what `sim verify` or `qa run` printed.
+ */
+export function flowOrderProblems(text) {
+  const problems = []
+  const steps = simStepLines(text)
+  const order = ['up', 'snap', 'down', 'verify']
+  for (const step of order) if (!(step in steps)) problems.push(`the skill never runs \`sim ${step}\``)
+  const present = order.filter(step => step in steps)
+  for (let i = 1; i < present.length; i++) {
+    if (steps[present[i]] < steps[present[i - 1]]) {
+      problems.push(`\`sim ${present[i]}\` comes before \`sim ${present[i - 1]}\``)
+    }
+  }
+  const prose = flat(text)
+  if (!/`sim down`[^.]*\bevery path\b/.test(prose)) problems.push('the skill never runs `sim down` on every path')
+  const qaRun = extractInvocations(text).find(inv => inv.words[0] === 'qa' && inv.words[1] === 'run')
+  if (!qaRun) problems.push('the skill never runs prepared validation rows with `qa run`')
+  else if ('up' in steps && qaRun.line > steps.up) problems.push('the skill runs `qa run` after its first `sim up`')
+  if (!/`validation\.json`/.test(prose)) problems.push('the skill never says when a plan has prepared rows (`validation.json`)')
+  if (!/never states? a verdict[^.]*`sim verify`/i.test(prose)) problems.push('the skill never forbids a verdict `sim verify` didn\'t print')
+  return problems
+}
+
+// Commands `sim up` and `sim down` own: the skill never runs them on the leased device.
+const OWNED = ['open', 'close', 'boot', 'install', 'reinstall']
+
+/**
+ * Every `agent-device <command>` written in code (a fenced line or an inline span) that drives a
+ * device: it must carry `--udid` and `--session`, and must not be a command `sim up` or `sim down`
+ * owns. `help` reads no device.
+ */
+export function agentDeviceProblems(text) {
+  const problems = []
+  let inFence = false
+  for (const [index, line] of text.split('\n').entries()) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence
+      continue
+    }
+    const segments = inFence ? [line] : line.split('`').filter((_, i) => i % 2 === 1)
+    for (const segment of segments) {
+      const match = /\bagent-device\s+([a-z][a-z-]*)/.exec(segment)
+      if (!match || match[1] === 'help') continue
+      const where = `${index + 1}: agent-device ${match[1]}`
+      if (OWNED.includes(match[1])) problems.push(`${where} is owned by \`sim up\` or \`sim down\``)
+      for (const flag of ['--udid', '--session']) if (!segment.includes(flag)) problems.push(`${where} lacks ${flag}`)
+    }
+  }
+  return problems
+}
+
+// What a QA skill must say about its verdicts and about keeping a flow (design §8.1, §8.3).
+const HANDOFFS = [
+  [/`RED`[^.]*`\/swift-harness:tdd`/, 'a RED verdict never hands off to `/swift-harness:tdd`'],
+  [/`BLOCKED`[^.]*`"\$SG" doctor`/, 'a BLOCKED verdict never runs `doctor`'],
+  [/AskUserQuestion/, 'the skill never asks with `AskUserQuestion` which flows to keep'],
+  [/never keeps? a flow[^.]*\bask/i, 'the skill never says it keeps no flow unasked'],
+  [/`\[\[flows\]\]`/, 'a kept flow gets no `[[flows]]` entry'],
+  [/`max_flows`[^.]*\bdrop\b/, 'the skill never asks which flow to drop at `max_flows`'],
+  [/`AccessibilityID`/, 'a kept flow never reads the app\'s `AccessibilityID` module'],
+  [/kept flow[^.]*`\/swift-harness:tdd`/i, 'a kept flow is not written test-first with `/swift-harness:tdd`'],
+  [/`references\/validation-worker\.md`/, 'the skill never points a validation task at its brief'],
+]
+
+export function handoffProblems(text) {
+  const prose = flat(text)
+  return HANDOFFS.filter(([pattern]) => !pattern.test(prose)).map(([, message]) => message)
+}
+
+const PREPARED = '.harness/qa/<plan>/'
+
+/**
+ * Where a validation worker brief falls short of amendment §5: its write set holds the acceptance
+ * test files its task names and `.harness/qa/<plan>/`, nothing else; a missing contract name is
+ * reported, never added; it lints its flow files and records each check's failure reason; and the
+ * gate, not the worker, confirms the red run with `qa run --at-base`.
+ */
+export function workerProblems(text) {
+  const problems = []
+  const writeSet = section(text, 'Write set')
+  if (!writeSet) return ['the brief has no `## Write set` section']
+  if (!writeSet.includes(`\`${PREPARED}\``)) problems.push(`the write set never names \`${PREPARED}\``)
+  if (!/acceptance test files/.test(flat(writeSet))) problems.push('the write set never names the acceptance test files')
+  for (const [, span] of writeSet.matchAll(/`([^`]+)`/g)) {
+    if (!span.includes('/') || span.startsWith('.harness/qa/')) continue
+    problems.push(`the write set names \`${span}\`, outside its test files and \`${PREPARED}\``)
+  }
+  const prose = flat(text)
+  if (!/missing[^.]*name[^.]*\breport/i.test(prose) || !/never add/i.test(prose)) {
+    problems.push('the brief never says a missing contract name is reported, not added')
+  }
+  if (!extractInvocations(text).some(inv => inv.words[0] === 'qa' && inv.words[1] === 'lint')) {
+    problems.push('the brief never lints its flow files with `qa lint`')
+  }
+  if (!/failure reason/.test(prose)) problems.push('the brief never records each check\'s failure reason')
+  if (!/`qa run --at-base`/.test(prose)) problems.push('the brief never says `qa run --at-base` confirms the red run')
+  return problems
+}
+
+// Words a generic skill never carries: every template preset but `default`, every captured spec
+// page's title, and the example app's name.
+function nonGenericWords() {
+  const template = readFileSync(join(root, 'templates/swiftgate.toml'), 'utf8')
+  const presets = [...template.matchAll(/^\[build\.presets\.([a-z0-9-]+)\]/gm)].map(m => m[1]).filter(name => name !== 'default')
+  const fixtures = join(root, 'gate/Tests/Fixtures/spec-page')
+  const titles = readdirSync(fixtures).filter(name => name.endsWith('.page.txt'))
+    .map(name => /^# (.+)$/m.exec(readFileSync(join(fixtures, name), 'utf8'))[1])
+  return [...presets, ...titles, 'SampleApp']
+}
+
+function realHelp() {
+  const binary = swiftgateBinary()
+  assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
+  const dir = mkdtempSync(join(tmpdir(), 'qa-skill-'))
+  const cache = new Map()
+  const help = path => {
+    const key = path.join(' ')
+    if (!cache.has(key)) {
+      cache.set(key, execFileSync(binary, [...path, '--help'], {
+        encoding: 'utf8',
+        cwd: dir,
+        env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'help-%p.profraw') },
+      }))
+    }
+    return cache.get(key)
+  }
+  help.cleanup = () => removeTempTree(dir)
+  return help
+}
+
+const skillFiles = () => ({ [SKILL]: read(SKILL), [WORKER]: read(WORKER) })
+
+const tests = {
+  'the QA skill names every sim and qa command it drives, each with flags the real CLI has — catches a skill step drifting from the CLI'() {
+    const help = realHelp()
+    try {
+      const invocations = Object.entries(skillFiles()).flatMap(([file, text]) =>
+        extractInvocations(text).map(inv => ({ ...inv, file })))
+      const { problems, resolved } = checkInvocations(invocations, help)
+      assert.deepEqual(problems, [])
+      const has = (path, flag) => resolved.some(r => r.path === path && (!flag || r.flags.includes(flag)))
+      for (const [path, flag] of [['sim up', '--scenario'], ['sim snap', '--assert'], ['sim verify', '--json'], ['sim down', '--json'],
+        ['qa run', '--plan'], ['qa lint'], ['doctor']]) {
+        assert.ok(has(path, flag), `the QA skill never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
+      }
+    } finally {
+      help.cleanup()
+    }
+  },
+
+  'the QA skill runs prepared rows first, then up, snap, down on every path, then verify, and takes its verdict from sim verify — catches crash reports judged before sim down copies them'() {
+    assert.deepEqual(flowOrderProblems(read(SKILL)), [])
+  },
+
+  'the flow order check names a missing step, verify before down, a skipped down, rows run after a device and a verdict of its own — catches a check that passes anything'() {
+    const skill = [
+      '1. `"$SG" sim up --json`', '2. `"$SG" sim snap "x" --assert "y"`', '3. `"$SG" sim verify`',
+      '4. `"$SG" sim down`', '5. `"$SG" qa run --json`',
+    ].join('\n')
+    assert.deepEqual(flowOrderProblems(skill), [
+      '`sim verify` comes before `sim down`',
+      'the skill never runs `sim down` on every path',
+      'the skill runs `qa run` after its first `sim up`',
+      'the skill never says when a plan has prepared rows (`validation.json`)',
+      'the skill never forbids a verdict `sim verify` didn\'t print',
+    ])
+    assert.deepEqual(flowOrderProblems('`"$SG" sim up`').slice(0, 3), [
+      'the skill never runs `sim snap`', 'the skill never runs `sim down`', 'the skill never runs `sim verify`',
+    ])
+  },
+
+  'every agent-device call in the QA skill carries the run\'s --udid and --session and leaves open and close to sim up and sim down — catches a call that drives another session\'s device'() {
+    for (const [file, text] of Object.entries(skillFiles())) assert.deepEqual(agentDeviceProblems(text), [], file)
+    assert.ok(/agent-device\s+snapshot[^`\n]*--udid/.test(read(SKILL)), 'the skill never shows an inspect call with --udid')
+  },
+
+  'the agent-device check names a call without --udid or --session and an open the skill runs itself — catches a check that passes anything'() {
+    const text = [
+      'Run `agent-device press id="a" --session <session>`.', '```', 'agent-device open app --udid <udid> --session <session>', '```',
+      'See `agent-device help batch`.',
+    ].join('\n')
+    assert.deepEqual(agentDeviceProblems(text), ['1: agent-device press lacks --udid', '3: agent-device open is owned by `sim up` or `sim down`'])
+  },
+
+  'the QA skill hands RED to tdd and BLOCKED to doctor, and keeps a flow only when asked, test-first, under max_flows and on the typed ids — catches a flow kept unasked'() {
+    assert.deepEqual(handoffProblems(read(SKILL)), [])
+  },
+
+  'the handoff check names each missing rule — catches a check that passes anything'() {
+    const text = '`RED` hands off to `/swift-harness:tdd`. It asks with AskUserQuestion. It never keeps a flow without asking.'
+    assert.deepEqual(handoffProblems(text), HANDOFFS.map(([, message]) => message)
+      .filter(m => !/RED verdict|AskUserQuestion|unasked/.test(m)))
+  },
+
+  'the validation worker writes only its acceptance test files and .harness/qa/<plan>/, reports a missing contract name, lints and records each failure reason — catches a worker writing app code'() {
+    assert.deepEqual(workerProblems(read(WORKER)), [])
+  },
+
+  'the worker check names a write set path outside the test files and .harness/qa, and each missing duty — catches a check that passes anything'() {
+    const text = ['# Brief', '', '## Write set', '', '- `.harness/qa/<plan>/`', '- `Sources/App/Contract.swift`', '', '## Return', ''].join('\n')
+    assert.deepEqual(workerProblems(text), [
+      'the write set never names the acceptance test files',
+      'the write set names `Sources/App/Contract.swift`, outside its test files and `.harness/qa/<plan>/`',
+      'the brief never says a missing contract name is reported, not added',
+      'the brief never lints its flow files with `qa lint`',
+      'the brief never records each check\'s failure reason',
+      'the brief never says `qa run --at-base` confirms the red run',
+    ])
+    assert.deepEqual(workerProblems('# Brief\n'), ['the brief has no `## Write set` section'])
+  },
+
+  'the QA skill is a plugin skill named qa whose text names no preset, captured page or example app — catches a skill tuned to one app'() {
+    const { fields } = parseFrontmatter(read(SKILL))
+    assert.equal(fields.name, 'qa')
+    assert.match(fields.description ?? '', /\/swift-harness:qa/)
+    const words = nonGenericWords()
+    assert.ok(words.length >= 4, `the generic check reads only ${words.join(', ')}`)
+    for (const [file, text] of Object.entries(skillFiles())) {
+      const found = words.filter(word => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text))
+      assert.deepEqual(found, [], `${file} names ${found.join(', ')}`)
+    }
+  },
+
+  'the docs router sends a reader running simulator QA to the QA skill — catches a skill no doc reaches'() {
+    const index = readFileSync(join(root, '..', 'docs/index.md'), 'utf8')
+    const row = index.split('\n').find(line => line.startsWith('|') && line.includes('(../plugin/skills/qa/SKILL.md)'))
+    assert.ok(row, 'docs/index.md has no row linking the QA skill')
+    assert.match(row, /\/swift-harness:qa/)
+  },
+}
+
+let failed = 0
+for (const [name, test] of Object.entries(tests)) {
+  try {
+    await test()
+    console.log(`ok   ${name}`)
+  } catch (error) {
+    failed++
+    console.log(`FAIL ${name}\n     ${String(error.message).split('\n').join('\n     ')}`)
+  }
+}
+if (failed) {
+  console.log(`${failed} failed`)
+  process.exit(1)
+}
