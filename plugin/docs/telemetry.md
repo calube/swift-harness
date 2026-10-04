@@ -21,11 +21,11 @@ line and never changes a verdict, an exit code or a report.
 ## What's never recorded
 
 No source text, diffs, finding or failure messages, prompts, transcript text, tool inputs, shell commands,
-environment values or API keys. The 1 exception to "no tool inputs": `agent.tools` keeps the `file_path`, `path` or
-`notebook_path` of a file tool (Read, Edit, Write, MultiEdit, NotebookEdit, Grep, Glob), made relative to the git top
-level of the agent's working directory, and nothing else from any tool input or output: no command, pattern, query,
-prompt, content or MCP server or tool name. A `~` path, a path outside that top level, or one the guard rejects is
-dropped and counted. Paths are repository-relative; nothing records a path outside the repository.
+environment values or API keys. `agent.tools` is the 1 exception to "no tool inputs". It keeps the `file_path`,
+`path` or `notebook_path` of a file tool (Read, Edit, Write, MultiEdit, NotebookEdit, Grep, Glob), relative to the
+git top level of the agent's working directory. It keeps nothing else from a tool's input or output: no command,
+pattern, query, prompt, content, or MCP server or tool name. Ingest drops and counts a `~` path, a path outside
+that top level, and a path the guard rejects. Paths are repository-relative; nothing records a path outside the repository.
 A guard drops any non-judge event holding a string over 512 bytes, a string starting with `/` or `~`, or a
 newline, and counts it in `dropped.json`; the gate hashes a test id the guard rejects. The judge log follows [`judge-audit.md`](judge-audit.md), which
 redacts backend keys. No command sends events anywhere.

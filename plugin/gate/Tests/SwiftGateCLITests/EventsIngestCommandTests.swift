@@ -275,6 +275,8 @@ struct EventsIngestCommandTests {
     #expect(output.status == 0)
     let store = try scenario.storeText()
     #expect(!scenario.usages.isEmpty)
+    // The subagent session's Agent call makes a tool window, which must hold no word either.
+    #expect(!scenario.toolWindows.isEmpty)
 
     // An event's own keys and closed values, which a prompt may also use.
     var vocabulary: Set<String> = []
