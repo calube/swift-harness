@@ -58,7 +58,8 @@ struct JudgeEventsTests {
         diff: FakeDiff(
           text:
             "diff --git a/\(JudgeCommandsTests.sourceFile) b/\(JudgeCommandsTests.sourceFile)\n+func doubled() {}\n"
-        ), reasonJudge: reasonJudge, secrets: secrets, events: scope),
+        ), reasonJudge: reasonJudge, secrets: secrets, events: scope,
+        retryClock: FakeRetryClock()),
       runID: runID)
     return Judged(findings: findings, log: log, failures: scope.failures)
   }
@@ -383,6 +384,66 @@ struct JudgeEventsTests {
       decoded.allSatisfy { summary in
         summary.blocks.contains { ($0.reason?.utf8.count ?? 0) > 512 }
       })
+  }
+
+  @Test(
+    "judge events names each block's served model and escalation cause, counts escalations as uncertain or jevFailed, and counts decisions by served model — catches a summary that can't tell a Jev outage from an uncertain answer"
+  )
+  func summaryShowsServedModelAndCause() async throws {
+    let log = MemoryEventLog()
+    let jevUsage = JudgeUsage(
+      inputTokens: 1000, outputTokens: 20, costUSD: 0.00004, wallMilliseconds: 300,
+      servedModel: "jev-1.13.0")
+    let claudeUsage = JudgeUsage(
+      inputTokens: 3000, outputTokens: 200, costUSD: 0.02, wallMilliseconds: 4000,
+      servedModel: "claude-sonnet-5-5")
+    func claude() -> FakeJudge {
+      FakeJudge(identity: Steps.claude, usage: claudeUsage) {
+        subject, questions throws(JudgeError) in
+        Steps.answers(subject, questions, flagged: 0.95, rationale: "never compared")
+      }
+    }
+    _ = try await Self.judged(
+      judge: FakeJudge(identity: Steps.jev, usage: jevUsage) {
+        subject, questions throws(JudgeError) in
+        Steps.answers(subject, questions, flagged: 0.5, rationale: nil)
+      }, reasonJudge: claude(), log: log)
+    _ = try await Self.judged(
+      judge: FakeJudge(identity: Steps.jev) { _, _ throws(JudgeError) in
+        throw JudgeFailsLoudlyTests.missingKey
+      }, reasonJudge: claude(), log: log)
+
+    let summary = JudgeEventSummary.make(
+      HarnessEventJSON.Read(events: log.events, tornLastLine: false), filter: JudgeEventFilter())
+
+    let causes = Dictionary(
+      uniqueKeysWithValues: summary.escalationCauses.map { ($0.key, $0.count) })
+    #expect(Set(causes.keys) == [.uncertain, .jevFailed])
+    #expect(causes[.uncertain] == causes[.jevFailed])
+    #expect(causes.values.reduce(0, +) == summary.escalated)
+    let failsIfBroken = try #require(summary.questions.first { $0.question == "fails-if-broken" })
+    #expect(Set(failsIfBroken.escalationCauses.map(\.key)) == [.uncertain, .jevFailed])
+
+    #expect(!summary.blocks.isEmpty)
+    #expect(summary.blocks.allSatisfy { $0.servedModel == "claude-sonnet-5-5" })
+    #expect(Set(summary.blocks.compactMap(\.escalationCause)) == [.uncertain, .jevFailed])
+    #expect(summary.blocks.allSatisfy { $0.escalationCause != nil })
+
+    let answered = log.decisions.filter { $0.decision != .error }.count
+    #expect(summary.servedModels.map(\.decisions).reduce(0, +) == answered)
+    let byModel = Dictionary(
+      uniqueKeysWithValues: summary.servedModels.map {
+        ("\($0.backend.rawValue) \($0.servedModel ?? "none")", $0.decisions)
+      })
+    #expect(Set(byModel.keys) == ["jev jev-1.13.0", "claude claude-sonnet-5-5"])
+    #expect(byModel["claude claude-sonnet-5-5"] == summary.blocks.count)
+
+    let text = summary.render(source: "judge.jsonl")
+    #expect(
+      text.contains("uncertain \(causes[.uncertain] ?? 0), jevFailed \(causes[.jevFailed] ?? 0)"))
+    #expect(text.contains("served by claude-sonnet-5-5 (escalated: jevFailed)"))
+    #expect(text.contains("served by claude-sonnet-5-5 (escalated: uncertain)"))
+    #expect(text.contains("jev jev-1.13.0"))
   }
 
   @Test(
