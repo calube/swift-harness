@@ -4,6 +4,7 @@ import SwiftGateAdapters
 import SwiftGateDomain
 
 extension HookEvent: ExpressibleByArgument {}
+extension HookSource: ExpressibleByArgument {}
 
 struct HookCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -14,10 +15,15 @@ struct HookCommand: AsyncParsableCommand {
   @Argument(help: "session-start, pre-tool-use, post-tool-use or stop.")
   var event: HookEvent
 
+  @Option(help: "plugin (hooks/hooks.json) or settings (a brownfield clone's settings.json).")
+  var source: HookSource = .plugin
+
   func run() async throws {
     let input = FileHandle.standardInput.readDataToEndOfFile()
     let environment = ProcessInfo.processInfo.environment
-    let result = await Self.execute(event, input: input, environment: environment) { root in
+    let result = await Self.execute(
+      event, input: input, source: source, environment: environment
+    ) { root in
       HookDependencies.live(root: root, environment: environment)
     }
     if let stdout = result.stdout { Console.write(stdout) }
@@ -28,11 +34,11 @@ struct HookCommand: AsyncParsableCommand {
   }
 
   static func execute(
-    _ event: HookEvent, input: Data, environment: [String: String],
-    dependencies: (URL) -> HookDependencies
+    _ event: HookEvent, input: Data, source: HookSource = .plugin,
+    environment: [String: String], dependencies: (URL) -> HookDependencies
   ) async -> HookResult {
     guard let recorder = HookRecorder.configured(environment) else {
-      return await HookRunner.run(event, input: input, dependencies: dependencies)
+      return await HookRunner.run(event, input: input, source: source, dependencies: dependencies)
     }
     var warnings: [String] = []
     let recording: HookRecorder.Recording?
@@ -43,7 +49,7 @@ struct HookCommand: AsyncParsableCommand {
       warnings.append("\(HookRecorder.environmentKey): payload not recorded: \(error)")
     }
     var (result, milliseconds) = await GateRun.timed {
-      await HookRunner.run(event, input: input, dependencies: dependencies)
+      await HookRunner.run(event, input: input, source: source, dependencies: dependencies)
     }
     if let recording {
       do {

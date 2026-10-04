@@ -158,10 +158,12 @@ struct DisabledCommitCommentJudge: CommitCommentJudging {
 /// Entry point for `swiftgate hook <event>`: decodes the payload, finds the project, and hands off
 /// to the event's hook. Outside a project with `.swiftgate.toml` or a brownfield clone every hook
 /// is a silent no-op that never builds its dependencies, except the review agents' Bash limit:
-/// it belongs to the agent, so it holds wherever the agent runs.
+/// it belongs to the agent, so it holds wherever the agent runs. A brownfield clone's hook is
+/// silent too unless the clone's rendered settings started it.
 enum HookRunner {
   static func run(
-    _ event: HookEvent, input: Data, dependencies: (URL) -> HookDependencies
+    _ event: HookEvent, input: Data, source: HookSource = .plugin,
+    dependencies: (URL) -> HookDependencies
   ) async -> HookResult {
     let payload: HookPayload
     do {
@@ -183,7 +185,11 @@ enum HookRunner {
         from: URL(filePath: payload.cwd, directoryHint: .isDirectory))
     else { return outsideProject(event, payload) }
     let root = project.root
-    if case .brownfield = project, !brownfieldEvents.contains(event) { return .silent }
+    if case .brownfield = project {
+      // A `swiftgate run` session loads the plugin for its skills and the clone's settings for
+      // its hooks, so every event arrives from both; the settings own a clone's hooks.
+      guard source == .settings, brownfieldEvents.contains(event) else { return .silent }
+    }
     let dependencies = dependencies(root)
     let clock = ContinuousClock()
     let start = clock.now
@@ -217,12 +223,14 @@ enum HookRunner {
     dependencies: HookDependencies
   ) async -> HookResult {
     let root = project.root
+    var brownfield: BrownfieldStateLayout?
+    if case .brownfield(_, let layout) = project { brownfield = layout }
     switch event {
     case .sessionStart:
-      return .output(await SessionStartHook.run(payload, root: root, dependencies: dependencies))
+      return .output(
+        await SessionStartHook.run(
+          payload, root: root, dependencies: dependencies, brownfield: brownfield))
     case .preToolUse:
-      var brownfield: BrownfieldStateLayout?
-      if case .brownfield(_, let layout) = project { brownfield = layout }
       return .output(
         await PreToolUseHook.run(
           payload, root: root, dependencies: dependencies, brownfield: brownfield))
@@ -230,10 +238,8 @@ enum HookRunner {
       return .output(
         await PostToolUseHook.run(payload, root: root, dependencies: dependencies))
     case .stop:
-      var brownfield = false
-      if case .brownfield = project { brownfield = true }
       return await StopHook.run(
-        payload, root: root, dependencies: dependencies, brownfield: brownfield)
+        payload, root: root, dependencies: dependencies, brownfield: brownfield != nil)
     }
   }
 }
