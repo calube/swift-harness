@@ -51,10 +51,79 @@ struct AllowCommand: AsyncParsableCommand {
   static func allow(
     worktree: URL, rule: String, location: String, reason: String
   ) throws(AllowCommandError) -> BrownfieldAllow {
-    throw .rule(rule)
+    guard let ruleID = BrownfieldRuleID(rawValue: rule), waivableRules.contains(ruleID) else {
+      throw .rule(rule)
+    }
+    guard let colon = location.lastIndex(of: ":"),
+      let line = Int(location[location.index(after: colon)...]),
+      line >= 1, colon > location.startIndex
+    else { throw .location(location) }
+    let path = String(location[..<colon])
+    let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !why.isEmpty else { throw .emptyReason }
+    let file: BrownfieldConfigFile
+    do {
+      file = try BrownfieldConfigFile.locate(worktree: worktree)
+    } catch {
+      throw .config(error)
+    }
+    guard let data = FileManager.default.contents(atPath: worktree.appending(path: path).path),
+      let text = String(data: data, encoding: .utf8)
+    else { throw .unreadableSource(path: path) }
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    guard line <= lines.count, !(line == lines.count && lines[line - 1].isEmpty) else {
+      throw .lineOutOfRange(path: path, line: line)
+    }
+    let entry = BrownfieldAllow(
+      rule: ruleID.rawValue, path: path, lineSHA: AllowMatching.lineSHA(String(lines[line - 1])),
+      reason: why)
+    do {
+      try file.update { config in
+        BrownfieldConfig(
+          brownfield: config.brownfield, areas: config.areas,
+          allow: config.allow.contains(entry) ? config.allow : config.allow + [entry],
+          buildPresets: config.buildPresets)
+      }
+    } catch {
+      throw .config(error)
+    }
+    return entry
   }
 
   func run() async throws {
-    try StubCommand.notImplemented("allow", json: json)
+    var worktree = URL(
+      filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    while !FileManager.default.fileExists(atPath: worktree.appending(path: ".git").path),
+      worktree.pathComponents.count > 1
+    {
+      worktree = worktree.deletingLastPathComponent()
+    }
+    let outcome: Result<BrownfieldAllow, AllowCommandError>
+    do throws(AllowCommandError) {
+      outcome = .success(
+        try Self.allow(worktree: worktree, rule: rule, location: location, reason: reason))
+    } catch {
+      outcome = .failure(error)
+    }
+    switch outcome {
+    case .success(let entry):
+      try print(
+        ["status": "allowed", "rule": entry.rule, "path": entry.path, "line_sha": entry.lineSHA],
+        text: "allowed \(entry.rule) on \(location) (line_sha \(entry.lineSHA))")
+    case .failure(let error):
+      try print(["status": "error", "message": error.description], text: "allow: \(error)")
+      switch error {
+      case .config(.lock), .config(.unreadable), .config(.write):
+        throw ExitCode(Verdict.blocked.exitCode)
+      default:
+        throw ExitCode(Verdict.red.exitCode)
+      }
+    }
+  }
+
+  private func print(_ fields: [String: String], text: String) throws {
+    guard json else { return Console.write(text) }
+    let data = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
+    Console.write(String(decoding: data, as: UTF8.self))
   }
 }

@@ -35,7 +35,15 @@ public struct BrownfieldConfigFile: Sendable {
   /// The config of the clone holding `worktree`.
   public static func locate(worktree: URL) throws(BrownfieldConfigFileError) -> BrownfieldConfigFile
   {
-    throw .notBrownfield(path: worktree.path)
+    guard let gitDir = StateRootResolver.gitDirectory(enclosing: worktree) else {
+      throw .notBrownfield(path: worktree.path)
+    }
+    let url = StateRootResolver.commonDirectory(of: gitDir)
+      .appending(path: StateRootResolver.commonConfigFile)
+    guard FileManager.default.fileExists(atPath: url.path) else {
+      throw .notBrownfield(path: worktree.path)
+    }
+    return BrownfieldConfigFile(url: url)
   }
 
   /// Reads the config, applies `change`, and writes the result back, all under the lock.
@@ -43,6 +51,39 @@ public struct BrownfieldConfigFile: Sendable {
   public func update(
     _ change: (BrownfieldConfig) throws(BrownfieldConfigFileError) -> BrownfieldConfig
   ) throws(BrownfieldConfigFileError) -> BrownfieldConfig {
-    throw .notBrownfield(path: url.path)
+    let lockPath = url.deletingLastPathComponent().appending(path: Self.lockFileName).path
+    let descriptor = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC, 0o644)
+    guard descriptor >= 0 else { throw .lock(path: lockPath, errno: errno) }
+    defer { close(descriptor) }
+    while flock(descriptor, LOCK_EX) != 0 {
+      guard errno == EINTR else { throw .lock(path: lockPath, errno: errno) }
+    }
+    defer { flock(descriptor, LOCK_UN) }
+
+    let text: String
+    do {
+      text = try String(contentsOf: url, encoding: .utf8)
+    } catch {
+      throw .unreadable(path: url.path, reason: error.localizedDescription)
+    }
+    let current: BrownfieldConfig
+    do {
+      current = try TOMLConfigDecoder().decodeBrownfield(text)
+    } catch {
+      throw .invalid(path: url.path, error: error)
+    }
+    let updated = try change(current)
+    let temporary = url.deletingLastPathComponent()
+      .appending(path: ".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+    do {
+      try Data(BrownfieldConfigTOML.render(updated).utf8).write(to: temporary)
+      guard rename(temporary.path, url.path) == 0 else {
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+      }
+    } catch {
+      try? FileManager.default.removeItem(at: temporary)
+      throw .write(path: url.path, reason: error.localizedDescription)
+    }
+    return updated
   }
 }
