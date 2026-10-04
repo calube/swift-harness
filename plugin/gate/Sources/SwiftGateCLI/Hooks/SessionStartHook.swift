@@ -9,9 +9,12 @@ import SwiftGateDomain
 enum SessionStartHook {
   static let moduleMapCache = "module-map.json"
 
-  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
-    -> String
-  {
+  /// - Parameter brownfield: the clone's state when it runs the brownfield profile, whose
+  ///   config and tiers the context names instead of the owned repository's.
+  static func run(
+    _ payload: HookPayload, root: URL, dependencies: HookDependencies,
+    brownfield: BrownfieldStateLayout? = nil
+  ) async -> String {
     var notes: [String] = []
     var modules: [SessionContext.ModuleEntry] = []
     var xcode: SessionContext.Xcode?
@@ -41,7 +44,9 @@ enum SessionStartHook {
     notes += recordSession(payload, root: root, environment: dependencies.environment)
 
     let inputs = SessionContext.Inputs(
-      projectName: root.lastPathComponent, sessionID: payload.sessionID, modules: modules,
+      projectName: root.lastPathComponent,
+      profile: brownfield.map { .brownfield(config: $0.config.path) } ?? .owned,
+      sessionID: payload.sessionID, modules: modules,
       xcode: xcode, plans: await plans(git: dependencies.git),
       referenceDocs: referenceDocs(environment: dependencies.environment), notes: notes)
     return HookOutput.context(.sessionStart, SessionContext.render(inputs))

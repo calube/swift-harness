@@ -101,7 +101,7 @@ struct BrownfieldProfileCommandTests {
     if let judge { harness.commitJudge = judge }
     let input = try harness.payload(fixture, cwd: clone.root, replacing: replacing)
     let dependencies = harness.dependencies
-    return await HookRunner.run(event, input: input) { _ in dependencies }
+    return await HookRunner.run(event, input: input, source: .settings) { _ in dependencies }
   }
 
   func bash(_ command: String, in clone: Clone) async throws -> HookResult {
@@ -167,7 +167,7 @@ struct BrownfieldProfileCommandTests {
   }
 
   @Test(
-    "in a brownfield clone SessionStart answers with no state in the tree, Stop gates at slice and blocks a RED slice, and PostToolUse stays silent — catches the owned fast tier or formatter run on a team's code, or a brownfield stop that checks nothing"
+    "in a brownfield clone the settings' SessionStart answers with no state in the tree and the plugin's own stays silent, Stop gates at slice and blocks a RED slice, and PostToolUse stays silent — catches the owned fast tier or formatter run on a team's code, a brownfield stop that checks nothing, or both registrations answering"
   )
   func hooksFollowTheProfile() async throws {
     let clone = try Clone()
@@ -184,12 +184,17 @@ struct BrownfieldProfileCommandTests {
     let slice = dependencies
 
     let start = try await hook(.sessionStart, "session-start", in: clone)
-    let stop = await HookRunner.run(.stop, input: try harness.payload("stop", cwd: clone.root)) {
-      _ in slice
-    }
+    let stop = await HookRunner.run(
+      .stop, input: try harness.payload("stop", cwd: clone.root), source: .settings
+    ) { _ in slice }
     let post = try await hook(.postToolUse, "post-tool-use-edit-swift", in: clone)
 
     #expect(start.stdout?.contains("hookSpecificOutput") == true)
+    let pluginInput = try harness.payload("session-start", cwd: clone.root)
+    let pluginStart = await HookRunner.run(.sessionStart, input: pluginInput, source: .plugin) {
+      _ in slice
+    }
+    #expect(pluginStart == .silent)
     #expect(!FileManager.default.fileExists(atPath: clone.root.appending(path: ".harness").path))
     #expect(ran.all == [clone.root.lastPathComponent])
     #expect(stop.stdout?.contains("neutral.unsafe-shortcut") == true)
