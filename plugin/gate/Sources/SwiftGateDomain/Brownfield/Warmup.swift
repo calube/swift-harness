@@ -77,7 +77,11 @@ public struct WarmupAreaResult: Sendable, Equatable {
 
   /// 1 `warmup.run` per step.
   public var events: [WarmupRunEvent] {
-    []
+    steps.map {
+      WarmupRunEvent(
+        area: area, step: $0.step, milliseconds: $0.milliseconds, cache: $0.cache,
+        outcome: $0.outcome)
+    }
   }
 }
 
@@ -103,20 +107,71 @@ public struct WarmupTimesFile: Sendable, Equatable {
   public static func decode(_ data: Data, tree: String) throws(WarmupTimesFileError)
     -> WarmupTimesFile
   {
-    WarmupTimesFile(tree: tree)
+    let stored: StoredFile
+    do {
+      stored = try JSONDecoder().decode(StoredFile.self, from: data)
+    } catch {
+      throw WarmupTimesFileError(detail: "\(error)")
+    }
+    guard stored.version == version else {
+      throw WarmupTimesFileError(detail: "version \(stored.version), expected \(version)")
+    }
+    guard stored.tree == tree else {
+      throw WarmupTimesFileError(detail: "recorded for tree \(stored.tree), expected \(tree)")
+    }
+    var areas: [String: WarmupAreaRecord] = [:]
+    for (name, area) in stored.areas {
+      var steps: [WarmupStep: WarmupOutcome] = [:]
+      for (raw, outcome) in area.steps {
+        guard let step = WarmupStep(rawValue: raw) else {
+          throw WarmupTimesFileError(
+            detail: "\(name): unknown step \(raw), expected one of "
+              + WarmupStep.allCases.map(\.rawValue).joined(separator: ", "))
+        }
+        steps[step] = outcome
+      }
+      areas[name] = WarmupAreaRecord(
+        coldMilliseconds: area.coldMs, testMilliseconds: area.testMs, steps: steps)
+    }
+    return WarmupTimesFile(tree: tree, areas: areas)
   }
 
   public func encoded() -> Data {
-    Data()
+    let stored = StoredFile(
+      version: Self.version, tree: tree,
+      areas: areas.mapValues { record in
+        StoredArea(
+          coldMs: record.coldMilliseconds, testMs: record.testMilliseconds,
+          steps: Dictionary(uniqueKeysWithValues: record.steps.map { ($0.key.rawValue, $0.value) }))
+      })
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+    // Every field is a string, an int or a map of them, which always encode.
+    return (try? encoder.encode(stored)) ?? Data()
   }
 
   /// A newer record for an area replaces the older one.
-  public mutating func merge(area: String, record: WarmupAreaRecord) {}
+  public mutating func merge(area: String, record: WarmupAreaRecord) {
+    areas[area] = record
+  }
 
   /// `true` when `area`'s warm test time doesn't fit `budgetSeconds`, or no warm-up measured it:
   /// `slice` then only builds the area, and its tests and their prove move to `merge`.
   public func buildsOnly(_ area: String, budgetSeconds: Int) -> Bool {
-    true
+    guard let test = areas[area]?.testMilliseconds else { return true }
+    return test > budgetSeconds * 1_000
+  }
+
+  private struct StoredArea: Codable {
+    let coldMs: Int
+    let testMs: Int?
+    let steps: [String: WarmupOutcome]
+  }
+
+  private struct StoredFile: Codable {
+    let version: Int
+    let tree: String
+    let areas: [String: StoredArea]
   }
 }
 
@@ -169,16 +224,53 @@ public enum Warmup {
   public static func run(areas: [BrownfieldArea], dependencies: Dependencies) async
     -> [WarmupAreaResult]
   {
-    []
+    let results = await withTaskGroup(of: (Int, WarmupAreaResult).self) { group in
+      for (index, area) in areas.enumerated() {
+        group.addTask { (index, await run(area: area, dependencies: dependencies)) }
+      }
+      var results: [(Int, WarmupAreaResult)] = []
+      for await result in group { results.append(result) }
+      return results
+    }
+    return results.sorted { $0.0 < $1.0 }.map(\.1)
   }
 
-  /// 1 area: `generate` for XcodeGen and Tuist, then `build`, then `test`.
+  /// 1 area: `generate` for XcodeGen and Tuist, then `build`, then `test`. A generate that
+  /// doesn't produce a project ends the area there.
   public static func run(area: BrownfieldArea, dependencies: Dependencies) async
     -> WarmupAreaResult
   {
-    WarmupAreaResult(
-      area: area.name, steps: [], baseline: [],
-      record: WarmupAreaRecord(coldMilliseconds: 0, testMilliseconds: nil, steps: [:]))
+    let treeRun: WarmupTreeRun
+    var steps: [WarmupStepResult] = []
+    if let inclusion = area.xcode?.inclusion, inclusion == .xcodegen || inclusion == .tuist {
+      let generation = await dependencies.generate(area) { toplevel in
+        await buildAndTest(area, toplevel: toplevel, dependencies: dependencies)
+      }
+      let cache = cache(area.name, .generate, dependencies.known)
+      switch generation {
+      case .generated(let milliseconds, let run):
+        steps.append(
+          WarmupStepResult(
+            step: .generate, milliseconds: milliseconds, cache: cache, outcome: .passed,
+            detail: nil))
+        treeRun = run
+      case .notGenerated(let milliseconds, let outcome, let detail):
+        steps.append(
+          WarmupStepResult(
+            step: .generate, milliseconds: milliseconds, cache: cache, outcome: outcome,
+            detail: detail))
+        treeRun = WarmupTreeRun(steps: [], baseline: [])
+      }
+    } else {
+      treeRun = await buildAndTest(
+        area, toplevel: dependencies.repositoryRoot, dependencies: dependencies)
+    }
+    steps += treeRun.steps
+    let result = WarmupAreaResult(
+      area: area.name, steps: steps, baseline: treeRun.baseline,
+      record: record(area.name, steps: steps, known: dependencies.known))
+    await dependencies.finished(result)
+    return result
   }
 
   /// Whether the repository commits `xcode`'s generated project, so generating it in place would
@@ -186,6 +278,94 @@ public enum Warmup {
   public static func generatedProjectTracked(_ xcode: XcodeAreaConfig, tree: TrackedTreeSnapshot)
     -> Bool
   {
-    false
+    guard let container = xcode.project ?? xcode.workspace else { return false }
+    let prefix = container.split(separator: "/").filter { $0 != "." }.joined(separator: "/") + "/"
+    return tree.paths.contains { $0.hasPrefix(prefix) }
+  }
+
+  /// `build`, then `test`, in the tree whose toplevel is `toplevel`. The test runs after a failed
+  /// build too: its failure is the base tree's answer the baseline needs.
+  private static func buildAndTest(
+    _ area: BrownfieldArea, toplevel: String, dependencies: Dependencies
+  ) async -> WarmupTreeRun {
+    var steps: [WarmupStepResult] = []
+    var baseline: [BaselineRecord] = []
+    let environment = AreaCacheEnvironment.make(
+      area: area, layout: dependencies.layout, tree: dependencies.trackedTree
+    ).variables
+    for (step, areaStep) in [(WarmupStep.build, AreaStep.build), (.test, .test)] {
+      let cache = cache(area.name, step, dependencies.known)
+      guard
+        let template = AreaCommandExpansion.template(for: areaStep, in: area),
+        let prepared = AreaCommandExpansion.prepare(
+          area: area, step: areaStep, repositoryRoot: toplevel, files: [], tests: [],
+          junitPath: AreaCommandExpansion.junitPath(
+            layout: dependencies.layout, area: area.name, step: areaStep),
+          deadline: dependencies.deadline, environment: environment)
+      else {
+        steps.append(
+          WarmupStepResult(
+            step: step, milliseconds: 0, cache: cache, outcome: .dropped,
+            detail: "no \(areaStep.rawValue) command in the config"))
+        continue
+      }
+      let started = ContinuousClock.now
+      let outcome = await dependencies.run(prepared.request)
+      let milliseconds = Self.milliseconds(ContinuousClock.now - started)
+      steps.append(
+        WarmupStepResult(
+          step: step, milliseconds: milliseconds, cache: cache,
+          outcome: outcome == .passed ? .passed : .failed, detail: detail(outcome)))
+      baseline.append(
+        BaselineRecord(
+          key: BaselineStepKey(area: area.name, step: areaStep, command: template),
+          result: BaselineStepResult.of(outcome)))
+    }
+    return WarmupTreeRun(steps: steps, baseline: baseline)
+  }
+
+  /// `warm` once an earlier warm-up at this tree ran the step, whatever it came to: the caches it
+  /// fills are filled either way.
+  private static func cache(_ area: String, _ step: WarmupStep, _ known: WarmupTimesFile)
+    -> WarmupCache
+  {
+    switch known.areas[area]?.steps[step] {
+    case .passed?, .failed?: .warm
+    case .dropped?, .notInstalled?, nil: .cold
+    }
+  }
+
+  /// The cold cost stays that of the first run that built; the test time and outcomes are this
+  /// run's.
+  private static func record(
+    _ area: String, steps: [WarmupStepResult], known: WarmupTimesFile
+  ) -> WarmupAreaRecord {
+    let earlier = known.areas[area]
+    let ran = steps.filter { $0.outcome == .passed || $0.outcome == .failed }
+    let test = ran.first { $0.step == .test }?.milliseconds
+    var outcomes = earlier?.steps ?? [:]
+    for step in steps { outcomes[step.step] = step.outcome }
+    let earlierBuilt = earlier?.steps[.build] == .passed || earlier?.steps[.build] == .failed
+    let cold =
+      earlierBuilt ? earlier?.coldMilliseconds : nil
+    return WarmupAreaRecord(
+      coldMilliseconds: cold ?? ran.reduce(0) { $0 + $1.milliseconds },
+      testMilliseconds: test ?? earlier?.testMilliseconds, steps: outcomes)
+  }
+
+  private static func detail(_ outcome: AreaCommandOutcome) -> String? {
+    switch outcome {
+    case .passed: nil
+    case .failed(_, let tail, _): tail
+    case .crashed(let signal, let tail):
+      "crashed\(signal.map { " on signal \($0)" } ?? ""):\n\(tail)"
+    case .timedOut(let tail): "timed out:\n\(tail)"
+    }
+  }
+
+  private static func milliseconds(_ duration: Duration) -> Int {
+    Int(
+      duration.components.seconds * 1_000
+        + duration.components.attoseconds / 1_000_000_000_000_000)
   }
 }

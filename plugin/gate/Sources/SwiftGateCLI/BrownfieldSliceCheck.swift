@@ -47,7 +47,9 @@ enum BrownfieldSliceCheck {
         prove: BrownfieldProve.Dependencies.live(
           root: root, layout: merge.layout, runner: merge.runner, deadline: liveDeadline),
         trackedTree: merge.trackedTree, tree: merge.tree,
-        warmTestMilliseconds: { _, _ in nil },
+        warmTestMilliseconds: { [layout = merge.layout] area, tree in
+          WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?.testMilliseconds
+        },
         judgeAssertion: { _, _ in
           .unanswered("no judge backend is wired for the brownfield profile")
         },
