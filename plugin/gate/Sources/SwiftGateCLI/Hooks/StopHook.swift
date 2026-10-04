@@ -84,7 +84,7 @@ enum StopHook {
         tiers: parts.tiers, findings: parts.findings, allowances: parts.allowances)
       try? runs.record(
         report, finishedAt: Date(), command: command, gateSteps: context.steps.steps,
-        checkTier: .slice, baselineCount: parts.baselineCount)
+        checkTier: .slice, baselineCount: parts.baselineCount, proofs: context.proofs.results)
       return (report.verdict, ReportRenderer.human(report))
     } catch {
       return (.blocked, "swiftgate check --tier slice could not run: \(error)")

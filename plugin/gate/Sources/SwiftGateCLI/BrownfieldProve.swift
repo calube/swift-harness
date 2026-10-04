@@ -45,9 +45,11 @@ enum BrownfieldProve {
   /// - Parameters:
   ///   - root: the worktree's toplevel.
   ///   - junitDirectory: where `{junit}` paths point.
+  ///   - proofs: takes each changed test the reverted runs said something about, for the gate
+  ///     run's `prove.result` events.
   static func run(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    dependencies: Dependencies
+    proofs: ProveResultCollector, dependencies: Dependencies
   ) async -> ChangedTestJudgement {
     let git = dependencies.git
     let mergeBase: String
@@ -100,13 +102,17 @@ enum BrownfieldProve {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
         var total = AreaRun()
         for plan in plans {
-          total = total + (await execute(plan, in: toplevel, junitDirectory, dependencies))
+          total =
+            total
+            + (await execute(
+              plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies))
         }
         return total
       }
     } catch {
       return judgement.merged(with: blocked("scratch worktree: \(error)"))
     }
+    proofs.record(ran.proved)
     return judgement.merged(with: ran.judgement).merged(
       with: note(
         "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
@@ -132,11 +138,12 @@ enum BrownfieldProve {
     var judgement = ChangedTestJudgement.empty
     var proven = 0
     var total = 0
+    var proved: [ProvedTest] = []
 
     static func + (lhs: AreaRun, rhs: AreaRun) -> AreaRun {
       AreaRun(
         judgement: lhs.judgement.merged(with: rhs.judgement), proven: lhs.proven + rhs.proven,
-        total: lhs.total + rhs.total)
+        total: lhs.total + rhs.total, proved: lhs.proved + rhs.proved)
     }
   }
 
@@ -190,7 +197,8 @@ enum BrownfieldProve {
   }
 
   private static func execute(
-    _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, _ dependencies: Dependencies
+    _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, proofBase: String,
+    _ dependencies: Dependencies
   ) async -> AreaRun {
     let area = plan.area
     let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
@@ -214,12 +222,15 @@ enum BrownfieldProve {
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement
+    let whole: Bool
     switch plan.command {
     case .whole(let command):
+      whole = true
       let outcome = await run(command, step: .test, ids: plan.ids)
       outcomes = plan.ids.map { ($0, outcome) }
       judgement = ProveVerdict.judgeWhole(area: area.name, ids: plan.ids, outcome: outcome)
     case .selected(let template):
+      whole = false
       let together = await run(template, step: .testFiles, ids: plan.ids)
       if ProveVerdict.needsRerunAlone(together, idCount: plan.ids.count) {
         var alone: [(AreaTestID, AreaCommandOutcome)] = []
@@ -236,7 +247,10 @@ enum BrownfieldProve {
       if case .failed = $0.1 { return true }
       return false
     }.count
-    return AreaRun(judgement: judgement, proven: proven, total: plan.ids.count)
+    return AreaRun(
+      judgement: judgement, proven: proven, total: plan.ids.count,
+      proved: BrownfieldProofs.proved(
+        area: area.name, outcomes: outcomes, whole: whole, proofBase: proofBase))
   }
 
   private static func blocked(_ message: String, file: String = ".") -> ChangedTestJudgement {

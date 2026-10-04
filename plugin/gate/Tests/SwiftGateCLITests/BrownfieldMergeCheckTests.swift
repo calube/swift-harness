@@ -84,16 +84,25 @@ struct BrownfieldMergeCheckTests {
     defer { try? FileManager.default.removeItem(at: clone.base) }
     let changed = ["web/src/lib.js", "web/tests/new.test.js"]
     let moved = FakeAreaCommandRunner { _ in .passed }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
 
     let parts = try await Self.run(
       clone, tier: .merge, areas: [Self.area("web")], changed: changed, runner: moved,
-      sliceBuildsOnly: true)
+      sliceBuildsOnly: true, context: context)
 
     #expect(
       moved.requests.contains { $0.step == .testFiles && clone.inScratch($0) },
       "prove ran the moved test in a reverted tree")
     #expect(moved.requests.contains { $0.step == .test && !clone.inScratch($0) })
     #expect(Self.gating(parts) == ["neutral.not-proven web/tests/new.test.js"])
+    #expect(
+      context.proofs.results
+        == [
+          ProvedTest(
+            test: "tests/new.test.js", target: "web", outcome: .passesReverted,
+            proofBase: "base0", assertion: nil)
+        ],
+      "the gate run records the moved test's proof")
 
     let proven = FakeAreaCommandRunner { _ in .passed }
     _ = try await Self.run(
