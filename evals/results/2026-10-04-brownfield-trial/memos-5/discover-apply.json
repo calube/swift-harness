@@ -1,0 +1,97 @@
+{
+  "applied" : "/Users/caleb/Developer/trials/memos-5/.git/swift-harness/config.toml",
+  "ms" : 124,
+  "proposal" : {
+    "areas" : [
+      {
+        "kind" : "node",
+        "language" : "typescript",
+        "missing" : [
+
+        ],
+        "name" : "web",
+        "root" : "web",
+        "source" : "web/package.json",
+        "testGlobs" : [
+          "web/**/*.test.*",
+          "web/**/*.spec.*",
+          "web/**/__tests__/**"
+        ],
+        "values" : [
+          {
+            "command" : "pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit}",
+            "confidence" : "found",
+            "source" : "web/package.json",
+            "step" : "test"
+          },
+          {
+            "command" : "pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit} {files}",
+            "confidence" : "guessed",
+            "source" : "web/package.json",
+            "step" : "test_files"
+          },
+          {
+            "command" : "pnpm run lint",
+            "confidence" : "found",
+            "source" : "web/package.json",
+            "step" : "lint"
+          },
+          {
+            "command" : "pnpm run build",
+            "confidence" : "found",
+            "source" : "web/package.json",
+            "step" : "build"
+          }
+        ]
+      },
+      {
+        "kind" : "go",
+        "language" : "go",
+        "missing" : [
+
+        ],
+        "name" : "memos",
+        "root" : ".",
+        "source" : "go.mod",
+        "testGlobs" : [
+          "**/*_test.go"
+        ],
+        "values" : [
+          {
+            "command" : "go test -json ./...",
+            "confidence" : "found",
+            "source" : "go.mod",
+            "step" : "test"
+          },
+          {
+            "command" : "go test -json ./... -run {tests}",
+            "confidence" : "found",
+            "source" : "go.mod",
+            "step" : "test_files"
+          },
+          {
+            "command" : "golangci-lint run ./...",
+            "confidence" : "found",
+            "source" : ".golangci.yaml",
+            "step" : "lint"
+          },
+          {
+            "command" : "go build ./...",
+            "confidence" : "found",
+            "source" : "go.mod",
+            "step" : "build"
+          }
+        ]
+      }
+    ],
+    "dirty" : [
+
+    ],
+    "edits" : [
+
+    ],
+    "head" : "0d989707f82c33f74bb852edd8965ec88fcf041b",
+    "schemaVersion" : 1
+  }
+}
+

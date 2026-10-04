@@ -1,0 +1,43 @@
+final: GREEN (gate run 20261004T162117Z-f3ed863d)
+
+# Run report: spec
+
+## Unfinished tasks
+
+- none
+
+## Assumptions
+
+- The proto gains `optional int32 view_limit = 4` (OPTIONAL) and `int32 view_count = 5` (OUTPUT_ONLY) on `MemoShare`; `view_count` is not optional, since every share has a count starting at 0.
+- The store gains `ViewLimit *int32` and `ViewCount int32` on `store.MemoShare`, and a driver method `ConsumeMemoShareView(ctx, id) (bool, error)` that runs 1 conditional `UPDATE ... SET view_count = view_count + 1 WHERE id = ? AND (view_limit IS NULL OR view_count < view_limit)` and reports whether it claimed a view; the single conditional UPDATE is what keeps 2 racing resolves from both taking the last view.
+- Only `GetSharedMemo` counts views. It consumes the view after every other check passes (token found, not expired, memo readable), so failed resolves count nothing; if the consume claims nothing it returns NOT_FOUND.
+- Attachment downloads through `/file/...?share_token=` neither count views nor check the limit, so a 1-view link still shows its images on the page it opened; they keep the existing expiry check only.
+- The new migration is `store/migration/{sqlite,mysql,postgres}/26.10/00__add_memo_share_view_limit.sql` (today is 2026-10-04), recording schema 26.10.1 per the migration README.
+- A view count of 0 on an unlimited share shows "0 views". The spec allowed other locales to fall back to English, but the repository's `tests/locale-resources.test.ts` requires every locale to hold every English key, so the new strings go in every `web/src/locales/*.json` file.
+- The web task's first merge turned the merge gate red on `locale-resources.test.ts`; the merge fixer added the keys to every locale, and the web task's write set was widened from `web/src/locales/en.json` to `web/src/locales/` to cover the fix.
+- MySQL and PostgreSQL migrations are written but not run: those store tests need containers this machine lacks; Go tests run with `DRIVER=sqlite`.
+
+## Baseline failures
+
+- memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+- web test: tests/filtered-memo-stats.test.ts.useFilteredMemoStats > aggregates by created timestamps when timeBasis is create_time
+- web test: tests/filtered-memo-stats.test.ts.useFilteredMemoStats > aggregates by updated timestamps when timeBasis is update_time
+- web test: tests/filtered-memo-stats.test.ts.useFilteredMemoStats > falls back to created timestamps when updated array is empty (old server)
+- web test: tests/locale-resources.test.ts.locale key usage > references every English key and reviews every computed key pattern
+
+## Build-only areas
+
+- memos (Go, root `.`; warm test 83.8 s, build-only)
+- web (node, root `web`; warm test 84.1 s, build-only)
+
+## Dropped steps
+
+- none
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at 587495a13d3704e199320a824689354c8787d019 holds every commit of the run; merging it is your call

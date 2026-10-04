@@ -1,0 +1,16 @@
+{"at":"2026-10-04T16:07:00Z","from":"pending","kind":"transition","task":"share-view-limit-store","to":"in-progress"}
+{"at":"2026-10-04T16:07:00Z","from":"pending","kind":"transition","task":"share-view-limit-web","to":"in-progress"}
+{"at":"2026-10-04T16:10:03Z","kind":"merge","postCommit":"9f5c7a218ba3deb517642e3a9d121fad62b3e089","preCommit":"07b59425fad425719c4b04ca4f684a741a4e63d4","task":"share-view-limit-web"}
+{"at":"2026-10-04T16:10:44Z","gate":"merge","kind":"gate","runId":"20261004T161006Z-3c0f2ae2","task":"share-view-limit-web","tier":"merge","verdict":"RED"}
+{"at":"2026-10-04T16:10:45Z","fromCommit":"9f5c7a218ba3deb517642e3a9d121fad62b3e089","kind":"undo","task":"share-view-limit-web","toCommit":"07b59425fad425719c4b04ca4f684a741a4e63d4"}
+{"at":"2026-10-04T16:13:41Z","kind":"merge","postCommit":"025d3cf0104428901f107b54496f4b548e539c8e","preCommit":"07b59425fad425719c4b04ca4f684a741a4e63d4","task":"share-view-limit-web"}
+{"at":"2026-10-04T16:14:34Z","gate":"merge","kind":"gate","runId":"20261004T161355Z-8a9c7da2","task":"share-view-limit-web","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-04T16:14:34Z","from":"in-progress","kind":"transition","task":"share-view-limit-web","to":"done"}
+{"at":"2026-10-04T16:14:42Z","kind":"merge","postCommit":"97012540afa1c05006ab4d36c4728bf7b3ee06a6","preCommit":"025d3cf0104428901f107b54496f4b548e539c8e","task":"share-view-limit-store"}
+{"at":"2026-10-04T16:16:17Z","gate":"merge","kind":"gate","runId":"20261004T161445Z-aa86d7d2","task":"share-view-limit-store","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-04T16:16:17Z","from":"in-progress","kind":"transition","task":"share-view-limit-store","to":"done"}
+{"at":"2026-10-04T16:16:18Z","from":"pending","kind":"transition","task":"share-view-limit-api","to":"in-progress"}
+{"at":"2026-10-04T16:19:14Z","kind":"merge","postCommit":"587495a13d3704e199320a824689354c8787d019","preCommit":"97012540afa1c05006ab4d36c4728bf7b3ee06a6","task":"share-view-limit-api"}
+{"at":"2026-10-04T16:21:13Z","gate":"merge","kind":"gate","runId":"20261004T161914Z-7ee90012","task":"share-view-limit-api","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-04T16:21:13Z","from":"in-progress","kind":"transition","task":"share-view-limit-api","to":"done"}
+{"at":"2026-10-04T16:23:12Z","gate":"final","kind":"gate","runId":"20261004T162117Z-f3ed863d","tier":"final","verdict":"GREEN"}

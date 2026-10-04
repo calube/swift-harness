@@ -1,0 +1,52 @@
+schema = 1
+
+[harness]
+profile = "brownfield"
+
+[brownfield]
+discovered_at = "0d989707f82c33f74bb852edd8965ec88fcf041b"
+slice_budget_s = 30
+time_budget_min = 0
+sensitive = []
+
+[[areas]]
+name = "web"
+root = "web"
+language = "typescript"
+kind = "node"
+test = "pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit}"
+test_files = "pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit} {files}"
+lint = "pnpm run lint"
+build = "pnpm run build"
+test_globs = ["web/**/*.test.*", "web/**/*.spec.*", "web/**/__tests__/**"]
+packs = []
+
+[[areas]]
+name = "memos"
+root = "."
+language = "go"
+kind = "go"
+test = "go test -json ./..."
+test_files = "go test -json ./... -run {tests}"
+lint = "golangci-lint run ./..."
+build = "go build ./..."
+test_globs = ["**/*_test.go"]
+packs = []
+
+[judge]
+backend = "claude"
+advisory_threshold = 0.6
+block_threshold = 0.9
+
+[build.presets.brownfield]
+design_tier = "none"
+max_parallel = 3
+review = "classified"
+task_gate = "slice"
+merge_gate = "merge"
+worker_model = "claude-sonnet-5-5"
+time_budget_min = 0
+stop_starts_before_min = 0
+on_design_conflict = "amend"
+task_proof = "prove"
+stall_min = 2

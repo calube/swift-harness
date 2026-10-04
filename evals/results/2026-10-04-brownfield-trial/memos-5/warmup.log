@@ -1,0 +1,85 @@
+warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: /Users/caleb/Developer/trials/memos-5/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
+web build: passed, 18553 ms, cold
+web test: failed, 84148 ms, cold
+  
+  - Expected
+  + Received
+  
+    {
+  -   "2026-05-01": 1,
+  +   "2026-04-30": 1,
+    }
+  
+   ❯ tests/filtered-memo-stats.test.ts:106:53
+      104|     const { result } = renderHook(() => useFilteredMemoStats({ userNam…
+      105|
+      106|     expect(result.current.statistics.activityStats).toEqual({ "2026-05…
+         |                                                     ^
+      107|     expect(warn).toHaveBeenCalled();
+      108|     warn.mockRestore();
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+  
+   FAIL  tests/locale-resources.test.ts > locale key usage > references every English key and reviews every computed key pattern
+  Error: Test timed out in 5000ms.
+  If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ❯ tests/locale-resources.test.ts:97:3
+       95|
+       96| describe("locale key usage", () => {
+       97|   it("references every English key and reviews every computed key patt…
+         |   ^
+       98|     const references = collectReferences(sourceFiles);
+       99|
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+  
+  
+   Test Files  2 failed | 192 passed (194)
+        Tests  4 failed | 1768 passed (1772)
+     Start at  11:02:52
+     Duration  78.56s (transform 146.03s, setup 83.18s, import 438.10s, tests 148.22s, environment 390.37s)
+  
+  JUNIT report written to /Users/caleb/Developer/trials/memos-5/.git/swift-harness/junit/web.test.xml
+   ELIFECYCLE  Test failed. See above for more details.
+memos build: passed, 2760 ms, cold
+memos test: failed, 83804 ms, cold
+  {"Time":"2026-10-04T11:03:52.417161-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalAnd","Output":"--- SKIP: TestAttachmentFilterLogicalAnd (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418418-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalAnd","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418459-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterComplexLogical","Output":"--- SKIP: TestAttachmentFilterComplexLogical (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418488-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterComplexLogical","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418502-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterNullMemoId","Output":"--- SKIP: TestAttachmentFilterNullMemoId (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418517-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterNullMemoId","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418531-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterCreateTimeComparison","Output":"--- SKIP: TestAttachmentFilterCreateTimeComparison (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418546-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterCreateTimeComparison","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418561-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameStartsWith","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T11:03:52.418576-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMultipleFilters","Output":"--- SKIP: TestAttachmentFilterMultipleFilters (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418592-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMultipleFilters","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418606-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterCreateTimeArithmetic","Output":"--- SKIP: TestAttachmentFilterCreateTimeArithmetic (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.41862-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterCreateTimeArithmetic","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418635-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameSpecialCharacters","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T11:03:52.418651-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T11:03:52.418854-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMimeTypeNotEquals","Output":"--- SKIP: TestAttachmentFilterMimeTypeNotEquals (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.418862-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMimeTypeNotEquals","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.418864-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMimeTypeEquals","Output":"--- SKIP: TestAttachmentFilterMimeTypeEquals (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.419206-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMimeTypeEquals","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.419216-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalOr","Output":"--- SKIP: TestAttachmentFilterLogicalOr (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.41922-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalOr","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.419265-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameUnicode","Output":"--- SKIP: TestAttachmentFilterFilenameUnicode (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.41927-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameUnicode","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.419273-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalNot","Output":"--- SKIP: TestAttachmentFilterLogicalNot (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.419644-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterLogicalNot","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.419657-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameStartsWith","Output":"--- SKIP: TestAttachmentFilterFilenameStartsWith (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.419671-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameStartsWith","Elapsed":0.01}
+  {"Time":"2026-10-04T11:03:52.419674-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameSpecialCharacters","Output":"--- SKIP: TestAttachmentFilterFilenameSpecialCharacters (0.00s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.419678-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameSpecialCharacters","Elapsed":0}
+  {"Time":"2026-10-04T11:03:52.419681-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Output":"--- SKIP: TestAttachmentFilterFilenameEndsWith (0.00s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.446293-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Elapsed":0}
+  {"Time":"2026-10-04T11:03:52.446311-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterEmptyFilename","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T11:03:52.446821-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterEmptyFilename","Output":"--- SKIP: TestAttachmentFilterEmptyFilename (0.04s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.44683-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterEmptyFilename","Elapsed":0.04}
+  {"Time":"2026-10-04T11:03:52.446832-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"PASS\n","OutputType":"frame"}
+  {"Time":"2026-10-04T11:03:52.458151-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"ok  \tgithub.com/usememos/memos/store/test\t1.149s\n"}
+  {"Time":"2026-10-04T11:03:52.510878-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"\n"}
+  {"Time":"2026-10-04T11:03:52.510975-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"PASS: all drivers\n"}
+  {"Time":"2026-10-04T11:03:52.51139-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"ok  \tgithub.com/usememos/memos/store/test\t67.300s\n"}
+  {"Time":"2026-10-04T11:03:52.511434-05:00","Action":"pass","Package":"github.com/usememos/memos/store/test","Elapsed":67.3}

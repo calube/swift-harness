@@ -1,0 +1,27 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 40824,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "memos: no warm-up measured its tests at the base tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2, so slice only builds it; its changed tests and their prove run at merge",
+      "rule" : "area.build-only",
+      "severity" : "nit"
+    }
+  ],
+  "runID" : "20261004T160127Z-4932a01b",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 40754,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}
