@@ -125,11 +125,6 @@ struct BaselineTests {
 struct BaselineAreaRunTests {
   static let directory = Fixture.directory.appending(path: "AreaRuns", directoryHint: .isDirectory)
 
-  /// The capture replaced machine paths and names with `<repo>`-style placeholders, which leave a
-  /// JUnit report ill-formed XML; escaping them restores the document the runner wrote, with
-  /// the placeholder as text.
-  static let placeholders = ["scratch", "repo", "host", "home", "user", "tmp"]
-
   static func outcome(_ ecosystem: String, _ run: String) throws -> AreaCommandOutcome {
     let base = directory.appending(path: "\(ecosystem)/\(run)", directoryHint: .isDirectory)
     let exit = try #require(
@@ -137,13 +132,7 @@ struct BaselineAreaRunTests {
         String(decoding: try Data(contentsOf: base.appending(path: "exit")), as: UTF8.self)
           .trimmingCharacters(in: .whitespacesAndNewlines)))
     let tail = String(decoding: try Data(contentsOf: base.appending(path: "stdout")), as: UTF8.self)
-    var junit: Data?
-    if var report = try? String(contentsOf: base.appending(path: "junit.xml"), encoding: .utf8) {
-      for name in placeholders {
-        report = report.replacingOccurrences(of: "<\(name)>", with: "&lt;\(name)&gt;")
-      }
-      junit = Data(report.utf8)
-    }
+    let junit = try? Data(contentsOf: base.appending(path: "junit.xml"))
     if exit == 0 { return .passed }
     if exit > 128 { return .crashed(signal: exit - 128, tail: tail) }
     return .failed(exit: exit, tail: tail, junit: junit)

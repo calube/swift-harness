@@ -1,0 +1,1 @@
+pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit}

@@ -41,8 +41,35 @@ public enum AreaOutcomeReading {
     if let crash = crashMarker(in: output) {
       return .crashed(signal: crash.signal, tail: tail(output))
     }
-    return .failed(
-      exit: exit, tail: tail(output), junit: junit ?? GoTestReport.junit(fromJSON: output))
+    let report: Data?
+    if let junit {
+      report = failsOutsideReport(output) ? nil : junit
+    } else {
+      report = GoTestReport.junit(fromJSON: output) ?? CargoTestReport.junit(fromOutput: output)
+    }
+    return .failed(exit: exit, tail: tail(output), junit: report)
+  }
+
+  /// Whether the runner says something failed that its JUnit report can't hold, such as a
+  /// module that didn't compile beside one whose tests failed. Its report then names only the
+  /// tests that ran, and read per test it would let the baseline absorb the rest.
+  private static func failsOutsideReport(_ output: String) -> Bool {
+    let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+    for (index, line) in lines.enumerated() {
+      // Gradle: every failed task is named, and a test task's names its failing tests.
+      if line.contains("Execution failed for task '") {
+        let next = lines.indices.contains(index + 1) ? lines[index + 1] : ""
+        if !next.hasPrefix("> There were failing tests") { return true }
+      }
+      // Maven: every goal that failed the build, and Surefire's only for failing tests.
+      if line.contains("[ERROR] Failed to execute goal "),
+        !(line.contains(":maven-surefire-plugin:") && line.contains("There are test failures"))
+      {
+        return true
+      }
+    }
+    // RSpec: a spec file that didn't load is no example, so no formatter reports it.
+    return output.contains("occurred outside of examples")
   }
 
   public static func timedOut(output: String) -> AreaCommandOutcome {

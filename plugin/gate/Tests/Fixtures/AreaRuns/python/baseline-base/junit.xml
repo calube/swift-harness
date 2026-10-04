@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="4" time="0.012" timestamp="2026-10-04T07:37:22.670388-05:00" hostname="&lt;host&gt;"><testcase classname="tests.test_alpha" name="test_passes" time="0.000" /><testcase classname="tests.test_alpha" name="test_flaky" time="0.000"><failure message="AssertionError: fails at the base commit&#10;assert False">def test_flaky():
+&gt;       assert False, "fails at the base commit"
+E       AssertionError: fails at the base commit
+E       assert False
+
+tests/test_alpha.py:6: AssertionError</failure></testcase><testcase classname="tests.test_alpha.TestTable" name="test_case_a" time="0.000" /><testcase classname="tests.test_beta" name="test_new" time="0.000" /></testsuite></testsuites>

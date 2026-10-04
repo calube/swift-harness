@@ -6,4 +6,4 @@ PASS __tests__/convert-case.test.ts
 Test Suites: 1 passed, 1 total
 Tests:       4 passed, 4 total
 Snapshots:   0 total
-Time:        0.564 s
+Time:        0.222 s

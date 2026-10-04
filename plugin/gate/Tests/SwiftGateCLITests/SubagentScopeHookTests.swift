@@ -50,13 +50,13 @@ struct SubagentScopeScenario {
     return try await output("pre-tool-use-write-ledger-subagent", replacing: replacing)
   }
 
-  /// A Bash command from a subagent of `agentType`, run in the task worktree.
-  func bash(_ command: String, agentType: String = "general-purpose") async throws
-    -> [String: String]?
+  /// A Bash command from a subagent of `agentType`, run in `cwd`, by default the task worktree.
+  func bash(_ command: String, agentType: String = "general-purpose", cwd: URL? = nil)
+    async throws -> [String: String]?
   {
     let quoted = String(decoding: try JSONEncoder().encode(command), as: UTF8.self)
     return try await output(
-      "pre-tool-use-bash-allowed", cwd: worktree,
+      "pre-tool-use-bash-allowed", cwd: cwd ?? worktree,
       replacing: [
         Self.recordedCommand: quoted,
         "\"tool_use_id\"":
@@ -131,6 +131,54 @@ struct SubagentScopeHookTests {
     #expect(try await scenario.write(main, agentType: agentType)?["permissionDecision"] == "deny")
     #expect(
       try await scenario.write(worktree, agentType: agentType)?["permissionDecision"] == "allow")
+  }
+
+  /// The memos trial's build workers' denied Bash calls, as their transcripts recorded them.
+  struct DeniedCall: Decodable {
+    let agentType: String
+    let command: String
+  }
+
+  @Test(
+    "a memos worker's Bash call from the main checkout, cd'ing into its own worktree, is allowed; the same call cd'ing into the main checkout or into \"$X\" is denied — catches the guard denying a worker's worktree writes, or a cd hiding a main-checkout write",
+    arguments: 0..<4)
+  func workerCdIntoItsWorktree(index: Int) async throws {
+    let calls = try JSONDecoder().decode(
+      [DeniedCall].self, from: Fixture.data("Hooks/memos-3-worker-bash.json"))
+    let call = calls[index]
+    let scenario = try SubagentScopeScenario()
+    defer { scenario.remove() }
+    let main = scenario.harness.root.path
+    for directory in ["web", "store"] {
+      for checkout in [scenario.worktree.path, main] {
+        try FileManager.default.createDirectory(
+          atPath: "\(checkout)/\(directory)", withIntermediateDirectories: true)
+      }
+    }
+    let target = try #require(
+      call.command.split(separator: "\n").first?.split(separator: " ").dropFirst().first)
+    let task = try #require(target.firstRange(of: /\/CLONE-spec-share-view-limit-[a-z]+/))
+    let inside = target[task.upperBound...]
+    func command(cdInto directory: String) -> String {
+      call.command.replacingOccurrences(of: "cd \(target)", with: "cd \(directory)")
+        .replacingOccurrences(of: "/HARNESS", with: "/tmp/swiftgate-harness")
+        .replacingOccurrences(of: "/CLONE", with: main)
+    }
+
+    let own = try await scenario.bash(
+      command(cdInto: scenario.worktree.path + inside), agentType: call.agentType,
+      cwd: scenario.harness.root)
+    let mainCheckout = try await scenario.bash(
+      command(cdInto: main + inside), agentType: call.agentType, cwd: scenario.harness.root)
+    let unknown = try await scenario.bash(
+      command(cdInto: "\"$X\""), agentType: call.agentType, cwd: scenario.harness.root)
+
+    #expect(own?["permissionDecision"] == "allow", "\(own ?? [:])")
+    #expect(mainCheckout?["permissionDecision"] == "deny")
+    #expect(
+      mainCheckout?["permissionDecisionReason"]?.contains(
+        SubagentScopeGuard.buildAgentMainCheckoutRuleID) == true)
+    #expect(unknown?["permissionDecision"] == "deny")
   }
 
   @Test(

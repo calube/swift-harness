@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="1" failures="1" skipped="0" time="0.000807125">
+    <testcase classname="SwiftBaseTests" name="fresh()" time="0.00066075" >
+      <failure message="Expectation failed: (ProcessInfo.processInfo.environment[&quot;SWIFTBASE_FAIL_NEW&quot;] &#8594; &quot;1&quot;) == nil (error): fails only after the change" />
+    </testcase>
+  </testsuite>
+</testsuites>

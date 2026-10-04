@@ -1,0 +1,40 @@
+
+> test
+> vitest run --reporter=default --reporter=junit --outputFile.junit=<scratch>/report/out.xml
+
+
+ RUN  v5.0.3 <repo>
+
+ ✓ test/beta.test.js (1 test) 2ms
+ ✓ test/late.test.js (1 test) 2ms
+ ❯ test/alpha.test.js (2 tests | 1 failed) 5ms
+   ❯ alpha (2)
+     ✓ passes 1ms
+     × flaky 3ms
+ ✓ test/broken.test.js (1 test) 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/alpha.test.js > alpha > flaky
+AssertionError: expected 'base' to be 'fails at the base commit' // Object.is equality
+
+Expected: "fails at the base commit"
+Received: "base"
+
+ ❯ test/alpha.test.js:9:20
+      7|
+      8|   it("flaky", () => {
+      9|     expect("base").toBe("fails at the base commit");
+       |                    ^
+     10|   });
+     11| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 4 passed (5)
+   Start at  07:37:53
+   Duration  153ms (transform 58%, import 25%, worker 9%, tests 8%)
+
+JUNIT report written to <scratch>/report/out.xml

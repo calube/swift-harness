@@ -1,0 +1,36 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 147074,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "/Users/caleb/Developer/trials/memos-4/.git/swift-harness/baseline/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json",
+      "line" : null,
+      "message" : "2 failure(s) also fail at the merge base, so they don't gate: memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot; web test (the whole step)",
+      "rule" : "baseline.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: no new or changed tests since 0d989707f82c33f74bb852edd8965ec88fcf041b",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "6fc0cb61bbcb569586d7c60bd7765126ec7912cb",
+  "runID" : "20261004T141215Z-31ad3958",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 146980,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

@@ -1,0 +1,49 @@
+run: INCOMPLETE, 3 task(s) not done: share-view-limit-store (blocked), share-view-limit-api (blocked), share-view-limit-web (blocked)
+final: not recorded; no final gate: build run 20261004T141445Z-85d15f09 recorded none
+
+# Run report: spec
+
+## Unfinished tasks
+
+- share-view-limit-store: blocked
+- share-view-limit-api: blocked
+- share-view-limit-web: blocked
+
+## Assumptions
+
+- "Resolve" means the public `GetSharedMemo` RPC. Attachment downloads through `/file/...?share_token=` neither count a view nor check the limit, so a read-once link still loads the attachments of the 1 view it allowed; they keep checking expiry only, as today.
+- A view counts only when `GetSharedMemo` would otherwise succeed: the handler checks the memo and access first, and increments last, in 1 conditional UPDATE (`view_limit IS NULL OR view_count < view_limit`, and unexpired), so 2 racing resolves for the last view can't both succeed.
+- A share whose count reached its limit stays listed for its owner with its "N of M views" text; the panel doesn't hide it, and the owner can revoke it.
+- The proto gets `optional int32 view_limit = 4` (OPTIONAL) and `int32 view_count = 5` (OUTPUT_ONLY) on `MemoShare`; a `view_count` sent on create is ignored.
+- The store migration is the first calendar migration: `store/migration/{sqlite,mysql,postgres}/26.10/00__add_memo_share_view_limit.sql`, adding `view_limit` (nullable integer) and `view_count` (integer, not null, default 0).
+- Go tests run with `DRIVER=sqlite`; the memos area's test command was set to `DRIVER=sqlite go test -json ./...` because the default run starts MySQL and PostgreSQL containers this machine lacks. MySQL and PostgreSQL migrations are written but not run.
+- The web area's commands run `pnpm install --frozen-lockfile --prefer-offline` first, since each fresh worktree has no `node_modules`.
+- The contract task landed as commit 6fc0cb61 before import, but the ledger listed it pending and dependent packs needed its return; it went through `ledger set` in-progress then done, with a return checked by `build check-return` against a slice run in its own worktree.
+- `judge diff-risk` gives no level because the clone's config has no `[judge]` section, so every task's classified review runs at `medium`; the orchestrator reviewed the contract diff itself.
+- Halt on `share-view-limit-web`: its workflow return failed `build check-return` (`build-return.surface-commit-off-branch`: the return's `surfaceCommit` held the sha wrapped in literal quotes, `"\"7c3becaa\""`). Following the recommended option, it went on without it, so the task stays blocked on branch `spec/share-view-limit-web` (commits 7c3becaa, a0030881, slice GREEN) and doesn't merge.
+- Design-conflict halt on `share-view-limit-store` (on_design_conflict = block): `store/test/migrator_guardrail_test.go`, outside its write set, has a `calver-newer` case at schema 26.9.1 that the first 26.10 migration makes older than latest, so it fails. Its dependent `share-view-limit-api` was blocked too. Following the recommended option, the build stopped. The store work is on branch `spec/share-view-limit-store` (commit 8daa17c7). The fix is to add that file to the task's write set and change the case to 26.11.1.
+- Baseline failures at the start commit, not caused by the run: `scripts` `TestEntrypointDoesNotLoopWhenTargetUIDIsRoot` (killed on this machine) and 3 web vitest cases in 1 activity-stats test file.
+
+## Baseline failures
+
+- memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+- memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+- web test: the whole step
+- web test: the whole step
+
+## Build-only areas
+
+- memos (Go, root `.`; warm test about 40 s with `DRIVER=sqlite`, build-only at slice)
+- web (node, root `web`; warm test about 35 s, build-only at slice)
+
+## Dropped steps
+
+- none
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at 6fc0cb61bbcb569586d7c60bd7765126ec7912cb holds every commit of the run; merging it is your call

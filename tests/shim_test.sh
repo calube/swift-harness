@@ -321,7 +321,7 @@ esac
 # no record of it, the newest cached binary runs. A decoy tells which one ran.
 decoy=ffffffffffffffff
 mkdir -p "$cache/bin/$decoy"
-printf '#!/bin/sh\necho decoy\n' >"$cache/bin/$decoy/swiftgate"
+printf '#!/bin/sh\necho "decoy ${SWIFTGATE_SOURCE_HASH:-unset}"\n' >"$cache/bin/$decoy/swiftgate"
 chmod +x "$cache/bin/$decoy/swiftgate"
 touch "$cache/bin/$decoy/swiftgate"
 pointer=("$cache"/last-good/*)
@@ -341,12 +341,24 @@ newest_out="$(cd "$work/project" && echo "$deny_payload" | PATH="$held_bin:$PATH
   fail "hook with no last-good record exited non-zero"
 rebuild_still_held "a hook with no last-good record"
 stop_rebuild
-[ "$newest_out" = "decoy" ] || fail "with no last-good record the newest cached binary did not run: '$newest_out'"
+# The fallback binary must name its own hash in its events, never the hash still being built.
+[ "$newest_out" = "decoy $decoy" ] ||
+  fail "with no last-good record the newest cached binary did not run, or did not see its own hash: '$newest_out'"
 /bin/rm -rf "$cache/bin/$decoy" "$cache/bin/$cached_hash"
 mv "$cache/bin/$stale" "$cache/bin/$cached_hash"
 printf '%s\n' "$cached_hash" >"${pointer[0]}"
 "$shim" --version >/dev/null 2>"$work/err-restore" || fail "the restored cache did not run"
 [ ! -s "$work/err-restore" ] || fail "the restored cache rebuilt: $(cat "$work/err-restore")"
+
+# The binary the shim execs reads the hash it was cached under from the environment, to name
+# itself in every event it writes. A stand-in under the current hash prints what it was handed.
+mv "$cache/bin/$cached_hash/swiftgate" "$work/real-swiftgate"
+printf '#!/bin/sh\necho "${SWIFTGATE_SOURCE_HASH:-unset}"\n' >"$cache/bin/$cached_hash/swiftgate"
+chmod +x "$cache/bin/$cached_hash/swiftgate"
+seen_hash="$(SWIFTGATE_SOURCE_HASH=stale "$shim" --version)" || fail "the hash stand-in did not run"
+mv -f "$work/real-swiftgate" "$cache/bin/$cached_hash/swiftgate"
+[ "$seen_hash" = "$cached_hash" ] ||
+  fail "the exec'd binary saw SWIFTGATE_SOURCE_HASH '$seen_hash', not its hash $cached_hash"
 
 # A session `swiftgate run` starts with --plugin-dir gives the plugin's hooks a data directory of
 # their own. When it holds only an older binary but the user cache, which the run warmed, holds
@@ -476,6 +488,130 @@ for _ in $(seq 1 50); do
   sleep 0.2
   pgrep -f "$work/repo/plugin/gate" >/dev/null 2>&1 || break
 done
+
+# Gates in different worktrees build in scratch paths of their own, so neither queues on the
+# other's SwiftPM lock. A stand-in swift models that lock: each build announces itself, takes a
+# lock in its scratch path (noting once if it had to wait), and holds it until both builds have
+# announced themselves, so the two always overlap. Its binary embeds whatever hash the shim asked
+# to link in, or a wrong one on request.
+standin_bin="$work/standin-bin"
+standin_log="$work/standin.log"
+mkdir -p "$standin_bin"
+cat >"$standin_bin/swift" <<'EOF'
+#!/bin/bash
+scratch="" config=debug hash_file="" show=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --scratch-path) scratch="$2"; shift ;;
+    -c) config="$2"; shift ;;
+    --show-bin-path) show=1 ;;
+    */source-hash-*) hash_file="$1" ;;
+  esac
+  shift
+done
+if [ -n "$show" ]; then echo "$scratch/$config"; exit 0; fi
+mkdir -p "$scratch/$config"
+echo "arrived $scratch" >>"$STANDIN_LOG"
+noted=""
+until mkdir "$scratch/.standin-lock" 2>/dev/null; do
+  [ -n "$noted" ] || { echo "waited $scratch" >>"$STANDIN_LOG"; noted=1; }
+  sleep 0.1
+done
+echo "built $scratch" >>"$STANDIN_LOG"
+for _ in $(seq 1 600); do
+  [ "$(grep -c '^arrived ' "$STANDIN_LOG")" -ge "${STANDIN_PEERS:-1}" ] && break
+  sleep 0.1
+done
+if [ -n "${STANDIN_WRONG_HASH:-}" ]; then
+  marker="swiftgate-source-hash=$STANDIN_WRONG_HASH;"
+else
+  marker="$(cat "$hash_file" 2>/dev/null)"
+fi
+printf '#!/bin/sh\n# %s\necho standin-binary\n' "$marker" >"$scratch/$config/swiftgate"
+chmod +x "$scratch/$config/swiftgate"
+rmdir "$scratch/.standin-lock"
+EOF
+chmod +x "$standin_bin/swift"
+wt_cache="$work/worktree-cache"
+for wt in wt1 wt2; do
+  mkdir -p "$work/$wt/plugin/gate"
+  /bin/cp -R "$work/repo/plugin/bin" "$work/$wt/plugin/"
+  rsync -a --exclude .build "$work/repo/plugin/gate/" "$work/$wt/plugin/gate/"
+done
+standin() {
+  (cd "$work/elsewhere" && CLAUDE_PLUGIN_DATA="$wt_cache" STANDIN_LOG="$standin_log" \
+    PATH="$standin_bin:$PATH" "$@")
+}
+: >"$standin_log"
+STANDIN_PEERS=2 standin "$work/wt1/plugin/bin/swiftgate" --version >"$work/wt1.out" 2>"$work/wt1.err" &
+wt1_build=$!
+STANDIN_PEERS=2 standin "$work/wt2/plugin/bin/swiftgate" --version >"$work/wt2.out" 2>"$work/wt2.err" &
+wt2_build=$!
+wt1_status=0 wt2_status=0
+wait "$wt1_build" || wt1_status=$?
+wait "$wt2_build" || wt2_status=$?
+[ "$wt1_status" = 0 ] && [ "$wt2_status" = 0 ] ||
+  fail "concurrent worktree builds exited $wt1_status and $wt2_status: $(cat "$work/wt1.err" "$work/wt2.err")"
+! grep -q '^waited ' "$standin_log" ||
+  fail "one worktree's build waited on another's scratch lock: $(cat "$standin_log")"
+scratches="$(sed -n 's/^built //p' "$standin_log" | sort -u)"
+[ "$(printf '%s\n' "$scratches" | wc -l | tr -d ' ')" = 2 ] ||
+  fail "two worktrees did not build in two scratch paths: $(cat "$standin_log")"
+for wt in wt1 wt2; do
+  [ "$(cat "$work/$wt.out")" = standin-binary ] || fail "$wt did not run its build: '$(cat "$work/$wt.out")'"
+  owned=""
+  for scratch in $scratches; do
+    [ "$(cat "$(dirname "$scratch")/gate-path" 2>/dev/null)" = "$work/$wt/plugin/gate" ] && owned="$scratch"
+  done
+  [ -n "$owned" ] || fail "no scratch path records $wt's gate as its owner: $scratches"
+  eval "${wt}_scratch=\$(dirname \"\$owned\")"
+done
+
+# A build first drops the scratch of a worktree that is gone, with its stamp, and keeps a live
+# one's. A scratch path that records no gate goes once nothing in it changed for a day. The
+# cached path never prunes: a dead worktree's scratch outlives a run that builds nothing.
+/bin/rm -rf "$work/wt2"
+wt2_key="$(basename "$wt2_scratch")"
+mkdir -p "$wt_cache/stamps" "$wt_cache/build/debug" "$wt_cache/build/release"
+: >"$wt_cache/stamps/$wt2_key"
+touch -t 200001010000 "$wt_cache/build/debug"
+standin "$work/wt1/plugin/bin/swiftgate" --version >/dev/null 2>"$work/wt1.err" ||
+  fail "cached run in a live worktree failed: $(cat "$work/wt1.err")"
+[ -d "$wt2_scratch" ] || fail "a run that built nothing pruned a scratch path"
+echo "// changed" >>"$work/wt1/plugin/gate/Sources/SwiftGateDomain/SwiftGateDomain.swift"
+standin "$work/wt1/plugin/bin/swiftgate" --version >/dev/null 2>"$work/wt1.err" ||
+  fail "rebuild in a live worktree failed: $(cat "$work/wt1.err")"
+[ ! -e "$wt2_scratch" ] || fail "a build kept the scratch path of a removed worktree: $wt2_scratch"
+[ ! -e "$wt_cache/stamps/$wt2_key" ] || fail "a build kept the stamp of a removed worktree"
+[ -d "$wt1_scratch" ] || fail "a build pruned the scratch path of a live worktree: $wt1_scratch"
+[ ! -e "$wt_cache/build/debug" ] || fail "a build kept an ownerless scratch path unchanged for a day"
+[ -d "$wt_cache/build/release" ] || fail "a build pruned an ownerless scratch path changed today"
+
+# A build that leaves a binary of other sources (SwiftPM can reuse an earlier tree's build plan in
+# a shared scratch path) is never filed under this hash or run, even after the one retry.
+echo "// changed again" >>"$work/wt1/plugin/gate/Sources/SwiftGateDomain/SwiftGateDomain.swift"
+: >"$standin_log"
+mismatch_status=0
+STANDIN_WRONG_HASH=0000000000000000 standin "$work/wt1/plugin/bin/swiftgate" --version \
+  >"$work/mismatch.out" 2>"$work/mismatch.err" || mismatch_status=$?
+mismatch_hash="$(sed -n 's/.*building swiftgate (debug, \([0-9a-f]*\)).*/\1/p' "$work/mismatch.err" | head -n 1)"
+[ -n "$mismatch_hash" ] || fail "the shim did not build for the changed sources: $(cat "$work/mismatch.err")"
+! grep -q standin-binary "$work/mismatch.out" ||
+  fail "the shim ran a binary that does not embed its source hash $mismatch_hash"
+[ ! -e "$wt_cache/bin/$mismatch_hash/swiftgate" ] ||
+  fail "the shim cached a binary that does not embed its source hash $mismatch_hash"
+[ "$mismatch_status" != 0 ] || fail "the shim exited 0 with no binary of its sources"
+[ "$(grep -c '^built ' "$standin_log")" = 2 ] ||
+  fail "a mismatched build was not retried exactly once: $(cat "$standin_log")"
+# A binary already filed under this hash without the check (an older shim cached it) is checked
+# before it runs, and replaced by a build when it embeds another hash.
+mkdir -p "$wt_cache/bin/$mismatch_hash"
+printf '#!/bin/sh\necho unchecked-binary\n' >"$wt_cache/bin/$mismatch_hash/swiftgate"
+chmod +x "$wt_cache/bin/$mismatch_hash/swiftgate"
+unchecked_out="$(standin "$work/wt1/plugin/bin/swiftgate" --version 2>"$work/unchecked.err")" ||
+  fail "the shim failed to replace an unchecked binary: $(cat "$work/unchecked.err")"
+[ "$unchecked_out" = standin-binary ] ||
+  fail "the shim ran a cached binary that does not embed its source hash: '$unchecked_out'"
 
 # Every background build this test started was either killed and reaped, or let finish — none
 # should still be running.

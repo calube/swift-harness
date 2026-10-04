@@ -1,0 +1,36 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 18152,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "web",
+      "line" : null,
+      "message" : "web: no warm-up measured its tests at the base tree b668765dcf7890372148e982421616fd9209c177, so slice only builds it; its changed tests and their prove run at merge",
+      "rule" : "area.build-only",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "web",
+      "line" : null,
+      "message" : "web lint failed at the head and the merge base doesn't fail it (`pnpm run lint`), exit 1:\n+ @types/hast 3.0.4\n+ @types/leaflet 1.9.21\n+ @types/lodash-es 4.17.12\n+ @types/mdast 4.0.4\n+ @types/node 24.12.2\n+ @types/react 19.2.14\n+ @types/react-dom 19.2.3\n+ @types/unist 3.0.3\n+ @vitejs/plugin-react 6.0.1\n+ babel-plugin-react-compiler 1.0.0\n+ jsdom 29.1.1\n+ tw-animate-css 1.4.0\n+ typescript 7.0.2\n+ vite 8.0.11\n+ vitest 4.1.5\n\nDone in 2s using pnpm v11.0.1\n$ tsc --noEmit --skipLibCheck && biome check src tests\nsrc/components/MemoDetailSidebar/MemoSharePanel.tsx format ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n  × Formatter would have printed the following content:\n  \n    122 122 │     const handleCreate = async () => {\n    123 123 │       try {\n    124     │ - ······await·createShare.mutateAsync({·memoName,·expireTime:·getExpireDate(expiry),\n        124 │ + ······await·createShare.mutateAsync({\n        125 │ + ········memoName,\n        126 │ + ········expireTime:·getExpireDate(expiry),\n    125 127 │           viewLimit: viewLimit === \"none\" ? undefined : Number(viewLimit),\n    126 128 │         });\n  \n\nChecked 695 files in 87ms. No fixes applied.\nFound 1 error.\ncheck ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n  × Some errors were emitted while running checks.\n  \n\n ELIFECYCLE  Command failed with exit code 1.",
+      "rule" : "area.lint-failed",
+      "severity" : "major"
+    }
+  ],
+  "headCommit" : "92640971e73d37c7494de4fe8ea017c0b73e1151",
+  "runID" : "20261004T124437Z-d7c9ce0b",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 18079,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}

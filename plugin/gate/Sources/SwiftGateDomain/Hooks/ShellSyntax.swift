@@ -13,12 +13,26 @@ public struct SimpleCommand: Sendable, Equatable {
   public let redirectTargets: [String]
 }
 
+/// An operator between two commands of a line, as written before the later one.
+enum ShellLink: Equatable {
+  case and, or, pipe, background, open, close
+  /// `;` or a newline.
+  case sequence
+}
+
 /// A simple command and whether it came from a heredoc's text rather than the command line.
 struct ParsedCommand {
   let command: SimpleCommand
   /// Heredoc text is data to the command it feeds unless that command is a shell, which a static
   /// reading can't tell, so it is checked as commands by the Bash guard but never names a write.
   let isHeredocBody: Bool
+  /// The words as written, before wrappers and assignments are stripped.
+  let words: [String]
+  /// The operators between the previous command of the same script and this one; empty for the
+  /// script's first.
+  let links: [ShellLink]
+  /// Run by the line's own shell: not a substitution, heredoc text or a `sh -c`/`eval` script.
+  let isTopLevel: Bool
 }
 
 public enum ShellSyntax {
@@ -35,7 +49,11 @@ public enum ShellSyntax {
 
   private static func expand(_ parsed: Tokenized, depth: Int) -> [ParsedCommand] {
     let command = normalize(parsed.words, redirectTargets: parsed.redirectTargets)
-    var result = [ParsedCommand(command: command, isHeredocBody: parsed.isHeredocBody)]
+    var result = [
+      ParsedCommand(
+        command: command, isHeredocBody: parsed.isHeredocBody, words: parsed.words,
+        links: parsed.links, isTopLevel: depth == 0 && parsed.depth == 0 && !parsed.isHeredocBody)
+    ]
     guard depth < maxDepth, let name = command.name else { return result }
     var script: String?
     if ["sh", "bash", "zsh", "dash"].contains(name),
@@ -98,6 +116,8 @@ public enum ShellSyntax {
     var words: [String]
     var redirectTargets: [String]
     var isHeredocBody: Bool
+    var links: [ShellLink]
+    var depth: Int
   }
 
   private static func words(in characters: [Character], depth: Int, isHeredocBody: Bool)
@@ -130,6 +150,7 @@ public enum ShellSyntax {
     private var index = 0
     private var operand: Operand?
     private var heredocs: [(delimiter: String, stripsTabs: Bool)] = []
+    private var links: [ShellLink] = []
 
     init(characters: [Character], depth: Int, isHeredocBody: Bool) {
       self.characters = characters
@@ -172,11 +193,12 @@ public enum ShellSyntax {
           operand = .writeTarget
         case "\n":
           endCommand()
+          links.append(.sequence)
           index += 1
           if !heredocs.isEmpty { heredocBodies() }
         case ";", "&", "|", "(", ")":
           endCommand()
-          index += 1
+          links.append(link(at: character))
         case "<", ">":
           redirection()
         case "#" where !inWord:
@@ -188,6 +210,28 @@ public enum ShellSyntax {
         }
       }
       endCommand()
+    }
+
+    /// The operator starting at `index`, which it moves past.
+    private mutating func link(at character: Character) -> ShellLink {
+      let next = peek(1)
+      index += 1
+      switch character {
+      case "&" where next == "&":
+        index += 1
+        return .and
+      case "|" where next == "|":
+        index += 1
+        return .or
+      case "|" where next == "&":
+        index += 1
+        return .pipe
+      case "&": return .background
+      case "|": return .pipe
+      case "(": return .open
+      case ")": return .close
+      default: return .sequence
+      }
     }
 
     private func peek(_ offset: Int) -> Character? {
@@ -343,7 +387,9 @@ public enum ShellSyntax {
       if !words.isEmpty || !redirectTargets.isEmpty {
         commands.append(
           Tokenized(
-            words: words, redirectTargets: redirectTargets, isHeredocBody: isHeredocBody))
+            words: words, redirectTargets: redirectTargets, isHeredocBody: isHeredocBody,
+            links: links, depth: depth))
+        links = []
       }
       words = []
       redirectTargets = []

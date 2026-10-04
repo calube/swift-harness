@@ -104,8 +104,8 @@ The guard judges each path a Bash command writes as it judges a Write to that pa
 payload. It finds redirections (`>`, `>>`, `&>`, `<>`), `tee`, and the destination of `cp`, `mv`,
 `install` and `ln`. It also finds the operands of `rm`, `truncate` and `touch`, `dd of=`, and
 `sed -i`/`perl -i` files, and every operand of `git checkout`, `git restore`, `git rm` and
-`git mv` (after `-C`), anywhere in the command. Relative paths resolve against the working
-directory and any literal `cd` before them. The guard denies a subagent's `echo {} > ledger.json`
+`git mv` (after `-C`), anywhere in the command. Relative paths resolve under a guaranteed literal
+`cd`, else the working directory too. The guard denies a subagent's `echo {} > ledger.json`
 as it denies its Write, and the lock holder can still write its ledger through Bash. Reads, `cp` sources, quoted text and `2>&1` aren't writes.
 
 Known limits: the guard stops accidental and ordinary writes; it isn't a sandbox. It doesn't judge

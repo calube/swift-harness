@@ -375,9 +375,7 @@ enum BuildCheckReturnRun {
     guard let record = history.records.last(where: { $0.runID == gate.runID }) else {
       return nil
     }
-    return TaskReturnEvidence.GateRun(
-      tier: TaskReturnEvidence.GateRun.tier(ofCommand: record.command), verdict: record.verdict,
-      steps: record.steps ?? [], proofBases: record.proofBases ?? [])
+    return TaskReturnEvidence.GateRun(record: record)
   }
 
   private static func taskStatus(in worktree: URL) throws(Blocked) -> TaskStatusReport? {

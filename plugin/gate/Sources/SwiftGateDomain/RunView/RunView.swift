@@ -108,12 +108,15 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var brief: Brief?
     /// `nil` while the task's worker runs: its usage is ingested when it finishes.
     public var tokens: Tokens?
+    /// Why the task stopped; `nil` unless it ended `blocked` or `needs-replan`.
+    public var blocked: TaskBlock?
 
     public init(
       id: String, status: TaskStatus, model: TaskModel? = nil, deps: [String] = [],
       writes: [String] = [], gate: CheckTier, covers: [String] = [], commits: [String] = [],
       gateRun: String? = nil, mergeGateRun: String? = nil, createdAt: Date? = nil,
-      mergedAt: Date? = nil, brief: Brief? = nil, tokens: Tokens? = nil
+      mergedAt: Date? = nil, brief: Brief? = nil, tokens: Tokens? = nil,
+      blocked: TaskBlock? = nil
     ) {
       self.id = id
       self.status = status
@@ -129,6 +132,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.mergedAt = mergedAt
       self.brief = brief
       self.tokens = tokens
+      self.blocked = blocked
     }
   }
 
@@ -204,11 +208,14 @@ public struct RunView: Sendable, Equatable, Encodable {
     /// Laid end to end because its gate step carried no start offset.
     public var approximate: Bool
     public var tools: ToolSummary?
+    /// The RED gate run that turned this stage red; `nil` for a span whose own `gateRun` says,
+    /// or one no gate run explains.
+    public var causeGateRun: String?
 
     public init(
       id: String, parent: String? = nil, phase: Phase, task: String? = nil,
       gateRun: String? = nil, start: Date, end: Date? = nil, outcome: SpanOutcome? = nil,
-      approximate: Bool = false, tools: ToolSummary? = nil
+      approximate: Bool = false, tools: ToolSummary? = nil, causeGateRun: String? = nil
     ) {
       self.id = id
       self.parent = parent
@@ -220,6 +227,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.outcome = outcome
       self.approximate = approximate
       self.tools = tools
+      self.causeGateRun = causeGateRun
     }
   }
 
@@ -253,11 +261,13 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var tests: TestCounts?
     public var ruleCounts: [String: Int]
     public var steps: [GateStepRow]
+    /// Why the run wasn't GREEN; `nil` for a GREEN run.
+    public var failure: GateFailure?
 
     public init(
       runID: String, task: String? = nil, command: String? = nil, verdict: Verdict,
       milliseconds: Int, tests: TestCounts? = nil, ruleCounts: [String: Int] = [:],
-      steps: [GateStepRow] = []
+      steps: [GateStepRow] = [], failure: GateFailure? = nil
     ) {
       self.runID = runID
       self.task = task
@@ -267,10 +277,11 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.tests = tests
       self.ruleCounts = ruleCounts
       self.steps = steps
+      self.failure = failure
     }
 
     private enum CodingKeys: String, CodingKey {
-      case task, command, verdict, tests, ruleCounts, steps
+      case task, command, verdict, tests, ruleCounts, steps, failure
       case runID = "runId"
       case milliseconds = "ms"
     }
@@ -303,16 +314,20 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var at: Date
     public var answer: BuildResumeAnswer?
     public var waitMs: Int?
+    /// The RED gate run a `gate-red` halt stopped on; `nil` for another reason, or when no
+    /// RED gate run of the halt's task came before it.
+    public var gateRun: String?
 
     public init(
       task: String? = nil, reason: BuildHaltReason, at: Date, answer: BuildResumeAnswer? = nil,
-      waitMs: Int? = nil
+      waitMs: Int? = nil, gateRun: String? = nil
     ) {
       self.task = task
       self.reason = reason
       self.at = at
       self.answer = answer
       self.waitMs = waitMs
+      self.gateRun = gateRun
     }
   }
 
@@ -421,7 +436,7 @@ extension RunView.Brief {
 extension RunView.Task {
   private enum CodingKeys: String, CodingKey {
     case id, status, model, deps, writes, gate, covers, commits, gateRun, mergeGateRun
-    case createdAt, mergedAt, brief, tokens
+    case createdAt, mergedAt, brief, tokens, blocked
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -440,12 +455,13 @@ extension RunView.Task {
     try c.encode(mergedAt, forKey: .mergedAt)
     try c.encode(brief, forKey: .brief)
     try c.encode(tokens, forKey: .tokens)
+    try c.encode(blocked, forKey: .blocked)
   }
 }
 
 extension RunView.Span {
   private enum CodingKeys: String, CodingKey {
-    case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools
+    case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools, causeGateRun
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -460,6 +476,7 @@ extension RunView.Span {
     try c.encode(outcome, forKey: .outcome)
     try c.encode(approximate, forKey: .approximate)
     try c.encode(tools, forKey: .tools)
+    try c.encode(causeGateRun, forKey: .causeGateRun)
   }
 }
 
@@ -485,6 +502,7 @@ extension RunView.Gate {
     try c.encode(tests, forKey: .tests)
     try c.encode(ruleCounts, forKey: .ruleCounts)
     try c.encode(steps, forKey: .steps)
+    try c.encode(failure, forKey: .failure)
   }
 }
 
@@ -506,7 +524,7 @@ extension RunView.Proof {
 
 extension RunView.Halt {
   private enum CodingKeys: String, CodingKey {
-    case task, reason, at, answer, waitMs
+    case task, reason, at, answer, waitMs, gateRun
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -516,6 +534,7 @@ extension RunView.Halt {
     try c.encode(at, forKey: .at)
     try c.encode(answer, forKey: .answer)
     try c.encode(waitMs, forKey: .waitMs)
+    try c.encode(gateRun, forKey: .gateRun)
   }
 }
 

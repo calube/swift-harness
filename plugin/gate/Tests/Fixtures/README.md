@@ -276,6 +276,44 @@ The rest (`pre-tool-use-bash-git-commit`, `pre-tool-use-edit-snapshot`,
 from the documented schema: no live session produced a Write, a subagent or a resume. Tests swap
 `/REPO` for a probe repository. Re-record whenever Claude Code's hook contract changes.
 
+`memos-3-worker-bash.json` holds the 4 Bash calls `guard.build-agent-main-checkout` denied 2 build
+workers in the third brownfield trial on `usememos/memos` (2026-10-04,
+`evals/results/2026-10-04-brownfield-trial/memos-3/`, finding 3). Each worker started in the
+clone's main checkout and `cd`'d into its own task worktree first. Each entry is the call's
+`agentType` (from the subagent's `.meta.json`), the transcript's `cwd`, the `tool_input.command`
+and the denial text the hook returned. `T` is the session's `subagents/workflows` directory
+under `~/.claude/projects/`, `C` the clone and `H` the harness checkout the trial ran:
+
+```sh
+F=plugin/gate/Tests/Fixtures/Hooks/memos-3-worker-bash.json T=… C=… H=… python3 - <<'PY'
+import json, os, glob
+T, C, H, F = (os.environ[k] for k in "TCHF")
+calls = []
+for path in sorted(glob.glob(f"{T}/*/agent-*.jsonl")):
+    agent = json.load(open(path[:-len(".jsonl")] + ".meta.json"))["agentType"]
+    uses = {}
+    for line in open(path):
+        entry = json.loads(line)
+        content = entry.get("message", {}).get("content")
+        if not isinstance(content, list): continue
+        for block in content:
+            if block.get("type") == "tool_use" and block.get("name") == "Bash":
+                uses[block["id"]] = (block["input"]["command"], entry["cwd"])
+            if block.get("type") == "tool_result" and block["tool_use_id"] in uses:
+                text = json.dumps(block.get("content"))
+                if "guard.build-agent-main-checkout" in text:
+                    command, cwd = uses[block["tool_use_id"]]
+                    calls.append({"agentType": agent, "cwd": cwd, "command": command,
+                                  "denial": json.loads(text) if text.startswith('"') else text})
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+out = json.dumps(calls, indent=2, ensure_ascii=False) + "\n"
+open(F, "w").write(scrub(out))
+PY
+```
+
+The scrub turns the harness checkout into `/HARNESS` and the clone into `/CLONE`, so the task
+worktrees beside it read `/CLONE-spec-share-view-limit-web` and `-store`; nothing else changed.
+
 Live payloads differ from the documented examples only in fields swiftgate does not read:
 SessionStart has no `model` in a headless session; Bash `tool_input` omits `timeout` and
 `run_in_background` unless the model sets them; PostToolUse carries `effort` and a full
@@ -1498,7 +1536,9 @@ if [ -n "$j" ] && [ -f "$j" ]; then mv "$j" "$d/junit.xml"; fi
 
 `$SCRATCH/scrub.sh` replaces machine paths, the host name and the user name. After the last capture
 it ran once more over every `stdout`, `stderr` and `junit.xml` (from inside a clone; it is
-idempotent), because the user-name and `$TMPDIR` rules came last:
+idempotent), because the user-name and `$TMPDIR` rules came last. This first version wrote `<repo>`
+into `junit.xml` too, which left those reports ill-formed XML, so a later capture replaced them with
+the version under "Recaptured reports" below:
 
 ```sh
 #!/bin/sh
@@ -1514,6 +1554,37 @@ done
 So `<repo>` is the clone's root (not the directory the command ran in), `<scratch>` the scratch
 directory, `<home>` the home directory, `<tmp>` `$TMPDIR`, and `<host>` and `<user>` the machine's
 names. `grep -rIl -i -e caleb -e /Users/ -e /private/ -e /var/folders AreaRuns` prints nothing.
+
+### Recaptured reports
+
+On 2026-10-04 the same commands ran again for every case that has a `junit.xml`. Those are
+`gradle/test-{pass,fail,crash}`, `maven/test-{pass,fail}`, `node/test-{pass,fail}` and
+`python/test-{pass,fail}`. The clones sat at the same commits and the tools at the same versions,
+so each report is now well-formed XML. Each case's `stdout`, `stderr` and `exit` come from the same
+run as its report. `git init; git fetch --depth 1 origin <sha>; git checkout FETCH_HEAD` made each
+clone, and the tools went into a new scratch directory the same way. The scrub now escapes each
+placeholder inside a report, so `<repo>` reads back from the XML as text:
+
+```sh
+#!/bin/sh
+# Placeholders are <repo> in text, and &lt;repo&gt; inside an XML report so it stays well-formed.
+R=$(git rev-parse --show-toplevel); R_L=${R#/private}; T=${TMPDIR%/}; SP=$(cd "$SCRATCH" && pwd -P)
+for f in "$@"; do
+  case "$f" in *.xml) o='\&lt;'; c='\&gt;';; *) o='<'; c='>';; esac
+  sed -i '' -e "s#${R}#${o}repo${c}#g" -e "s#${R_L}#${o}repo${c}#g" \
+    -e "s#${SP}#${o}scratch${c}#g" -e "s#${SCRATCH}#${o}scratch${c}#g" \
+    -e "s#/private${T}#${o}tmp${c}#g" -e "s#${T}#${o}tmp${c}#g" -e "s#${HOME}#${o}home${c}#g" \
+    -e "s#$(hostname)#${o}host${c}#g" -e "s#\"$(id -un)\"#\"${o}user${c}\"#g" "$f"
+done
+```
+
+`cap.sh` also removes a `junit.xml` left in the case directory before it moves the new one in. The
+Gradle and Maven captures ran `rm -rf okhttp-sse/build/test-results` or `rm -rf
+target/surefire-reports` before each test run, as the original note says. The Gradle `test-pass`
+run came after a warm-up, so its output holds no distribution download. The Gradle `test-crash`
+command ran 8 times. 1 run reported 12 cases, as the original did, but with 2 failures; the
+other 7 reported 2. The fixture keeps the fourth run: `retryInvalidFormatIgnored()` passed and the
+report marks `multilineCrLf()` skipped. JUnit's method order there is not stable between runs.
 
 ### Captures
 
@@ -1673,7 +1744,7 @@ $CAP $F/swift/lint "swiftlint lint --quiet $L"
 | `cargo/test-crash` | 101 | — | stderr `process didn't exit successfully: ... (signal: 6, SIGABRT: process abort signal)`; stdout stops after `running 9 tests` |
 | `gradle/test-pass` | 0 | 1 / 0 | `BUILD SUCCESSFUL` |
 | `gradle/test-fail` | 1 | 1 / 1 | `ServerSentEventIteratorTest > multiline() FAILED` |
-| `gradle/test-crash` | 1 | 12 / 0, 1 skipped | stderr `Process 'Gradle Test Executor 4' finished with non-zero exit value 3`; the JUnit file marks `exits()` `<skipped/>`, so JUnit alone reads as a pass |
+| `gradle/test-crash` | 1 | 2 / 0, 1 skipped | stderr `Process 'Gradle Test Executor 4' finished with non-zero exit value 3`; the JUnit file marks the case running at the exit `<skipped/>` (`multilineCrLf()` in this run) and leaves `exits()` out, so JUnit alone reads as a pass |
 | `maven/test-pass` | 0 | 1 / 0 | `Tests run: 1, Failures: 0` |
 | `maven/test-fail` | 1 | 1 / 1 | `Tests run: 1, Failures: 1` |
 | `maven/test-crash` | 1 | none written | `The forked VM terminated without properly saying goodbye. VM crash or System.exit called?` |
@@ -1730,6 +1801,152 @@ $CAP $F/go/build-fail "go test -json -tags broken ./..."
 | `go/baseline-base` | 1 | `alpha`: `TestFlaky`, `TestTable/case_b` and `TestTable` fail; `beta` passes |
 | `go/baseline-head` | 1 | as `baseline-base`, and `beta`'s `TestNew` fails |
 | `go/build-fail` | 1 | `beta` emits `build-output` and `build-fail`, then a package `fail` with `FailedBuild` and no test; `alpha` fails as in `baseline-base` |
+
+### Other runners read per test
+
+`AreaRuns/<runner>/{baseline-base,baseline-head,build-fail}/` for `python` (pytest), `vitest`, `jest`,
+`gradle`, `maven`, `ruby` (RSpec), `swift` and `cargo` are runs of 1 throwaway project per runner,
+with the test command discover now proposes, so each proves its report flag. In each project
+`flaky` fails at both runs, and a second test fails only under an environment variable the
+`baseline-head` run sets. `build-fail` adds a failure no test result holds. `vitest/unhandled`,
+`vitest/pnpm-head`, `jest/pnpm-head`, `maven/multi-module-build-fail` and `ruby/suite-hook-fail` are extra
+runs.
+
+Captured 2026-10-04 on macOS 26 (arm64). Tools went into scratch only, with `MISE_DATA_DIR` and
+every cache under `$SCRATCH` (mise 2025.12.7):
+
+- Python 3.12.12 with pytest 9.1.1 in a uv venv.
+- node 22.23.3 with npm 10.9.9; node 24.21.0 with pnpm 12.0.0 for the pnpm runs; vitest 5.0.3,
+  jest 30.5.2 and jest-junit 17.0.0.
+- Temurin JDK 21.0.12, Gradle 9.8.0, Maven 3.10.0, JUnit Jupiter 5.13.4 and Surefire 3.5.4.
+- Ruby 3.4.11 (mise compiled it), Bundler 2.6.9, rspec-core 3.13.6, rspec_junit_formatter 0.6.0.
+- Apple Swift 6.2 (swiftlang-6.2.3.3.20), and rustup with cargo 1.90.0.
+
+`$CAP2`, `$SCRATCH/cap2.sh`, runs a command as the area runner does: through `/bin/sh -c` with stderr folded
+into stdout (so `stderr` is empty), and `{junit}` expanded, quoted, to a fresh path. A report file
+becomes `junit.xml`, and a Swift Testing report beside it `junit-swift-testing.xml`. A directory of
+reports becomes `junit/`. The script then scrubs with `scrub2.sh`, which is `scrub.sh` above with
+`R` the project directory (`pwd -P`, and `pwd` for `R_L`) and run over every file of the case:
+
+```sh
+#!/bin/sh
+# cap2.sh <fixture-dir> <command with {junit}>
+d="$1"; c="$2"; J="$SCRATCH/report/out.xml"
+/bin/rm -rf "$SCRATCH/report" "$d"; mkdir -p "$SCRATCH/report" "$d"
+printf '%s\n' "$c" > "$d/command"
+q="'$J'"
+expanded=$(printf '%s' "$c" | sed "s#{junit}#$q#g")
+/bin/sh -c "exec 2>&1
+$expanded" > "$d/stdout"
+echo $? > "$d/exit"
+: > "$d/stderr"
+if [ -d "$J" ]; then mkdir -p "$d/junit"; for f in "$J"/*.xml; do [ -f "$f" ] && /bin/cp -f "$f" "$d/junit/"; done
+elif [ -f "$J" ]; then /bin/cp -f "$J" "$d/junit.xml"; fi
+for f in "$SCRATCH"/report/out-*.xml; do [ -f "$f" ] && /bin/cp -f "$f" "$d/$(basename "$f" | sed 's/^out/junit/')"; done
+"$SCRATCH/scrub2.sh" "$d"
+```
+
+The projects, each a directory of its own:
+
+- `python`: `pyproject.toml` with `[project] name = "pybase"` and `[tool.pytest.ini_options]
+  testpaths = ["tests"]`; `tests/test_alpha.py` with `test_passes`, `test_flaky` (`assert False,
+  "fails at the base commit"`) and `TestTable.test_case_a`; `tests/test_beta.py`, where `test_new`
+  asserts `not FAIL_NEW` read from `PYBASE_FAIL_NEW`; `conftest.py` imports `missing_helper` when
+  `PYBASE_BROKEN=1`.
+- `vitest`: `package.json` with `"test": "vitest run"` and `"type": "module"`, `npm install -D
+  vitest@latest`; `test/alpha.test.js` (`alpha > passes`, `alpha > flaky`), `test/beta.test.js`
+  (`new` fails when `VITESTBASE_FAIL_NEW=1`), `test/broken.test.js` (awaits `import
+  ("./missing-helper.js")` when `VITESTBASE_BROKEN=1`), `test/late.test.js` (throws from a
+  `setTimeout` after its test when `VITESTBASE_LATE=1`).
+- `jest`: `package.json` with `"test": "jest"`, `npm install -D jest@latest jest-junit@latest`; the
+  same 3 test files as `vitest` in CommonJS, with `JESTBASE_` variables and `require
+  ("./missing-helper")`.
+- `vitest-pnpm` and `jest-pnpm`: copies of those 2 with no `node_modules`, installed by `pnpm install
+  --store-dir $SCRATCH/pnpm-store` under node 24, with a `pnpm-workspace.yaml` `allowBuilds` list
+  for the packages whose install scripts pnpm 12 otherwise refuses.
+- `gradle`: `settings.gradle` includes `alpha` and `beta`; the root `build.gradle` applies `java`
+  with JUnit Jupiter to both. `alpha/.../AlphaTest.java` has `passes()` and `flaky()`;
+  `beta/.../BetaTest.java` has `fresh()`, failing under `GRADLEBASE_FAIL_NEW`.
+- `maven`: 1 `pom.xml` (`mavenbase`, release 21, JUnit Jupiter, Surefire 3.5.4); `AlphaTest` with
+  `passes()` and `flaky()`, and `BetaTest.fresh()` failing under `MAVENBASE_FAIL_NEW`.
+  `maven-multi` is a parent `pom.xml` with modules `alpha` (`AlphaTest.flaky()`) and `beta`, whose
+  `BetaTest` calls an undefined `undefinedHelper()`.
+- `ruby`: a `Gemfile` with `rspec ~> 3.13` and `rspec_junit_formatter ~> 0.6`, `BUNDLE_PATH` under
+  scratch; `spec/alpha_spec.rb` (`alpha passes`, `alpha flaky`), `spec/beta_spec.rb` (`beta new`,
+  failing when `RSPECBASE_FAIL_NEW=1`), `spec/broken_spec.rb` (`require_relative "missing_helper"`
+  when `RSPECBASE_BROKEN=1`); after the other Ruby runs, `spec/teardown_spec.rb` adds an
+  `after(:suite)` hook that raises when `RSPECBASE_TEARDOWN=1`.
+- `swift`: `Package.swift` (tools 6.0) with target `SwiftBase` (`public func sum`) and test target
+  `SwiftBaseTests`: XCTest `AlphaTests` with `testPasses` and `testFlaky`, and Swift Testing
+  `@Test func fresh()` expecting `SWIFTBASE_FAIL_NEW` unset; `swift build --build-tests` first.
+- `cargo`: crate `cargobase` (edition 2021) with a doc test on `sum`, unit tests `tests::passes`
+  and `tests::flaky` in `src/lib.rs`, and `tests/beta.rs` whose `mod tests` has its own `flaky`,
+  failing under `CARGOBASE_FAIL_NEW`; `PATH=$CARGO_HOME/bin:$PATH RUSTUP_TOOLCHAIN=1.90.0`.
+
+Each `build-fail` that isn't a variable adds 1 line and removes it after the run: Gradle and Maven
+add `undefinedHelper();` as `fresh()`'s first line (`perl -pi -e 's/(void fresh\(\) \{)/$1\n
+undefinedHelper();/'`), Swift adds `undefinedHelper()` to `fresh()`, cargo `undefined_helper();` to
+`tests/beta.rs`'s `flaky`. Gradle captures ran after `rm -rf alpha/build beta/build`; the Maven
+captures ran in order with no clean, so `build-fail` ran with the earlier runs' reports still in
+`target/surefire-reports`. From each project directory, with `G` the Gradle collection and `M` the
+Maven one:
+
+```sh
+G="mkdir -p {junit} && gradle test --continue; status=\$?; find . -path '*/build/test-results/*' -name '*.xml' -newer {junit} -exec cp {} {junit} ';'; exit \$status"
+M="mkdir -p {junit} && mvn test; status=\$?; find . -path '*/target/surefire-reports/*' -name 'TEST-*.xml' -newer {junit} -exec cp {} {junit} ';'; exit \$status"
+C='python -m pytest --junitxml={junit}'
+$CAP2 $F/python/baseline-base "$C"; PYBASE_FAIL_NEW=1 $CAP2 $F/python/baseline-head "$C"
+PYBASE_BROKEN=1 PYBASE_FAIL_NEW=1 $CAP2 $F/python/build-fail "$C"
+C='npm run test -- --reporter=default --reporter=junit --outputFile.junit={junit}'
+$CAP2 $F/vitest/baseline-base "$C"; VITESTBASE_FAIL_NEW=1 $CAP2 $F/vitest/baseline-head "$C"
+VITESTBASE_BROKEN=1 VITESTBASE_FAIL_NEW=1 $CAP2 $F/vitest/build-fail "$C"
+VITESTBASE_LATE=1 $CAP2 $F/vitest/unhandled "$C"
+C='JEST_JUNIT_OUTPUT_FILE={junit} JEST_JUNIT_REPORT_TEST_SUITE_ERRORS=true npm run test -- --reporters=default --reporters=jest-junit'
+$CAP2 $F/jest/baseline-base "$C"; JESTBASE_FAIL_NEW=1 $CAP2 $F/jest/baseline-head "$C"
+JESTBASE_BROKEN=1 JESTBASE_FAIL_NEW=1 $CAP2 $F/jest/build-fail "$C"
+VITESTBASE_FAIL_NEW=1 $CAP2 $F/vitest/pnpm-head 'pnpm run test --reporter=default --reporter=junit --outputFile.junit={junit}'   # in vitest-pnpm
+JESTBASE_FAIL_NEW=1 $CAP2 $F/jest/pnpm-head 'JEST_JUNIT_OUTPUT_FILE={junit} JEST_JUNIT_REPORT_TEST_SUITE_ERRORS=true pnpm run test --reporters=default --reporters=jest-junit'   # in jest-pnpm
+$CAP2 $F/gradle/baseline-base "$G"; GRADLEBASE_FAIL_NEW=1 $CAP2 $F/gradle/baseline-head "$G"
+GRADLEBASE_FAIL_NEW=1 $CAP2 $F/gradle/build-fail "$G"
+$CAP2 $F/maven/baseline-base "$M"; MAVENBASE_FAIL_NEW=1 $CAP2 $F/maven/baseline-head "$M"
+MAVENBASE_FAIL_NEW=1 $CAP2 $F/maven/build-fail "$M"
+$CAP2 $F/maven/multi-module-build-fail "$(printf '%s' "$M" | sed 's/mvn test/mvn -fae test/')"   # in maven-multi
+C='bundle exec rspec --format progress --format RspecJunitFormatter --out {junit}'
+$CAP2 $F/ruby/baseline-base "$C"; RSPECBASE_FAIL_NEW=1 $CAP2 $F/ruby/baseline-head "$C"
+RSPECBASE_BROKEN=1 RSPECBASE_FAIL_NEW=1 $CAP2 $F/ruby/build-fail "$C"
+RSPECBASE_TEARDOWN=1 $CAP2 $F/ruby/suite-hook-fail "$C"
+C='swift test --parallel --xunit-output {junit}'
+$CAP2 $F/swift/baseline-base "$C"; SWIFTBASE_FAIL_NEW=1 $CAP2 $F/swift/baseline-head "$C"
+SWIFTBASE_FAIL_NEW=1 $CAP2 $F/swift/build-fail "$C"
+C='cargo test --no-fail-fast'
+$CAP2 $F/cargo/baseline-base "$C"; CARGOBASE_FAIL_NEW=1 $CAP2 $F/cargo/baseline-head "$C"
+CARGOBASE_FAIL_NEW=1 $CAP2 $F/cargo/build-fail "$C"
+```
+
+What the runs show, beyond `flaky` failing in every `baseline-*` run and the second test in every
+`baseline-head` run:
+
+| Case | exit | Report |
+|---|---|---|
+| `python/build-fail` | 4 | none: `ImportError while loading conftest` before any test ran |
+| `vitest/build-fail` | 1 | the suite that didn't load is a failing case named `test/broken.test.js` |
+| `vitest/unhandled` | 1 | a case in suite `vitest unhandled errors` with an `<error>` for the late throw |
+| `jest/build-fail` | 1 | 2 `Test suite failed to run` cases for `test/broken.test.js`; without `JEST_JUNIT_REPORT_TEST_SUITE_ERRORS=true` a probe run left the suite out of the report |
+| `gradle/*` | 1 | `junit/` holds 1 file per test class; in `build-fail` only `AlphaTest`'s, beside `Execution failed for task ':beta:compileTestJava'` |
+| `maven/build-fail` | 1 | none: `testCompile` failed, and the older reports in `target/surefire-reports` were not newer than `{junit}` |
+| `maven/multi-module-build-fail` | 1 | `AlphaTest`'s report only, beside `[ERROR] Failed to execute goal ...maven-compiler-plugin...:testCompile ... on project beta` |
+| `ruby/build-fail` | 1 | 0 cases: `0 examples, 0 failures, 1 error occurred outside of examples` |
+| `ruby/suite-hook-fail` | 1 | only `alpha flaky` fails in the report; the output ends `4 examples, 1 failure, 1 error occurred outside of examples` |
+| `swift/baseline-*` | 1 | XCTest's cases in `junit.xml`, Swift Testing's in `junit-swift-testing.xml`; `fresh()` fails only in the second |
+| `swift/build-fail` | 1 | none: `error: cannot find 'undefinedHelper' in scope` |
+| `cargo/baseline-head` | 101 | no report; libtest prints `test tests::flaky ... FAILED` under both `Running unittests src/lib.rs` and `Running tests/beta.rs` |
+| `cargo/build-fail` | 101 | none: `error: could not compile` before any test ran |
+
+Probes that decided the flags, run in the same projects and not kept: `mvn test
+-Dsurefire.reportsDirectory=<dir> -DreportsDirectory=<dir>` still wrote only
+`target/surefire-reports`, so Gradle and Maven collect their reports into `{junit}` instead;
+`swift test --xunit-output <dir>/out.xml` without `--parallel` wrote only
+`out-swift-testing.xml`.
 
 ## Run view: a prove gate
 
@@ -1860,3 +2077,78 @@ cp $S/build-events.jsonl $F/build-events.jsonl
 
 The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
 changes nothing else.
+
+## Run view: a RED gate's report
+
+`RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
+gate of `counter-ui-reset-button` wrote in the `build-run-1` capture (see its `SOURCE`), the run
+that went RED on the `counterWithFact` snapshot test before the fixer turned the task GREEN. The
+run viewer reads it for that gate's failure: its tier, gating findings and failing test. The
+capture's scratch repository still held it on 2026-10-04; with `S` that scratch directory and
+`R=20261004T050310Z-ed998508`, this copy made 2 path substitutions and nothing else:
+
+```sh
+sed -e 's#/var/folders/lb/9c21kv5n74x2gyjdxqn51ngh0000gn/T/tmp\.IvRTQZud90#/var/folders/xx/T/tmp.scratch#g' \
+    -e 's#/Users/<user>/#/Users/user/#g' \
+    $S/app/.harness/runs/$R/report.json > <fixtures>/RunView/build-run-1/runs/$R/report.json
+```
+
+The `t2.test-failed` finding's message is the snapshot library's own, 13 lines long with 2
+`file://` URLs: 1 under the checkout and 1 under the simulator's data directory. The substitutions
+keep both absolute, so a test can show that neither reaches a run view: the builder makes the
+first repo-relative from the checkout root and replaces the second with `<path>`. Those 2 URLs are
+the only matches of the run view greps above in this file.
+
+## Run view: a brownfield run with blocked tasks
+
+`RunView/brownfield-blocked/` is the state a real brownfield run left, for the run view's worker
+gate runs in a clone's shared store and its blocked tasks. The `memos-3` trial ran the run skill
+on a clone of the `usememos/memos` repository on 2026-10-04, build run
+`20261004T124141Z-c3747b7a` of plan `spec`. The contract task finished. `share-view-limit-store`
+and `share-view-limit-web` ran in parallel. Each worker's slice gate went RED once in its own
+worktree (`neutral.lint` on `store/test/memo_share_test.go:212`, and the web area's lint), then
+GREEN. Each task ended `blocked` when `build check-return` rejected its return for an
+`app-build` step a slice gate never records. That rejection is in no event or ledger line: the
+run's `REPORT.md` holds it as prose. `share-view-limit-api` never started.
+
+With `G` the clone's `.git`, `C=$G/swift-harness`, `P=$C/plans/spec` and
+`R=$P/build/20261004T124141Z-c3747b7a`, copied after the run ended:
+
+```sh
+S='s#/Users/<user>/Developer/trials/memos-3-#../memos-3-#g; s#"/private/tmp/[^"]*/spec\.md"#"/spec.md"#g; s#"/Users/<user>/Developer/trials/memos-3/\.git/swift-harness/plans/spec/spec\.md"#"/spec.md"#g'
+cp $C/events/{gate,span,build,brownfield,usage}.jsonl $C/events/store.json events/
+sed -E "$S" $P/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json; cp $P/plan.json plan.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+for w in $G/worktrees/*; do n=$(basename $w); for r in $w/swift-harness/runs/2*/; do
+  mkdir -p worktrees/$n/runs/$(basename $r); cp $r/report.json worktrees/$n/runs/$(basename $r)/; done; done
+```
+
+The `sed` made the ledger's 4 worktree paths relative (`../memos-3-spec-<task>`), as
+`build-run-1`'s are, and set `clock.json`'s `spec` and `origin` to `/spec.md`, as the reader
+tests' clocks spell them. The hook stream, `PLAN.md`, `spec.md` and `REPORT.md` stayed out: the
+reader reads none of them. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|home'
+RunView/brownfield-blocked` and the secrets grep above matched nothing; `/tmp` matches only a
+repo-relative `.harness/tmp/edit.py` in an `agent.tools` file list.
+
+## Build returns: GREEN brownfield slice returns
+
+`BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
+`usememos/memos` handed to `build check-return`, which rejected both for a missing `app-build` step. Each
+`.history.jsonl` beside it is the task worktree's `runs/history.jsonl` line for the `check slice` run the return
+cites. The returns are the `result` of each `build-task` workflow's output file, written as the orchestrator wrote
+them before calling `check-return`. `T` is the orchestrator session's task output directory,
+`<Claude Code temp dir>/<cwd slug>/5f9bc272-d96a-48ac-ae63-61af01b8865a/tasks`, and `C` is the trial clone. From
+this directory:
+
+```sh
+F=BuildReturn/memos-3 W=$C/.git/worktrees/memos-3-spec-share-view-limit
+mkdir -p $F
+for p in store:wj86fkhlk:20261004T124847Z-cc87cdd0 web:w2tnxl83w:20261004T124503Z-79e036f7; do
+  IFS=: read task out run <<<"$p"
+  python3 -c "import json,sys;d=json.load(open(sys.argv[1]));r=d['result'];sys.stdout.write(r if isinstance(r,str) else json.dumps(r))" \
+    $T/$out.output > $F/share-view-limit-$task.json
+  grep "\"runID\":\"$run\"" $W-$task/swift-harness/runs/history.jsonl > $F/share-view-limit-$task.history.jsonl
+done
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-3/*` matched nothing.

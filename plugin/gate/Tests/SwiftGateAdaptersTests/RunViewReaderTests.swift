@@ -93,6 +93,66 @@ struct RunViewReaderTests {
     return try #require(object?["eventID"] as? String)
   }
 
+  static let redGate = "20261004T050310Z-ed998508"
+
+  /// A checkout holding the captured run's gate and test streams, and the RED merge gate's
+  /// `report.json` as `body` when given.
+  static func redGateRepository(report body: Data?) throws -> Repository {
+    let repository = try Repository()
+    for stream in ["gate", "test", "build"] {
+      try repository.write(
+        try Self.lines("events/\(stream).jsonl"),
+        to: repository.events.appending(path: "\(stream).jsonl"))
+    }
+    if let body {
+      let report = repository.checkout.appending(path: ".harness/runs/\(redGate)/report.json")
+      try Repository.make(report.deletingLastPathComponent())
+      try body.write(to: report)
+    }
+    return repository
+  }
+
+  @Test(
+    "a RED gate's report.json in the main checkout reads with its location relative to the checkout, beside the checkout's roots — catches the reader dropping a red gate's findings"
+  )
+  func readsTheRedGateReport() throws {
+    let captured = try Data(
+      contentsOf: Self.captured.appending(path: "runs/\(Self.redGate)/report.json"))
+    let repository = try Self.redGateRepository(report: captured)
+    defer { repository.remove() }
+    let input = try repository.read()
+    #expect(Array(input.gateReports.keys) == [Self.redGate])
+    let read = try #require(input.gateReports[Self.redGate])
+    #expect(read.location == ".harness/runs/\(Self.redGate)/report.json")
+    #expect(read.report == (try RecordedRunReport.decode(captured)).report)
+    #expect(input.checkoutRoots.contains(repository.checkout.standardizedFileURL.path))
+    #expect(input.damage.isEmpty, "\(input.damage)")
+
+    let failure = try #require(
+      RunViewBuilder.build(input).gates.first { $0.runID == Self.redGate }?.failure)
+    #expect(failure.findings.map(\.rule) == ["t2.test-failed"])
+    #expect(failure.report == read.location)
+  }
+
+  @Test(
+    "a RED gate's report.json that doesn't decode is 1 damage row naming its relative location, and a missing one leaves the failure with no report — catches a silent gap or a machine path in the footer"
+  )
+  func unreadableRedGateReportIsDamage() throws {
+    let broken = try Self.redGateRepository(report: Data("{\"runID\":".utf8))
+    defer { broken.remove() }
+    let input = try broken.read()
+    #expect(input.gateReports.isEmpty)
+    #expect(input.damage.map(\.source) == [".harness/runs/\(Self.redGate)/report.json"])
+    #expect(input.damage.allSatisfy { !$0.reason.contains(broken.parent.path) })
+
+    let missing = try Self.redGateRepository(report: nil)
+    defer { missing.remove() }
+    let view = RunViewBuilder.build(try missing.read())
+    let failure = try #require(view.gates.first { $0.runID == Self.redGate }?.failure)
+    #expect(failure.report == nil)
+    #expect(failure.tiers == [.t2])
+  }
+
   @Test(
     "events split across the main store, a live task worktree's store and an imported store read back as the set 1 store holds — catches a store left out"
   )

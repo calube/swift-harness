@@ -42,6 +42,7 @@ struct ReportCommandTests {
         ("ledger-events.jsonl", run.appending(path: "events.jsonl")),
         ("returns", run.appending(path: "returns")),
         ("events", root.appending(path: ".harness/events")),
+        ("runs", root.appending(path: ".harness/runs")),
       ]
       for (name, target) in copies {
         try files.copyItem(at: ReportCommandTests.captured.appending(path: name), to: target)

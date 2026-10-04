@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="rspec" tests="4" skipped="0" failures="1" errors="1" time="0.014321" timestamp="2026-10-04T08:41:14-05:00" hostname="&lt;host&gt;">
+<properties>
+<property name="seed" value="6469"/>
+</properties>
+<testcase classname="spec.alpha_spec" name="alpha passes" file="./spec/alpha_spec.rb" time="0.000183"></testcase>
+<testcase classname="spec.alpha_spec" name="alpha flaky" file="./spec/alpha_spec.rb" time="0.001946"><failure message="
+expected: &quot;fails at the base commit&quot;
+     got: &quot;base&quot;
+
+(compared using ==)
+" type="RSpec::Expectations::ExpectationNotMetError">Failure/Error: expect(&quot;base&quot;).to eq(&quot;fails at the base commit&quot;)
+
+  expected: &quot;fails at the base commit&quot;
+       got: &quot;base&quot;
+
+  (compared using ==)
+./spec/alpha_spec.rb:7:in &apos;block (2 levels) in &lt;top (required)&gt;&apos;</failure></testcase>
+<testcase classname="spec.beta_spec" name="beta new" file="./spec/beta_spec.rb" time="0.000183"></testcase>
+<testcase classname="spec.broken_spec" name="broken loads" file="./spec/broken_spec.rb" time="0.000021"></testcase>
+</testsuite>

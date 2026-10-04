@@ -2,11 +2,11 @@
 // loads it in headless Chrome: the page is the report's only file, every region draws a row for
 // each item the embedded view holds, and the console holds no error.
 // Run: node tests/run_viewer_report_test.mjs   (SWIFTGATE_BIN=plugin/bin/swiftgate to use the shim)
-// Regressions caught: key drift between the Swift encoder and the page, and a report that needs a
-// sibling file or the network to draw.
+// Regressions caught: key drift between the Swift encoder and the page, a report that needs a
+// sibling file or the network to draw, and a red span or blocked task with no failure context.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -19,12 +19,50 @@ const fixtures = join(plugin, 'gate/Tests/Fixtures/RunView')
 const RUNS = {
   first: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor' },
   spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
+  blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true },
 }
+// build-run-1's merge gate of counter-ui-reset-button, RED on a snapshot test before the fixer.
+const RED_GATE = '20261004T050310Z-ed998508'
+// What no published report may carry: the capture's machine paths, anonymised or not.
+const MACHINE_PATHS = /\/var\/folders|\/Users\/|tmp\.scratch|file:\/\//
 
 function swiftgateBinary() {
   if (process.env.SWIFTGATE_BIN) return process.env.SWIFTGATE_BIN
   const debug = join(plugin, 'gate/.build/debug/swiftgate')
   return existsSync(debug) ? debug : join(plugin, 'bin/swiftgate')
+}
+
+// A brownfield clone holding the captured run's shared store and plan state, with each task
+// worktree's run store under its own git dir, as `git worktree add` lays them out.
+function seededClone({ dir: fixture, buildRun, plan }) {
+  const captured = join(fixtures, fixture)
+  const parent = mkdtempSync(join(tmpdir(), 'run-viewer-report-'))
+  const dir = join(parent, 'memos-3')
+  mkdirSync(dir)
+  execFileSync(gitPath, ['init', '-q'], { cwd: dir })
+  const harness = join(dir, '.git/swift-harness')
+  const runDir = join(harness, 'plans', plan, 'build', buildRun)
+  mkdirSync(runDir, { recursive: true })
+  writeFileSync(join(harness, 'config.toml'), '')
+  const copies = [
+    ['events', join(harness, 'events')],
+    ['ledger.json', join(harness, 'plans', plan, 'ledger.json')],
+    ['plan.json', join(harness, 'plans', plan, 'plan.json')],
+    ['clock.json', join(harness, 'plans', plan, 'clock.json')],
+    ['run.json', join(runDir, 'run.json')],
+    ['ledger-events.jsonl', join(runDir, 'events.jsonl')],
+    ['returns', join(runDir, 'returns')],
+  ]
+  for (const [from, to] of copies) cpSync(join(captured, from), to, { recursive: true })
+  for (const name of readdirSync(join(captured, 'worktrees'))) {
+    const gitDir = join(dir, '.git/worktrees', name)
+    mkdirSync(join(parent, name), { recursive: true })
+    mkdirSync(join(gitDir, 'swift-harness'), { recursive: true })
+    writeFileSync(join(parent, name, '.git'), `gitdir: ${gitDir}\n`)
+    writeFileSync(join(gitDir, 'commondir'), '../..\n')
+    cpSync(join(captured, 'worktrees', name, 'runs'), join(gitDir, 'swift-harness/runs'), { recursive: true })
+  }
+  return { dir, root: parent, report: join(harness, 'reports', `${buildRun}.html`) }
 }
 
 // A git repository holding the captured run's plan state and stores, as the run left them.
@@ -47,7 +85,9 @@ function seededRepository({ dir: fixture, buildRun, plan }) {
     ['events', join(dir, '.harness/events')],
   ]
   for (const [from, to] of copies) cpSync(join(captured, from), to, { recursive: true })
-  return dir
+  // A gate run's report.json, where the capture kept it.
+  if (existsSync(join(captured, 'runs'))) cpSync(join(captured, 'runs'), join(dir, '.harness/runs'), { recursive: true })
+  return { dir, root: dir, report: join(dir, '.harness/reports', `${buildRun}.html`) }
 }
 
 const REGIONS = `(() => ({
@@ -71,32 +111,44 @@ const repositories = []
 
 // Writes the run's report in a seeded repository and loads it, returning the page's region
 // counts, its embedded view, its text and its console errors.
-async function renderReport(run) {
-  const repository = seededRepository(run)
-  repositories.push(repository)
+// `act`, when given, runs against the open page before it closes and its answer is returned.
+async function renderReport(run, act) {
+  const repository = run.brownfield ? seededClone(run) : seededRepository(run)
+  repositories.push(repository.root)
   const result = spawnSync(swiftgateBinary(), ['report', '--html', run.buildRun], {
-    cwd: repository,
+    cwd: repository.dir,
     encoding: 'utf8',
-    env: { ...process.env, LLVM_PROFILE_FILE: join(repository, 'profile-%p.profraw'), SWIFTGATE_HARNESS_ROOT: plugin },
+    env: { ...process.env, LLVM_PROFILE_FILE: join(repository.root, 'profile-%p.profraw'), SWIFTGATE_HARNESS_ROOT: plugin },
     timeout: 30_000,
   })
   assert.equal(result.status, 0, result.stdout + result.stderr)
-  const report = join(repository, '.harness/reports', `${run.buildRun}.html`)
-  const html = readFileSync(report, 'utf8')
+  const html = readFileSync(repository.report, 'utf8')
   assert.doesNotMatch(html, /<script src|<link|http/)
 
   const { page, close } = await launch()
   try {
     await page.viewport(1280, 900)
-    await page.load(pathToFileURL(report).href)
+    await page.load(pathToFileURL(repository.report).href)
     const regions = await page.evaluate(REGIONS)
     const view = JSON.parse(await page.evaluate("document.getElementById('run-view').textContent"))
     const text = await page.evaluate('document.body.innerText')
     const barIDs = await page.evaluate("[...new Set([...document.querySelectorAll('#tl .bar')].map(bar => bar.dataset.id))]")
-    return { regions, view, text, barIDs, errors: [...page.errors] }
+    const acted = act ? await act(page) : null
+    return { regions, view, text, barIDs, html, acted, errors: [...page.errors] }
   } finally {
     await close()
   }
+}
+
+// Focuses the bar with `id` and reads the popover, then opens the drawer of `task` and reads it.
+const POPOVER = `(() => { const p = document.getElementById('pop');
+  return { hidden: p.hidden, text: p.innerText, active: document.activeElement.dataset.id ?? null } })()`
+async function focusThenDrawer(page, id, task) {
+  await page.evaluate(`document.querySelector('#tl .bar[data-id="${id}"]').focus()`)
+  const popover = await page.evaluate(POPOVER)
+  await page.evaluate(`window.runViewer.openTaskDrawer(${JSON.stringify(task)})`)
+  const drawer = await page.evaluate("document.getElementById('dr-body').innerText")
+  return { popover, drawer }
 }
 
 function assertRendered({ regions, view, text, errors }, run, keys) {
@@ -128,6 +180,44 @@ const tests = {
     // Every emitted span draws its own bar, so a span the page can't place fails here.
     const emitted = rendered.view.spans.filter(span => ['worker', 'final', 'ship'].includes(span.phase)).map(span => span.id)
     assert.deepEqual(emitted.filter(id => !rendered.barIDs.includes(id)), [])
+  },
+  async 'focusing the RED merge gate\'s bar shows its tier, rule and file:line in the popover, and the task drawer the whole message, its failing test and report — catches a red span with no failure context'() {
+    const rendered = await renderReport(RUNS.first, (page) => focusThenDrawer(page, `gate:${RED_GATE}`, 'counter-ui-reset-button'))
+    assertRendered(rendered, RUNS.first, REGION_KEYS)
+    const { popover, drawer } = rendered.acted
+    assert.equal(popover.hidden, false, 'focusing the red gate bar opens no popover')
+    assert.equal(popover.active, `gate:${RED_GATE}`, 'the popover took focus from the bar')
+    assert.match(popover.text, /why it failed/i)
+    assert.match(popover.text, /T2 failed/)
+    assert.match(popover.text, /t2\.test-failed/)
+    assert.match(popover.text, /CounterViewSnapshotTests\.swift:21/)
+    assert.match(popover.text, /33 passed, 1 failed, 0 skipped/)
+    assert.match(popover.text, new RegExp(`report \\.harness/runs/${RED_GATE}/report\\.json`))
+    assert.match(popover.text, new RegExp(`swiftgate events list --run ${RED_GATE}`))
+    assert.match(drawer, /why it failed/i)
+    assert.match(drawer, /Newly-taken snapshot does not match reference/, 'the drawer cuts the message the popover cuts')
+    assert.doesNotMatch(popover.text, /Newly-taken snapshot/)
+    assert.match(drawer, /CounterUISnapshotTests\.CounterViewSnapshotTests\/counterWithFact/)
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'a brownfield run\'s blocked task reads why on its task span and drawer, and a worker\'s RED gate its rule at file:line — catches a blocked task whose spans all read ok'() {
+    const task = 'share-view-limit-store'
+    const rendered = await renderReport(RUNS.blocked, async (page) => ({
+      task: await focusThenDrawer(page, `task:${task}`, task),
+      gate: await focusThenDrawer(page, 'gate:20261004T124744Z-9d7ec113', task),
+    }))
+    assertRendered(rendered, RUNS.blocked, ['meta', 'stats', 'bars', 'gates'])
+    const { task: blocked, gate } = rendered.acted
+    assert.equal(blocked.popover.hidden, false)
+    assert.match(blocked.popover.text, /why it stopped/i)
+    assert.match(blocked.popover.text, /stopped\s+at \d\d:\d\d UTC: no return of it was stored/)
+    assert.match(blocked.popover.text, /halt raised: question/)
+    assert.match(blocked.popover.text, /last gate run 20261004T124847Z-cc87cdd0 GREEN/)
+    assert.match(gate.popover.text, /neutral\.lint/)
+    assert.match(gate.popover.text, /store\/test\/memo_share_test\.go:212/)
+    assert.match(gate.popover.text, /slice tier · worker's gate/)
+    assert.match(gate.drawer, /20261004T124744Z-9d7ec113/)
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
 }
 

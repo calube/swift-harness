@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="2" failures="1" time="0.31661737599999995">
+<testcase classname="SwiftBaseTests.AlphaTests" name="testFlaky" time="0.158310459">
+<failure message="failure"></failure>
+</testcase>
+<testcase classname="SwiftBaseTests.AlphaTests" name="testPasses" time="0.158306917">
+</testcase>
+</testsuite>
+</testsuites>

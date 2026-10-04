@@ -97,7 +97,8 @@ enum PreToolUseHook {
   private static func writtenPaths(_ command: String, payload: HookPayload, home: String?)
     -> [String]
   {
-    ShellSyntax.writeTargets(in: command).flatMap { target -> [String] in
+    ShellSyntax.writeTargets(in: command, directoryExists: isDirectory).flatMap {
+      target -> [String] in
       guard !target.entries.isEmpty,
         target.isDirectory
           || ToolPath.resolvedAbsolutes(target.path, cwd: payload.cwd, home: home)

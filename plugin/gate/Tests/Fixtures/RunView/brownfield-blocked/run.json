@@ -1,0 +1,20 @@
+{
+  "plan" : "spec",
+  "preset" : {
+    "designTier" : "none",
+    "maxParallel" : 3,
+    "mergeGate" : "merge",
+    "onDesignConflict" : "block",
+    "review" : "classified",
+    "stallMin" : 2,
+    "stopStartsBeforeMin" : 0,
+    "taskGate" : "slice",
+    "taskProof" : "prove",
+    "timeBudgetMin" : 0,
+    "workerModel" : "claude-sonnet-5-5"
+  },
+  "presetName" : "brownfield",
+  "runId" : "20261004T124141Z-c3747b7a",
+  "schemaVersion" : 1,
+  "startedAt" : "2026-10-04T12:41:41Z"
+}

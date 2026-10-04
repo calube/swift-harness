@@ -1,0 +1,1622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Viewer</title>
+<style>
+/* Layout: summary header, optional module panels, full-width flame timeline in its own scroller, then a 2-column grid of spec, proof, tokens and gates that stacks at phone width. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --sunken: #eef0f4;
+  --line: #dde1e8;
+  --fg: #11181c;
+  --muted: #5d6673;
+  --accent: #006fee;
+  --accent-soft: #e6f1fe;
+  --ok: #12a150;
+  --ok-soft: #e8faf0;
+  --warn: #c4841d;
+  --warn-soft: #fefce8;
+  --bad: #d31248;
+  --bad-soft: #fee7ef;
+  --bar-phase: #7c8a9e;
+  --bar-task: #3b82f6;
+  --bar-worker: #60a5fa;
+  --bar-review: #8b9dc3;
+  --bar-gate: #12a150;
+  --bar-red: #d31248;
+  --bar-merge: #11181c;
+  --bar-text: #ffffff;
+  --label-1: #7c3aed; --label-2: #0e9f9a; --label-3: #d97706; --label-4: #db2777; --label-5: #2563eb;
+  --shadow: rgba(16, 24, 40, .22);
+  --scrim: rgba(17, 24, 28, .32);
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0d10; --surface: #15181d; --sunken: #1d2128; --line: #2a2f38;
+    --fg: #ecedee; --muted: #9aa3ae; --accent: #338ef7; --accent-soft: #10253e;
+    --ok: #17c964; --ok-soft: #0e2a1b; --warn: #f5a524; --warn-soft: #2e2208;
+    --bad: #f31260; --bad-soft: #3a0d1c;
+    --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
+    --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0d10; --surface: #15181d; --sunken: #1d2128; --line: #2a2f38;
+  --fg: #ecedee; --muted: #9aa3ae; --accent: #338ef7; --accent-soft: #10253e;
+  --ok: #17c964; --ok-soft: #0e2a1b; --warn: #f5a524; --warn-soft: #2e2208;
+  --bad: #f31260; --bad-soft: #3a0d1c;
+  --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
+  --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45;
+  padding-inline: 16px; padding-block: 20px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.wrap > * { min-width: 0; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 12px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.panel > *, .cols > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.info { background: var(--accent-soft); color: var(--accent); }
+.chip.plain { background: var(--sunken); color: var(--muted); }
+.chip.plain::before { display: none; }
+
+/* header */
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.head .meta { color: var(--muted); overflow-wrap: anywhere; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.stat { background: var(--sunken); border-radius: var(--radius-md); padding: 10px 12px; }
+.stat b { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+
+/* timeline */
+.tl-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.tl-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tl { position: relative; min-width: 900px; }
+.tl-row { display: grid; grid-template-columns: 190px 1fr; height: 24px; align-items: center; border-bottom: 1px solid var(--sunken); }
+.tl-row:last-child { border-bottom: 0; }
+.tl-label { position: sticky; left: 0; z-index: 2; background: var(--surface); height: 100%; display: flex; align-items: center; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; border-right: 1px solid var(--line); }
+.tl-track { position: relative; height: 100%; }
+.bar { position: absolute; top: 3px; height: 17px; border-radius: 4px; color: var(--bar-text); font-size: 11px; line-height: 17px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; cursor: pointer; font-family: var(--font-ui); text-align: left; }
+.bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bar.sel { box-shadow: 0 0 0 2px var(--fg); }
+/* Bars too narrow for their label drop the text; the title and popover still carry it. */
+.bar.notext { font-size: 0; padding: 0; }
+/* An open span is cut at the run's last event; the hatched end says it never closed. */
+.bar.open { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, .28) 6px 9px); }
+.axis { height: 26px; }
+.axis .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); font-size: 11px; color: var(--muted); padding: 5px 0 0 4px; font-variant-numeric: tabular-nums; }
+.grid-lines { position: absolute; inset: 26px 0 0 190px; pointer-events: none; }
+.grid-lines i { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--sunken); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.tl-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+.zoom { display: inline-flex; background: var(--sunken); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+.zoom button { border: 0; background: transparent; color: var(--muted); font: 600 12px/1 var(--font-ui); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.zoom button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* span popover: anchored to the clicked bar; a bottom sheet at phone width */
+.pop { position: fixed; z-index: 20; top: 0; left: 0; width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 520px); overflow-y: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 12px 32px var(--shadow); padding: 12px 14px 14px; display: grid; gap: 10px; }
+.pop[hidden] { display: none; }
+.pop-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.pop-head h3 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.pop-close { flex: none; border: 0; background: var(--sunken); color: var(--muted); width: 26px; height: 26px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; }
+.pop-close:hover { color: var(--fg); }
+.pop-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pop dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.pop dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 2px; }
+.pop dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pop h4 { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.pop-tools { display: grid; gap: 8px; border-top: 1px solid var(--sunken); padding-top: 10px; }
+.pop-files { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.pop-files li { font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.pop-files li.more { font-family: var(--font-ui); color: var(--muted); }
+.pop .sub { color: var(--muted); font-size: 12px; margin: 0; }
+@media (max-width: 520px) {
+  .pop { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 75vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* grids and tables */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.tbl-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--sunken); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td .sub { color: var(--muted); font-size: 12px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-family: var(--font-mono); font-size: 11px; background: var(--sunken); border-radius: var(--radius-sm); padding: 1px 6px; }
+
+/* tokens */
+.tok-row { display: grid; grid-template-columns: 110px 1fr 70px; gap: 10px; align-items: center; font-size: 13px; }
+.tok-bar { display: flex; height: 12px; border-radius: 4px; overflow: hidden; background: var(--sunken); }
+.tok-bar i { display: block; height: 100%; }
+.tok-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.tok-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+
+/* gates */
+.gate { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 8px; }
+.gate-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; }
+.step { font-size: 11px; border-radius: var(--radius-sm); padding: 2px 7px; background: var(--ok-soft); color: var(--ok); font-variant-numeric: tabular-nums; }
+.step.red { background: var(--bad-soft); color: var(--bad); }
+
+footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+footer .damage-line { color: var(--bad); flex-basis: 100%; overflow-wrap: anywhere; }
+
+/* task drawer: a ticket view that slides in from the right; a full-height sheet at phone width */
+html.drawer-open { overflow: hidden; }
+.scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s linear .2s; }
+.scrim.open { opacity: 1; visibility: visible; transition: opacity .2s; }
+.drawer { position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--bg); color: var(--fg); border-left: 1px solid var(--line); box-shadow: -16px 0 40px var(--shadow); overflow-y: auto; overscroll-behavior: contain; transform: translateX(100%); visibility: hidden; transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s; }
+.drawer.open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+.dr-head { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
+.dr-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); min-width: 0; }
+.dr-kicker .mono { font-weight: 500; overflow-wrap: anywhere; }
+.dr-title { grid-column: 1 / -1; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.dr-body { padding: 16px 20px 32px; display: grid; gap: 12px; }
+.dr-body > * { min-width: 0; }
+.dr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.dr-card h4, .dr-fold summary { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.dr-card p { margin: 0; overflow-wrap: anywhere; }
+.dr-ref { color: var(--muted); font-size: 13px; }
+.dr-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.dr-list li::marker { color: var(--muted); }
+.drawer code { font-family: var(--font-mono); font-size: 12px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.props { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px 12px; font-size: 13px; align-items: baseline; }
+.props dt { color: var(--muted); }
+.props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.props dd.block { display: block; }
+.muted { color: var(--muted); }
+.drawer .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.label-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.label-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.drawer summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; border-radius: 4px; }
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
+.drawer details[open] > summary::before { transform: rotate(45deg); }
+.drawer summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws summary { font-variant-numeric: tabular-nums; }
+.ws .pop-files { margin-top: 6px; }
+.dr-fold[open] { gap: 12px; }
+.dr-fold:not([open]) { gap: 0; }
+.links { display: grid; gap: 6px; }
+.link-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; }
+.link-row > span { color: var(--muted); }
+.link-btn { font: inherit; color: var(--fg); text-align: left; background: var(--sunken); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.link-btn:hover { border-color: var(--line); }
+.link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.link-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.link-btn .mono { flex: none; font-weight: 600; }
+.link-btn .goal { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.act { list-style: none; margin: 0; padding: 0; display: grid; }
+.act li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; position: relative; padding-bottom: 14px; font-size: 13px; }
+.act li:last-child { padding-bottom: 0; }
+.act li::before { content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 1px; background: var(--line); }
+.act li:last-child::before { display: none; }
+.act .dot { width: 9px; height: 9px; border-radius: 50%; margin: 5px 0 0 2px; background: var(--c, var(--muted)); }
+.act .ev { min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.act .ev .sub { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.act time { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .drawer { width: 100%; border-left: 0; transform: translateY(100%); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  .dr-head { padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px; }
+  .dr-body { padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .dr-card { padding: 12px 14px; }
+}
+@media (max-width: 520px) {
+  .tok-row { grid-template-columns: 84px 1fr 58px; }
+  .tl-row { grid-template-columns: 132px 1fr; }
+  .grid-lines { left: 132px; }
+  .tl-label { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* now strip (live mode) and the failed-poll line */
+.now-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.now-card { background: var(--sunken); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 4px; border-left: 3px solid var(--accent); min-width: 0; }
+.now-card.stalled { border-left-color: var(--warn); }
+.now-card.halted { border-left-color: var(--bad); }
+.now-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.now-top b { overflow-wrap: anywhere; }
+.now-stage { display: flex; justify-content: space-between; gap: 8px; }
+.now-card .sub, .now .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.now-note { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.live-error { color: var(--bad); background: var(--bad-soft); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; }
+
+</style>
+<style>
+/* board: 6 lanes that scroll horizontally inside their own box */
+.board-scroll { overflow-x: auto; border-radius: var(--radius-md); }
+.board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(176px, 1fr)); gap: 8px; }
+.lane { background: var(--sunken); border-radius: var(--radius-md); padding: 8px; display: grid; gap: 8px; align-content: start; min-height: 150px; min-width: 0; }
+.lane.blocked { background: transparent; border: 1px dashed var(--line); }
+.lane-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 2px 2px 0; }
+.lane-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 14px 4px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }
+.card { font: inherit; text-align: left; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line)); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; gap: 6px; cursor: pointer; width: 100%; min-width: 0; transition: box-shadow .12s; }
+.card:hover { box-shadow: 0 0 0 1px var(--muted); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card.sel { box-shadow: 0 0 0 2px var(--fg); }
+.card-top, .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.card-id { font-family: var(--font-mono); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.card-meta .num { color: var(--muted); font-size: 12px; }
+.board-note { margin: 0; color: var(--muted); font-size: 12px; }
+.card-none { color: var(--muted); font-size: 12px; }
+
+</style>
+<style>
+/* plan graph: layered left to right, scrolls inside its own box at narrow widths */
+.graph-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.graph-scroll:empty { display: none; }
+.graph-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.graph { display: block; width: 100%; height: auto; }
+.graph .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .75; }
+.graph .edge.stage { stroke-dasharray: 4 3; }
+.graph .arrow { fill: var(--muted); }
+.gnode { cursor: pointer; outline: none; --sc: var(--muted); --sf: var(--surface); }
+.gnode .box { fill: var(--sf); stroke: var(--sc); stroke-width: 1.5; }
+.gnode.stage .box { stroke-dasharray: 5 3; }
+.gnode .dot { fill: var(--sc); }
+.gnode .gid { fill: var(--fg); font: 600 12px var(--font-mono); }
+.gnode .gsub { fill: var(--muted); font: 11px var(--font-ui); font-variant-numeric: tabular-nums; }
+.gnode:hover .box { stroke-width: 2.5; }
+.gnode:focus-visible .box { stroke: var(--accent); stroke-width: 3; }
+.gnode.sel .box { stroke: var(--fg); stroke-width: 2.5; }
+.gnode.ln-merged { --sc: var(--ok); --sf: var(--ok-soft); }
+.gnode.ln-building { --sc: var(--accent); --sf: var(--accent-soft); }
+.gnode.ln-gating { --sc: var(--warn); --sf: var(--warn-soft); }
+.gnode.ln-review { --sc: var(--bar-review); --sf: color-mix(in srgb, var(--bar-review) 16%, var(--surface)); }
+.gnode.ln-blocked { --sc: var(--bad); --sf: var(--bad-soft); }
+.graph-notes:empty { display: none; }
+.graph-notes .damage-line { margin: 0 0 8px; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel" aria-label="Run summary">
+    <div class="head">
+      <h1 id="title">Run</h1>
+      <span class="chip plain" id="state"></span>
+      <span class="chip plain">Report</span>
+    </div>
+    <div class="head"><div class="meta mono" id="meta"></div></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel" aria-label="Plan graph" data-module="graph" hidden></section>
+  <section class="panel" aria-label="Board" data-module="board" hidden></section>
+
+  <section class="panel" aria-label="Timeline">
+    <div class="head" style="justify-content:space-between">
+      <h2>Timeline</h2>
+      <div class="tl-controls">
+      <div class="zoom" role="group" aria-label="Timeline zoom" id="zoom">
+        <button type="button" data-z="1" aria-pressed="true">1x</button>
+        <button type="button" data-z="2" aria-pressed="false">2x</button>
+        <button type="button" data-z="4" aria-pressed="false">4x</button>
+      </div>
+      <div class="legend">
+        <span style="--c:var(--bar-phase)">phase</span>
+        <span style="--c:var(--bar-task)">task</span>
+        <span style="--c:var(--bar-worker)">worker</span>
+        <span style="--c:var(--bar-review)">review</span>
+        <span style="--c:var(--bar-gate)">gate GREEN</span>
+        <span style="--c:var(--bar-red)">gate RED</span>
+        <span style="--c:var(--bar-merge)">merge</span>
+      </div>
+      </div>
+    </div>
+    <div class="tl-scroll" id="tl-scroll" tabindex="0" aria-label="Timeline, scrolls horizontally"><div class="tl" id="tl"></div></div>
+  </section>
+
+  <div class="pop" id="pop" role="dialog" aria-modal="false" aria-labelledby="pop-title" hidden>
+    <div class="pop-head"><h3 id="pop-title"></h3><button type="button" class="pop-close" aria-label="Close span details">×</button></div>
+    <div id="pop-body" style="display:grid;gap:10px"></div>
+  </div>
+
+  <div class="cols">
+    <section class="panel" aria-label="Spec mapping">
+      <h2>Spec to tasks, commits and gates</h2>
+      <div class="tbl-scroll"><table id="spec"></table></div>
+    </section>
+    <section class="panel" aria-label="Proof">
+      <h2>Proof for each changed test</h2>
+      <div class="tbl-scroll"><table id="proof"></table></div>
+    </section>
+    <section class="panel" aria-label="Tokens and time">
+      <h2>Tokens and time</h2>
+      <div class="tok-legend">
+        <span style="--c:var(--accent)">input</span>
+        <span style="--c:var(--bar-review)">cache read</span>
+        <span style="--c:var(--warn)">cache write</span>
+        <span style="--c:var(--ok)">output</span>
+      </div>
+      <div id="tokens" style="display:grid;gap:8px"></div>
+      <h2 style="margin-top:6px">By role</h2>
+      <div id="roles" style="display:grid;gap:8px"></div>
+    </section>
+    <section class="panel" aria-label="Gate runs">
+      <h2>Gate runs</h2>
+      <div id="gates" style="display:grid;gap:8px"></div>
+    </section>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="scrim" id="drawer-scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title" inert>
+  <header class="dr-head">
+    <div class="dr-kicker"><span class="mono" id="dr-id"></span><span class="chip" id="dr-status"></span></div>
+    <button type="button" class="pop-close dr-close" aria-label="Close task">×</button>
+    <h3 class="dr-title" id="dr-title"></h3>
+  </header>
+  <div class="dr-body" id="dr-body"></div>
+</aside>
+
+<script type="application/json" id="run-view">{"cursor":null,"damage":[],"gates":[{"command":"check slice","ms":38194,"ruleCounts":{"area.build-only":2},"runId":"20261004T141540Z-be184a1a","steps":[{"ms":18,"startMs":578,"step":"neutral","tier":null,"verdict":"GREEN"},{"ms":50,"startMs":578,"step":"neutral","tier":null,"verdict":"GREEN"},{"ms":11493,"startMs":597,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":19869,"startMs":12091,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":35619,"startMs":629,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":1927,"startMs":36248,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":0,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"share-view-limit-contract","tests":null,"verdict":"GREEN"}],"halts":[{"answer":"continue","at":"2026-10-04T14:23:28.866Z","reason":"question","task":"share-view-limit-web","waitMs":43},{"answer":"abandon","at":"2026-10-04T14:23:59.238Z","reason":"amend","task":"share-view-limit-store","waitMs":133}],"proofs":[],"roles":[{"role":"orchestrator","tokens":{"cacheRead":5683551,"cacheWrite":123932,"input":130,"output":28496}},{"role":"build-worker","tokens":{"cacheRead":779833,"cacheWrite":155954,"input":66,"output":18357}}],"run":{"endedAt":null,"id":"20261004T141445Z-85d15f09","plan":"spec","preset":"brownfield","stallMin":2,"startedAt":"2026-10-04T14:06:25.315Z","state":"running"},"schemaVersion":1,"spans":[{"approximate":false,"end":null,"gateRun":null,"id":"run","outcome":null,"parent":null,"phase":"run","start":"2026-10-04T14:06:25.315Z","task":null,"tools":{"calls":[{"count":2,"ms":291,"tool":"Edit"},{"count":1,"ms":197,"tool":"Write"},{"count":31,"ms":123199,"tool":"Bash"}],"droppedPaths":0,"files":[".git/swift-harness/plans/spec/PLAN.md"],"ms":123687,"otherCount":6}},{"approximate":false,"end":"2026-10-04T14:06:25.460Z","gateRun":null,"id":"discover:91427E27-8549-4332-AD3E-66C1D4B9F3CF","outcome":"ok","parent":"run","phase":"discover","start":"2026-10-04T14:06:25.333Z","task":null,"tools":null},{"approximate":true,"end":"2026-10-04T14:06:37.096Z","gateRun":null,"id":"warmup:web:build:A174B3D8-B25D-4895-80C2-A317FFDC3B75","outcome":"ok","parent":"run","phase":"warmup","start":"2026-10-04T14:06:25.513Z","task":null,"tools":null},{"approximate":true,"end":"2026-10-04T14:06:27.528Z","gateRun":null,"id":"warmup:memos:build:62831126-5F00-476C-9F37-9A94A396B64A","outcome":"ok","parent":"run","phase":"warmup","start":"2026-10-04T14:06:25.517Z","task":null,"tools":null},{"approximate":true,"end":"2026-10-04T14:07:07.080Z","gateRun":null,"id":"warmup:memos:test:EDF7B6C5-8950-4B13-8505-CCD8262F5005","outcome":"red","parent":"run","phase":"warmup","start":"2026-10-04T14:06:27.528Z","task":null,"tools":{"calls":[{"count":13,"ms":58231,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":58231,"otherCount":0}},{"approximate":false,"end":"2026-10-04T14:06:36.230Z","gateRun":null,"id":"3c6cf90ca8ac4aee","outcome":"ok","parent":"run","phase":"spec-read","start":"2026-10-04T14:06:33.348Z","task":null,"tools":null},{"approximate":true,"end":"2026-10-04T14:07:11.797Z","gateRun":null,"id":"warmup:web:test:68F409C8-35D1-4C9A-88E2-F25B0E258935","outcome":"red","parent":"run","phase":"warmup","start":"2026-10-04T14:06:37.096Z","task":null,"tools":null},{"approximate":false,"end":"2026-10-04T14:07:22.692Z","gateRun":null,"id":"fcf339cc832ad137","outcome":"ok","parent":"run","phase":"explore","start":"2026-10-04T14:06:40.233Z","task":null,"tools":null},{"approximate":false,"end":"2026-10-04T14:09:41.241Z","gateRun":null,"id":"discover:35AC7649-5E6B-4160-A6ED-2811775C518C","outcome":"ok","parent":"run","phase":"discover","start":"2026-10-04T14:09:41.060Z","task":null,"tools":null},{"approximate":false,"end":"2026-10-04T14:10:21.501Z","gateRun":null,"id":"a041e1a62efc4753","outcome":"ok","parent":"run","phase":"plan","start":"2026-10-04T14:09:44.230Z","task":null,"tools":null},{"approximate":false,"end":"2026-10-04T14:11:56.611Z","gateRun":null,"id":"987fb8eb52e94b60","outcome":"ok","parent":"run","phase":"contract","start":"2026-10-04T14:10:21.547Z","task":null,"tools":{"calls":[{"count":10,"ms":216240,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":216240,"otherCount":0}},{"approximate":false,"end":"2026-10-04T14:15:00.000Z","gateRun":null,"id":"task:share-view-limit-contract","outcome":"ok","parent":"run","phase":"task","start":"2026-10-04T14:15:00.000Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:16:18.825Z","gateRun":"20261004T141540Z-be184a1a","id":"gate:20261004T141540Z-be184a1a","outcome":"ok","parent":"task:share-view-limit-contract","phase":"gate","start":"2026-10-04T14:15:40.631Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:15:41.227Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:1","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:15:41.209Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:15:41.259Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:2","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:15:41.209Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:15:52.722Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:3","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:15:41.228Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:16:16.879Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:5","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:15:41.260Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:16:12.591Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:4","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:15:52.722Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":"2026-10-04T14:16:18.807Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:6","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:16:16.879Z","task":"share-view-limit-contract","tools":null},{"approximate":true,"end":"2026-10-04T14:16:18.807Z","gateRun":"20261004T141540Z-be184a1a","id":"step:20261004T141540Z-be184a1a:7","outcome":"ok","parent":"gate:20261004T141540Z-be184a1a","phase":"step","start":"2026-10-04T14:16:18.807Z","task":"share-view-limit-contract","tools":null},{"approximate":false,"end":null,"gateRun":null,"id":"task:share-view-limit-store","outcome":null,"parent":"run","phase":"task","start":"2026-10-04T14:16:57.000Z","task":"share-view-limit-store","tools":{"calls":[{"count":1,"ms":341,"tool":"Read"},{"count":8,"ms":42887,"tool":"Bash"}],"droppedPaths":0,"files":[".git/worktrees/memos-4-spec/swift-harness/context-pack/worker-share-view-limit-store.md"],"ms":43228,"otherCount":1}},{"approximate":false,"end":null,"gateRun":null,"id":"task:share-view-limit-web","outcome":null,"parent":"run","phase":"task","start":"2026-10-04T14:16:57.000Z","task":"share-view-limit-web","tools":{"calls":[{"count":8,"ms":291,"tool":"Read"},{"count":15,"ms":62359,"tool":"Bash"}],"droppedPaths":1,"files":["web/tests/memo-share-panel.test.tsx","web/src/components/MemoDetailSidebar/MemoSharePanel.tsx","web/src/hooks/useMemoShareQueries.ts",".git/worktrees/memos-4-spec/swift-harness/context-pack/worker-share-view-limit-web.md"],"ms":62650,"otherCount":3}},{"approximate":false,"end":"2026-10-04T14:23:33.069Z","gateRun":null,"id":"74dd86079227b809","outcome":"abandoned","parent":"task:share-view-limit-store","phase":"worker","start":"2026-10-04T14:17:08.197Z","task":"share-view-limit-store","tools":{"calls":[{"count":6,"ms":411984,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":411984,"otherCount":0}},{"approximate":false,"end":"2026-10-04T14:18:36.754Z","gateRun":null,"id":"5f3dd61c7f24263c","outcome":"ok","parent":"task:share-view-limit-web","phase":"worker","start":"2026-10-04T14:17:10.230Z","task":"share-view-limit-web","tools":{"calls":[{"count":1,"ms":298,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":298,"otherCount":1}},{"approximate":false,"end":"2026-10-04T14:18:51.572Z","gateRun":null,"id":"8716fa4ee55d7e46","outcome":"ok","parent":"task:share-view-limit-web","phase":"review","start":"2026-10-04T14:18:45.661Z","task":"share-view-limit-web","tools":null},{"approximate":false,"end":"2026-10-04T14:19:13.924Z","gateRun":null,"id":"7fe902dd561c64f0","outcome":"ok","parent":"8716fa4ee55d7e46","phase":"verify","start":"2026-10-04T14:18:56.639Z","task":"share-view-limit-web","tools":null}],"spec":[{"id":"req-limit-field","tasks":["share-view-limit-contract","share-view-limit-api"],"title":"A share can be created with an optional view limit from 1 to 1000; a share created without one behaves as today"},{"id":"req-limit-validation","tasks":["share-view-limit-api"],"title":"Creating a share with a view limit outside 1 to 1000 fails with INVALID_ARGUMENT"},{"id":"req-count-on-resolve","tasks":["share-view-limit-store","share-view-limit-api"],"title":"Each successful resolve of a share token adds 1 to that share's view count, and an invalid, expired or revoked token cou"},{"id":"req-exhausted-not-found","tasks":["share-view-limit-store","share-view-limit-api"],"title":"Once a share's view count reaches its limit the token returns NOT_FOUND, and 2 racing resolves for the last view never b"},{"id":"req-list-counts","tasks":["share-view-limit-store","share-view-limit-api"],"title":"Listing a memo's shares returns each share's view count and its view limit when it has one"},{"id":"req-panel-choice","tasks":["share-view-limit-web"],"title":"The web share panel offers no limit, 1 view, 10 views or 100 views next to the expiry choice and sends the choice on cre"},{"id":"req-panel-text","tasks":["share-view-limit-web"],"title":"Each listed share in the panel shows \"N of M views\" with a limit and \"N views\" without one, from English locale strings"},{"id":"req-migrations","tasks":["share-view-limit-store"],"title":"SQLite, MySQL and PostgreSQL each get a migration adding the view limit and view count, LATEST.sql matches, and existing"}],"tasks":[{"brief":{"acceptance":["every touched area builds; slice is GREEN"],"designRef":null,"outOfScope":["migrations, SQL, API validation and UI"],"scope":["`MemoShare.view_limit` and `MemoShare.view_count` in `proto/api/v1/memo_service.proto`, regenerated with `buf generate`","`store.MemoShare.ViewLimit *int32` and `ViewCount int32`, the `store.ConsumeMemoShareView` type, `Store.ConsumeMemoShareView` and the `Driver.ConsumeMemoShareView` method","driver stubs returning a not-implemented error"],"title":"Declare the view-limit fields and the atomic view-consume store method, with no behaviour.","why":"requirements 1 to 5 cross the store, the API and the web client, so all build against 1 declared shape."},"commits":["6fc0cb61"],"covers":["req-limit-field"],"createdAt":"2026-10-04T14:15:00.000Z","deps":[],"gate":"slice","gateRun":"20261004T141540Z-be184a1a","id":"share-view-limit-contract","mergeGateRun":null,"mergedAt":null,"model":null,"status":"done","tokens":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0},"writes":["proto/api/v1/memo_service.proto","proto/gen/","web/src/types/proto/","store/memo_share.go","store/driver.go","store/db/sqlite/memo_share.go","store/db/mysql/memo_share.go","store/db/postgres/memo_share.go"]},{"brief":{"acceptance":["in `store/test/memo_share_test.go`, run with `DRIVER=sqlite`: a share with limit 2 consumes twice, then the third consume returns nil; a share without a limit keeps consuming; an expired share and an unknown uid consume nothing; listed shares carry the count and limit; 2 concurrent consumes of a share with 1 view left give exactly 1 success","the migrator tests that compare drivers and `LATEST.sql` pass; slice is GREEN"],"designRef":null,"outOfScope":["API validation and the RPC handlers"],"scope":["a `26.10/00__add_memo_share_view_limit.sql` migration for sqlite, mysql and postgres adding `view_limit` (nullable) and `view_count` (not null, default 0) to `memo_share`","the same columns in each driver's `LATEST.sql`","each driver's `CreateMemoShare` writes `view_limit`; `ListMemoShares` and `GetMemoShare` read both columns","each driver's `ConsumeMemoShareView` runs 1 conditional `UPDATE memo_share SET view_count = view_count + 1 WHERE uid = ? AND (expires_ts IS NULL OR expires_ts \u003e= now) AND (view_limit IS NULL OR view_count \u003c view_limit)`, returns the updated share when 1 row changed, and nil with no error when none did"],"title":"Persist the view limit and count in every driver, and count views atomically.","why":"requirements 2 and 3 (\"each time a share token resolves … view count goes up by 1\"; \"two resolves racing for the last view must not both succeed\") and the constraint that every driver gets a migration."},"commits":["8daa17c7"],"covers":["req-count-on-resolve","req-exhausted-not-found","req-migrations","req-list-counts"],"createdAt":"2026-10-04T14:16:57.000Z","deps":["share-view-limit-contract"],"gate":"slice","gateRun":null,"id":"share-view-limit-store","mergeGateRun":null,"mergedAt":null,"model":null,"status":"blocked","tokens":{"cacheRead":452913,"cacheWrite":45852,"input":28,"output":9368},"writes":["store/memo_share.go","store/db/sqlite/memo_share.go","store/db/mysql/memo_share.go","store/db/postgres/memo_share.go","store/migration/sqlite/","store/migration/mysql/","store/migration/postgres/","store/test/memo_share_test.go","store/test/migrator_test.go"]},{"brief":{"acceptance":["in `server/api/v1/test/memo_share_service_test.go`: limits 0, -1 and 1001 fail with `INVALID_ARGUMENT`; 1 and 1000 succeed; a limit-2 share resolves twice and then returns `NOT_FOUND`; a share without a limit keeps resolving; `ListMemoShares` returns the count and limit; slice is GREEN"],"designRef":null,"outOfScope":["the fileserver's attachment access, which keeps checking expiry only"],"scope":["`CreateMemoShare` rejects a `view_limit` outside 1 to 1000 with `codes.InvalidArgument` and stores a valid one","`convertMemoShareFromStore` sets `view_limit` when present and `view_count`","`getActiveMemoShare` also returns `NOT_FOUND` for a share whose count reached its limit","`GetSharedMemo` calls `Store.ConsumeMemoShareView` after every other check passes and before it returns; a nil result returns `NOT_FOUND` with the same \"not found\" message an expired link gives"],"title":"Validate the view limit on create, return counts on list, and consume a view on each successful resolve.","why":"requirements 1 to 4: limits from 1 to 1000, `INVALID_ARGUMENT` outside it, `NOT_FOUND` once used up, and the count and limit on list."},"commits":[],"covers":["req-limit-field","req-limit-validation","req-count-on-resolve","req-exhausted-not-found","req-list-counts"],"createdAt":"2026-10-04T14:23:59.000Z","deps":["share-view-limit-store"],"gate":"slice","gateRun":null,"id":"share-view-limit-api","mergeGateRun":null,"mergedAt":null,"model":null,"status":"blocked","tokens":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0},"writes":["server/api/v1/memo_share_service.go","server/api/v1/test/memo_share_service_test.go"]},{"brief":{"acceptance":["`web/tests/memo-share-panel.test.tsx` checks the text for a share with limit 10 and count 3 (\"3 of 10 views\") and for a share without a limit and count 4 (\"4 views\"), failing first; `pnpm lint` passes; slice is GREEN"],"designRef":null,"outOfScope":["other locales, which fall back to English"],"scope":["`useCreateMemoShare` takes an optional `viewLimit` and sets it on the created `MemoShare`","`MemoSharePanel` gains a second `Select` beside the expiry one with no limit, 1 view, 10 views and 100 views, default no limit","each `ShareLinkRow` shows the view-count text beside the expiry text, through an exported formatter in the panel file","new keys under `memo.share` in `web/src/locales/en.json` only"],"title":"Add the view-limit choice and the view-count text to the share panel.","why":"requirement 5: a view-limit choice next to the expiry choice, and \"N of M views\" or \"N views\" for each listed share."},"commits":[],"covers":["req-panel-choice","req-panel-text"],"createdAt":"2026-10-04T14:16:57.000Z","deps":["share-view-limit-contract"],"gate":"slice","gateRun":null,"id":"share-view-limit-web","mergeGateRun":null,"mergedAt":null,"model":null,"status":"blocked","tokens":{"cacheRead":326920,"cacheWrite":110102,"input":38,"output":8989},"writes":["web/src/components/MemoDetailSidebar/MemoSharePanel.tsx","web/src/hooks/useMemoShareQueries.ts","web/src/locales/en.json","web/tests/memo-share-panel.test.tsx"]}]}</script>
+
+<script>
+// Pure functions over a RunView: merging partials, laying out the timeline, and formatting.
+// Loaded as a classic script so the report can inline it; it publishes one global.
+(function (root) {
+  // The key each RunView array merges on. A partial row replaces the row with the same key.
+  const KEYS = {
+    spec: (x) => x.id,
+    tasks: (x) => x.id,
+    roles: (x) => x.role,
+    spans: (x) => x.id,
+    gates: (x) => x.runId,
+    proofs: (x) => x.gateRun + "\u0000" + x.test,
+    halts: (x) => (x.task || "") + "\u0000" + x.at,
+    damage: (x) => x.source + "\u0000" + x.reason
+  };
+
+  function mergeBy(rows, partial, key) {
+    const out = rows.slice();
+    const index = new Map(out.map((row, i) => [key(row), i]));
+    partial.forEach((row) => {
+      const k = key(row);
+      if (index.has(k)) out[index.get(k)] = row;
+      else { index.set(k, out.length); out.push(row); }
+    });
+    return out;
+  }
+
+  function apply(view, partial) {
+    const out = Object.assign({}, view);
+    Object.keys(partial || {}).forEach((field) => {
+      const value = partial[field];
+      out[field] = KEYS[field] && Array.isArray(value) ? mergeBy(view[field] || [], value, KEYS[field]) : value;
+    });
+    return out;
+  }
+
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+
+  // The run's last event: what an open span is cut at in the report.
+  function lastEventMs(view) {
+    const times = [ms(view.run.startedAt), ms(view.run.endedAt)];
+    (view.spans || []).forEach((s) => times.push(ms(s.start), ms(s.end)));
+    (view.halts || []).forEach((h) => times.push(ms(h.at)));
+    (view.tasks || []).forEach((t) => times.push(ms(t.createdAt), ms(t.mergedAt)));
+    return Math.max.apply(null, times.filter((t) => t != null && !Number.isNaN(t)));
+  }
+
+  function spanLabel(s) {
+    if (s.phase === "run") return "build run";
+    if (s.phase === "task") return s.task || "task";
+    if (s.phase === "gate") return "gate";
+    return s.phase.replace(/-/g, " ");
+  }
+
+  // Spans in minutes from the run's start, with open spans cut at the run's last event.
+  function normalize(view, nowMs) {
+    const t0 = ms(view.run.startedAt);
+    const cut = nowMs != null ? nowMs : lastEventMs(view);
+    const toMin = (t) => (t - t0) / 60000;
+    const gateBy = {};
+    (view.gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const spans = (view.spans || []).map((s) => {
+      const open = s.end == null;
+      const g = s.gateRun && gateBy[s.gateRun];
+      let label = spanLabel(s);
+      if (s.phase === "gate" && g) label = "gate " + gateTier(g.command);
+      return Object.assign({}, s, { start: toMin(ms(s.start)), end: toMin(open ? cut : ms(s.end)), open, label });
+    });
+    return { spans, wall: Math.max(0, toMin(cut)), t0 };
+  }
+
+  function gateTier(command) {
+    const m = /--tier\s+(\S+)/.exec(command || "");
+    return m ? m[1] : command || "";
+  }
+
+  // Greedy first-fit: each span takes the first row it doesn't overlap.
+  function pack(spans) {
+    const rows = [];
+    spans.slice().sort((a, b) => a.start - b.start).forEach((s) => {
+      const row = rows.find((r) => r[r.length - 1].end <= s.start);
+      if (row) row.push(s); else rows.push([s]);
+    });
+    return rows;
+  }
+
+  // Timeline rows. A task's (or the final phase's) descendants share rows under it, so a worker's
+  // whole story reads left to right; its gate runs add 1 row per tier, steps from the gate record.
+  function lanes(spans, gates) {
+    const byId = {};
+    const kids = {};
+    spans.forEach((s) => { byId[s.id] = s; });
+    spans.forEach((s) => {
+      const p = s.parent != null && byId[s.parent] ? s.parent : null;
+      (kids[p] = kids[p] || []).push(s);
+    });
+    Object.keys(kids).forEach((k) => kids[k].sort((a, b) => a.start - b.start));
+    const gateBy = {};
+    (gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const descendants = (s) => (kids[s.id] || []).reduce((acc, c) => acc.concat([c], descendants(c)), []);
+    const rows = [];
+
+    function gateRows(gs, depth) {
+      const g = gateBy[gs.gateRun];
+      if (!g || !g.steps || !g.steps.length) return;
+      const minutes = g.ms / 60000;
+      const factor = minutes > 0 ? (gs.end - gs.start) / minutes : 0;
+      const tiers = [];
+      g.steps.forEach((st) => { if (tiers.indexOf(st.tier) < 0) tiers.push(st.tier); });
+      tiers.forEach((tier) => {
+        let cursor = 0;
+        const steps = g.steps.filter((st) => st.tier === tier).map((st) => {
+          // A step with no start offset is laid end to end after the last and marked approximate.
+          const approximate = st.startMs == null;
+          const startMs = approximate ? cursor : st.startMs;
+          cursor = startMs + st.ms;
+          return {
+            id: gs.id + ":" + tier + ":" + st.step, parent: gs.id, phase: "step", label: st.step,
+            start: gs.start + (startMs / 60000) * factor, end: gs.start + ((startMs + st.ms) / 60000) * factor,
+            outcome: st.verdict === "RED" ? "red" : "ok", gateRun: g.runId, task: gs.task, ms: st.ms, tier, approximate
+          };
+        });
+        rows.push({ depth, label: tier + " · " + (g.verdict === "RED" ? "RED run" : "run") + " " + shortRun(g.runId), spans: steps });
+      });
+    }
+
+    function walk(s, depth) {
+      rows.push({ depth, spans: [s], label: s.label, isTask: s.phase === "task" });
+      if (s.phase === "task" || s.phase === "final") {
+        const all = descendants(s);
+        pack(all).forEach((r, i) => rows.push({ depth: depth + 1, spans: r, label: i === 0 ? (s.phase === "task" ? "stages" : "gate") : "" }));
+        all.filter((c) => c.phase === "gate" && c.gateRun).forEach((gs) => gateRows(gs, depth + 2));
+      } else {
+        (kids[s.id] || []).forEach((c) => walk(c, depth + 1));
+      }
+    }
+    (kids.null || []).forEach((s) => walk(s, 0));
+    return rows;
+  }
+
+  const ZOOMS = [1, 2, 4];
+  const scale = (zoom, width) => width * (ZOOMS.indexOf(zoom) >= 0 ? zoom : 1);
+  // Rough width of a bar label at 11px plus its 12px of padding.
+  const labelFits = (text, px) => px >= String(text).length * 6.3 + 12;
+
+  const sum = (t) => t.input + t.output + t.cacheRead + t.cacheWrite;
+  const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : Math.round(n / 1e3) + "k");
+  const fmtTokens = (t) => (t == null ? "pending" : fmtTok(sum(t)));
+  const fmtMin = (m) => {
+    const s = Math.round(m * 60);
+    return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s";
+  };
+  const fmtMs = (n) => fmtMin(n / 60000);
+  const shortRun = (id) => (id && id.length > 15 ? id.slice(9, 15) + "…" + id.slice(-4) : String(id));
+  const durationText = (s) => (s.open ? "never ended" : s.ms != null ? fmtMs(s.ms) : fmtMin(s.end - s.start));
+
+  function blocks(view, id) {
+    return (view.tasks || []).filter((t) => (t.deps || []).indexOf(id) >= 0).map((t) => t.id);
+  }
+
+  // A task's wave counts only task deps; a dep cycle stops at the task already being visited.
+  function waveOf(view, id) {
+    const byId = {};
+    (view.tasks || []).forEach((t) => { byId[t.id] = t; });
+    const memo = {};
+    const visit = (tid, seen) => {
+      if (memo[tid]) return memo[tid];
+      const deps = (byId[tid] ? byId[tid].deps || [] : []).filter((d) => byId[d] && seen.indexOf(d) < 0);
+      memo[tid] = deps.length ? 1 + Math.max.apply(null, deps.map((d) => visit(d, seen.concat([tid])))) : 1;
+      return memo[tid];
+    };
+    return visit(id, []);
+  }
+
+  // A task's events in time order: created, worker and fix starts, gate verdicts, review, halts
+  // and merge. `at` is milliseconds since the epoch.
+  function activity(view, id) {
+    const t = (view.tasks || []).find((x) => x.id === id);
+    if (!t) return [];
+    const events = [];
+    if (t.createdAt) events.push({ at: ms(t.createdAt), kind: "created", text: "Created", c: "--muted" });
+    const gateBy = {};
+    (view.gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const gatesSeen = {};
+    (view.spans || []).filter((s) => s.task === id).forEach((s) => {
+      if (s.phase === "worker") events.push({ at: ms(s.start), kind: "worker", text: "Worker started", sub: (t.model || "") + " build worker", c: "--bar-worker" });
+      else if (s.phase === "fix") events.push({ at: ms(s.start), kind: "fix", text: "Fix started", sub: s.tools ? s.tools.files.length + " files touched" : "", c: "--warn" });
+      else if (s.phase === "review") events.push({ at: ms(s.start), kind: "review", text: "Review started", c: "--bar-review" });
+      else if (s.phase === "verify") events.push({ at: ms(s.start), kind: "verify", text: "Verify started", c: "--warn" });
+      else if (s.phase === "gate" && s.gateRun) {
+        gatesSeen[s.gateRun] = true;
+        const g = gateBy[s.gateRun];
+        const verdict = g ? g.verdict : s.outcome === "red" ? "RED" : "GREEN";
+        const sub = (g ? gateTier(g.command) + " gate · " : "") + "run " + shortRun(s.gateRun);
+        if (s.end == null) events.push({ at: ms(s.start), kind: "gate", text: "Gate running", sub, c: "--warn" });
+        else events.push({ at: ms(s.end), kind: "gate", text: "Gate " + verdict, codes: g ? Object.keys(g.ruleCounts || {}) : [], sub, c: verdict === "RED" ? "--bad" : "--ok" });
+      }
+    });
+    (view.halts || []).filter((h) => h.task === id).forEach((h) => {
+      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason, c: "--bad" });
+    });
+    if (t.mergedAt) {
+      const g = gateBy[t.mergeGateRun];
+      events.push({ at: ms(t.mergedAt), kind: "merge", text: "Merged", codes: t.commits || [], sub: g ? "merge gate " + g.verdict : "", c: "--fg" });
+    }
+    // At the same instant a verdict comes before the stage it starts: a RED gate, then its fix.
+    const rank = (e) => (e.kind === "created" ? 0 : e.kind === "gate" && e.text !== "Gate running" ? 1 : 2);
+    return events.filter((e) => e.at != null && !Number.isNaN(e.at)).sort((a, b) => a.at - b.at || rank(a) - rank(b));
+  }
+
+  // The tool summary of a span and every span under it, in the RunView `tools` shape.
+  function toolSummary(spans, spanId) {
+    const kids = {};
+    let rootSpan = null;
+    spans.forEach((s) => {
+      if (s.id === spanId) rootSpan = s;
+      (kids[s.parent] = kids[s.parent] || []).push(s);
+    });
+    if (!rootSpan) return null;
+    const calls = {};
+    const files = [];
+    let otherCount = 0, total = 0, droppedPaths = 0, any = false;
+    const walk = (s) => {
+      if (s.tools) {
+        any = true;
+        s.tools.calls.forEach((c) => {
+          const row = calls[c.tool] || (calls[c.tool] = { tool: c.tool, count: 0, ms: 0 });
+          row.count += c.count;
+          row.ms += c.ms;
+        });
+        otherCount += s.tools.otherCount || 0;
+        total += s.tools.ms || 0;
+        droppedPaths += s.tools.droppedPaths || 0;
+        s.tools.files.forEach((f) => { if (files.indexOf(f) < 0) files.push(f); });
+      }
+      (kids[s.id] || []).forEach(walk);
+    };
+    walk(rootSpan);
+    if (!any) return null;
+    const sorted = Object.keys(calls).map((k) => calls[k]).sort((a, b) => b.count - a.count || (a.tool < b.tool ? -1 : 1));
+    return { calls: sorted, otherCount, ms: total, files, droppedPaths };
+  }
+
+  // Halts with no resume yet: the builder fills `answer` and `waitMs` only from a `build.resume`.
+  const openHalts = (view) => (view.halts || []).filter((h) => h.answer == null && h.waitMs == null);
+
+  // The newest time anything of a task happened: a span starting or ending, a halt or its resume.
+  function lastTaskEventMs(view, id) {
+    const times = [];
+    (view.spans || []).filter((s) => s.task === id).forEach((s) => times.push(ms(s.start), ms(s.end)));
+    (view.halts || []).filter((h) => h.task === id).forEach((h) => {
+      times.push(ms(h.at));
+      if (h.waitMs != null) times.push(ms(h.at) + h.waitMs);
+    });
+    const known = times.filter((t) => t != null && !Number.isNaN(t));
+    return known.length ? Math.max.apply(null, known) : null;
+  }
+
+  // The now strip: 1 card per task with an open task span, naming its newest open stage.
+  function workers(view, nowMs, stallMin) {
+    const spans = view.spans || [];
+    const halted = {};
+    openHalts(view).forEach((h) => { if (h.task != null) halted[h.task] = h; });
+    return spans.filter((s) => s.phase === "task" && s.task != null && s.end == null).map((ts) => {
+      const stages = spans.filter((s) => s.task === ts.task && s.id !== ts.id && s.end == null)
+        .sort((a, b) => ms(b.start) - ms(a.start));
+      const stage = stages[0] || null;
+      const last = lastTaskEventMs(view, ts.task);
+      return {
+        task: ts.task, phase: stage ? stage.phase : "task", gateRun: stage ? stage.gateRun : null,
+        elapsedMs: nowMs - ms(ts.start), lastEventMs: last,
+        stalled: last != null && nowMs - last > stallMin * 60000, halted: !!halted[ts.task],
+        halt: halted[ts.task] || null
+      };
+    });
+  }
+
+  // Tasks whose open span has had no event of that task for `stallMin` minutes at `nowMs`.
+  const stalls = (view, nowMs, stallMin) => workers(view, nowMs, stallMin).filter((w) => w.stalled).map((w) => w.task);
+
+  root.RunViewModel = {
+    apply, stalls, openHalts, workers, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
+  };
+})(globalThis);
+
+</script>
+<script>
+(function () {
+  const M = window.RunViewModel;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const { fmtTok, fmtTokens, fmtMin, fmtMs, shortRun, sum } = M;
+  const verdictChip = (v) => `<span class="chip ${v === "GREEN" ? "ok" : v === "RED" ? "bad" : "warn"}">${esc(v)}</span>`;
+  const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+
+  // Errors anywhere on the page are counted where a headless check can read them.
+  document.body.dataset.errors = "0";
+  const countError = () => { document.body.dataset.errors = String(Number(document.body.dataset.errors) + 1); };
+  window.addEventListener("error", countError);
+  window.addEventListener("unhandledrejection", countError);
+
+  const pageDamage = [];
+  let view = null;
+  // Served by `swiftgate view` the page carries no data and fetches it; opened as a file, it is a report.
+  let liveMode = false;
+  try {
+    const text = $("run-view").textContent.trim();
+    if (text) view = JSON.parse(text);
+    else if (location.protocol !== "file:") liveMode = true;
+    else pageDamage.push({ source: "page", reason: "no run data embedded" });
+  } catch (error) {
+    pageDamage.push({ source: "page", reason: "run data is not JSON: " + error.message });
+  }
+
+  // State the page derives from the view on each render.
+  let spans = [], wall = 0, t0 = 0, byId = {}, kids = {}, gateBy = {}, taskBy = {};
+
+  // A live run's open spans grow with the clock; a finished run stops at its last event.
+  const liveNowMs = () => (liveMode && view.run.state !== "done" ? Date.now() : null);
+
+  function derive() {
+    const n = M.normalize(view, liveNowMs());
+    spans = n.spans; wall = n.wall || 1; t0 = n.t0;
+    byId = {}; kids = {};
+    spans.forEach((s) => { byId[s.id] = s; (kids[s.parent] = kids[s.parent] || []).push(s); });
+    gateBy = Object.fromEntries(view.gates.map((g) => [g.runId, g]));
+    taskBy = Object.fromEntries(view.tasks.map((t) => [t.id, t]));
+  }
+  const taskSpan = (id) => spans.find((s) => s.phase === "task" && s.task === id);
+  const minOf = (iso) => (Date.parse(iso) - t0) / 60000;
+
+  // header
+  function renderHeader() {
+    const r = view.run;
+    $("title").textContent = r.plan || r.id;
+    const state = $("state");
+    state.textContent = r.state;
+    state.className = "chip " + ({ done: "ok", running: "info", halted: "bad" }[r.state] || "plain");
+    $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].map((x) => `<span>${x}</span>`).join("");
+    const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
+    const taskTok = view.tasks.filter((t) => t.tokens).reduce((a, t) => a + sum(t.tokens), 0);
+    const pending = view.tasks.filter((t) => t.tokens == null).length;
+    const tests = new Set(view.proofs.map((p) => p.test)).size;
+    const proven = new Set(view.proofs.filter((p) => p.outcome === "proven").map((p) => p.test)).size;
+    const red = view.gates.filter((g) => g.verdict === "RED").length;
+    const taskSpans = spans.filter((s) => s.phase === "task");
+    const parallel = taskSpans.reduce((m, s) => Math.max(m, taskSpans.filter((o) => o.start < s.end && s.start < o.end).length), 0);
+    const answered = view.halts.filter((h) => h.answer != null).length;
+    const stats = [
+      [fmtMin(wall), "wall time"],
+      [fmtTok(roleTok || taskTok), pending ? `tokens, ${plural(pending, "task")} pending` : "tokens"],
+      [plural(view.tasks.length, "task"), `${parallel} in parallel at most`],
+      [proven + " / " + tests, "tests proven"],
+      [plural(view.gates.length, "gate"), red + " RED"],
+      [plural(view.halts.length, "halt"), answered + " answered"]
+    ];
+    $("stats").innerHTML = stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("");
+  }
+
+  // timeline
+  const colour = { run: "--bar-phase", task: "--bar-task", worker: "--bar-worker", fix: "--bar-worker", review: "--bar-review", verify: "--bar-gate", merge: "--bar-merge" };
+  const barColour = (s) => {
+    if (s.phase === "gate" || s.phase === "step") return s.outcome === "red" ? "--bar-red" : "--bar-gate";
+    if (s.outcome === "red" || s.outcome === "halted") return "--bar-red";
+    return colour[s.phase] || "--bar-phase";
+  };
+  const scroller = $("tl-scroll");
+  const tl = $("tl");
+  let zoom = 1;
+  let all = {};
+
+  function renderTimeline() {
+    const rows = M.lanes(spans, view.gates);
+    const pct = (m) => (m / wall) * 100;
+    const tick = wall > 120 ? 30 : wall > 60 ? 10 : 5;
+    let html = `<div class="tl-row axis"><div class="tl-label" style="font-weight:600;color:var(--muted)">span</div><div class="tl-track">`;
+    for (let m = 0; m <= wall; m += tick) html += `<div class="tick" style="left:${pct(m)}%">${m}m</div>`;
+    html += `</div></div><div class="grid-lines">`;
+    for (let m = tick; m <= wall; m += tick) html += `<i style="left:${pct(m)}%"></i>`;
+    html += `</div>`;
+    all = {};
+    rows.forEach((row) => {
+      html += `<div class="tl-row"><div class="tl-label" style="padding-left:${8 + row.depth * 14}px;${row.isTask ? "font-weight:600" : row.depth > 2 ? "color:var(--muted)" : ""}">${esc(row.label)}</div><div class="tl-track">`;
+      row.spans.forEach((s) => {
+        all[s.id] = s;
+        const textColor = s.phase === "merge" ? "var(--bg)" : "var(--bar-text)";
+        const dur = M.durationText(s);
+        html += `<button class="bar${s.open ? " open" : ""}" data-id="${esc(s.id)}" style="left:${pct(s.start)}%;width:calc(${pct(Math.max(0, s.end - s.start))}% - 2px);background-color:var(${barColour(s)});color:${textColor}" title="${esc(s.label)} · ${esc(dur)}" aria-label="${esc(s.label)}, ${esc(s.phase)}, ${esc(dur)}" aria-haspopup="dialog" aria-expanded="false">${esc(s.label)}</button>`;
+      });
+      html += `</div></div>`;
+    });
+    tl.innerHTML = html;
+    sizeTrack();
+  }
+
+  function sizeTrack() {
+    tl.style.width = M.scale(zoom, Math.max(900, scroller.clientWidth)) + "px";
+    fitBars();
+  }
+
+  function fitBars() {
+    tl.querySelectorAll(".bar").forEach((b) => {
+      const s = all[b.dataset.id];
+      b.classList.toggle("notext", !M.labelFits(s.label, b.clientWidth));
+    });
+  }
+
+  // span popover
+  const pop = $("pop");
+  const sheet = window.matchMedia("(max-width: 520px)");
+  let openAnchor = null;
+
+  function toolsHtml(t, filesLabel = "Files touched") {
+    if (!t) return `<p class="sub">no tool activity recorded</p>`;
+    const calls = t.calls.reduce((a, c) => a + c.count, 0) + (t.otherCount || 0);
+    const shown = t.files.slice(0, 6);
+    const more = t.files.length - shown.length;
+    const files = t.files.length
+      ? `<ul class="pop-files">${shown.map((f) => `<li>${esc(f)}</li>`).join("")}${more > 0 ? `<li class="more">+${more} more</li>` : ""}</ul>`
+      : `<p class="sub">no files touched</p>`;
+    const chips = t.calls.map((c) => `<span class="chip plain num" title="${esc(fmtMs(c.ms))}">${esc(c.tool)} ${c.count}</span>`)
+      .concat(t.otherCount ? [`<span class="chip plain num">other ${t.otherCount}</span>`] : []);
+    return `${chips.length ? `<div class="tags">${chips.join("")}</div>` : ""}
+      <p class="sub num">${calls} calls · ${fmtMs(t.ms)} tool time</p>
+      <h4>${esc(filesLabel)} (${t.files.length})</h4>${files}
+      ${t.droppedPaths ? `<p class="sub">${plural(t.droppedPaths, "path")} dropped: outside the repository</p>` : ""}`;
+  }
+
+  function place() {
+    if (!openAnchor) return;
+    if (sheet.matches) { pop.style.left = ""; pop.style.top = ""; return; }
+    const r = openAnchor.getBoundingClientRect();
+    const m = 8, gap = 6;
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    const left = Math.min(Math.max(m, r.left), vw - pw - m);
+    let top = r.bottom + gap;
+    if (top + ph > vh - m) top = r.top - gap - ph;
+    if (top < m) top = Math.max(m, vh - ph - m);
+    pop.style.left = Math.max(m, left) + "px";
+    pop.style.top = top + "px";
+  }
+
+  // Anchors a popover of label and value rows to any element; modules use it through runViewer.
+  function openPopover(anchor, rows, title, extraHtml = "", focus = true) {
+    if (openAnchor) closePop(false);
+    openAnchor = anchor;
+    anchor.classList.add("sel");
+    anchor.setAttribute("aria-expanded", "true");
+    $("pop-title").textContent = title != null ? title : anchor.getAttribute("aria-label") || "";
+    $("pop-body").innerHTML = `<dl>${rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v)}</dd>`).join("")}</dl>${extraHtml}`;
+    pop.hidden = false;
+    place();
+    if (focus) pop.querySelector(".pop-close").focus({ preventScroll: true });
+  }
+
+  function openSpan(bar, focus = true) {
+    const s = all[bar.dataset.id];
+    const outcome = s.outcome ? (s.outcome === "red" ? "RED" : s.outcome === "ok" ? "GREEN" : s.outcome) : null;
+    const rows = [
+      ["phase", s.tier ? `${s.tier} ${s.phase}` : s.phase],
+      ["span", s.phase === "step" ? s.parent : s.id, `<span class="mono">${esc(s.phase === "step" ? s.parent : s.id)}</span>`],
+      ["task", s.task || "none"],
+      ["start", "+" + fmtMin(s.start)],
+      ["duration", M.durationText(s) + (s.approximate ? " (approximate)" : "")],
+      ["gate run", s.gateRun || "none", s.gateRun ? `<span class="mono">${esc(s.gateRun)}</span>` : null],
+      ["outcome", outcome || "none", outcome ? verdictChip(outcome) : null]
+    ];
+    const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
+    openPopover(bar, rows, s.label, `<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
+  }
+
+  function closePop(restoreFocus = true) {
+    if (!openAnchor) return;
+    const anchor = openAnchor;
+    openAnchor = null;
+    pop.hidden = true;
+    anchor.classList.remove("sel");
+    anchor.setAttribute("aria-expanded", "false");
+    if (restoreFocus && anchor.isConnected) anchor.focus({ preventScroll: true });
+  }
+
+  tl.addEventListener("click", (e) => {
+    const b = e.target.closest(".bar");
+    if (!b) return;
+    if (b === openAnchor) closePop(); else openSpan(b);
+  });
+  pop.querySelector(".pop-close").addEventListener("click", () => closePop());
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (drawerId) { e.preventDefault(); closeDrawer(); } else if (openAnchor) { e.preventDefault(); closePop(); }
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (openAnchor && !pop.contains(e.target) && !openAnchor.contains(e.target)) closePop();
+  });
+  window.addEventListener("scroll", place, { capture: true, passive: true });
+  window.addEventListener("resize", () => { if (view) sizeTrack(); place(); });
+  sheet.addEventListener("change", place);
+
+  // zoom: scale the track and keep the time at the middle of the visible track in view
+  const zoomBtns = [...document.querySelectorAll("#zoom button")];
+  function setZoom(z) {
+    const labelW = tl.querySelector(".tl-label").offsetWidth;
+    const mid = (labelW + scroller.clientWidth) / 2;
+    const f = (scroller.scrollLeft + mid - labelW) / (tl.offsetWidth - labelW);
+    zoom = z;
+    sizeTrack();
+    scroller.scrollLeft = labelW + f * (tl.offsetWidth - labelW) - mid;
+    zoomBtns.forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.z) === z)));
+    place();
+  }
+  zoomBtns.forEach((b) => b.addEventListener("click", () => setZoom(Number(b.dataset.z))));
+
+  // spec mapping
+  function renderSpec() {
+    $("spec").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
+      view.spec.map((q) => {
+        const ts = q.tasks.map((id) => taskBy[id]).filter(Boolean);
+        const verdicts = ts.map((t) => (gateBy[t.mergeGateRun] ? gateBy[t.mergeGateRun].verdict : null));
+        const v = !q.tasks.length ? `<span class="chip warn">uncovered</span>`
+          : verdicts.includes("RED") ? verdictChip("RED")
+          : verdicts.length && verdicts.every((x) => x === "GREEN") ? verdictChip("GREEN")
+          : `<span class="chip plain">not merged</span>`;
+        return `<tr><td><span class="mono">${esc(q.id)}</span><div class="sub">${esc(q.title)}</div></td>
+          <td><div class="tags">${q.tasks.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div></td>
+          <td><div class="tags">${ts.flatMap((t) => t.commits).map((c) => `<span class="tag">${esc(c)}</span>`).join("")}</div></td>
+          <td>${v}</td></tr>`;
+      }).join("") + `</tbody>`;
+  }
+
+  // proof: the assertion's file, line and kind only; a report never carries source
+  const outcomeText = { proven: ["failed", "ok", "proven"], "passes-reverted": ["passed", "bad", "not proven"], "compile-only": ["didn't compile", "warn", "not proven"], crashed: ["crashed", "warn", "not proven"], skipped: ["skipped", "warn", "not proven"] };
+  function renderProof() {
+    $("proof").innerHTML = `<thead><tr><th>test</th><th>with the change reverted</th><th>assertion</th></tr></thead><tbody>` +
+      view.proofs.map((p) => {
+        const [txt, cls, label] = outcomeText[p.outcome] || [p.outcome, "warn", "unknown"];
+        const a = p.assertion ? `<span class="mono" title="${esc(p.assertion.file)}">${esc(p.assertion.file.split("/").pop())}:${esc(p.assertion.line)}</span><div class="sub">#${esc(p.assertion.kind)}</div>` : `<span class="sub">none failed</span>`;
+        return `<tr><td><span class="mono">${esc(p.test)}</span><div class="sub">${esc(p.task)} · base ${esc(p.proofBase || "none")} · run <span class="mono" title="${esc(p.gateRun)}">${esc(shortRun(p.gateRun))}</span></div></td>
+          <td><span class="chip ${cls}">${esc(label)}</span><div class="sub">${esc(txt)}</div></td><td>${a}</td></tr>`;
+      }).join("") + `</tbody>`;
+  }
+
+  // tokens
+  function tokRows(items, labelKey, timeFn) {
+    const max = Math.max(1, ...items.filter((x) => x.tokens).map((x) => sum(x.tokens)));
+    return items.map((x) => {
+      const t = x.tokens, w = (n) => (n / max) * 100;
+      const bar = t
+        ? `<div class="tok-bar" title="input ${fmtTok(t.input)}, cache read ${fmtTok(t.cacheRead)}, cache write ${fmtTok(t.cacheWrite)}, output ${fmtTok(t.output)}">
+          <i style="width:${w(t.input)}%;background:var(--accent)"></i><i style="width:${w(t.cacheRead)}%;background:var(--bar-review)"></i><i style="width:${w(t.cacheWrite)}%;background:var(--warn)"></i><i style="width:${w(t.output)}%;background:var(--ok)"></i>
+        </div>`
+        : `<div class="tok-bar" title="tokens arrive when the worker's transcript is ingested"></div>`;
+      const time = timeFn ? timeFn(x) : "";
+      return `<div class="tok-row"><span class="mono">${esc(x[labelKey])}</span>${bar}<span class="num" style="text-align:right">${fmtTokens(t)}${time ? `<div class="sub" style="color:var(--muted);font-size:11px">${esc(time)}</div>` : ""}</span></div>`;
+    }).join("");
+  }
+  function renderTokens() {
+    $("tokens").innerHTML = tokRows(view.tasks, "id", (t) => { const s = taskSpan(t.id); return s ? M.durationText(s) : ""; });
+    $("roles").innerHTML = tokRows(view.roles, "role");
+  }
+
+  // gates
+  function renderGates() {
+    $("gates").innerHTML = view.gates.map((g) => {
+      const rules = Object.entries(g.ruleCounts || {});
+      return `<div class="gate"><div class="gate-top">${verdictChip(g.verdict)}<span class="mono">${esc(g.runId)}</span></div>
+        <div class="sub" style="color:var(--muted);font-size:12px">${esc(g.task || "no task")} · swiftgate ${esc(g.command)} · ${fmtMs(g.ms)} · ${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped</div>
+        <div class="steps">${g.steps.map((s) => `<span class="step ${s.verdict === "RED" ? "red" : ""}">${esc(s.tier)} ${esc(s.step)} ${fmtMs(s.ms)}</span>`).join("")}</div>
+        ${rules.length ? `<div class="tags">${rules.map(([k, n]) => `<span class="tag">${esc(k)} ${n}</span>`).join("")}</div>` : ""}</div>`;
+    }).join("");
+  }
+
+  // task drawer: opened from a board card, a graph node or a link, it reads like a ticket
+  const statusChip = { pending: "plain", "in-progress": "info", done: "ok", blocked: "bad", "needs-replan": "warn", abandoned: "bad" };
+  const statusVar = { pending: "--muted", "in-progress": "--accent", done: "--ok", blocked: "--bad", "needs-replan": "--warn", abandoned: "--bad" };
+  const clock = (ms) => { const d = new Date(ms); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + " UTC"; };
+  const nowMs = () => t0 + wall * 60000;
+  const ago = (ms) => { const d = (nowMs() - ms) / 60000; return d < 1 ? "just now" : d < 60 ? Math.round(d) + "m ago" : Math.floor(d / 60) + "h ago"; };
+  const when = (ms) => `<time title="+${fmtMin((ms - t0) / 60000)} · ${clock(ms)}">${ago(ms)}</time>`;
+  const md = (txt) => esc(txt).replace(/`([^`]+)`/g, "<code>$1</code>");
+  const bullets = (xs) => `<ul class="dr-list">${xs.map((x) => `<li>${md(x)}</li>`).join("")}</ul>`;
+  const card = (label, body) => `<section class="dr-card"><h4>${label}</h4>${body}</section>`;
+
+  function renderDrawer(id) {
+    const t = taskBy[id], b = t.brief;
+    $("dr-id").textContent = t.id;
+    $("dr-status").className = "chip " + (statusChip[t.status] || "plain");
+    $("dr-status").textContent = t.status;
+    $("dr-title").textContent = b ? b.title : t.id;
+    const specColour = Object.fromEntries(view.spec.map((q, i) => [q.id, `--label-${(i % 5) + 1}`]));
+    const writes = t.writes || [];
+    const ws = writes.length
+      ? `<details class="ws"><summary>${plural(writes.length, "file")}</summary><ul class="pop-files">${writes.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>`
+      : `<span class="muted">no files</span>`;
+    const merged = t.mergedAt
+      ? `${(t.commits || []).map((c) => `<code>${esc(c)}</code>`).join("")}<span class="muted">${clock(Date.parse(t.mergedAt))} · ${ago(Date.parse(t.mergedAt))}</span>`
+      : `<span class="muted">not yet</span>`;
+    const created = t.createdAt ? `<span>${clock(Date.parse(t.createdAt))}</span><span class="muted">· ${ago(Date.parse(t.createdAt))}</span>` : `<span class="muted">unknown</span>`;
+    const covers = t.covers || [];
+    const props = [
+      ["status", `<span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span>`],
+      ["worker", `${esc(t.model)} <span class="muted">build worker</span>`],
+      ["wave", `wave ${M.waveOf(view, id)}`],
+      ["spec ids", covers.length ? covers.map((c) => `<span class="label-chip" style="--c:var(${specColour[c] || "--muted"})">${esc(c)}</span>`).join("") : `<span class="muted">none</span>`],
+      ["write set", ws, "block"],
+      ["gate", t.gate ? esc(t.gate) : `<span class="muted">none</span>`],
+      ["created", created],
+      ["merged", merged],
+      ["id", `<span class="mono">${esc(id)}</span>`]
+    ];
+
+    const linkRows = (label, ids) => ids.map((d) => {
+      const x = taskBy[d];
+      if (!x) return `<div class="link-row"><span>${label}</span><span class="mono">${esc(d)}</span></div>`;
+      const goal = x.brief ? x.brief.title : x.status;
+      return `<div class="link-row"><span>${label}</span><button type="button" class="link-btn" data-open="${esc(d)}" style="--c:var(${statusVar[x.status] || "--muted"})" aria-label="${label} ${esc(d)}, ${esc(x.status)}: ${esc(goal)}"><i class="dot"></i><span class="mono">${esc(d)}</span><span class="goal">${esc(goal)}</span></button></div>`;
+    }).join("");
+    const links = linkRows("Blocked by", t.deps || []) + linkRows("Blocks", M.blocks(view, id));
+
+    const ev = M.activity(view, id);
+    const acts = ev.length
+      ? `<ol class="act">${ev.map((e) => `<li style="--c:var(${e.c})"><i class="dot"></i><div class="ev"><span>${esc(e.text)}</span>${(e.codes || []).map((c) => `<code>${esc(c)}</code>`).join("")}${e.sub ? `<span class="sub">${esc(e.sub)}</span>` : ""}</div>${when(e.at)}</li>`).join("")}</ol>`
+      : `<p class="muted">nothing yet</p>`;
+    const ts = taskSpan(id);
+
+    $("dr-body").innerHTML =
+      (b ? card("Why", `<p>${md(b.why)}</p>${b.designRef ? `<p class="dr-ref">Implements design ${esc(b.designRef)}</p>` : ""}`) +
+        card("Scope", bullets(b.scope)) +
+        card("Acceptance", bullets(b.acceptance)) +
+        card("Out of scope", bullets(b.outOfScope)) : "") +
+      card("Properties", `<dl class="props">${props.map(([k, v, cls]) => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ""}>${v}</dd>`).join("")}</dl>`) +
+      card("Links", links ? `<div class="links">${links}</div>` : `<p class="muted">no dependencies</p>`) +
+      card("Activity", acts) +
+      `<details class="dr-card dr-fold"><summary>Tool activity</summary><div style="display:grid;gap:8px">${toolsHtml(ts ? M.toolSummary(spans, ts.id) : null)}</div></details>`;
+  }
+
+  const drawer = $("drawer"), scrim = $("drawer-scrim");
+  let drawerId = null, drawerOpener = null;
+  // With no opener given, focus returns on close to whatever had it when the drawer opened.
+  function openTaskDrawer(id, opener) {
+    if (!taskBy[id]) return false;
+    closePop(false);
+    const from = opener || (drawerId ? null : document.activeElement);
+    if (from && from !== drawerOpener && from !== document.body) {
+      if (drawerOpener) { drawerOpener.classList.remove("sel"); drawerOpener.setAttribute("aria-expanded", "false"); }
+      drawerOpener = from;
+      if (opener) { opener.classList.add("sel"); opener.setAttribute("aria-expanded", "true"); }
+    }
+    drawerId = id;
+    renderDrawer(id);
+    drawer.scrollTop = 0;
+    drawer.removeAttribute("inert");
+    drawer.classList.add("open");
+    scrim.classList.add("open");
+    document.documentElement.classList.add("drawer-open");
+    drawer.querySelector(".dr-close").focus({ preventScroll: true });
+    return true;
+  }
+  function closeDrawer() {
+    if (!drawerId) return;
+    drawerId = null;
+    drawer.classList.remove("open");
+    scrim.classList.remove("open");
+    drawer.setAttribute("inert", "");
+    document.documentElement.classList.remove("drawer-open");
+    const o = drawerOpener;
+    drawerOpener = null;
+    if (o) { o.classList.remove("sel"); o.setAttribute("aria-expanded", "false"); if (o.isConnected) o.focus({ preventScroll: true }); }
+  }
+  drawer.querySelector(".dr-close").addEventListener("click", closeDrawer);
+  scrim.addEventListener("pointerdown", (e) => { e.preventDefault(); closeDrawer(); });
+  // Following a link keeps the original opener, so closing still returns focus to it.
+  $("dr-body").addEventListener("click", (e) => { const l = e.target.closest("[data-open]"); if (l) openTaskDrawer(l.dataset.open); });
+  drawer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const f = [...drawer.querySelectorAll("button, summary, [tabindex]:not([tabindex='-1'])")].filter((el) => el.getClientRects().length);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // footer: every damage row is a visible line, never a silent gap
+  function renderFooter() {
+    const damage = (view ? view.damage : []).concat(pageDamage);
+    $("foot").innerHTML = `<span>RunView schema ${view ? esc(view.schemaVersion) : "none"}</span><span>damage: ${damage.length ? damage.length : "none"}</span><span>plan text, ids, counts, times and repo-relative paths; no source or transcripts</span>` +
+      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
+  }
+
+  // Optional modules (board, graph) render into their own hidden panel. One that throws is shown
+  // as a damage line and its panel stays hidden, so it can't blank the core regions.
+  const modules = new Map();
+  function runModule(name, step) {
+    const mod = modules.get(name);
+    const mount = document.querySelector(`[data-module="${CSS.escape(name)}"]`);
+    if (!mod || !mount || !view) return;
+    try {
+      if (step === "render") mod.render(view, mount); else if (mod.apply) mod.apply(view);
+      mount.hidden = false;
+    } catch (error) {
+      mount.hidden = true;
+      pageDamage.push({ source: "module " + name, reason: String(error && error.message ? error.message : error) });
+      renderFooter();
+    }
+  }
+  function register(name, mod) {
+    modules.set(name, mod);
+    runModule(name, "render");
+  }
+
+  // now strip: live mode only, 1 card per running task with stall and halt badges
+  let strip = null;
+  function ensureStrip() {
+    if (strip) return strip;
+    strip = document.createElement("section");
+    strip.className = "panel now";
+    strip.id = "now";
+    strip.setAttribute("aria-label", "Now");
+    strip.innerHTML = `<div class="head"><h2>Now</h2><span class="now-note" id="now-note"></span></div><div class="now-cards" id="now-cards" role="list"></div>`;
+    document.querySelector(".wrap > .panel").after(strip);
+    return strip;
+  }
+  const stageLabel = (w) => {
+    if (w.phase === "gate") { const g = w.gateRun && gateBy[w.gateRun]; return g ? "gate " + M.gateTier(g.command) : "gate"; }
+    return w.phase === "task" ? "starting" : w.phase.replace(/-/g, " ");
+  };
+  const age = (msAgo) => (msAgo < 60000 ? Math.max(0, Math.round(msAgo / 1000)) + "s ago" : fmtMs(msAgo) + " ago");
+
+  function renderNow() {
+    if (!liveMode) return;
+    ensureStrip();
+    const now = Date.now();
+    // Without the preset's stall_min there is nothing to measure a stall against, so the strip says so.
+    const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
+    const cards = M.workers(view, now, stallMin == null ? Infinity : stallMin);
+    const runHalts = M.openHalts(view).filter((h) => h.task == null);
+    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run names no stall_min</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
+      runHalts.map((h) => `<span class="chip bad">run halted: ${esc(h.reason)}</span>`).join("");
+    $("now-cards").innerHTML = cards.length ? cards.map((w) => `<div class="now-card${w.halted ? " halted" : w.stalled ? " stalled" : ""}" role="listitem" data-task="${esc(w.task)}">
+        <div class="now-top"><b class="mono">${esc(w.task)}</b>${w.halted ? `<span class="chip bad" title="${esc(w.halt.reason)}">halted</span>` : ""}${w.stalled ? `<span class="chip warn">stalled</span>` : ""}</div>
+        <div class="now-stage"><span>${esc(stageLabel(w))}</span><span class="num">${esc(fmtMs(w.elapsedMs))}</span></div>
+        <div class="sub num">last event ${w.lastEventMs == null ? "none" : esc(age(now - w.lastEventMs))}</div>
+      </div>`).join("") : `<p class="sub">idle: no task running</p>`;
+  }
+
+  function render() {
+    derive();
+    renderHeader();
+    renderNow();
+    renderTimeline();
+    renderSpec();
+    renderProof();
+    renderTokens();
+    renderGates();
+    renderFooter();
+  }
+
+  // Merges a partial RunView by id and redraws; live mode calls this on each poll.
+  // A redraw keeps what the reader had: the open span popover, the focused bar, and the drawer's
+  // focus and folds, so a 1 s poll never pulls them away.
+  function apply(partial) {
+    view = M.apply(view, partial);
+    const active = document.activeElement;
+    const popSpan = openAnchor && openAnchor.classList.contains("bar") ? openAnchor.dataset.id : null;
+    const popFocus = pop.contains(active);
+    const barFocus = active && active.classList && active.classList.contains("bar") ? active.dataset.id : null;
+    const drawerFocusables = () => [...drawer.querySelectorAll("#dr-body button, #dr-body summary")];
+    const drawerFocus = drawerId ? drawerFocusables().indexOf(active) : -1;
+    const folds = drawerId ? [...drawer.querySelectorAll("#dr-body details")].map((d) => d.open) : [];
+    closePop(false);
+    render();
+    modules.forEach((_, name) => runModule(name, "apply"));
+    const bar = (id) => (id ? tl.querySelector(`.bar[data-id="${CSS.escape(id)}"]`) : null);
+    if (barFocus && bar(barFocus)) bar(barFocus).focus({ preventScroll: true });
+    if (popSpan && bar(popSpan)) openSpan(bar(popSpan), popFocus);
+    if (drawerId) {
+      renderDrawer(drawerId);
+      drawer.querySelectorAll("#dr-body details").forEach((d, i) => { if (folds[i]) d.open = true; });
+      if (drawerFocus >= 0 && drawerFocusables()[drawerFocus]) drawerFocusables()[drawerFocus].focus({ preventScroll: true });
+    }
+  }
+
+  // live mode: fetch the whole view once, then merge each change set polled after its cursor
+  const POLL_MS = 1000;
+  let polls = 0, pollFailures = 0;
+  async function fetchJSON(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(`${path.split("?")[0]} answered ${response.status}`);
+    return response.json();
+  }
+  function showLiveError(message) {
+    let line = $("live-error");
+    if (!line) {
+      line = document.createElement("div");
+      line.id = "live-error";
+      line.className = "live-error";
+      line.setAttribute("role", "status");
+      document.querySelector(".wrap > .panel").appendChild(line);
+    }
+    line.textContent = message || "";
+    line.hidden = !message;
+  }
+  async function poll() {
+    try {
+      if (!view) {
+        view = await fetchJSON("/view.json");
+        render();
+      } else {
+        apply(await fetchJSON("/changes?after=" + encodeURIComponent(view.cursor)));
+      }
+      polls++;
+      document.body.dataset.polls = String(polls);
+      showLiveError(null);
+    } catch (error) {
+      pollFailures++;
+      document.body.dataset.pollFailures = String(pollFailures);
+      showLiveError(`live updates paused: ${error.message}; retrying every second`);
+    }
+    setTimeout(poll, POLL_MS);
+  }
+
+  window.runViewer = {
+    register,
+    openPopover: (anchor, rows, title) => openPopover(anchor, rows.map(([k, v]) => [k, v]), title),
+    openTaskDrawer,
+    apply
+  };
+
+  if (liveMode) {
+    document.body.dataset.live = "on";
+    const mode = document.querySelector(".wrap > .panel .head .chip.plain:not(#state)");
+    if (mode) mode.textContent = "Live";
+    renderFooter();
+    poll();
+  } else if (view) render(); else renderFooter();
+})();
+
+</script>
+<script>
+// The board module: 1 card per task in queued, building, gating, review, merged, or the blocked
+// lane. Loaded after the core page as a classic script; it publishes `RunViewBoard` and registers
+// with the page when the page is there.
+(function (root) {
+  const LANES = ["queued", "building", "gating", "review", "merged", "blocked"];
+  const BLOCKED = new Set(["blocked", "needs-replan", "abandoned"]);
+  // An open merge span is still waiting on its merge gate, so it reads as review, not merged.
+  const STAGE = { worker: "building", fix: "building", verify: "gating", gate: "gating", review: "review", merge: "review" };
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+
+  function laneFor(task, own, halted) {
+    if (halted || BLOCKED.has(task.status)) return "blocked";
+    if (task.status === "done") return "merged";
+    const open = own.filter((s) => s.end == null && STAGE[s.phase]).sort((a, b) => ms(b.start) - ms(a.start));
+    if (open.length) return STAGE[open[0].phase];
+    return task.status === "in-progress" ? "building" : "queued";
+  }
+
+  // The verdict of the task's latest finished gate span, else of its last gate record.
+  function lastGate(task, own, gateBy, gates) {
+    const ran = own.filter((s) => s.phase === "gate" && s.gateRun && s.end != null).sort((a, b) => ms(a.start) - ms(b.start));
+    const last = ran[ran.length - 1];
+    if (last) return gateBy[last.gateRun] ? gateBy[last.gateRun].verdict : last.outcome === "red" ? "RED" : "GREEN";
+    const records = gates.filter((g) => g.task === task.id);
+    return records.length ? records[records.length - 1].verdict : null;
+  }
+
+  function elapsed(task, own, cut) {
+    const fmtMin = root.RunViewModel.fmtMin;
+    if (!own.length) return "waiting";
+    const taskSpan = own.find((s) => s.phase === "task");
+    const start = taskSpan ? ms(taskSpan.start) : Math.min(...own.map((s) => ms(s.start)));
+    let end = taskSpan && taskSpan.end != null ? ms(taskSpan.end) : ms(task.mergedAt);
+    if (end == null) end = own.every((s) => s.end != null) && !taskSpan ? Math.max(...own.map((s) => ms(s.end))) : cut;
+    return fmtMin(Math.max(0, end - start) / 60000);
+  }
+
+  // Each lane's cards in the view's task order. `now` cuts open spans; it defaults to the run's last
+  // event, as the timeline does.
+  function columns(view, now) {
+    const cut = now != null ? now : root.RunViewModel.lastEventMs(view);
+    const spans = view.spans || [];
+    const gates = view.gates || [];
+    const gateBy = Object.fromEntries(gates.map((g) => [g.runId, g]));
+    const halted = new Set((view.halts || []).filter((h) => h.task != null && h.answer == null && h.waitMs == null).map((h) => h.task));
+    const out = Object.fromEntries(LANES.map((lane) => [lane, []]));
+    (view.tasks || []).forEach((task) => {
+      const own = spans.filter((s) => s.task === task.id);
+      const lane = laneFor(task, own, halted.has(task.id));
+      out[lane].push({
+        id: task.id, lane, model: task.model, elapsed: elapsed(task, own, cut),
+        lastGate: lastGate(task, own, gateBy, gates), covers: task.covers || []
+      });
+    });
+    return out;
+  }
+
+  root.RunViewBoard = { LANES, columns };
+
+  const runViewer = root.runViewer;
+  if (!runViewer || typeof document === "undefined") return;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const verdictChip = (v) => `<span class="chip ${v === "GREEN" ? "ok" : v === "RED" ? "bad" : "warn"}">${esc(v)}</span>`;
+  const laneColour = { queued: "--muted", building: "--bar-worker", gating: "--warn", review: "--bar-review", merged: "--ok", blocked: "--bad" };
+
+  let board = null, note = null;
+  const lanes = {};
+  // Cards persist by task id, so a card that moves keeps its focus and stays the drawer's opener.
+  const cards = new Map();
+
+  function build(mount) {
+    mount.innerHTML = `<div class="head" style="justify-content:space-between"><h2>Board</h2></div>
+      <p class="sub board-note"></p>
+      <div class="board-scroll" tabindex="0" aria-label="Task board, scrolls horizontally"><div class="board"></div></div>`;
+    note = mount.querySelector(".board-note");
+    board = mount.querySelector(".board");
+    LANES.forEach((lane) => {
+      const el = document.createElement("div");
+      el.className = "lane" + (lane === "blocked" ? " blocked" : "");
+      el.setAttribute("role", "group");
+      el.dataset.lane = lane;
+      board.appendChild(el);
+      lanes[lane] = el;
+    });
+    cards.clear();
+    board.addEventListener("click", (e) => {
+      const c = e.target.closest(".card");
+      if (c) runViewer.openTaskDrawer(c.dataset.task, c);
+    });
+  }
+
+  function cardFor(c) {
+    let el = cards.get(c.id);
+    if (!el) {
+      el = document.createElement("button");
+      el.type = "button";
+      el.className = "card";
+      el.dataset.task = c.id;
+      el.setAttribute("aria-haspopup", "dialog");
+      el.setAttribute("aria-expanded", "false");
+      cards.set(c.id, el);
+    }
+    el.style.setProperty("--c", `var(${laneColour[c.lane]})`);
+    el.setAttribute("aria-label", `${c.id}, ${c.lane}, ${c.model}, ${c.elapsed}, last gate ${c.lastGate || "none"}`);
+    el.innerHTML = `<span class="card-top"><span class="card-id">${esc(c.id)}</span><span class="chip plain">${esc(c.model)}</span></span>
+      <span class="card-meta"><span class="num">${esc(c.elapsed)}</span>${c.lastGate ? verdictChip(c.lastGate) : `<span class="chip plain">no gate yet</span>`}</span>
+      <span class="tags">${c.covers.length ? c.covers.map((t) => `<span class="tag">${esc(t)}</span>`).join("") : `<span class="sub card-none">no spec id</span>`}</span>`;
+    return el;
+  }
+
+  function update(view) {
+    const cut = root.RunViewModel.lastEventMs(view);
+    const byLane = columns(view, cut);
+    const focused = document.activeElement;
+    const seen = new Set();
+    LANES.forEach((lane) => {
+      const inLane = byLane[lane];
+      const head = document.createElement("div");
+      head.className = "lane-head";
+      head.innerHTML = `<span>${lane}</span><span class="num">${inLane.length}</span>`;
+      const body = inLane.length ? inLane.map((c) => { seen.add(c.id); return cardFor(c); }) : [Object.assign(document.createElement("div"), { className: "lane-empty", textContent: lane === "blocked" ? "no halts" : "empty" })];
+      lanes[lane].setAttribute("aria-label", `${lane}, ${inLane.length} tasks`);
+      lanes[lane].replaceChildren(head, ...body);
+    });
+    [...cards.keys()].forEach((id) => { if (!seen.has(id)) cards.delete(id); });
+    if (focused && focused.classList.contains("card") && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    const fmtMin = root.RunViewModel.fmtMin;
+    const at = fmtMin(Math.max(0, cut - ms(view.run.startedAt)) / 60000);
+    const total = (view.tasks || []).length;
+    note.textContent = view.run.state === "running"
+      ? `Live at +${at}: ${total - byLane.merged.length} tasks in flight.`
+      : `Final state at +${at}: ${byLane.merged.length} of ${total} merged, ${byLane.blocked.length} blocked.`;
+  }
+
+  runViewer.register("board", {
+    render(view, mount) {
+      if (!board || !mount.contains(board)) build(mount);
+      update(view);
+    },
+    apply: update
+  });
+})(globalThis);
+
+</script>
+<script>
+// The plan graph module: the tasks as a dependency graph in waves left to right, 1 node per task
+// coloured by its board lane and 1 edge per dep. Loaded after the core page as a classic script;
+// it publishes `RunViewGraph` and registers with the page when the page is there.
+(function (root) {
+  // A dep on an id outside `tasks` is left out here; the module reports it as a damage line.
+  function cycleIn(tasks, by) {
+    const state = new Map();
+    const stack = [];
+    let found = null;
+    const visit = (id) => {
+      state.set(id, "open");
+      stack.push(id);
+      for (const d of by.get(id).deps || []) {
+        if (found) break;
+        if (!by.has(d)) continue;
+        if (state.get(d) === "open") found = stack.slice(stack.indexOf(d));
+        else if (!state.has(d)) visit(d);
+      }
+      stack.pop();
+      state.set(id, "done");
+    };
+    for (const t of tasks) {
+      if (found) break;
+      if (!state.has(t.id)) visit(t.id);
+    }
+    return found;
+  }
+
+  // Each task's wave is the length of its longest dep chain. Then 1 pass orders each wave by the
+  // mean centred position of its deps, so edges from a wave's top tend to stay at the top.
+  function layers(tasks) {
+    const by = new Map(tasks.map((t) => [t.id, t]));
+    const cycle = cycleIn(tasks, by);
+    if (cycle) return { waves: [], cycle };
+    const wave = new Map();
+    const waveOf = (id) => {
+      if (!wave.has(id)) {
+        const known = (by.get(id).deps || []).filter((d) => by.has(d));
+        wave.set(id, known.length ? 1 + Math.max(...known.map(waveOf)) : 0);
+      }
+      return wave.get(id);
+    };
+    const waves = [];
+    tasks.forEach((t) => (waves[waveOf(t.id)] = waves[waveOf(t.id)] || []).push(t.id));
+    const pos = new Map();
+    waves.forEach((w, i) => {
+      if (i > 0) {
+        const key = (id) => {
+          const known = (by.get(id).deps || []).filter((d) => pos.has(d));
+          return known.reduce((a, d) => a + pos.get(d), 0) / known.length;
+        };
+        const keys = new Map(w.map((id) => [id, key(id)]));
+        w.sort((a, b) => keys.get(a) - keys.get(b));
+      }
+      w.forEach((id, j) => pos.set(id, j - (w.length - 1) / 2));
+    });
+    return { waves, cycle: null };
+  }
+
+  root.RunViewGraph = { layers };
+
+  const runViewer = root.runViewer;
+  if (!runViewer || typeof document === "undefined") return;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+  // Plan stages come from phase spans; before tasks run spec-read, plan and contract, after them final.
+  const PRE = ["spec-read", "plan", "contract"];
+  const POST = ["final"];
+  const STAGE_LABEL = { "spec-read": "spec read", plan: "plan", contract: "contract", final: "final" };
+  const NW = 168, NH = 52, GX = 44, PAD = 20, ROW = 72;
+  // A 12px monospace id fits about 18 characters in a node; the tooltip and label keep the whole id.
+  const fit = (s) => (s.length > 18 ? s.slice(0, 17) + "…" : s);
+
+  // Without the board module a task's lane comes from its status alone.
+  function lanesOf(view) {
+    const out = {};
+    if (root.RunViewBoard) {
+      const cols = root.RunViewBoard.columns(view);
+      Object.keys(cols).forEach((lane) => cols[lane].forEach((c) => (out[c.id] = lane)));
+      return out;
+    }
+    (view.tasks || []).forEach((t) => {
+      out[t.id] = t.status === "done" ? "merged" : ["blocked", "needs-replan", "abandoned"].includes(t.status) ? "blocked" : t.status === "in-progress" ? "building" : "queued";
+    });
+    return out;
+  }
+
+  function stagesOf(view) {
+    const out = {};
+    (view.spans || []).forEach((s) => {
+      if (!STAGE_LABEL[s.phase]) return;
+      const st = out[s.phase] || (out[s.phase] = { phase: s.phase, start: ms(s.start), end: ms(s.end), open: false });
+      st.start = Math.min(st.start, ms(s.start));
+      if (s.end == null) st.open = true; else st.end = Math.max(st.end || 0, ms(s.end));
+    });
+    return out;
+  }
+
+  // The graph's nodes: plan stages present in the spans, chained around the tasks.
+  function nodesOf(view) {
+    const tasks = view.tasks || [];
+    const ids = new Set(tasks.map((t) => t.id));
+    const stages = stagesOf(view);
+    const pre = PRE.filter((p) => stages[p]);
+    const post = POST.filter((p) => stages[p]);
+    const key = (p) => "@" + p;
+    const nodes = [];
+    pre.forEach((p, i) => nodes.push({ key: key(p), stage: stages[p], deps: i ? [key(pre[i - 1])] : [], stageDeps: true }));
+    const depended = new Set(tasks.flatMap((t) => (t.deps || []).filter((d) => ids.has(d))));
+    tasks.forEach((t) => {
+      const known = (t.deps || []).filter((d) => ids.has(d));
+      const lead = !known.length && pre.length ? [key(pre[pre.length - 1])] : [];
+      nodes.push({ key: t.id, task: t, deps: lead.concat(known), lead: lead.length });
+    });
+    const sinks = tasks.filter((t) => !depended.has(t.id)).map((t) => t.id);
+    post.forEach((p, i) => nodes.push({ key: key(p), stage: stages[p], deps: i ? [key(post[i - 1])] : sinks, stageDeps: true }));
+    return nodes;
+  }
+
+  let mount = null, shape = null;
+
+  function taskBits(n, lane) {
+    const t = n.task;
+    const files = t.writes.length + (t.writes.length === 1 ? " file" : " files");
+    const title = t.brief && t.brief.title ? `${t.id}: ${t.brief.title}` : t.id;
+    return { cls: `gnode ln-${lane}`, sub: `${files} · ${t.model}`, title, label: `${t.id}, ${lane}, writes ${files}, ${t.model}` };
+  }
+  function stageBits(n, cut) {
+    const s = n.stage;
+    const state = s.open ? "running" : "done";
+    const sub = s.open ? `running ${root.RunViewModel.fmtMin(Math.max(0, cut - s.start) / 60000)}` : root.RunViewModel.fmtMin(Math.max(0, s.end - s.start) / 60000);
+    const name = STAGE_LABEL[s.phase];
+    return { cls: `gnode stage ln-${state === "done" ? "merged" : "building"}`, sub, title: `${name} stage`, label: `${name} stage, ${state}, ${sub}` };
+  }
+
+  function draw(view, nodes, waves) {
+    const by = new Map(nodes.map((n) => [n.key, n]));
+    const maxRows = Math.max(1, ...waves.map((w) => w.length));
+    const GH = PAD * 2 + NH + (maxRows - 1) * ROW, mid = GH / 2;
+    const GW = PAD * 2 + waves.length * NW + Math.max(0, waves.length - 1) * GX;
+    waves.forEach((w, i) => w.forEach((k, j) => {
+      const n = by.get(k);
+      n.x = PAD + i * (NW + GX);
+      // A lone node sits level with its deps; a crowded wave spreads around the middle.
+      n.cy = w.length === 1 && n.deps.length ? n.deps.reduce((a, d) => a + by.get(d).cy, 0) / n.deps.length : mid + (j - (w.length - 1) / 2) * ROW;
+    }));
+    let svg = `<svg class="graph" viewBox="0 0 ${GW} ${GH}" style="min-width:${GW}px" role="group" aria-label="Plan dependency graph">
+      <defs><marker id="graph-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>`;
+    nodes.forEach((n) => n.deps.forEach((d, i) => {
+      const a = by.get(d), x1 = a.x + NW, x2 = n.x - 2, mx = (x1 + x2) / 2;
+      const kind = n.stageDeps || i < (n.lead || 0) ? "stage" : "dep";
+      svg += `<path class="edge ${kind}" d="M${x1} ${a.cy} C${mx} ${a.cy}, ${mx} ${n.cy}, ${x2} ${n.cy}" marker-end="url(#graph-arrow)"/>`;
+    }));
+    nodes.forEach((n) => {
+      const attr = n.task ? `data-task="${esc(n.task.id)}" aria-haspopup="dialog" aria-expanded="false"` : `data-stage="${esc(n.stage.phase)}"`;
+      const name = n.task ? n.task.id : STAGE_LABEL[n.stage.phase];
+      svg += `<g class="gnode" tabindex="0" role="button" ${attr}><title></title>
+        <rect class="box" x="${n.x}" y="${n.cy - NH / 2}" width="${NW}" height="${NH}" rx="8"/>
+        <circle class="dot" cx="${n.x + 14}" cy="${n.cy - 8}" r="4"/>
+        <text class="gid" x="${n.x + 24}" y="${n.cy - 4}">${esc(fit(name))}</text>
+        <text class="gsub" x="${n.x + 24}" y="${n.cy + 14}"></text></g>`;
+    });
+    mount.querySelector(".graph-scroll").innerHTML = svg + `</svg>`;
+  }
+
+  // Classes, labels and tooltips change in place, so a focused node and the drawer's opener survive a poll.
+  function paint(view, nodes) {
+    const lanes = lanesOf(view);
+    const cut = root.RunViewModel.lastEventMs(view);
+    nodes.forEach((n) => {
+      const el = n.task
+        ? mount.querySelector(`.gnode[data-task="${CSS.escape(n.task.id)}"]`)
+        : mount.querySelector(`.gnode[data-stage="${CSS.escape(n.stage.phase)}"]`);
+      const bits = n.task ? taskBits(n, lanes[n.task.id] || "queued") : stageBits(n, cut);
+      const keep = el.classList.contains("sel");
+      el.setAttribute("class", bits.cls + (keep ? " sel" : ""));
+      if (n.task) el.dataset.lane = lanes[n.task.id] || "queued";
+      el.setAttribute("aria-label", bits.label);
+      el.querySelector("title").textContent = bits.title;
+      el.querySelector(".gsub").textContent = bits.sub;
+    });
+  }
+
+  function stageRows(phase, view) {
+    const s = stagesOf(view)[phase];
+    const fmtMin = root.RunViewModel.fmtMin;
+    const t0 = ms(view.run.startedAt);
+    return [["stage", STAGE_LABEL[phase]], ["start", "+" + fmtMin(Math.max(0, s.start - t0) / 60000)],
+      ["duration", s.open ? "running" : fmtMin(Math.max(0, s.end - s.start) / 60000)]];
+  }
+
+  let current = null;
+  function open(g) {
+    if (g.dataset.task) runViewer.openTaskDrawer(g.dataset.task, g);
+    else if (g.dataset.stage && current) runViewer.openPopover(g, stageRows(g.dataset.stage, current), STAGE_LABEL[g.dataset.stage]);
+  }
+
+  function build(m) {
+    mount = m;
+    shape = null;
+    mount.innerHTML = `<div class="head" style="justify-content:space-between"><h2>Plan</h2>
+        <div class="legend"><span style="--c:var(--ok)">merged</span><span style="--c:var(--accent)">building</span><span style="--c:var(--warn)">gating</span><span style="--c:var(--bar-review)">review</span><span style="--c:var(--bad)">blocked</span><span style="--c:var(--muted)">queued</span></div></div>
+      <div class="graph-notes"></div>
+      <div class="graph-scroll" tabindex="0" aria-label="Plan dependency graph, scrolls horizontally"></div>`;
+    const scroll = mount.querySelector(".graph-scroll");
+    scroll.addEventListener("click", (e) => { const g = e.target.closest(".gnode"); if (g) open(g); });
+    scroll.addEventListener("keydown", (e) => {
+      const g = e.target.closest(".gnode");
+      if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(g); }
+    });
+  }
+
+  function update(view) {
+    current = view;
+    const nodes = nodesOf(view);
+    const ids = new Set((view.tasks || []).map((t) => t.id));
+    const unknown = (view.tasks || []).flatMap((t) => (t.deps || []).filter((d) => !ids.has(d)).map((d) => `${t.id} → ${d}`));
+    const { waves, cycle } = layers(nodes.map((n) => ({ id: n.key, deps: n.deps })));
+    const notes = [];
+    if (cycle) notes.push(`plan graph: dep cycle ${cycle.concat(cycle[0]).join(" → ")}; no graph drawn`);
+    if (unknown.length) notes.push(`plan graph: dep on a task outside the plan, not drawn: ${unknown.join(", ")}`);
+    mount.querySelector(".graph-notes").innerHTML = notes.map((n) => `<p class="damage-line">${esc(n)}</p>`).join("");
+    if (cycle) {
+      shape = null;
+      mount.querySelector(".graph-scroll").replaceChildren();
+      return;
+    }
+    const next = JSON.stringify(nodes.map((n) => [n.key, n.deps]));
+    if (next !== shape) {
+      const focused = document.activeElement;
+      const refocus = focused && mount.contains(focused) ? (focused.dataset.task ? `[data-task="${CSS.escape(focused.dataset.task)}"]` : focused.dataset.stage ? `[data-stage="${CSS.escape(focused.dataset.stage)}"]` : null) : null;
+      draw(view, nodes, waves);
+      shape = next;
+      const again = refocus && mount.querySelector(`.gnode${refocus}`);
+      if (again) again.focus({ preventScroll: true });
+    }
+    paint(view, nodes);
+  }
+
+  runViewer.register("graph", {
+    render(view, m) {
+      if (mount !== m || !m.querySelector(".graph-scroll")) build(m);
+      update(view);
+    },
+    apply: update
+  });
+})(globalThis);
+
+</script>
+</body>
+</html>

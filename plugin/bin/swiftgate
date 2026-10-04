@@ -68,23 +68,42 @@ else
   rm -f "$pending.before"
 fi
 binary="$cache/bin/$hash/swiftgate"
+# A binary is filed under a hash only once it is seen to embed that hash: a build that reports
+# success can still leave an earlier tree's binary in place, and a hook would then run the wrong
+# gate code under the right name. The marker file makes that check a single stat on later calls.
+verified="$cache/bin/$hash/verified"
+embeds_hash() { LC_ALL=C grep -aqF "swiftgate-source-hash=$hash;" "$1" 2>/dev/null; }
+ready() { [ -x "$binary" ]; }
+# Files a candidate under this hash if it embeds the hash; $2 is how it is brought in.
+install_binary() {
+  mkdir -p "$(dirname "$binary")"
+  local tmp="$binary.tmp.$$"
+  case "$2" in
+    link) ln -f "$1" "$tmp" 2>/dev/null || cp -f "$1" "$tmp" 2>/dev/null || return 1 ;;
+    copy) cp -f "$1" "$tmp" || return 1 ;;
+  esac
+  if ! embeds_hash "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$binary"
+  : >"$verified"
+}
+# A binary cached before the marker existed is checked once, and dropped if it is another tree's.
+# From here on, any binary under this hash embeds it.
+if [ -x "$binary" ] && [ ! -f "$verified" ]; then
+  if embeds_hash "$binary"; then : >"$verified"; else rm -f "$binary"; fi
+fi
 
 # Another cache the shim knows may already hold this exact hash: a session started with
 # --plugin-dir gives the plugin's hooks a data directory of their own, while the terminal and the
 # settings hooks build into the user cache. The same sources build the same binary, so it is
 # linked in here rather than rebuilt, and no hook falls back to an older binary meanwhile.
-if [ ! -x "$binary" ]; then
+if ! ready; then
   for other in "${SWIFTGATE_CACHE_DIR:-}" "${CLAUDE_PLUGIN_DATA:-}" \
     "${XDG_CACHE_HOME:-$HOME/.cache}/swift-harness"; do
     [ -n "$other" ] && [ "$other" != "$cache" ] && [ -x "$other/bin/$hash/swiftgate" ] || continue
-    mkdir -p "$(dirname "$binary")"
-    tmp="$binary.tmp.$$"
-    if ln -f "$other/bin/$hash/swiftgate" "$tmp" 2>/dev/null ||
-      cp -f "$other/bin/$hash/swiftgate" "$tmp" 2>/dev/null; then
-      mv -f "$tmp" "$binary"
-      break
-    fi
-    rm -f "$tmp"
+    install_binary "$other/bin/$hash/swiftgate" link && break
   done
 fi
 
@@ -106,7 +125,7 @@ previous_binary() {
   printf '%s\n' "$newest"
 }
 
-if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
+if ! ready && [ "${1:-}" = "hook" ]; then
   # Hooks run under Claude Code timeouts on every tool call, and a build takes minutes: build in
   # the background and meanwhile run the previous binary, or on a cold cache leave the hooks
   # inactive until the binary lands. A lock older than 30 minutes belongs to a build that died.
@@ -122,6 +141,9 @@ if [ ! -x "$binary" ] && [ "${1:-}" = "hook" ]; then
   rm -f "${pending:-}"
   if previous="$(previous_binary)"; then
     export SWIFTGATE_HARNESS_ROOT="$root"
+    # Events name the binary that ran, and this one is cached under its own hash.
+    SWIFTGATE_SOURCE_HASH="$(basename "$(dirname "$previous")")"
+    export SWIFTGATE_SOURCE_HASH
     exec "$previous" "$@"
   fi
   if [ "${2:-}" = "session-start" ] && in_project "$PWD"; then
@@ -163,19 +185,63 @@ format or lint after edits, no command guards, no Stop-hook check, no module map
   exit 0
 fi
 
-if [ ! -x "$binary" ]; then
+# Drops the build directories of gates that no longer exist, with their stamps. A directory with no
+# recorded gate, such as the one scratch path every gate once shared, goes once a day has passed
+# without a build in it. Runs only before a build, never on a hook's cached path.
+prune_scratch() {
+  local dir owner
+  for dir in "$cache"/build/*/; do
+    dir="${dir%/}"
+    [ -d "$dir" ] || continue
+    if [ -f "$dir/gate-path" ]; then
+      read -r owner <"$dir/gate-path" || owner=""
+      [ -n "$owner" ] && [ -d "$owner" ] && continue
+    elif [ -n "$(find "$dir" -maxdepth 1 -mmin -1440 -print 2>/dev/null | head -n 1)" ]; then
+      continue
+    fi
+    rm -rf "$dir"
+    rm -f "$cache/stamps/$(basename "$dir")" "$cache/last-good/$(basename "$dir")"
+  done
+}
+
+if ! ready; then
   echo "swift-harness: building swiftgate ($config, $hash)…" >&2
-  scratch="$cache/build/$config"
-  swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" >&2
-  built="$(swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" --show-bin-path)/swiftgate"
-  mkdir -p "$(dirname "$binary")"
-  tmp="$binary.tmp.$$"
-  cp "$built" "$tmp"
-  mv -f "$tmp" "$binary"
+  prune_scratch
+  # Each gate builds in a scratch path of its own: SwiftPM locks a scratch path for a whole build,
+  # and gates of different trees sharing one queue behind each other and rebuild every module on
+  # each switch.
+  scratch_root="$cache/build/$key"
+  scratch="$scratch_root/$config"
+  mkdir -p "$scratch_root"
+  printf '%s\n' "$gate" >"$scratch_root/gate-path"
+  # The hash goes into the binary through a file named after it, so a new hash is a new link line,
+  # which also makes SwiftPM plan the build again. The files are left in place: a build of another
+  # hash in this scratch path may be waiting to link with its own.
+  hash_file="$scratch_root/source-hash-$hash"
+  printf 'swiftgate-source-hash=%s;' "$hash" >"$hash_file"
+  link_flags=(-Xlinker -sectcreate -Xlinker __TEXT -Xlinker __swiftgate_src -Xlinker "$hash_file")
+  build() {
+    swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" "${link_flags[@]}" >&2
+    built="$(swift build -c "$config" --package-path "$gate" --scratch-path "$scratch" \
+      "${link_flags[@]}" --show-bin-path)/swiftgate"
+  }
+  build
+  if ! install_binary "$built" copy; then
+    # SwiftPM can keep a build plan made for other sources and report success without compiling;
+    # dropping the plan makes it plan again. Tried once.
+    echo "swift-harness: the build left a binary of other sources; rebuilding $scratch" >&2
+    rm -f "$scratch/$config.yaml" "$scratch/build.db" "$scratch"/*/"$config"/description.json
+    build
+    if ! install_binary "$built" copy; then
+      echo "swift-harness: $built does not embed source hash $hash; refusing to cache or run it" >&2
+      rm -f "${pending:-}"
+      exit 1
+    fi
+  fi
 fi
 
 if [ -n "${pending:-}" ] && [ -f "$pending" ]; then
-  if [ -x "$binary" ]; then
+  if ready; then
     mv -f "$pending" "$stamp"
     # Only a rehash can change the hash, so the pointer is kept current without a write per call.
     mkdir -p "$cache/last-good"
@@ -188,4 +254,6 @@ fi
 
 # `bootstrap` finds its templates, and `self-test` its fixtures, in the plugin this shim belongs to.
 export SWIFTGATE_HARNESS_ROOT="$root"
+# The binary reads its own hash from here to name itself in the events it writes.
+export SWIFTGATE_SOURCE_HASH="$hash"
 exec "$binary" "$@"
