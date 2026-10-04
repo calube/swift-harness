@@ -100,7 +100,7 @@ struct DiscoverTests {
     let proposal = Discover.propose(tree: tree, head: "abc", dirty: [], readers: [reader])
 
     let core = try #require(proposal.areas.first { $0.name == "core" })
-    #expect(core.commands[.test]?.value == "go test -count=1 ./...")
+    #expect(core.commands[.test]?.value == "go test -json -count=1 ./...")
     #expect(
       core.commands[.lint] == Sourced(value: "make lint", source: "Makefile", confidence: .found))
     let ui = try #require(proposal.areas.first { $0.name == "ui" })
@@ -339,7 +339,7 @@ struct DiscoverTests {
       Discover.propose(tree: tree, head: "abc", dirty: [], readers: [reader]).areas.first)
 
     #expect(core.commands[.test]?.source == ".github/workflows/release.yaml")
-    #expect(core.commands[.test]?.value == "flags= go test ./...")
+    #expect(core.commands[.test]?.value == "flags= go test -json ./...")
     #expect(core.missing[.test] == nil)
   }
 
