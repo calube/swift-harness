@@ -77,7 +77,8 @@ public struct SimVerify: Sendable {
     }
     let start = dependencies.clock.now()
     let store = SimRunStore(simDirectory: request.simDirectory(runID))
-    let report = judge(runID: runID, store: store, checkoutHead: request.checkoutHead)
+    let report = judge(
+      runID: runID, store: store, checkoutHead: request.checkoutHead, audit: request.audit)
     let unrecorded = record(
       report, store: store, historyFile: request.historyFile,
       elapsed: dependencies.clock.now() - start)
@@ -132,12 +133,12 @@ public struct SimVerify: Sendable {
     return newest.runID
   }
 
-  private func judge(runID: String, store: SimRunStore, checkoutHead: SimCheckoutHead)
-    -> SimVerifyReport
-  {
+  private func judge(
+    runID: String, store: SimRunStore, checkoutHead: SimCheckoutHead, audit: SimAuditScope
+  ) -> SimVerifyReport {
     do throws(SimRunStoreError) {
       return .judged(
-        try Self.evidence(runID: runID, store: store), checkoutHead: checkoutHead)
+        try Self.evidence(runID: runID, store: store), checkoutHead: checkoutHead, audit: audit)
     } catch {
       return .unreadable(runID: runID, reason: error.message, checkoutHead: checkoutHead)
     }

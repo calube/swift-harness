@@ -326,7 +326,8 @@ public actor QAFlowRunner {
 
     let simDirectory = row.directory.appending(path: "sim", directoryHint: .isDirectory)
     let request = QAFlowSimulatorRequest(
-      worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil)
+      worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil,
+      audit: Self.audit(row))
     let started: SimUpStarted
     switch await simulator.up(request) {
     case .failure(let failure):
@@ -466,6 +467,15 @@ public actor QAFlowRunner {
     return environment
   }
 
+  /// The controls the row's `sim verify` audits: every one in an owned repository, and in a
+  /// brownfield clone those the flow file's steps select. A flow file that doesn't parse selects
+  /// none; the batch reports it.
+  static func audit(_ row: QAFlowRow) -> SimAuditScope {
+    let steps = (try? Data(contentsOf: row.stepsFile)).flatMap { try? FlowSteps.parse($0) }
+    return .scope(
+      profile: StateRootResolver.profile(worktree: row.worktree), flowSteps: steps ?? [])
+  }
+
   /// `sim verify` over the row's `sim/` folder: only `GREEN` passes.
   private func judge(
     _ request: QAFlowSimulatorRequest, relativeDirectory: String, evidence: inout [String]
@@ -479,13 +489,14 @@ public actor QAFlowRunner {
     case .success(let verified):
       evidence.append("\(relativeDirectory)/sim/\(SimVerifyReport.fileName)")
       let report = verified.report
+      let nits = report.notes.map { "; nit \($0.rule): \($0.message)" }.joined()
       switch report.verdict {
       case .green:
         let steps = report.stepCount.map { $0 == 1 ? "1 step" : "\($0) steps" } ?? "its steps"
-        return (.pass, "batch passed; sim verify GREEN over \(steps)")
+        return (.pass, "batch passed; sim verify GREEN over \(steps)" + nits)
       case .red:
         let found = report.findings.map { "\($0.rule.rawValue): \($0.message)" }
-        return (.red, "sim verify RED: " + found.joined(separator: "; "))
+        return (.red, "sim verify RED: " + found.joined(separator: "; ") + nits)
       case .blocked:
         return (.unverified, "not judged: sim verify BLOCKED: \(report.blocked ?? "no reason")")
       }

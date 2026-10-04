@@ -17,6 +17,7 @@ into a committed file.
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
 | How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
+| Which controls `sim verify`'s accessibility rules judge, in an owned repository or a brownfield clone | [`simulator-qa-audit.md`](simulator-qa-audit.md) |
 | Seeing a build run as 1 page (`swiftgate report --html`, `swiftgate view`), or emitting a span with `swiftgate events span` | [`run-viewer.md`](run-viewer.md) |
 
 Your repository's `docs/index.md` routes its own docs (designs, plans, ADRs); this page doesn't.

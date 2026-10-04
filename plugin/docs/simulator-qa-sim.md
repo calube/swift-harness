@@ -16,11 +16,7 @@ The verdict is GREEN (exit 0), RED (exit 1) on any finding, or BLOCKED (exit 2) 
 or `steps.ndjson` doesn't read, git can't name HEAD, or the caller named no run and none is live.
 A RED finding outranks BLOCKED.
 
-Each step's tree must also show every button, switch, text field and cell with an accessibility
-identifier (`sim.a11y-identifier`) and a readable label (`sim.a11y-label`). A label is readable when
-it holds more than whitespace and differs from the identifier. Static text, images and containers
-need neither. These 2 rules check standards §7 on the screen the app drew, so an icon-only
-button with no `.accessibilityLabel` fails here even when review missed it.
+Each step's tree must also show its controls with an accessibility identifier (`sim.a11y-identifier`) and a readable label (`sim.a11y-label`). Which controls depends on the repository and the flow: see [`simulator-qa-audit.md`](simulator-qa-audit.md).
 
 `sim snap` records each step's `appState` from `agent-device appstate`. When it finds the app
 `notRunning`, it keeps the step with its screenshot and no tree, and exits 1 with `sim.app-exited`.
@@ -30,9 +26,10 @@ another device or an earlier run. `sim down` copies the reports, so run `sim ver
 name them.
 
 Each judged run writes `sim/report.json` with keys `schemaVersion`, `command`, `runID`, `verdict`,
-`stepCount`, `headCommit` (the commit `sim up` built), `checkoutHead`, `blocked` and `findings`,
-each `{rule, step, path, message}` with `path` relative to `sim/`. Unknown values are `null`. It
-also appends a `sim verify` line to the runs history with the run id and verdict.
+`stepCount`, `headCommit` (the commit `sim up` built), `checkoutHead`, `blocked`, `findings`,
+each `{rule, step, path, message}` with `path` relative to `sim/`, and `notes`, each
+`{rule, message}`. Unknown values are `null`. It also appends a `sim verify` line to the runs
+history with the run id and verdict.
 
 ## sim down
 
