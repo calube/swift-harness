@@ -177,9 +177,6 @@ public struct RunViewReader: RunViewReading {
             source: display(path),
             reason: "malformed spec page: \(problems.map(\.message).joined(separator: "; "))"))
       }
-    case .livePlan:
-      // A live plan names tasks, not requirement ids, so it has no spec rows to show.
-      break
     case .design(let design):
       let checkout: String
       do {
@@ -197,6 +194,9 @@ public struct RunViewReader: RunViewReading {
       state.requirements = document.requirements.map {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
+    case .livePlan:
+      // A live plan names no requirements of its own; its task briefs reach the view separately.
+      break
     }
     return state
   }
