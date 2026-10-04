@@ -23,6 +23,8 @@ enum GateRun {
     /// Each test tier hands its parsed cases here, for the run's `test.result` events. They never
     /// enter the report.
     var tests = TestResultCollector()
+    /// `prove` hands each changed test it ran here, for the run's `prove.result` events.
+    var proofs = ProveResultCollector()
   }
 
   /// - Parameters:
@@ -177,6 +179,17 @@ final class TestResultCollector: Sendable {
   }
 
   var cases: [TestCaseResult] { results.withLock { $0 } }
+}
+
+/// The changed tests 1 gate run's `prove` ran, in the order it handed them over.
+final class ProveResultCollector: Sendable {
+  private let proved = Mutex<[ProvedTest]>([])
+
+  init() {}
+
+  func record(_ results: [ProvedTest]) {}
+
+  var results: [ProvedTest] { [] }
 }
 
 /// Paths changed since a ref, relative to this project's root (which may sit inside a larger
