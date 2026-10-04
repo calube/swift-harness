@@ -305,4 +305,16 @@ struct NeutralRulesTests {
     #expect(AllowMatching.lineSHA("let x = try! load()") == sha)
     #expect(AllowMatching.lineSHA("    let x = try! load()\t") == sha)
   }
+
+  @Test(
+    "a judge candidate names its test's last line, so a judge reads the whole body — catches a candidate cut to its declaration"
+  )
+  func candidateNamesItsLastLine() throws {
+    let text = "def test_load():\n    value = load()\n    check(value)\n\ndef helper():\n    pass\n"
+    let result = try Self.check(text, path: "tests/test_load.py", added: [1...3])
+    let candidate = try #require(result.judgeCandidates.first)
+    #expect(candidate.line == 1)
+    #expect(candidate.endLine == 3)
+  }
+
 }

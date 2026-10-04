@@ -89,10 +89,9 @@ struct BrownfieldRecordingTests {
     let created = await scenario.create()
     try #require(created.status == .created, "\(created.message)")
     let buildRun = RunID.make(startedAt: Date(timeIntervalSince1970: 1_790_000_000), suffix: 1)
-    let worker = try SpanLog(root: URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory))
-      .start(
-        phase: .worker, buildRun: buildRun, task: PlanBranchScenario.task, role: nil,
-        parentSpan: nil)
+    let task = URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory)
+    let worker = try SpanLog(root: task).start(
+      phase: .worker, buildRun: buildRun, task: PlanBranchScenario.task, role: nil, parentSpan: nil)
     let merge = try SpanLog(root: URL(filePath: scenario.checkout, directoryHint: .isDirectory))
       .start(phase: .final, buildRun: buildRun, task: nil, role: nil, parentSpan: nil)
 

@@ -52,16 +52,17 @@ struct BrownfieldConfigTOMLTests {
   @Test(
     "a [judge] key holding a credential is refused by name — catches a brownfield config that stores an API key"
   )
-  func judgeSecretRefused() {
+  func judgeSecretRefused() throws {
     let text = BrownfieldConfigTOMLSample.text.replacingOccurrences(
       of: "[build.presets.brownfield]",
       with: "[judge]\nbackend = \"claude\"\napi_key = \"sk\"\n\n[build.presets.brownfield]")
     let error = #expect(throws: ConfigLoadError.self) {
       try TOMLConfigDecoder().decodeBrownfield(text)
     }
-    #expect(error.map { "\($0)" }?.contains("judge.api_key") == true, "\(String(describing: error))")
-    let plain = try? TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOMLSample.text)
-    #expect(plain?.judge == .disabled)
+    let message = error.map { "\($0)" } ?? "no error"
+    #expect(message.contains("judge.api_key"), "\(message)")
+    let plain = try TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOMLSample.text)
+    #expect(plain.judge == .disabled)
   }
 }
 

@@ -34,18 +34,19 @@ enum JudgeDiffRiskRun {
       }
       return .noAnswer(BrownfieldJudge.notConfigured)
     }
+    let verdict: DiffRiskVerdict
     do throws(JudgeClassificationError) {
-      return .rated(
-        try await DiffRisk.classify(change, sensitive: sensitive) { subject, questions in
-          try await judge.ask(subject, questions, questions)
-        })
-    } catch .noAnswer(let why) {
-      return .noAnswer("the judge gave no answer: \(why)")
-    } catch .unreadable(let why) {
-      return .noAnswer("the judge's answer doesn't read as a level: \(why)")
+      verdict = try await DiffRisk.classify(change, sensitive: sensitive) { subject, questions in
+        try await judge.ask(subject, questions, questions)
+      }
     } catch {
-      return .noAnswer("\(error)")
+      switch error {
+      case .noAnswer(let why): return .noAnswer("the judge gave no answer: \(why)")
+      case .unreadable(let why):
+        return .noAnswer("the judge's answer doesn't read as a level: \(why)")
+      }
     }
+    return .rated(verdict)
   }
 
   /// The printed text and the exit status: 0 with a level, 1 without one. `--json` prints
