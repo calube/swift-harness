@@ -9,7 +9,9 @@ struct RunCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
     abstract: "Plan and build a spec in a brownfield clone with no approval step.",
-    subcommands: [RunStartCommand.self, RunReportCommand.self, RunCheckoutCommand.self],
+    subcommands: [
+      RunStartCommand.self, RunReportCommand.self, RunCheckoutCommand.self, RunClockCommand.self,
+    ],
     defaultSubcommand: RunStartCommand.self)
 }
 
@@ -79,8 +81,9 @@ extension RunCommand {
   /// checked first, and a launch that fails anyway takes back what was prepared, so a failed run
   /// leaves no plan dir, plan branch or warm-up to collide with the next.
   static func start(
-    spec: String, directory: URL, slug: String?, extra: [String], dependencies: Dependencies,
-    claude: any ClaudeLaunching, announce: (RunPrepared) -> Void = { _ in }
+    spec: String, directory: URL, slug: String?, timeBox: Int? = nil, extra: [String],
+    dependencies: Dependencies, claude: any ClaudeLaunching,
+    announce: (RunPrepared) -> Void = { _ in }
   ) async throws(RunStartError) -> RunPrepared {
     if let option = RunLaunch.conflictingOption(in: extra) {
       throw RunStartError(
@@ -90,7 +93,7 @@ extension RunCommand {
     }
     _ = try claude.resolve()
     let prepared = try await prepare(
-      spec: spec, directory: directory, slug: slug, dependencies: dependencies)
+      spec: spec, directory: directory, slug: slug, timeBox: timeBox, dependencies: dependencies)
     announce(prepared)
     do {
       try await warmPlugins(prepared, extra: extra, plugins: dependencies.plugins)
@@ -130,8 +133,10 @@ extension RunCommand {
 
   /// Starts the clock, copies an untracked spec into the plan dir, applies discovery, starts the
   /// warm-up detached and creates the plan branch at `HEAD`, never moving the checked-out branch.
+  /// `timeBox` is `--time-box`'s minutes, which replace the preset's budget for this run.
   static func prepare(
-    spec: String, directory: URL, slug requested: String?, dependencies: Dependencies
+    spec: String, directory: URL, slug requested: String?, timeBox: Int? = nil,
+    dependencies: Dependencies
   ) async throws(RunStartError) -> RunPrepared {
     let runner = dependencies.runner
     let tree = GitTrackedTree(runner: runner, directory: directory)
@@ -494,6 +499,13 @@ struct RunStartCommand: AsyncParsableCommand {
   @Option(help: "The plan slug; defaults to the spec's file name.")
   var slug: String?
 
+  @Option(
+    name: .customLong("time-box"),
+    help: ArgumentHelp(
+      "Minutes the run must end within, from launch; overrides the brownfield preset's "
+        + "time_budget_min for this run."))
+  var timeBox: Int?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -505,7 +517,7 @@ struct RunStartCommand: AsyncParsableCommand {
       filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     do throws(RunStartError) {
       _ = try await RunCommand.start(
-        spec: spec, directory: directory, slug: slug, extra: claudeArguments,
+        spec: spec, directory: directory, slug: slug, timeBox: timeBox, extra: claudeArguments,
         dependencies: .init(), claude: ExecClaudeLauncher(), announce: announce)
     } catch {
       report("run: \(error.message)")

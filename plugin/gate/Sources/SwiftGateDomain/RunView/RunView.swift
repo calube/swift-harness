@@ -38,10 +38,13 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var state: RunState
     /// Minutes a worker may go quiet before the page flags it; `nil` when the preset doesn't say.
     public var stallMin: Int?
+    /// A `swiftgate run`'s time box; `nil` for a run without one.
+    public var timeBox: TimeBox?
 
     public init(
       id: String, plan: String? = nil, preset: String? = nil, startedAt: Date? = nil,
-      endedAt: Date? = nil, state: RunState = .running, stallMin: Int? = nil
+      endedAt: Date? = nil, state: RunState = .running, stallMin: Int? = nil,
+      timeBox: TimeBox? = nil
     ) {
       self.id = id
       self.plan = plan
@@ -50,6 +53,30 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.endedAt = endedAt
       self.state = state
       self.stallMin = stallMin
+      self.timeBox = timeBox
+    }
+  }
+
+  /// The box a brownfield run must end inside, and the moments it stops starting tasks and cuts
+  /// off in-flight work.
+  public struct TimeBox: Sendable, Equatable, Encodable {
+    public var budgetMin: Int
+    public var source: TimeBoxSource
+    public var startedAt: Date
+    public var noNewStartsAt: Date
+    public var cutoffAt: Date
+    public var endsAt: Date
+
+    public init(
+      budgetMin: Int, source: TimeBoxSource, startedAt: Date, noNewStartsAt: Date,
+      cutoffAt: Date, endsAt: Date
+    ) {
+      self.budgetMin = budgetMin
+      self.source = source
+      self.startedAt = startedAt
+      self.noNewStartsAt = noNewStartsAt
+      self.cutoffAt = cutoffAt
+      self.endsAt = endsAt
     }
   }
 

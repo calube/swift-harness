@@ -36,20 +36,26 @@ public struct BuildRunRecord: Sendable, Equatable {
   public let startedAt: Date
   public let presetName: String
   public let preset: BuildPreset
+  /// A `swiftgate run`'s time box, which replaces the preset's budget fields for this run and
+  /// measures from the run's launch, not from ``startedAt``. `nil` for every owned run.
+  public let timeBox: RunTimeBox?
 
-  public init(runID: String, plan: String, startedAt: Date, presetName: String, preset: BuildPreset)
-  {
+  public init(
+    runID: String, plan: String, startedAt: Date, presetName: String, preset: BuildPreset,
+    timeBox: RunTimeBox? = nil
+  ) {
     self.runID = runID
     self.plan = plan
     self.startedAt = startedAt
     self.presetName = presetName
     self.preset = preset
+    self.timeBox = timeBox
   }
 }
 
 extension BuildRunRecord: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runId, plan, startedAt, presetName, preset
+    case schemaVersion, runId, plan, startedAt, presetName, preset, timeBox
   }
 
   public init(from decoder: any Decoder) throws {
@@ -65,7 +71,8 @@ extension BuildRunRecord: Codable {
       plan: try container.decode(String.self, forKey: .plan),
       startedAt: try container.decode(Date.self, forKey: .startedAt),
       presetName: try container.decode(String.self, forKey: .presetName),
-      preset: try container.decode(BuildPreset.self, forKey: .preset))
+      preset: try container.decode(BuildPreset.self, forKey: .preset),
+      timeBox: try container.decodeIfPresent(RunTimeBox.self, forKey: .timeBox))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -76,6 +83,7 @@ extension BuildRunRecord: Codable {
     try container.encode(startedAt, forKey: .startedAt)
     try container.encode(presetName, forKey: .presetName)
     try container.encode(preset, forKey: .preset)
+    try container.encodeIfPresent(timeBox, forKey: .timeBox)
   }
 }
 

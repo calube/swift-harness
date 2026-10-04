@@ -16,13 +16,17 @@ public struct RunReportBuild: Sendable, Equatable {
   /// Each checked return under the run's `returns/`, by task id. A task with no entry stored no
   /// return there.
   public let returns: [String: RunReportInput<TaskReturn>]
+  /// The run's `cutoff.json`; `.missing` when the cutoff never came, `nil` when not looked for.
+  public let cutoff: RunReportInput<CutoffRecord>?
 
   public init(
-    record: BuildRunRecord, log: BuildEventLog, returns: [String: RunReportInput<TaskReturn>] = [:]
+    record: BuildRunRecord, log: BuildEventLog, returns: [String: RunReportInput<TaskReturn>] = [:],
+    cutoff: RunReportInput<CutoffRecord>? = nil
   ) {
     self.record = record
     self.log = log
     self.returns = returns
+    self.cutoff = cutoff
   }
 }
 

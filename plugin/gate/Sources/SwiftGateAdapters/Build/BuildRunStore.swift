@@ -48,7 +48,7 @@ public struct BuildRunStore: Sendable {
   ///   - suffix: the run id's random part, drawn by the caller as `GateRun` does for gate runs.
   public static func create(
     plan: String, presetName: String, preset: BuildPreset, startedAt: Date, git: any Git,
-    suffix: UInt32
+    suffix: UInt32, timeBox: RunTimeBox? = nil
   ) async throws(BuildRunStoreError) -> BuildRunStore {
     let runID = RunID.make(startedAt: startedAt, suffix: suffix)
     let layout = try await locate(plan: plan, runID: runID, git: git)
@@ -63,7 +63,8 @@ public struct BuildRunStore: Sendable {
       throw posixError("mkdir", layout.directory)
     }
     let record = BuildRunRecord(
-      runID: runID, plan: plan, startedAt: startedAt, presetName: presetName, preset: preset)
+      runID: runID, plan: plan, startedAt: startedAt, presetName: presetName, preset: preset,
+      timeBox: timeBox)
     let data: Data
     do {
       data = try BuildRunJSON.encode(record)

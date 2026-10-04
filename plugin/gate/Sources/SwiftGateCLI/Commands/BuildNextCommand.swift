@@ -19,6 +19,17 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   /// Minutes the stall watch lets a worker's transcripts sit unchanged: the preset's `stall_min`,
   /// or `nil` when the preset doesn't say.
   let stallMin: Int?
+  /// A `swiftgate run`'s box: when starts stop, when the cutoff comes and when the box ends.
+  /// Absent for a run without one.
+  let timeBox: TimeBox?
+
+  struct TimeBox: Sendable, Equatable, Encodable {
+    let noNewStartsAt: Date
+    let cutoffAt: Date
+    let endsAt: Date
+    /// Whole seconds from now to ``cutoffAt``, 0 once it has passed: the cutoff timer's sleep.
+    let secondsToCutoff: Int
+  }
 
   struct Required: Sendable, Equatable, Encodable {
     let task: String
@@ -137,7 +148,7 @@ enum BuildNextRun {
         },
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
-        }, stallMin: record.preset.stallMin)
+        }, stallMin: record.preset.stallMin, timeBox: nil)
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
         message: "phase \(result.phase.rawValue)")

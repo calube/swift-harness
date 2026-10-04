@@ -26,10 +26,12 @@ public struct RunClock: Codable, Sendable, Equatable {
   public let planBranch: String
   /// The commit the plan branch starts at: the user's `HEAD` when the run started.
   public let base: String
+  /// The run's time box, measured from ``started``; `nil` in a clock written before runs had one.
+  public let timeBox: TimeBoxLimits?
 
   public init(
     started: Date, spec: String, origin: String, specSource: RunSpecSource, planBranch: String,
-    base: String
+    base: String, timeBox: TimeBoxLimits? = nil
   ) {
     self.started = started
     self.spec = spec
@@ -37,6 +39,12 @@ public struct RunClock: Codable, Sendable, Equatable {
     self.specSource = specSource
     self.planBranch = planBranch
     self.base = base
+    self.timeBox = timeBox
+  }
+
+  /// The box anchored at the launch; `nil` when the clock has none.
+  public var runTimeBox: RunTimeBox? {
+    timeBox.map { RunTimeBox(startedAt: started, limits: $0) }
   }
 
   /// Pretty, key-sorted JSON with ISO 8601 times and a trailing newline.
