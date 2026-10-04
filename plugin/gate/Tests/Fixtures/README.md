@@ -1051,8 +1051,8 @@ The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target sel
 
 1 `project.pbxproj` per inclusion kind, and the tool output read from it, captured from public
 repositories pinned at a commit. Xcode 26.2 (17C48), XcodeGen 2.45.3 (Homebrew), Tuist 4.210.0
-(installed into the scratch directory with mise 2025.12.7; Tuist isn't installed on this machine),
-git 2.50.1. Network access is needed. From the repository root:
+(the script installs it into its scratch directory with mise 2025.12.7, since this machine has no
+Tuist), git 2.50.1. The script needs network access. From the repository root:
 
 ```sh
 plugin/gate/Tests/Fixtures/Xcode/capture.sh
@@ -1074,10 +1074,10 @@ with the clone root as `/REPO` and the temp dir as `/TMP`.
 Observed behavior the Xcode readers rely on:
 
 - The XcodeGen and Tuist generated projects and the explicit project hold no
-  `PBXFileSystemSynchronized*` object. The synchronized project lists no source file at all: each
-  root group (`Buy`, `BuyTests`) names its exception sets, and each set names 1 target and the
-  files under the folder that target leaves out (`membershipExceptions`, here `Info.plist`) or
-  treats specially (`publicHeaders`).
+  `PBXFileSystemSynchronized*` object. The synchronized project lists no source file at all. Each
+  root group (`Buy`, `BuyTests`) names its exception sets. Each set names 1 target and the files
+  under the folder that target leaves out (`membershipExceptions`, here `Info.plist`) or exports
+  (`publicHeaders`).
 - `xcodegen generate` with the pinned version rewrites the tracked project byte for byte:
   `git-status-after-generate.txt` is empty and `generated/` equals `tree/`. It prints 3 progress
   lines and `Created project at <absolute .xcodeproj path>` on stdout, nothing on stderr, exit 0.
@@ -1090,10 +1090,10 @@ Observed behavior the Xcode readers rely on:
   carries a `Total time taken:` line that changes run to run.
 - A missing generator run through `env` exits 127 with `env: <tool>: No such file or directory` on
   stderr and nothing on stdout.
-- `plutil -lint` prints `<path>: OK` on stdout and exits 0 for a valid project. For the damaged one
+- `plutil -lint` prints `<path>: OK` on stdout and exits 0 for a valid project. For the damaged file
   it exits 1 with `<path>: (Unexpected character / at line 1)` on stderr: plutil reports the
   failure at the comment header, not where the file ends.
 - `xcodebuild -list -json` prints `project.{configurations,name,schemes,targets}`. For the damaged
-  project it exits 74 with empty stdout and `Unable to read project` and `is damaged and cannot be
-  opened due to a parse error` on stderr, and writes a result bundle into the user temp dir
-  whatever `TMPDIR` says; the capture deletes the bundle it names.
+  project it exits 74 with empty stdout, and stderr names it unreadable with a parse error (see
+  `xcodebuild-list-damaged.stderr`). It also writes a result bundle into the user temp dir whatever
+  `TMPDIR` says; the capture deletes the bundle it names.
