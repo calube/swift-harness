@@ -1,6 +1,6 @@
 ---
 name: run
-description: This skill should be used by the orchestrator session that `swiftgate run <spec.md>` launches in a brownfield clone, a repository the harness doesn't own. It takes the spec to a merged plan branch with no human input — reads the spec, picks the areas it touches, runs 1 read-only explorer per area against a deadline, fixes failing command guesses through `swiftgate discover --apply`, writes the live `PLAN.md` with its assumptions, lands a contract commit on the plan branch, imports the plan, builds it with the brownfield preset, runs the `final` gate and prints the end-of-run report. Use when the prompt says it comes from `swiftgate run`, or names a brownfield plan slug and a spec to build.
+description: This skill should be used by the orchestrator session that `swiftgate run <spec.md>` launches in a brownfield clone, a repository the harness doesn't own. It takes the spec to a merged plan branch with no human input — reads the spec, picks the areas it touches, runs 1 read-only explorer per area against a deadline, fixes failing command guesses through `swiftgate discover --apply`, writes the live `PLAN.md` with its assumptions, lands a contract commit on the plan branch, imports the plan, builds it with the brownfield preset, runs the `final` gate and prints the end-of-run report, all inside the run's time box, whose cutoff it decides by rule. Use when the prompt says it comes from `swiftgate run`, or names a brownfield plan slug and a spec to build.
 ---
 
 # Run
@@ -46,6 +46,28 @@ The viewer folds them into the plan's first build run. `final` runs inside the b
 names `<run>`. Discovery and the warm-up time themselves in `discover.run` and `warmup.run`, so
 they take no span call here.
 
+## Time box
+
+A run ends inside its time box: `[build.presets.brownfield] time_budget_min` minutes from the
+launch, 45 unless the config or the `--time-box <min>` option of `swiftgate run` says otherwise. The box keeps a
+reserve at its end for the merges of the tasks still running, `final` and this report: starts
+stop `stop_starts_before_min` minutes before the end, and the cutoff comes 5 minutes before it.
+`"$SG" run clock <slug> --json` prints where the run stands: its `phase`, each deadline in
+`deadlines` and the seconds to the `next` one. Read it at the start of steps 1, 3, 5, 6 and 7.
+
+| Deadline | At 45 min | When it passes |
+|---|---|---|
+| `exploreBy` | 5 min | stop every explorer still running and plan their areas from your own reading |
+| `planBy` | 8 min | write `PLAN.md` now from what you know, with an assumption for each open question |
+| `contractBy` | 12 min | land the smallest contract that builds: fewer types, more stubs |
+| `noNewStartsAt` | 32 min | `build next` starts nothing new; running tasks go on |
+| `cutoffAt` | 40 min | `build cutoff` decides every running task (step 7) |
+| `endsAt` | 45 min | the report is printed |
+
+No early deadline is a reason to skip a step: past one, finish that step at its smallest and go
+on. A contract with no GREEN `slice` by `noNewStartsAt` lets no task start: go to step 8 with
+nothing merged.
+
 ## 1. Read the spec
 
 Open the phase: `"$SG" events span start --phase spec-read --build-run <slug>`, kept as `<span>`.
@@ -79,8 +101,8 @@ Note the time you launched them.
 
 Each explorer has a 3-minute soft and 4-minute hard deadline and returns in 300 words or fewer.
 At 3 minutes, send each explorer still running a message to return what it has now. At 4 minutes,
-stop any still running and drop its report: write 1 assumption naming the area and that you
-planned it from your own reading.
+or at `exploreBy` if that comes first, stop any still running and drop its report: write 1
+assumption naming the area and that you planned it from your own reading.
 
 While they run, draft the plan skeleton: the contract task, 1 task per requirement or per area a
 requirement crosses, their dependencies, and the goal line of each. Fill in write sets, tests and
@@ -183,7 +205,26 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
-     merge or stop them, then go to step 8. No answer skips step 8.
+     merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is
+     never one of these halts: the next bullet decides it by rule.
+   - **The time box replaces the build skill's cutoff timer and its halt.** `build next` reports
+     the box in `timeBox`. After each `build next`, start the cutoff timer if none is running: a
+     Bash `/bin/sleep <timeBox.secondsToCutoff>` with `run_in_background`. Run
+     `"$SG" build cutoff <slug> --session <session> --json` when the timer fires, when any
+     `build next` reports `phase` `cutoff`, or when one reports `no-new-starts` with nothing in
+     `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
+     sleep again for the seconds its message names. Its JSON decides every task, and you follow
+     it as written:
+     1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
+        already set it `abandoned`, with the reason the report quotes.
+     2. Merge each task in `finish`, in order, as the build loop's completion step does. A
+        conflict or a RED `merge` gate gets no fixer at the cutoff: `build merge --undo`, then
+        `"$SG" ledger set <slug> <task> abandoned --session <session> --json`.
+     3. Start nothing else, and go to step 8.
+
+     `build cutoff` records the cutoff as `budget` halts it answers itself, so never run
+     `build halt` for it. The tasks it names under `notStarted` stay `pending`, and the report
+     lists them as tasks that didn't fit the box.
    - A design conflict halts with `"$SG" build halt --run <run> --task <task> --reason amend`,
      whatever the preset's `on_design_conflict` says. A brownfield plan has no design to amend:
      `PLAN.md` is what changes. **Retry with a widened write set** (Recommended) when every path
@@ -214,9 +255,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 ## 8. Final
 
 Every run ends here, however its build ended: `build next` reports nothing to start and nothing
-running, or an answer stopped the build and its running tasks have merged or stopped. Blocked,
-abandoned and pending tasks never skip this step: `final` gates whatever merged, the contract
-alone when nothing else did. A run whose `plan import` never succeeded has no ledger and no
+running, an answer stopped the build and its running tasks have merged or stopped, or the cutoff
+decided its running tasks. Blocked, abandoned and pending tasks never skip this step: `final`
+gates whatever merged, the contract alone when nothing else did. A run whose `plan import` never succeeded has no ledger and no
 `<run>`: it runs item 1 alone, naming `<slug>` for its span, then step 9.
 
 Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
@@ -228,7 +269,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its
    span with `"$SG" events span end <span> --outcome red`, goes on to item 4 and ends the run RED;
-   the report quotes its findings as `rule: message`.
+   the report quotes its findings as `rule: message`. Past the cutoff a fix task doesn't fit in
+   the box: a red `final` then goes straight to item 4 and ends the run RED.
 4. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 5. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
@@ -238,7 +280,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 
 `"$SG" run report <slug>` writes the report to `<plan-dir>` and prints it: the assumptions, the
 baseline failures, the build-only areas, the dropped steps, each task's review depth, the review
-fallbacks and the plan branch to merge. Its first line says whether the run finished: a run that left any task blocked
+fallbacks, the time box with each task that didn't fit it, and the plan branch to merge. Its first
+line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
 line, covers only what merged. Print it as your last message as written. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
@@ -246,6 +289,8 @@ line, covers only what merged. Print it as your last message as written. Merging
 ## Rules
 
 - Every choice is yours. A question you would ask becomes an assumption in `PLAN.md`.
+- The run ends inside its time box. `run clock` holds the early steps to their deadlines, and
+  `build cutoff` decides the running tasks at the cutoff; neither waits for anyone.
 - Commits land on `<plan-branch>` only, from `<checkout>` or a task worktree beside it.
 - The repository's git hooks run on every commit; our own commit-message check doesn't run here.
 - `<config>` changes only through `"$SG" discover --apply` and `"$SG" allow`.

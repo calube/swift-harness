@@ -181,7 +181,10 @@ enum BrownfieldRunReportRun {
       return .read(
         RunReportBuild(
           record: try store.record(), log: log,
-          returns: returns(in: store.layout.directory + "/returns", log: log)))
+          returns: returns(in: store.layout.directory + "/returns", log: log),
+          cutoff: read(store.layout.directory + "/" + CutoffRecord.fileName) {
+            try CutoffRecord.decode(Data($0.utf8))
+          }))
     } catch {
       return .unreadable(source: "the plan's build runs", reason: "\(error)")
     }

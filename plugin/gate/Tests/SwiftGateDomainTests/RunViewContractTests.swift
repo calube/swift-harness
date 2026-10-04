@@ -60,8 +60,11 @@ struct RunViewContractTests {
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["cursor"] is NSNull)
     #expect(
-      keys(object["run"]) == ["id", "plan", "preset", "startedAt", "endedAt", "state", "stallMin"])
+      keys(object["run"]) == [
+        "id", "plan", "preset", "startedAt", "endedAt", "state", "stallMin", "timeBox",
+      ])
     #expect((object["run"] as? [String: Any])?["stallMin"] is NSNull)
+    #expect((object["run"] as? [String: Any])?["timeBox"] is NSNull)
     #expect((object["run"] as? [String: Any])?["endedAt"] is NSNull)
     #expect(keys(first(object["spec"])) == ["id", "title", "tasks"])
 
@@ -190,5 +193,37 @@ struct RunViewContractTests {
     #expect(view.run.stallMin == 3)
     let object = try JSONSerialization.jsonObject(with: RunViewJSON.encode(view))
     #expect(((object as? [String: Any])?["run"] as? [String: Any])?["stallMin"] as? Int == 3)
+  }
+
+  @Test(
+    "a run with a time box carries its minutes, source and the moments starts stop, the cutoff comes and the box ends — catches a viewer that can't show the box a run must fit"
+  )
+  func runCarriesTheTimeBox() throws {
+    let preset = BuildPreset(
+      designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
+      mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 45,
+      stopStartsBeforeMin: 13, onDesignConflict: .amend, taskProof: .prove, stallMin: 2)
+    let box = RunTimeBox(
+      startedAt: start,
+      limits: TimeBoxLimits(
+        budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
+    let record = BuildRunRecord(
+      runID: "b1", plan: "p", startedAt: start.addingTimeInterval(300), presetName: "brownfield",
+      preset: preset, timeBox: box)
+    let join = BuildJoin.Run(
+      plan: "p", runID: "b1", writeSets: [:], returns: [:], events: [], record: record)
+
+    let view = RunViewBuilder.build(RunViewInput(buildRun: "b1", join: join))
+
+    #expect(
+      view.run.timeBox
+        == RunView.TimeBox(
+          budgetMin: 45, source: .config, startedAt: start,
+          noNewStartsAt: start.addingTimeInterval(32 * 60),
+          cutoffAt: start.addingTimeInterval(40 * 60), endsAt: start.addingTimeInterval(45 * 60)))
+    let object = try JSONSerialization.jsonObject(with: RunViewJSON.encode(view))
+    let encoded = ((object as? [String: Any])?["run"] as? [String: Any])?["timeBox"]
+    #expect(
+      keys(encoded) == ["budgetMin", "source", "startedAt", "noNewStartsAt", "cutoffAt", "endsAt"])
   }
 }

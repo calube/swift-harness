@@ -16,13 +16,17 @@ public struct RunReportBuild: Sendable, Equatable {
   /// Each checked return under the run's `returns/`, by task id. A task with no entry stored no
   /// return there.
   public let returns: [String: RunReportInput<TaskReturn>]
+  /// The run's `cutoff.json`; `.missing` when the cutoff never came, `nil` when not looked for.
+  public let cutoff: RunReportInput<CutoffRecord>?
 
   public init(
-    record: BuildRunRecord, log: BuildEventLog, returns: [String: RunReportInput<TaskReturn>] = [:]
+    record: BuildRunRecord, log: BuildEventLog, returns: [String: RunReportInput<TaskReturn>] = [:],
+    cutoff: RunReportInput<CutoffRecord>? = nil
   ) {
     self.record = record
     self.log = log
     self.returns = returns
+    self.cutoff = cutoff
   }
 }
 
@@ -144,13 +148,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   /// Every ledger task not `done`, in ledger order. Its note says why the ledger couldn't be read,
   /// so whether the run finished is unknown.
   public let unfinishedTasks: Section<UnfinishedTask>
+  /// The run's time box, then each task that didn't fit it with why; `nil` for a build run with
+  /// no box.
+  public let timeBox: Section<String>?
 
   public init(
     plan: String, planBranch: String, planBranchHead: String?, final: Final?, finalNote: String?,
     assumptions: Section<String>, baselineFailures: Section<BaselineFailureLine>,
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
     reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>,
-    reviewDepths: Section<String> = Section(items: [], note: nil)
+    reviewDepths: Section<String> = Section(items: [], note: nil),
+    timeBox: Section<String>? = nil
   ) {
     self.plan = plan
     self.planBranch = planBranch
@@ -164,11 +172,12 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.reviewFallbacks = reviewFallbacks
     self.reviewDepths = reviewDepths
     self.unfinishedTasks = unfinishedTasks
+    self.timeBox = timeBox
   }
 
   private enum CodingKeys: String, CodingKey {
     case plan, planBranch, planBranchHead, final, finalNote, assumptions, baselineFailures
-    case buildOnlyAreas, droppedSteps, reviewFallbacks, reviewDepths, unfinishedTasks
+    case buildOnlyAreas, droppedSteps, reviewFallbacks, reviewDepths, unfinishedTasks, timeBox
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -186,6 +195,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     try c.encode(reviewFallbacks, forKey: .reviewFallbacks)
     try c.encode(reviewDepths, forKey: .reviewDepths)
     try c.encode(unfinishedTasks, forKey: .unfinishedTasks)
+    try c.encode(timeBox, forKey: .timeBox)
   }
 
   /// The steps `merge` and `final` run for every area: one with no command is worth a line even
@@ -202,7 +212,45 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       droppedSteps: Self.droppedSteps(inputs.discover),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
-      reviewDepths: Self.reviewDepths(inputs.build))
+      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build))
+  }
+
+  /// The box's line, then 1 line per task the cutoff abandoned or never started. A task the
+  /// cutoff let merge has no line: it either landed or shows as unfinished.
+  private static func timeBox(_ build: RunReportInput<RunReportBuild>) -> Section<String>? {
+    guard case .read(let run) = build, let box = run.record.timeBox else { return nil }
+    let deadlines = box.deadlines
+    func time(_ date: Date) -> String { date.formatted(.iso8601) }
+    let source =
+      switch box.limits.source {
+      case .config: "[build.presets.brownfield]"
+      case .flag: "--time-box"
+      case .default: "the default, since the preset names no budget"
+      }
+    var items = [
+      "\(box.limits.budgetMin) min, from \(source): launched \(time(box.startedAt)), starts stop "
+        + "\(time(deadlines.noNewStartsAt)), cutoff \(time(deadlines.cutoffAt)), ends "
+        + time(deadlines.endsAt)
+    ]
+    switch run.cutoff {
+    case nil, .missing?:
+      items.append("the cutoff never came")
+      return Section(items: items, note: nil)
+    case .unreadable(let source, let reason)?:
+      return Section(
+        items: items, note: "the cutoff's decisions not read from \(source): \(reason)")
+    case .read(let record)?:
+      for decision in record.decisions {
+        switch decision.action {
+        case .finishMerge: continue
+        case .abandon:
+          items.append("\(decision.task) didn't fit the box: abandoned, \(decision.reason)")
+        case .notStarted:
+          items.append("\(decision.task) didn't fit the box: \(decision.reason)")
+        }
+      }
+      return Section(items: items, note: nil)
+    }
   }
 
   private static func unfinishedTasks(_ ledger: RunReportInput<Ledger>) -> Section<UnfinishedTask> {
@@ -511,6 +559,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       out += ["", "Note: \(finalNote) (final \(final.verdict.rawValue))"]
     }
     out += render("Unfinished tasks", unfinishedTasks) { "\($0.id): \($0.status.rawValue)" }
+    if let timeBox { out += render("Time box", timeBox) { $0 } }
     out += render("Assumptions", assumptions) { $0 }
     out += render("Baseline failures", baselineFailures) {
       "\($0.area) \($0.step.rawValue): " + ($0.test ?? "the whole step")

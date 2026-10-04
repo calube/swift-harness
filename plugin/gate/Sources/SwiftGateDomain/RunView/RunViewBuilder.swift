@@ -39,7 +39,8 @@ public enum RunViewBuilder {
       run: RunView.Run(
         id: input.buildRun, plan: input.join?.plan, preset: input.join?.record?.presetName,
         startedAt: startedAt, endedAt: runEnd, state: state,
-        stallMin: input.join?.record?.preset.stallMin),
+        stallMin: input.join?.record?.preset.stallMin,
+        timeBox: input.join?.record?.timeBox.map(timeBox)),
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,
       roles: roles(usage),
@@ -116,6 +117,14 @@ public enum RunViewBuilder {
       let own = usage.filter { $0.role == role }
       return own.isEmpty ? nil : RunView.Role(role: role, tokens: tokens(own))
     }
+  }
+
+  private static func timeBox(_ box: RunTimeBox) -> RunView.TimeBox {
+    let deadlines = box.deadlines
+    return RunView.TimeBox(
+      budgetMin: box.limits.budgetMin, source: box.limits.source, startedAt: box.startedAt,
+      noNewStartsAt: deadlines.noNewStartsAt, cutoffAt: deadlines.cutoffAt,
+      endsAt: deadlines.endsAt)
   }
 
   private static func halts(_ events: [HarnessEvent]) -> [RunView.Halt] {

@@ -380,6 +380,7 @@ struct PlanStateAuthorityTests {
     ("build finish", AuthorityRepository.planA),
     ("worktree create", "\(AuthorityRepository.planA) fetch"),
     ("build merge", "\(AuthorityRepository.planA) fetch"),
+    ("build cutoff", AuthorityRepository.planA),
   ]
 
   @Test(
