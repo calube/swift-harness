@@ -98,6 +98,37 @@ struct RunViewEmittedEventsTests {
   }
 
   @Test(
+    "a second start or end of 1 span and a parent never started show as damage — catches the first span overwritten or nested under nothing"
+  )
+  func repeatedAndUnparented() throws {
+    let captured = try capturedSpans()
+    let workerStart = try #require(captured.first { $0.eventID.hasPrefix("1F48286F") })
+    let workerEnd = try #require(captured.first { $0.eventID.hasPrefix("2264A9E6") })
+    let later = workerEnd.time.addingTimeInterval(1)
+    let restart = HarnessEvent(
+      eventID: "again-start", time: later, source: HarnessEventSource(route: nil),
+      payload: workerStart.payload)
+    let reend = HarnessEvent(
+      eventID: "again-end", time: later, source: HarnessEventSource(route: nil),
+      payload: .spanEnd(SpanEndEvent(spanID: workerSpan, outcome: .red, milliseconds: 1)))
+    let start = workerStart.time
+    let view = RunView(
+      run: RunView.Run(id: spanRun, startedAt: start),
+      spans: [RunView.Span(id: "run", phase: .run, start: start)])
+    let folded = RunViewEmittedEvents.fold(
+      [workerStart, workerEnd, restart, reend], into: view)
+    let workers = folded.spans.filter { $0.id == workerSpan }
+    #expect(workers.count == 1)
+    #expect(workers.first?.outcome == .ok)
+    #expect(workers.first?.parent == "run")
+    #expect(
+      folded.damage.map(\.reason).sorted() == [
+        "parent span \(planSpan) never started", "span \(workerSpan) ended twice",
+        "span \(workerSpan) started twice",
+      ])
+  }
+
+  @Test(
     "a prove.result lands under its gate run and that gate's task — catches a proof left unjoined"
   )
   func proofJoined() throws {
