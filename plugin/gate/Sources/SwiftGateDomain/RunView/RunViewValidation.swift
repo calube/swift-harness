@@ -486,3 +486,11 @@ enum RunViewValidationFold {
         ? "Row \(check.row) \(check.layer.rawValue) check failed\(how)." : nil)
   }
 }
+
+extension RunViewValidation {
+  /// Each video and contact sheet a flow links, as `<run id>/<run-relative path>`: the only files
+  /// a live page may fetch from a run directory.
+  public var linkedFiles: Set<String> {
+    []
+  }
+}
