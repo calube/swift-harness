@@ -51,6 +51,7 @@ file is one where `swift test` wrote none.
 | `shared-first-line` | `ProbeTests\.SharedFirstLine` | two `Issue.record` failures whose console lines both read `Issue recorded`; only the `↳` continuation lines (and the report message) tell them apart |
 | `crash` | `ProbeTests\.Crash` | an index-out-of-range trap in each framework |
 | `zero` | `^EmptyTests\.` | a target with no tests |
+| `no-match` | `ProbeTests\.NoSuchTest` | a filter that names no test in a target that has tests: exit 0, stderr `warning: No matching test cases were run`, both reports with `tests="0"`. Captured on its own with the `capture` function's command for this 1 scenario |
 | `build-error` | `ProbeTests\.Pass` | a copy of the package (no build output) with a type error in `Probe.swift` |
 | `macro-compile-error` | `ProbeTests\.Pass` | a copy with a `#expect(try …)` call added to `PassTests.swift` inside a non-throwing test: no report, a macro expansion diagnostic with no file:line of its own |
 | `reverted` | `ProbeTests\.Pass` | a copy with `double` computing `value * 3`: the passing tests fail on their assertions, as `prove` expects with a source change reverted |

@@ -39,6 +39,7 @@ capture skip "$probe" "$probe_path" 'ProbeTests\.Skip'
 capture crash "$probe" "$probe_path" 'ProbeTests\.Crash'
 capture shared-first-line "$probe" "$probe_path" 'ProbeTests\.SharedFirstLine'
 capture zero "$probe" "$probe_path" '^EmptyTests\.'
+capture no-match "$probe" "$probe_path" 'ProbeTests\.NoSuchTest'
 
 # A compile error in the code under test: copy without build output, break one line.
 broken="$work/broken"
