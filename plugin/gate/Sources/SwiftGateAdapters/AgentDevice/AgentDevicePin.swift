@@ -2,7 +2,7 @@
 /// `Tests/Fixtures/AgentDevice/` and the step schemas under the plugin's `qa/` folder are captured
 /// at this version, so a bump recaptures both.
 public enum AgentDevicePin {
-  public static let version = "0.0.0"
+  public static let version = "0.21.18"
 
   public static var installCommand: String { "npm i -g agent-device@\(version)" }
 
