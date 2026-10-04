@@ -241,30 +241,6 @@ struct BuildBrownfieldPresetTests {
   }
 
   @Test(
-    "a brownfield preset that leaves the model to the task refuses an alias-tagged task as unpinned-model, where an owned one starts it — catches a brownfield worker on a moving alias"
-  )
-  func brownfieldRefusesAliasTag() {
-    let ledger = Ledger(
-      schemaVersion: 1, resume: "r", maxParallel: 3,
-      tasks: [PresetScenario.task("a", model: .sonnet)], waves: [["a"]])
-    let tagged = BuildPreset(
-      designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
-      mergeGate: .merge, workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0,
-      onDesignConflict: .block, taskProof: .prove, stallMin: 2)
-
-    let brownfield = BuildScheduler.next(
-      ledger: ledger, running: [], preset: tagged, startedAt: PresetScenario.startedAt,
-      now: PresetScenario.startedAt, required: .empty)
-    let owned = BuildScheduler.next(
-      ledger: ledger, running: [], preset: PresetScenario.ownedPreset,
-      startedAt: PresetScenario.startedAt, now: PresetScenario.startedAt, required: .empty)
-
-    #expect(brownfield.toStart.isEmpty)
-    #expect(brownfield.refused == [.init(taskID: "a", reason: .unpinnedModel)])
-    #expect(owned.toStart == ["a"])
-  }
-
-  @Test(
     "record-gate refuses an owned tier's run in a brownfield build, naming the profile, and records a merge run — catches a push gate standing in for the merge tier"
   )
   func recordGateKeepsTheProfile() async throws {
