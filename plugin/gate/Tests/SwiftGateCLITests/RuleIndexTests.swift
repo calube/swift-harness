@@ -86,7 +86,7 @@ struct RuleIndexTests {
       Doctor.upgradeHazardRuleID, Doctor.profileRuleID, Doctor.pluginChangedRuleID,
       Doctor.sessionRecordRuleID, Doctor.judgeKeyRuleID, Doctor.agentDeviceRuleID,
       BashGuard.rawXcodebuildRuleID,
-      BashGuard.simctlAllRuleID,
+      BashGuard.simctlAllRuleID, SimulatorSelection.baseAmbiguousRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
