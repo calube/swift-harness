@@ -1,0 +1,7 @@
+{"schemaVersion":1,"unitOnly":[],"rows":[
+{"requirement":"slice-2-decrement-at-zero-stays-zero","layer":"acceptance","check":"/bin/test -d .git","runsAfter":["counter-core-reset-and-decrement-floor"],"writer":"counter-core-reset-and-decrement-floor"},
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"acceptance","check":"printf 'counter reset\\n'; printf 'expected 0 after reset, got 1\\n' >&2; exit 1","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"},
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"flow","check":"reset.flow.json","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"},
+{"requirement":"slice-2-decrement-at-zero-stays-zero","layer":"state","check":"floor.state.sh","runsAfter":["counter-core-reset-and-decrement-floor","counter-ui-reset-button-snapshot"],"writer":"counter-core-reset-and-decrement-floor"},
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"state","check":"reset.state.sh","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"}
+]}

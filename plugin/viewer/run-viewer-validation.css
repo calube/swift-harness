@@ -1,0 +1,14 @@
+/* validation: a count strip, then 1 group of rows per task */
+.qa-count[data-result="red"] b { color: var(--bad); }
+.qa-count[data-result="unverified"] b { color: var(--warn); }
+.qa-count[data-result="pass"] b { color: var(--ok); }
+.qa-group { display: grid; gap: 6px; }
+.qa-group h3 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qa-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.qa-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); min-width: 0; }
+.qa-row.qa-waiting { border-style: dashed; color: var(--muted); }
+.qa-layer { font-size: 12px; color: var(--muted); }
+.qa-req, .qa-check { overflow-wrap: anywhere; min-width: 0; }
+.qa-check { font-family: var(--font-mono); font-size: 11px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; }
+.qa-why { margin-left: auto; }
+.qa-output pre { margin: 0; max-height: 220px; overflow: auto; font: 11px/1.45 var(--font-mono); background: var(--sunken); border-radius: var(--radius-sm); padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -1,0 +1,369 @@
+import Darwin
+import Foundation
+import SwiftGateDomain
+
+/// What `swiftgate sim up` does: check the pinned `agent-device`, check the scenario, start a
+/// `sim hold` for the run and wait for its lease, build and install the app scheme on the leased
+/// device, open it in the scenario through `agent-device`, record the session in the lease, and
+/// write `sim/session.json`.
+///
+/// Once the holder has started, any failure removes the run's lease (or stops a holder still
+/// waiting for a slot), so the device and the slot go back.
+public struct SimUp: Sendable {
+  public struct Request: Sendable {
+    /// The worktree root: the holder's working directory and where the app container is found.
+    public var worktree: URL
+    public var config: Config
+    public var scenario: String?
+    public var runID: String
+    /// The run's `sim/` folder, created if missing.
+    public var simDirectory: URL
+    /// Absolute; this worktree's DerivedData for `sim up` builds.
+    public var derivedDataPath: String
+    /// The `swiftgate` binary the holder runs as.
+    public var swiftgateExecutable: String
+
+    public init(
+      worktree: URL, config: Config, scenario: String?, runID: String, simDirectory: URL,
+      derivedDataPath: String, swiftgateExecutable: String
+    ) {
+      self.worktree = worktree
+      self.config = config
+      self.scenario = scenario
+      self.runID = runID
+      self.simDirectory = simDirectory
+      self.derivedDataPath = derivedDataPath
+      self.swiftgateExecutable = swiftgateExecutable
+    }
+  }
+
+  public struct Dependencies: Sendable {
+    public var agentDevice: any AgentDevice
+    public var leases: SimLeaseStore
+    public var launcher: any DetachedLaunching
+    public var xcodebuild: any Xcodebuild
+    public var simctl: any Simctl
+    public var bundles: any AppBundleReading
+    public var git: any Git
+    public var isAlive: @Sendable (Int32) -> Bool
+    /// Stops a holder that never wrote its lease.
+    public var terminate: @Sendable (Int32) -> Void
+    /// The PIDs holding `sim` lock slots now, named when no slot comes free.
+    public var slotHolders: @Sendable () -> [Int32]
+    public var clock: SimHoldClock
+    public var now: @Sendable () -> Date
+
+    public init(
+      agentDevice: any AgentDevice, leases: SimLeaseStore, launcher: any DetachedLaunching,
+      xcodebuild: any Xcodebuild, simctl: any Simctl, bundles: any AppBundleReading,
+      git: any Git, isAlive: @escaping @Sendable (Int32) -> Bool,
+      terminate: @escaping @Sendable (Int32) -> Void,
+      slotHolders: @escaping @Sendable () -> [Int32], clock: SimHoldClock,
+      now: @escaping @Sendable () -> Date
+    ) {
+      self.agentDevice = agentDevice
+      self.leases = leases
+      self.launcher = launcher
+      self.xcodebuild = xcodebuild
+      self.simctl = simctl
+      self.bundles = bundles
+      self.git = git
+      self.isAlive = isAlive
+      self.terminate = terminate
+      self.slotHolders = slotHolders
+      self.clock = clock
+      self.now = now
+    }
+  }
+
+  private let dependencies: Dependencies
+  private let leaseTimeout: Duration
+  private let pollInterval: Duration
+
+  /// - Parameter leaseTimeout: how long to wait for the holder's lease. The holder gives up on
+  ///   the `sim` lock on its own sooner, so this only bounds a holder that hangs.
+  public init(
+    dependencies: Dependencies, leaseTimeout: Duration = .seconds(45 * 60),
+    pollInterval: Duration = .milliseconds(250)
+  ) {
+    self.dependencies = dependencies
+    self.leaseTimeout = leaseTimeout
+    self.pollInterval = pollInterval
+  }
+
+  public func run(_ request: Request) async -> Result<SimUpStarted, SimUpFailure> {
+    do throws(SimUpFailure) {
+      return .success(try await start(request))
+    } catch {
+      return .failure(error)
+    }
+  }
+
+  /// The PIDs recorded in the `sim` lock's slot files that are still alive.
+  public static func liveSlotHolders(lockDirectory: URL, capacity: Int) -> [Int32] {
+    (0..<max(capacity, 0)).compactMap { slot in
+      // Slot files are `<lock name>.<slot>`, and the lock is named `sim`.
+      let file = lockDirectory.appending(path: "sim").appendingPathExtension(String(slot))
+      guard let text = try? String(contentsOf: file, encoding: .utf8),
+        let pid = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)),
+        SimulatorClones.processIsAlive(pid)
+      else { return nil }
+      return pid
+    }
+  }
+
+  private func start(_ request: Request) async throws(SimUpFailure) -> SimUpStarted {
+    let version: String
+    do {
+      version = try await dependencies.agentDevice.version()
+    } catch {
+      throw .agentDevicePin(
+        found: nil, pin: AgentDevicePin.version, installCommand: AgentDevicePin.installCommand)
+    }
+    guard version == AgentDevicePin.version else {
+      throw .agentDevicePin(
+        found: version, pin: AgentDevicePin.version,
+        installCommand: AgentDevicePin.installCommand)
+    }
+    if let failure = SimUpFailure.scenarioCheck(
+      request.scenario, declared: request.config.scenarios)
+    {
+      throw failure
+    }
+    let container = try Self.container(in: request.worktree)
+    let startedAt = dependencies.now()
+    let headCommit = try await head(runID: request.runID)
+    let log = request.simDirectory.appending(path: SimSession.logFileName)
+    do {
+      try FileManager.default.createDirectory(
+        at: request.simDirectory, withIntermediateDirectories: true)
+    } catch {
+      throw environment(
+        "could not create \(request.simDirectory.path): \(error.localizedDescription)",
+        request.runID)
+    }
+
+    let holderPID: Int32
+    do {
+      holderPID = try dependencies.launcher.launch(
+        DetachedLaunch(
+          executable: request.swiftgateExecutable,
+          arguments: ["sim", "hold", "--run", request.runID],
+          workingDirectory: request.worktree.path, logPath: log.path))
+    } catch {
+      throw environment(error.message, request.runID)
+    }
+    let lease = try await waitForLease(runID: request.runID, holderPID: holderPID, log: log)
+
+    do {
+      return try await prepare(
+        request, lease: lease, container: container, version: version, headCommit: headCommit,
+        startedAt: startedAt, log: log)
+    } catch {
+      throw release(error, runID: request.runID)
+    }
+  }
+
+  /// Everything after the hold, on the leased device. The caller gives the device back on a throw.
+  private func prepare(
+    _ request: Request, lease: SimLease, container: XcodebuildContainer, version: String,
+    headCommit: String, startedAt: Date, log: URL
+  ) async throws(SimUpFailure) -> SimUpStarted {
+    let runID = request.runID
+    let buildLog = request.simDirectory.appending(path: "build.log")
+    let resultBundle = request.simDirectory.appending(path: "build").appendingPathExtension(
+      "xcresult")
+    // `xcodebuild` refuses to overwrite a result bundle.
+    try? FileManager.default.removeItem(at: resultBundle)
+    let build = AppBuild.Request(
+      container: container, scheme: request.config.appScheme,
+      derivedDataPath: request.derivedDataPath, resultBundlePath: resultBundle.path)
+    let status: ExitStatus
+    do {
+      status = try await dependencies.xcodebuild.build(build, logPath: buildLog.path)
+    } catch {
+      throw environment(error.message, runID)
+    }
+    guard status.isSuccess else {
+      throw SimUpFailure(
+        rule: .appBuildFailed,
+        message:
+          "app scheme \(request.config.appScheme) failed to build (\(status)); read \(buildLog.path)",
+        runID: runID)
+    }
+
+    let app: BuiltApp
+    do {
+      app = try dependencies.bundles.builtApp(
+        productsDirectory: AppBundleReader.productsDirectory(
+          derivedDataPath: request.derivedDataPath))
+    } catch {
+      throw SimUpFailure(rule: .appInstallFailed, message: error.message, runID: runID)
+    }
+    do {
+      try await dependencies.simctl.install(lease.udid, appPath: app.path)
+    } catch {
+      throw SimUpFailure(
+        rule: .appInstallFailed,
+        message: "installing \(app.path) on \(lease.udid) failed: \(error.message)", runID: runID)
+    }
+
+    let session = SimSession.agentDeviceSessionName(runID: runID)
+    let target = AgentDeviceTarget(udid: lease.udid, session: session)
+    do {
+      _ = try await dependencies.agentDevice.open(
+        bundleID: app.bundleID,
+        launchArguments: SimSession.launchArguments(scenario: request.scenario),
+        on: target)
+    } catch {
+      Self.append("sim up: \(error.message)", to: log)
+      throw SimUpFailure(
+        rule: .driverFailed, message: "\(error.message); see \(log.path)", runID: runID)
+    }
+
+    do throws(SimUpFailure) {
+      try record(session: session, runID: runID, log: log)
+      let runtime = try await runtime(of: lease.udid, runID: runID)
+      let file = SimSession(
+        agentDeviceVersion: version, udid: lease.udid, deviceType: request.config.simulator.device,
+        runtime: runtime, bundleID: app.bundleID, scenario: request.scenario,
+        headCommit: headCommit, startedAt: startedAt)
+      let path = request.simDirectory.appending(path: SimSession.fileName)
+      do {
+        try file.encoded().write(to: path, options: .atomic)
+      } catch {
+        throw environment("could not write \(path.path): \(error.localizedDescription)", runID)
+      }
+    } catch {
+      // The holder frees the device either way; closing first drops the session's claim now.
+      try? await dependencies.agentDevice.close(on: target)
+      throw error
+    }
+    return SimUpStarted(
+      runID: runID, udid: lease.udid, session: session, scenario: request.scenario)
+  }
+
+  private static func container(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer {
+    let entries = (try? FileManager.default.contentsOfDirectory(atPath: worktree.path)) ?? []
+    switch AppContainer.choose(among: entries) {
+    case .failure(let error):
+      throw SimUpFailure(rule: .appBuildFailed, message: error.message)
+    case .success(let name):
+      let path = worktree.appending(path: name).path
+      return name.hasSuffix(".xcworkspace") ? .workspace(path: path) : .project(path: path)
+    }
+  }
+
+  private func head(runID: String) async throws(SimUpFailure) -> String {
+    let head: String?
+    do {
+      head = try await dependencies.git.revision("HEAD")
+    } catch {
+      throw environment("could not read HEAD: \(error)", runID)
+    }
+    guard let head else { throw environment("HEAD names no commit", runID) }
+    return head
+  }
+
+  /// Waits until the holder writes the run's lease. A holder that exits first, or is still
+  /// waiting at the timeout, means no device.
+  private func waitForLease(runID: String, holderPID: Int32, log: URL)
+    async throws(SimUpFailure) -> SimLease
+  {
+    let start = dependencies.clock.now()
+    while true {
+      let lease: SimLease?
+      do {
+        lease = try dependencies.leases.read(runID: runID)
+      } catch {
+        dependencies.terminate(holderPID)
+        throw release(environment(error.message, runID), runID: runID)
+      }
+      if let lease { return lease }
+      guard dependencies.isAlive(holderPID) else {
+        throw noSlot("the holder (PID \(holderPID)) exited without a device", runID, log)
+      }
+      if dependencies.clock.now() - start >= leaseTimeout {
+        dependencies.terminate(holderPID)
+        throw noSlot(
+          "the holder (PID \(holderPID)) had no device after \(leaseTimeout.components.seconds) s "
+            + "and was stopped", runID, log)
+      }
+      do {
+        try await dependencies.clock.sleep(pollInterval)
+      } catch {
+        dependencies.terminate(holderPID)
+        throw environment("sim up was cancelled while waiting for a simulator", runID)
+      }
+    }
+  }
+
+  private func record(session: String, runID: String, log: URL) throws(SimUpFailure) {
+    let current: SimLease?
+    do {
+      current = try dependencies.leases.read(runID: runID)
+    } catch {
+      throw environment(error.message, runID)
+    }
+    guard var lease = current else {
+      throw noSlot("the holder gave the device back before sim up finished", runID, log)
+    }
+    lease.session = session
+    do {
+      try dependencies.leases.write(lease)
+    } catch {
+      throw environment(error.message, runID)
+    }
+  }
+
+  private func runtime(of udid: String, runID: String) async throws(SimUpFailure) -> String {
+    let devices: [SimulatorDevice]
+    do {
+      devices = try await dependencies.simctl.devices()
+    } catch {
+      throw environment(error.message, runID)
+    }
+    guard let device = devices.first(where: { $0.udid == udid }) else {
+      throw environment("simulator \(udid) is no longer listed by simctl", runID)
+    }
+    return device.runtimeIdentifier
+  }
+
+  /// Removes the run's lease so the holder deletes the device and frees the slot. A lease that
+  /// can't be removed is named in the failure, since the device then stays held until timeout.
+  private func release(_ failure: SimUpFailure, runID: String) -> SimUpFailure {
+    do {
+      try dependencies.leases.remove(runID: runID)
+      return failure
+    } catch {
+      var failure = failure
+      failure.message +=
+        "; the lease could not be removed, so the simulator stays held until "
+        + "[qa] session_timeout_minutes: \(error.message)"
+      return failure
+    }
+  }
+
+  private func noSlot(_ reason: String, _ runID: String, _ log: URL) -> SimUpFailure {
+    let holders = dependencies.slotHolders()
+    let named =
+      holders.isEmpty
+      ? "no live process holds a sim slot"
+      : "sim slots held by PIDs \(holders.map(String.init).joined(separator: ", "))"
+    return SimUpFailure(
+      rule: .noSlot, message: "no simulator for run \(runID): \(reason); \(named); see \(log.path)",
+      runID: runID)
+  }
+
+  private func environment(_ message: String, _ runID: String) -> SimUpFailure {
+    SimUpFailure(rule: .environment, message: message, runID: runID)
+  }
+
+  private static func append(_ line: String, to log: URL) {
+    let fd = open(log.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0o644)
+    guard fd >= 0 else { return }
+    defer { close(fd) }
+    let bytes = Array((line + "\n").utf8)
+    _ = bytes.withUnsafeBytes { Darwin.write(fd, $0.baseAddress, $0.count) }
+  }
+}
