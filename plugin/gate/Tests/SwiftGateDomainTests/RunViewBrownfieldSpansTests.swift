@@ -35,6 +35,7 @@ struct RunViewBrownfieldSpansTests {
         "warmup:web:test:1A4D1A7F-7A35-46DB-8B81-5B275EB95669",
       ])
     #expect(warmups.allSatisfy { $0.parent == "run" && $0.outcome == .ok && $0.approximate })
+    try #require(warmups.count == 4)
 
     let apiEnd = try time("2026-10-04T09:19:56.935Z")
     let apiTest = warmups[1]

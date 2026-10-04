@@ -139,6 +139,24 @@ struct RunViewReaderPrebuildTests {
   }
 
   @Test(
+    "a clock.json that doesn't decode is a damage row naming it, and the slug's spans still fold in — catches a silent run with no launch"
+  )
+  func undecodableClockIsDamage() throws {
+    let clone = try PrebuildClone(launched: try time("2026-10-04T04:55:00.000Z"))
+    defer { clone.remove() }
+    try Data("{\"started\": 1}\n".utf8).write(
+      to: clone.planDirectory.appending(path: RunClock.fileName))
+
+    let input = try clone.reader.read(buildRun: PrebuildClone.buildRun)
+    #expect(input.launchedAt == nil)
+    #expect(
+      input.damage.map(\.source) == ["swift-harness/plans/\(PrebuildClone.plan)/clock.json"])
+    let view = RunViewBuilder.build(input)
+    #expect(view.spans.filter { $0.phase == .specRead }.count == 1)
+    #expect(view.spans.filter { $0.phase == .warmup }.isEmpty)
+  }
+
+  @Test(
     "a later build run of the same plan keeps none of the plan's pre-build phases — catches every build run of a plan redrawing its spec-read and warm-up"
   )
   func laterBuildRunKeepsNone() throws {

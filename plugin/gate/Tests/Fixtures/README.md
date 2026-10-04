@@ -1707,8 +1707,9 @@ $SG events span end $F --outcome ok
 cp .git/swift-harness/events/brownfield.jsonl .git/swift-harness/events/span.jsonl <fixtures>/RunView/brownfield-prebuild/events/
 ```
 
-The streams hold 1 `discover.run`, 4 `warmup.run` (1 per area and step, each area's 2 written
-together when the area finished) and 5 spans: 4 naming the slug, as the run skill's phases before
-`build start` do, and `final` naming the build run. Both files are copied unedited:
+The streams hold 1 `discover.run`, 4 `warmup.run` and 5 spans. The warm-up wrote 1 event per area
+and step, an area's 2 together when the area finished. 4 spans name the slug, as the run skill's
+phases before `build start` do, and `final` names the build run. The capture copied both files
+unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
 matched nothing.
