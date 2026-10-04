@@ -164,7 +164,7 @@ struct AreaOutcomeReadingTests {
   }
 
   @Test(
-    "each captured failure and lint run reads as failed — catches a crash marker matching ordinary output",
+    "each captured failure and lint run reads as failed, Go's failing tests with a report — catches a crash marker matching ordinary output, or Go's events left unread",
     // Clippy's warnings leave its status 0, so the cargo lint run is a pass.
     arguments: ecosystems.flatMap { [($0, "test-fail"), ($0, "lint")] }.filter {
       $0 != ("cargo", "lint")
@@ -175,11 +175,16 @@ struct AreaOutcomeReadingTests {
       Issue.record("a captured run ends with an exit status")
       return
     }
-    #expect(
-      AreaOutcomeReading.outcome(end: run.end, output: run.output, junit: run.junit)
-        == .failed(
-          exit: exit, tail: AreaOutcomeReading.tail(run.output),
-          junit: run.junit ?? GoTestReport.junit(fromJSON: run.output)))
+    let outcome = AreaOutcomeReading.outcome(end: run.end, output: run.output, junit: run.junit)
+    guard case .failed(let status, let tail, let junit) = outcome else {
+      Issue.record("\(ecosystem) \(caseName) read as \(outcome)")
+      return
+    }
+    #expect(status == exit)
+    #expect(tail == AreaOutcomeReading.tail(run.output))
+    // Go writes no JUnit; its failing run's `-json` events stand in for one.
+    let goEvents = ecosystem == "go" && caseName == "test-fail"
+    #expect(goEvents ? junit != nil : junit == run.junit)
   }
 
   @Test(
