@@ -265,6 +265,7 @@ struct NewSubcommandRegistrationTests {
     "design-telemetry",
     "discover", "discover --apply",
     "allow",
+    "claude",
   ]
 
   @Test(

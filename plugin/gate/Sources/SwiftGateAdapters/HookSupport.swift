@@ -25,6 +25,75 @@ public enum ProjectRoot {
   }
 }
 
+/// The project a hook fires in, by profile.
+public enum HookProject: Sendable, Equatable {
+  /// The directory holding `.swiftgate.toml`.
+  case owned(URL)
+  /// A worktree of a clone whose git common dir holds the brownfield `config.toml`.
+  case brownfield(root: URL, layout: BrownfieldStateLayout)
+
+  public var root: URL {
+    switch self {
+    case .owned(let root), .brownfield(let root, _): root
+    }
+  }
+}
+
+extension ProjectRoot {
+  /// ``locate(from:)``'s owned project, or else the enclosing worktree when its clone runs the
+  /// brownfield profile.
+  public static func locateProfile(from directory: URL) -> HookProject? {
+    if let owned = locate(from: directory) { return .owned(owned) }
+    guard let worktree = worktreeRoot(from: directory),
+      let gitDir = StateRootResolver.gitDirectory(enclosing: worktree)
+    else { return nil }
+    let common = StateRootResolver.commonDirectory(of: gitDir)
+    guard
+      FileManager.default.fileExists(
+        atPath: common.appending(path: StateRootResolver.commonConfigFile).path)
+    else { return nil }
+    return .brownfield(
+      root: worktree, layout: BrownfieldStateLayout(commonDir: common, gitDir: gitDir))
+  }
+
+  /// The nearest directory at or above `directory` holding `.git`.
+  private static func worktreeRoot(from directory: URL) -> URL? {
+    var current = directory.standardizedFileURL
+    while true {
+      if FileManager.default.fileExists(atPath: current.appending(path: ".git").path) {
+        return current
+      }
+      let parent = current.deletingLastPathComponent().standardizedFileURL
+      if parent.path == current.path { return nil }
+      current = parent
+    }
+  }
+}
+
+/// What reading `discover/dirty.json` gave.
+public enum DirtyFileRead: Sendable, Equatable {
+  /// Discovery hasn't written one.
+  case absent
+  case listed(DirtyFileList)
+  case unreadable(path: String, reason: String)
+
+  public static func read(_ file: URL) -> DirtyFileRead {
+    let data: Data
+    do {
+      data = try Data(contentsOf: file)
+    } catch CocoaError.fileReadNoSuchFile {
+      return .absent
+    } catch {
+      return .unreadable(path: file.path, reason: error.localizedDescription)
+    }
+    do {
+      return .listed(try JSONDecoder().decode(DirtyFileList.self, from: data))
+    } catch {
+      return .unreadable(path: file.path, reason: "\(error)")
+    }
+  }
+}
+
 public enum HookStateError: Error, Sendable, Equatable {
   case unwritable(path: String, reason: String)
 

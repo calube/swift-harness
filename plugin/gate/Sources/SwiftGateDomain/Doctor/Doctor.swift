@@ -161,6 +161,20 @@ public struct DoctorResult: Sendable, Equatable {
   }
 }
 
+/// What `doctor` judges in a brownfield clone, where the harness owns no Xcode pin, shim or
+/// SwiftLint setup.
+public struct BrownfieldDoctorFacts: Sendable {
+  /// Free bytes on the worktree's volume; `nil` when unreadable.
+  public let freeBytes: Int64?
+  /// The session's plugin record against the tree on disk; `nil` when not gathered.
+  public let pluginSession: PluginSessionFacts?
+
+  public init(freeBytes: Int64?, pluginSession: PluginSessionFacts? = nil) {
+    self.freeBytes = freeBytes
+    self.pluginSession = pluginSession
+  }
+}
+
 /// A toolchain upgrade that breaks a pinned dependency (spec §6.2 toolchain notes).
 public struct UpgradeHazard: Sendable {
   public let xcode: ToolVersion
@@ -189,6 +203,9 @@ public enum Doctor {
   public static let sessionRecordRuleID = "doctor.session-record"
   /// `[judge] backend` names a backend whose key variable isn't set.
   public static let judgeKeyRuleID = "doctor.judge-key"
+
+  /// A committed `.swiftgate.toml` and a common-dir `config.toml` in 1 clone.
+  public static let configConflictRuleID = BrownfieldRuleID.doctorConfigConflict.rawValue
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.
@@ -269,15 +286,7 @@ public enum Doctor {
       }
     }
 
-    switch facts.freeBytes {
-    case nil: check.block(diskRuleID, ".", "free disk space could not be read")
-    case let free? where free < minimumFreeBytes:
-      check.block(
-        diskRuleID, ".",
-        "\(gibibytes(free)) GiB free, below the \(gibibytes(minimumFreeBytes)) GiB a simulator "
-          + "run needs; run `swiftgate gc` or free space")
-    default: break
-    }
+    check.disk(facts.freeBytes)
 
     switch facts.shim {
     case .current, .unverified: break
@@ -359,6 +368,27 @@ public enum Doctor {
     return check.result
   }
 
+  /// Both configs in 1 clone: the profile is ambiguous, so nothing else is judged.
+  public static func configConflict(committed: String, common: String) -> DoctorResult {
+    var check = DoctorJudgement()
+    check.fail(
+      configConflictRuleID, committed,
+      "\(committed) and \(common) both exist, so this clone's profile is ambiguous: keep the "
+        + "committed config for an owned repository, or delete it to run the brownfield profile")
+    return check.result
+  }
+
+  /// A brownfield clone: the disk and the plugin session only. The Xcode pin, shim, SwiftLint,
+  /// simulator and package checks judge a repository set up for the harness, which this isn't.
+  public static func evaluateBrownfield(_ facts: BrownfieldDoctorFacts) -> DoctorResult {
+    var check = DoctorJudgement()
+    check.disk(facts.freeBytes)
+    if let session = facts.pluginSession {
+      check.findings += pluginSessionFindings(session)
+    }
+    return check.result
+  }
+
   /// Whether the session still runs the plugin text on disk: a running session keeps the skills
   /// and agent prompts it loaded at start, so a plugin change reaches only new sessions.
   public static func pluginSessionFindings(_ facts: PluginSessionFacts) -> [Finding] {
@@ -401,7 +431,7 @@ public enum Doctor {
     return check.findings
   }
 
-  private static func gibibytes(_ bytes: Int64) -> String {
+  fileprivate static func gibibytes(_ bytes: Int64) -> String {
     String(bytes / (1024 * 1024 * 1024))
   }
 }
@@ -419,6 +449,18 @@ private struct DoctorJudgement {
   mutating func block(_ rule: String, _ file: String, _ message: String) {
     blocked = true
     append(rule, .minor, file, message)
+  }
+
+  mutating func disk(_ freeBytes: Int64?) {
+    switch freeBytes {
+    case nil: block(Doctor.diskRuleID, ".", "free disk space could not be read")
+    case let free? where free < Doctor.minimumFreeBytes:
+      block(
+        Doctor.diskRuleID, ".",
+        "\(Doctor.gibibytes(free)) GiB free, below the \(Doctor.gibibytes(Doctor.minimumFreeBytes)) "
+          + "GiB a simulator run needs; run `swiftgate gc` or free space")
+    default: break
+    }
   }
 
   mutating func fail(_ rule: String, _ file: String, _ message: String) {

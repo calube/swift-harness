@@ -152,8 +152,8 @@ struct DisabledCommitCommentJudge: CommitCommentJudging {
 }
 
 /// Entry point for `swiftgate hook <event>`: decodes the payload, finds the project, and hands off
-/// to the event's hook. Outside a project with `.swiftgate.toml` every hook is a silent no-op
-/// that never builds its dependencies.
+/// to the event's hook. Outside a project with `.swiftgate.toml` or a brownfield clone every hook
+/// is a silent no-op that never builds its dependencies.
 enum HookRunner {
   static func run(
     _ event: HookEvent, input: Data, dependencies: (URL) -> HookDependencies
@@ -174,12 +174,15 @@ enum HookRunner {
         exitCode: 1)
     }
     guard
-      let root = ProjectRoot.locate(from: URL(filePath: payload.cwd, directoryHint: .isDirectory))
+      let project = ProjectRoot.locateProfile(
+        from: URL(filePath: payload.cwd, directoryHint: .isDirectory))
     else { return .silent }
+    let root = project.root
+    if case .brownfield = project, !brownfieldEvents.contains(event) { return .silent }
     let dependencies = dependencies(root)
     let clock = ContinuousClock()
     let start = clock.now
-    var result = await dispatch(event, payload, root: root, dependencies: dependencies)
+    var result = await dispatch(event, payload, project: project, dependencies: dependencies)
     let milliseconds = GateRun.milliseconds(clock.now - start)
     // The event follows the decision, and its failure is 1 line on stderr, which on exit 0 only
     // reaches the debug log: telemetry never delays or sways what the hook decided.
@@ -193,15 +196,24 @@ enum HookRunner {
     return result
   }
 
+  /// The events a brownfield clone answers. Stop runs the owned `fast` tier, which that profile
+  /// rejects, and PostToolUse formats Swift to this harness's style rather than the team's.
+  static let brownfieldEvents: Set<HookEvent> = [.sessionStart, .preToolUse]
+
   private static func dispatch(
-    _ event: HookEvent, _ payload: HookPayload, root: URL, dependencies: HookDependencies
+    _ event: HookEvent, _ payload: HookPayload, project: HookProject,
+    dependencies: HookDependencies
   ) async -> HookResult {
+    let root = project.root
     switch event {
     case .sessionStart:
       return .output(await SessionStartHook.run(payload, root: root, dependencies: dependencies))
     case .preToolUse:
+      var brownfield: BrownfieldStateLayout?
+      if case .brownfield(_, let layout) = project { brownfield = layout }
       return .output(
-        await PreToolUseHook.run(payload, root: root, dependencies: dependencies))
+        await PreToolUseHook.run(
+          payload, root: root, dependencies: dependencies, brownfield: brownfield))
     case .postToolUse:
       return .output(
         await PostToolUseHook.run(payload, root: root, dependencies: dependencies))

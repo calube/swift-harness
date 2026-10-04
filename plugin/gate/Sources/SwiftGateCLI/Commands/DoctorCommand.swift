@@ -15,6 +15,29 @@ enum DoctorRun {
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) async throws -> GateRunParts {
     let (result, milliseconds) = try await GateRun.timed { () async throws -> DoctorResult in
+      if let common = ConfigLoader.commonDirectory(enclosing: root) {
+        do throws(ProfileLoadError) {
+          if case .brownfield = try ConfigLoader().loadProfile(
+            repositoryRoot: root, commonDir: common)
+          {
+            return Doctor.evaluateBrownfield(
+              BrownfieldDoctorFacts(
+                freeBytes: HarnessFiles.freeBytes(at: root),
+                pluginSession: pluginSession(root: root, sessionID: sessionID)))
+          }
+        } catch {
+          switch error {
+          case .conflict(let committed, let common):
+            return Doctor.configConflict(committed: committed, common: common)
+          case .brownfield:
+            return try single(
+              error.verdict == .red
+                ? .invalid(reason: error.description) : .blocked(reason: error.description))
+          case .config:
+            break  // The owned load below reports it.
+          }
+        }
+      }
       let config: Config
       switch StaticCheckInputs.loadConfig(root: root) {
       case .failure(let failure): return try single(failure.outcome)
