@@ -18,6 +18,9 @@ public enum SimulatorCloneError: Error, Sendable, Equatable {
 public struct SimulatorClones: Sendable {
   /// Releases `agent-device`'s stale claims on a device the orphan sweep just deleted.
   public typealias ClaimRelease = @Sendable (_ udid: String) async -> Void
+  /// Frees what dead holders' leases still hold, run before each orphan sweep so a lease's
+  /// session is closed while its device still exists.
+  public typealias LeaseSweep = @Sendable () async -> Void
   /// Receives each non-gating note a lookup raises, such as `sim.base-ambiguous`.
   public typealias NoteSink = @Sendable (Finding) -> Void
 
@@ -29,9 +32,11 @@ public struct SimulatorClones: Sendable {
   private let makeToken: @Sendable () -> String
   private let lockTimeout: Duration
   private let releaseClaims: ClaimRelease?
+  private let sweepLeases: LeaseSweep?
   private let notes: NoteSink?
 
   /// - Parameter releaseClaims: run for each orphan the sweep deletes; `nil` leaves claims alone.
+  /// - Parameter sweepLeases: run before each orphan sweep; `nil` leaves leases alone.
   /// - Parameter notes: receives the base lookup's note; `nil` drops it.
   public init(
     simctl: any Simctl, lock: any CountingLock, config: SimulatorConfig,
@@ -39,7 +44,7 @@ public struct SimulatorClones: Sendable {
     isAlive: @escaping @Sendable (Int32) -> Bool = SimulatorClones.processIsAlive,
     makeToken: @escaping @Sendable () -> String = SimulatorClones.randomToken,
     lockTimeout: Duration = .seconds(30 * 60), releaseClaims: ClaimRelease? = nil,
-    notes: NoteSink? = nil
+    sweepLeases: LeaseSweep? = nil, notes: NoteSink? = nil
   ) {
     self.simctl = simctl
     self.lock = lock
@@ -49,19 +54,21 @@ public struct SimulatorClones: Sendable {
     self.makeToken = makeToken
     self.lockTimeout = lockTimeout
     self.releaseClaims = releaseClaims
+    self.sweepLeases = sweepLeases
     self.notes = notes
   }
 
   /// The production wiring: `xcrun simctl` and the machine-wide `sim` lock.
   public static func live(
-    config: SimulatorConfig, runner: any ProcessRunner, releaseClaims: ClaimRelease? = nil
+    config: SimulatorConfig, runner: any ProcessRunner, releaseClaims: ClaimRelease? = nil,
+    sweepLeases: LeaseSweep? = nil
   ) -> SimulatorClones {
     SimulatorClones(
       simctl: LiveSimctl(
         runner: runner,
         timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simctlTimeoutSeconds))),
       lock: FileCountingLock(name: "sim", capacity: config.maxConcurrent), config: config,
-      releaseClaims: releaseClaims)
+      releaseClaims: releaseClaims, sweepLeases: sweepLeases)
   }
 
   public static let randomToken: @Sendable () -> String = {

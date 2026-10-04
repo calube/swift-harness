@@ -105,3 +105,21 @@ public struct SimDowned: Sendable, Equatable {
     return ([head] + reports + notes.map { "  note: \($0)" }).joined(separator: "\n")
   }
 }
+
+/// What sweeping the leases of dead holders did. A holder killed outright never closes its
+/// `agent-device` session, and the session's claim belongs to the still-running `agent-device`
+/// daemon, so neither the orphan device sweep nor `release --stale` frees it.
+public struct SimLeaseSweep: Sendable, Equatable {
+  /// The runs whose session was closed, lease removed and claims released.
+  public var released: [String]
+  /// What could not be freed, each naming its run; any one makes `gc` BLOCKED.
+  public var problems: [String]
+  /// Unreadable leases skipped, which never fail the sweep.
+  public var notes: [String]
+
+  public init(released: [String] = [], problems: [String] = [], notes: [String] = []) {
+    self.released = released
+    self.problems = problems
+    self.notes = notes
+  }
+}

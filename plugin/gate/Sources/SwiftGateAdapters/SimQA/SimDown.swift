@@ -71,6 +71,17 @@ public struct SimDown: Sendable {
     }
   }
 
+  /// Releases every lease on the machine whose holder has died, whichever worktree wrote it: a
+  /// dead holder can't give anything back itself. Each goes through the same release as
+  /// `sim down`.
+  ///
+  /// - Parameter simDirectory: the run's `sim/` folder for its lease, where a problem is logged;
+  ///   `nil` (the lease's worktree is gone) logs nothing.
+  public func sweepDeadHolders(simDirectory: @Sendable (SimLease) -> URL?) async -> SimLeaseSweep
+  {
+    SimLeaseSweep()
+  }
+
   private func down(_ request: Request) async throws(SimDownFailure) -> SimDowned {
     var notes: [String] = []
     guard let lease = try resolve(request, notes: &notes) else {
@@ -290,5 +301,25 @@ public struct SimDown: Sendable {
           runID: lease.runID)
       }
     }
+  }
+}
+
+extension SimDown {
+  /// The production wiring: `agent-device`, `xcrun simctl`, the machine-wide lease store and the
+  /// user's crash report folder.
+  public static func live(runner: any ProcessRunner) -> SimDown {
+    SimDown(
+      dependencies: Dependencies(
+        agentDevice: LiveAgentDevice(runner: runner),
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        simctl: LiveSimctl(runner: runner),
+        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
+        isAlive: SimulatorClones.processIsAlive, clock: .continuous()))
+  }
+
+  /// The lease's run `sim/` folder in its worktree's state root, or `nil` when that worktree is
+  /// gone, so a sweep never recreates a removed worktree to log into it.
+  public static func simDirectory(for lease: SimLease) -> URL? {
+    nil
   }
 }

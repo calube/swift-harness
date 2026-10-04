@@ -8,6 +8,8 @@ import Synchronization
 struct GCSummary: Sendable, Equatable, Encodable {
   var removed: [String] = []
   var orphanClones: [String] = []
+  /// Runs whose holder had died: session closed, lease removed, claims released.
+  var releasedLeases: [String] = []
   var errors: [String] = []
   /// Sealed segments, indexes and rollups removed by `--events`, relative to the root.
   var removedEvents: [String] = []
@@ -15,12 +17,16 @@ struct GCSummary: Sendable, Equatable, Encodable {
 
 /// `gc`: prunes this worktree's stale DerivedData and run directories and deletes simulator
 /// clones whose owning process died (spec §4.4), releasing `agent-device`'s stale claims on each.
+/// Before the clones, it frees each lease a dead `sim hold` left: its session, claims and file.
 /// Only paths under the state root are ever removed.
 enum GCRun {
   /// - Parameter eventsOlderThanDays: `nil` leaves every event file; a count removes each sealed
   ///   segment whose index's last time is older.
+  /// - Parameter sweepLeases: runs before `sweepOrphans`, so a lease's session is closed while
+  ///   its device still exists.
   static func run(
     root: URL, maxAgeDays: Int, eventsOlderThanDays: Int? = nil, now: Date,
+    sweepLeases: () async -> SimLeaseSweep = { SimLeaseSweep() },
     sweepOrphans: () async throws -> [String]
   ) async -> GCSummary {
     var summary = GCSummary()
