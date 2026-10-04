@@ -1,0 +1,3 @@
+run: plan spec in /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/; spec /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/spec.md (copied); plan branch swift-harness/spec at 0d989707f82c33f74bb852edd8965ec88fcf041b; warm-up pid 4713 logging to /Users/caleb/Developer/trials/memos/.git/swift-harness/logs/warmup-spec.log
+run: claude could not start: No such file or directory; is it on PATH?
+exit 2

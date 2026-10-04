@@ -88,6 +88,7 @@ Workflow({
     review: "<full|gate|classified>",
     taskProof: "<per-task|final|prove>",
     planSurface: "<plan.json's surfaceCommit, or null>",
+    buildRun: "<run>",
     pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
   }
 })
@@ -110,6 +111,10 @@ Workflow({
   alone as a stub, checks it with `swiftgate surface-check <sha>`, and returns the stub as
   `surfaceCommit`. [`build proof-bases`](#final-gate) lists the plan surface first, then each stub in
   merge order. `null` leaves the worker's prompt exactly as it was before the arg existed.
+- `buildRun`: `<run>`, the `runId` `build start` printed. Every agent the workflow runs, the
+  worker, each reviewer, each verifier and the fix pass, opens and closes its own run-viewer span
+  in this build run from its prompt, so no stage spends an agent on a span. A span call that fails
+  never changes a stage's outcome. Leaving `buildRun` out throws `build-task: buildRun is required`.
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
