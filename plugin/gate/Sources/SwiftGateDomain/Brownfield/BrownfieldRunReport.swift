@@ -290,9 +290,16 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     guard case .read(let file) = baseline else {
       return Section(items: [], note: describe(baseline, what: "baseline"))
     }
-    let failures = file.records.flatMap { Baseline.failures(of: $0.key, $0.result) }
-    let lines = failures.map {
-      BaselineFailureLine(area: $0.key.area, step: $0.key.step, test: $0.test)
+    // A step re-recorded under an edited command keeps its earlier record, so 1 failing test can
+    // appear once per command.
+    var seen: Set<String> = []
+    var lines: [BaselineFailureLine] = []
+    for failure in file.records.flatMap({ Baseline.failures(of: $0.key, $0.result) }) {
+      let line = BaselineFailureLine(
+        area: failure.key.area, step: failure.key.step, test: failure.test)
+      let identity = [line.area, line.step.rawValue, line.test.map { "test:" + $0 } ?? "step"]
+      guard seen.insert(identity.joined(separator: "\u{0}")).inserted else { continue }
+      lines.append(line)
     }
     return Section(
       items: lines.sorted {
@@ -327,21 +334,40 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   }
 
   /// The build-task workflow gets no diff-risk answer, so classified review runs every task at
-  /// `medium`; the report names them so the depth is never silent.
+  /// `medium`; the report names them so the depth is never silent. A task the build carried
+  /// through review is one it merged, or one it started that ended blocked or needing a replan,
+  /// since a return halts only after its review; a task marked done with no merge was landed
+  /// without one.
   private static func reviewFallbacks(_ build: RunReportInput<RunReportBuild>) -> Section<String> {
     guard case .read(let run) = build else {
       return Section(items: [], note: describe(build, what: "build run"))
     }
     guard run.record.preset.review == .classified else { return Section(items: [], note: nil) }
-    var merged: [String] = []
-    for case .merge(let merge) in run.log.events where !merged.contains(merge.task) {
-      merged.append(merge.task)
+    var order: [String] = []
+    var merged: Set<String> = []
+    var ended: [String: TaskStatus] = [:]
+    for event in run.log.events {
+      switch event {
+      case .merge(let merge):
+        merged.insert(merge.task)
+        if !order.contains(merge.task) { order.append(merge.task) }
+      case .transition(let transition) where transition.from == .inProgress:
+        ended[transition.task] = transition.to
+        if !order.contains(transition.task) { order.append(transition.task) }
+      case .transition, .undo, .gate:
+        continue
+      }
     }
-    guard !merged.isEmpty else { return Section(items: [], note: nil) }
+    let reviewed = order.compactMap { task -> String? in
+      if merged.contains(task) { return "\(task) (merged)" }
+      guard let status = ended[task], [.blocked, .needsReplan].contains(status) else { return nil }
+      return "\(task) (\(status.rawValue))"
+    }
+    guard !reviewed.isEmpty else { return Section(items: [], note: nil) }
     return Section(
       items: [
-        "classified review ran at medium for \(merged.count) merged task(s), because no "
-          + "diff-risk answer reached them: " + merged.joined(separator: ", ")
+        "classified review ran at medium for \(reviewed.count) task(s), merged or not, because no "
+          + "diff-risk answer reached them: " + reviewed.joined(separator: ", ")
       ], note: nil)
   }
 
