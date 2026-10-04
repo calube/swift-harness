@@ -363,10 +363,11 @@ enum BrownfieldSliceCheck {
         "\(area.name) records no project, so slice can't check that its new Swift files join a "
           + "target", severity: .nit)
     }
-    let file = root.appending(path: project).appending(path: "project.pbxproj")
+    let pbxproj = project + "/project.pbxproj"
+    let file = root.appending(path: pbxproj)
     guard let text = dependencies.prove.readFile(file) else {
       return note(
-        "can't read \(project)/project.pbxproj, so slice can't check that \(area.name)'s new Swift "
+        "can't read \(pbxproj), so slice can't check that \(area.name)'s new Swift "
           + "files join a target", severity: .nit)
     }
     do {
@@ -374,7 +375,7 @@ enum BrownfieldSliceCheck {
         .newFileFindings(newSwift, inclusion: xcode.inclusion)
     } catch {
       return note(
-        "\(project)/project.pbxproj doesn't parse, so slice can't check that \(area.name)'s new "
+        "\(pbxproj) doesn't parse, so slice can't check that \(area.name)'s new "
           + "Swift files join a target: \(error)", severity: .nit)
     }
   }
