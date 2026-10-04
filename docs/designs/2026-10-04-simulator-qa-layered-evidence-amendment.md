@@ -43,7 +43,7 @@ Since no simulator QA task has started, this amendment can change the plan befor
 |---|---|---|---|---|
 | unit | each task's own behaviour | the task's tests, test-first, proven by `prove` | seconds | the task's gate; not listed in the validation table |
 | acceptance | behaviour at a boundary: an API, a CLI, the module that joins 2 tasks | a test in the repository's framework, or a `curl -fsS … \| jq -e '<condition>'` command | seconds | after the tasks it names merge |
-| flow | a user journey in the running app | an `agent-device batch` steps file | about a minute | once the UI it drives merges |
+| flow | a user journey in the running app | an `agent-device batch` steps file, or a kept XCUITest in T3 (§6) | about a minute | once the UI it drives merges |
 | state | the result persisted or left the app | a script that exits non-zero when the stored or sent result is wrong | seconds | straight after its flow |
 
 A state check reads 1 of: a database query, a read after the write, the app's stored data, or a log line.
@@ -134,7 +134,13 @@ swiftgate qa run --final                   # every row, recording flows (§7)
 swiftgate qa run --at-base                 # the validation task's red runs (§5.2)
 ```
 
-A flow row runs as 1 call on the device `sim up` leased:
+A flow has 2 sources, and both normalise to 1 `qa.flow` record (§9.2), so the report treats them alike:
+
+- **Prepared and final-pass flows** run as an `agent-device` batch through `swiftgate qa run`. The 5 rules in §6.1
+  run before any step does.
+- **Kept flows** run as XCUITest in T3 through `swiftgate check`, with keep-always attachments (decision 17).
+
+A prepared flow row runs as 1 call on the device `sim up` leased:
 
 ```bash
 agent-device batch --steps-file <qa>/<name>.flow.json --session <session> --udid <udid> --on-error stop --json
@@ -143,13 +149,20 @@ agent-device batch --steps-file <qa>/<name>.flow.json --session <session> --udid
 
 ### 6.1 Flow file rules
 
+These rules check a batch steps file. A kept XCUITest flow gets the same guarantees from the compiler and the
+typed accessibility-id module.
+
 | Rule id (proposed) | Finding | Verdict |
 |---|---|---|
 | `qa.flow-unparsed` | the steps file isn't a JSON array of `{"command","input"}` steps | `RED` |
 | `qa.flow-ref-target` | a step targets an `@e` ref or a coordinate, not a selector | `RED` |
 | `qa.flow-no-assert` | a flow has no `wait` or `is` step | `RED` |
+| `qa.flow-schema` | a step's input fails the pinned tool's schema for that command, captured from its MCP `tools/list` at the pin | `RED` |
+| `qa.flow-unknown-id` | an `id="…"` selector names an identifier the app doesn't declare in its typed accessibility-id module (decision 17) | `RED` |
 
-`get` reads a value and takes no predicate, so it never counts as the assertion. The installed guide says
+The last 2 rules run offline, before any device boots. In the measured run (§11.1), they caught an identifier typo in
+70 ms that the Swift compiler let through and the device run found after 39 s. `get` reads a value and takes no
+predicate, so it never counts as the assertion. The installed guide says
 "get text alone ... is not enough" (decision 4). Each rule ships with a captured fixture and a rule-index
 row in `plugin/docs/standards.md`.
 
@@ -158,7 +171,8 @@ row in `plugin/docs/standards.md`.
 | Layer | Passes when |
 |---|---|
 | acceptance | the test passes in the gate, or the command exits 0 |
-| flow | the batch exits 0, and `sim verify` is `GREEN` over the run's steps |
+| flow, prepared | the batch exits 0, and `sim verify` is `GREEN` over the run's steps |
+| flow, kept | its XCUITest passes in T3 |
 | state | the script exits 0 |
 
 A screenshot, tree, video or log alone never passes a row. A row whose check didn't run reads `unverified`.
@@ -174,7 +188,8 @@ agent-device record stop --session <session>
 agent-device record contact-sheet <ev>/<name>.mp4 --out <ev>/<name>-sheet.png
 ```
 
-Claude reads the contact sheet PNG to confirm the journey reached its end state. The MP4 is for people. Neither passes
+A kept XCUITest flow leaves its MP4 through keep-always attachments in T3, and the same contact sheet command reads
+it (§11.1). Claude reads the contact sheet PNG to confirm the journey reached its end state. The MP4 is for people. Neither passes
 a row (§6.2).
 
 Limits the installed help states:
@@ -262,7 +277,7 @@ already isolates its devices; this section states what the other session must le
 
 The run viewer change adds a field to the closed `RunView` contract and a new `HarnessEvent` kind. Each evidence path
 passes the payload guard; a path the guard rejects becomes a `damage` row, as today. The page links the MP4 and the
-contact sheet by run-relative path and embeds neither (decision 10).
+contact sheet by run-relative path and embeds neither: no thumbnails and no inline images (decision 10).
 
 ### 9.1 The report
 
@@ -298,6 +313,14 @@ The user chose the tabbed layout on 2026-10-04: the validation layout mockups, v
 - **Task details.** A click on a board card or a graph node opens a task details popover: status, board column,
   deps, gate, commits, covered requirements, and the task's validation rows with their Why buttons. Its "Open task"
   action opens the task drawer.
+- **Flow steps.** Each flow, from a batch or from a kept XCUITest, becomes 1 `qa.flow` record of the same shape:
+  `{source: batch|xcuitest, steps: [{n, label, offsetMs, ok}], video, sheet}`. A batch fills it from `batch --json`;
+  an XCUITest fills it from its xcresult activities. A flow row lists its steps with a pass or fail mark. Each step
+  links to the MP4 at its offset, and the row links the contact sheet.
+- **Links, never embeds.** Evidence opens by run-relative path. The page shows no thumbnails and no inline images
+  (decision 10).
+- **Timeline ticks.** A `qa.check` span on the timeline carries 1 tick per step, each linking to the video at that
+  offset.
 
 ## 10. Against the approved choices
 
@@ -334,16 +357,31 @@ Captured on 2026-10-04 on this Mac. Nothing here comes from memory.
 | A batch whose `wait` fails, with and without `--json` | exit 1; the message names the failing step's index and command |
 | A batch with no `--udid` on this Mac | `AMBIGUOUS_MATCH` across 11 devices, so every call passes the leased UDID |
 
-Unverified, for the fixture capture task: the shape of `batch --json` per-step output on success; whether
-`record start` in a batch works while the batch also drives the app; and the `--session` binding when `open` ran
-with `--udid`.
+Unverified, for the fixture capture task: whether `record start` in a batch works while the batch also drives the
+app, and the `--session` binding when `open` ran with `--udid`. §11.1 settles the success shape of `batch --json`.
+
+### 11.1 Measured: batch vs XCUITest
+
+A research run on a scratch copy of `examples/SampleApp`, with `agent-device` 0.21.18 and Xcode 26.2, measured the
+same flow both ways.
+
+| Question | Measured |
+|---|---|
+| Warm flow time | batch: 4.1 to 4.5 s at load 15 to 97. XCUITest `test-without-building`: 6.5 to 7.9 s at load 17 to 21, and 19 to 20 s at load 57 to 82 |
+| Where the gap comes from | the step time inside the run matches, since the tool's iOS backend is itself an XCUITest bundle. The gap is the fixed cost of each `xcodebuild` call, which T3 pays once for all its flows |
+| An accessibility-id typo | the Swift compiler didn't catch it; the run failed after 39 s. An offline check of each step's input against the pinned tool's `tools/list` schemas, and of each `id="…"` against the app's declared ids, caught it in 70 ms |
+| `batch --json` on success | each step returns `durationMs`, `ok` and its data, and a `snapshot` step returns the full tree |
+| Video from XCUITest | with `systemAttachmentLifetime = keepAlways`, a passing test keeps an MP4 and timestamped activities per step; `xcresulttool get test-results activities` gives each step's offset |
+| Contact sheet from XCUITest | `agent-device record contact-sheet` reads the XCUITest MP4, in 0.7 s |
+| Step schema stability | the schemas for `open`, `wait`, `press`, `is`, `screenshot`, `snapshot` and `record` match across 0.21.16, 0.21.18 and 0.21.20 |
+
 
 ## 12. Decisions for the user
 
 | # | Question | Options | Recommendation | Needs |
 |---|---|---|---|---|
-| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) a separate per-plan numbering, `D1`, `D2` | (a): the ledger and the run viewer already join on them | user |
-| 2 | Which tools run the checks? | (a) `agent-device` batch for flows, the repo's test runner or `curl` with `jq -e` for acceptance, shell for state, all behind `swiftgate qa run`; (b) the same tools called directly, with no `swiftgate` wrapper | (a): every enforcement point calls `swiftgate` | user |
+| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) a separate per-plan numbering, `D1`, `D2` | Decided: (a), the ledger and the run viewer already join on them | decided (user, 2026-10-04) |
+| 2 | Which tools run the checks? | (a) every check invoked by `swiftgate`: prepared and final-pass flows as `agent-device` batch behind `swiftgate qa run`, with `qa.flow-schema` and `qa.flow-unknown-id` checked before any step runs; kept flows as XCUITest in T3 through `swiftgate check`, with keep-always attachments; acceptance through the repo's test runner or `curl` with `jq -e`; state through shell. Both flow sources normalise to 1 `qa.flow` record; (b) the same tools called directly, with no `swiftgate` wrapper | (a): every enforcement point calls `swiftgate`, and the 2 offline flow rules run only when `swiftgate` runs the flow | user |
 | 3 | Which evidence kinds? | (a) the approved PNG and tree per step, plus final-pass MP4 and contact sheet, logs, network, trace and app data; (b) (a) without trace; (c) the approved evidence only | (a) | user |
 | 4 | What passes a check? | (a) only `wait` or `is` steps with batch exit 0 plus `sim verify` GREEN, a test pass, or a state exit 0; (b) (a) plus `get` steps | (a): the installed guide says `get` alone isn't proof | user |
 | 5 | Where does `qa/` live? | (a) the validation worktree's `.harness/qa/<plan>/`, copied into plan state by the orchestrator; (b) a tracked `qa/` folder in the repository; (c) plan state in the git common dir, with a new guard exception for the validation agent | (a): no guard change, no second tracked format | user |
@@ -351,22 +389,25 @@ with `--udid`.
 | 7 | Who confirms a check fails first? | (a) the gate: `prove --proof-base` for acceptance, `qa run --at-base` for flow and state; (b) the worker's recorded reason | (a) | user |
 | 8 | What may the validation worker write? | (a) acceptance test files named in its write set, plus `qa/`; (b) (a) plus contract additions it finds missing | (a): it reports a missing name and the orchestrator amends the contract | user |
 | 9 | Do sprint and design-free ship get the table? | (a) not in the first cut; (b) yes, as an optional spec-page section | (a) | user |
-| 10 | Where does the report live, and how does the run viewer show it? | Location: (a) `.harness/runs/<runID>/qa/report.json` plus rows in `/swift-validate`; (b) `/swift-validate` rows only. Layout: tabs with a Validation tab (variant B of the validation layout mockups) | Location: (a). Layout: decided, tabs (§9.2) | location: user; layout: decided (user, 2026-10-04) |
+| 10 | Where does the report live, and how does the run viewer show it? | Location: (a) `.harness/runs/<runID>/qa/report.json` plus rows in `/swift-validate`; (b) `/swift-validate` rows only. Layout: tabs with a Validation tab (variant B of the validation layout mockups). Evidence: linked by run-relative path, never embedded | Location: (a). Layout: decided, tabs (§9.2). Evidence: decided, the page embeds neither video nor contact sheet, with no thumbnails and no inline images | location: user; layout and evidence: decided (user, 2026-10-04) |
 | 11 | Do flows run after each merge, or only at `validate`? | (a) after each merge for the rows it unblocks, stop at the first red layer; (b) acceptance after each merge, flow and state at `validate` only | (a) | user |
-| 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a) | user |
+| 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a). 0.21.20 is out, with the same step schemas (§11.1); recapture the fixtures on any bump | user |
 | 13 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | user |
 | 14 | How long does `qa run --final` wait when another recording holds the Mac? | (a) retry every 15 s for up to 5 minutes per flow, then run without video and mark the video `unverified`; (b) no wait: mark it `unverified` at once; (c) wait with no bound | (a): a bound keeps the final pass from hanging on a session the harness can't see | user |
 | 15 | How does a server's port reach its checks? | (a) the row binds port 0, reads the port the OS assigned, and passes it as the `QA_PORT` environment variable to the row's commands and scripts; (b) a port range per worktree in `.swiftgate.toml` | (a): no config, no collisions between runs | user |
 | 16 | What happens when more than 1 device shares the base's name and `os`? | (a) a non-gating note naming each UDID, and the lowest UDID as today; (b) `BLOCKED` until 1 remains; (c) no change | (a): no silent pick, and no new way to block a gate | user |
-| 17 | Kept flows: XCUITest or `agent-device` batch? | (a) keep the split: batch for prepared flows that serve 1 run, XCUITest for kept regression flows; a prepared flow that proves its worth moves to XCUITest through its contract-named identifiers; (b) promote batch flows to the kept regression format: a tracked `qa/` folder, plus a new ADR superseding that part of [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a), for now: `agent-device` is pre-1.0 and its pin has already moved from 0.21.16 to 0.21.18; XCUITest compiles against the app and already runs in the gate; the §11 items (`batch --json`, `record` inside a batch, the `--session` and `--udid` binding) are still unverified; and every replay would depend on the `sim up` UDID lease. Revisit once the capture task settles §11 and the steps format holds across releases | user |
+| 17 | Kept flows: XCUITest or `agent-device` batch? | (a) keep the split: batch for prepared flows that serve 1 run, XCUITest for kept regression flows; a prepared flow that proves its worth moves to XCUITest through its contract-named identifiers. With it: a shared typed accessibility-id module that the app and its UI tests both import, so an id typo fails to compile in XCUITest; and keep-always attachments for T3, so kept flows also leave video. (b) promote batch flows to the kept regression format: a tracked `qa/` folder, plus a new ADR superseding that part of [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): `agent-device` is pre-1.0 and its pin has moved twice; XCUITest compiles against the app and already runs in the gate; batch's speed edge is `xcodebuild`'s fixed cost per call, which T3 pays once (§11.1); and every replay would depend on the `sim up` UDID lease. Revisit (b) only if the step schemas hold across several minor releases and `xcodebuild`'s fixed cost starts to dominate kept-flow time | decided: (a) (user, 2026-10-04) |
 
 ## 13. Changes to the plan, once approved
 
 - The capture task also captures `batch --json` success and failure, `record start`, `record stop`, `record
-  contact-sheet`, `logs`, `network dump` and `trace` at the pin.
+  contact-sheet`, `logs`, `network dump`, `trace`, and the MCP `tools/list` step schemas at the pin.
 - A task adds `swiftgate qa run` and `qa.check` events, surface first.
-- A task adds the 3 `qa.flow-*` rules and the `plan-lint` rules, each with a fixture and a rule-index row.
+- A task adds the 5 `qa.flow-*` rules and the `plan-lint` rules, each with a fixture and a rule-index row.
+- A task adds the typed accessibility-id module to the bootstrap template and SampleApp, and sets keep-always
+  attachments for T3, so kept flows leave video and `qa.flow-unknown-id` has ids to read.
 - The QA skill task gains the validation worker's brief and the final-pass recording.
 - The `validate` stage task calls `swiftgate qa run --final`.
-- A run viewer task adds the validation column and the red-row popover.
+- A run viewer task adds the tabs, the Validation tab with its flow-step records and timeline ticks, and the Why
+  popovers.
 - A brownfield task teaches `plan import` the `## Validation` section.
