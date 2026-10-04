@@ -248,8 +248,9 @@ reply task has the id of a `<fixed>` task; its `validation` is the whole table, 
    requirements and the ledger's tasks: `plan-lint.validation-uncovered` (a requirement with no row
    and no unit-only reason), `plan-lint.validation-unknown-task` (a `runsAfter` or `writer` id that
    names no task), `plan-lint.validation-state-without-flow` (a `state` row with no `flow` row for
-   the same requirement and tasks) and `plan-lint.validation-flow-without-ios` (a `flow` row with
-   no app to drive). Each is `major`, and goes to the fix round like any other finding.
+   the same requirement and tasks), `plan-lint.validation-flow-without-ios` (a `flow` row with
+   no app to drive) and `plan-lint.validation-check-source-file` (an `acceptance` row whose check
+   is a test source file, not `test: <id>`). Each is `major`, and goes to the fix round like any other finding.
 
    Exit 0: go to step 6. Exit 2 halts, and so does a malformed `validation.json`: the plan state, the design at `designSha`, the spec page
    or the module graph is unreadable, or no one has confirmed the page. Exit 1: go on to the fix round,
