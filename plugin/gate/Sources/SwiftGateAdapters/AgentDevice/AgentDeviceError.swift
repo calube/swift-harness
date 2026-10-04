@@ -2,7 +2,9 @@ import Foundation
 import SwiftGateDomain
 
 /// The `error.code` values the pinned version was seen to print. A code outside this set fails
-/// decoding and names itself, so an upgrade that adds one cannot pass as a known failure.
+/// decoding and names itself, so an upgrade that adds one cannot pass as a known failure; a
+/// reason outside ``AgentDeviceFailureReason/named`` decodes as `unknown`, since the code and the
+/// step already say what failed.
 public enum AgentDeviceErrorCode: String, Sendable, Equatable, CaseIterable {
   case commandFailed = "COMMAND_FAILED"
   case deviceInUse = "DEVICE_IN_USE"
@@ -30,6 +32,7 @@ public enum AgentDeviceFailureReason: Sendable, Equatable, Hashable {
   /// Every reason with a case of its own.
   public static let named: [AgentDeviceFailureReason] = [
     .waitDeadlineExceeded, .predicateFailed, .appleSimulatorRecordingBusy,
+    .coveredByInteractiveDescendants,
   ]
 
   public init(rawValue: String) {
@@ -148,14 +151,7 @@ public enum AgentDeviceError: Error, Sendable, Equatable {
       throw DecodingFailure(detail: "unknown error code \"\(envelope.error.code)\"")
     }
     let details = envelope.error.details
-    var reason: AgentDeviceFailureReason?
-    if let raw = details?.reason {
-      let known = AgentDeviceFailureReason(rawValue: raw)
-      guard AgentDeviceFailureReason.named.contains(known) else {
-        throw DecodingFailure(detail: "unknown failure reason \"\(raw)\" for \(code.rawValue)")
-      }
-      reason = known
-    }
+    let reason = details?.reason.map(AgentDeviceFailureReason.init(rawValue:))
     let failedStep = details.flatMap { details in
       details.step.flatMap { step in
         details.command.map { AgentDeviceBatchStep(index: step, command: $0) }

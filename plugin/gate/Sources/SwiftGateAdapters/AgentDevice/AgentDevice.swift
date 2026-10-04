@@ -335,7 +335,9 @@ public struct LiveAgentDevice: AgentDevice {
     let output = try await invoke(command, arguments, timeout: timeout)
     let stdout = output.stdout.bytes
     guard let outcome = try? JSONDecoder().decode(Outcome.self, from: stdout) else {
-      throw .unreadableOutput(command: command, status: output.status, detail: Self.summary(output))
+      throw .unreadableOutput(
+        command: command, status: output.status, detail: Self.summary(output),
+        output: stdout.isEmpty ? nil : stdout)
     }
     if outcome.success && output.status.isSuccess { return stdout }
     throw .failed(command: command, try Self.failure(stdout, command, output.status))
@@ -349,7 +351,7 @@ public struct LiveAgentDevice: AgentDevice {
       failure.output = stdout
       return failure
     } catch {
-      throw .unreadableOutput(command: command, status: status, detail: error.detail)
+      throw .unreadableOutput(command: command, status: status, detail: error.detail, output: stdout)
     }
   }
 
