@@ -1,0 +1,18 @@
+{
+  "blocked" : null,
+  "checkoutHead" : "f7e10b00b4d7bf7336441a9943809b255724bc08",
+  "command" : "sim verify",
+  "findings" : [
+    {
+      "message" : "run 20261004T223404Z-be50ef8e-row2 recorded no step: run sim snap at each checked point",
+      "path" : "steps.ndjson",
+      "rule" : "sim.no-steps",
+      "step" : null
+    }
+  ],
+  "headCommit" : "f7e10b00b4d7bf7336441a9943809b255724bc08",
+  "runID" : "20261004T223404Z-be50ef8e-row2",
+  "schemaVersion" : 1,
+  "stepCount" : 0,
+  "verdict" : "RED"
+}

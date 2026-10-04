@@ -1,0 +1,53 @@
+{
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait role=button label=\"Settings\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "press role=button label=\"Settings\"",
+      "n" : 2,
+      "offsetMs" : 2598,
+      "ok" : true
+    },
+    {
+      "label" : "scroll",
+      "n" : 3,
+      "offsetMs" : 6764,
+      "ok" : true
+    },
+    {
+      "label" : "press label=\"Downloads\"",
+      "n" : 4,
+      "offsetMs" : 12734,
+      "ok" : true
+    },
+    {
+      "label" : "wait label=\"Compress Downloads\"",
+      "n" : 5,
+      "offsetMs" : 16557,
+      "ok" : true
+    },
+    {
+      "label" : "wait id=\"settings.downloads.confirmLargeDownloads\"",
+      "n" : 6,
+      "offsetMs" : 18336,
+      "ok" : true
+    },
+    {
+      "label" : "wait label=\"Confirm Large Downloads\"",
+      "n" : 7,
+      "offsetMs" : 20016,
+      "ok" : true
+    },
+    {
+      "label" : "is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"",
+      "n" : 8,
+      "offsetMs" : 21749,
+      "ok" : true
+    }
+  ]
+}

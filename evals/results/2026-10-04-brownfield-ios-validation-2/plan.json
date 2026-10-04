@@ -1,0 +1,98 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "contract" : {
+        "acceptance" : [
+          "the app builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any visible or stored behaviour"
+        ],
+        "scope" : [
+          "`DownloadsSettings.confirmLargeDownloads` key declaration (not yet in `keys`)",
+          "`LargeDownloadConfirmation` with `threshold`, `toggleAccessibilityIdentifier` and a stub `isRequired(chapterCount:defaults:)` returning false",
+          "English strings `CONFIRM_LARGE_DOWNLOADS` and `DOWNLOAD_N_CHAPTERS_CONFIRM`"
+        ],
+        "title" : "Declare the setting key, the decision entry point as a stub, the accessibility identifier and the strings, with no behaviour change.",
+        "why" : "requirements 1 to 4 all read the same key, entry point and names, so each task builds against 1 declared shape."
+      },
+      "download-check" : {
+        "acceptance" : [
+          "`AidokuTests/LargeDownloadConfirmationTests.swift` (Swift Testing, `@testable import Aidoku`) uses a dedicated `UserDefaults(suiteName:)` suite, removed after each test, storing the setting under its real key: on + 51 → true, on + 50 → false, off + 51 → false, never stored + 51 → false; it fails against the stub, then passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the settings row, registration, the prompt"
+        ],
+        "scope" : [
+          "`isRequired(chapterCount:defaults:)` reads `AppSettings.downloads.confirmLargeDownloads.key` from `defaults`; true only when the stored value is true and `chapterCount > threshold` (50)"
+        ],
+        "title" : "Implement the large-download decision against the user defaults it is handed.",
+        "why" : "requirement 3, \"one entry point decides whether a chapter-list download request needs confirmation\"."
+      },
+      "download-prompt" : {
+        "acceptance" : [
+          "the app builds and slice is GREEN; behaviour is covered by download-check's acceptance test, as the view has no unit-test seam"
+        ],
+        "outOfScope" : [
+          "the library's Download All menu, the download queue, its storage or notifications"
+        ],
+        "scope" : [
+          "in `MangaView`, route the multi-select Download button and the per-chapter context-menu download through 1 helper that, after the existing Wi-Fi check, calls `LargeDownloadConfirmation.isRequired(chapterCount:defaults: .standard)`; when true it stores the pending chapters and shows a `confirmationDialogOrAlert` titled `String(format: NSLocalizedString(\"DOWNLOAD_N_CHAPTERS_CONFIRM\"), n)` with Cancel (`role: .cancel`, queues nothing, clears the pending chapters) and Download (queues them); otherwise it queues at once as today"
+        ],
+        "title" : "Ask before queueing a large chapter-list download from a manga's page.",
+        "why" : "requirement 4, the \"Download <n> chapters?\" prompt with Download and Cancel before queueing."
+      },
+      "download-setting" : {
+        "acceptance" : [
+          "a Swift Testing test in `AidokuTests/ConfirmLargeDownloadsSettingTests.swift` checks the key is in `AppSettings.downloads.keys` with default false and that `Settings.downloadSettings` holds a toggle row for the key; it fails first, then passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the decision logic and the prompt"
+        ],
+        "scope" : [
+          "add `confirmLargeDownloads` to `DownloadsSettings.keys` so `AppSettings.registerDefaults()` registers it with default false",
+          "add a `.toggle` row keyed `AppSettings.downloads.confirmLargeDownloads.key`, titled `NSLocalizedString(\"CONFIRM_LARGE_DOWNLOADS\")`, to `Settings.downloadSettings`' base items, after the parallel downloads toggle",
+          "in `SettingView.toggleView`, set `.accessibilityIdentifier(LargeDownloadConfirmation.toggleAccessibilityIdentifier)` on the `Toggle` only when `setting.key` is that key, leaving every other toggle unchanged"
+        ],
+        "title" : "Register the setting and show its toggle in Settings → Downloads with its accessibility identifier.",
+        "why" : "requirements 1 and 2, the \"Confirm Large Downloads\" toggle, off by default, stored under its own registered key."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the flow and state checks against the contract's names, and record why each fails now.",
+        "why" : "requirements 1 and 2 need checks in the running app that fail before download-setting merges and pass after."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-setting",
+        "title" : "Settings → Downloads shows a \"Confirm Large Downloads\" toggle, off by default, beside the other download toggles, with the stable accessibility identifier `settings.downloads.confirmLargeDownloads`"
+      },
+      {
+        "id" : "req-stored",
+        "title" : "The toggle's value is stored in user defaults under `Downloads.confirmLargeDownloads`, registered with the other download settings, and switching it on in the UI writes `true` there"
+      },
+      {
+        "id" : "req-check",
+        "title" : "`LargeDownloadConfirmation.isRequired(chapterCount:defaults:)` returns true only when the setting stored in the given defaults is on and more than 50 chapters are requested"
+      },
+      {
+        "id" : "req-prompt",
+        "title" : "A chapter-list download from a manga's page that needs confirmation asks \"Download <n> chapters?\" with Download and Cancel before queueing, Cancel queues nothing, and other requests queue as today"
+      }
+    ]
+  },
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}
