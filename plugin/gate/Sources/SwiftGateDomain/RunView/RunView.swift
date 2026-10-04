@@ -204,11 +204,14 @@ public struct RunView: Sendable, Equatable, Encodable {
     /// Laid end to end because its gate step carried no start offset.
     public var approximate: Bool
     public var tools: ToolSummary?
+    /// The RED gate run that turned this stage red; `nil` for a span whose own `gateRun` says,
+    /// or one no gate run explains.
+    public var causeGateRun: String?
 
     public init(
       id: String, parent: String? = nil, phase: Phase, task: String? = nil,
       gateRun: String? = nil, start: Date, end: Date? = nil, outcome: SpanOutcome? = nil,
-      approximate: Bool = false, tools: ToolSummary? = nil
+      approximate: Bool = false, tools: ToolSummary? = nil, causeGateRun: String? = nil
     ) {
       self.id = id
       self.parent = parent
@@ -220,6 +223,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.outcome = outcome
       self.approximate = approximate
       self.tools = tools
+      self.causeGateRun = causeGateRun
     }
   }
 
@@ -253,11 +257,13 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var tests: TestCounts?
     public var ruleCounts: [String: Int]
     public var steps: [GateStepRow]
+    /// Why the run wasn't GREEN; `nil` for a GREEN run.
+    public var failure: GateFailure?
 
     public init(
       runID: String, task: String? = nil, command: String? = nil, verdict: Verdict,
       milliseconds: Int, tests: TestCounts? = nil, ruleCounts: [String: Int] = [:],
-      steps: [GateStepRow] = []
+      steps: [GateStepRow] = [], failure: GateFailure? = nil
     ) {
       self.runID = runID
       self.task = task
@@ -267,6 +273,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.tests = tests
       self.ruleCounts = ruleCounts
       self.steps = steps
+      self.failure = failure
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -303,16 +310,20 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var at: Date
     public var answer: BuildResumeAnswer?
     public var waitMs: Int?
+    /// The RED gate run a `gate-red` halt stopped on; `nil` for another reason, or when no
+    /// RED gate run of the halt's task came before it.
+    public var gateRun: String?
 
     public init(
       task: String? = nil, reason: BuildHaltReason, at: Date, answer: BuildResumeAnswer? = nil,
-      waitMs: Int? = nil
+      waitMs: Int? = nil, gateRun: String? = nil
     ) {
       self.task = task
       self.reason = reason
       self.at = at
       self.answer = answer
       self.waitMs = waitMs
+      self.gateRun = gateRun
     }
   }
 
