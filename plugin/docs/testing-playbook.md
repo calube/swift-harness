@@ -1,6 +1,6 @@
 # Testing playbook
 
-How tests are written, placed, and judged in a swift-harness app. It's for anyone adding a test. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
+How to write, place, and judge tests in a swift-harness app. It's for anyone adding a test. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
 
 Every rule here names what enforces it:
 
@@ -18,7 +18,7 @@ Waivers use the same-line syntax from [standards.md § Escape hatches](standards
 | T2 simulator | Snapshot tests, view and integration tests | `xcodebuild test` on a cloned simulator | minutes | Pinned device and OS, no network, dependency overrides. |
 | T3 flow | A thin XCUITest smoke test per critical flow | `xcodebuild test` on a cloned simulator | minutes | Launch-argument scenario injection. |
 
-Gate T1 and `prove` builds skip dSYMs, so links don't stall on `dsymutil`; rerun `swift test` locally for symbolicated crash traces.
+Gate T1 and `prove` builds skip dSYMs, so links don't stall on `dsymutil`; rerun `swift test` yourself for symbolicated crash traces.
 
 `swiftgate check --tier` composes the tiers:
 
