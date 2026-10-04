@@ -173,4 +173,49 @@ struct DoctorCommandTests {
     }
     #expect(try await sessionFindings("session-a").isEmpty)
   }
+
+  private func agentDeviceFindings(
+    answering agentDevice: @escaping @Sendable () throws(ProcessRunnerError) -> ProcessOutput
+  ) async throws -> [Finding] {
+    try Self.write(
+      repository, ".swiftgate.toml",
+      Self.config + "\n\n[[scenarios]]\nname = \"live\"\nreason = \"the real clients\"\n")
+    let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      guard invocation.executable == LiveAgentDevice.executable else {
+        throw .launchFailed(executable: invocation.executable, reason: "not on this test machine")
+      }
+      return try agentDevice()
+    }
+    let parts = try await DoctorRun.run(
+      root: repository, sessionID: nil, swiftPM: FakeSwiftPM(serving: []), runner: runner)
+    return parts.findings.filter { $0.ruleID == Doctor.agentDeviceRuleID }
+  }
+
+  @Test(
+    "doctor in a repo with a scenario, where agent-device isn't on PATH, reports doctor.agent-device with the pinned install line, and the captured pinned --version reports nothing — catches doctor never asking agent-device for its version"
+  )
+  func agentDeviceIsCheckedAgainstThePin() async throws {
+    defer { cleanUp() }
+    let emptyPath = LiveProcessRunner(baseEnvironment: ["PATH": repository.path])
+    let notFound: ProcessRunnerError
+    do {
+      _ = try await emptyPath.run(
+        ProcessInvocation(
+          executable: LiveAgentDevice.executable, arguments: ["--version"], timeout: .seconds(10)))
+      Issue.record("agent-device ran with an empty PATH")
+      return
+    } catch {
+      notFound = error
+    }
+    let missing = try await agentDeviceFindings { () throws(ProcessRunnerError) in throw notFound }
+    let finding = try #require(missing.first)
+    #expect(missing.count == 1)
+    #expect(finding.message.contains(AgentDevicePin.installCommand))
+
+    let captured = ProcessOutput(
+      status: .exited(0),
+      stdout: CapturedStream(bytes: try Fixture.data("AgentDevice/version.stdout")),
+      stderr: CapturedStream(bytes: try Fixture.data("AgentDevice/version.stderr")), elapsed: .zero)
+    #expect(try await agentDeviceFindings { captured }.isEmpty)
+  }
 }

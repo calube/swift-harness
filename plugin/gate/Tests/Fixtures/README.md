@@ -2194,6 +2194,20 @@ reader reads none of them. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z
 RunView/brownfield-blocked` and the secrets grep above matched nothing; `/tmp` matches only a
 repo-relative `.harness/tmp/edit.py` in an `agent.tools` file list.
 
+`RunView/brownfield-blocked/{warmup,baseline}/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json` are
+the times file and the baseline file the same clone's warm-up wrote at its base tree, for the run
+view's failure reason on a red warm-up step. The memos area's Go tests failed with 1 test id; the
+web area's failed with no test id read, so its record holds the whole step. A later merge gate
+added a second memos test record under a changed command to the baseline file. Copied 2026-10-04,
+after the run ended, with `C` as above:
+
+```sh
+T=98ce20b4568e17d2b5fee0f4a11ec054d03d03e2
+mkdir -p warmup baseline && cp $C/warmup/$T.json warmup/ && cp $C/baseline/$T.json baseline/
+```
+
+Both files are copied unedited; the grep above matched nothing in them.
+
 `RunView/brownfield-rejected/` is the state the fourth brownfield trial on `usememos/memos` left
 (`evals/results/2026-10-04-brownfield-trial/memos-4`), build run `20261004T141445Z-85d15f09` of plan
 `spec`, plus 1 `build.return-checked` event. The web task's worker ran its `slice` GREEN in its own

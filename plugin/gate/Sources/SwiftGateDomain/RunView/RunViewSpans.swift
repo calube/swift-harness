@@ -221,7 +221,11 @@ enum RunViewSpans {
   /// earlier. The warm-up writes an area's steps together when the area finishes, so its last
   /// step ends at the event and each earlier step ends where the next one starts; those
   /// boundaries are inferred, so each warm-up span is approximate.
-  static func brownfieldSpans(events: [HarnessEvent], parent: String?) -> [RunView.Span] {
+  ///
+  /// A failed warm-up step says why, from what the warm-up recorded into the baseline.
+  static func brownfieldSpans(
+    events: [HarnessEvent], parent: String?, baselines: [String: BaselineStepResult] = [:]
+  ) -> [RunView.Span] {
     var spans: [RunView.Span] = []
     var batch: [(event: HarnessEvent, run: WarmupRunEvent)] = []
     func flush() {
@@ -230,11 +234,12 @@ enum RunViewSpans {
       for (event, run) in batch.reversed() {
         guard let stepEnd = end else { break }
         let start = stepEnd.addingTimeInterval(-seconds(run.milliseconds))
+        let why = RunViewFailureReasons.warmup(run, baseline: baselines[event.eventID])
         placed.append(
           RunView.Span(
             id: "warmup:\(run.area):\(run.step.rawValue):\(event.eventID)", parent: parent,
             phase: .warmup, start: start, end: stepEnd, outcome: outcome(of: run.outcome),
-            approximate: true))
+            approximate: true, failureReason: why.reason, baseline: why.baseline))
         end = start
       }
       spans += placed.reversed()

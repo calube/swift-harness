@@ -1,0 +1,19 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "App"
+packages = ["Packages/*"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[[scenarios]]
+name = "live"
+reason = "an example scenario"
+
+[[scenarios]]
+name = "offline"
+reason = "an example scenario"
+
+[clients]
+vendor_modules = ["DatadogRUM"]

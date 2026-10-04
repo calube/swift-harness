@@ -1,0 +1,62 @@
+import ArgumentParser
+import Darwin
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+
+/// The detached process `sim up` starts to own a run's simulator until `sim down`, the end of
+/// the run's `agent-device` session, or `[qa] session_timeout_minutes`. Not for direct use: it
+/// takes the worktree it runs in as the lease's owner, so `sim up` starts it in the worktree root.
+struct SimHoldCommand: AsyncParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "hold",
+    abstract: "Hold one simulator slot and device for a QA run (started by sim up).",
+    shouldDisplay: false)
+
+  @Option(name: .customLong("run"), help: "The run id the lease is written under.")
+  var runID: String
+
+  func validate() throws {
+    guard SimLease.isValidRunID(runID) else {
+      throw ValidationError(
+        "--run \"\(runID)\" is not a run id: use letters, digits, '-', '_' and '.', not leading '.'"
+      )
+    }
+  }
+
+  func run() async throws {
+    let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    let config: Config
+    do {
+      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
+        Self.log("sim hold: no \(ConfigLoader.fileName) in \(root.path)")
+        throw ExitCode(Verdict.blocked.exitCode)
+      }
+      config = loaded
+    } catch let error as ConfigLoadError {
+      Self.log("sim hold: \(error)")
+      throw ExitCode(error.verdict.exitCode)
+    }
+    let runner = LiveProcessRunner()
+    let holder = SimHolder(
+      devices: SimulatorClones.live(config: config.simulator, runner: runner),
+      leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+      agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
+      holderPID: getpid(), timeout: .seconds(config.qa.sessionTimeoutMinutes * 60),
+      log: Self.log)
+    do {
+      _ = try await holder.hold(runID: runID)
+    } catch let error as SimulatorCloneError {
+      Self.log("sim hold: no device for run \(runID): \(error)")
+      throw ExitCode(error.verdict.exitCode)
+    } catch let error as SimLeaseStoreError {
+      Self.log("sim hold: \(error.message)")
+      throw ExitCode(Verdict.blocked.exitCode)
+    }
+  }
+
+  /// Unbuffered, so `agent-device.log` shows each line even if the holder is killed.
+  @Sendable static func log(_ line: String) {
+    FileHandle.standardOutput.write(Data((line + "\n").utf8))
+  }
+}

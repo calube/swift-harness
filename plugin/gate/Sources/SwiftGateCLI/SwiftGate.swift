@@ -36,6 +36,7 @@ struct SwiftGate: AsyncParsableCommand {
       XcodeCommand.self, AllowCommand.self,
       ReportCommand.self, ViewCommand.self,
       QACommand.self,
+      SimCommand.self,
     ]
   )
 

@@ -1,0 +1,57 @@
+{
+  "records" : [
+    {
+      "area" : "memos",
+      "command" : "go test -json .\/...",
+      "result" : "failed-tests",
+      "selection" : [
+
+      ],
+      "step" : "test",
+      "tests" : [
+        "github.com\/usememos\/memos\/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot"
+      ]
+    },
+    {
+      "area" : "memos",
+      "command" : "go build .\/...",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "web",
+      "command" : "pnpm run test",
+      "result" : "failed",
+      "selection" : [
+
+      ],
+      "step" : "test"
+    },
+    {
+      "area" : "web",
+      "command" : "pnpm run build",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "memos",
+      "command" : "DRIVER=sqlite go test -json .\/...",
+      "result" : "failed-tests",
+      "selection" : [
+
+      ],
+      "step" : "test",
+      "tests" : [
+        "github.com\/usememos\/memos\/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot"
+      ]
+    }
+  ],
+  "tree" : "98ce20b4568e17d2b5fee0f4a11ec054d03d03e2",
+  "version" : 1
+}

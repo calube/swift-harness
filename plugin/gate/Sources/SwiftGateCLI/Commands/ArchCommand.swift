@@ -5,11 +5,14 @@ import SwiftGateDomain
 import SwiftGateRules
 
 /// Architecture rules (spec §6.1): client boundaries and module kinds from the module graph, plus
-/// the source-level facts (imports, `@Reducer`, test values) the graph cannot show.
+/// the source-level facts (imports, `@Reducer`, test values) the graph cannot show, and the app
+/// target's `Scenario` enum against `[[scenarios]]`.
 enum ArchCheck {
   /// Every rule `arch` can report, source-level and graph-level.
   static var ruleIDs: [String] {
-    RuleCatalog.arch.map(\.descriptor.id) + ArchitectureRules.all.map(\.id) + [EngineReplayRule.id]
+    RuleCatalog.arch.map(\.descriptor.id) + ArchitectureRules.all.map(\.id) + [
+      EngineReplayRule.id, ScenarioDriftRule.id,
+    ]
   }
 
   static func run(root: URL, swiftPM: any SwiftPM) async -> StaticCheckOutcome {
@@ -41,6 +44,7 @@ enum ArchCheck {
         try ArchitectureRules.evaluate(
           ArchitectureInput(graph: graph, config: config, settings: settings))
         + EngineReplayRule.evaluate(graph: graph, sources: inputs.sources)
+        + ScenarioDriftRule.evaluate(config: config, sources: inputs.sources)
       return .checked(
         RuleRunResult(
           findings: sourceResult.findings + graphFindings, allowances: sourceResult.allowances))
