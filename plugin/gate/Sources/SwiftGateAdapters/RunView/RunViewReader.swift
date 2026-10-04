@@ -72,6 +72,19 @@ public struct RunViewReader: RunViewReading {
       workerGateRuns: workerGateRuns)
   }
 
+  /// The newest build run of any plan; `nil` when there is none. Run ids start with their UTC
+  /// start time, so the greatest id is the newest.
+  public func newestBuildRun() -> String? {
+    nil
+  }
+
+  /// What every file ``read(buildRun:)`` reads holds now: each event store's files, the run's
+  /// ledger log, returns and `run.json`, and the plan's ledger. Taken before a read, a moved
+  /// snapshot means the next read differs.
+  public func snapshot(buildRun: String) -> RunViewSnapshot {
+    RunViewSnapshot()
+  }
+
   /// Each `gate.run` of a worker's store that nothing names, by run id, with the task whose
   /// window holds its end: from the task's move to `in-progress` until it is `done` or
   /// `abandoned`, or open. A run inside no window, or inside more than 1, stays out: a store copied
