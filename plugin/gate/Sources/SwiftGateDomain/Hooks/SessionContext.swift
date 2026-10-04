@@ -99,6 +99,14 @@ public enum SessionContext {
     case unavailable(reason: String)
   }
 
+  /// Which profile the session's project runs: the owned repository's `.swiftgate.toml` and
+  /// tiers, or a brownfield clone's config under its git common dir and its own tiers.
+  public enum Profile: Sendable, Equatable {
+    case owned
+    /// `config` is the absolute path of the clone's applied `config.toml`.
+    case brownfield(config: String)
+  }
+
   public enum Plans: Sendable, Equatable {
     case none
     case active([PlanSummary])
@@ -107,6 +115,7 @@ public enum SessionContext {
 
   public struct Inputs: Sendable, Equatable {
     public let projectName: String
+    public let profile: Profile
     /// The Claude Code session id (spec §6.3 row 1): a skill reads it back out of this context
     /// to pass `--session` to `swiftgate plan claim`/`plan release`, since skills can't read hook
     /// payloads directly. Empty when the caller has none to report (never rendered).
@@ -121,10 +130,12 @@ public enum SessionContext {
     public let notes: [String]
 
     public init(
-      projectName: String, sessionID: String = "", modules: [ModuleEntry], xcode: Xcode?,
+      projectName: String, profile: Profile = .owned, sessionID: String = "",
+      modules: [ModuleEntry], xcode: Xcode?,
       plans: Plans, referenceDocs: ReferenceDocs? = nil, notes: [String]
     ) {
       self.projectName = projectName
+      self.profile = profile
       self.sessionID = sessionID
       self.modules = modules
       self.xcode = xcode

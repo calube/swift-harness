@@ -1,5 +1,14 @@
 import Foundation
 
+/// Which registration started a `swiftgate hook` process: the plugin's own `hooks/hooks.json`, or
+/// the settings file ``HookSettings`` renders for a brownfield clone. A session that loads the
+/// plugin and that settings file registers every event twice, so the hook needs to know which
+/// one it is to let exactly one of them act.
+public enum HookSource: String, Sendable, CaseIterable {
+  case plugin
+  case settings
+}
+
 /// Turns the plugin's `hooks/hooks.json` into the settings file `swiftgate claude` passes to
 /// `claude --settings`, so a brownfield clone gets the hooks without a file in its tree.
 public enum HookSettings {

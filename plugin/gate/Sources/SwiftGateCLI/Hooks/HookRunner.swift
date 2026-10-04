@@ -160,7 +160,8 @@ struct DisabledCommitCommentJudge: CommitCommentJudging {
 /// is a silent no-op that never builds its dependencies.
 enum HookRunner {
   static func run(
-    _ event: HookEvent, input: Data, dependencies: (URL) -> HookDependencies
+    _ event: HookEvent, input: Data, source: HookSource = .plugin,
+    dependencies: (URL) -> HookDependencies
   ) async -> HookResult {
     let payload: HookPayload
     do {
