@@ -516,3 +516,143 @@ Other fast-tier REDs were the inner loop at work. No attempt-2 fast T1 run took 
 | A surface API renamed mid-sprint needs a stub-then-restore commit pair to prove | A attempt 2: 4 extra commits and 2 extra `ready` runs; the first pair stubbed too little |
 | The created-device path boots a fresh simulator on every T3 run | with the pinned device booted, each T3 run creates, boots and deletes its own device (41 to 97 s in attempt 2) |
 | `sprint.target-outside-surface` can only halt | its fix rewrites the surface, but `sprint.json` accepts `surface` only straight after `start` |
+
+## Simulator QA (unattended, 2026-10-04)
+
+Harness `main` at `91fa9876` for every check, merged to `b6bb74fe` for the run viewer. `agent-device`
+0.21.18, Xcode 26.2, each device a clone `sim up` made from the configured iPhone 17 (iOS 26.2). The
+`sim` lock is machine-wide and its cap is 2 (the default). Other sessions were queued on the same
+lock during the isolation check.
+
+The skill steps ran from `examples/SampleApp` in this checkout. The isolation check used a scratch
+copy of the app with 2 extra git worktrees. The validation table and the planted bug used a second
+scratch copy with its own plan state, so no plan state in this repository was touched.
+
+### Acceptance checks
+
+| Check | Result | Evidence |
+|---|---|---|
+| `doctor` is GREEN | pass | `20261004T220526Z-a0f1c534`, 0 gating findings |
+| `/swift-harness:qa`, counter flow, `fixed-fact` | pass | `qa run`: no plan holds a table. `sim up --scenario fixed-fact` `20261004T220545Z-f6f397eb`. 3 steps asserted `0`, `1` and the fixed fact |
+| `sim verify` GREEN | pass | GREEN, `stepCount` 3, `headCommit` equals the checkout's HEAD |
+| `sim down` leaves nothing | pass | `released: true`; no clone, lease or `agent-device` session left |
+| Seeded branch RED on both accessibility rules | pass | the seeded diff from the fixtures README, uncommitted, then reverted. Run `20261004T220837Z-7b3464d9`: RED, `sim.a11y-identifier` (Button "Share") and `sim.a11y-label` (Button `counter.dot`) |
+| 3 `sim up` from 3 worktrees, cap 2: the third queues | pass | a and b started 17:09:49 and leased by 17:12:02. c started 17:10:10, and both slot files named a's and b's holders. a's `sim down` ended 17:12:27; c leased, built and returned 17:13:44 |
+| SIGKILL the holder, then `gc` leaves no device and no claim | **fail** | `gc` deleted the clone (`1 orphan clone(s)`). The lease file, the `agent-device` session and its device claim survived. A later `sim down` cleared all 3 (finding 1) |
+| Validation table: `--at-base` fails each row, `qa run` passes, `--final` leaves MP4 and contact sheet | pass, with gaps | below; findings 3 and 4 |
+| T3 leaves the kept flow's `qa.flow` with `source: xcuitest` | pass | `test --tier t3` `20261004T222634Z-f39ef58c`, GREEN 2/2; 2 `qa.flow` events, `flow: counter`, `source: xcuitest`, each with video and sheet |
+| Validation tab links each flow step to its video offset | pass | 7 of 7 steps link `video.mp4#t=<s>` in all 3 reports; the page has 0 `img` or `video` elements |
+
+### The validation table
+
+The scratch app's `main` is SampleApp as committed. Its `feature` branch adds a Reset button
+(`counter.reset`) and a `resetButtonTapped` action. It also logs `count changed count=<n>` at
+`notice` level through `LogClient` on each count change, and adds the unit test
+`resetAfterIncrementsShowsZero`. The plan has 1 done task and 3 rows for 1 requirement:
+
+- acceptance: `swift test --filter resetAfterIncrementsShowsZero`, and its output must say a test ran;
+- flow: `qa/reset.flow.json`, which waits, then increments, checks `1`, increments, checks `2`, resets and checks `0`;
+- state: `qa/reset.state.sh`. It takes the last 3 `count changed` lines from the final pass's
+  `qa/logs/<NN>-<req>/os.log` when one exists, or from `log show` on `QA_SIM_UDID`, and requires `1 2 0`.
+
+| Command | Run | Wall | Result |
+|---|---|---|---|
+| `qa run --at-base` | `20261004T222122Z-9b62b184` | 47 s | acceptance red (no test ran at base); flow red, `qa.flow-unknown-id` for `counter.reset`; state unverified (no device) |
+| `qa run` | `20261004T222215Z-2384733a` | 126 s | 3 of 3 pass; state read `log show` |
+| `qa run --final` | `20261004T222435Z-513ddd35` | 93 s | 3 of 3 pass; `video.mp4`, `sheet.png`, 7 steps with offsets; logs saved; state read the collected `os.log` |
+
+### Planted bug: an internal value the screen never shows
+
+The bug was an uncommitted diff in the scratch copy only, reverted with `git checkout -- Packages`
+after each run. It logs the count before the increment, so every increment logs the old value
+while the screen shows the new one:
+
+```diff
+       case .incrementButtonTapped:
++        log.log(.notice, "count changed", category: "Counter", [.public("count", state.count)])
+         state.count += 1
+         state.fact = nil
+-        log.log(.notice, "count changed", category: "Counter", [.public("count", state.count)])
+         return .none
+```
+
+For b2, the same diff went into a second copy's `feature` commit, and the state row was removed.
+`/swift-harness:qa` then ran in a fresh `claude -p --plugin-dir plugin --model opus` session with the
+prompt "QA the counter reset change on this branch, and record the evidence (video and logs) so I
+can look at it later". The prompt didn't hint at logs.
+
+| Run | Flow row | State row | qa skill verdict | Evidence that showed the bug |
+|---|---|---|---|---|
+| clean (`20261004T225912Z-99e4740e`) | pass | pass, `1 2 0` | GREEN | none: `os.log` and `app.log` read `count=1`, `count=2`, `count=0` |
+| b1, targeted (`20261004T230400Z-ae9e9c11`) | pass | **red**, exit 1 | RED (`qa run` RED, 2 pass, 1 red) | the state row's stderr quotes the 3 `os.log` lines `count changed count=0`, `count=1`, `count=0`; the viewer's "Why it failed" shows them |
+| b2, untargeted (session run `20261004T225356Z-6c855437`) | pass | no row | **GREEN**, plus a prose warning | the skill read the branch diff, saw the log call before `+= 1`, then confirmed it in the collected `app.log` (`count=0`, `count=1`, `count=0`). It reported "No check looks at log contents, so the verdict is still GREEN" and offered `/swift-harness:tdd` |
+
+The acceptance unit test passed in every run, because it checks state, not the log.
+
+### Run viewer
+
+Each copy got a build run from `build start` with a 1-task preset before the viewer runs, since the
+viewer reads only `qa run`s inside a build run. Then `qa run --final` was run again and
+`swiftgate report --html` wrote the page to its default `reports/` folder. Each page was copied next to
+its run's `video.mp4` and `sheet.png`, at the same relative paths, so every link resolves (0 missing).
+
+| Report | Strip | Contrast |
+|---|---|---|
+| clean | 3 pass | every row green; 7 steps linked to `#t=0` … `#t=7.586` |
+| b1 | 2 pass, 1 red | the flow row is green with 7 linked steps; the state row is red, and its "Why it failed" quotes the 3 offending log lines |
+| b2 | 2 pass | no row can show the bug; the page looks the same as clean |
+
+The b1 timeline also carries the clean run's flow ticks, since both ran in 1 build run. The rows
+show the newest result.
+
+### Findings, ranked
+
+1. **`gc` doesn't free what a killed holder leaves.** After SIGKILL of `sim hold` (PID 96953), `gc`
+   deleted the clone but left `sim-leases/<run>.json`, the `agent-device` session and its device
+   claim. The claim's owner is the `agent-device` daemon, which is alive, so `device release --stale`
+   skips it. A plain `sim down` from that worktree cleaned all 3 up.
+2. **A log-only bug passes validation unless a row targets it.** In b2, every row passed and the
+   skill's verdict was GREEN. It spotted the bug by reading the diff, not from the evidence on its
+   own, and by its rule ("`swiftgate` is the judge") it can't turn a log mismatch into RED. With a
+   state row reading the collected `os.log` (b1), the run went RED and named the line.
+3. **`--at-base` passes an acceptance test that exists only on the branch.** The plain
+   `swift test --filter resetAfterIncrementsShowsZero` row read `pass` at base, with
+   "No matching test cases were run" and exit 0, and no note (`20261004T221707Z-0078b8c8`). It took a
+   check that also requires a test to have run to get a red run at base.
+4. **At base, a state row behind a lint-red flow never gets a red run.** The new id doesn't exist at
+   base, so the flow stops at `qa.flow-unknown-id` and no device comes up. The state row reads
+   unverified, not red.
+5. **A cold shim build ends a `claude -p` QA session with no verdict.** In b2's first attempt, the
+   skill's first `qa run` waited behind the shim's 190 s release build. Bash moved it to the
+   background at 120 s, the turn ended, and `-p` killed it 150 s in. The second attempt, on a warm
+   cache, ran to the end (495 s, $0.36).
+6. A red row's report `message` is only `exit 1`. The reason is in the row's `.txt` evidence,
+   which the viewer's popover shows.
+7. A plain `qa run` needs the ledger's `waves` key (BLOCKED without it), but `--at-base` doesn't
+   read the ledger, so the same plan passes `--at-base` and BLOCKS plain.
+8. From b2: `sim snap --assert` can only check that text is present, never that it's gone. A
+   negative value such as `--assert "-2"` parses as a flag and needs `--assert=-2`.
+9. `sim verify` can't tell a build from uncommitted changes. The seeded run reported
+   `headCommit` = `checkoutHead`.
+
+### Decisions
+
+Keep-flow answer: no flow was proposed. The counter journey is already kept as `[[flows]] counter`
+(2 XCUITests). b2's skill session proposed none either, saying Reset stays inside 1 feature and a
+unit test covers it.
+
+### Wall time per command
+
+| Command | Wall |
+|---|---|
+| `doctor` | 2.4 s |
+| `sim up` (cold DerivedData / warm) | 103 s / 31 s |
+| `sim snap` | 1.4 to 2.0 s |
+| `sim down` | 4.4 to 5.0 s |
+| `sim verify` | 0.1 s |
+| `gc` after SIGKILL | 3.8 s |
+| `qa run --at-base` | 47 to 71 s |
+| `qa run` | 126 s |
+| `qa run --final` | 90 to 116 s |
+| `test --tier t3` | 91 s |
+| b2 `/swift-harness:qa` session | 150 s (killed) / 495 s |
