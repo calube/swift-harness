@@ -121,7 +121,8 @@ public struct BuildPreset: Sendable, Equatable {
     public var isAlias: Bool { self == .sonnet || self == .opus }
   }
 
-  /// `amend`: the full `--amend` flow. `block`: spec §8.4's block behavior.
+  /// `amend`: the full `--amend` flow, which in a brownfield run widens the task's write set in
+  /// `PLAN.md` and retries it. `block`: spec §8.4's block behavior.
   public enum OnDesignConflict: String, Sendable, Equatable, CaseIterable {
     case amend, block
   }

@@ -8,11 +8,13 @@ public enum Discover {
   /// `[brownfield] slice_budget_s` for a clone discovered for the first time.
   public static let defaultSliceBudgetSeconds = 30
 
-  /// `[build.presets.brownfield]` for a clone discovered for the first time (design §13).
+  /// `[build.presets.brownfield]` for a clone discovered for the first time (design §13). A
+  /// design conflict answers `amend`: the run widens the task's write set in `PLAN.md` and
+  /// retries it, where `block` would stop a run no one is watching.
   public static let brownfieldPreset = BuildPreset(
     designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
     mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 0, stopStartsBeforeMin: 0,
-    onDesignConflict: .block, taskProof: .prove, stallMin: 2)
+    onDesignConflict: .amend, taskProof: .prove, stallMin: 2)
 
   /// `[judge]` for a clone discovered for the first time: the owned profile's default backend and
   /// thresholds, so `judge diff-risk` can rate a slice (design §11.5) without a hand edit. Claude

@@ -23,11 +23,27 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
   /// The plan's `index.json` status after the import; `nil` before that step.
   var indexStatus: PlanStatus?
   var assumptions: [String] = []
+  /// What became of the contract task `--contract` named; `nil` without the flag.
+  var contract: ContractRecord?
   var message = ""
+
+  /// The contract task `--contract` named, and whether its gate run made it `done`.
+  struct ContractRecord: Sendable, Equatable, Encodable {
+    enum Status: String, Sendable, Encodable {
+      case done, pending
+    }
+
+    var task: String
+    var runId: String
+    var status: Status
+    /// The contract commit recorded as the task's only commit; `nil` while it stays pending.
+    var commit: String?
+    var message: String
+  }
 
   private enum CodingKeys: String, CodingKey {
     case command, plan, status, verdict, tasks, waves, excludeAdded, indexStatus, assumptions,
-      message
+      contract, message
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -42,6 +58,7 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
     try c.encode(excludeAdded, forKey: .excludeAdded)
     try c.encode(indexStatus, forKey: .indexStatus)
     try c.encode(assumptions, forKey: .assumptions)
+    try c.encode(contract, forKey: .contract)
     try c.encode(message, forKey: .message)
   }
 }
@@ -56,7 +73,15 @@ enum PlanImportRun {
   /// it. Nothing is written
   /// unless the clone is brownfield, the plan parses and the link's place is free or already
   /// the link.
-  static func run(slug: String, root: URL, git: any Git) async -> PlanImportReport {
+  /// The contract task and the gate run of its commit, from `--contract` and `--contract-run`.
+  struct Contract: Sendable, Equatable {
+    let task: String
+    let runID: String
+  }
+
+  static func run(
+    slug: String, root: URL, git: any Git, contract: Contract? = nil
+  ) async -> PlanImportReport {
     var report = PlanImportReport(plan: slug)
     let common: String
     do {
@@ -107,6 +132,18 @@ enum PlanImportRun {
       return invalid(report, error, livePath)
     }
 
+    var landing: ContractLanding.Outcome?
+    if let contract {
+      guard livePlan.tasks.contains(where: { $0.id == contract.task }) else {
+        report.status = .invalid
+        report.verdict = .red
+        report.message =
+          "--contract `\(contract.task)` names no task in \(livePath); nothing was written"
+        return report
+      }
+      landing = await contractLanding(contract, slug: slug, common: common, git: git)
+    }
+
     let link = root.appending(path: PlanFile.LivePlanSource.fileName).path
     if let refusal = linkRefusal(at: link, target: livePath) {
       report.message = refusal
@@ -154,7 +191,7 @@ enum PlanImportRun {
       report.message = "naming the task worktrees: \(error)"
       return report
     }
-    let ledger: Ledger
+    var ledger: Ledger
     do throws(LivePlanError) {
       // `ledger` asks only for the ids of `livePlan.tasks`, each named above.
       ledger = try livePlan.ledger(maxParallel: preset.maxParallel, existing: existingLedger) {
@@ -162,6 +199,14 @@ enum PlanImportRun {
       }
     } catch {
       return invalid(report, error, livePath)
+    }
+    if let contract, let landing {
+      switch recordContract(contract, landing, in: &ledger, plan: plan) {
+      case .success(let record): report.contract = record
+      case .failure(let failure):
+        report.message = failure.message
+        return report
+      }
     }
     let planFile = livePlan.planFile(slug: slug, resume: ledger.resume, existing: existingPlan)
     do {
@@ -241,14 +286,91 @@ enum PlanImportRun {
     }
 
     report.status = .imported
-    report.verdict = .green
+    report.verdict = report.contract?.status == .pending ? .red : .green
     report.tasks = ledger.tasks.count
     report.waves = ledger.waves.count
     report.assumptions = livePlan.assumptions
     report.message =
       "\(ledger.tasks.count) tasks in \(ledger.waves.count) waves; \(plan.ledgerFile) and "
       + "\(plan.planFile) written"
+      + (report.contract.map { "; contract `\($0.task)` \($0.status.rawValue): \($0.message)" }
+        ?? "")
     return report
+  }
+
+  /// Reads the contract's gate run from the plan checkout's history and the plan branch's tip.
+  /// Neither failing to read is fatal to the import: the contract just stays pending, saying why.
+  private static func contractLanding(
+    _ contract: Contract, slug: String, common: String, git: any Git
+  ) async -> ContractLanding.Outcome {
+    let branch = BrownfieldRunReport.planBranch(slug: slug)
+    let tip: String?
+    do {
+      tip = try await git.revision(branch)
+    } catch {
+      return .pending(reason: "reading the tip of \(branch): \(error)")
+    }
+    let checkout: String
+    do throws(GitWorkspaceError) {
+      checkout = try TaskWorktree.planCheckout(commonDirectory: common, plan: slug)
+    } catch {
+      return .pending(reason: "naming the plan checkout: \(error)")
+    }
+    let runs = RunStore(worktreeRoot: URL(filePath: checkout, directoryHint: .isDirectory))
+    let history: [RunHistoryRecord]
+    do throws(RunStoreError) {
+      history = try runs.readHistory().records
+    } catch {
+      return .pending(reason: "reading \(runs.historyFile.path): \(error)")
+    }
+    return ContractLanding.outcome(
+      task: contract.task, runID: contract.runID, history: history, planBranch: branch,
+      planBranchTip: tip)
+  }
+
+  /// Sets a pending contract task `done` in `ledger` once its return is written to the plan's
+  /// pre-build returns, which `build start` copies into the run. A task already `done` keeps its
+  /// return; one in any other status stays where it is.
+  private static func recordContract(
+    _ contract: Contract, _ landing: ContractLanding.Outcome, in ledger: inout Ledger,
+    plan: PlanStateLayout.Plan
+  ) -> Result<PlanImportReport.ContractRecord, ContractWriteFailure> {
+    var record = PlanImportReport.ContractRecord(
+      task: contract.task, runId: contract.runID, status: .pending, commit: nil, message: "")
+    guard let index = ledger.tasks.firstIndex(where: { $0.id == contract.task }) else {
+      record.message = "the ledger has no task `\(contract.task)`"
+      return .success(record)
+    }
+    let task = ledger.tasks[index]
+    switch (landing, task.status) {
+    case (.pending(let reason), _):
+      record.message = reason
+      return .success(record)
+    case (.done, .done):
+      record.status = .done
+      record.message = "already done; its return was kept"
+      return .success(record)
+    case (.done(let taskReturn), .pending):
+      let file = URL(filePath: plan.returnsDirectory, directoryHint: .isDirectory)
+        .appending(path: "\(contract.task).json")
+      do {
+        try FileManager.default.createDirectory(
+          at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try TaskReturnJSON.encode(taskReturn).write(to: file, options: .atomic)
+      } catch {
+        return .failure(
+          ContractWriteFailure(message: "writing the contract's return \(file.path): \(error)"))
+      }
+      ledger = ledger.setting(status: .done, ofTaskAt: index)
+      record.status = .done
+      record.commit = taskReturn.commits.first
+      record.message = taskReturn.notes
+      return .success(record)
+    case (.done, let status):
+      record.message =
+        "the task is \(status.rawValue), and only a pending task takes a landed contract"
+      return .success(record)
+    }
   }
 
   /// Why `link` can't become the plan's link: something other than that link already sits there.
@@ -293,6 +415,25 @@ private struct IndexEntryUnknown: Error {
   let status: String
 }
 
+private struct ContractWriteFailure: Error {
+  let message: String
+}
+
+extension Ledger {
+  /// This ledger with the task at `index` moved to `status` and nothing else changed.
+  fileprivate func setting(status: TaskStatus, ofTaskAt index: Int) -> Ledger {
+    var tasks = self.tasks
+    let task = tasks[index]
+    tasks[index] = LedgerTask(
+      id: task.id, deps: task.deps, writeSet: task.writeSet, gate: task.gate, tests: task.tests,
+      covers: task.covers, estLines: task.estLines, status: status, worktree: task.worktree,
+      actualLines: task.actualLines, model: task.model, branch: task.branch)
+    return Ledger(
+      schemaVersion: schemaVersion, resume: resume, maxParallel: maxParallel, tasks: tasks,
+      waves: waves)
+  }
+}
+
 extension PlanStatus {
   /// Whether `plan import` moves a plan at this status to `planned`: only one not planned yet.
   fileprivate var importSetsPlanned: Bool {
@@ -315,13 +456,30 @@ struct PlanImportCommand: AsyncParsableCommand {
   @Argument(help: "The plan's slug.")
   var slug: String
 
+  @Option(help: "The contract task, already landed on the plan branch; needs --contract-run.")
+  var contract: String?
+
+  @Option(help: "The GREEN gate run, in the plan checkout, of the contract commit.")
+  var contractRun: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
+  func validate() throws {
+    guard (contract == nil) == (contractRun == nil) else {
+      throw ValidationError("--contract and --contract-run go together")
+    }
+  }
+
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    var named: PlanImportRun.Contract?
+    if let contract, let contractRun {
+      named = PlanImportRun.Contract(task: contract, runID: contractRun)
+    }
     let report = await PlanImportRun.run(
-      slug: slug, root: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path))
+      slug: slug, root: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path),
+      contract: named)
     Console.write(PlanImportRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

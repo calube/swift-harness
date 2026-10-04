@@ -11,6 +11,9 @@ public struct PlanStateLayout: Sendable, Equatable {
     public var planFile: String { directory + "/plan.json" }
     public var ledgerFile: String { directory + "/ledger.json" }
     public var orchestratorLock: String { directory + "/orchestrator.lock" }
+    /// Returns recorded before any build run exists, such as a brownfield contract's, which
+    /// `build start` copies into each run it starts.
+    public var returnsDirectory: String { directory + "/returns" }
   }
 
   /// `<common dir>/swift-harness/plans`.
