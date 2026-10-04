@@ -21,7 +21,7 @@ public final class DedicatedThreadExecutor: TaskExecutor {
 
   public init() {
     let thread = Thread { [self] in drain() }
-    thread.name = "swiftgate.dedicated-executor"
+    thread.name = "dedicated executor"
     thread.start()
   }
 
