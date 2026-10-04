@@ -60,6 +60,11 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "pytest.warns": "a pytest call the neutral assertion table matches",
     "evidence-check.stale":
       "a self-test answer label for what `evidence-check.stale-claim` reports",
+    "meson.build": "a build file discovery reads",
+    "com.android": "a Gradle plugin id discovery matches",
+    "android.application": "a Gradle plugin alias discovery matches",
+    "android.library": "a Gradle plugin alias discovery matches",
+    "kotlin.multiplatform": "a Gradle plugin alias discovery matches",
   ]
 
   /// Interpolated templates that look like id families but build something else, each with why.
@@ -72,8 +77,12 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   ]
 
   static let fileExtensions: Set<Substring> = [
-    "css", "html", "js", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift",
-    "toml", "txt", "xml", "yaml", "yml",
+    "css", "html", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift", "toml",
+    "txt", "xml", "yaml", "yml",
+    // Build file extensions discovery reads: `build.gradle.kts`, `mix.exs`, `go.mod`, `build.zig`.
+    "gradle", "kts", "exs", "mod", "zig",
+    // Node, Python and Ruby files discovery reads: `eslint.config.mjs`, `setup.cfg`, `tox.ini`.
+    "cfg", "cjs", "cts", "ini", "js", "jsonc", "lockb", "mjs", "mts", "ts",
   ]
 
   /// The ids and families one Swift source file spells out.

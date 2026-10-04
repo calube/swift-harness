@@ -236,7 +236,7 @@ public struct RunViewReader: RunViewReading {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
     case .livePlan:
-      // A live plan names no spec page or design to read requirements from.
+      // A live plan names no requirements of its own; its task briefs reach the view separately.
       break
     }
     return state

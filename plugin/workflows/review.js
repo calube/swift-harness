@@ -26,7 +26,7 @@ const ALL_FOCUSES = ['concurrency', 'architecture', 'test-quality', 'api-errors'
 
 if (!ARGS || typeof ARGS.bundle !== 'string' || !Array.isArray(ARGS.focuses)) {
   throw new Error(
-    'swift-harness-review requires args {bundle: "<.harness/runs/<id>/review-input path>", focuses: [...], pluginRoot: "<absolute plugin root>"}',
+    'swift-harness-review requires args {bundle: "<state root>/runs/<id>/review-input path>", focuses: [...], pluginRoot: "<absolute plugin root>"}',
   )
 }
 // A workflow script has no filesystem or environment access, so the calling skill passes the

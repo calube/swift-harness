@@ -164,9 +164,85 @@ struct BuildStartReport: Sendable, Equatable, Encodable {
   let indexStatus: PlanStatus
 }
 
+/// The presets a repository defines, and the profile whose config they came from.
+struct BuildPresetCatalog: Sendable, Equatable {
+  /// The only preset a brownfield clone runs, and a name an owned repository can't use.
+  static let brownfieldPresetName = "brownfield"
+
+  let profile: RepositoryProfile
+  let presets: [String: BuildPreset]
+  /// The config file the presets came from, as a refusal names it.
+  let file: String
+
+  static func owned(_ presets: [String: BuildPreset]) -> Self {
+    Self(profile: .owned, presets: presets, file: ConfigLoader.fileName)
+  }
+
+  /// An owned repository's `.swiftgate.toml`, or a brownfield clone's `config.toml` under the git
+  /// common dir, chosen as ``StateRootResolver`` chooses the state root.
+  static func load(root: URL, git: any Git) async throws(BuildLoopError) -> Self {
+    guard case .gitDir = StateRootResolver.resolve(worktree: root) else {
+      do {
+        return .owned(try ConfigLoader().load(repositoryRoot: root)?.buildPresets ?? [:])
+      } catch {
+        throw BuildLoopError("can't load \(ConfigLoader.fileName): \(error)")
+      }
+    }
+    let file: URL
+    do {
+      file = URL(filePath: try await git.commonDirectory(), directoryHint: .isDirectory)
+        .appending(path: StateRootResolver.commonConfigFile, directoryHint: .notDirectory)
+    } catch {
+      throw BuildLoopError("can't find the git common dir that holds config.toml: \(error)")
+    }
+    do {
+      let text = String(decoding: try Data(contentsOf: file), as: UTF8.self)
+      return Self(
+        profile: .brownfield,
+        presets: try TOMLConfigDecoder().decodeBrownfield(text).buildPresets, file: file.path)
+    } catch {
+      throw BuildLoopError("can't load \(file.path): \(error)")
+    }
+  }
+
+  /// The preset `name` names, or why this profile can't run it.
+  func preset(named name: String) -> Result<BuildPreset, BuildLoopError> {
+    switch (profile, name == Self.brownfieldPresetName) {
+    case (.brownfield, false):
+      return .failure(
+        BuildLoopError(
+          "preset `\(name)` can't run here: this clone uses the brownfield profile, which runs "
+            + "only `--preset \(Self.brownfieldPresetName)` from \(file)"))
+    case (.owned, true):
+      return .failure(
+        BuildLoopError(
+          "preset `\(name)` belongs to the brownfield profile, and this repository is owned: "
+            + "it commits \(file); pick 1 of its own presets"))
+    case (.brownfield, true), (.owned, false):
+      guard let preset = presets[name] else {
+        let known = presets.keys.sorted().joined(separator: ", ")
+        return .failure(
+          BuildLoopError(
+            "preset `\(name)` isn't defined in \(file); known presets: "
+              + (known.isEmpty ? "none" : known)))
+      }
+      return .success(preset)
+    }
+  }
+}
+
 enum BuildStartRun {
   static func run(
     slug: String, presetName: String, session: String?, presets: [String: BuildPreset],
+    git: any Git, clock: any BuildClock, suffix: UInt32
+  ) async -> BuildLoopResult<BuildStartReport> {
+    await run(
+      slug: slug, presetName: presetName, session: session, catalog: .owned(presets), git: git,
+      clock: clock, suffix: suffix)
+  }
+
+  static func run(
+    slug: String, presetName: String, session: String?, catalog: BuildPresetCatalog,
     git: any Git, clock: any BuildClock, suffix: UInt32
   ) async -> BuildLoopResult<BuildStartReport> {
     let command = "build start"
@@ -175,12 +251,10 @@ enum BuildStartRun {
     {
       return refusal
     }
-    guard let preset = presets[presetName] else {
-      let known = presets.keys.sorted().joined(separator: ", ")
-      return .blocked(
-        command, slug,
-        "preset `\(presetName)` isn't defined in .swiftgate.toml; known presets: "
-          + (known.isEmpty ? "none" : known))
+    let preset: BuildPreset
+    switch catalog.preset(named: presetName) {
+    case .success(let found): preset = found
+    case .failure(let error): return .blocked(command, slug, error.message)
     }
     do throws(BuildLoopError) {
       let layout = try await BuildLoop.planLayout(slug, git: git)
@@ -230,8 +304,9 @@ struct BuildStartCommand: AsyncParsableCommand {
     discussion:
       "The caller must already hold the plan's lock. Prints the run id. Exits 0 when started, 1 "
       + "when --session doesn't hold the lock or the plan's index status isn't planned, and 2 "
-      + "for a missing --session, a preset .swiftgate.toml doesn't define, or unreadable plan "
-      + "state.")
+      + "for a missing --session, a preset the config doesn't define, a preset from the other "
+      + "profile (only `brownfield` in a brownfield clone, never `brownfield` in an owned "
+      + "repository), or unreadable plan state.")
 
   @Argument(help: "The plan's slug.")
   var plan: String
@@ -246,17 +321,17 @@ struct BuildStartCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let presets: [String: BuildPreset]
+    let git = BuildLoop.git()
+    let catalog: BuildPresetCatalog
     do {
-      presets = try ConfigLoader().load(repositoryRoot: root)?.buildPresets ?? [:]
+      catalog = try await BuildPresetCatalog.load(root: root, git: git)
     } catch {
-      let result = BuildLoopResult<BuildStartReport>.blocked(
-        "build start", plan, "can't load .swiftgate.toml: \(error)")
+      let result = BuildLoopResult<BuildStartReport>.blocked("build start", plan, error.message)
       Console.write(BuildStartRun.render(result, format: output.format))
       throw ExitCode(result.verdict.exitCode)
     }
     let result = await BuildStartRun.run(
-      slug: plan, presetName: preset, session: session, presets: presets, git: BuildLoop.git(),
+      slug: plan, presetName: preset, session: session, catalog: catalog, git: git,
       clock: LiveBuildClock(), suffix: UInt32.random(in: .min ... .max))
     Console.write(BuildStartRun.render(result, format: output.format))
     try BuildLoop.exit(result)
