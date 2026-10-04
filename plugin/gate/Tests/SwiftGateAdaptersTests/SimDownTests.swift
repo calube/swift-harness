@@ -227,19 +227,24 @@ struct SimDownTests {
     let simctl = FakeSimctl(devices: [Self.base])
     let agent = Self.agent()
     let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+    // The holder polls its own fake, so these calls are sim down's alone.
+    let refusedAgent = Self.agent()
 
     let failure = Self.failure(
-      await down(agent, simctl: simctl, worktree: "/repos/app-b", isAlive: process.isAlive))
+      await down(
+        refusedAgent, simctl: simctl, worktree: "/repos/app-b", isAlive: process.isAlive))
     #expect(failure?.rule == .notOwner)
     #expect(failure?.verdict == .red)
     #expect(failure?.message.contains(Self.worktree) == true)
-    #expect(agent.calls.isEmpty)
+    #expect(refusedAgent.calls.isEmpty)
     #expect(try store.read(runID: Self.runID) == lease)
     #expect(Self.harnessDevices(simctl) == [lease.udid])
 
     let bare = await down(
-      agent, simctl: simctl, runID: nil, worktree: "/repos/app-b", isAlive: process.isAlive)
+      refusedAgent, simctl: simctl, runID: nil, worktree: "/repos/app-b",
+      isAlive: process.isAlive)
     #expect(try bare.get().outcome == .nothingHeld(runID: nil))
+    #expect(Self.closes(refusedAgent).isEmpty)
     #expect(try store.read(runID: Self.runID) == lease)
 
     try store.remove(runID: Self.runID)

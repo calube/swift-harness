@@ -29,6 +29,8 @@ public enum RunLayout {
   public static let impactExemptionsFile = "impact-exemptions.json"
   /// Throwaway worktrees `prove` builds in, for a root under the git dir.
   public static let scratchDirectory = "scratch"
+  /// Where a validation worker leaves its prepared checks in its own worktree, 1 folder per plan.
+  public static let qaPreparedDirectory = "qa"
 
   public static func runDirectory(for runID: String) -> String {
     "\(runsDirectory)/\(runID)/"
