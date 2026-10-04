@@ -187,9 +187,15 @@ public enum ConfigSchema {
         reader.issues.append(.unknownJudgeBackend(path: "\(path).backend", value: raw))
       }
     }
-    let required = backend != nil
-    let advisory = reader.double(table, "advisory_threshold", at: path, required: required)
-    let block = reader.double(table, "block_threshold", at: path, required: required)
+    // A threshold of the wrong type reads as nil and is already reported, so only an absent key
+    // takes the default.
+    let advisory =
+      table["advisory_threshold"] == nil
+      ? JudgeThresholds.defaults.advisory
+      : reader.double(table, "advisory_threshold", at: path)
+    let block =
+      table["block_threshold"] == nil
+      ? JudgeThresholds.defaults.block : reader.double(table, "block_threshold", at: path)
     let model = reader.string(table, "model", at: path)
     // A send_to of the wrong type, or beside a missing or unknown backend, is already reported.
     let sendTo = reader.string(table, "send_to", at: path)

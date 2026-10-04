@@ -191,7 +191,7 @@ A `Judge` protocol takes typed questions and returns calibrated probabilities, n
 - **Cache:** keyed by test, diff, questions as sent, backend and model.
 - **Calibration:** `gate/Fixtures/judge/` holds labeled tests and 1 recording per backend; `swiftgate self-test --judge` scores each offline, failing on a per-question precision or recall drop, and `--judge-backend <backend> --record` re-records live.
 - **Commands:** `swiftgate judge [--ready]` judges new and changed host tests, as `check --tier ready` does; the commit hook asks advisory comment questions; `judge ask --input <file>` prints JSON answers to any question set, with no policy. Below `ready`, a backend failure is a non-gating `judge.not-run` note.
-- **Opt-in:** off by default (`backend = "none"`). A remote backend sends test source off the machine, so each repository opts in and sets both thresholds.
+- **Opt-in:** off by default (`backend = "none"`), since remote backends send test source off the machine. Thresholds default to 0.6 (advisory) and 0.9 (block).
 
 | `[judge] backend` | `claude` | `jev` (TypeSafe's Jev, over HTTP) |
 |---|---|---|

@@ -319,16 +319,54 @@ struct TOMLConfigDecoderTests {
     #expect(found == [.outOfRange(path: "mutation.max_workers", value: "0", allowed: ">= 1")])
   }
 
-  @Test("enabled judge without thresholds is an error — catches a judge running with no policy")
-  func judgeNeedsThresholds() {
-    let found = issues(
+  @Test(
+    "a judge table with only backend, model and send_to decodes with thresholds 0.6 and 0.9 — catches a working judge config rejected for omitting the template's thresholds"
+  )
+  func judgeThresholdsDefault() throws {
+    let config = try decoder.decode(
       Self.minimal + """
         [judge]
-        backend = "claude"
+        backend = "jev"
+        model = "jev-1.13.0"
+        send_to = "api.typesafe.ai"
         """)
     #expect(
-      found == [
-        .missingKey(path: "judge.advisory_threshold"), .missingKey(path: "judge.block_threshold"),
+      config.judge
+        == .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9),
+          model: "jev-1.13.0"))
+  }
+
+  @Test(
+    "an explicit threshold wins over its default, each key on its own — catches a default overwriting the value a person set"
+  )
+  func judgeExplicitThresholdWins() throws {
+    let advisoryOnly = try decoder.decode(
+      Self.minimal + "[judge]\nbackend = \"claude\"\nadvisory_threshold = 0.3\n")
+    #expect(
+      advisoryOnly.judge
+        == .enabled(backend: .claude, thresholds: JudgeThresholds(advisory: 0.3, block: 0.9)))
+    let blockOnly = try decoder.decode(
+      Self.minimal + "[judge]\nbackend = \"claude\"\nblock_threshold = 0.95\n")
+    #expect(
+      blockOnly.judge
+        == .enabled(backend: .claude, thresholds: JudgeThresholds(advisory: 0.6, block: 0.95)))
+  }
+
+  @Test(
+    "an out-of-range or mistyped threshold still fails naming its key — catches a bad value silently replaced by the default"
+  )
+  func judgeBadThresholdStillFails() {
+    #expect(
+      issues(Self.minimal + "[judge]\nbackend = \"claude\"\nblock_threshold = 1.5\n") == [
+        .outOfRange(path: "judge.block_threshold", value: "1.5", allowed: "0...1")
+      ])
+    #expect(
+      issues(Self.minimal + "[judge]\nbackend = \"claude\"\nadvisory_threshold = \"high\"\n")
+        == [.wrongType(path: "judge.advisory_threshold", expected: "number", found: "string")])
+    #expect(
+      issues(Self.minimal + "[judge]\nbackend = \"claude\"\nadvisory_threshold = 0.95\n") == [
+        .judgeThresholdsInverted(advisory: 0.95, block: 0.9)
       ])
   }
 
