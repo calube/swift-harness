@@ -1112,6 +1112,111 @@ function runValidationProblems(files) {
   return problems
 }
 
+const callerQAFileNames = [
+  'skills/build/SKILL.md', 'skills/build/references/event-loop.md', 'skills/sprint/SKILL.md',
+  'skills/ship/SKILL.md', 'skills/validate/SKILL.md', 'skills/qa/SKILL.md',
+]
+const callerQAFiles = () => Object.fromEntries(callerQAFileNames.map(name =>
+  [name, existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '']))
+
+// The key names a Swift `CodingKeys` enum encodes, its raw value where it gives one.
+function codingKeys(source, typeName) {
+  const type = source.split(new RegExp(`\\bstruct ${typeName}\\b`))[1] ?? ''
+  const body = (type.split(/enum CodingKeys: String, CodingKey \{/)[1] ?? '').split('}')[0]
+  return [...body.matchAll(/case ([^\n]+)/g)].flatMap(m => m[1].split(',')).map(part => {
+    const raw = /= "([^"]+)"/.exec(part)
+    return raw ? raw[1] : part.trim()
+  }).filter(Boolean)
+}
+
+// The keys `sim verify` writes to `sim/report.json` and `qa run` to `qa/report.json` and each of
+// its rows, read from the types that encode them, so the validate skill's names move with them.
+function reportKeys() {
+  const sim = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/SimQA/SimEvidenceRules.swift'), 'utf8')
+  const json = (sim.split(/func json\(\) -> Data \{/)[1] ?? '').split(/\n\s*return\b/)[0]
+  const findings = json.split('"findings"')[0]
+  return {
+    sim: [...findings.matchAll(/"(\w+)":/g)].map(m => m[1]).concat('findings'),
+    qa: codingKeys(readFileSync(join(root, 'gate/Sources/SwiftGateDomain/QA/QAReport.swift'), 'utf8'), 'QAReport'),
+    row: codingKeys(readFileSync(join(root, 'gate/Sources/SwiftGateDomain/QA/QARow.swift'), 'utf8'), 'QARow'),
+  }
+}
+
+// The backticked names after `<lead>` in flattened text: "`a`, `b` and `c`".
+function keysAfter(text, lead) {
+  const at = text.indexOf(lead)
+  if (at < 0) return null
+  const list = /^((?:`[^`]+`(?:,? and |, )?)+)/.exec(text.slice(at + lead.length))?.[1] ?? ''
+  return [...list.matchAll(/`([^`]+)`/g)].map(m => m[1].replace(/\[\]$/, ''))
+}
+
+const CALLERS = ['skills/build/SKILL.md', 'skills/sprint/SKILL.md', 'skills/ship/SKILL.md']
+
+// Where the callers fall short of running simulator QA (design §8.2, amendment §9): build, sprint
+// and ship each name `/swift-harness:qa` under the preset's `sim_qa`, none still prints
+// `validate: not configured`, the build's `validate` stage runs `qa run --final` before the skill
+// and prints `validate: sim_qa off` when the key is off, the sprint's comes after `sprint finish`,
+// the build loop hands a design plan's validation task the shared brief and links its after-merge
+// step, the qa skill knows `--final`, and `/swift-validate`'s "Simulator QA" rows read only keys
+// `sim verify` and `qa run` write.
+function callerQAProblems(files, keys) {
+  const problems = []
+  const text = name => files[name] ?? ''
+  const flat = name => text(name).replace(/\s+/g, ' ')
+  for (const name of CALLERS) {
+    if (!text(name).includes('/swift-harness:qa')) problems.push(`${name} never runs \`/swift-harness:qa\``)
+    if (!text(name).includes('`sim_qa`')) problems.push(`${name} never reads the preset's \`sim_qa\``)
+  }
+  for (const name of Object.keys(files)) {
+    if (text(name).includes('validate: not configured')) problems.push(`${name} still prints \`validate: not configured\``)
+  }
+  const qaRuns = section => extractInvocations(section).filter(inv => inv.words[0] === 'qa' && inv.words[1] === 'run')
+
+  const finish = h2Section(text('skills/build/SKILL.md'), '4. Finish')
+  const final = qaRuns(finish).find(inv => inv.words.includes('--final') && inv.words.includes('--plan'))
+  if (!final) problems.push('the build\'s validate stage never runs `swiftgate qa run --plan <slug> --final`')
+  const skillAt = finish.split('\n').findIndex(line => line.includes('/swift-harness:qa')) + 1
+  if (!skillAt) problems.push('the build\'s validate stage never runs `/swift-harness:qa`')
+  else if (final && final.line > skillAt) problems.push('the build\'s validate stage runs `/swift-harness:qa` before `qa run --final`')
+  if (!finish.includes('`validate: sim_qa off`')) problems.push('the build\'s validate stage never prints `validate: sim_qa off`')
+  if (!text('skills/build/SKILL.md').includes('references/event-loop.md#after-each-merge')) {
+    problems.push('the build skill\'s completion step never links the after-merge step')
+  }
+  const loop = text('skills/build/references/event-loop.md')
+  if (!h2Section(loop, 'Validate stage')) problems.push('the build loop has no `## Validate stage` section')
+  if (!h2Section(loop, 'Validation task').includes('skills/qa/references/validation-worker.md')) {
+    problems.push('the build loop never hands a plan\'s validation task the shared validation worker brief')
+  }
+
+  const sprint = h2Section(text('skills/sprint/SKILL.md'), '6. Finish')
+  const finishAt = extractInvocations(sprint).find(inv => inv.words[0] === 'sprint' && inv.words[1] === 'finish')?.line ?? 0
+  const sprintQA = sprint.split('\n').findIndex(line => line.includes('/swift-harness:qa')) + 1
+  if (!sprintQA || sprintQA < finishAt) problems.push('the sprint never runs `/swift-harness:qa` after `sprint finish`')
+  if (!sprint.includes('`validate: sim_qa off`')) problems.push('the sprint never prints `validate: sim_qa off`')
+
+  if (!qaRuns(text('skills/qa/SKILL.md')).some(inv => inv.words.includes('--final'))) {
+    problems.push('the qa skill never names `qa run --final`')
+  }
+
+  const validate = flat('skills/validate/SKILL.md')
+  if (!/\| Simulator QA \|/.test(validate)) problems.push('the validate block has no "Simulator QA" row')
+  if (!/Not run[^.]*simulator QA/i.test(validate)) problems.push('the validate skill never lists a skipped simulator QA under "Not run"')
+  for (const [lead, known, needed] of [
+    ['`sim/report.json` keys ', keys.sim, ['runID', 'verdict', 'stepCount']],
+    ['`qa/report.json` keys ', keys.qa, ['runID', 'rows']],
+    ['row\'s keys ', keys.row, ['requirement', 'layer', 'check', 'result', 'evidence']],
+  ]) {
+    const named = keysAfter(validate, lead)
+    if (!named) {
+      problems.push(`the validate skill never reads ${lead.trim()}`)
+      continue
+    }
+    for (const key of named) if (!known.includes(key)) problems.push(`the validate skill reads ${lead.trim()} \`${key}\`, which nothing writes`)
+    for (const key of needed) if (!named.includes(key)) problems.push(`the validate skill never reads ${lead.trim()} \`${key}\``)
+  }
+  return problems
+}
+
 const planValidationFiles = () => ({
   plan: readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8'),
   stateFiles: readFileSync(join(root, 'skills/plan/references/state-files.md'), 'utf8'),
@@ -1193,6 +1298,72 @@ const tests = {
 
   'the brownfield run adopts its prepared checks before their red run, validates each merge, runs every row at final and keeps the validation task to .harness/qa/ — catches a merge that skips its rows or a validation task that commits'() {
     assert.deepEqual(runValidationProblems(runValidationFiles()), [])
+  },
+
+  'build, sprint and ship run simulator QA under the preset\'s sim_qa, and /swift-validate reports it from the keys sim verify and qa run write — catches a caller still skipping QA or a validate row naming a key no report holds'() {
+    const keys = reportKeys()
+    for (const key of ['runID', 'verdict', 'stepCount', 'findings']) assert.ok(keys.sim.includes(key), `sim/report.json keys read as ${keys.sim}`)
+    for (const key of ['runID', 'final', 'rows']) assert.ok(keys.qa.includes(key), `qa/report.json keys read as ${keys.qa}`)
+    for (const key of ['requirement', 'layer', 'check', 'result', 'evidence', 'ms']) assert.ok(keys.row.includes(key), `qa/report.json row keys read as ${keys.row}`)
+    assert.deepEqual(callerQAProblems(callerQAFiles(), keys), [])
+    const { problems, resolved } = scanSkills(join(root, 'skills/build'), help, root)
+    assert.deepEqual(problems, [])
+    assert.ok(resolved.some(r => r.path === 'qa run' && r.flags.includes('--final') && r.file === 'skills/build/SKILL.md'), 'the build skill never runs `swiftgate qa run --final` as the CLI has it')
+  },
+
+  'the caller QA check names each gap — catches a checker that passes anything'() {
+    const keys = { sim: ['runID', 'verdict', 'stepCount'], qa: ['runID', 'rows'], row: ['requirement', 'layer', 'check', 'result', 'evidence'] }
+    const files = {
+      'skills/build/SKILL.md': [
+        '## 3. On each completion', '', 'Merge it.', '',
+        '## 4. Finish', '', '1. Run `/swift-harness:qa` when `sim_qa` is `changed`.', '2. `"$SG" qa run --plan <slug> --final --json`.',
+        '3. The `validate` stage: print `validate: not configured` and go on.', '',
+      ].join('\n'),
+      'skills/build/references/event-loop.md': '## Validation task\n\nFollow the brief.\n',
+      'skills/sprint/SKILL.md': [
+        '## 6. Finish', '', '1. `/swift-harness:qa` when `sim_qa` is `changed`.', '2. `"$SG" sprint finish --gate <run id> --json`.', '',
+      ].join('\n'),
+      'skills/ship/SKILL.md': 'Run `/swift-harness:build`.\n',
+      'skills/validate/SKILL.md': [
+        '| Simulator QA | <verdict> |', '', 'Read `sim/report.json` keys `runID`, `verdict` and `steps`.',
+        'Read `qa/report.json` keys `runID` and `rows[]`, each row\'s keys `requirement`, `layer`, `check` and `result`.',
+      ].join('\n'),
+      'skills/qa/SKILL.md': '`"$SG" qa run --json`\n',
+    }
+    assert.deepEqual(callerQAProblems(files, keys), [
+      'skills/ship/SKILL.md never runs `/swift-harness:qa`',
+      'skills/ship/SKILL.md never reads the preset\'s `sim_qa`',
+      'skills/build/SKILL.md still prints `validate: not configured`',
+      'the build\'s validate stage runs `/swift-harness:qa` before `qa run --final`',
+      'the build\'s validate stage never prints `validate: sim_qa off`',
+      'the build skill\'s completion step never links the after-merge step',
+      'the build loop has no `## Validate stage` section',
+      'the build loop never hands a plan\'s validation task the shared validation worker brief',
+      'the sprint never runs `/swift-harness:qa` after `sprint finish`',
+      'the sprint never prints `validate: sim_qa off`',
+      'the qa skill never names `qa run --final`',
+      'the validate skill never lists a skipped simulator QA under "Not run"',
+      'the validate skill reads `sim/report.json` keys `steps`, which nothing writes',
+      'the validate skill never reads `sim/report.json` keys `stepCount`',
+      'the validate skill never reads row\'s keys `evidence`',
+    ])
+    assert.deepEqual(callerQAProblems({}, keys), [
+      ...CALLERS.flatMap(name => [`${name} never runs \`/swift-harness:qa\``, `${name} never reads the preset's \`sim_qa\``]),
+      'the build\'s validate stage never runs `swiftgate qa run --plan <slug> --final`',
+      'the build\'s validate stage never runs `/swift-harness:qa`',
+      'the build\'s validate stage never prints `validate: sim_qa off`',
+      'the build skill\'s completion step never links the after-merge step',
+      'the build loop has no `## Validate stage` section',
+      'the build loop never hands a plan\'s validation task the shared validation worker brief',
+      'the sprint never runs `/swift-harness:qa` after `sprint finish`',
+      'the sprint never prints `validate: sim_qa off`',
+      'the qa skill never names `qa run --final`',
+      'the validate block has no "Simulator QA" row',
+      'the validate skill never lists a skipped simulator QA under "Not run"',
+      'the validate skill never reads `sim/report.json` keys',
+      'the validate skill never reads `qa/report.json` keys',
+      'the validate skill never reads row\'s keys',
+    ])
   },
 
   'the run validation check names each missing step — catches a checker that passes anything'() {
