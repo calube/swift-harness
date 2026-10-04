@@ -41,7 +41,7 @@ public struct JudgeEventFilter: Sendable, Equatable {
       case .judgeCall(let call): if call.backend != backend { return false }
       case .gateRun, .gateStep: return false
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: return false
-      case .buildHalt, .buildResume: return false
+      case .buildHalt, .buildResume, .buildReturnChecked: return false
       case .discoverRun, .warmupRun: return false
       case .spanStart, .spanEnd, .proveResult, .agentTools: return false
       }
@@ -255,7 +255,7 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       case .judgeCall(let call): calls.append(call)
       case .gateRun, .gateStep: continue
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: continue
-      case .buildHalt, .buildResume: continue
+      case .buildHalt, .buildResume, .buildReturnChecked: continue
       case .discoverRun, .warmupRun: continue
       case .spanStart, .spanEnd, .proveResult, .agentTools: continue
       }

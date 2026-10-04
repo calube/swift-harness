@@ -1,0 +1,28 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 33684,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "web",
+      "line" : null,
+      "message" : "web: no warm-up measured its tests at the base tree 6c1f087621a67820a182cecb1b73ade98bc8a498, so slice only builds it; its changed tests and their prove run at merge",
+      "rule" : "area.build-only",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "a00308810b883b7e3de7bebd0b8bd80fb63a6063",
+  "runID" : "20261004T141801Z-79b9bebf",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 33453,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

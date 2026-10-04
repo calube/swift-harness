@@ -15,6 +15,7 @@ line and never changes a verdict, an exit code or a report.
 | `hook.decision` | each hook call | hook event, tool name, decision, rule ids, ms, session id, a salted hash of the tool input |
 | `cache.lookup` | the manifest and evidence caches | cache, outcome, key hash, answer hash, tombstone reason |
 | `build.halt`, `build.resume` | `swiftgate build halt` and `resume` | build run, task, reason or answer, wait |
+| `build.return-checked` | `swiftgate build check-return` | build run, task, verdict, rule ids, and the first 10 findings' messages and the summary, scrubbed |
 | `span.start`, `span.end` | `swiftgate events span start` and `end` | a 16-hex span id, its parent span, phase, build run, task and role; the end holds the outcome (`ok`, `red`, `halted` or `abandoned`) and ms |
 | `agent.usage` | `swiftgate events ingest` | session, agent, role, task, build run, model, message id and time, token counts, cost |
 | `agent.tools` | `swiftgate events ingest` | per agent per 60 s window: session, agent, role, task, build run, window bounds, call counts and summed ms by tool (built-in names; every `mcp__…` tool as `mcp`; any other name only counted), the repository-relative paths file tools named (at most 50), and a count of paths dropped |
@@ -25,7 +26,8 @@ line and never changes a verdict, an exit code or a report.
 ## What's never recorded
 
 No source text, diffs, finding or failure messages, prompts, transcript text, tool inputs, shell commands,
-environment values or API keys. `agent.tools` is the 1 exception to "no tool inputs". It keeps the `file_path`,
+environment values or API keys, except `check-return`'s messages, cut and scrubbed as the
+[run viewer](run-viewer-failures.md#privacy) does. `agent.tools` is the 1 exception to "no tool inputs". It keeps the `file_path`,
 `path` or `notebook_path` of a file tool (Read, Edit, Write, MultiEdit, NotebookEdit, Grep, Glob). Each path is relative to the
 innermost of the git top level of the agent's working directory and every worktree of that repository, so a
 worker keeps the paths in its own worktree. It keeps nothing else from a tool's input or output: no command,
@@ -42,8 +44,8 @@ redacts backend keys. No command sends events anywhere.
 - **Sealed, never deleted on their own.** Past 4 MiB (16 MiB for `test`) an active file moves to
   `sealed/<stream>/`, compressed with LZFSE, beside an index. A sealed `test` segment also gets a rollup, so the
   summary never decompresses it.
-- **Build halts and spans** go to the main checkout's store, where the orchestrator runs, whichever worktree
-  the command starts in.
+- **Build halts, return checks and spans** go to the main checkout's store, whichever worktree the command
+  starts in.
 - **Copied up on remove.** `swiftgate worktree remove` copies a worktree's events to main's
   `.harness/events/imported/<storeID>/`. If the copy fails, it moves them to `.harness/events/unkept/<storeID>/`
   and names the path in its report. Readers read every imported and unkept store, each event once.

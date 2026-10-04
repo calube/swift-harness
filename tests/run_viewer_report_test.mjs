@@ -19,7 +19,8 @@ const fixtures = join(plugin, 'gate/Tests/Fixtures/RunView')
 const RUNS = {
   first: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor' },
   spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
-  blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true },
+  blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true, clone: 'memos-3' },
+  rejected: { dir: 'brownfield-rejected', buildRun: '20261004T141445Z-85d15f09', plan: 'spec', brownfield: true, clone: 'memos-4' },
 }
 // build-run-1's merge gate of counter-ui-reset-button, RED on a snapshot test before the fixer.
 const RED_GATE = '20261004T050310Z-ed998508'
@@ -34,10 +35,10 @@ function swiftgateBinary() {
 
 // A brownfield clone holding the captured run's shared store and plan state, with each task
 // worktree's run store under its own git dir, as `git worktree add` lays them out.
-function seededClone({ dir: fixture, buildRun, plan }) {
+function seededClone({ dir: fixture, buildRun, plan, clone }) {
   const captured = join(fixtures, fixture)
   const parent = mkdtempSync(join(tmpdir(), 'run-viewer-report-'))
-  const dir = join(parent, 'memos-3')
+  const dir = join(parent, clone)
   mkdirSync(dir)
   execFileSync(gitPath, ['init', '-q'], { cwd: dir })
   const harness = join(dir, '.git/swift-harness')
@@ -217,6 +218,22 @@ const tests = {
     assert.match(gate.popover.text, /store\/test\/memo_share_test\.go:212/)
     assert.match(gate.popover.text, /slice tier · worker's gate/)
     assert.match(gate.drawer, /20261004T124744Z-9d7ec113/)
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'a task whose return check-return rejected reads the rule and its message on its task span and drawer — catches a rejected-return task that reads only "no return stored"'() {
+    const task = 'share-view-limit-web'
+    const rendered = await renderReport(RUNS.rejected, (page) => focusThenDrawer(page, `task:${task}`, task))
+    assertRendered(rendered, RUNS.rejected, ['meta', 'stats', 'bars', 'gates'])
+    const { popover, drawer } = rendered.acted
+    assert.equal(popover.hidden, false)
+    for (const text of [popover.text, drawer]) {
+      assert.match(text, /why it stopped/i)
+      assert.match(text, /stopped\s+at \d\d:\d\d UTC: build check-return rejected its return/)
+      assert.match(text, /build-return\.surface-commit-off-branch/)
+      assert.match(text, /surface commit "7c3becaa" isn't on branch spec\/share-view-limit-web/)
+      assert.match(text, /last gate run 20261004T141801Z-79b9bebf GREEN/)
+    }
+    assert.doesNotMatch(popover.text, /no return of it was stored/)
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
 }

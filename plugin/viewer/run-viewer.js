@@ -145,7 +145,8 @@
   const stageText = { task: "task gate", worker: "worker's gate", merge: "merge gate", final: "final gate" };
   const blockText = {
     "gate-red": "its last gate run was RED",
-    "return-not-stored": "no return of it was stored: build check-return rejected it, or none came back",
+    "return-rejected": "build check-return rejected its return",
+    "return-not-stored": "no return of it was stored: none came back, or a check-return that records nothing rejected it",
     halt: "a halt stopped it"
   };
   function failureHeadline(g) {
@@ -181,9 +182,20 @@
       <p class="sub">run <span class="mono">${esc(g.runId)}</span></p>
       <p class="sub">${f.report ? `report <code>${esc(f.report)}</code>` : "its report.json isn't in any live checkout"} · <code>${esc(f.command)}</code></p>`;
   }
-  function blockHtml(b, gateOf) {
+  // What build check-return said about a rejected return; `full` is the drawer's form.
+  function rejectionHtml(r, full) {
+    const shown = r.findings.slice(0, full ? Infinity : POP_LINES);
+    const hidden = r.findings.length - shown.length;
+    const rows = shown.map((x) => `<li><div class="fail-head"><code>${esc(x.rule)}</code></div><div class="fail-msg">${esc(full ? x.message : M.clip(x.message, POP_MESSAGE))}${full && x.truncated ? ` <span class="muted">(cut)</span>` : ""}</div></li>`);
+    const list = shown.length
+      ? `<ul class="fail-list">${rows.join("")}${more(hidden, "in the task drawer")}${more(r.moreFindings, "in check-return's output")}</ul>`
+      : r.rules.length ? `<div class="tags">${r.rules.map((k) => `<span class="tag">${esc(k)}</span>`).join("")}</div>` : "";
+    return `<p class="sub">check-return ${esc(r.verdict)}${r.fix ? " on the fixer's return" : ""}: ${esc(full ? r.message : M.clip(r.message, POP_MESSAGE))}</p>${list}`;
+  }
+  function blockHtml(b, gateOf, full) {
     const g = b.gateRun ? gateOf(b.gateRun) : null;
     return `<p class="fail-line"><span class="chip bad">stopped</span> at ${esc(clock(Date.parse(b.at)))}${b.cause ? `: ${esc(blockText[b.cause] || b.cause)}` : ""}</p>
+      ${b.rejection ? rejectionHtml(b.rejection, full) : ""}
       ${b.halt ? `<p class="sub">halt raised: ${esc(b.halt)}</p>` : ""}
       ${b.gateRun ? `<p class="sub">last gate run <span class="mono">${esc(b.gateRun)}</span> ${g ? esc(g.verdict) : ""}</p>` : `<p class="sub">no gate run</p>`}`;
   }
@@ -192,7 +204,7 @@
     const why = M.failureOf(view, s);
     if (!why) return "";
     const parts = [];
-    if (why.block) parts.push(blockHtml(why.block, why.gateOf));
+    if (why.block) parts.push(blockHtml(why.block, why.gateOf, false));
     if (why.gate) parts.push(gateFailureHtml(why.gate, false));
     why.halts.forEach((h) => {
       const g = h.gateRun ? why.gateOf(h.gateRun) : null;
@@ -429,7 +441,7 @@
     const redGates = view.gates.filter((g) => g.task === id && g.failure);
     const gateOf = (rid) => gateBy[rid] || null;
     const failed = t.blocked || redGates.length
-      ? card(redGates.length ? "Why it failed" : "Why it stopped", `${t.blocked ? blockHtml(t.blocked, gateOf) : ""}${redGates.map((g) => `<div class="dr-fail">${gateFailureHtml(g, true)}</div>`).join("")}`)
+      ? card(redGates.length ? "Why it failed" : "Why it stopped", `${t.blocked ? blockHtml(t.blocked, gateOf, true) : ""}${redGates.map((g) => `<div class="dr-fail">${gateFailureHtml(g, true)}</div>`).join("")}`)
       : "";
 
     $("dr-body").innerHTML = failed +

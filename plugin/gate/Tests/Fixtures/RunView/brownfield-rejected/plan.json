@@ -1,0 +1,109 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "share-view-limit-api" : {
+        "acceptance" : [
+          "in `server/api/v1/test/memo_share_service_test.go`: limits 0, -1 and 1001 fail with `INVALID_ARGUMENT`; 1 and 1000 succeed; a limit-2 share resolves twice and then returns `NOT_FOUND`; a share without a limit keeps resolving; `ListMemoShares` returns the count and limit; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the fileserver's attachment access, which keeps checking expiry only"
+        ],
+        "scope" : [
+          "`CreateMemoShare` rejects a `view_limit` outside 1 to 1000 with `codes.InvalidArgument` and stores a valid one",
+          "`convertMemoShareFromStore` sets `view_limit` when present and `view_count`",
+          "`getActiveMemoShare` also returns `NOT_FOUND` for a share whose count reached its limit",
+          "`GetSharedMemo` calls `Store.ConsumeMemoShareView` after every other check passes and before it returns; a nil result returns `NOT_FOUND` with the same \"not found\" message an expired link gives"
+        ],
+        "title" : "Validate the view limit on create, return counts on list, and consume a view on each successful resolve.",
+        "why" : "requirements 1 to 4: limits from 1 to 1000, `INVALID_ARGUMENT` outside it, `NOT_FOUND` once used up, and the count and limit on list."
+      },
+      "share-view-limit-contract" : {
+        "acceptance" : [
+          "every touched area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "migrations, SQL, API validation and UI"
+        ],
+        "scope" : [
+          "`MemoShare.view_limit` and `MemoShare.view_count` in `proto/api/v1/memo_service.proto`, regenerated with `buf generate`",
+          "`store.MemoShare.ViewLimit *int32` and `ViewCount int32`, the `store.ConsumeMemoShareView` type, `Store.ConsumeMemoShareView` and the `Driver.ConsumeMemoShareView` method",
+          "driver stubs returning a not-implemented error"
+        ],
+        "title" : "Declare the view-limit fields and the atomic view-consume store method, with no behaviour.",
+        "why" : "requirements 1 to 5 cross the store, the API and the web client, so all build against 1 declared shape."
+      },
+      "share-view-limit-store" : {
+        "acceptance" : [
+          "in `store/test/memo_share_test.go`, run with `DRIVER=sqlite`: a share with limit 2 consumes twice, then the third consume returns nil; a share without a limit keeps consuming; an expired share and an unknown uid consume nothing; listed shares carry the count and limit; 2 concurrent consumes of a share with 1 view left give exactly 1 success",
+          "the migrator tests that compare drivers and `LATEST.sql` pass; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "API validation and the RPC handlers"
+        ],
+        "scope" : [
+          "a `26.10/00__add_memo_share_view_limit.sql` migration for sqlite, mysql and postgres adding `view_limit` (nullable) and `view_count` (not null, default 0) to `memo_share`",
+          "the same columns in each driver's `LATEST.sql`",
+          "each driver's `CreateMemoShare` writes `view_limit`; `ListMemoShares` and `GetMemoShare` read both columns",
+          "each driver's `ConsumeMemoShareView` runs 1 conditional `UPDATE memo_share SET view_count = view_count + 1 WHERE uid = ? AND (expires_ts IS NULL OR expires_ts >= now) AND (view_limit IS NULL OR view_count < view_limit)`, returns the updated share when 1 row changed, and nil with no error when none did"
+        ],
+        "title" : "Persist the view limit and count in every driver, and count views atomically.",
+        "why" : "requirements 2 and 3 (\"each time a share token resolves … view count goes up by 1\"; \"two resolves racing for the last view must not both succeed\") and the constraint that every driver gets a migration."
+      },
+      "share-view-limit-web" : {
+        "acceptance" : [
+          "`web/tests/memo-share-panel.test.tsx` checks the text for a share with limit 10 and count 3 (\"3 of 10 views\") and for a share without a limit and count 4 (\"4 views\"), failing first; `pnpm lint` passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "other locales, which fall back to English"
+        ],
+        "scope" : [
+          "`useCreateMemoShare` takes an optional `viewLimit` and sets it on the created `MemoShare`",
+          "`MemoSharePanel` gains a second `Select` beside the expiry one with no limit, 1 view, 10 views and 100 views, default no limit",
+          "each `ShareLinkRow` shows the view-count text beside the expiry text, through an exported formatter in the panel file",
+          "new keys under `memo.share` in `web/src/locales/en.json` only"
+        ],
+        "title" : "Add the view-limit choice and the view-count text to the share panel.",
+        "why" : "requirement 5: a view-limit choice next to the expiry choice, and \"N of M views\" or \"N views\" for each listed share."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-limit-field",
+        "title" : "A share can be created with an optional view limit from 1 to 1000; a share created without one behaves as today"
+      },
+      {
+        "id" : "req-limit-validation",
+        "title" : "Creating a share with a view limit outside 1 to 1000 fails with INVALID_ARGUMENT"
+      },
+      {
+        "id" : "req-count-on-resolve",
+        "title" : "Each successful resolve of a share token adds 1 to that share's view count, and an invalid, expired or revoked token counts nothing"
+      },
+      {
+        "id" : "req-exhausted-not-found",
+        "title" : "Once a share's view count reaches its limit the token returns NOT_FOUND, and 2 racing resolves for the last view never both succeed"
+      },
+      {
+        "id" : "req-list-counts",
+        "title" : "Listing a memo's shares returns each share's view count and its view limit when it has one"
+      },
+      {
+        "id" : "req-panel-choice",
+        "title" : "The web share panel offers no limit, 1 view, 10 views or 100 views next to the expiry choice and sends the choice on create"
+      },
+      {
+        "id" : "req-panel-text",
+        "title" : "Each listed share in the panel shows \"N of M views\" with a limit and \"N views\" without one, from English locale strings"
+      },
+      {
+        "id" : "req-migrations",
+        "title" : "SQLite, MySQL and PostgreSQL each get a migration adding the view limit and view count, LATEST.sql matches, and existing shares keep working with no limit and a view count of 0"
+      }
+    ]
+  },
+  "resume" : "planned; 4 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

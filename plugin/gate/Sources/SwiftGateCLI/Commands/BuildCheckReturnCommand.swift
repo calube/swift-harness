@@ -69,6 +69,81 @@ enum BuildCheckReturnRun {
     }
   }
 
+  /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.
+  struct Checked: Equatable {
+    let report: BuildCheckReturnReport
+    /// Why the verdict went unrecorded, for stderr; empty when it was recorded or telemetry is
+    /// off.
+    let notRecorded: [String]
+  }
+
+  /// ``run(file:plan:fix:git:profile:)``, then its verdict recorded as `build.return-checked` in
+  /// the main checkout's store, the one `directory` belongs to.
+  static func check(
+    file: String, plan: String?, fix: Bool = false, git: any Git,
+    profile: RepositoryProfile = .owned,
+    directory: String = FileManager.default.currentDirectoryPath
+  ) async -> Checked {
+    let report = await run(file: file, plan: plan, fix: fix, git: git, profile: profile)
+    return Checked(
+      report: report,
+      notRecorded: await record(
+        report, fix: fix, git: git, profile: profile, directory: directory))
+  }
+
+  /// Writes `report` as `build.return-checked` under the plan's newest build run. Returns why
+  /// nothing was written, unless telemetry is off: a verdict on no task or no build run has
+  /// nothing to name, and a failed write never changes the verdict.
+  private static func record(
+    _ report: BuildCheckReturnReport, fix: Bool, git: any Git, profile: RepositoryProfile,
+    directory: String
+  ) async -> [String] {
+    let notRecorded = "the verdict wasn't recorded"
+    guard let task = report.task, let plan = report.plan else {
+      return ["\(notRecorded): the check names no task and plan"]
+    }
+    guard RunID.isValid(task) else { return ["\(notRecorded): task `\(task)` isn't an id"] }
+    let buildRun: String
+    do {
+      guard let store = try await BuildRunStore.latest(plan: plan, git: git) else {
+        return ["\(notRecorded): plan `\(plan)` has no build run"]
+      }
+      buildRun = store.runID
+    } catch {
+      return ["\(notRecorded): listing plan `\(plan)`'s build runs: \(error)"]
+    }
+    let root: URL
+    switch await BuildHaltRun.store(command: command, directory: directory) {
+    case .refused(let refused): return [refused.stderr.trimmingCharacters(in: .newlines)]
+    case .found(_, false): return []
+    case .found(let found, true): root = found
+    }
+    var roots = [root.path, root.resolvingSymlinksInPath().path, directory]
+    if let common = try? await git.commonDirectory(),
+      let worktree = try? TaskWorktree(
+        commonDirectory: common, plan: plan, task: fix ? "fix-\(task)" : task, profile: profile)
+    {
+      roots.append(worktree.path)
+      roots.append(URL(filePath: worktree.path).resolvingSymlinksInPath().path)
+    }
+    roots.append(URL(filePath: directory).resolvingSymlinksInPath().path)
+    let eventID = UUID().uuidString  // swiftgate:allow det.uuid-init — an id need only be unique
+    let event = HarnessEvent(
+      eventID: eventID,
+      time: Date(),  // swiftgate:allow det.date-init — stamps the event
+      source: HarnessEventSource(route: nil),
+      payload: .buildReturnChecked(
+        .scrubbed(
+          buildRun: buildRun, task: task, fix: fix, verdict: report.verdict,
+          findings: report.findings, message: report.message, roots: roots)))
+    do throws(HarnessEventWriteError) {
+      try HarnessEventFiles(root: root).append(event)
+    } catch {
+      return ["\(notRecorded): \(error)"]
+    }
+    return []
+  }
+
   private static func gather(
     _ taskReturn: TaskReturn, plan slug: String, fix: Bool, git: any Git,
     profile: RepositoryProfile, warnings: inout [String]
@@ -440,7 +515,10 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
       + "adds or changes with its production source reverted to each proof base (the plan "
       + "surface, merged tasks' stubs, the return's surfaceCommit) in scratch worktrees it "
       + "removes: a test file that compiles at none is build-return.test-needs-stub. Re-runs no "
-      + "gate. Exits 0 when every claim holds, 1 for any finding, and 2 when the return or plan "
+      + "gate. Records the verdict as build.return-checked in the main checkout's store, under "
+      + "the plan's newest build run: the task, the verdict, the rule ids and each finding's "
+      + "message on 1 line, cut and with machine paths taken out; a failed write prints 1 line "
+      + "and changes nothing. Exits 0 when every claim holds, 1 for any finding, and 2 when the return or plan "
       + "state can't be read.")
 
   @Argument(help: "Path to the task's return JSON file.")
@@ -451,7 +529,7 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
 
   @Option(
     help: ArgumentHelp(
-      "The orchestrator's session id. Accepted so every build verb takes it; this check writes "
+      "The orchestrator's session id. Accepted so every build verb takes it; this check claims "
         + "nothing, so it isn't required."))
   var session: String?
 
@@ -466,8 +544,13 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let report = await BuildCheckReturnRun.run(
-      file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root))
+    let checked = await BuildCheckReturnRun.check(
+      file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root),
+      directory: root.path)
+    for note in checked.notRecorded {
+      FileHandle.standardError.write(Data("swiftgate build check-return: \(note)\n".utf8))
+    }
+    let report = checked.report
     Console.write(BuildCheckReturnRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

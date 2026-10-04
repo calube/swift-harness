@@ -6,7 +6,7 @@ import SwiftGateDomain
 /// and the plan, filtered to 1 build run.
 ///
 /// An event belongs to the run when its payload names the run (`build.halt`, `build.resume`,
-/// `agent.usage`, `agent.tools`, `span.*`), or when it is a gate event (`gate.run`, `gate.step`,
+/// `build.return-checked`, `agent.usage`, `agent.tools`, `span.*`), or when it is a gate event (`gate.run`, `gate.step`,
 /// `test.result`, `prove.result`) of a gate run the run's ledger log or a task return names.
 ///
 /// A brownfield run has phases before its build run exists, so the plan's first build run also
@@ -395,6 +395,7 @@ public struct RunViewReader: RunViewReading {
     switch event.payload {
     case .buildHalt(let halt): return halt.buildRun == buildRun
     case .buildResume(let resume): return resume.buildRun == buildRun
+    case .buildReturnChecked(let checked): return checked.buildRun == buildRun
     case .agentUsage(let usage): return usage.buildRun == buildRun
     case .agentTools(let tools): return tools.buildRun == buildRun
     case .spanStart(let span): return span.buildRun == buildRun || span.buildRun == prebuild.slug

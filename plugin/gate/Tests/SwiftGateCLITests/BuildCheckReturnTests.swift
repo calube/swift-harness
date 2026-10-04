@@ -662,3 +662,87 @@ struct BuildCheckReturnTests {
     #expect(throws: DecodingError.self) { try TaskReturnJSON.decode(missingSeverity) }
   }
 }
+
+@Suite("build check-return records its verdict")
+struct BuildCheckReturnRecordTests {
+  /// The `build.return-checked` events in the scenario's main checkout store.
+  private static func recorded(_ scenario: ReturnScenario) throws -> [BuildReturnCheckedEvent] {
+    let data = try HarnessEventFiles(root: scenario.main).read(.build, runID: nil) ?? Data()
+    return try HarnessEventJSON.decode(data).events.compactMap { event in
+      guard case .buildReturnChecked(let checked) = event.payload else { return nil }
+      return checked
+    }
+  }
+
+  private static func checked(_ scenario: ReturnScenario, _ taskReturn: TaskReturn) async throws
+    -> BuildCheckReturnRun.Checked
+  {
+    // A checkout with a config keeps events, as a harness repository does.
+    try Data(
+      """
+      schema = 1
+      xcode = "26.2"
+      app_scheme = "App"
+      packages = ["Packages/*"]
+
+      [simulator]
+      device = "iPhone 17"
+      os = "26.2"
+
+      """.utf8
+    ).write(to: scenario.main.appending(path: ".swiftgate.toml"))
+    return await BuildCheckReturnRun.check(
+      file: try scenario.write(try TaskReturnJSON.encode(taskReturn)), plan: ReturnScenario.plan,
+      git: scenario.git, directory: scenario.main.path)
+  }
+
+  @Test(
+    "a return check-return rejects for a quoted surface commit is recorded as build.return-checked with its task, build run, verdict and rule — catches a rejection that leaves no record for the run view"
+  )
+  func rejectionIsRecorded() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let quoted = "\"\(scenario.taskCommit.prefix(8))\""
+    let result = try await Self.checked(
+      scenario,
+      scenario.returnValue(
+        gate: .init(tier: .push, verdict: .green, runID: runID), surfaceCommit: quoted))
+
+    #expect(result.report.verdict == .red)
+    #expect(result.notRecorded == [])
+    let events = try Self.recorded(scenario)
+    #expect(events.count == 1)
+    let event = try #require(events.first)
+    #expect(event.task == ReturnScenario.task)
+    #expect(
+      event.buildRun == RunID.make(startedAt: ReturnScenario.finishedAt, suffix: 1))
+    #expect(event.verdict == .red)
+    #expect(event.fix == false)
+    #expect(event.rules == result.report.findings.map(\.rule))
+    #expect(event.rules.contains(.surfaceCommitOffBranch))
+    #expect(event.findings.map(\.rule) == event.rules)
+    #expect(event.findings.first?.message.contains(quoted) == true)
+  }
+
+  @Test(
+    "a BLOCKED check is recorded with its reason on 1 line and no machine path — catches a blocked return that leaves no record, or a record carrying the clone's absolute path"
+  )
+  func blockedCheckIsRecordedScrubbed() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    try FileManager.default.removeItem(at: scenario.worktree)
+    let result = try await Self.checked(
+      scenario, scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
+
+    #expect(result.report.verdict == .blocked)
+    #expect(result.report.message.contains(scenario.worktree.lastPathComponent))
+    let event = try #require(try Self.recorded(scenario).first)
+    #expect(event.verdict == .blocked)
+    #expect(event.rules == [])
+    #expect(event.message.contains("has no worktree"))
+    #expect(!event.message.contains(scenario.base.lastPathComponent), "\(event.message)")
+    #expect(!event.message.contains("/var/"), "\(event.message)")
+  }
+}
