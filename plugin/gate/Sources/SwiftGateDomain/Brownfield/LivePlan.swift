@@ -88,13 +88,17 @@ public struct LivePlan: Sendable, Equatable {
   public let assumptions: [String]
   /// The `## Requirements` bullets, in plan order; empty when the plan has none.
   public let requirements: [LivePlanRequirement]
+  /// The `## Validation` table; `nil` when the plan has no such section.
+  public let validation: LivePlanValidation?
 
   public init(
-    tasks: [LivePlanTask], assumptions: [String], requirements: [LivePlanRequirement] = []
+    tasks: [LivePlanTask], assumptions: [String], requirements: [LivePlanRequirement] = [],
+    validation: LivePlanValidation? = nil
   ) {
     self.tasks = tasks
     self.assumptions = assumptions
     self.requirements = requirements
+    self.validation = validation
   }
 }
 
@@ -120,6 +124,8 @@ public enum LivePlanError: Error, Sendable, Equatable {
   case unknownRequirement(task: String, id: String)
   /// A requirement no task's `- Covers:` names.
   case uncoveredRequirement(String)
+  /// A `## Validation` line that isn't a row of the table's shape.
+  case invalidValidation(line: Int, reason: String)
 
   /// One sentence naming the task and what to fix in `PLAN.md`.
   public var message: String {
@@ -158,6 +164,8 @@ public enum LivePlanError: Error, Sendable, Equatable {
       "task `\(task)` covers `\(id)`, which `## Requirements` doesn't list"
     case .uncoveredRequirement(let id):
       "requirement `\(id)` is in `## Requirements` but no task's `- Covers:` names it"
+    case .invalidValidation(let line, let reason):
+      "`## Validation` line \(line): \(reason)"
     }
   }
 }

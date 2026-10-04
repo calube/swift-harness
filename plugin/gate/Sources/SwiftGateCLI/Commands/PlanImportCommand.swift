@@ -23,6 +23,10 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
   /// The plan's `index.json` status after the import; `nil` before that step.
   var indexStatus: PlanStatus?
   var assumptions: [String] = []
+  /// The rows written to `validation.json`; `nil` when the plan has no `## Validation` section.
+  var validationRows: Int?
+  /// Non-gating notes, such as a plan imported with no validation table.
+  var notes: [String] = []
   /// What became of the contract task `--contract` named; `nil` without the flag.
   var contract: ContractRecord?
   var message = ""
@@ -43,7 +47,7 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case command, plan, status, verdict, tasks, waves, excludeAdded, indexStatus, assumptions,
-      contract, message
+      validationRows, notes, contract, message
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -58,6 +62,8 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
     try c.encode(excludeAdded, forKey: .excludeAdded)
     try c.encode(indexStatus, forKey: .indexStatus)
     try c.encode(assumptions, forKey: .assumptions)
+    try c.encode(validationRows, forKey: .validationRows)
+    try c.encode(notes, forKey: .notes)
     try c.encode(contract, forKey: .contract)
     try c.encode(message, forKey: .message)
   }
