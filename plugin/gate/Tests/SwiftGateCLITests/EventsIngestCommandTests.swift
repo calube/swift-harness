@@ -51,7 +51,7 @@ struct EventsIngestCommandTests {
 
     init(config: String? = ProbeRepository.config) throws {
       repo = try ProbeRepository(config: config)
-      transcripts = FileManager.default.temporaryDirectory
+      transcripts = TestTemporaryDirectory.root
         .appending(path: "swiftgate-transcripts-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.copyItem(
@@ -69,7 +69,7 @@ struct EventsIngestCommandTests {
 
     func remove() {
       repo.remove()
-      try? FileManager.default.removeItem(at: transcripts)
+      TestTemporaryDirectory.remove(transcripts)
     }
 
     func ingest(

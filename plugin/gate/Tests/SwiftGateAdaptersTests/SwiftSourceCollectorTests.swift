@@ -1,11 +1,12 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 @Suite("SwiftSourceCollector")
 struct SwiftSourceCollectorTests {
   private func makeTree(_ files: [String: String]) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-sources-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     for (path, content) in files {

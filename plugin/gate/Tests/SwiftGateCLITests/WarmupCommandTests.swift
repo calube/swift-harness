@@ -11,7 +11,7 @@ import Testing
 private struct WarmupClone {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -27,7 +27,7 @@ private struct WarmupClone {
   }
 
   init(areas: [String]?) async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-warmup-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -82,7 +82,7 @@ private struct WarmupClone {
     WarmupCommand.Dependencies(processRunner: runner, areaRunner: areaRunner, events: events)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 }
 
 private func warmups(_ log: MemoryEventLog) -> [WarmupRunEvent] {

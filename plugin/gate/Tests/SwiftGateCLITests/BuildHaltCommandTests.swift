@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -14,7 +15,7 @@ struct BuildHaltCommandTests {
   static let buildRun = RunID.make(startedAt: runStart, suffix: 0x2a)
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-build-halt-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -144,9 +145,11 @@ struct BuildHaltCommandTests {
       let statuses = await withTaskGroup(of: Int32.self) { group in
         for resumer in 0..<resumers {
           group.addTask {
-            Self.resume(
-              root, at: Double(round) + 0.5, id: "resume-\(round)-\(resumer)", task: task
-            ).status
+            await OffPool.run {
+              Self.resume(
+                root, at: Double(round) + 0.5, id: "resume-\(round)-\(resumer)", task: task
+              ).status
+            }
           }
         }
         return await group.reduce(into: []) { $0.append($1) }

@@ -1,11 +1,12 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("RunStore")
 struct RunStoreTests {
-  let root = FileManager.default.temporaryDirectory
+  let root = TestTemporaryDirectory.root
     .appending(path: "swiftgate-runs-\(UUID().uuidString)", directoryHint: .isDirectory)
 
   var store: RunStore { RunStore(worktreeRoot: root) }

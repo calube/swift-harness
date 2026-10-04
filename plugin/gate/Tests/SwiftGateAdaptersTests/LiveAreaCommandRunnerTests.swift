@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("LiveAreaCommandRunner")
@@ -12,7 +13,7 @@ struct LiveAreaCommandRunnerTests {
       postExitDrainLimit: .milliseconds(200)))
 
   private func temporaryDirectory() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "area-runner-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     // `$PWD` in the child is the real path, `/private/var/…`, which `URL` would shorten.

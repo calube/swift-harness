@@ -31,7 +31,7 @@ struct BrownfieldProfileCommandTests {
     }
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-brownfield-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(
         at: root.appending(path: ".git/swift-harness/discover", directoryHint: .isDirectory),

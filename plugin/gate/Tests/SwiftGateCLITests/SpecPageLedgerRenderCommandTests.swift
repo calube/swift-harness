@@ -11,7 +11,7 @@ import Testing
 private struct SpecPagePlanRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
   ]
@@ -24,7 +24,7 @@ private struct SpecPagePlanRepo {
   var git: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-spec-page-ledger-\(UUID().uuidString)", directoryHint: .isDirectory
       )
@@ -40,7 +40,7 @@ private struct SpecPagePlanRepo {
     try #require(claimed.verdict == .green, "\(claimed.message)")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func store() async throws -> PlanStateStore {
     try await PlanStateStore.locate(slug: Self.slug, git: git)

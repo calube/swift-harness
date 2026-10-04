@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -26,14 +27,14 @@ struct DesignReviewSynthCommandTests {
     var doc: String { root.appending(path: "design.md").path }
 
     init() throws {
-      root = FileManager.default.temporaryDirectory.appending(
+      root = TestTemporaryDirectory.root.appending(
         path: "swiftgate-design-synth-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
       try Data(DesignReviewSynthCommandTests.doc.utf8).write(
         to: root.appending(path: "design.md"))
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     /// Writes one reviewer file; `finding` is `(severity, anchor)` or none.
     func reviewer(

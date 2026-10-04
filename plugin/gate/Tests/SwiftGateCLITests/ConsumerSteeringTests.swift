@@ -210,7 +210,7 @@ struct ConsumerSteeringTests {
   /// A throwaway `<tmp>/<id>/plugin/` holding `files`, so the repository root above it has the
   /// same shape as this checkout without touching it.
   private static func plantedPlugin(_ files: [String: String]) throws -> URL {
-    let plugin = FileManager.default.temporaryDirectory
+    let plugin = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-steering-\(UUID().uuidString)/plugin", directoryHint: .isDirectory)
     for (path, text) in files {

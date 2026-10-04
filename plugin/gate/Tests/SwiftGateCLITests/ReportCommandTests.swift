@@ -24,7 +24,7 @@ struct ReportCommandTests {
     }
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-report-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       let files = FileManager.default
@@ -58,7 +58,7 @@ struct ReportCommandTests {
         commonDirectory: common, pluginRoot: pluginRoot)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   /// The text of the `run-view` data block, up to the first `</script` after it.

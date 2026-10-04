@@ -8,7 +8,7 @@ import Testing
 private struct PlanScenario {
   static let plan = "2026-09-26-search"
 
-  let commonDirectory = FileManager.default.temporaryDirectory
+  let commonDirectory = TestTemporaryDirectory.root
     .appending(path: "swiftgate-ledger-writer-\(UUID().uuidString)", directoryHint: .isDirectory)
   var git: FakeGit { FakeGit(commonDirectory: commonDirectory.path) }
 
@@ -36,7 +36,7 @@ private struct PlanScenario {
     try PlanStateStore(plan: try layout).ledger().tasks.first { $0.id == id }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: commonDirectory) }
+  func remove() { TestTemporaryDirectory.remove(commonDirectory) }
 }
 
 @Suite("Ledger writer")

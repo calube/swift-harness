@@ -18,9 +18,9 @@ struct JudgeQuestionKeysAdapterTests {
   /// The real seeds and agents copied beside a kept reply for every seed, so the loader reads the
   /// questions a live run asks.
   static func dataset() throws -> JudgeDataset {
-    let root = FileManager.default.temporaryDirectory.appending(
+    let root = TestTemporaryDirectory.root.appending(
       path: "judge-keys-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: root) }
+    defer { TestTemporaryDirectory.remove(root) }
     let checkout = Fixture.checkoutRoot.deletingLastPathComponent()
     for path in ["plugin/agents", "plugin/gate/Fixtures/calibrate-design"] {
       try FileManager.default.createDirectory(

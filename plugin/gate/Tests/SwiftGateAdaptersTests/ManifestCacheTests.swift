@@ -21,7 +21,7 @@ struct ManifestCacheTests {
     let failNext = Flag()
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-manifests-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(
         at: root.appending(path: ManifestCacheTests.package), withIntermediateDirectories: true)
@@ -55,7 +55,7 @@ struct ManifestCacheTests {
       ).describe(packageDirectory: ManifestCacheTests.package)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   @Test(

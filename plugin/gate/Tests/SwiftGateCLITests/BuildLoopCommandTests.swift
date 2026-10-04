@@ -412,7 +412,7 @@ struct BuildLoopCommandTests {
 
   /// A checkout holding one recorded run, as `check` or another command writes it.
   private func checkout(runID: String, command: String, verdict: Verdict) throws -> URL {
-    let root = FileManager.default.temporaryDirectory.appending(
+    let root = TestTemporaryDirectory.root.appending(
       path: "swiftgate-record-gate-\(UUID().uuidString)", directoryHint: .isDirectory)
     let report = try RunReport(
       runID: runID, durationMilliseconds: 1000,

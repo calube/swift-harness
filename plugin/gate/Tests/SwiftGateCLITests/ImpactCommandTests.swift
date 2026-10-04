@@ -9,7 +9,7 @@ import Testing
 @Suite("swiftgate impact")
 struct ImpactCommandTests {
   private func makeRepository(_ files: [String: String] = [:]) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-impact-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

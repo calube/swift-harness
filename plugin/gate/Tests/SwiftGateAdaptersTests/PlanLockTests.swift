@@ -167,9 +167,13 @@ struct PlanLockTests {
   @Test(
     "on a filesystem without hard links neither the lock nor plan.json is published and no staging file is left — catches a failed link treated as a lost race",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
-  func noHardLinksBlocksPublishing() throws {
-    let volume = try FATVolume()
-    defer { volume.detach() }
+  func noHardLinksBlocksPublishing() async throws {
+    try await FATVolume.with { volume in
+      try Self.refusesPublishing(on: volume)
+    }
+  }
+
+  private static func refusesPublishing(on volume: FATVolume) throws {
     let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
     let lock = PlanLock(plan: plan)
 
@@ -189,9 +193,13 @@ struct PlanLockTests {
   @Test(
     "a full volume fails the staging write and removes the half-written staging file — catches a partial lock file left behind",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
-  func fullVolumeFailsStagingWrite() throws {
-    let volume = try FATVolume()
-    defer { volume.detach() }
+  func fullVolumeFailsStagingWrite() async throws {
+    try await FATVolume.with { volume in
+      try Self.failsStagingWrite(on: volume)
+    }
+  }
+
+  private static func failsStagingWrite(on volume: FATVolume) throws {
     let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
     try FileManager.default.createDirectory(
       atPath: plan.directory, withIntermediateDirectories: true)

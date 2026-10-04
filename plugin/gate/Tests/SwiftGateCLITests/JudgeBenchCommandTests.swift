@@ -105,7 +105,7 @@ struct JudgeBenchCommandTests {
   }
 
   static func temporaryRoot() throws -> URL {
-    let root = FileManager.default.temporaryDirectory.appending(
+    let root = TestTemporaryDirectory.root.appending(
       path: "judge-bench-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     return root

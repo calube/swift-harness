@@ -19,7 +19,7 @@ struct MutationRunnerTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-mutate-seed-\(UUID().uuidString)", directoryHint: .isDirectory)
       let file = root.appending(path: MutationRunnerTests.file)
       try FileManager.default.createDirectory(
@@ -27,7 +27,7 @@ struct MutationRunnerTests {
       try Data(MutationRunnerTests.original.utf8).write(to: file)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   /// `count` distinct mutants of the file (boundary, negation, default), cycled.
@@ -62,7 +62,7 @@ struct MutationRunnerTests {
     await MutationRunner(scratch: scratch, toolchain: toolchain, workers: workers, timeout: timeout)
       .run(
         jobs, tree: Self.tree, projectPrefix: "",
-        reportDirectory: FileManager.default.temporaryDirectory.appending(path: "mutate-reports"))
+        reportDirectory: TestTemporaryDirectory.root.appending(path: "mutate-reports"))
   }
 
   @Test(
@@ -187,8 +187,12 @@ struct MutationRunnerTests {
         if started == workers {
           for _ in 0..<workers { allBuilding.signal() }
         }
-        if started <= workers { _ = allBuilding.wait(timeout: .now() + 60) }
-        if (2...workers).contains(started) { _ = baselineStarted.wait(timeout: .now() + 2) }
+        if started <= workers {
+          _ = allBuilding.wait(timeout: .now() + 60)  // swiftgate:allow safety.blocking-in-async — the fake toolchain runs builds off the pool
+        }
+        if (2...workers).contains(started) {
+          _ = baselineStarted.wait(timeout: .now() + 2)  // swiftgate:allow safety.blocking-in-async — the fake toolchain runs builds off the pool
+        }
         return .built
       },
       test: { root, _ in

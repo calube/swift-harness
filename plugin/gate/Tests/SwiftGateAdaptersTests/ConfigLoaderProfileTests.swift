@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("ConfigLoader profile")
@@ -9,7 +10,7 @@ struct ConfigLoaderProfileTests {
 
   /// A worktree root with its own `.git` directory, standing in for a fresh clone.
   func makeClone() throws -> (root: URL, common: URL) {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-profile-\(UUID().uuidString)", directoryHint: .isDirectory)
     let common = root.appending(path: ".git", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: common, withIntermediateDirectories: true)
@@ -82,28 +83,26 @@ struct ConfigLoaderProfileTests {
   @Test(
     "a linked worktree's common dir is the main checkout's git dir — catches each worktree reading its own config"
   )
-  func linkedWorktreeSharesCommonDir() throws {
+  func linkedWorktreeSharesCommonDir() async throws {
     let (root, common) = try makeClone()
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.removeItem(at: common)
     let linked = root.appending(path: "linked", directoryHint: .isDirectory)
-    try git(["init", "-q", "-b", "main"], in: root)
-    try git(
+    try await git(["init", "-q", "-b", "main"], in: root)
+    try await git(
       ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
       in: root)
-    try git(["worktree", "add", "-q", linked.path], in: root)
+    try await git(["worktree", "add", "-q", linked.path], in: root)
 
     let found = try #require(ConfigLoader.commonDirectory(enclosing: linked))
     #expect(found.resolvingSymlinksInPath().path == common.resolvingSymlinksInPath().path)
   }
 
-  private func git(_ arguments: [String], in directory: URL) throws {
-    let process = Process()
-    process.executableURL = URL(filePath: "/usr/bin/git")
-    process.arguments = arguments
-    process.currentDirectoryURL = directory
-    try process.run()
-    process.waitUntilExit()
-    #expect(process.terminationStatus == 0, "git \(arguments.joined(separator: " "))")
+  private func git(_ arguments: [String], in directory: URL) async throws {
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: "/usr/bin/git", arguments: arguments, workingDirectory: directory.path,
+        timeout: .seconds(60)))
+    #expect(output.status.isSuccess, "git \(arguments.joined(separator: " ")): \(output.stderr.text)")
   }
 }

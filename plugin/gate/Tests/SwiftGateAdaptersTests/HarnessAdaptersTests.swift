@@ -7,7 +7,7 @@ import Testing
 @Suite("xcodebuild and harness files")
 struct HarnessAdaptersTests {
   private func scratch() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-files-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

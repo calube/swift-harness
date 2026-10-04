@@ -39,7 +39,7 @@ private struct ReturnScenario {
     ledgerGate: CheckTier = .push, presetGate: BuildPreset.TaskGate = .ledger,
     taskProof: BuildPreset.TaskProof = .perTask
   ) async throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
     let main = base.appending(path: "app", directoryHint: .isDirectory)
     self.main = main
@@ -194,7 +194,7 @@ private struct ReturnScenario {
     )
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 }
 
 @Suite("build check-return")

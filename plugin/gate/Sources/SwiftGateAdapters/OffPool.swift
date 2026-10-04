@@ -7,6 +7,16 @@ public enum OffPool {
   public static func run<T: Sendable, Failure: Error>(
     name: String = "swiftgate.blocking", _ body: @escaping @Sendable () throws(Failure) -> T
   ) async throws(Failure) -> T {
-    try body()
+    let result = await withCheckedContinuation {
+      (continuation: CheckedContinuation<Result<T, Failure>, Never>) in
+      let thread = Thread {
+        continuation.resume(returning: Result { () throws(Failure) -> T in try body() })
+      }
+      thread.name = name
+      // Parsers and walkers recurse deeply; a pool thread's 512 KB stack is the floor.
+      thread.stackSize = 8 << 20
+      thread.start()
+    }
+    return try result.get()
   }
 }

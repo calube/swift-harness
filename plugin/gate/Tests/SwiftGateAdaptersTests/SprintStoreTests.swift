@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -215,13 +216,15 @@ struct SprintStoreTests {
     "a full volume fails the staged write, leaves sprint.json absent and removes the half-written staging file — catches a partial staging file left beside sprint.json",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
   func fullVolumeRemovesStagingFile() async throws {
-    let volume = try FATVolume()
-    defer { volume.detach() }
+    try await FATVolume.with { volume in try await Self.removesStagingFile(on: volume) }
+  }
+
+  private static func removesStagingFile(on volume: FATVolume) async throws {
     let layout = try PlanStateLayout(commonDirectory: volume.mountPoint.path)
     try FileManager.default.createDirectory(atPath: layout.root, withIntermediateDirectories: true)
     // The lock lives off the volume so only the staged write runs out of space.
     let lockDirectory = try FileSystemConditions.scratchDirectory("sprint-lock")
-    defer { try? FileManager.default.removeItem(at: lockDirectory) }
+    defer { TestTemporaryDirectory.remove(lockDirectory) }
     let store = SprintStore(
       layout: layout,
       lock: FileCountingLock(

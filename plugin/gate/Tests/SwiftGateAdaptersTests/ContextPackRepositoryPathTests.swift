@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 @Suite("the repository-relative path a context pack cites")
@@ -7,7 +8,7 @@ struct ContextPackRepositoryPathTests {
   /// A fresh directory named through `/var` or `/tmp`, which macOS links under `/private`, so the
   /// root and the path can spell the same place differently.
   private static func unresolvedRoot() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-repository-path-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(

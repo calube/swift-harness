@@ -20,10 +20,10 @@ struct ReviewerBashHookTests {
   ) async throws -> [String: String]? {
     let harness = try HookHarness()
     defer { harness.repository.remove() }
-    let outside = FileManager.default.temporaryDirectory
+    let outside = TestTemporaryDirectory.root
       .appending(path: "swiftgate-outside-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: outside) }
+    defer { TestTemporaryDirectory.remove(outside) }
     let quoted = String(decoding: try JSONEncoder().encode(command), as: UTF8.self)
     let (result, _) = try await harness.run(
       .preToolUse, Self.fixture, cwd: inProject ? nil : outside,

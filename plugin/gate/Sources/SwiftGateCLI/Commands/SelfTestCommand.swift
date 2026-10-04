@@ -459,7 +459,7 @@ private struct SeedRepo {
     return SeedRepo(root: root, runner: LiveProcessRunner(baseEnvironment: environment))
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TemporaryDirectories.remove(root) }
 
   @discardableResult
   func git(_ arguments: String...) async -> Bool {
@@ -578,7 +578,7 @@ private enum SeedRunners {
     let design = "docs/designs/probe-seed.md"
     let tempRoot = FileManager.default.temporaryDirectory.appending(
       path: "swiftgate-self-test-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: tempRoot) }
+    defer { TemporaryDirectories.remove(tempRoot) }
     let probesDestination = tempRoot.appending(
       path: EvidenceLayout(designDocPath: design).probesDirectory, directoryHint: .isDirectory)
     do {
@@ -638,7 +638,7 @@ private enum SeedRunners {
     let design = "docs/example/designs/seed.md"
     let tempRoot = FileManager.default.temporaryDirectory.appending(
       path: "swiftgate-self-test-design-diff-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: tempRoot) }
+    defer { TemporaryDirectories.remove(tempRoot) }
     let environment: [String: String] = [
       "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin", "HOME": tempRoot.path,
       "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
@@ -1017,7 +1017,7 @@ private struct BuildSeedRepo {
         root: made.root.appending(path: "app", directoryHint: .isDirectory), runner: made.runner))
   }
 
-  func remove() { try? FileManager.default.removeItem(at: container) }
+  func remove() { TemporaryDirectories.remove(container) }
 
   /// `git -C <directory>`'s trimmed stdout, or `nil` when it fails.
   func output(_ arguments: [String], in directory: URL? = nil) async -> String? {
@@ -1122,7 +1122,7 @@ private enum BuildSeedRunners {
     let root = CanonicalPath.url(
       FileManager.default.temporaryDirectory.appending(
         path: "swiftgate-self-test-ledger-set-\(UUID().uuidString)", directoryHint: .isDirectory))
-    defer { try? FileManager.default.removeItem(at: root) }
+    defer { TemporaryDirectories.remove(root) }
     let plan: PlanStateLayout.Plan
     do {
       plan = try PlanStateLayout(commonDirectory: root.path).plan(Self.plan)

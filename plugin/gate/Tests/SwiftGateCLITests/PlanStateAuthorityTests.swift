@@ -19,7 +19,7 @@ private struct AuthorityRepository {
 
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
@@ -50,7 +50,7 @@ private struct AuthorityRepository {
   init() async throws {
     scratch = URL(
       filePath: CanonicalPath.of(
-        FileManager.default.temporaryDirectory.appending(
+        TestTemporaryDirectory.root.appending(
           path: "swiftgate-authority-\(UUID().uuidString)", directoryHint: .isDirectory)),
       directoryHint: .isDirectory)
     main = scratch.appending(path: "repo", directoryHint: .isDirectory)
@@ -69,7 +69,7 @@ private struct AuthorityRepository {
     try await git(["worktree", "add", "-q", "-b", "task", linked.path])
   }
 
-  func remove() { try? FileManager.default.removeItem(at: scratch) }
+  func remove() { TestTemporaryDirectory.remove(scratch) }
 
   private func git(_ arguments: [String]) async throws {
     let output = try await runner.run(

@@ -1,12 +1,13 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 /// A plan directory holding one build run's `returns/`, laid out as the build skill stores them.
 private struct ReturnsScenario {
   static let runID = "20260927T090000Z-0a1b2c3d"
 
-  let root = FileManager.default.temporaryDirectory
+  let root = TestTemporaryDirectory.root
     .appending(path: "swiftgate-task-return-\(UUID().uuidString)", directoryHint: .isDirectory)
   let ledgerPath = "plans/2026-09-26-search/ledger.json"
 
@@ -22,7 +23,7 @@ private struct ReturnsScenario {
       forTask: task, buildRun: Self.runID, ledgerPath: ledgerPath, root: root)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   static func fullReturn(task: String, extra: String = "") -> String {
     """

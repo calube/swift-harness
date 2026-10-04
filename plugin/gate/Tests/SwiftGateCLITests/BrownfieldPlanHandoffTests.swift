@@ -38,14 +38,14 @@ private struct MemosClone {
   let root: URL
   let runner = LiveProcessRunner(baseEnvironment: [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
   ])
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-memos-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.copyItem(
@@ -65,7 +65,7 @@ private struct MemosClone {
     try Data(Self.plan.utf8).write(to: planDirectory.appending(path: "PLAN.md"))
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   var gitClient: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 

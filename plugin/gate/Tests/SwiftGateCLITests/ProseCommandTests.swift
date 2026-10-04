@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -27,7 +28,7 @@ private struct ProseRepository {
   }
 
   init(sentenceCeiling: Int? = nil) throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-prose-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let package = root.appending(path: "Sample", directoryHint: .isDirectory)
@@ -47,7 +48,7 @@ private struct ProseRepository {
     try Data(text.utf8).write(to: url)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func report(_ files: [String]) throws -> RunReport {
     try StaticCheckReport.make(

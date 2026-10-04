@@ -19,7 +19,7 @@ struct MutateCheckTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-mutate-\(UUID().uuidString)", directoryHint: .isDirectory)
       for path in [MutateCheckTests.source, MutateCheckTests.testFile] {
         let destination = root.appending(path: path)
@@ -30,7 +30,7 @@ struct MutateCheckTests {
       }
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     var context: GateRun.Context {
       GateRun.Context(runID: "r", directory: root.appending(path: ".harness/runs/r"))

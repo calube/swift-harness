@@ -13,7 +13,7 @@ import Testing
 private struct ResolvedFileRewriteRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -40,7 +40,7 @@ private struct ResolvedFileRewriteRepo {
   private(set) var resolvedBeforeCorruption = ""
 
   init() async throws {
-    let base = FileManager.default.temporaryDirectory
+    let base = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-resolved-rewrite-\(UUID().uuidString)", directoryHint: .isDirectory
       )
@@ -107,7 +107,7 @@ private struct ResolvedFileRewriteRepo {
   }
 
   func remove() {
-    try? FileManager.default.removeItem(at: dependencyRoot.deletingLastPathComponent())
+    TestTemporaryDirectory.remove(dependencyRoot.deletingLastPathComponent())
   }
 
   var resolvedFile: URL { root.appending(path: "MainPkg/Package.resolved") }
@@ -212,7 +212,7 @@ struct ResolvedFileRewriteTests {
   private static func runNoDependenciesPackage() async throws -> (
     report: RunReport, resolvedFileAppeared: Bool
   ) {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-no-deps-\(UUID().uuidString)", directoryHint: .isDirectory
       )
@@ -271,7 +271,7 @@ struct ResolvedFileRewriteTests {
         workingDirectory: root.path, timeout: .seconds(600)))
     let report = try RunReportJSON.decode(output.stdout.bytes)
     let resolvedFileAppeared = FileManager.default.fileExists(atPath: resolvedFile.path)
-    try? FileManager.default.removeItem(at: root)
+    TestTemporaryDirectory.remove(root)
     return (report, resolvedFileAppeared)
   }
 }

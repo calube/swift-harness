@@ -1,4 +1,6 @@
 import Foundation
+import SwiftGateAdapters
+import SwiftGateTestSupport
 
 /// Real filesystem states for error-path tests: a scratch directory, permission changes that are
 /// always undone, and a small FAT volume (no hard links, a fixed size that can be filled).
@@ -9,7 +11,7 @@ enum FileSystemConditions {
   static let hasDiskImages = FileManager.default.isExecutableFile(atPath: "/usr/bin/hdiutil")
 
   static func scratchDirectory(_ label: String) throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-\(label)-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -40,20 +42,34 @@ struct FATVolume {
   let image: URL
   let mountPoint: URL
 
-  init() throws {
+  /// Attaches a fresh volume for `body` and detaches it afterwards, whether `body` throws or not.
+  static func with<T>(_ body: (FATVolume) async throws -> T) async throws -> T {
+    let volume = try await FATVolume()
+    let result: Result<T, any Error>
+    do {
+      result = .success(try await body(volume))
+    } catch {
+      result = .failure(error)
+    }
+    await volume.detach()
+    return try result.get()
+  }
+
+  private init() async throws {
     let base = try FileSystemConditions.scratchDirectory("fat")
     image = base.appending(path: "volume.dmg")
     mountPoint = base.appending(path: "mnt", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: mountPoint, withIntermediateDirectories: true)
-    try Self.hdiutil(
+    try await Self.hdiutil(
       "create", "-quiet", "-size", "1m", "-fs", "MS-DOS", "-volname", "SGTEST", "-layout", "NONE",
       "-o", image.path)
-    try Self.hdiutil("attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path)
+    try await Self.hdiutil(
+      "attach", "-quiet", "-nobrowse", "-mountpoint", mountPoint.path, image.path)
   }
 
-  func detach() {
-    try? Self.hdiutil("detach", "-quiet", "-force", mountPoint.path)
-    try? FileManager.default.removeItem(at: image.deletingLastPathComponent())
+  private func detach() async {
+    try? await Self.hdiutil("detach", "-quiet", "-force", mountPoint.path)
+    TemporaryDirectories.remove(image.deletingLastPathComponent())
   }
 
   /// Grows a filler file to the largest size the volume accepts. FAT has no sparse files, so every
@@ -73,17 +89,15 @@ struct FATVolume {
     guard ftruncate(descriptor, fits) == 0 else { throw ConditionError("sizing \(path)") }
   }
 
-  private static func hdiutil(_ arguments: String...) throws {
-    let process = Process()
-    process.executableURL = URL(filePath: "/usr/bin/hdiutil")
-    process.arguments = arguments
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-    try process.run()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else {
+  /// Through the process runner, which waits on a thread of its own: `hdiutil` can take seconds
+  /// under load, and a test waiting in `Process.waitUntilExit()` holds a pool thread for all of it.
+  private static func hdiutil(_ arguments: String...) async throws {
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: "/usr/bin/hdiutil", arguments: arguments, timeout: .seconds(120)))
+    guard output.status.isSuccess else {
       throw ConditionError(
-        "hdiutil \(arguments.joined(separator: " ")) exited \(process.terminationStatus)")
+        "hdiutil \(arguments.joined(separator: " ")) exited \(output.status): \(output.stderr.text)")
     }
   }
 }

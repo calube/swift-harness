@@ -12,7 +12,7 @@ import Testing
 private struct LinkedWorktreePair {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -45,7 +45,7 @@ private struct LinkedWorktreePair {
 
   init() async throws {
     let runner = LiveProcessRunner(baseEnvironment: Self.environment)
-    let mainRoot = FileManager.default.temporaryDirectory
+    let mainRoot = TestTemporaryDirectory.root
       .appending(path: "swiftgate-index-repo-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: mainRoot, withIntermediateDirectories: true)
@@ -65,15 +65,15 @@ private struct LinkedWorktreePair {
   }
 
   func remove() {
-    try? FileManager.default.removeItem(at: linkedRoot)
-    try? FileManager.default.removeItem(at: mainRoot)
+    TestTemporaryDirectory.remove(linkedRoot)
+    TestTemporaryDirectory.remove(mainRoot)
   }
 }
 
 @Suite("swiftgate index set")
 struct IndexSetCommandTests {
   private func temporaryDirectory() -> URL {
-    FileManager.default.temporaryDirectory
+    TestTemporaryDirectory.root
       .appending(path: "swiftgate-index-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 

@@ -33,7 +33,7 @@ struct RunViewReaderConcurrentTests {
 
   static func seed() throws -> Seeded {
     let fileManager = FileManager.default
-    let parent = fileManager.temporaryDirectory.appending(
+    let parent = TestTemporaryDirectory.root.appending(
       path: "run-view-reader-concurrent-\(UUID().uuidString)", directoryHint: .isDirectory)
     let checkout = parent.appending(path: "app", directoryHint: .isDirectory)
     let common = checkout.appending(path: ".git", directoryHint: .isDirectory)

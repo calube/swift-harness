@@ -31,9 +31,9 @@ struct DoctorJudgeKeyTests {
   private static func doctor(environment: [String: String]) async throws -> (
     findings: [Finding], output: String
   ) {
-    let repository = FileManager.default.temporaryDirectory
+    let repository = TestTemporaryDirectory.root
       .appending(path: "swiftgate-doctor-key-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: repository) }
+    defer { TestTemporaryDirectory.remove(repository) }
     try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
     try Data(config.utf8).write(to: repository.appending(path: ".swiftgate.toml"))
     let runner = FakeProcessRunner { invocation throws(ProcessRunnerError) in

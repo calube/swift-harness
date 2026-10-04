@@ -5,6 +5,7 @@ import SwiftSyntax
 enum SafetyRules {
   static let all: [any Rule] = [
     tryBang, asBang, uncheckedSendable, nonisolatedUnsafe, preconcurrency, fatalError,
+    blockingInAsync,
   ]
 
   private static func allowHint(_ id: String) -> String {
@@ -85,6 +86,24 @@ enum SafetyRules {
           "crashes users; use `reportIssue` or a typed error, "
           + allowHint("safety.fatal-error"),
         failureScenario: "input that reaches this path crashes the app")
+    }
+  }
+
+  static let blockingInAsync = SyntaxLintRule(
+    id: "safety.blocking-in-async", summary: "a blocking wait on a cooperative-pool thread",
+    scope: .allFiles
+  ) { unit, index, _ in
+    index.calls.compactMap { call in
+      guard let name = BlockingCalls.name(of: call),
+        BlockingCalls.runsOnPool(call, isTestFile: unit.isTestFile)
+      else { return nil }
+      return unit.violation(
+        at: call,
+        message:
+          "`\(name)` holds a cooperative-pool thread while it waits, and the pool has one thread "
+          + "per core for every task in the process; use an async API or run it on a thread of its "
+          + "own, \(allowHint("safety.blocking-in-async"))",
+        failureScenario: "every other task waits for a free thread, so timeouts fire under load")
     }
   }
 }

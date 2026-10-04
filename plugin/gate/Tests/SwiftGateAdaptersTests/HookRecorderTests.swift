@@ -1,11 +1,12 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("hook payload recorder")
 struct HookRecorderTests {
-  let directory = FileManager.default.temporaryDirectory
+  let directory = TestTemporaryDirectory.root
     .appending(path: "swiftgate-record-\(UUID().uuidString)/nested", directoryHint: .isDirectory)
   let moment = Date(timeIntervalSince1970: 1_790_000_000.125)
 

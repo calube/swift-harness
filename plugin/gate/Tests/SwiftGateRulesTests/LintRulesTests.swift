@@ -58,6 +58,7 @@ struct LintRulesTests {
     "safety.nonisolated-unsafe": ["UnsafeGlobal.swift": [1, 3]],
     "safety.preconcurrency": ["Preconcurrency.swift": [1, 3]],
     "safety.fatal-error": ["Crashes.swift": [8, 12, 13]],
+    "safety.blocking-in-async": ["BlockingWaits.swift": [5, 6, 7, 8, 9, 10, 12, 13, 17]],
     "snap.record-mode": ["Recording.swift": [4, 7, 8, 9, 10]],
     "tca.banned-api": [
       "ViewStoreEra.swift": [6, 8, 10, 11, 15, 18, 19],
@@ -86,6 +87,32 @@ struct LintRulesTests {
         context: try manifest.context())
       #expect(result.findings.compactMap(\.line) == expected, "\(ruleID) bad/\(file)")
     }
+  }
+
+  @Test(
+    "in a test file a blocking wait fires in any function, sync tests and helpers included, but not in a closure handed to a thread, while production code fires only where async — catches a test helper blocking the pool unseen"
+  )
+  func blockingWaitsInTestFiles() throws {
+    let source = """
+      import Foundation
+      import Testing
+      @Test func waits() { Process().waitUntilExit() }
+      func helper(_ semaphore: DispatchSemaphore) { semaphore.wait() }
+      func offPool(_ semaphore: DispatchSemaphore) async { await OffPool.run { semaphore.wait() } }
+      func thread(_ semaphore: DispatchSemaphore) { Thread { semaphore.wait() }.start() }
+      func detached(_ semaphore: DispatchSemaphore) { Task.detached { semaphore.wait() } }
+      """
+    let production = source.replacingOccurrences(of: "import Testing\n", with: "\n")
+    let result = try Self.lint([
+      "Tests/FeedCoreTests/A.swift": source, "Sources/FeedCore/A.swift": production,
+    ])
+    #expect(
+      Self.located(result).filter { $0.hasSuffix("safety.blocking-in-async") } == [
+        "Sources/FeedCore/A.swift:7:safety.blocking-in-async",
+        "Tests/FeedCoreTests/A.swift:3:safety.blocking-in-async",
+        "Tests/FeedCoreTests/A.swift:4:safety.blocking-in-async",
+        "Tests/FeedCoreTests/A.swift:7:safety.blocking-in-async",
+      ])
   }
 
   @Test(

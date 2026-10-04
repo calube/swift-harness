@@ -25,7 +25,7 @@ private struct TestBuildScenario {
   let planState: PlanStateLayout.Plan
 
   init(tasks: [String]) async throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "check-return-test-build-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     main = base.appending(path: "app", directoryHint: .isDirectory)
@@ -226,7 +226,7 @@ private struct TestBuildScenario {
   }
 
   /// Task worktrees are siblings of `main` under `base`, so this removes them too.
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 }
 
 @Suite("build check-return builds new tests at the proof bases")

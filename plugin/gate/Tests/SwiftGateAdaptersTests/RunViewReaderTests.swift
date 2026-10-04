@@ -32,7 +32,7 @@ struct RunViewReaderTests {
     /// A checkout holding the captured run's plan state, with empty stores. `bare` puts the git
     /// common dir beside the checkout, as a bare repository's, with no main checkout.
     init(bare: Bool = false) throws {
-      parent = FileManager.default.temporaryDirectory.appending(
+      parent = TestTemporaryDirectory.root.appending(
         path: "run-view-reader-\(UUID().uuidString)", directoryHint: .isDirectory)
       checkout = parent.appending(path: "app", directoryHint: .isDirectory)
       common =
@@ -80,7 +80,7 @@ struct RunViewReaderTests {
         .read(buildRun: RunViewReaderTests.buildRun)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: parent) }
+    func remove() { TestTemporaryDirectory.remove(parent) }
   }
 
   static func lines(_ path: String) throws -> [String] {

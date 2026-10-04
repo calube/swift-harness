@@ -21,7 +21,7 @@ private struct RemoveScenario {
     ],
     waves: [["cli"]])
 
-  let base = FileManager.default.temporaryDirectory.appending(
+  let base = TestTemporaryDirectory.root.appending(
     path: "swiftgate-remove-events-\(UUID().uuidString)", directoryHint: .isDirectory)
   var main: URL { base.appending(path: "app", directoryHint: .isDirectory) }
   var commonDirectory: String { main.appending(path: ".git").path }
@@ -46,7 +46,7 @@ private struct RemoveScenario {
       workspace: workspace)
   }
 
-  func delete() { try? FileManager.default.removeItem(at: base) }
+  func delete() { TestTemporaryDirectory.remove(base) }
 }
 
 /// A ``FakeGitWorkspace`` whose `removeWorktree` deletes the directory, as git does.

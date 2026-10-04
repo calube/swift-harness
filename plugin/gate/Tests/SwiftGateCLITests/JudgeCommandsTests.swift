@@ -492,7 +492,7 @@ struct JudgeSelfTestBackendsTests {
     var judge: URL { root.appending(path: JudgeSelfTest.directory, directoryHint: .isDirectory) }
 
     init(cases: [JudgeCalibrationSet.Case] = JudgeSelfTestBackendsTests.cases) throws {
-      root = FileManager.default.temporaryDirectory.appending(
+      root = TestTemporaryDirectory.root.appending(
         path: "judge-self-test-\(UUID().uuidString)", directoryHint: .isDirectory)
       for item in cases {
         let directory = judge.appending(path: "cases/\(item.id)", directoryHint: .isDirectory)
@@ -518,7 +518,7 @@ struct JudgeSelfTestBackendsTests {
       try JSONDecoder().decode(type, from: Data(contentsOf: judge.appending(path: file)))
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   /// Jev is calibrated on its own rendering of the set; Claude on the set as written.

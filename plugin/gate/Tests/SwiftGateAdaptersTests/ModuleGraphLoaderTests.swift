@@ -7,7 +7,7 @@ import Testing
 @Suite("ModuleGraphLoader")
 struct ModuleGraphLoaderTests {
   private func makeTree(_ files: [String]) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-graph-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     for path in files {

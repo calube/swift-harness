@@ -21,7 +21,7 @@ struct BrownfieldMergeCheckTests {
     }
 
     init() throws {
-      base = FileManager.default.temporaryDirectory.appending(
+      base = TestTemporaryDirectory.root.appending(
         path: "swiftgate-brownfield-merge-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
     }

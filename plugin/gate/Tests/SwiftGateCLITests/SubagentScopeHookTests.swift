@@ -33,7 +33,7 @@ struct SubagentScopeScenario {
 
   func remove() {
     harness.repository.remove()
-    try? FileManager.default.removeItem(at: worktree)
+    TestTemporaryDirectory.remove(worktree)
   }
 
   /// A Write of `path`, from a subagent of `agentType`, or from the main session when `nil`.

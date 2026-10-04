@@ -7,7 +7,7 @@ import Testing
 @Suite("run store test results")
 struct RunStoreTestResultsTests {
   private static func temporaryRoot() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-run-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     return root

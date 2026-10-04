@@ -10,7 +10,7 @@ struct TranscriptReaderTests {
 
   /// A copy of the captured transcripts in Claude Code's layout.
   static func copy() throws -> URL {
-    let directory = FileManager.default.temporaryDirectory
+    let directory = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-transcript-reader-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.copyItem(

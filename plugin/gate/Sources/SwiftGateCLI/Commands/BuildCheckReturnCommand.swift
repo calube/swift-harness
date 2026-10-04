@@ -210,7 +210,7 @@ enum BuildCheckReturnRun {
     guard !reverted.isEmpty else { return nil }
     let output = FileManager.default.temporaryDirectory.appending(
       path: "swiftgate-check-return-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: output) }
+    defer { TemporaryDirectories.remove(output) }
     let builds:
       [(package: ChangedTestChecks.PackageTests, base: String, outcome: ProofBaseTestBuild.Outcome)]
     do throws(ScratchWorktreeError) {
