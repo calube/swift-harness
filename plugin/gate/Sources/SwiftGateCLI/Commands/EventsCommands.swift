@@ -229,6 +229,7 @@ enum EventsIngestRun {
     var role: AgentRole?
     var task: String?
     var buildRun: String?
+    var agentID: String? = nil
   }
 
   static let command = "swiftgate events ingest"
@@ -404,12 +405,17 @@ struct EventsIngestCommand: ParsableCommand {
   @Option(name: .customLong("build-run"), help: "The build run id the usage belongs to.")
   var buildRun: String?
 
+  @Option(
+    name: .customLong("agent-id"),
+    help: "The id of 1 subagent of the session, as the Agent tool printed it.")
+  var agentID: String?
+
   func run() throws {
     try EventsCommandRunner.finish(
       EventsIngestRun.make(
         options: EventsIngestRun.Options(
           session: session, workflowTranscripts: workflowTranscripts, role: role, task: task,
-          buildRun: buildRun),
+          buildRun: buildRun, agentID: agentID),
         root: EventsCommandRunner.root))
   }
 }
