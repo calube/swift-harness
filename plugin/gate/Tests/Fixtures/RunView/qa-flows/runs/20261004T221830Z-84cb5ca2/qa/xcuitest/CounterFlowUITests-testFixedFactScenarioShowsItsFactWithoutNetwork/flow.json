@@ -1,0 +1,39 @@
+{
+  "flow" : "counter",
+  "sheet" : "qa/xcuitest/CounterFlowUITests-testFixedFactScenarioShowsItsFactWithoutNetwork/sheet.png",
+  "source" : "xcuitest",
+  "steps" : [
+    {
+      "label" : "Open com.example.SampleApp",
+      "n" : 1,
+      "offsetMs" : 64,
+      "ok" : true
+    },
+    {
+      "label" : "Waiting 10.0s for \"counter.fact\" Button to exist",
+      "n" : 2,
+      "offsetMs" : 5000,
+      "ok" : true
+    },
+    {
+      "label" : "Tap \"counter.fact\" Button",
+      "n" : 3,
+      "offsetMs" : 6054,
+      "ok" : true
+    },
+    {
+      "label" : "Waiting 10.0s for \"counter.factText\" StaticText to exist",
+      "n" : 4,
+      "offsetMs" : 6473,
+      "ok" : true
+    },
+    {
+      "label" : "Find the \"counter.factText\" StaticText",
+      "n" : 5,
+      "offsetMs" : 7515,
+      "ok" : true
+    }
+  ],
+  "test" : "CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork()",
+  "video" : "qa/xcuitest/CounterFlowUITests-testFixedFactScenarioShowsItsFactWithoutNetwork/video.mp4"
+}

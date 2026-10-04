@@ -1,0 +1,8 @@
+$ counter.state.sh
+QA_PORT=55031
+exit: 0
+--- stdout ---
+device com.example.SampleApp is up
+
+--- stderr ---
+
