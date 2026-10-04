@@ -1050,12 +1050,12 @@ The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target sel
 ## Discover
 
 `Discover/<owner>-<repo>/` holds 1 public repository at a pinned commit, as `swiftgate discover` sees it
-(design §5.1): `ls-files.txt` is its `git ls-files` listing, `tree/` holds the bytes of each signal file at its
-tracked path (symlinks stay symlinks), and `SOURCE` names the URL, commit, commit date and capture date. A path
-in `ls-files.txt` with no file under `tree/` is tracked but not a signal file: discover sees its name only
-(lockfiles, `bin/*`, sources). Nothing is edited after capture.
+(design §5.1). `ls-files.txt` is its `git ls-files` listing. `tree/` holds the bytes of each signal file at its
+tracked path, and symlinks stay symlinks. `SOURCE` names the URL, commit, commit date and capture date. When
+`ls-files.txt` lists a path that `tree/` lacks, the path isn't a signal file and discover reads its name only
+(lockfiles, `bin/*`, sources). Never edit a file after capture.
 
-Each repository is permissively licensed (MIT or Apache-2.0) and holds more than 1 language. Captured 2026-10-03.
+Each repository carries an MIT or Apache-2.0 license and holds more than 1 language. Captured 2026-10-03.
 
 | Directory | Signal row | Commit |
 |---|---|---|
@@ -1097,7 +1097,7 @@ Then `rm -rf "$R"`, except for the 2 rows below.
 (^|/)(Package(@swift-[0-9.]+)?\.swift|project\.ya?ml|Project\.swift|Workspace\.swift|Tuist\.swift|Tuist/Config\.swift|Tuist/Package\.swift|Cargo\.toml|go\.mod|go\.work|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|gradle\.properties|gradle-wrapper\.properties|libs\.versions\.toml|pom\.xml|maven-wrapper\.properties|package\.json|pnpm-workspace\.yaml|lerna\.json|nx\.json|turbo\.json|rush\.json|\.yarnrc\.yml|pyproject\.toml|setup\.cfg|tox\.ini|pytest\.ini|Gemfile|\.rspec|Rakefile|mix\.exs|CMakeLists\.txt|CMakePresets\.json|(GNU)?[Mm]akefile|[Jj]ustfile|\.gitlab-ci\.yml|[^/]+\.xcscheme|contents\.xcworkspacedata|project\.pbxproj|\.swiftlint\.ya?ml|\.swiftformat|\.swift-format|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.prettierrc(\.[a-z]+)?|ruff\.toml|\.ruff\.toml|\.flake8|\.pylintrc|mypy\.ini|\.rubocop\.yml|\.golangci\.(ya?ml|toml)|\.?clippy\.toml|\.?rustfmt\.toml|detekt(-config)?\.ya?ml|\.editorconfig|\.credo\.exs|\.formatter\.exs|\.clang-format|\.clang-tidy|\.tool-versions|\.?mise\.toml|\.nvmrc|\.node-version|\.python-version|\.ruby-version|rust-toolchain(\.toml)?|\.swift-version|\.xcode-version|\.java-version|\.sdkmanrc|\.go-version|Mintfile)$|(^|/)\.github/workflows/[^/]+\.ya?ml$
 ```
 
-The 2 `after-build/` directories are the negative case: build output that exists on disk but isn't tracked.
+The 2 `after-build/` directories are the negative case: build output on disk that git ignores.
 After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
 or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
 `git -C "$R" status --porcelain --ignored > "$O/after-build/status-ignored.txt"`:
