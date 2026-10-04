@@ -186,10 +186,17 @@ A (`main`) and B (`main~8`, 20 source files apart):
 - **Thrash.** Every switch between trees rebuilt all 5 gate modules. Five alternations
   (B, A, B, A, B) took 115-127 s each at load 50-70, with about 208 s of user CPU each. A repeat of
   the same tree was a no-op in 0.4 s.
-- **Unconfirmed correctness risk.** In the first sequence, once, building B right after A
-  compiled nothing (0.4 s), and `release.yaml` still listed A's 1 768 source paths. The shim
-  would then have cached A's binary under B's hash. A deliberate retry, with B's files given old
-  mtimes, did not reproduce it. It needs its own investigation.
+- **Correctness risk, seen twice.** In the first scratch sequence, once, building B right after A
+  compiled nothing (0.4 s), and `release.yaml` still listed A's 1 768 source paths. A deliberate
+  retry, with B's files given old mtimes, did not reproduce it. Then it happened in a real gate:
+  this branch's push gate (`20261004T140632Z-bbe2fc2e`) ran
+  `swift build --package-path <this worktree>`. Its build printed compiler warnings for
+  `swift-harness-gate-builds-keep-a-cache-per-worktree/plugin/gate/Sources/…/ProveVerdict.swift`,
+  another worktree's copy of a file this worktree also has. Afterwards the shared `release.yaml`
+  named a third worktree. A build in a shared scratch path can compile another worktree's
+  sources, and the shim then caches that binary under this worktree's hash. The branch
+  `gate-builds-keep-a-cache-per-worktree` is already changing the shim to a scratch path per
+  worktree.
 - **History.** `~/.cache/swift-harness/bin` holds 97 release builds made on 2026-10-04 by 07:22,
   from 62 worktrees. At about 130 s each, the lock was held for about 3.5 h of those 7.4 h. With
   k gates arriving together, the i-th waits about (i - 1) × 130 s. The case of 8+ minutes at
@@ -199,8 +206,8 @@ A (`main`) and B (`main~8`, 20 source files apart):
   scratch does not help. Every compile command embeds the scratch path, so a clone rebuilds
   everything, and its cloned `ModuleCache` fails with "PCH was compiled with module cache path …".
 
-Recommendation (not implemented): key the scratch by the gate path the stamp already hashes,
-`$cache/build/$key/$config`, and prune scratch directories whose gate path no longer exists.
+Recommendation (not implemented here, and in progress on that branch): key the scratch by the
+gate path the stamp already hashes, `$cache/build/$key/$config`, and prune scratch directories whose gate path no longer exists.
 Saved: the queue wait of about (i - 1) × 130 s per gate in a round. With 3 concurrent gates that
 is about 130 s on average and 260 s at worst, and the thrash rebuild for every later gate in the
 same worktree whose change misses `SwiftGateDomain`. Cost: about 150 s of extra wall time and
