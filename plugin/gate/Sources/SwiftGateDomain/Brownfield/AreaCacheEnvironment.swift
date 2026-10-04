@@ -69,9 +69,8 @@ public struct AreaCacheEnvironment: Sendable, Equatable {
       ]
     case .python:
       [
-        SharedCache(
-          variable: "PIP_CACHE_DIR", directory: "pip",
-          pins: [Pin(file: "pip.conf", key: "cache-dir")]),
+        // pip reads no config file from the repository, so nothing there can pin its cache.
+        SharedCache(variable: "PIP_CACHE_DIR", directory: "pip", pins: []),
         SharedCache(
           variable: "UV_CACHE_DIR", directory: "uv", pins: [Pin(file: "uv.toml", key: "cache-dir")]),
       ]
