@@ -4,8 +4,8 @@
 Status: PROPOSED 2026-10-04. Nothing here is approved. Each choice waits on the user's decisions in §12.
 Amends: the approved simulator QA design (docs/designs/2026-09-28-simulator-qa-design.md), its decision record
 [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), and its plan (docs/plans/2026-09-28-simulator-qa-plan.md), which has not started.
-Why: the user asked to adopt layered validation from their own plugin (prior art: https://github.com/calube/bxb,
-skills kickoff, dispatch and qa at tag v0.4.0), adapted to this harness's QA setup and report format.
+Why: the user asked for layered validation planning and richer QA evidence, fitted to this harness's QA setup and
+report format.
 Read first: this header, §2, §4, §10 (conflicts) and §12 (decisions).
 -->
 
@@ -59,8 +59,8 @@ Each plan carries 1 table. A row maps 1 acceptance criterion to 1 check.
 | `req-save-draft` | flow | `qa/save-draft.flow.json` | `draft-ui` | `validation` |
 | `req-save-draft` | state | `qa/save-draft.state.sh`: reads the stored draft file | `draft-ui` | `validation` |
 
-- **Done when** names a requirement id. bxb numbers criteria `D1`, `D2`; the harness already has `req-<name>` ids
-  that the ledger's `covers` and the run viewer's spec rows use, so the table reuses them (decision 1).
+- **Done when** names a requirement id. The table uses the existing `req-<name>` ids that the ledger's `covers`
+  and the run viewer's spec rows join on (decision 1).
 - **Layer** is a closed enum: `acceptance`, `flow` or `state`.
 - **Runs after** lists ledger task ids. The row runs once every named task has merged.
 - **Writer** is the validation task's id, or the owning task for a 1-task plan.
@@ -106,8 +106,8 @@ A validation task runs beside the first wave, with no deps on the build tasks, a
 | flow steps files and state scripts | a `qa/` folder outside the tracked tree (decision 5) | never |
 
 The edit guard denies a subagent's write outside the repository's checkouts (`guard.subagent-outside-checkouts`)
-and any write into `.git` (`guard.subagent-protected-path`). bxb's work directory outside the repository therefore
-can't hold `qa/` here as it stands. The recommended option writes `qa/` under the validation worktree's own
+and any write into `.git` (`guard.subagent-protected-path`). Because of the edit guard, `qa/` can't sit in a work
+directory outside the repository. The recommended option writes `qa/` under the validation worktree's own
 `.harness/qa/<plan>/`, which no commit carries. The orchestrator then copies it into plan state.
 
 ### 5.2 Proof that a check fails first
@@ -301,8 +301,8 @@ with `--udid`.
 
 | # | Question | Options | Recommendation | Needs |
 |---|---|---|---|---|
-| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) `D1`, `D2` per plan | (a): the ledger and the run viewer already join on them | user |
-| 2 | Which tools run the checks? | (a) `agent-device` batch for flows, the repo's test runner or `curl` with `jq -e` for acceptance, shell for state, all behind `swiftgate qa run`; (b) the same with no `swiftgate` wrapper, as in bxb | (a): every enforcement point calls `swiftgate` | user |
+| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) a separate per-plan numbering, `D1`, `D2` | (a): the ledger and the run viewer already join on them | user |
+| 2 | Which tools run the checks? | (a) `agent-device` batch for flows, the repo's test runner or `curl` with `jq -e` for acceptance, shell for state, all behind `swiftgate qa run`; (b) the same tools called directly, with no `swiftgate` wrapper | (a): every enforcement point calls `swiftgate` | user |
 | 3 | Which evidence kinds? | (a) the approved PNG and tree per step, plus final-pass MP4 and contact sheet, logs, network, trace and app data; (b) (a) without trace; (c) the approved evidence only | (a) | user |
 | 4 | What passes a check? | (a) only `wait` or `is` steps with batch exit 0 plus `sim verify` GREEN, a test pass, or a state exit 0; (b) (a) plus `get` steps | (a): the installed guide says `get` alone isn't proof | user |
 | 5 | Where does `qa/` live? | (a) the validation worktree's `.harness/qa/<plan>/`, copied into plan state by the orchestrator; (b) a tracked `qa/` folder in the repository; (c) plan state in the git common dir, with a new guard exception for the validation agent | (a): no guard change, no second tracked format | user |
