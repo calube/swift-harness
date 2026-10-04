@@ -195,7 +195,7 @@ public struct RunViewReader: RunViewReading {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
     case .livePlan:
-      // A live plan has tasks and assumptions but no requirement list to show.
+      // A live plan names no requirements of its own; its task briefs reach the view separately.
       break
     }
     return state
