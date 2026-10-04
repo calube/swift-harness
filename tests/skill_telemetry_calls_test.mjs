@@ -140,10 +140,13 @@ export function telemetryRuns(files, values, transcripts) {
 // The phase spans each skill opens, with the build run id each names. The run skill's phases
 // before `build start` have no build run yet, so they name the plan slug.
 const SPANS = [
-  [RUN, 'spec-read', '<slug>'], [RUN, 'discover', '<slug>'], [RUN, 'explore', '<slug>'],
+  [RUN, 'spec-read', '<slug>'], [RUN, 'explore', '<slug>'],
   [RUN, 'plan', '<slug>'], [RUN, 'contract', '<slug>'], [RUN, 'final', '<run>'],
   [BUILD, 'final', '<run>'], [SHIP, 'ship', '<run>'],
 ]
+// Phases the run viewer derives from their own events in a skill's run; a span call would draw
+// them twice.
+const DERIVED = [[RUN, 'discover']]
 // A block that hands control away from the skill's own steps: a span still open there never ends.
 const LEAVES = /\bhalts?\b|\bends the run\b/i
 const isSpan = (inv, edge) => inv.words[0] === 'events' && inv.words[1] === 'span' && (!edge || inv.words[2] === edge)
@@ -190,6 +193,11 @@ export function spanCallProblems(files) {
     const start = extractInvocations(files[file] ?? '').find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === phase)
     if (!start) problems.push(`${file}: never starts the \`${phase}\` span`)
     else if (flagValue(start.words, '--build-run') !== run) problems.push(`${file}: the \`${phase}\` span names --build-run ${flagValue(start.words, '--build-run')}, not ${run}`)
+  }
+  for (const [file, phase] of DERIVED) {
+    if (extractInvocations(files[file] ?? '').some(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === phase)) {
+      problems.push(`${file}: starts the \`${phase}\` span the viewer derives from its own events`)
+    }
   }
   for (const [file, text] of Object.entries(files)) {
     for (const { heading, body } of sections(text)) {
@@ -321,14 +329,14 @@ const tests = {
     assert.deepEqual(wrong.map(r => `${r.where}: exit ${r.status} for \`${r.args.join(' ')}\`: ${r.out.trim()}`), [])
   },
 
-  'the run skill times spec-read, discover, explore, plan, contract and final, the build skill final and ship its report, each ended ok and on every halt — catches a phase never timed or a span left open by a halt'() {
+  'the run skill times spec-read, explore, plan, contract and final and leaves discover to its own events, the build skill final and ship its report, each ended ok and on every halt — catches a phase never timed or a span left open by a halt'() {
     assert.deepEqual(spanCallProblems(spanFiles()), [])
   },
 
   'every events span line in the build, run and ship skills runs through the real binary: a start prints a 16-hex id, its end records, and with telemetry off a start prints nothing and exits 0 — catches a flag, phase or outcome the CLI lacks, or a skill reading an opt-out as a failure'() {
     const { starts, pairs, problems } = spanRuns(spanFiles())
     assert.deepEqual(problems, [])
-    assert.ok(starts.length >= 8 && pairs.length >= 10, `only ${starts.length} starts and ${pairs.length} ends`)
+    assert.ok(starts.length >= 7 && pairs.length >= 10, `only ${starts.length} starts and ${pairs.length} ends`)
     withRepository(true, dir => {
       const failures = []
       for (const { where, args } of starts) {
@@ -356,7 +364,7 @@ const tests = {
     })
   },
 
-  'the span call check names a missing phase, a wrong build run, a span never ended ok, a halt that leaves it open and a missing failure rule — catches a check that passes anything'() {
+  'the span call check names a missing phase, a derived phase opened by hand, a wrong build run, a span never ended ok, a halt that leaves it open and a missing failure rule — catches a check that passes anything'() {
     const build = [
       '# Build', '', '## 4. Finish', '',
       '1. `"$SG" events span start --phase final --build-run <slug>`. Not GREEN: halt.', '',
@@ -366,15 +374,17 @@ const tests = {
       '# Run', '', 'Span calls: `events span start` prints the id. Empty output: skip its end. Any other non-zero exit prints 1 line and the step goes on.', '',
       '## 1. Read', '', '`"$SG" events span start --phase spec-read --build-run <slug>`', '',
       'A red read ends the run.', '', '`"$SG" events span end <span> --outcome ok`', '',
+      '## 2. Areas', '', '`"$SG" events span start --phase discover --build-run <slug>`', '',
+      '`"$SG" events span end <span> --outcome ok`', '',
     ].join('\n')
     assert.deepEqual(spanCallProblems({ [BUILD]: build, [RUN]: run, [SHIP]: '# Ship\n' }), [
-      `${RUN}: never starts the \`discover\` span`,
       `${RUN}: never starts the \`explore\` span`,
       `${RUN}: never starts the \`plan\` span`,
       `${RUN}: never starts the \`contract\` span`,
       `${RUN}: never starts the \`final\` span`,
       `${BUILD}: the \`final\` span names --build-run <slug>, not <run>`,
       `${SHIP}: never starts the \`ship\` span`,
+      `${RUN}: starts the \`discover\` span the viewer derives from its own events`,
       `${BUILD}: \`## 4. Finish\` never ends the \`final\` span ok`,
       `${BUILD}: \`## 4. Finish\` leaves its span open at "1. \`"$SG" events span start --phase final --build-run <slug>"`,
       `${RUN}: \`## 1. Read\` leaves its span open at "A red read ends the run."`,

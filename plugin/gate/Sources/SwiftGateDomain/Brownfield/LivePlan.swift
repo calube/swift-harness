@@ -164,8 +164,9 @@ public enum LivePlanError: Error, Sendable, Equatable {
 
 /// Reads `PLAN.md` in the task-section shape the brownfield plan fixes: a `### <task-id>`
 /// heading, a one-line goal, `- Deps: … · Gate: … · Model: … · estLines: …`, then `- Why:`,
-/// `- Scope:`, `- Acceptance:`, `- Out of scope:`, `- Writes:` and others. A list value is the
-/// text after its colon, then each indented `- ` item under it.
+/// `- Scope:`, `- Acceptance:`, `- Out of scope:`, `- Covers:`, `- Writes:` and others. A list
+/// value is the text after its colon, then each indented `- ` item under it. `## Requirements`
+/// lists `- <id>: <title>`; each id needs a task that covers it, and a task covers listed ids only.
 public enum LivePlanParser {
   private struct Section {
     let id: String
@@ -180,6 +181,8 @@ public enum LivePlanParser {
     var current: Section?
     var inAssumptions = false
     var assumptions: [String] = []
+    var inRequirements = false
+    var requirementLines: [String] = []
 
     func close() {
       if let current { sections.append(current) }
@@ -191,17 +194,27 @@ public enum LivePlanParser {
       let trimmed = line.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix("## ") || line.hasPrefix("# ") {
         close()
-        inAssumptions =
+        let heading =
           line.hasPrefix("## ")
-          && trimmed.dropFirst(3).trimmingCharacters(in: .whitespaces).lowercased()
-            == "assumptions"
+          ? trimmed.dropFirst(3).trimmingCharacters(in: .whitespaces).lowercased() : ""
+        inAssumptions = heading == "assumptions"
+        inRequirements = heading == "requirements"
         continue
       }
       if line.hasPrefix("### ") {
         close()
         inAssumptions = false
+        inRequirements = false
         let id = stripTicks(String(trimmed.dropFirst(4)))
         if isTaskID(id) { current = Section(id: id) }
+        continue
+      }
+      if inRequirements {
+        if line.hasPrefix("- ") {
+          requirementLines.append(trimmed)
+        } else if !trimmed.isEmpty, let last = requirementLines.popLast() {
+          requirementLines.append(last + " " + trimmed)
+        }
         continue
       }
       if inAssumptions {
@@ -244,7 +257,43 @@ public enum LivePlanParser {
       guard seen.insert(section.id).inserted else { throw .duplicateTask(section.id) }
       tasks.append(try task(section))
     }
-    return LivePlan(tasks: tasks, assumptions: assumptions)
+    let requirements = try requirements(requirementLines)
+    try checkCovers(tasks, requirements: requirements)
+    return LivePlan(tasks: tasks, assumptions: assumptions, requirements: requirements)
+  }
+
+  /// Each `- <id>: <title>` bullet, the id in the task-id alphabet and optionally in backticks.
+  private static func requirements(_ lines: [String]) throws(LivePlanError)
+    -> [LivePlanRequirement]
+  {
+    var requirements: [LivePlanRequirement] = []
+    var seen: Set<String> = []
+    for line in lines {
+      let body = line.dropFirst(2)
+      guard let colon = body.firstIndex(of: ":") else { throw .invalidRequirement(line: line) }
+      let id = stripTicks(String(body[..<colon]))
+      let title = body[body.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      guard isTaskID(id), !title.isEmpty else { throw .invalidRequirement(line: line) }
+      guard seen.insert(id).inserted else { throw .duplicateRequirement(id) }
+      requirements.append(LivePlanRequirement(id: id, title: title))
+    }
+    return requirements
+  }
+
+  /// Every id a task covers is a listed requirement, and every requirement has a task.
+  private static func checkCovers(
+    _ tasks: [LivePlanTask], requirements: [LivePlanRequirement]
+  ) throws(LivePlanError) {
+    let known = Set(requirements.map(\.id))
+    for task in tasks {
+      for id in task.covers where !known.contains(id) {
+        throw .unknownRequirement(task: task.id, id: id)
+      }
+    }
+    let covered = Set(tasks.flatMap(\.covers))
+    if let uncovered = requirements.first(where: { !covered.contains($0.id) }) {
+      throw .uncoveredRequirement(uncovered.id)
+    }
   }
 
   private static func task(_ section: Section) throws(LivePlanError) -> LivePlanTask {
@@ -305,7 +354,7 @@ public enum LivePlanParser {
       outOfScope: section.fields["out of scope"] ?? [])
     return LivePlanTask(
       id: id, deps: deps, gate: gate, model: model, estLines: estLines, writes: writes,
-      brief: brief)
+      brief: brief, covers: (section.fields["covers"] ?? []).flatMap(list))
   }
 
   private static func list(_ text: String) -> [String] {
@@ -358,7 +407,7 @@ extension LivePlan {
       let old = kept[task.id]
       return LedgerTask(
         id: task.id, deps: task.deps, writeSet: task.writes, gate: task.gate, tests: [],
-        covers: [], estLines: task.estLines, status: old?.status ?? .pending,
+        covers: task.covers, estLines: task.estLines, status: old?.status ?? .pending,
         worktree: old?.worktree ?? worktree(task.id), actualLines: old?.actualLines,
         model: task.model, branch: old?.branch)
     }
@@ -383,7 +432,8 @@ extension LivePlan {
       schemaVersion: 1, slug: slug,
       source: .livePlan(
         PlanFile.LivePlanSource(
-          briefs: Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.brief) }))),
+          briefs: Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0.brief) }),
+          requirements: requirements)),
       surfaceCommit: existing?.surfaceCommit, resume: resume)
   }
 }
