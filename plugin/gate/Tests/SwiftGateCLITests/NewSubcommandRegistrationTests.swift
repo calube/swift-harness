@@ -198,6 +198,13 @@ struct NewSubcommandRegistrationTests {
     ("run", ["run", "spec.md"], "start"),
     ("run start", ["run", "start", "spec.md", "--json"], "start"),
     ("run report", ["run", "report", "example-plan", "--json"], "report"),
+    ("qa run", ["qa", "run"], "run"),
+    (
+      "qa run --after --at-base",
+      ["qa", "run", "--plan", "example-plan", "--after", "example-task", "--at-base", "--json"],
+      "run"
+    ),
+    ("qa adopt", ["qa", "adopt", "../repo-validation", "--json"], "adopt"),
     ("warmup", ["warmup", "--areas", "api,web"], "warmup"),
     (
       "xcode add-file",

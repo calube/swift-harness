@@ -35,6 +35,7 @@ public enum EventPayloadGuard {
     case .build: .enforced
     case .brownfield: .enforced
     case .span: .enforced
+    case .qa: .enforced
     }
   }
 
