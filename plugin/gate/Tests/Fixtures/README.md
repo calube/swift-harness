@@ -1676,3 +1676,40 @@ sha. The streams hold 1 `gate.run`, 11 `gate.step` (every one but `record` with 
 unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/prove-gate`
 matched nothing.
+
+## Run view: a brownfield run's pre-build phases
+
+`RunView/brownfield-prebuild/events/{brownfield,span}.jsonl` are the `brownfield` and `span`
+streams of a real brownfield clone taken from discovery to the final span, for the run view's
+discover and warm-up spans and its folding of the phases before `build start` into the build run.
+Captured 2026-10-04 with Node 22, from a `swiftgate` debug build of this commit's sources.
+
+The clone, made in `mktemp -d`, is an npm workspace with 2 packages, `packages/api` and
+`packages/web`, each with a `test` and a `build` script that exit 0. The spans name the plan slug
+and the build run of `RunView/build-run-1/`, so a reader test can seed that run's plan state
+beside them. From `plugin/gate` after `swift build`:
+
+```sh
+SG=$PWD/.build/debug/swiftgate T=$(mktemp -d) && cd $T && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null && mkdir clone && cd clone
+git init -q -b main
+printf '{"name":"clone","private":true,"workspaces":["packages/*"]}\n' > package.json
+for a in api web; do mkdir -p packages/$a; printf '{"name":"%s","version":"1.0.0","scripts":{"test":"node -e \\"process.exit(0)\\"","build":"node -e \\"process.exit(0)\\""}}\n' $a > packages/$a/package.json; done
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor RUN=20261004T045528Z-58d28c78
+$SG discover --apply      # exit 0, 2 areas, 4 guessed commands
+$SG warmup                # exit 0, every step passed, cold
+for phase in spec-read explore plan contract; do
+  S=$($SG events span start --phase $phase --build-run $SLUG --role orchestrator); sleep 1
+  $SG events span end $S --outcome ok
+done
+F=$($SG events span start --phase final --build-run $RUN --role orchestrator); sleep 1
+$SG events span end $F --outcome ok
+cp .git/swift-harness/events/brownfield.jsonl .git/swift-harness/events/span.jsonl <fixtures>/RunView/brownfield-prebuild/events/
+```
+
+The streams hold 1 `discover.run`, 4 `warmup.run` and 5 spans. The warm-up wrote 1 event per area
+and step, an area's 2 together when the area finished. 4 spans name the slug, as the run skill's
+phases before `build start` do, and `final` names the build run. The capture copied both files
+unedited:
+`grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
+matched nothing.

@@ -40,9 +40,11 @@ Each phase below opens and closes a span the run viewer draws. Opening one with
 calls never stop the run: any other non-zero exit of either prints 1 line for the report, and the
 step goes on without that span.
 
-No build run exists before `build start` in step 7, so the phases before it (spec-read, discover,
-explore, plan and contract) name the plan slug as their `--build-run`: the 1 id the run has from
-launch. `final` runs inside the build run and names `<run>`.
+No build run exists before `build start` in step 7, so the phases before it (spec-read, explore,
+plan and contract) name the plan slug as their `--build-run`: the 1 id the run has from launch.
+The viewer folds them into the plan's first build run. `final` runs inside the build run and
+names `<run>`. Discovery and the warm-up time themselves in `discover.run` and `warmup.run`, so
+they take no span call here.
 
 ## 1. Read the spec
 
@@ -57,8 +59,6 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 2. Pick the areas
 
-Open the phase: `"$SG" events span start --phase discover --build-run <slug>`, kept as `<span>`.
-
 `swiftgate run` already applied discovery. Read the proposal it applied with `"$SG" discover --json`
 and the areas in `<config>`: each `[[areas]]` entry has a `name`, a `root`, a `kind`, its
 commands (`test`, `test_files`, `lint`, `build`, `e2e`) and the source of each (`found`, `guessed`,
@@ -66,8 +66,6 @@ commands (`test`, `test_files`, `lint`, `build`, `e2e`) and the source of each (
 changes a file under its `root`, or a type another touched area reads. Name the touched areas in
 `PLAN.md`'s `## Areas`. Files listed in `<common>/swift-harness/discover/dirty.json` were modified
 before the run started; no task writes them and nothing stages them.
-
-Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 3. Explore and draft at once
 
@@ -118,10 +116,13 @@ Never edit `<config>` by hand.
 Open the phase: `"$SG" events span start --phase plan --build-run <slug>`, kept as `<span>`.
 
 Write `<plan-dir>/PLAN.md` in the shape [`references/plan-shape.md`](references/plan-shape.md)
-fixes: `## Areas`, `## Assumptions` with 1 bullet per reading you made, then 1 `### <task-id>`
-section per task. Read that reference now. It holds the field list, an example, how to derive
+fixes: `## Requirements` with 1 `- req-<name>: <requirement>` bullet per requirement from step 1,
+`## Areas`, `## Assumptions` with 1 bullet per reading you made, then 1 `### <task-id>` section
+per task, whose `- Covers:` names the requirements it serves. Read that reference now. It holds the field list, an example, how to derive
 write sets from each kind's target graph, and the rules a task's write set obeys.
 
+- Every requirement is covered by at least 1 task, and a task covers only listed ids: the import
+  fails naming any id that breaks either rule.
 - Every task gates at `slice` (`Gate: slice`). Leave `Model:` out: the brownfield preset's pinned
   worker model applies.
 - The first task is the contract task (step 6), already done when the plan is imported; every task
