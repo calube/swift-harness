@@ -12,7 +12,9 @@ struct SimSnapCommand: AsyncParsableCommand {
   @Argument(help: "What the step shows, for the step log.")
   var label: String
 
-  @Option(help: "Text the step's tree must hold; sim verify checks it.")
+  @Option(
+    parsing: .unconditional,
+    help: "Text the step's tree must hold, even one starting with '-'; sim verify checks it.")
   var assert: String?
 
   @Argument(help: "The run to capture; this worktree's newest live run when omitted.")

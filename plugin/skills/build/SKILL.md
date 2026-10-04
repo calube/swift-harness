@@ -57,6 +57,20 @@ there is no span: skip its end. Span calls never stop the build: any other non-z
 either prints 1 line for the report, and the step goes on without that span. The run skill times
 the phases before `build start`; this skill has no build run id until then.
 
+## Foreground work
+
+On a cold cache, the first `swiftgate` call builds the binary, which can take minutes. A Bash call
+that outlasts its timeout moves to the background, and a headless session that ends its turn kills
+it with no verdict. So before step 1, warm the binary:
+
+```bash
+"$SG" --version
+```
+
+Give that call, and every `swiftgate` command after it, the Bash tool's `timeout` at 600000, its
+longest. Never pass `run_in_background` to one. The stall watch and the budget timer in the
+reference are the only Bash work this skill sends to the background.
+
 ## 1. Start
 
 1. `"$SG" doctor --session <session>`. A running session keeps the skills and agent prompts it

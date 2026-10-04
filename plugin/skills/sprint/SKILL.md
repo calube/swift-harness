@@ -78,6 +78,19 @@ preflight's push gate and `finish`'s `ready` gate take `--base main`.
 A slice or finish command reads the run from this checkout's run history, so run the gate in this
 checkout, after the commit it judges.
 
+## Foreground work
+
+On a cold cache, the first `swiftgate` call builds the binary, which can take minutes. A Bash call
+that outlasts its timeout moves to the background, and a headless session that ends its turn kills
+it with no verdict. So before step 1, warm the binary:
+
+```bash
+"$SG" --version
+```
+
+Give that call, and every `swiftgate` command after it, the Bash tool's `timeout` at 600000, its
+longest. Never pass `run_in_background` to one.
+
 ## 1. Preflight
 
 1. **Recorded sprint.** `"$SG" sprint status --json`. When `next` isn't `start`, a sprint is in
