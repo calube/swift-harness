@@ -97,7 +97,7 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
     guard !events.isEmpty else { return }
     var accepted: [HarnessEvent] = []
     var dropped: [String] = []
-    for event in events {
+    for event in events.map({ $0.stamped(binary) }) {
       if guardPolicy(event.kind.stream) == .enforced {
         let reason: EventPayloadGuard.Reason?
         do {

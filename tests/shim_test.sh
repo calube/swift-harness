@@ -321,7 +321,7 @@ esac
 # no record of it, the newest cached binary runs. A decoy tells which one ran.
 decoy=ffffffffffffffff
 mkdir -p "$cache/bin/$decoy"
-printf '#!/bin/sh\necho decoy\n' >"$cache/bin/$decoy/swiftgate"
+printf '#!/bin/sh\necho "decoy ${SWIFTGATE_SOURCE_HASH:-unset}"\n' >"$cache/bin/$decoy/swiftgate"
 chmod +x "$cache/bin/$decoy/swiftgate"
 touch "$cache/bin/$decoy/swiftgate"
 pointer=("$cache"/last-good/*)
@@ -341,12 +341,24 @@ newest_out="$(cd "$work/project" && echo "$deny_payload" | PATH="$held_bin:$PATH
   fail "hook with no last-good record exited non-zero"
 rebuild_still_held "a hook with no last-good record"
 stop_rebuild
-[ "$newest_out" = "decoy" ] || fail "with no last-good record the newest cached binary did not run: '$newest_out'"
+# The fallback binary must name its own hash in its events, never the hash still being built.
+[ "$newest_out" = "decoy $decoy" ] ||
+  fail "with no last-good record the newest cached binary did not run, or did not see its own hash: '$newest_out'"
 /bin/rm -rf "$cache/bin/$decoy" "$cache/bin/$cached_hash"
 mv "$cache/bin/$stale" "$cache/bin/$cached_hash"
 printf '%s\n' "$cached_hash" >"${pointer[0]}"
 "$shim" --version >/dev/null 2>"$work/err-restore" || fail "the restored cache did not run"
 [ ! -s "$work/err-restore" ] || fail "the restored cache rebuilt: $(cat "$work/err-restore")"
+
+# The binary the shim execs reads the hash it was cached under from the environment, to name
+# itself in every event it writes. A stand-in under the current hash prints what it was handed.
+mv "$cache/bin/$cached_hash/swiftgate" "$work/real-swiftgate"
+printf '#!/bin/sh\necho "${SWIFTGATE_SOURCE_HASH:-unset}"\n' >"$cache/bin/$cached_hash/swiftgate"
+chmod +x "$cache/bin/$cached_hash/swiftgate"
+seen_hash="$(SWIFTGATE_SOURCE_HASH=stale "$shim" --version)" || fail "the hash stand-in did not run"
+mv -f "$work/real-swiftgate" "$cache/bin/$cached_hash/swiftgate"
+[ "$seen_hash" = "$cached_hash" ] ||
+  fail "the exec'd binary saw SWIFTGATE_SOURCE_HASH '$seen_hash', not its hash $cached_hash"
 
 # A session `swiftgate run` starts with --plugin-dir gives the plugin's hooks a data directory of
 # their own. When it holds only an older binary but the user cache, which the run warmed, holds

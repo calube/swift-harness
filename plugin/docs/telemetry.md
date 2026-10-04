@@ -19,6 +19,8 @@ line and never changes a verdict, an exit code or a report.
 | `agent.usage` | `swiftgate events ingest` | session, agent, role, task, build run, model, message id and time, token counts, cost |
 | `agent.tools` | `swiftgate events ingest` | per agent per 60 s window: session, agent, role, task, build run, window bounds, call counts and summed ms by tool (built-in names; every `mcp__…` tool as `mcp`; any other name only counted), the repository-relative paths file tools named (at most 50), and a count of paths dropped |
 | `judge.decision`, `judge.call` | the judge | see [`judge-audit.md`](judge-audit.md) |
+| every kind, in `source.binary` | the binary `bin/swiftgate` exec'd | `sourceHash`, the 16-hex hash of the sources it built that binary from, set in `SWIFTGATE_SOURCE_HASH`, and `pluginVersion`, the `version` of `.claude-plugin/plugin.json` when it has one. A run without the shim (`swift run`, a test) writes neither. The binary leaves out and names on stderr a value that isn't a hash or a version, so neither ever holds a path, and clears the variable once read so no process it starts claims its hash |
+
 
 ## What's never recorded
 

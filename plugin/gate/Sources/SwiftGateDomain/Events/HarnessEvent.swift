@@ -39,7 +39,12 @@ public struct HarnessEvent: Sendable, Equatable {
 
   /// This event with `binary` in its source, unless its source already names one.
   public func stamped(_ binary: GateBinary?) -> HarnessEvent {
-    self
+    guard let binary, source.binary == nil else { return self }
+    return HarnessEvent(
+      eventID: eventID, parentID: parentID, time: time, runID: runID, head: head, base: base,
+      source: HarnessEventSource(
+        route: source.route, tier: source.tier, hook: source.hook, binary: binary),
+      payload: payload)
   }
 }
 

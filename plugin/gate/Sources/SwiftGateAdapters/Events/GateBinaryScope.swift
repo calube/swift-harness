@@ -15,7 +15,13 @@ public enum GateBinaryReader {
   /// The plugin manifest, under the plugin root.
   public static let manifestPath = ".claude-plugin/plugin.json"
 
+  /// Reads the manifest only when the shim set a hash, so a run without the shim does no IO.
   public static func read(environment: [String: String]) -> GateBinary.Reading {
-    GateBinary.Reading(binary: nil, problems: [])
+    let hash = environment[GateBinary.sourceHashVariable]
+    guard hash?.isEmpty == false, let root = environment[harnessRootVariable], !root.isEmpty
+    else { return GateBinary.read(sourceHash: hash, pluginManifest: nil) }
+    let manifest = URL(filePath: root, directoryHint: .isDirectory).appending(path: manifestPath)
+    return GateBinary.read(
+      sourceHash: hash, pluginManifest: FileManager.default.contents(atPath: manifest.path))
   }
 }
