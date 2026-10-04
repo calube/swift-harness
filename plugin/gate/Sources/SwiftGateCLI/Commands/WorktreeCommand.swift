@@ -52,6 +52,25 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   /// `remove`: why the worktree's events couldn't be copied, and where they were moved instead,
   /// or why that failed too and they were lost.
   var unkeptEvents: UnkeptEvents? = nil
+  /// `create` in a brownfield clone: each node install it ran. Absent when it ran none.
+  var installs: [Install]? = nil
+  /// `create` in a brownfield clone: node areas left without an install, and why.
+  var installNotes: [String]? = nil
+
+  /// 1 node dependency install `create` ran in the new worktree. A failed one leaves the
+  /// worktree created; its area's commands then run as they would without it.
+  struct Install: Sendable, Equatable, Encodable {
+    /// Worktree-relative directory holding the lockfile.
+    let directory: String
+    let manager: NodePackageManager
+    let command: String
+    let areas: [String]
+    let ms: Int
+    let cache: WarmupCache
+    let outcome: WarmupOutcome
+    /// The end of the output when it failed, or why it didn't run.
+    let detail: String?
+  }
 
   struct UnkeptRun: Sendable, Equatable, Encodable {
     let runId: String
@@ -81,7 +100,8 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
 enum WorktreeRun {
   static func create(
     slug: String, task: String, session: String?, git: any Git, workspace: any GitWorkspace,
-    profile: RepositoryProfile = .owned
+    profile: RepositoryProfile = .owned,
+    install: WorktreeNodeInstall.Dependencies = .live()
   ) async -> WorktreeReport {
     let command = "worktree create"
     let context: HeldTask

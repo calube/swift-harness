@@ -7,9 +7,10 @@ import SwiftGateDomain
 /// contract commit lands, merges land and the run's gates run. Both act only for the session
 /// holding the plan's lock.
 enum RunCheckoutRun {
-  static func create(slug: String, session: String?, root: URL, runner: any ProcessRunner)
-    async -> WorktreeReport
-  {
+  static func create(
+    slug: String, session: String?, root: URL, runner: any ProcessRunner,
+    install: WorktreeNodeInstall.Dependencies = .live()
+  ) async -> WorktreeReport {
     let context: Context
     switch await Context.resolve(
       "run checkout create", slug: slug, session: session, root: root, runner: runner)
