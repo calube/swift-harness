@@ -1,4 +1,5 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
@@ -26,6 +27,10 @@ enum QARunRun {
     var runIDSuffix: @Sendable () -> UInt32
     var newEventID: @Sendable () -> String
     var timeout: Duration = QARunRun.checkTimeout
+    /// The device flow rows run on; `nil` leaves every flow row `unverified`.
+    var flows: (any QAFlowSimulating)?
+    /// The plugin root `qa lint` reads the pinned step schemas from.
+    var pluginRoot: URL?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -333,8 +338,102 @@ struct QARunCommand: AsyncParsableCommand {
         },
         newEventID: {
           UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
+        }, flows: LiveQAFlowSimulator(runner: runner),
+        pluginRoot: ProcessInfo.processInfo.environment[QALintRun.harnessRootVariable].map {
+          URL(filePath: $0, directoryHint: .isDirectory)
         }))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
+  }
+}
+
+/// `sim up`, `sim verify` and `sim down` as their commands run them, for the tree a flow row runs
+/// in: the checkout, or a scratch tree at the merge base.
+struct LiveQAFlowSimulator: QAFlowSimulating {
+  let runner: any ProcessRunner
+  let agentDevice: any AgentDevice
+
+  init(runner: any ProcessRunner) {
+    self.runner = runner
+    self.agentDevice = LiveAgentDevice(runner: runner)
+  }
+
+  /// Whether a holder this process started is still running.
+  @Sendable static func isAlive(_ pid: Int32) -> Bool {
+    SimulatorClones.processIsAlive(pid)
+  }
+
+  func up(_ request: QAFlowSimulatorRequest) async -> Result<SimUpStarted, SimUpFailure> {
+    let root = request.worktree
+    let config: Config
+    do {
+      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
+        return .failure(
+          SimUpFailure(rule: .environment, message: "no \(ConfigLoader.fileName) in \(root.path)"))
+      }
+      config = loaded
+    } catch {
+      return .failure(
+        SimUpFailure(rule: .environment, message: "\(ConfigLoader.fileName) doesn't load: \(error)"))
+    }
+    let maxConcurrent = config.simulator.maxConcurrent
+    let dependencies = SimUp.Dependencies(
+      agentDevice: agentDevice,
+      leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+      launcher: DetachedLauncher(), xcodebuild: LiveXcodebuild(runner: runner),
+      simctl: LiveSimctl(
+        runner: runner,
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simulator.simctlTimeoutSeconds))),
+      bundles: AppBundleReader(), git: LiveGit(runner: runner, repositoryRoot: root.path),
+      isAlive: Self.isAlive, terminate: { _ = kill($0, SIGTERM) },
+      slotHolders: {
+        SimUp.liveSlotHolders(
+          lockDirectory: FileCountingLock.defaultDirectory(), capacity: maxConcurrent)
+      }, clock: .continuous(),
+      now: { Date() })  // swiftgate:allow det.date-init — the CLI edge stamps when the run started
+    return await SimUp(dependencies: dependencies).run(
+      SimUp.Request(
+        worktree: root, config: config, scenario: request.scenario, runID: request.runID,
+        simDirectory: request.simDirectory,
+        derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
+        swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
+  }
+
+  func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {
+    let root = request.worktree
+    let checkoutHead: SimCheckoutHead
+    do {
+      let sha = try await LiveGit(runner: runner, repositoryRoot: root.path).revision("HEAD")
+      checkoutHead = sha.map { .commit($0) } ?? .unreadable("HEAD names no commit yet")
+    } catch {
+      checkoutHead = .unreadable(String(describing: error))
+    }
+    let simDirectory = request.simDirectory
+    return SimVerify(
+      dependencies: SimVerify.Dependencies(
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        isAlive: Self.isAlive, clock: .continuous(),
+        now: { Date() })  // swiftgate:allow det.date-init — the history line's finish time
+    ).run(
+      SimVerify.Request(
+        worktree: CanonicalPath.of(root), runID: request.runID, checkoutHead: checkoutHead,
+        simDirectory: { _ in simDirectory },
+        historyFile: StateRootResolver.resolve(worktree: root)
+          .url(RunLayout.historyFile, directoryHint: .notDirectory)))
+  }
+
+  func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {
+    let simDirectory = request.simDirectory
+    return await SimDown(
+      dependencies: SimDown.Dependencies(
+        agentDevice: agentDevice,
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        simctl: LiveSimctl(runner: runner),
+        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
+        isAlive: Self.isAlive, clock: .continuous())
+    ).run(
+      SimDown.Request(
+        worktree: CanonicalPath.of(request.worktree), runID: request.runID,
+        simDirectory: { _ in simDirectory }))
   }
 }

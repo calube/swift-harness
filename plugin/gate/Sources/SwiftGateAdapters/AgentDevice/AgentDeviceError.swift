@@ -34,15 +34,19 @@ public struct AgentDeviceFailure: Sendable, Equatable {
   public var reason: AgentDeviceFailureReason?
   /// Set only when a batch stopped at a step.
   public var failedStep: AgentDeviceBatchStep?
+  /// The failure envelope exactly as printed, kept as evidence; `nil` when the failure was
+  /// built rather than read.
+  public var output: Data?
 
   public init(
     code: AgentDeviceErrorCode, message: String, reason: AgentDeviceFailureReason? = nil,
-    failedStep: AgentDeviceBatchStep? = nil
+    failedStep: AgentDeviceBatchStep? = nil, output: Data? = nil
   ) {
     self.code = code
     self.message = message
     self.reason = reason
     self.failedStep = failedStep
+    self.output = output
   }
 }
 
