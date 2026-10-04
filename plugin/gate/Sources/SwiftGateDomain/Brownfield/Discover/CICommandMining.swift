@@ -56,13 +56,10 @@ public enum CICommandMining {
       }
       let directory = dirname(path)
       for target in makeTargets(text) {
-        let command =
-          directory == "."
-          ? "make \(target.rawValue)" : "make -C \(quote(directory)) \(target.rawValue)"
         candidates.append(
           Candidate(
-            step: target, command: command, directory: directory, kinds: nil, names: [],
-            source: path))
+            step: target, segment: "make \(target.rawValue)", cwd: directory,
+            directory: directory, kinds: nil, names: [], source: path))
       }
     }
     for path in paths where ["justfile", "Justfile", ".justfile"].contains(basename(path)) {
@@ -73,7 +70,7 @@ public enum CICommandMining {
       for recipe in justRecipes(text) {
         candidates.append(
           Candidate(
-            step: recipe, command: inDirectory(directory, "just \(recipe.rawValue)"),
+            step: recipe, segment: "just \(recipe.rawValue)", cwd: directory,
             directory: directory, kinds: nil, names: [], source: path))
       }
     }
@@ -85,31 +82,45 @@ public enum CICommandMining {
       let directory = parts.count == 2 ? "." : parts.dropLast(2).joined(separator: "/")
       candidates.append(
         Candidate(
-          step: step, command: inDirectory(directory, "bin/\(parts[parts.count - 1])"),
+          step: step, segment: "bin/\(parts[parts.count - 1])", cwd: directory,
           directory: directory, kinds: nil, names: [], source: path))
     }
     return candidates.compactMap { candidate in
       guard let area = attribute(candidate, to: areas) else { return nil }
+      if let command = candidate.retarget?(area.root) {
+        return MinedCommand(
+          area: area.name, step: candidate.step, command: command, source: candidate.source)
+      }
+      let command = inDirectory(relative(candidate.cwd, to: area.root), candidate.segment)
+      guard contains(area.root, candidate.cwd) else {
+        return MinedCommand(
+          area: area.name, step: candidate.step, command: command,
+          source: candidate.source + " (runs from the repository root)", confidence: .guessed)
+      }
       return MinedCommand(
-        area: area.name, step: candidate.step, command: candidate.command,
-        source: candidate.source)
+        area: area.name, step: candidate.step, command: command, source: candidate.source)
     }
   }
 
-  /// `areas` with the first mined command for each area and step replacing a guessed value or
-  /// filling a missing one. A value a build file states stays.
+  /// `areas` with the first found mined command for each area and step replacing a guessed value
+  /// or filling a missing one. A value a build file states stays. A guessed mined command, 1 that
+  /// only runs from the repository root, fills a missing step and replaces nothing.
   public static func outrank(_ areas: [ProposedArea], with mined: [MinedCommand])
     -> [ProposedArea]
   {
     areas.map { area in
       var commands = area.commands
       var missing = area.missing
+      let own = mined.filter { $0.area == area.name }
+      let found = own.filter { $0.confidence == .found }
       var settled: Set<AreaStep> = []
-      for command in mined where command.area == area.name {
+      for command in found + own.filter({ $0.confidence == .guessed }) {
         guard settled.insert(command.step).inserted else { continue }
-        if let current = commands[command.step], current.confidence != .guessed { continue }
+        if let current = commands[command.step] {
+          guard current.confidence == .guessed, command.confidence == .found else { continue }
+        }
         commands[command.step] = Sourced(
-          value: command.command, source: command.source, confidence: .found)
+          value: command.command, source: command.source, confidence: command.confidence)
         missing[command.step] = nil
       }
       return area.replacing(commands: commands, missing: missing)
@@ -120,7 +131,10 @@ public enum CICommandMining {
 
   struct Candidate {
     let step: AreaStep
-    let command: String
+    /// The command as CI runs it from `cwd`.
+    let segment: String
+    /// Where CI runs it, repository-relative.
+    let cwd: String
     /// Where the command acts, repository-relative.
     let directory: String
     /// The area kinds whose tool it runs; `nil` for a runner of any kind, such as `make`.
@@ -128,6 +142,9 @@ public enum CICommandMining {
     /// Package names it selects, such as `cargo test -p core`.
     let names: [String]
     let source: String
+    /// The command with its directory flag pointed at the area root it is given, so it runs from
+    /// there; `nil` when it has no directory flag or the flag points outside that root.
+    var retarget: ((String) -> String?)? = nil
   }
 
   static func attribute(_ candidate: Candidate, to areas: [ProposedArea]) -> ProposedArea? {
@@ -260,6 +277,20 @@ public enum CICommandMining {
       }
     }
     return parts.isEmpty ? "." : parts.joined(separator: "/")
+  }
+
+  /// Whether repository-relative `path` is `root` or inside it.
+  static func contains(_ root: String, _ path: String) -> Bool {
+    root == "." || path == root || path.hasPrefix(root + "/")
+  }
+
+  /// Repository-relative `path` as seen from repository-relative `root`, climbing with `..`.
+  static func relative(_ path: String, to root: String) -> String {
+    let parts = path.split(separator: "/").filter { $0 != "." }
+    let base = root.split(separator: "/").filter { $0 != "." }
+    let shared = zip(parts, base).prefix { $0 == $1 }.count
+    let steps = Array(repeating: "..", count: base.count - shared) + parts.dropFirst(shared)
+    return steps.isEmpty ? "." : steps.joined(separator: "/")
   }
 
   static func quote(_ path: String) -> String {
@@ -426,17 +457,18 @@ enum ShellSegments {
     var steps: Set<AreaStep> = []
     var directory = cwd
     var names: [String] = []
+    var directoryFlag: (index: Int, flag: String, inline: Bool, target: String)?
     var index = words.startIndex
     while index < words.endIndex {
       let word = words[index]
       let next = words.index(after: index) < words.endIndex ? words[words.index(after: index)] : nil
       let (flag, inline) = splitFlag(word)
       if directoryFlags.contains(flag) || (flag == "-C" && tool != "git") {
-        guard let value = inline ?? next,
-          let path = CICommandMining.join(
-            cwd, flag == "--manifest-path" ? CICommandMining.dirname(value) : value)
-        else { return nil }
-        directory = path
+        guard let value = inline ?? next, let target = CICommandMining.join(cwd, value) else {
+          return nil
+        }
+        directory = flag == "--manifest-path" ? CICommandMining.dirname(target) : target
+        directoryFlag = (index, flag, inline != nil, target)
         if inline == nil { index = words.index(after: index) }
       } else if nameFlags.contains(flag) {
         guard let value = inline ?? next else { return nil }
@@ -458,9 +490,36 @@ enum ShellSegments {
       index = words.index(after: index)
     }
     guard steps.count == 1, let step = steps.first else { return nil }
-    return CICommandMining.Candidate(
-      step: step, command: CICommandMining.inDirectory(cwd, segment), directory: directory,
-      kinds: kinds, names: names, source: source)
+    var candidate = CICommandMining.Candidate(
+      step: step, segment: segment, cwd: cwd, directory: directory, kinds: kinds, names: names,
+      source: source)
+    if let directoryFlag {
+      candidate.retarget = { root in
+        retarget(allWords, flag: directoryFlag, root: root)
+      }
+    }
+    return candidate
+  }
+
+  /// `words` with the directory flag at `flag.index` rewritten relative to `root`, or removed
+  /// when it names `root` itself, which is where the area runner already runs.
+  private static func retarget(
+    _ words: [String], flag: (index: Int, flag: String, inline: Bool, target: String),
+    root: String
+  ) -> String? {
+    guard CICommandMining.contains(root, flag.target) else { return nil }
+    let path = CICommandMining.relative(flag.target, to: root)
+    let redundant = flag.flag == "--manifest-path" ? path == "Cargo.toml" : path == "."
+    var rewritten = words
+    let span = flag.inline ? flag.index...flag.index : flag.index...(flag.index + 1)
+    let replacement =
+      redundant
+      ? []
+      : flag.inline
+        ? ["\(flag.flag)=\(CICommandMining.quote(path))"]
+        : [flag.flag, CICommandMining.quote(path)]
+    rewritten.replaceSubrange(span, with: replacement)
+    return rewritten.joined(separator: " ")
   }
 
   static let directoryFlags: Set<String> = [
