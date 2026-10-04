@@ -229,10 +229,12 @@ struct DiscoverJVMGoCargoTests {
     let phoenix = try area("phoenix", in: proposal.areas)
     #expect(phoenix.kind == .command)
     #expect(phoenix.source == "mix.exs")
-    #expect(phoenix.commands[.test] == sourced("mix test", ".github/workflows/ci.yml", .found))
+    #expect(
+      phoenix.commands[.test]
+        == sourced("MIX_ENV=test PHX_CI=true mix test", ".github/workflows/ci.yml", .found))
     let installer = try area("phx_new", in: proposal.areas)
     #expect(installer.root == "installer")
-    #expect(installer.commands[.test]?.value == "mix test")
+    #expect(installer.commands[.test]?.value == "MIX_ENV=test PHX_CI=true mix test")
   }
 
   @Test(

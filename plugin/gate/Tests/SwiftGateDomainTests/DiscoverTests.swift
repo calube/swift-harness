@@ -109,7 +109,7 @@ struct DiscoverTests {
     #expect(
       ui.commands[.build]
         == Sourced(
-          value: "npm run build", source: ".github/workflows/release.yaml",
+          value: "flags= npm run build", source: ".github/workflows/release.yaml",
           confidence: .found))
   }
 
@@ -132,7 +132,7 @@ struct DiscoverTests {
     let cliTests = mined.filter {
       $0.area == "cli-js" && $0.step == .test && $0.source == ".github/workflows/test-cli-js.yml"
     }
-    #expect(cliTests.map(\.command) == ["pnpm test"])
+    #expect(cliTests.map(\.command) == ["RUST_BACKTRACE=1 CARGO_PROFILE_DEV_DEBUG=0 pnpm test"])
     #expect(cliTests.map(\.confidence) == [.found])
     let cargoBuilds = mined.filter {
       $0.area == "tauri-cli" && $0.source == ".github/workflows/docker.yml"
@@ -161,7 +161,10 @@ struct DiscoverTests {
 
     let named = try #require(
       mined.first { $0.command.hasSuffix("cargo test --all-features -p polars --test it") })
-    #expect(named.command == "cd ../.. && cargo test --all-features -p polars --test it")
+    #expect(
+      named.command
+        == "cd ../.. && RUSTFLAGS='-C debuginfo=0' RUST_BACKTRACE=1 cargo test --all-features -p polars --test it"
+    )
     #expect(named.confidence == .guessed)
     #expect(
       named.source == ".github/workflows/test-rust.yml (runs from the repository root)")
@@ -187,11 +190,109 @@ struct DiscoverTests {
     let mined = CICommandMining.commands(in: tree, areas: reader.areas(in: tree))
 
     let docs = try #require(
-      mined.first { $0.command.hasPrefix("pytest tests/docs/test_user_guide.py") })
+      mined.first { $0.command.contains("pytest tests/docs/test_user_guide.py") })
     #expect(docs.area == "py-polars")
-    #expect(docs.command == "pytest tests/docs/test_user_guide.py -m docs")
-    #expect(docs.source == ".github/workflows/test-python.yml")
+    #expect(
+      docs.command
+        == "RUSTFLAGS='-C debuginfo=0' RUST_BACKTRACE=1 PYTHONUTF8=1 pytest tests/docs/test_user_guide.py -m docs"
+    )
+    #expect(
+      docs.source
+        == ".github/workflows/test-python.yml (left out CI env: POLARS_IDEAL_MORSEL_SIZE is an expression discover can't resolve, EXTRA_PYTEST_MARKERS is an expression discover can't resolve)"
+    )
     #expect(docs.confidence == .found)
+  }
+
+  @Test(
+    "a CI step's env reaches its mined command, the step's own over the workflow's and the command's own assignment over both — catches env dropped from a mined command"
+  )
+  func minedCommandsCarryStepEnvironment() throws {
+    let tree = try fixtureTree("usememos-memos")
+    let areas = [area(name: "memos", root: ".", language: .go, kind: .go, source: "go.mod")]
+
+    let mined = CICommandMining.commands(in: tree, areas: areas).filter {
+      $0.source == ".github/workflows/backend-tests.yml"
+    }
+
+    #expect(
+      mined.map(\.command) == [
+        "GO_VERSION=1.27.0 DRIVER= go test -v -coverprofile=coverage.out -covermode=atomic ./store/...",
+        "GO_VERSION=1.27.0 DRIVER=sqlite go test -v -race -coverprofile=coverage.out -covermode=atomic ./server/...",
+        "GO_VERSION=1.27.0 DRIVER=sqlite go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/...",
+        "GO_VERSION=1.27.0 DRIVER=sqlite go test -v -race -coverprofile=coverage.out -covermode=atomic  ./cmd/... ./core/... ./markdown/... ./filter/... ./provider/... ./proto/...",
+      ])
+    #expect(mined.allSatisfy { $0.confidence == .found && $0.step == .test })
+  }
+
+  @Test(
+    "a job's env overrides the workflow's for that job's steps only — catches a wider scope winning, or a job's env leaking into another job"
+  )
+  func jobEnvironmentOverridesWorkflow() throws {
+    let tree = try fixtureTree("square-workflow-swift")
+    let areas = [
+      area(name: "samples", root: ".", language: .swift, kind: .xcode, source: "Project.swift")
+    ]
+
+    let tuist = CICommandMining.commands(in: tree, areas: areas).filter {
+      $0.command.contains("tuist test")
+    }
+
+    #expect(
+      tuist.map(\.command) == [
+        "XCODE_VERSION=26.3 TUIST_TEST_DEVICE='iPad (10th generation)' TUIST_TEST_PLATFORM=iOS TUIST_TEST_OS=26.2 TUIST_TEST_SCHEME=SnapshotTests tuist test --path Samples",
+        "XCODE_VERSION=26.3 TUIST_TEST_PLATFORM=iOS TUIST_TEST_DEVICE='iPad Air 11-inch (M3)' tuist test --path Samples/Tutorial TutorialTests",
+      ])
+  }
+
+  @Test(
+    "an env value only CI can resolve is left out of the mined command and named in its source — catches a ${{ }} expression run as a literal, or dropped without a word"
+  )
+  func unresolvableEnvironmentIsNamed() throws {
+    let tree = try fixtureTree("usememos-memos")
+    let areas = [area(name: "memos", root: ".", language: .go, kind: .go, source: "go.mod")]
+
+    let smoke = try #require(
+      CICommandMining.commands(in: tree, areas: areas).first {
+        $0.command.contains("-run 'TestMigration|TestUpgrade|TestFreshInstall'")
+      })
+
+    #expect(
+      smoke.command
+        == "GO_VERSION=1.27.0 NODE_VERSION=24 PNPM_VERSION=11.0.1 go test -v -timeout 30m -run 'TestMigration|TestUpgrade|TestFreshInstall' ./store/test/..."
+    )
+    #expect(
+      smoke.source
+        == ".github/workflows/upgrade-smoke.yml (left out CI env: DRIVER is an expression discover can't resolve)"
+    )
+  }
+
+  @Test(
+    "a secret in a step's env never reaches the mined command, and its source says it was left out — catches a secrets. value leaking into a command"
+  )
+  func secretEnvironmentIsLeftOut() throws {
+    let shopify = try fixtureTree("Shopify-mobile-buy-sdk-ios")
+    let areas = [area(name: "ruby", root: ".", language: .ruby, kind: .command, source: "Gemfile")]
+
+    let lint = try #require(
+      CICommandMining.commands(in: shopify, areas: areas).first {
+        $0.source.hasPrefix(".github/workflows/deploy.yml")
+      })
+
+    #expect(lint.command == "bundle exec pod lib lint --allow-warnings --verbose")
+    #expect(
+      lint.source
+        == ".github/workflows/deploy.yml (left out CI env: COCOAPODS_TRUNK_TOKEN is a secret)")
+    let fixtures = try FileManager.default.contentsOfDirectory(
+      atPath: Fixture.directory.appending(path: "Discover").path)
+    #expect(fixtures.count > 10)
+    for name in fixtures {
+      let tree = try fixtureTree(name)
+      let areas = EcosystemReaders.all.flatMap { $0.areas(in: tree) }
+      for mined in CICommandMining.commands(in: tree, areas: areas) {
+        #expect(!mined.command.contains("secrets."), "\(name): \(mined.command)")
+        #expect(!mined.command.contains("${{"), "\(name): \(mined.command)")
+      }
+    }
   }
 
   @Test(
@@ -238,7 +339,7 @@ struct DiscoverTests {
       Discover.propose(tree: tree, head: "abc", dirty: [], readers: [reader]).areas.first)
 
     #expect(core.commands[.test]?.source == ".github/workflows/release.yaml")
-    #expect(core.commands[.test]?.value == "go test ./...")
+    #expect(core.commands[.test]?.value == "flags= go test ./...")
     #expect(core.missing[.test] == nil)
   }
 

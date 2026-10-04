@@ -1,13 +1,19 @@
 # `PLAN.md` shape
 
 A brownfield run's plan is 1 live file, `<plan-dir>/PLAN.md`. `swiftgate plan import <slug>` turns
-it into the executor's `ledger.json`, and carries each task's goal, `Why`, `Scope`, `Acceptance` and
-`Out of scope` into `plan.json` as the brief the run viewer shows. Anything the importer can't read
+it into the executor's `ledger.json`, with each task's `Covers` as its `covers`, and carries each
+task's goal, `Why`, `Scope`, `Acceptance` and `Out of scope`, and the `## Requirements`, into
+`plan.json` for the run viewer's task drawer and spec rows. Anything the importer can't read
 fails the import and names the task and the line.
 
 ## Sections
 
 - `# <title>`: 1 line naming the change.
+- `## Requirements`: 1 bullet per requirement of the spec, `- <id>: <title>`. The id is lowercase
+  letters, digits and `-`, by convention `req-<name>`; the title is the requirement as 1 sentence
+  a test could check. Every id is covered by at least 1 task's `Covers`, and a `Covers` id that
+  isn't listed here fails the import naming it. A plan with no requirements section has no
+  `Covers` lines.
 - `## Areas`: 1 bullet per touched area: its name, its warm test time from the warm-up, and
   `build-only` when that time exceeds `slice_budget_s`, or `unknown` while the warm-up hasn't
   reached it. The importer ignores this section; the report and the workers read it.
@@ -26,6 +32,7 @@ The line after the heading is the task's one-line goal. Then these bullets, in t
 | `- Scope:` | what it changes, as indented `- ` items | yes |
 | `- Acceptance:` | the tests that fail first and then pass, and the gate, as indented items | yes |
 | `- Out of scope:` | what a worker might expect it to do but it doesn't | yes |
+| `- Covers:` | the `## Requirements` ids it serves, comma-separated | yes, with `## Requirements` |
 | `- Writes:` | its write set: repository-relative paths, comma-separated; a path ending in `/` is a prefix | yes |
 | `- Does:` | anything a worker needs that the bullets above don't say | no |
 | `- Tests:` | the test files it adds or changes | no |
@@ -38,6 +45,11 @@ starts with `/` and never contains `..`.
 
 ```markdown
 # Export the report as CSV
+
+## Requirements
+
+- req-csv-download: A user can download the report as a CSV file
+- req-csv-columns: The file's columns follow the on-screen table, left to right
 
 ## Areas
 
@@ -59,6 +71,7 @@ Declare the export types every task compiles against, with no behaviour.
   - every touched area builds; slice is GREEN
 - Out of scope:
   - any export logic
+- Covers: req-csv-download
 - Writes: api/export/contract/, api/export/handler/
 
 ### report-export-api
@@ -71,6 +84,7 @@ Serve the report as CSV.
   - a handler test for 2 rows fails first, then passes; slice is GREEN
 - Out of scope:
   - the download button
+- Covers: req-csv-download, req-csv-columns
 - Writes: api/export/handler/, api/tests/export/
 ```
 

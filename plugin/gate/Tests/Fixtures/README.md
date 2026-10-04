@@ -254,6 +254,23 @@ literal `Date()` to CounterCore's reducer and stop without fixing) and `pre-tool
 transcript directory `/HOME/.claude/projects/-REPO/`, and every `session_id` the fixed
 `8f2c1d7e-…` the tests key on; nothing else changed.
 
+`pre-tool-use-bash-reviewer-span` is a review agent's span line, captured the same way (Claude
+Code 2.1.288, 2026-10-04) from a scratch git repository with no `.swiftgate.toml`, which changes
+nothing in the payload:
+
+```
+SWIFTGATE_HOOK_RECORD_DIR=<dir> claude -p "Use the Agent tool exactly once, with subagent_type \
+  swift-harness:verifier, and this prompt: 'Run exactly this one Bash command, once, verbatim, \
+  and reply with its output and nothing else: <plugin>/bin/swiftgate events span start --phase \
+  verify --build-run 20261004-capture --task 'reviewer-span' --role review'. Then reply done." \
+  --plugin-dir <plugin> --permission-mode acceptEdits --setting-sources project,local \
+  --output-format stream-json --verbose --include-hook-events
+```
+
+It shows a plugin subagent's PreToolUse carries `agent_id` and `agent_type`
+`swift-harness:verifier`. Scrubbed as above, and the plugin directory became `/PLUGIN`; the JSON
+was re-indented.
+
 The rest (`pre-tool-use-bash-git-commit`, `pre-tool-use-edit-snapshot`,
 `pre-tool-use-write-*`, `post-tool-use-write-markdown`, `session-start-resume`) are still built
 from the documented schema: no live session produced a Write, a subagent or a resume. Tests swap
@@ -1327,6 +1344,17 @@ Then `rm -rf "$R"`, except for the 2 rows below.
 (^|/)(Package(@swift-[0-9.]+)?\.swift|project\.ya?ml|Project\.swift|Workspace\.swift|Tuist\.swift|Tuist/Config\.swift|Tuist/Package\.swift|Cargo\.toml|go\.mod|go\.work|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|gradle\.properties|gradle-wrapper\.properties|libs\.versions\.toml|pom\.xml|maven-wrapper\.properties|package\.json|pnpm-workspace\.yaml|lerna\.json|nx\.json|turbo\.json|rush\.json|\.yarnrc\.yml|pyproject\.toml|setup\.cfg|tox\.ini|pytest\.ini|Gemfile|\.rspec|Rakefile|mix\.exs|CMakeLists\.txt|CMakePresets\.json|(GNU)?[Mm]akefile|[Jj]ustfile|\.gitlab-ci\.yml|[^/]+\.xcscheme|contents\.xcworkspacedata|project\.pbxproj|\.swiftlint\.ya?ml|\.swiftformat|\.swift-format|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.prettierrc(\.[a-z]+)?|ruff\.toml|\.ruff\.toml|\.flake8|\.pylintrc|mypy\.ini|\.rubocop\.yml|\.golangci\.(ya?ml|toml)|\.?clippy\.toml|\.?rustfmt\.toml|detekt(-config)?\.ya?ml|\.editorconfig|\.credo\.exs|\.formatter\.exs|\.clang-format|\.clang-tidy|\.tool-versions|\.?mise\.toml|\.nvmrc|\.node-version|\.python-version|\.ruby-version|rust-toolchain(\.toml)?|\.swift-version|\.xcode-version|\.java-version|\.sdkmanrc|\.go-version|Mintfile)$|(^|/)\.github/workflows/[^/]+\.ya?ml$
 ```
 
+`usememos-memos` (Go, TypeScript; MIT) came later, on 2026-10-04, from the first brownfield trial's pinned clone
+rather than from GitHub. It holds `web/pnpm-workspace.yaml` with pnpm settings and no `packages:` key, and a
+backend workflow whose test step sets `DRIVER` in its own `env:`. Capture it with the commands above, with `R`
+a scratch directory, the commit `0d989707f82c33f74bb852edd8965ec88fcf041b` and, in place of the first 2 lines,
+a clone of that local checkout, which already holds the commit:
+
+```sh
+git clone -q --no-checkout <path to the trial's memos clone> "$R"
+git -C "$R" reset -q 0d989707f82c33f74bb852edd8965ec88fcf041b
+```
+
 The 2 `after-build/` directories are the negative case: build output on disk that git ignores.
 After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
 or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
@@ -1719,3 +1747,40 @@ The sources held no machine path, so no `sed` ran.
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/build-run-2`
 and `grep -rniE 'sk-ant|api[_-]?key|ANTHROPIC|bearer|password|secret|token=' RunView/build-run-2`
 matched nothing. Each `agent.tools` `files` list is empty.
+
+## Run view: a brownfield run's pre-build phases
+
+`RunView/brownfield-prebuild/events/{brownfield,span}.jsonl` are the `brownfield` and `span`
+streams of a real brownfield clone taken from discovery to the final span, for the run view's
+discover and warm-up spans and its folding of the phases before `build start` into the build run.
+Captured 2026-10-04 with Node 22, from a `swiftgate` debug build of this commit's sources.
+
+The clone, made in `mktemp -d`, is an npm workspace with 2 packages, `packages/api` and
+`packages/web`, each with a `test` and a `build` script that exit 0. The spans name the plan slug
+and the build run of `RunView/build-run-1/`, so a reader test can seed that run's plan state
+beside them. From `plugin/gate` after `swift build`:
+
+```sh
+SG=$PWD/.build/debug/swiftgate T=$(mktemp -d) && cd $T && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null && mkdir clone && cd clone
+git init -q -b main
+printf '{"name":"clone","private":true,"workspaces":["packages/*"]}\n' > package.json
+for a in api web; do mkdir -p packages/$a; printf '{"name":"%s","version":"1.0.0","scripts":{"test":"node -e \\"process.exit(0)\\"","build":"node -e \\"process.exit(0)\\""}}\n' $a > packages/$a/package.json; done
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor RUN=20261004T045528Z-58d28c78
+$SG discover --apply      # exit 0, 2 areas, 4 guessed commands
+$SG warmup                # exit 0, every step passed, cold
+for phase in spec-read explore plan contract; do
+  S=$($SG events span start --phase $phase --build-run $SLUG --role orchestrator); sleep 1
+  $SG events span end $S --outcome ok
+done
+F=$($SG events span start --phase final --build-run $RUN --role orchestrator); sleep 1
+$SG events span end $F --outcome ok
+cp .git/swift-harness/events/brownfield.jsonl .git/swift-harness/events/span.jsonl <fixtures>/RunView/brownfield-prebuild/events/
+```
+
+The streams hold 1 `discover.run`, 4 `warmup.run` and 5 spans. The warm-up wrote 1 event per area
+and step, an area's 2 together when the area finished. 4 spans name the slug, as the run skill's
+phases before `build start` do, and `final` names the build run. The capture copied both files
+unedited:
+`grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
+matched nothing.

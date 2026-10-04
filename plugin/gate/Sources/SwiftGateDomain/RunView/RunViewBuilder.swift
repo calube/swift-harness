@@ -10,7 +10,9 @@ public enum RunViewBuilder {
     join.taskOfGateRun.merge(input.workerGateRuns) { named, _ in named }
 
     let times = events.map(\.time) + ledgerEvents.map(\.at)
-    let startedAt = input.join?.record?.startedAt ?? times.min()
+    // A brownfield run starts at its launch, before discovery and its build run.
+    let startedAt = [input.launchedAt, input.join?.record?.startedAt ?? times.min()]
+      .compactMap { $0 }.min()
     let lastTime = times.max()
     let state: RunView.RunState =
       !BuildHalts.open(in: events).isEmpty ? .halted : join.finalGate == nil ? .running : .done
@@ -41,7 +43,9 @@ public enum RunViewBuilder {
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,
       roles: roles(usage),
-      spans: ordered((runSpan.map { [$0] } ?? []) + taskSpans + gates.spans),
+      spans: ordered(
+        (runSpan.map { [$0] } ?? []) + taskSpans + gates.spans
+          + RunViewSpans.brownfieldSpans(events: events, parent: runSpan?.id)),
       gates: gates.gates,
       halts: halts(events),
       damage: damage)

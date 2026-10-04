@@ -28,12 +28,15 @@ public struct RunViewInput: Sendable, Equatable {
   /// Gate runs no ledger event or return names, by run id: a worker's own runs, attributed to the
   /// task whose window holds them.
   public var workerGateRuns: [String: String]
+  /// When `swiftgate run` started a brownfield run, before discovery and the build run; `nil`
+  /// for a run no `swiftgate run` launched.
+  public var launchedAt: Date?
 
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
     ledger: Ledger? = nil, requirements: [RunViewRequirement] = [],
     damage: [RunView.Damage] = [], briefs: [String: RunView.Brief] = [:],
-    workerGateRuns: [String: String] = [:]
+    workerGateRuns: [String: String] = [:], launchedAt: Date? = nil
   ) {
     self.buildRun = buildRun
     self.events = events
@@ -43,5 +46,6 @@ public struct RunViewInput: Sendable, Equatable {
     self.damage = damage
     self.briefs = briefs
     self.workerGateRuns = workerGateRuns
+    self.launchedAt = launchedAt
   }
 }

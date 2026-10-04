@@ -90,6 +90,7 @@ PreToolUse call carries `agent_id`, the hook decides it after the guards above:
 | A write into `.git`, `.claude`, `.vscode` or `.idea`, which Claude Code always asks about | deny (`guard.subagent-protected-path`) |
 | A write outside the repository's checkouts, such as `/tmp` | deny, naming `.harness/tmp/` (`guard.subagent-outside-checkouts`) |
 | A build worker's or fixer's write to the main checkout | deny (`guard.build-agent-main-checkout`) |
+| A reviewer's or verifier's Bash other than 1 `swiftgate events span start\|end`, even outside a project | deny (`guard.reviewer-bash`) |
 | Anything else | allow |
 
 The checkouts are the main checkout and each sibling `<repo>-…` directory whose `.git` is a file.

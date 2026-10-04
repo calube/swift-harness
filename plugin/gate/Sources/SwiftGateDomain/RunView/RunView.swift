@@ -152,6 +152,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     case step
     case specRead = "spec-read"
     case discover
+    /// 1 area's warm-up step, derived from `warmup.run`.
+    case warmup
     case explore
     case plan
     case contract

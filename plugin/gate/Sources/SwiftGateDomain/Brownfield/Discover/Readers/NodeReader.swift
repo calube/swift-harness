@@ -138,8 +138,11 @@ public struct NodeReader: EcosystemReader {
     {
       return globs
     }
-    if let text = ManifestPaths.text(tree, ManifestPaths.join(directory, "pnpm-workspace.yaml")) {
-      return YAMLList.items(under: "packages", in: text)
+    // pnpm also keeps its settings in this file, so 1 with no `packages` list declares nothing.
+    if let text = ManifestPaths.text(tree, ManifestPaths.join(directory, "pnpm-workspace.yaml")),
+      let globs = YAMLList.items(under: "packages", in: text)
+    {
+      return globs
     }
     if let data = tree.read(ManifestPaths.join(directory, "lerna.json")),
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -211,15 +214,17 @@ private struct PackageManager {
 }
 
 /// The items of 1 top-level list in a YAML file such as `pnpm-workspace.yaml`. A line reader, not
-/// a YAML parser: the key at column 0, then its `- item` lines.
+/// a YAML parser: the key at column 0, then its `- item` lines. `nil` when the key isn't there.
 private enum YAMLList {
-  static func items(under key: String, in text: String) -> [String] {
+  static func items(under key: String, in text: String) -> [String]? {
     var items: [String] = []
+    var present = false
     var inside = false
     for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
       let trimmed = line.trimmingCharacters(in: .whitespaces)
       if line.first.map({ !$0.isWhitespace }) == true {
         inside = trimmed.hasPrefix("\(key):")
+        present = present || inside
         continue
       }
       guard inside, trimmed.hasPrefix("- ") else { continue }
@@ -227,7 +232,7 @@ private enum YAMLList {
       if let hash = item.range(of: " #") { item = String(item[..<hash.lowerBound]) }
       items.append(item.trimmingCharacters(in: CharacterSet(charactersIn: "\"' ")))
     }
-    return items
+    return present ? items : nil
   }
 }
 
