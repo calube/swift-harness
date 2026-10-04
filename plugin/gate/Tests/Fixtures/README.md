@@ -2355,6 +2355,28 @@ cp $S/build-events.jsonl $F/build-events.jsonl
 The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
 changes nothing else.
 
+## qa run: a validation table no row of which verified
+
+`QA/aidoku-validation/` holds what the iOS validation trial on `Aidoku/Aidoku` left
+(`evals/results/2026-10-04-brownfield-ios-validation/`, findings 3, 4 and 12). `validation.json`
+is the plan's table: 2 flow rows and 1 state row behind the second. `at-base-report.json` is
+`qa run --at-base`'s report, whose state row ran with no device and read red on a missing
+`QA_SIM_UDID`, and `final-report.json` is the `final` `qa run`'s, 3 of 3 rows `unverified` and
+GREEN. `after-report.json` is `qa run --after download-prompt`'s, with no row to run. From the
+repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation F=plugin/gate/Tests/Fixtures/QA/aidoku-validation
+mkdir -p $F && cp $S/validation.json $F/validation.json
+sed -E 's#/Users/[^/]*/Developer/trials/#/TRIALS/#g' $S/qa-runs/20261004T211326Z-e21553f8/report.json > $F/at-base-report.json
+sed -E 's#/Users/[^/]*/Developer/trials/#/TRIALS/#g' $S/qa-runs/20261004T213430Z-5250c2ac/report.json > $F/final-report.json
+cp $S/qa-runs/20261004T213311Z-fea5f318/report.json $F/after-report.json
+```
+
+The `sed` replaces the trial clone's parent folder in each `sim up` message with `/TRIALS/` and
+changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation`
+matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
