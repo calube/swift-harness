@@ -32,20 +32,32 @@ public struct SimBuildStamp: Codable, Sendable, Equatable {
   /// The uncommitted paths among `paths` that can change the build: all but the harness's own
   /// `.harness/` state, such as the flow files a validation worker writes beside the app.
   public static func buildInputs(_ paths: [String]) -> [String] {
-    paths
+    paths.filter { path in
+      !path.split(separator: "/").dropLast().contains(Substring(RunLayout.treeDirectory))
+    }
   }
 
   /// `container` as the stamp records it.
   public static func containerKey(_ container: XcodebuildContainer) -> String {
-    ""
+    switch container {
+    case .package(let directory): "package:\(directory)"
+    case .project(let path): "project:\(path)"
+    case .workspace(let path): "workspace:\(path)"
+    }
   }
 
   public func encoded() -> Data {
-    Data()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    // Strings, an integer and a string map always encode.
+    return (try? encoder.encode(self)) ?? Data()
   }
 
   /// `nil` for anything that isn't a stamp of the current schema.
   public static func decode(_ data: Data) -> SimBuildStamp? {
-    nil
+    guard let stamp = try? JSONDecoder().decode(SimBuildStamp.self, from: data),
+      stamp.schemaVersion == currentSchemaVersion
+    else { return nil }
+    return stamp
   }
 }

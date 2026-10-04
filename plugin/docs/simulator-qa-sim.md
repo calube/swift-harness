@@ -1,8 +1,16 @@
 # Simulator QA sessions
 
-How `swiftgate sim verify` judges a run's steps and how `swiftgate sim down` ends a run. Flow files
-and validation rows (`qa lint`, `qa run`, `qa adopt`) are in [`simulator-qa.md`](simulator-qa.md).
+How `swiftgate sim up` reuses its build, how `sim verify` judges a run's steps and how `sim down`
+ends a run. Flow files and validation rows (`qa lint`, `qa run`, `qa adopt`) are in
+[`simulator-qa.md`](simulator-qa.md).
 Rule ids are in [`standards.md` § Rule id index](standards.md#rule-id-index).
+
+## sim up builds
+
+`sim up` builds into 1 DerivedData folder per worktree, `derived-data/sim-up/` under its state
+root, and stamps a good build with HEAD and the uncommitted changes outside `.harness/`. A later
+`sim up` with the same stamp installs those products without building, and says so in its
+`sim/build.log`.
 
 ## sim verify
 

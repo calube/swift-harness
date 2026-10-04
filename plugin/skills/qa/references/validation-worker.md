@@ -56,17 +56,25 @@ missing element, a failing step. A check that fails on an import error, a typo, 
 lint finding isn't ready: fix it and run it again before you return.
 
 - **Acceptance**: run the test, or the command, and record the assertion it fails on.
-- **Flow**: build and install the base app only through `swiftgate sim up`, never on a device you
-  pick yourself, then run the steps file as 1 batch and release the device on every path:
+- **Flow**: judge it with the `sim verify` that judges it after the merge, so a red from the
+  screen's audit, an assertion or an app exit shows now, not after its tasks merged. Build and
+  install the base app only through `swiftgate sim up`, never on a device you pick yourself. Drive
+  the steps file as 1 batch on that device, snap the step it stopped at with `--assert` set to the
+  text that step expected, release the device on every path, then judge:
 
   ```bash
   "$SG" sim up --scenario <scenario> --json
   agent-device batch --steps-file .harness/qa/<plan>/<name>.flow.json --udid <udid> --session <session> --on-error stop --json
+  "$SG" sim snap "<the step the batch stopped at>" --assert "<text that step expected>" <runID> --json
   "$SG" sim down <runID> --json
+  "$SG" sim verify <runID> --json
   ```
 
-  Record the failing step's number and message from the batch output.
-- **State**: run the script after its flow's batch, before `sim down`, with `QA_DIR` set to
+  The red run is `sim verify`'s: record its `verdict` and each finding's `rule` and `message`,
+  with the batch's failing step number and message beside them. A batch's output alone is never a
+  red run. Run the flows one after another: a `sim up` at a commit this worktree already built,
+  with the same uncommitted changes, installs that build again instead of building.
+- **State**: run the script after its flow's `sim snap`, before `sim down`, with `QA_DIR` set to
   `.harness/qa/<plan>/` and `QA_SIM_UDID` and `QA_SIM_SESSION` from `sim up`'s JSON, and record
   its exit status and output.
 
