@@ -28,6 +28,11 @@ enum BrownfieldSliceCheck {
     /// The area's warm test time at the base tree `tree`, in milliseconds; `nil` when no warm-up
     /// measured it.
     let warmTestMilliseconds: @Sendable (_ area: BrownfieldArea, _ tree: String) async -> Int?
+    /// `commit`'s first-parent history with each tree, `commit` first, at most
+    /// ``WarmReuse/historyDepth`` entries.
+    let history: @Sendable (_ commit: String) async throws -> [CommitTree]
+    /// The paths that differ between 2 commits.
+    let changedBetween: @Sendable (_ from: String, _ to: String) async throws -> [String]
     /// The judge cascade for 1 candidate, given its file's text.
     let judgeAssertion:
       @Sendable (_ candidate: AssertionCandidate, _ source: String) async -> AssertionJudgement
@@ -50,9 +55,38 @@ enum BrownfieldSliceCheck {
         warmTestMilliseconds: { [layout = merge.layout] area, tree in
           WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?.testMilliseconds
         },
+        history: { commit in try await firstParentHistory(of: commit, root: root) },
+        changedBetween: { [git = merge.git] from, to in
+          try await git.changedFiles(from: from, to: to)
+        },
         judgeAssertion: BrownfieldJudge.assertionJudge(
           BrownfieldJudge.live(merge.config.judge, root: root)),
         deadline: liveDeadline)
+    }
+  }
+
+  /// `git log --first-parent` from `commit`, each line `<commit> <tree>`.
+  private static func firstParentHistory(of commit: String, root: URL) async throws
+    -> [CommitTree]
+  {
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: "git",
+        arguments: [
+          "log", "--first-parent", "--format=%H %T", "-n", "\(WarmReuse.historyDepth)", commit,
+        ],
+        workingDirectory: root.path(percentEncoded: false), timeout: .seconds(60)))
+    guard output.status.isSuccess else {
+      throw BrownfieldCheckSetupError(
+        reason: "git log --first-parent \(commit): \(output.stderr.text)")
+    }
+    return try output.stdout.text.split(separator: "\n").map { line in
+      let fields = line.split(separator: " ")
+      guard fields.count == 2 else {
+        throw BrownfieldCheckSetupError(
+          reason: "git log --first-parent \(commit) printed `\(line)`, not a commit and a tree")
+      }
+      return CommitTree(commit: String(fields[0]), tree: String(fields[1]))
     }
   }
 

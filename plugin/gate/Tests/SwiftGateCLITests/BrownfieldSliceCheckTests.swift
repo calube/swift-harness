@@ -61,6 +61,9 @@ struct BrownfieldSliceCheckTests {
   private static func run(
     _ clone: Clone, areas: [BrownfieldArea], changes: [Change],
     runner: any AreaCommandRunning, warm: [String: Int] = [:],
+    history: [CommitTree] = [CommitTree(commit: "base0", tree: "tree0")],
+    warmByTree: [String: [String: Int]] = [:],
+    changedSince: [String: [String]] = [:],
     judge:
       @escaping @Sendable (AssertionCandidate, String) async
       -> BrownfieldSliceCheck.AssertionJudgement = { _, _ in .asserts },
@@ -86,8 +89,12 @@ struct BrownfieldSliceCheckTests {
         git: git, scratch: scratch, runner: runner,
         readFile: { known[clone.relative($0)] }, deadline: .seconds(5)),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      warmTestMilliseconds: { area, _ in warm[area.name] }, judgeAssertion: judge,
-      deadline: .seconds(5))
+      warmTestMilliseconds: { area, tree in
+        tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]
+      },
+      history: { _ in history },
+      changedBetween: { from, _ in changedSince[from] ?? [] },
+      judgeAssertion: judge, deadline: .seconds(5))
     return try await BrownfieldSliceCheck.run(
       root: clone.root, base: "main",
       context: context ?? GateRun.Context(runID: "run", directory: clone.base),
