@@ -18,10 +18,10 @@ public enum TimeBoxSource: String, Sendable, Codable, CaseIterable {
 /// - ``defaultFinalReserveMin``: 1 merge gate (``CutoffRule/mergeGateSeconds``) plus `final` and
 ///   the report (``CutoffRule/finalAndReportSeconds``), so the cutoff leaves room to land the
 ///   task already gating and still end inside the box.
-/// - ``defaultStopStartsBeforeMin``: the final reserve, plus 3 more merge gates for the up to 3
-///   tasks `max_parallel` lets run at once (6 min), plus 2 min for the last worker to reach its
-///   return after its slice. Starts stop 13 min before the end, so whatever is running then has
-///   8 min to return and merge before the cutoff.
+/// - ``defaultStopStartsBeforeMin``: `final` and the report (3 min), a merge gate for each of the
+///   up to 3 tasks `max_parallel` lets run at once (6 min), and 4 min for the last of them to
+///   finish its slice, review and return. Starts stop 13 min before the end, so whatever is
+///   running then has 8 min before the cutoff to return and merge.
 public struct TimeBoxLimits: Sendable, Equatable, Codable {
   public static let defaultBudgetMin = 45
   public static let defaultStopStartsBeforeMin = 13
@@ -60,10 +60,29 @@ public struct TimeBoxLimits: Sendable, Equatable, Codable {
   /// given `--time-box`. A preset with no budget gets the default box: a one-shot run is never
   /// unbounded. Each reserve is clamped so the reserves nest inside the box.
   public static func resolve(preset: BuildPreset?, override: Int?) -> Resolution {
-    Resolution(
+    let configured = preset.flatMap { $0.timeBudgetMin > 0 ? $0 : nil }
+    let reserve = configured?.stopStartsBeforeMin ?? defaultStopStartsBeforeMin
+    let budget: Int
+    let source: TimeBoxSource
+    let note: String?
+    if let override {
+      (budget, source, note) = (override, .flag, nil)
+    } else if let configured {
+      (budget, source, note) = (configured.timeBudgetMin, .config, nil)
+    } else {
+      budget = defaultBudgetMin
+      source = .default
+      note =
+        "[build.presets.brownfield] "
+        + (preset == nil ? "is missing" : "time_budget_min is 0")
+        + ", and a one-shot run always has a time box: this run gets \(defaultBudgetMin) min"
+    }
+    let stopStarts = min(reserve, budget)
+    return Resolution(
       limits: TimeBoxLimits(
-        budgetMin: 0, stopStartsBeforeMin: 0, finalReserveMin: 0, source: .config),
-      note: nil)
+        budgetMin: budget, stopStartsBeforeMin: stopStarts,
+        finalReserveMin: min(defaultFinalReserveMin, stopStarts), source: source),
+      note: note)
   }
 }
 
@@ -108,14 +127,26 @@ public struct RunTimeBox: Sendable, Equatable, Codable {
   }
 
   public var deadlines: Deadlines {
-    Deadlines(
-      exploreBy: startedAt, planBy: startedAt, contractBy: startedAt, noNewStartsAt: startedAt,
-      cutoffAt: startedAt, endsAt: startedAt)
+    let noNewStarts = limits.budgetMin - limits.stopStartsBeforeMin
+    func at(_ minutes: Int) -> Date { startedAt.addingTimeInterval(Double(minutes) * 60) }
+    return Deadlines(
+      exploreBy: at(min(Self.exploreByMin, noNewStarts)),
+      planBy: at(min(Self.planByMin, noNewStarts)),
+      contractBy: at(min(Self.contractByMin, noNewStarts)), noNewStartsAt: at(noNewStarts),
+      cutoffAt: at(limits.budgetMin - limits.finalReserveMin), endsAt: at(limits.budgetMin))
   }
 
   /// `normal` before starts stop, `no-new-starts` until the cutoff, then `cutoff`.
   public func phase(at now: Date) -> BudgetPhase {
-    .normal
+    let deadlines = deadlines
+    if now >= deadlines.cutoffAt { return .cutoff }
+    if now >= deadlines.noNewStartsAt { return .noNewStarts }
+    return .normal
+  }
+
+  /// Whole seconds from `now` to the box's end; 0 once it has passed.
+  public func secondsLeft(at now: Date) -> Int {
+    max(0, Int(deadlines.endsAt.timeIntervalSince(now).rounded(.down)))
   }
 }
 
@@ -174,7 +205,37 @@ public enum CutoffRule {
   public static func decide(tasks: [CutoffTask], timeBox: RunTimeBox, now: Date)
     -> [CutoffDecision]
   {
-    []
+    let left = timeBox.secondsLeft(at: now)
+    let ends = timeBox.deadlines.endsAt.formatted(.iso8601)
+    var merging = 0
+    return tasks.map { task in
+      switch task.stage {
+      case .notStarted:
+        return CutoffDecision(
+          task: task.id, action: .notStarted,
+          reason: "never started: starts stopped \(timeBox.limits.stopStartsBeforeMin) min "
+            + "before the box ends at \(ends)")
+      case .working:
+        return CutoffDecision(
+          task: task.id, action: .abandon,
+          reason: "still working at the cutoff, \(left) s before the box ends at \(ends); its "
+            + "merge wouldn't fit beside final and the report")
+      case .gating:
+        let available = left - merging
+        guard mergeGateSeconds + finalAndReportSeconds <= available else {
+          return CutoffDecision(
+            task: task.id, action: .abandon,
+            reason: "its merge gate (\(mergeGateSeconds) s) plus final and the report "
+              + "(\(finalAndReportSeconds) s) doesn't fit in the \(available) s left in the box"
+              + (merging > 0 ? " after the merges ahead of it" : ""))
+        }
+        merging += mergeGateSeconds
+        return CutoffDecision(
+          task: task.id, action: .finishMerge,
+          reason: "its merge gate (\(mergeGateSeconds) s) plus final and the report "
+            + "(\(finalAndReportSeconds) s) fits in the \(available) s left in the box")
+      }
+    }
   }
 }
 

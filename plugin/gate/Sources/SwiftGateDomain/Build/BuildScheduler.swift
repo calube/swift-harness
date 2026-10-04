@@ -126,7 +126,8 @@ public enum BuildScheduler {
     required: RequiredTasks, timeBox: RunTimeBox? = nil
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
-    let phase = budgetPhase(preset: preset, startedAt: startedAt, now: now)
+    let phase =
+      timeBox?.phase(at: now) ?? budgetPhase(preset: preset, startedAt: startedAt, now: now)
 
     let doneIDs = Set(ledger.tasks.filter { $0.status == .done }.map(\.id))
     let readyTasks =

@@ -3,7 +3,7 @@
 // Run: node tests/run_viewer_model_test.mjs
 // Regressions caught: a partial that replaces every span, overlapping parallel tasks, a label
 // clipped inside a narrow bar, an open span with no end drawn as zero width, a link list read one
-// way, and activity out of time order.
+// way, activity out of time order, and a header that hides a run's time box.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
@@ -193,6 +193,17 @@ const tests = {
     assert.deepEqual(cards.map((c) => [c.task, c.phase, c.halted, c.stalled]), [['a', 'review', true, false], ['b', 'task', false, false]])
     assert.equal(cards[0].elapsedMs, 4 * 60000)
     assert.equal(cards[0].lastEventMs, Date.parse(at(4)))
+  },
+
+  'the header names a run\'s time box with the times starts stop, the cutoff comes and the box ends, and nothing for a run without one — catches a viewer that hides the box a brownfield run must fit'() {
+    const run = {
+      ...runView().run,
+      timeBox: { budgetMin: 45, source: 'config', startedAt: at(0), noNewStartsAt: at(32), cutoffAt: at(40), endsAt: at(45) },
+    }
+    assert.equal(M.timeBoxText(run), 'box 45 min (config): starts stop 14:32 UTC, cutoff 14:40 UTC, ends 14:45 UTC')
+    assert.equal(M.timeBoxText({ ...run, timeBox: { ...run.timeBox, source: 'flag' } }).slice(0, 23), 'box 45 min (--time-box)')
+    assert.equal(M.timeBoxText(runView().run), null)
+    assert.equal(M.timeBoxText({ ...runView().run, timeBox: null }), null)
   },
 }
 

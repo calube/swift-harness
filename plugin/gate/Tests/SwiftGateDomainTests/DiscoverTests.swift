@@ -534,6 +534,41 @@ struct DiscoverTests {
   }
 
   @Test(
+    "a first discovery writes a 45-minute box with starts stopping 13 minutes before its end — catches a brownfield run with no budget"
+  )
+  func freshPresetHasABox() throws {
+    let config = Discover.config(
+      from: DiscoverProposal(head: "abc", areas: [], dirty: []), keeping: nil)
+
+    let preset = try #require(config.buildPresets["brownfield"])
+    #expect(preset.timeBudgetMin == 45)
+    #expect(preset.stopStartsBeforeMin == 13)
+  }
+
+  @Test(
+    "a rediscovery keeps a user's time_budget_min and stop_starts_before_min, and fills only a brownfield preset that is gone — catches a rediscovery dropping a user's time_budget_min"
+  )
+  func rediscoveryKeepsTheBox() {
+    let proposal = DiscoverProposal(head: "new", areas: [], dirty: [])
+    let edited = BuildPreset(
+      designTier: .none, maxParallel: 2, review: .classified, taskGate: .tier(.slice),
+      mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 60, stopStartsBeforeMin: 20,
+      onDesignConflict: .amend, taskProof: .prove, stallMin: 2)
+    func existing(_ presets: [String: BuildPreset]) -> BrownfieldConfig {
+      BrownfieldConfig(
+        brownfield: BrownfieldSettings(
+          discoveredAt: "old", sliceBudgetSeconds: 30, timeBudgetMinutes: 0, sensitive: []),
+        areas: [], allow: [], buildPresets: presets)
+    }
+
+    let kept = Discover.config(from: proposal, keeping: existing(["brownfield": edited]))
+    let filled = Discover.config(from: proposal, keeping: existing([:]))
+
+    #expect(kept.buildPresets == ["brownfield": edited])
+    #expect(filled.buildPresets["brownfield"]?.timeBudgetMin == 45)
+  }
+
+  @Test(
     "the table prints a row per value with source and confidence, the inclusion of an Xcode area, and a missing line per step — catches a proposal printed without its provenance"
   )
   func tableRows() {

@@ -297,8 +297,18 @@
   // Tasks whose open span has had no event of that task for `stallMin` minutes at `nowMs`.
   const stalls = (view, nowMs, stallMin) => workers(view, nowMs, stallMin).filter((w) => w.stalled).map((w) => w.task);
 
+  // The header's line for a run's time box: its minutes and where they came from, then the clock
+  // times starts stop, the cutoff comes and the box ends. `null` for a run without a box.
+  const clock = (iso) => iso.slice(11, 16) + " UTC";
+  function timeBoxText(run) {
+    const box = run && run.timeBox;
+    if (!box) return null;
+    const from = { config: "config", flag: "--time-box", default: "default" }[box.source] || box.source;
+    return `box ${box.budgetMin} min (${from}): starts stop ${clock(box.noNewStartsAt)}, cutoff ${clock(box.cutoffAt)}, ends ${clock(box.endsAt)}`;
+  }
+
   root.RunViewModel = {
-    apply, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    apply, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

@@ -51,7 +51,9 @@ spec page, or from a brownfield `PLAN.md`'s `## Requirements` and each task's `-
 The page has a header and a span timeline with a 1x, 2x and 4x zoom, where each bar opens a popover with its
 tool summary. Below sit requirements against tasks, a row per changed test `prove` ran, tokens per task and
 role, every gate run, and a footer naming what the reader couldn't read. A running worker's tokens read
-"pending" until its ingest.
+"pending" until its ingest. A `swiftgate run`'s header also names its time box: its minutes, where they came
+from, and the times starts stop, the cutoff comes and the box ends. The cutoff's decisions show as `budget`
+halts, each answered at once: `continue` for the run and for a task let merge, `abandon` for a task dropped.
 
 A red span, a blocked task and a `gate-red` halt say why, in the popover and in more detail in the
 task drawer: see [why a run failed](run-viewer-failures.md).

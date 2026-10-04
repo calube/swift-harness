@@ -331,6 +331,10 @@ last tool call. Options:
 
 ## Time budget
 
+A `run.json` with a `timeBox` belongs to a `swiftgate run`: its box runs from the run's launch, and
+the run skill decides its cutoff by rule with `build cutoff`, asking no one. Everything below is the
+owned build's budget.
+
 With `timeBudgetMin` 0 there is no budget. Otherwise, right after `build start`, start a timer: a
 Bash `/bin/sleep <seconds left until startedAt + timeBudgetMin>` with `run_in_background`, which
 wakes the loop when it exits. `build next` stops listing new starts on its own once `phase` is

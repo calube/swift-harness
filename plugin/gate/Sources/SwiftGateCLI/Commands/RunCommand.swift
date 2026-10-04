@@ -138,6 +138,10 @@ extension RunCommand {
     spec: String, directory: URL, slug requested: String?, timeBox: Int? = nil,
     dependencies: Dependencies
   ) async throws(RunStartError) -> RunPrepared {
+    if let timeBox, timeBox <= 0 {
+      throw RunStartError(
+        message: "--time-box \(timeBox) must be a whole number of minutes above 0")
+    }
     let runner = dependencies.runner
     let tree = GitTrackedTree(runner: runner, directory: directory)
     let root: URL
@@ -186,8 +190,9 @@ extension RunCommand {
         message: "creating the plan dir \(planDirectory.path): \(error.localizedDescription)")
     }
 
-    let clock: RunClock
+    var clock: RunClock
     let discovered: DiscoverCommand.Outcome
+    var notes: [String] = []
     let warmupLog = layout.worktreeRoot.appending(path: "logs/warmup-\(slug).log")
     let warmupPID: Int32?
     var branched = false
@@ -218,6 +223,15 @@ extension RunCommand {
       } catch {
         throw RunStartError(message: "discover --apply: \(describe(error))")
       }
+      // The box needs the preset discovery just wrote, so the clock is written again with it.
+      let box = TimeBoxLimits.resolve(
+        preset: try brownfieldPreset(layout: layout), override: timeBox)
+      if let note = box.note { notes.append(note) }
+      clock = RunClock(
+        started: clock.started, spec: clock.spec, origin: clock.origin,
+        specSource: clock.specSource, planBranch: clock.planBranch, base: clock.base,
+        timeBox: box.limits)
+      try write(try encode(clock), to: planDirectory.appending(path: RunClock.fileName).path)
       guard files.fileExists(atPath: layout.settings.path) else {
         throw RunStartError(
           message: "\(layout.settings.path) wasn't written, so claude would start with no hooks: "
@@ -245,7 +259,21 @@ extension RunCommand {
       planDirectory: planDirectory.path(percentEncoded: false),
       clock: clock, settings: layout.settings.path(percentEncoded: false),
       warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID,
-      notes: discovered.notes)
+      notes: discovered.notes + notes)
+  }
+
+  /// `[build.presets.brownfield]` of the config discovery wrote; `nil` when it defines none.
+  private static func brownfieldPreset(layout: BrownfieldStateLayout) throws(RunStartError)
+    -> BuildPreset?
+  {
+    do {
+      let text = try String(contentsOf: layout.config, encoding: .utf8)
+      return try TOMLConfigDecoder().decodeBrownfield(text).buildPresets[
+        BuildPresetCatalog.brownfieldPresetName]
+    } catch {
+      throw RunStartError(
+        message: "reading \(layout.config.path) for the run's time box: \(error)")
+    }
   }
 
   /// Builds the gate of every plugin `extra` loads with `--plugin-dir`. `claude` starts in the
@@ -528,6 +556,12 @@ struct RunStartCommand: AsyncParsableCommand {
   private func announce(_ prepared: RunPrepared) {
     for note in prepared.notes { report(note) }
     let pid = prepared.warmupPID.map { "pid \($0)" } ?? "pid unknown"
+    if let box = prepared.clock.runTimeBox {
+      report(
+        "run: time box \(box.limits.budgetMin) min (\(box.limits.source.rawValue)); starts stop "
+          + "at \(box.deadlines.noNewStartsAt.formatted(.iso8601)), the box ends at "
+          + box.deadlines.endsAt.formatted(.iso8601))
+    }
     report(
       "run: plan \(prepared.slug) in \(prepared.planDirectory); spec \(prepared.clock.spec) "
         + "(\(prepared.clock.specSource.rawValue)); plan branch \(prepared.clock.planBranch) at "

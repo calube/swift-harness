@@ -123,6 +123,7 @@ enum BuildLoop {
     case .json:
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      encoder.dateEncodingStrategy = .iso8601
       let data: Data?
       if let report = result.report {
         data = try? encoder.encode(report)
@@ -274,11 +275,18 @@ enum BuildStartRun {
           "plan `\(slug)` is \(status.map { "`\($0)`" } ?? "not in the index"); a build starts "
             + "only from `planned`")
       }
+      let startedAt = clock.now()
+      let timeBox: RunTimeBox?
+      switch catalog.profile {
+      case .owned: timeBox = nil
+      case .brownfield:
+        timeBox = try runTimeBox(slug, layout: layout, preset: preset, startedAt: startedAt)
+      }
       let store: BuildRunStore
       do {
         store = try await BuildRunStore.create(
-          plan: slug, presetName: presetName, preset: preset, startedAt: clock.now(), git: git,
-          suffix: suffix)
+          plan: slug, presetName: presetName, preset: preset, startedAt: startedAt, git: git,
+          suffix: suffix, timeBox: timeBox)
       } catch {
         return .blocked(command, slug, "creating the build run: \(error)")
       }
@@ -297,6 +305,40 @@ enum BuildStartRun {
     } catch {
       return .blocked(command, slug, error.message)
     }
+  }
+
+  /// A brownfield build's box: the one `swiftgate run` wrote into the plan's `clock.json`,
+  /// measured from the launch, or, for a plan no run launched, the preset's from now. A brownfield
+  /// build never runs without one.
+  private static func runTimeBox(
+    _ slug: String, layout: PlanStateLayout, preset: BuildPreset, startedAt: Date
+  ) throws(BuildLoopError) -> RunTimeBox {
+    let path: String
+    do {
+      path = try layout.plan(slug).directory + "/" + RunClock.fileName
+    } catch {
+      throw BuildLoopError("invalid plan name `\(slug)`: \(error)")
+    }
+    let data: Data
+    do {
+      data = try Data(contentsOf: URL(filePath: path))
+    } catch CocoaError.fileReadNoSuchFile {
+      return RunTimeBox(
+        startedAt: startedAt,
+        limits: TimeBoxLimits.resolve(preset: preset, override: nil).limits)
+    } catch {
+      throw BuildLoopError("reading \(path) for the run's time box: \(error)")
+    }
+    let launched: RunClock
+    do {
+      launched = try RunClock.decode(data)
+    } catch {
+      throw BuildLoopError("\(path) doesn't decode, so the run's time box is unknown: \(error)")
+    }
+    return launched.runTimeBox
+      ?? RunTimeBox(
+        startedAt: launched.started,
+        limits: TimeBoxLimits.resolve(preset: preset, override: nil).limits)
   }
 
   /// Copies the returns `plan import` recorded before any run existed, such as a brownfield

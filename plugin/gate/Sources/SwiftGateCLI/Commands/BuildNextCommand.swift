@@ -137,9 +137,10 @@ enum BuildNextRun {
         }
       }
       let running = Set(ledger.tasks.filter { $0.status == .inProgress }.map(\.id))
+      let now = clock.now()
       let result = BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
-        now: clock.now(), required: required)
+        now: now, required: required, timeBox: record.timeBox)
       let notDone = Set(ledger.tasks.filter { $0.status != .done }.map(\.id))
       let report = BuildNextReport(
         runId: runID, phase: result.phase, toStart: result.toStart, running: result.running,
@@ -148,7 +149,14 @@ enum BuildNextRun {
         },
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
-        }, stallMin: record.preset.stallMin, timeBox: nil)
+        }, stallMin: record.preset.stallMin,
+        timeBox: record.timeBox.map { box in
+          let deadlines = box.deadlines
+          return BuildNextReport.TimeBox(
+            noNewStartsAt: deadlines.noNewStartsAt, cutoffAt: deadlines.cutoffAt,
+            endsAt: deadlines.endsAt,
+            secondsToCutoff: max(0, Int(deadlines.cutoffAt.timeIntervalSince(now).rounded(.up))))
+        })
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
         message: "phase \(result.phase.rawValue)")
@@ -170,6 +178,9 @@ enum BuildNextRun {
       var line =
         "build next: run \(report.runId), phase \(report.phase.rawValue); start: "
         + "\(list(report.toStart)); running: \(list(report.running))"
+      if let box = report.timeBox {
+        line += "; \(box.secondsToCutoff) s to the cutoff"
+      }
       if !report.refused.isEmpty {
         line +=
           "; refused: "
