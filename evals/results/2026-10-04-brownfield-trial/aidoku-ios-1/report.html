@@ -1,0 +1,1769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Viewer</title>
+<style>
+/* Layout: summary header, optional module panels, full-width flame timeline in its own scroller, then a 2-column grid of spec, proof, tokens and gates that stacks at phone width. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --sunken: #eef0f4;
+  --line: #dde1e8;
+  --fg: #11181c;
+  --muted: #5d6673;
+  --accent: #006fee;
+  --accent-soft: #e6f1fe;
+  --ok: #12a150;
+  --ok-soft: #e8faf0;
+  --warn: #c4841d;
+  --warn-soft: #fefce8;
+  --bad: #d31248;
+  --bad-soft: #fee7ef;
+  --bar-phase: #7c8a9e;
+  --bar-task: #3b82f6;
+  --bar-worker: #60a5fa;
+  --bar-review: #8b9dc3;
+  --bar-gate: #12a150;
+  --bar-red: #d31248;
+  --bar-merge: #11181c;
+  --bar-text: #ffffff;
+  --label-1: #7c3aed; --label-2: #0e9f9a; --label-3: #d97706; --label-4: #db2777; --label-5: #2563eb;
+  --shadow: rgba(16, 24, 40, .22);
+  --scrim: rgba(17, 24, 28, .32);
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0d10; --surface: #15181d; --sunken: #1d2128; --line: #2a2f38;
+    --fg: #ecedee; --muted: #9aa3ae; --accent: #338ef7; --accent-soft: #10253e;
+    --ok: #17c964; --ok-soft: #0e2a1b; --warn: #f5a524; --warn-soft: #2e2208;
+    --bad: #f31260; --bad-soft: #3a0d1c;
+    --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
+    --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0d10; --surface: #15181d; --sunken: #1d2128; --line: #2a2f38;
+  --fg: #ecedee; --muted: #9aa3ae; --accent: #338ef7; --accent-soft: #10253e;
+  --ok: #17c964; --ok-soft: #0e2a1b; --warn: #f5a524; --warn-soft: #2e2208;
+  --bad: #f31260; --bad-soft: #3a0d1c;
+  --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
+  --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45;
+  padding-inline: 16px; padding-block: 20px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.wrap > * { min-width: 0; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+.num { font-variant-numeric: tabular-nums; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 12px; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.panel > *, .cols > * { min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px; min-width: 0; display: grid; gap: 12px; align-content: start; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.info { background: var(--accent-soft); color: var(--accent); }
+.chip.plain { background: var(--sunken); color: var(--muted); }
+.chip.plain::before { display: none; }
+
+/* header */
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.head .meta { color: var(--muted); overflow-wrap: anywhere; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; }
+.stat { background: var(--sunken); border-radius: var(--radius-md); padding: 10px 12px; }
+.stat b { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+
+/* timeline */
+.tl-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.tl-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tl { position: relative; min-width: 900px; }
+.tl-row { display: grid; grid-template-columns: 190px 1fr; height: 24px; align-items: center; border-bottom: 1px solid var(--sunken); }
+.tl-row:last-child { border-bottom: 0; }
+.tl-label { position: sticky; left: 0; z-index: 2; background: var(--surface); height: 100%; display: flex; align-items: center; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; border-right: 1px solid var(--line); }
+.tl-track { position: relative; height: 100%; }
+.bar { position: absolute; top: 3px; height: 17px; border-radius: 4px; color: var(--bar-text); font-size: 11px; line-height: 17px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 0; cursor: pointer; font-family: var(--font-ui); text-align: left; }
+.bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bar.sel { box-shadow: 0 0 0 2px var(--fg); }
+/* Bars too narrow for their label drop the text; the title and popover still carry it. */
+.bar.notext { font-size: 0; padding: 0; }
+/* An open span is cut at the run's last event; the hatched end says it never closed. */
+.bar.open { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, .28) 6px 9px); }
+.axis { height: 26px; }
+.axis .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); font-size: 11px; color: var(--muted); padding: 5px 0 0 4px; font-variant-numeric: tabular-nums; }
+.grid-lines { position: absolute; inset: 26px 0 0 190px; pointer-events: none; }
+.grid-lines i { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--sunken); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.tl-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+.zoom { display: inline-flex; background: var(--sunken); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+.zoom button { border: 0; background: transparent; color: var(--muted); font: 600 12px/1 var(--font-ui); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.zoom button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* span popover: anchored to the clicked bar; a bottom sheet at phone width */
+.pop { position: fixed; z-index: 20; top: 0; left: 0; width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 520px); overflow-y: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 12px 32px var(--shadow); padding: 12px 14px 14px; display: grid; gap: 10px; }
+.pop[hidden] { display: none; }
+.pop-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.pop-head h3 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.pop-close { flex: none; border: 0; background: var(--sunken); color: var(--muted); width: 26px; height: 26px; border-radius: 50%; font-size: 16px; line-height: 1; cursor: pointer; }
+.pop-close:hover { color: var(--fg); }
+.pop-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pop dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.pop dt { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding-top: 2px; }
+.pop dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pop h4 { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.pop-tools { display: grid; gap: 8px; border-top: 1px solid var(--sunken); padding-top: 10px; }
+.pop-files { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.pop-files li { font-family: var(--font-mono); font-size: 11px; overflow-wrap: anywhere; }
+.pop-files li.more { font-family: var(--font-ui); color: var(--muted); }
+.pop .sub { color: var(--muted); font-size: 12px; margin: 0; }
+/* why a span failed: the gate's tiers, gating findings and failing tests */
+.pop-fail { display: grid; gap: 6px; border-top: 1px solid var(--sunken); padding-top: 10px; }
+.pop-fail p, .dr-card .fail-line, .gate-fail p { margin: 0; }
+.fail-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.fail-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.fail-list li { display: grid; gap: 2px; min-width: 0; }
+.fail-list li.more { color: var(--muted); font-size: 12px; }
+.fail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.fail-head .mono, .fail-msg .mono { overflow-wrap: anywhere; }
+.fail-msg { font-size: 12px; color: var(--fg); overflow-wrap: anywhere; }
+.pop code, .gate code { font-family: var(--font-mono); font-size: 11px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.dr-fail { display: grid; gap: 6px; border-top: 1px solid var(--sunken); padding-top: 10px; }
+.gate-fail { display: grid; gap: 6px; }
+@media (max-width: 520px) {
+  .pop { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 75vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; border-bottom: 0; padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* grids and tables */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.tbl-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--sunken); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td .sub { color: var(--muted); font-size: 12px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { font-family: var(--font-mono); font-size: 11px; background: var(--sunken); border-radius: var(--radius-sm); padding: 1px 6px; }
+
+/* tokens */
+.tok-row { display: grid; grid-template-columns: 110px 1fr 70px; gap: 10px; align-items: center; font-size: 13px; }
+.tok-bar { display: flex; height: 12px; border-radius: 4px; overflow: hidden; background: var(--sunken); }
+.tok-bar i { display: block; height: 100%; }
+.tok-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.tok-legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+
+/* gates */
+.gate { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 8px; }
+.gate-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; }
+.step { font-size: 11px; border-radius: var(--radius-sm); padding: 2px 7px; background: var(--ok-soft); color: var(--ok); font-variant-numeric: tabular-nums; }
+.step.red { background: var(--bad-soft); color: var(--bad); }
+
+footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+footer .damage-line { color: var(--bad); flex-basis: 100%; overflow-wrap: anywhere; }
+
+/* task drawer: a ticket view that slides in from the right; a full-height sheet at phone width */
+html.drawer-open { overflow: hidden; }
+.scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s linear .2s; }
+.scrim.open { opacity: 1; visibility: visible; transition: opacity .2s; }
+.drawer { position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--bg); color: var(--fg); border-left: 1px solid var(--line); box-shadow: -16px 0 40px var(--shadow); overflow-y: auto; overscroll-behavior: contain; transform: translateX(100%); visibility: hidden; transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s; }
+.drawer.open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+.dr-head { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
+.dr-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); min-width: 0; }
+.dr-kicker .mono { font-weight: 500; overflow-wrap: anywhere; }
+.dr-title { grid-column: 1 / -1; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.dr-body { padding: 16px 20px 32px; display: grid; gap: 12px; }
+.dr-body > * { min-width: 0; }
+.dr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.dr-card h4, .dr-fold summary { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.dr-card p { margin: 0; overflow-wrap: anywhere; }
+.dr-ref { color: var(--muted); font-size: 13px; }
+.dr-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.dr-list li::marker { color: var(--muted); }
+.drawer code { font-family: var(--font-mono); font-size: 12px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.props { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px 12px; font-size: 13px; align-items: baseline; }
+.props dt { color: var(--muted); }
+.props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.props dd.block { display: block; }
+.muted { color: var(--muted); }
+.drawer .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.label-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.label-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.drawer summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; border-radius: 4px; }
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
+.drawer details[open] > summary::before { transform: rotate(45deg); }
+.drawer summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws summary { font-variant-numeric: tabular-nums; }
+.ws .pop-files { margin-top: 6px; }
+.dr-fold[open] { gap: 12px; }
+.dr-fold:not([open]) { gap: 0; }
+.links { display: grid; gap: 6px; }
+.link-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; }
+.link-row > span { color: var(--muted); }
+.link-btn { font: inherit; color: var(--fg); text-align: left; background: var(--sunken); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.link-btn:hover { border-color: var(--line); }
+.link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.link-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.link-btn .mono { flex: none; font-weight: 600; }
+.link-btn .goal { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.act { list-style: none; margin: 0; padding: 0; display: grid; }
+.act li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; position: relative; padding-bottom: 14px; font-size: 13px; }
+.act li:last-child { padding-bottom: 0; }
+.act li::before { content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 1px; background: var(--line); }
+.act li:last-child::before { display: none; }
+.act .dot { width: 9px; height: 9px; border-radius: 50%; margin: 5px 0 0 2px; background: var(--c, var(--muted)); }
+.act .ev { min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.act .ev .sub { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.act time { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .drawer { width: 100%; border-left: 0; transform: translateY(100%); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  .dr-head { padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px; }
+  .dr-body { padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .dr-card { padding: 12px 14px; }
+}
+@media (max-width: 520px) {
+  .tok-row { grid-template-columns: 84px 1fr 58px; }
+  .tl-row { grid-template-columns: 132px 1fr; }
+  .grid-lines { left: 132px; }
+  .tl-label { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* now strip (live mode) and the failed-poll line */
+.now-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.now-card { background: var(--sunken); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 4px; border-left: 3px solid var(--accent); min-width: 0; }
+.now-card.stalled { border-left-color: var(--warn); }
+.now-card.halted { border-left-color: var(--bad); }
+.now-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.now-top b { overflow-wrap: anywhere; }
+.now-stage { display: flex; justify-content: space-between; gap: 8px; }
+.now-card .sub, .now .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.now-note { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.live-error { color: var(--bad); background: var(--bad-soft); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; }
+
+</style>
+<style>
+/* board: 6 lanes that scroll horizontally inside their own box */
+.board-scroll { overflow-x: auto; border-radius: var(--radius-md); }
+.board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.board { display: grid; grid-template-columns: repeat(6, minmax(176px, 1fr)); gap: 8px; }
+.lane { background: var(--sunken); border-radius: var(--radius-md); padding: 8px; display: grid; gap: 8px; align-content: start; min-height: 150px; min-width: 0; }
+.lane.blocked { background: transparent; border: 1px dashed var(--line); }
+.lane-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 2px 2px 0; }
+.lane-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 14px 4px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }
+.card { font: inherit; text-align: left; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line)); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; gap: 6px; cursor: pointer; width: 100%; min-width: 0; transition: box-shadow .12s; }
+.card:hover { box-shadow: 0 0 0 1px var(--muted); }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card.sel { box-shadow: 0 0 0 2px var(--fg); }
+.card-top, .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.card-id { font-family: var(--font-mono); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.card-meta .num { color: var(--muted); font-size: 12px; }
+.board-note { margin: 0; color: var(--muted); font-size: 12px; }
+.card-none { color: var(--muted); font-size: 12px; }
+
+</style>
+<style>
+/* plan graph: layered left to right, scrolls inside its own box at narrow widths */
+.graph-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.graph-scroll:empty { display: none; }
+.graph-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.graph { display: block; width: 100%; height: auto; }
+.graph .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .75; }
+.graph .edge.stage { stroke-dasharray: 4 3; }
+.graph .arrow { fill: var(--muted); }
+.gnode { cursor: pointer; outline: none; --sc: var(--muted); --sf: var(--surface); }
+.gnode .box { fill: var(--sf); stroke: var(--sc); stroke-width: 1.5; }
+.gnode.stage .box { stroke-dasharray: 5 3; }
+.gnode .dot { fill: var(--sc); }
+.gnode .gid { fill: var(--fg); font: 600 12px var(--font-mono); }
+.gnode .gsub { fill: var(--muted); font: 11px var(--font-ui); font-variant-numeric: tabular-nums; }
+.gnode:hover .box { stroke-width: 2.5; }
+.gnode:focus-visible .box { stroke: var(--accent); stroke-width: 3; }
+.gnode.sel .box { stroke: var(--fg); stroke-width: 2.5; }
+.gnode.ln-merged { --sc: var(--ok); --sf: var(--ok-soft); }
+.gnode.ln-building { --sc: var(--accent); --sf: var(--accent-soft); }
+.gnode.ln-gating { --sc: var(--warn); --sf: var(--warn-soft); }
+.gnode.ln-review { --sc: var(--bar-review); --sf: color-mix(in srgb, var(--bar-review) 16%, var(--surface)); }
+.gnode.ln-blocked { --sc: var(--bad); --sf: var(--bad-soft); }
+.graph-notes:empty { display: none; }
+.graph-notes .damage-line { margin: 0 0 8px; }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="panel" aria-label="Run summary">
+    <div class="head">
+      <h1 id="title">Run</h1>
+      <span class="chip plain" id="state"></span>
+      <span class="chip plain">Report</span>
+    </div>
+    <div class="head"><div class="meta mono" id="meta"></div></div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section class="panel" aria-label="Plan graph" data-module="graph" hidden></section>
+  <section class="panel" aria-label="Board" data-module="board" hidden></section>
+
+  <section class="panel" aria-label="Timeline">
+    <div class="head" style="justify-content:space-between">
+      <h2>Timeline</h2>
+      <div class="tl-controls">
+      <div class="zoom" role="group" aria-label="Timeline zoom" id="zoom">
+        <button type="button" data-z="1" aria-pressed="true">1x</button>
+        <button type="button" data-z="2" aria-pressed="false">2x</button>
+        <button type="button" data-z="4" aria-pressed="false">4x</button>
+      </div>
+      <div class="legend">
+        <span style="--c:var(--bar-phase)">phase</span>
+        <span style="--c:var(--bar-task)">task</span>
+        <span style="--c:var(--bar-worker)">worker</span>
+        <span style="--c:var(--bar-review)">review</span>
+        <span style="--c:var(--bar-gate)">gate GREEN</span>
+        <span style="--c:var(--bar-red)">gate RED</span>
+        <span style="--c:var(--bar-merge)">merge</span>
+      </div>
+      </div>
+    </div>
+    <div class="tl-scroll" id="tl-scroll" tabindex="0" aria-label="Timeline, scrolls horizontally"><div class="tl" id="tl"></div></div>
+  </section>
+
+  <div class="pop" id="pop" role="dialog" aria-modal="false" aria-labelledby="pop-title" hidden>
+    <div class="pop-head"><h3 id="pop-title"></h3><button type="button" class="pop-close" aria-label="Close span details">×</button></div>
+    <div id="pop-body" style="display:grid;gap:10px"></div>
+  </div>
+
+  <div class="cols">
+    <section class="panel" aria-label="Spec mapping">
+      <h2>Spec to tasks, commits and gates</h2>
+      <div class="tbl-scroll"><table id="spec"></table></div>
+    </section>
+    <section class="panel" aria-label="Proof">
+      <h2>Proof for each changed test</h2>
+      <div class="tbl-scroll"><table id="proof"></table></div>
+    </section>
+    <section class="panel" aria-label="Tokens and time">
+      <h2>Tokens and time</h2>
+      <div class="tok-legend">
+        <span style="--c:var(--accent)">input</span>
+        <span style="--c:var(--bar-review)">cache read</span>
+        <span style="--c:var(--warn)">cache write</span>
+        <span style="--c:var(--ok)">output</span>
+      </div>
+      <div id="tokens" style="display:grid;gap:8px"></div>
+      <h2 style="margin-top:6px">By role</h2>
+      <div id="roles" style="display:grid;gap:8px"></div>
+    </section>
+    <section class="panel" aria-label="Gate runs">
+      <h2>Gate runs</h2>
+      <div id="gates" style="display:grid;gap:8px"></div>
+    </section>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="scrim" id="drawer-scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title" inert>
+  <header class="dr-head">
+    <div class="dr-kicker"><span class="mono" id="dr-id"></span><span class="chip" id="dr-status"></span></div>
+    <button type="button" class="pop-close dr-close" aria-label="Close task">×</button>
+    <h3 class="dr-title" id="dr-title"></h3>
+  </header>
+  <div class="dr-body" id="dr-body"></div>
+</aside>
+
+<script type="application/json" id="run-view">{"cursor":null,"damage":[],"gates":[{"command":"check slice","failure":null,"ms":104972,"ruleCounts":{"area.build-only":1},"runId":"20261004T173730Z-e09dedfe","steps":[{"ms":1,"startMs":898,"step":"neutral","tier":null,"verdict":"GREEN"},{"ms":1,"startMs":900,"step":"xcode-membership","tier":null,"verdict":"GREEN"},{"ms":429,"startMs":904,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":103621,"startMs":1335,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":0,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"summary-contract","tests":null,"verdict":"GREEN"},{"command":"check slice","failure":null,"ms":5627,"ruleCounts":{"area.build-only":1},"runId":"20261004T174200Z-11a8b3f1","steps":[{"ms":9,"startMs":282,"step":"neutral","tier":null,"verdict":"GREEN"},{"ms":0,"startMs":292,"step":"xcode-membership","tier":null,"verdict":"GREEN"},{"ms":196,"startMs":292,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":5121,"startMs":489,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":0,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"summary-logic","tests":null,"verdict":"GREEN"},{"command":"check slice","failure":null,"ms":5433,"ruleCounts":{"area.build-only":1},"runId":"20261004T174216Z-5932bd4d","steps":[{"ms":10,"startMs":259,"step":"neutral","tier":null,"verdict":"GREEN"},{"ms":110,"startMs":270,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":5004,"startMs":381,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":1,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"summary-row","tests":null,"verdict":"GREEN"},{"command":"check merge","failure":null,"ms":149860,"ruleCounts":{"prove.summary":2},"runId":"20261004T174242Z-c6897717","steps":[{"ms":11209,"startMs":141,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":54872,"startMs":11350,"step":"area-test","tier":null,"verdict":"GREEN"},{"ms":119,"startMs":66223,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":83469,"startMs":66343,"step":"prove","tier":null,"verdict":"GREEN"},{"ms":4,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"summary-logic","tests":null,"verdict":"GREEN"},{"command":"check merge","failure":null,"ms":270711,"ruleCounts":{"prove.summary":2},"runId":"20261004T174531Z-4a491e54","steps":[{"ms":103220,"startMs":778,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":58758,"startMs":103998,"step":"area-test","tier":null,"verdict":"GREEN"},{"ms":138,"startMs":162757,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":107784,"startMs":162895,"step":"prove","tier":null,"verdict":"GREEN"},{"ms":1,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":"summary-row","tests":null,"verdict":"GREEN"},{"command":"check final","failure":null,"ms":236734,"ruleCounts":{"prove.summary":2},"runId":"20261004T175029Z-80ecc488","steps":[{"ms":56422,"startMs":552,"step":"area-build","tier":null,"verdict":"GREEN"},{"ms":88637,"startMs":56975,"step":"area-test","tier":null,"verdict":"GREEN"},{"ms":104,"startMs":145613,"step":"area-lint","tier":null,"verdict":"GREEN"},{"ms":90988,"startMs":145718,"step":"prove","tier":null,"verdict":"GREEN"},{"ms":1,"startMs":null,"step":"record","tier":null,"verdict":"GREEN"}],"task":null,"tests":null,"verdict":"GREEN"}],"halts":[],"proofs":[{"assertion":null,"gateRun":"20261004T174242Z-c6897717","outcome":"proven","proofBase":"3091ef26e593d303e34afed70bc8c5997c105f80","task":"summary-logic","test":"AidokuTests/DownloadQueueSummaryTests.swift"},{"assertion":null,"gateRun":"20261004T174531Z-4a491e54","outcome":"proven","proofBase":"3091ef26e593d303e34afed70bc8c5997c105f80","task":"summary-row","test":"AidokuTests/DownloadQueueSummaryTests.swift"},{"assertion":null,"gateRun":"20261004T175029Z-80ecc488","outcome":"proven","proofBase":"3091ef26e593d303e34afed70bc8c5997c105f80","task":null,"test":"AidokuTests/DownloadQueueSummaryTests.swift"}],"roles":[{"role":"orchestrator","tokens":{"cacheRead":3960734,"cacheWrite":172220,"input":114,"output":21572}},{"role":"build-worker","tokens":{"cacheRead":281358,"cacheWrite":85570,"input":42,"output":7243}}],"run":{"endedAt":"2026-10-04T17:54:43.927Z","id":"20261004T173923Z-a21597fe","plan":"spec","preset":"brownfield","stallMin":2,"startedAt":"2026-10-04T17:25:07.616Z","state":"done"},"schemaVersion":1,"spans":[{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:54:43.927Z","gateRun":null,"id":"run","outcome":"ok","parent":null,"phase":"run","start":"2026-10-04T17:25:07.616Z","task":null,"tools":{"calls":[{"count":9,"ms":240750,"tool":"Bash"},{"count":1,"ms":2,"tool":"ToolSearch"}],"droppedPaths":0,"files":[],"ms":240752,"otherCount":1}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:25:07.712Z","gateRun":null,"id":"discover:A9CA42EF-23C9-45F9-A1C7-03C05D8FFC14","outcome":"ok","parent":"run","phase":"discover","start":"2026-10-04T17:25:07.638Z","task":null,"tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:25:12.958Z","gateRun":null,"id":"warmup:Aidoku:build:95CB18A1-760F-4116-9EFB-E7464ABC11B0","outcome":"red","parent":"run","phase":"warmup","start":"2026-10-04T17:25:07.792Z","task":null,"tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:25:15.904Z","gateRun":null,"id":"warmup:Aidoku:test:CB82E048-8326-4F26-97F5-C51C80A7672F","outcome":"red","parent":"run","phase":"warmup","start":"2026-10-04T17:25:12.958Z","task":null,"tools":{"calls":[{"count":1,"ms":456,"tool":"Write"},{"count":13,"ms":7158,"tool":"Bash"}],"droppedPaths":0,"files":["Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift"],"ms":7614,"otherCount":0}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:25:17.690Z","gateRun":null,"id":"48e7d5a68da835e7","outcome":"ok","parent":"run","phase":"spec-read","start":"2026-10-04T17:25:14.980Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:26:11.771Z","gateRun":null,"id":"323e5da49894deb6","outcome":"ok","parent":"run","phase":"explore","start":"2026-10-04T17:25:27.527Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:25:38.768Z","gateRun":null,"id":"discover:318FE8EE-C23C-4228-9688-820076530BDA","outcome":"ok","parent":"run","phase":"discover","start":"2026-10-04T17:25:38.636Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:39:19.575Z","gateRun":null,"id":"4d5698600a5f3243","outcome":"ok","parent":"run","phase":"contract","start":"2026-10-04T17:26:11.899Z","task":null,"tools":{"calls":[{"count":1,"ms":91,"tool":"Edit"},{"count":1,"ms":202,"tool":"Write"},{"count":21,"ms":115360,"tool":"Bash"},{"count":1,"ms":3,"tool":"ToolSearch"}],"droppedPaths":0,"files":[".git/swift-harness/plans/spec/PLAN.md"],"ms":115656,"otherCount":2}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:26:51.000Z","gateRun":null,"id":"1f79c7c53b424d5b","outcome":"ok","parent":"run","phase":"plan","start":"2026-10-04T17:26:18.273Z","task":null,"tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:32:51.830Z","gateRun":null,"id":"warmup:Aidoku:build:9FD5C39A-BF39-4177-BF0F-F52C7B317A2C","outcome":"ok","parent":"run","phase":"warmup","start":"2026-10-04T17:27:08.689Z","task":null,"tools":{"calls":[{"count":1,"ms":204,"tool":"Read"},{"count":1,"ms":601177,"tool":"Bash"}],"droppedPaths":1,"files":[],"ms":601381,"otherCount":0}},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:34:38.784Z","gateRun":null,"id":"warmup:Aidoku:test:D359BB62-0AF6-4A78-8BB6-6C57D4508006","outcome":"ok","parent":"run","phase":"warmup","start":"2026-10-04T17:32:51.830Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:39:15.565Z","gateRun":"20261004T173730Z-e09dedfe","id":"gate:20261004T173730Z-e09dedfe","outcome":"ok","parent":"run","phase":"gate","start":"2026-10-04T17:37:30.593Z","task":"summary-contract","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:37:31.493Z","gateRun":"20261004T173730Z-e09dedfe","id":"step:20261004T173730Z-e09dedfe:1","outcome":"ok","parent":"gate:20261004T173730Z-e09dedfe","phase":"step","start":"2026-10-04T17:37:31.491Z","task":"summary-contract","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:37:31.495Z","gateRun":"20261004T173730Z-e09dedfe","id":"step:20261004T173730Z-e09dedfe:2","outcome":"ok","parent":"gate:20261004T173730Z-e09dedfe","phase":"step","start":"2026-10-04T17:37:31.493Z","task":"summary-contract","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:37:31.927Z","gateRun":"20261004T173730Z-e09dedfe","id":"step:20261004T173730Z-e09dedfe:3","outcome":"ok","parent":"gate:20261004T173730Z-e09dedfe","phase":"step","start":"2026-10-04T17:37:31.498Z","task":"summary-contract","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:39:15.550Z","gateRun":"20261004T173730Z-e09dedfe","id":"step:20261004T173730Z-e09dedfe:4","outcome":"ok","parent":"gate:20261004T173730Z-e09dedfe","phase":"step","start":"2026-10-04T17:37:31.929Z","task":"summary-contract","tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:39:15.550Z","gateRun":"20261004T173730Z-e09dedfe","id":"step:20261004T173730Z-e09dedfe:5","outcome":"ok","parent":"gate:20261004T173730Z-e09dedfe","phase":"step","start":"2026-10-04T17:39:15.550Z","task":"summary-contract","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:45:19.000Z","gateRun":null,"id":"task:summary-logic","outcome":"ok","parent":"run","phase":"task","start":"2026-10-04T17:39:31.000Z","task":"summary-logic","tools":{"calls":[{"count":4,"ms":129839,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":129839,"otherCount":1}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:50:06.000Z","gateRun":null,"id":"task:summary-row","outcome":"ok","parent":"run","phase":"task","start":"2026-10-04T17:39:33.000Z","task":"summary-row","tools":{"calls":[{"count":1,"ms":12,"tool":"Read"},{"count":7,"ms":129840,"tool":"Bash"}],"droppedPaths":0,"files":[".git/worktrees/aidoku-ios-1-spec/swift-harness/context-pack/worker-summary-row.md"],"ms":129852,"otherCount":2}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:08.034Z","gateRun":null,"id":"5d1930398f405543","outcome":"ok","parent":"task:summary-logic","phase":"worker","start":"2026-10-04T17:39:45.590Z","task":"summary-logic","tools":{"calls":[{"count":2,"ms":6325,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":6325,"otherCount":1}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:22.067Z","gateRun":null,"id":"504fc06e3b497fb4","outcome":"ok","parent":"task:summary-row","phase":"worker","start":"2026-10-04T17:39:48.246Z","task":"summary-row","tools":{"calls":[{"count":5,"ms":12461,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":12461,"otherCount":1}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:06.328Z","gateRun":"20261004T174200Z-11a8b3f1","id":"gate:20261004T174200Z-11a8b3f1","outcome":"ok","parent":"task:summary-logic","phase":"gate","start":"2026-10-04T17:42:00.702Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:00.992Z","gateRun":"20261004T174200Z-11a8b3f1","id":"step:20261004T174200Z-11a8b3f1:1","outcome":"ok","parent":"gate:20261004T174200Z-11a8b3f1","phase":"step","start":"2026-10-04T17:42:00.983Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:00.994Z","gateRun":"20261004T174200Z-11a8b3f1","id":"step:20261004T174200Z-11a8b3f1:2","outcome":"ok","parent":"gate:20261004T174200Z-11a8b3f1","phase":"step","start":"2026-10-04T17:42:00.994Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:01.190Z","gateRun":"20261004T174200Z-11a8b3f1","id":"step:20261004T174200Z-11a8b3f1:3","outcome":"ok","parent":"gate:20261004T174200Z-11a8b3f1","phase":"step","start":"2026-10-04T17:42:00.994Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:06.312Z","gateRun":"20261004T174200Z-11a8b3f1","id":"step:20261004T174200Z-11a8b3f1:4","outcome":"ok","parent":"gate:20261004T174200Z-11a8b3f1","phase":"step","start":"2026-10-04T17:42:01.190Z","task":"summary-logic","tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:42:06.312Z","gateRun":"20261004T174200Z-11a8b3f1","id":"step:20261004T174200Z-11a8b3f1:5","outcome":"ok","parent":"gate:20261004T174200Z-11a8b3f1","phase":"step","start":"2026-10-04T17:42:06.312Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:21.949Z","gateRun":"20261004T174216Z-5932bd4d","id":"gate:20261004T174216Z-5932bd4d","outcome":"ok","parent":"task:summary-row","phase":"gate","start":"2026-10-04T17:42:16.516Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:16.784Z","gateRun":"20261004T174216Z-5932bd4d","id":"step:20261004T174216Z-5932bd4d:1","outcome":"ok","parent":"gate:20261004T174216Z-5932bd4d","phase":"step","start":"2026-10-04T17:42:16.774Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:16.896Z","gateRun":"20261004T174216Z-5932bd4d","id":"step:20261004T174216Z-5932bd4d:2","outcome":"ok","parent":"gate:20261004T174216Z-5932bd4d","phase":"step","start":"2026-10-04T17:42:16.786Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:21.901Z","gateRun":"20261004T174216Z-5932bd4d","id":"step:20261004T174216Z-5932bd4d:3","outcome":"ok","parent":"gate:20261004T174216Z-5932bd4d","phase":"step","start":"2026-10-04T17:42:16.897Z","task":"summary-row","tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:42:21.902Z","gateRun":"20261004T174216Z-5932bd4d","id":"step:20261004T174216Z-5932bd4d:4","outcome":"ok","parent":"gate:20261004T174216Z-5932bd4d","phase":"step","start":"2026-10-04T17:42:21.901Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:39.899Z","gateRun":null,"id":"3ae9bdb1d3761713","outcome":"ok","parent":"504fc06e3b497fb4","phase":"review","start":"2026-10-04T17:42:35.753Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:45:19.000Z","gateRun":"20261004T174242Z-c6897717","id":"merge:summary-logic:1","outcome":"ok","parent":"task:summary-logic","phase":"merge","start":"2026-10-04T17:42:38.000Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:45:12.445Z","gateRun":"20261004T174242Z-c6897717","id":"gate:20261004T174242Z-c6897717","outcome":"ok","parent":"merge:summary-logic:1","phase":"gate","start":"2026-10-04T17:42:42.585Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:42:53.935Z","gateRun":"20261004T174242Z-c6897717","id":"step:20261004T174242Z-c6897717:1","outcome":"ok","parent":"gate:20261004T174242Z-c6897717","phase":"step","start":"2026-10-04T17:42:42.726Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:43:48.807Z","gateRun":"20261004T174242Z-c6897717","id":"step:20261004T174242Z-c6897717:2","outcome":"ok","parent":"gate:20261004T174242Z-c6897717","phase":"step","start":"2026-10-04T17:42:53.935Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:43:48.927Z","gateRun":"20261004T174242Z-c6897717","id":"step:20261004T174242Z-c6897717:3","outcome":"ok","parent":"gate:20261004T174242Z-c6897717","phase":"step","start":"2026-10-04T17:43:48.808Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:45:12.397Z","gateRun":"20261004T174242Z-c6897717","id":"step:20261004T174242Z-c6897717:4","outcome":"ok","parent":"gate:20261004T174242Z-c6897717","phase":"step","start":"2026-10-04T17:43:48.928Z","task":"summary-logic","tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:45:12.401Z","gateRun":"20261004T174242Z-c6897717","id":"step:20261004T174242Z-c6897717:5","outcome":"ok","parent":"gate:20261004T174242Z-c6897717","phase":"step","start":"2026-10-04T17:45:12.397Z","task":"summary-logic","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:50:06.000Z","gateRun":"20261004T174531Z-4a491e54","id":"merge:summary-row:1","outcome":"ok","parent":"task:summary-row","phase":"merge","start":"2026-10-04T17:45:29.000Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:50:02.064Z","gateRun":"20261004T174531Z-4a491e54","id":"gate:20261004T174531Z-4a491e54","outcome":"ok","parent":"merge:summary-row:1","phase":"gate","start":"2026-10-04T17:45:31.353Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:47:15.351Z","gateRun":"20261004T174531Z-4a491e54","id":"step:20261004T174531Z-4a491e54:1","outcome":"ok","parent":"gate:20261004T174531Z-4a491e54","phase":"step","start":"2026-10-04T17:45:32.131Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:48:14.109Z","gateRun":"20261004T174531Z-4a491e54","id":"step:20261004T174531Z-4a491e54:2","outcome":"ok","parent":"gate:20261004T174531Z-4a491e54","phase":"step","start":"2026-10-04T17:47:15.351Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:48:14.248Z","gateRun":"20261004T174531Z-4a491e54","id":"step:20261004T174531Z-4a491e54:3","outcome":"ok","parent":"gate:20261004T174531Z-4a491e54","phase":"step","start":"2026-10-04T17:48:14.110Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:50:02.032Z","gateRun":"20261004T174531Z-4a491e54","id":"step:20261004T174531Z-4a491e54:4","outcome":"ok","parent":"gate:20261004T174531Z-4a491e54","phase":"step","start":"2026-10-04T17:48:14.248Z","task":"summary-row","tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:50:02.033Z","gateRun":"20261004T174531Z-4a491e54","id":"step:20261004T174531Z-4a491e54:5","outcome":"ok","parent":"gate:20261004T174531Z-4a491e54","phase":"step","start":"2026-10-04T17:50:02.032Z","task":"summary-row","tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:54:33.098Z","gateRun":null,"id":"b9cd236cac6e89d6","outcome":"ok","parent":"run","phase":"final","start":"2026-10-04T17:50:29.457Z","task":null,"tools":{"calls":[{"count":2,"ms":1370,"tool":"Bash"}],"droppedPaths":0,"files":[],"ms":1370,"otherCount":0}},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:54:26.360Z","gateRun":"20261004T175029Z-80ecc488","id":"gate:20261004T175029Z-80ecc488","outcome":"ok","parent":"run","phase":"gate","start":"2026-10-04T17:50:29.626Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:51:26.601Z","gateRun":"20261004T175029Z-80ecc488","id":"step:20261004T175029Z-80ecc488:1","outcome":"ok","parent":"gate:20261004T175029Z-80ecc488","phase":"step","start":"2026-10-04T17:50:30.179Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:52:55.238Z","gateRun":"20261004T175029Z-80ecc488","id":"step:20261004T175029Z-80ecc488:2","outcome":"ok","parent":"gate:20261004T175029Z-80ecc488","phase":"step","start":"2026-10-04T17:51:26.601Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:52:55.343Z","gateRun":"20261004T175029Z-80ecc488","id":"step:20261004T175029Z-80ecc488:3","outcome":"ok","parent":"gate:20261004T175029Z-80ecc488","phase":"step","start":"2026-10-04T17:52:55.240Z","task":null,"tools":null},{"approximate":false,"causeGateRun":null,"end":"2026-10-04T17:54:26.333Z","gateRun":"20261004T175029Z-80ecc488","id":"step:20261004T175029Z-80ecc488:4","outcome":"ok","parent":"gate:20261004T175029Z-80ecc488","phase":"step","start":"2026-10-04T17:52:55.345Z","task":null,"tools":null},{"approximate":true,"causeGateRun":null,"end":"2026-10-04T17:54:26.334Z","gateRun":"20261004T175029Z-80ecc488","id":"step:20261004T175029Z-80ecc488:5","outcome":"ok","parent":"gate:20261004T175029Z-80ecc488","phase":"step","start":"2026-10-04T17:54:26.333Z","task":null,"tools":null}],"spec":[{"id":"req-summary-values","tasks":["summary-logic"],"title":"A download queue summary built from the queued chapters and their reported progress holds the chapter count, the pages d"},{"id":"req-summary-safe-fraction","tasks":["summary-logic"],"title":"A chapter with no reported progress counts as 0 of 0 pages, the fraction is 0 when the page total is 0, and a chapter wh"},{"id":"req-summary-row","tasks":["summary-row"],"title":"The queue screen shows the summary as its first row, above the paused banner and the per-source sections, only while the"},{"id":"req-summary-a11y-id","tasks":["summary-row"],"title":"The summary row carries the accessibility identifier `download-queue-summary`"},{"id":"req-chapter-safe-fraction","tasks":["summary-row"],"title":"Each chapter's own progress bar uses the same safe fraction, so a chapter whose total is 0 no longer divides by zero"},{"id":"req-localized-strings","tasks":["summary-row"],"title":"New user-facing strings go through `NSLocalizedString` with keys added to the English `Localizable.strings`, reusing exi"},{"id":"req-plain-value-type","tasks":["summary-contract","summary-logic"],"title":"The summary is a plain value type with no dependency on SwiftUI or the download manager"},{"id":"req-display-only","tasks":["summary-row"],"title":"Downloads are queued, stored and reported as before, and the queue screen keeps swipe to cancel, pause and resume, and t"},{"id":"req-unit-tests","tasks":["summary-logic"],"title":"A Swift Testing unit test in AidokuTests covers an empty queue, chapters with no progress, progress summed across more t"}],"tasks":[{"blocked":null,"brief":{"acceptance":["the app builds; slice is GREEN"],"designRef":null,"outOfScope":["the summing and clamping logic, the view row"],"scope":["`DownloadQueueSummary`, a `Sendable`, `Equatable` struct importing only Foundation, with stub bodies that return zero"],"title":"Declare `DownloadQueueSummary` with its initializers, `fraction` and the static safe-fraction function, with stub bodies.","why":"requirements 1, 2 and 5 share 1 type, which both the test task and the view task compile against."},"commits":["781be0b36692c18ff71724879847559da36272a5"],"covers":["req-plain-value-type"],"createdAt":null,"deps":[],"gate":"slice","gateRun":"20261004T173730Z-e09dedfe","id":"summary-contract","mergeGateRun":null,"mergedAt":null,"model":null,"status":"done","tokens":{"cacheRead":0,"cacheWrite":0,"input":0,"output":0},"writes":["Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift"]},{"blocked":null,"brief":{"acceptance":["`AidokuTests/DownloadQueueSummaryTests.swift`, in Swift Testing, covers an empty queue (0 chapters, fraction 0), chapters with no progress yet, progress summed across chapters from 2 sources, progress above its total clamped to the total, and the static fraction for a total of 0; each fails against the stub first, then passes; slice is GREEN"],"designRef":null,"outOfScope":["any change to `DownloadQueueView`, `DownloadManager` or `Localizable.strings`"],"scope":["`init(chapters:progress:)` sums each chapter's progress and total, counting a missing entry as 0 of 0, a progress above its total as its total and a negative progress as 0","`fraction(progress:total:)` returns 0 when total is 0 or below, and clamps the result to 0...1"],"title":"Implement the summary's summing and safe fraction, test-first.","why":"spec items 1 and 2, and the spec's Tests section."},"commits":["8bc6626d"],"covers":["req-summary-values","req-summary-safe-fraction","req-plain-value-type","req-unit-tests"],"createdAt":"2026-10-04T17:39:31.000Z","deps":["summary-contract"],"gate":"slice","gateRun":"20261004T174200Z-11a8b3f1","id":"summary-logic","mergeGateRun":"20261004T174242Z-c6897717","mergedAt":"2026-10-04T17:42:38.000Z","model":null,"status":"done","tokens":{"cacheRead":95813,"cacheWrite":38212,"input":16,"output":3126},"writes":["Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift","AidokuTests/DownloadQueueSummaryTests.swift"]},{"blocked":null,"brief":{"acceptance":["the app builds for the iOS Simulator and slice is GREEN; the row's logic is the summary, which summary-logic's tests cover, so this task adds no UI test"],"designRef":null,"outOfScope":["how downloads are queued, stored or reported; swipe to cancel, pause and resume and the toolbar menu stay as they are; other locales' strings files"],"scope":["in `DownloadQueueView`, a computed `DownloadQueueSummary` built from `queue` flattened in order (each download's `chapterIdentifier`) and the `progress` dictionary","a first `Section`, above the paused banner, shown only while `queue` isn't empty: the chapter count via `String(format: NSLocalizedString(\"%i_CHAPTERS\"), …)`, \"X of Y pages\" via a new `%i_OF_%i_PAGES` key, and `ProgressView(value: summary.fraction).progressViewStyle(.linear)`, with `.accessibilityIdentifier(\"download-queue-summary\")`","each chapter's bar uses `DownloadQueueSummary.fraction(progress:total:)` in place of the raw division","the English `Localizable.strings` gains `\"%i_OF_%i_PAGES\" = \"%i of %i pages\";`"],"title":"Show the summary as the queue screen's first row and use the safe fraction for each chapter's bar.","why":"spec items 3, 4, 5 and 6."},"commits":["f1839eb0"],"covers":["req-summary-row","req-summary-a11y-id","req-chapter-safe-fraction","req-localized-strings","req-display-only"],"createdAt":"2026-10-04T17:39:33.000Z","deps":["summary-contract"],"gate":"slice","gateRun":"20261004T174216Z-5932bd4d","id":"summary-row","mergeGateRun":"20261004T174531Z-4a491e54","mergedAt":"2026-10-04T17:45:29.000Z","model":null,"status":"done","tokens":{"cacheRead":185545,"cacheWrite":47358,"input":26,"output":4117},"writes":["Aidoku/Features/Library/DownloadQueueView.swift","Aidoku/App/Resources/Localization/en.lproj/Localizable.strings"]}]}</script>
+
+<script>
+// Pure functions over a RunView: merging partials, laying out the timeline, and formatting.
+// Loaded as a classic script so the report can inline it; it publishes one global.
+(function (root) {
+  // The key each RunView array merges on. A partial row replaces the row with the same key.
+  const KEYS = {
+    spec: (x) => x.id,
+    tasks: (x) => x.id,
+    roles: (x) => x.role,
+    spans: (x) => x.id,
+    gates: (x) => x.runId,
+    proofs: (x) => x.gateRun + "\u0000" + x.test,
+    halts: (x) => (x.task || "") + "\u0000" + x.at,
+    damage: (x) => x.source + "\u0000" + x.reason
+  };
+
+  function mergeBy(rows, partial, key) {
+    const out = rows.slice();
+    const index = new Map(out.map((row, i) => [key(row), i]));
+    partial.forEach((row) => {
+      const k = key(row);
+      if (index.has(k)) out[index.get(k)] = row;
+      else { index.set(k, out.length); out.push(row); }
+    });
+    return out;
+  }
+
+  function apply(view, partial) {
+    const out = Object.assign({}, view);
+    Object.keys(partial || {}).forEach((field) => {
+      const value = partial[field];
+      out[field] = KEYS[field] && Array.isArray(value) ? mergeBy(view[field] || [], value, KEYS[field]) : value;
+    });
+    return out;
+  }
+
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+
+  // The run's last event: what an open span is cut at in the report.
+  function lastEventMs(view) {
+    const times = [ms(view.run.startedAt), ms(view.run.endedAt)];
+    (view.spans || []).forEach((s) => times.push(ms(s.start), ms(s.end)));
+    (view.halts || []).forEach((h) => times.push(ms(h.at)));
+    (view.tasks || []).forEach((t) => times.push(ms(t.createdAt), ms(t.mergedAt)));
+    return Math.max.apply(null, times.filter((t) => t != null && !Number.isNaN(t)));
+  }
+
+  function spanLabel(s) {
+    if (s.phase === "run") return "build run";
+    if (s.phase === "task") return s.task || "task";
+    if (s.phase === "gate") return "gate";
+    return s.phase.replace(/-/g, " ");
+  }
+
+  // Spans in minutes from the run's start, with open spans cut at the run's last event.
+  function normalize(view, nowMs) {
+    const t0 = ms(view.run.startedAt);
+    const cut = nowMs != null ? nowMs : lastEventMs(view);
+    const toMin = (t) => (t - t0) / 60000;
+    const gateBy = {};
+    (view.gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const spans = (view.spans || []).map((s) => {
+      const open = s.end == null;
+      const g = s.gateRun && gateBy[s.gateRun];
+      let label = spanLabel(s);
+      if (s.phase === "gate" && g) label = "gate " + gateTier(g.command);
+      return Object.assign({}, s, { start: toMin(ms(s.start)), end: toMin(open ? cut : ms(s.end)), open, label });
+    });
+    return { spans, wall: Math.max(0, toMin(cut)), t0 };
+  }
+
+  function gateTier(command) {
+    const m = /--tier\s+(\S+)/.exec(command || "");
+    return m ? m[1] : command || "";
+  }
+
+  // Greedy first-fit: each span takes the first row it doesn't overlap.
+  function pack(spans) {
+    const rows = [];
+    spans.slice().sort((a, b) => a.start - b.start).forEach((s) => {
+      const row = rows.find((r) => r[r.length - 1].end <= s.start);
+      if (row) row.push(s); else rows.push([s]);
+    });
+    return rows;
+  }
+
+  // Timeline rows. A task's (or the final phase's) descendants share rows under it, so a worker's
+  // whole story reads left to right; its gate runs add 1 row per tier, steps from the gate record.
+  function lanes(spans, gates) {
+    const byId = {};
+    const kids = {};
+    spans.forEach((s) => { byId[s.id] = s; });
+    spans.forEach((s) => {
+      const p = s.parent != null && byId[s.parent] ? s.parent : null;
+      (kids[p] = kids[p] || []).push(s);
+    });
+    Object.keys(kids).forEach((k) => kids[k].sort((a, b) => a.start - b.start));
+    const gateBy = {};
+    (gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const descendants = (s) => (kids[s.id] || []).reduce((acc, c) => acc.concat([c], descendants(c)), []);
+    const rows = [];
+
+    function gateRows(gs, depth) {
+      const g = gateBy[gs.gateRun];
+      if (!g || !g.steps || !g.steps.length) return;
+      const minutes = g.ms / 60000;
+      const factor = minutes > 0 ? (gs.end - gs.start) / minutes : 0;
+      const tiers = [];
+      g.steps.forEach((st) => { if (tiers.indexOf(st.tier) < 0) tiers.push(st.tier); });
+      tiers.forEach((tier) => {
+        let cursor = 0;
+        const steps = g.steps.filter((st) => st.tier === tier).map((st) => {
+          // A step with no start offset is laid end to end after the last and marked approximate.
+          const approximate = st.startMs == null;
+          const startMs = approximate ? cursor : st.startMs;
+          cursor = startMs + st.ms;
+          return {
+            id: gs.id + ":" + tier + ":" + st.step, parent: gs.id, phase: "step", label: st.step,
+            start: gs.start + (startMs / 60000) * factor, end: gs.start + ((startMs + st.ms) / 60000) * factor,
+            outcome: st.verdict === "RED" ? "red" : "ok", gateRun: g.runId, task: gs.task, ms: st.ms, tier, approximate
+          };
+        });
+        rows.push({ depth, label: tier + " · " + (g.verdict === "RED" ? "RED run" : "run") + " " + shortRun(g.runId), spans: steps });
+      });
+    }
+
+    function walk(s, depth) {
+      rows.push({ depth, spans: [s], label: s.label, isTask: s.phase === "task" });
+      if (s.phase === "task" || s.phase === "final") {
+        const all = descendants(s);
+        pack(all).forEach((r, i) => rows.push({ depth: depth + 1, spans: r, label: i === 0 ? (s.phase === "task" ? "stages" : "gate") : "" }));
+        all.filter((c) => c.phase === "gate" && c.gateRun).forEach((gs) => gateRows(gs, depth + 2));
+      } else {
+        (kids[s.id] || []).forEach((c) => walk(c, depth + 1));
+      }
+    }
+    (kids.null || []).forEach((s) => walk(s, 0));
+    return rows;
+  }
+
+  const ZOOMS = [1, 2, 4];
+  const scale = (zoom, width) => width * (ZOOMS.indexOf(zoom) >= 0 ? zoom : 1);
+  // Rough width of a bar label at 11px plus its 12px of padding.
+  const labelFits = (text, px) => px >= String(text).length * 6.3 + 12;
+
+  const sum = (t) => t.input + t.output + t.cacheRead + t.cacheWrite;
+  const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : Math.round(n / 1e3) + "k");
+  const fmtTokens = (t) => (t == null ? "pending" : fmtTok(sum(t)));
+  const fmtMin = (m) => {
+    const s = Math.round(m * 60);
+    return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s";
+  };
+  const fmtMs = (n) => fmtMin(n / 60000);
+  const shortRun = (id) => (id && id.length > 15 ? id.slice(9, 15) + "…" + id.slice(-4) : String(id));
+  const durationText = (s) => (s.open ? "never ended" : s.ms != null ? fmtMs(s.ms) : fmtMin(s.end - s.start));
+
+  function blocks(view, id) {
+    return (view.tasks || []).filter((t) => (t.deps || []).indexOf(id) >= 0).map((t) => t.id);
+  }
+
+  // A task's wave counts only task deps; a dep cycle stops at the task already being visited.
+  function waveOf(view, id) {
+    const byId = {};
+    (view.tasks || []).forEach((t) => { byId[t.id] = t; });
+    const memo = {};
+    const visit = (tid, seen) => {
+      if (memo[tid]) return memo[tid];
+      const deps = (byId[tid] ? byId[tid].deps || [] : []).filter((d) => byId[d] && seen.indexOf(d) < 0);
+      memo[tid] = deps.length ? 1 + Math.max.apply(null, deps.map((d) => visit(d, seen.concat([tid])))) : 1;
+      return memo[tid];
+    };
+    return visit(id, []);
+  }
+
+  // A task's events in time order: created, worker and fix starts, gate verdicts, review, halts
+  // and merge. `at` is milliseconds since the epoch.
+  function activity(view, id) {
+    const t = (view.tasks || []).find((x) => x.id === id);
+    if (!t) return [];
+    const events = [];
+    if (t.createdAt) events.push({ at: ms(t.createdAt), kind: "created", text: "Created", c: "--muted" });
+    const gateBy = {};
+    (view.gates || []).forEach((g) => { gateBy[g.runId] = g; });
+    const gatesSeen = {};
+    (view.spans || []).filter((s) => s.task === id).forEach((s) => {
+      if (s.phase === "worker") events.push({ at: ms(s.start), kind: "worker", text: "Worker started", sub: (t.model || "") + " build worker", c: "--bar-worker" });
+      else if (s.phase === "fix") events.push({ at: ms(s.start), kind: "fix", text: "Fix started", sub: s.tools ? s.tools.files.length + " files touched" : "", c: "--warn" });
+      else if (s.phase === "review") events.push({ at: ms(s.start), kind: "review", text: "Review started", c: "--bar-review" });
+      else if (s.phase === "verify") events.push({ at: ms(s.start), kind: "verify", text: "Verify started", c: "--warn" });
+      else if (s.phase === "gate" && s.gateRun) {
+        gatesSeen[s.gateRun] = true;
+        const g = gateBy[s.gateRun];
+        const verdict = g ? g.verdict : s.outcome === "red" ? "RED" : "GREEN";
+        const sub = (g ? gateTier(g.command) + " gate · " : "") + "run " + shortRun(s.gateRun);
+        if (s.end == null) events.push({ at: ms(s.start), kind: "gate", text: "Gate running", sub, c: "--warn" });
+        else events.push({ at: ms(s.end), kind: "gate", text: "Gate " + verdict, codes: g ? (g.failure && g.failure.findings.length ? g.failure.findings.map((x) => x.rule) : Object.keys(g.ruleCounts || {})) : [], sub, c: verdict === "RED" ? "--bad" : "--ok" });
+      }
+    });
+    (view.halts || []).filter((h) => h.task === id).forEach((h) => {
+      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason + (h.gateRun ? " · gate run " + shortRun(h.gateRun) : ""), c: "--bad" });
+    });
+    if (t.mergedAt) {
+      const g = gateBy[t.mergeGateRun];
+      events.push({ at: ms(t.mergedAt), kind: "merge", text: "Merged", codes: t.commits || [], sub: g ? "merge gate " + g.verdict : "", c: "--fg" });
+    }
+    // At the same instant a verdict comes before the stage it starts: a RED gate, then its fix.
+    const rank = (e) => (e.kind === "created" ? 0 : e.kind === "gate" && e.text !== "Gate running" ? 1 : 2);
+    return events.filter((e) => e.at != null && !Number.isNaN(e.at)).sort((a, b) => a.at - b.at || rank(a) - rank(b));
+  }
+
+  // The tool summary of a span and every span under it, in the RunView `tools` shape.
+  function toolSummary(spans, spanId) {
+    const kids = {};
+    let rootSpan = null;
+    spans.forEach((s) => {
+      if (s.id === spanId) rootSpan = s;
+      (kids[s.parent] = kids[s.parent] || []).push(s);
+    });
+    if (!rootSpan) return null;
+    const calls = {};
+    const files = [];
+    let otherCount = 0, total = 0, droppedPaths = 0, any = false;
+    const walk = (s) => {
+      if (s.tools) {
+        any = true;
+        s.tools.calls.forEach((c) => {
+          const row = calls[c.tool] || (calls[c.tool] = { tool: c.tool, count: 0, ms: 0 });
+          row.count += c.count;
+          row.ms += c.ms;
+        });
+        otherCount += s.tools.otherCount || 0;
+        total += s.tools.ms || 0;
+        droppedPaths += s.tools.droppedPaths || 0;
+        s.tools.files.forEach((f) => { if (files.indexOf(f) < 0) files.push(f); });
+      }
+      (kids[s.id] || []).forEach(walk);
+    };
+    walk(rootSpan);
+    if (!any) return null;
+    const sorted = Object.keys(calls).map((k) => calls[k]).sort((a, b) => b.count - a.count || (a.tool < b.tool ? -1 : 1));
+    return { calls: sorted, otherCount, ms: total, files, droppedPaths };
+  }
+
+  // What explains a span's red or halted outcome: the RED gate run it is or names, the task's
+  // block when it stopped there, and the run's halts. Null when nothing does.
+  function failureOf(view, span) {
+    const gates = {};
+    (view.gates || []).forEach((g) => { gates[g.runId] = g; });
+    const task = span.task != null ? (view.tasks || []).find((t) => t.id === span.task) : null;
+    const runId = span.gateRun || span.causeGateRun || null;
+    const gate = runId && gates[runId] && gates[runId].failure ? gates[runId] : null;
+    const block = span.phase === "task" && task && task.blocked ? task.blocked : null;
+    const halts = span.phase === "run" && span.outcome === "halted" ? openHalts(view) : [];
+    if (!gate && !block && !halts.length) return null;
+    return { gate, block, halts, gateOf: (id) => gates[id] || null };
+  }
+
+  // `file:line`, `file`, or null for a finding or test no file locates.
+  const location = (file, line) => (file == null ? null : line == null ? file : file + ":" + line);
+
+  // `text` cut to `max` characters with an ellipsis.
+  const clip = (text, max) => (text.length > max ? text.slice(0, Math.max(0, max - 1)) + "…" : text);
+
+  // Halts with no resume yet: the builder fills `answer` and `waitMs` only from a `build.resume`.
+  const openHalts = (view) => (view.halts || []).filter((h) => h.answer == null && h.waitMs == null);
+
+  // The newest time anything of a task happened: a span starting or ending, a halt or its resume.
+  function lastTaskEventMs(view, id) {
+    const times = [];
+    (view.spans || []).filter((s) => s.task === id).forEach((s) => times.push(ms(s.start), ms(s.end)));
+    (view.halts || []).filter((h) => h.task === id).forEach((h) => {
+      times.push(ms(h.at));
+      if (h.waitMs != null) times.push(ms(h.at) + h.waitMs);
+    });
+    const known = times.filter((t) => t != null && !Number.isNaN(t));
+    return known.length ? Math.max.apply(null, known) : null;
+  }
+
+  // The now strip: 1 card per task with an open task span, naming its newest open stage.
+  function workers(view, nowMs, stallMin) {
+    const spans = view.spans || [];
+    const halted = {};
+    openHalts(view).forEach((h) => { if (h.task != null) halted[h.task] = h; });
+    return spans.filter((s) => s.phase === "task" && s.task != null && s.end == null).map((ts) => {
+      const stages = spans.filter((s) => s.task === ts.task && s.id !== ts.id && s.end == null)
+        .sort((a, b) => ms(b.start) - ms(a.start));
+      const stage = stages[0] || null;
+      const last = lastTaskEventMs(view, ts.task);
+      return {
+        task: ts.task, phase: stage ? stage.phase : "task", gateRun: stage ? stage.gateRun : null,
+        elapsedMs: nowMs - ms(ts.start), lastEventMs: last,
+        stalled: last != null && nowMs - last > stallMin * 60000, halted: !!halted[ts.task],
+        halt: halted[ts.task] || null
+      };
+    });
+  }
+
+  // Tasks whose open span has had no event of that task for `stallMin` minutes at `nowMs`.
+  const stalls = (view, nowMs, stallMin) => workers(view, nowMs, stallMin).filter((w) => w.stalled).map((w) => w.task);
+
+  root.RunViewModel = {
+    apply, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
+  };
+})(globalThis);
+
+</script>
+<script>
+(function () {
+  const M = window.RunViewModel;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const { fmtTok, fmtTokens, fmtMin, fmtMs, shortRun, sum } = M;
+  const verdictChip = (v) => `<span class="chip ${v === "GREEN" ? "ok" : v === "RED" ? "bad" : "warn"}">${esc(v)}</span>`;
+  const plural = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+
+  // Errors anywhere on the page are counted where a headless check can read them.
+  document.body.dataset.errors = "0";
+  const countError = () => { document.body.dataset.errors = String(Number(document.body.dataset.errors) + 1); };
+  window.addEventListener("error", countError);
+  window.addEventListener("unhandledrejection", countError);
+
+  const pageDamage = [];
+  let view = null;
+  // Served by `swiftgate view` the page carries no data and fetches it; opened as a file, it is a report.
+  let liveMode = false;
+  try {
+    const text = $("run-view").textContent.trim();
+    if (text) view = JSON.parse(text);
+    else if (location.protocol !== "file:") liveMode = true;
+    else pageDamage.push({ source: "page", reason: "no run data embedded" });
+  } catch (error) {
+    pageDamage.push({ source: "page", reason: "run data is not JSON: " + error.message });
+  }
+
+  // State the page derives from the view on each render.
+  let spans = [], wall = 0, t0 = 0, byId = {}, kids = {}, gateBy = {}, taskBy = {};
+
+  // A live run's open spans grow with the clock; a finished run stops at its last event.
+  const liveNowMs = () => (liveMode && view.run.state !== "done" ? Date.now() : null);
+
+  function derive() {
+    const n = M.normalize(view, liveNowMs());
+    spans = n.spans; wall = n.wall || 1; t0 = n.t0;
+    byId = {}; kids = {};
+    spans.forEach((s) => { byId[s.id] = s; (kids[s.parent] = kids[s.parent] || []).push(s); });
+    gateBy = Object.fromEntries(view.gates.map((g) => [g.runId, g]));
+    taskBy = Object.fromEntries(view.tasks.map((t) => [t.id, t]));
+  }
+  const taskSpan = (id) => spans.find((s) => s.phase === "task" && s.task === id);
+  const minOf = (iso) => (Date.parse(iso) - t0) / 60000;
+
+  // header
+  function renderHeader() {
+    const r = view.run;
+    $("title").textContent = r.plan || r.id;
+    const state = $("state");
+    state.textContent = r.state;
+    state.className = "chip " + ({ done: "ok", running: "info", halted: "bad" }[r.state] || "plain");
+    $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].map((x) => `<span>${x}</span>`).join("");
+    const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
+    const taskTok = view.tasks.filter((t) => t.tokens).reduce((a, t) => a + sum(t.tokens), 0);
+    const pending = view.tasks.filter((t) => t.tokens == null).length;
+    const tests = new Set(view.proofs.map((p) => p.test)).size;
+    const proven = new Set(view.proofs.filter((p) => p.outcome === "proven").map((p) => p.test)).size;
+    const red = view.gates.filter((g) => g.verdict === "RED").length;
+    const taskSpans = spans.filter((s) => s.phase === "task");
+    const parallel = taskSpans.reduce((m, s) => Math.max(m, taskSpans.filter((o) => o.start < s.end && s.start < o.end).length), 0);
+    const answered = view.halts.filter((h) => h.answer != null).length;
+    const stats = [
+      [fmtMin(wall), "wall time"],
+      [fmtTok(roleTok || taskTok), pending ? `tokens, ${plural(pending, "task")} pending` : "tokens"],
+      [plural(view.tasks.length, "task"), `${parallel} in parallel at most`],
+      [proven + " / " + tests, "tests proven"],
+      [plural(view.gates.length, "gate"), red + " RED"],
+      [plural(view.halts.length, "halt"), answered + " answered"]
+    ];
+    $("stats").innerHTML = stats.map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("");
+  }
+
+  // timeline
+  const colour = { run: "--bar-phase", task: "--bar-task", worker: "--bar-worker", fix: "--bar-worker", review: "--bar-review", verify: "--bar-gate", merge: "--bar-merge" };
+  const barColour = (s) => {
+    if (s.phase === "gate" || s.phase === "step") return s.outcome === "red" ? "--bar-red" : "--bar-gate";
+    if (s.outcome === "red" || s.outcome === "halted") return "--bar-red";
+    return colour[s.phase] || "--bar-phase";
+  };
+  const scroller = $("tl-scroll");
+  const tl = $("tl");
+  let zoom = 1;
+  let all = {};
+
+  function renderTimeline() {
+    const rows = M.lanes(spans, view.gates);
+    const pct = (m) => (m / wall) * 100;
+    const tick = wall > 120 ? 30 : wall > 60 ? 10 : 5;
+    let html = `<div class="tl-row axis"><div class="tl-label" style="font-weight:600;color:var(--muted)">span</div><div class="tl-track">`;
+    for (let m = 0; m <= wall; m += tick) html += `<div class="tick" style="left:${pct(m)}%">${m}m</div>`;
+    html += `</div></div><div class="grid-lines">`;
+    for (let m = tick; m <= wall; m += tick) html += `<i style="left:${pct(m)}%"></i>`;
+    html += `</div>`;
+    all = {};
+    rows.forEach((row) => {
+      html += `<div class="tl-row"><div class="tl-label" style="padding-left:${8 + row.depth * 14}px;${row.isTask ? "font-weight:600" : row.depth > 2 ? "color:var(--muted)" : ""}">${esc(row.label)}</div><div class="tl-track">`;
+      row.spans.forEach((s) => {
+        all[s.id] = s;
+        const textColor = s.phase === "merge" ? "var(--bg)" : "var(--bar-text)";
+        const dur = M.durationText(s);
+        html += `<button class="bar${s.open ? " open" : ""}" data-id="${esc(s.id)}" style="left:${pct(s.start)}%;width:calc(${pct(Math.max(0, s.end - s.start))}% - 2px);background-color:var(${barColour(s)});color:${textColor}" title="${esc(s.label)} · ${esc(dur)}" aria-label="${esc(s.label)}, ${esc(s.phase)}, ${esc(dur)}" aria-haspopup="dialog" aria-expanded="false">${esc(s.label)}</button>`;
+      });
+      html += `</div></div>`;
+    });
+    tl.innerHTML = html;
+    sizeTrack();
+  }
+
+  function sizeTrack() {
+    tl.style.width = M.scale(zoom, Math.max(900, scroller.clientWidth)) + "px";
+    fitBars();
+  }
+
+  function fitBars() {
+    tl.querySelectorAll(".bar").forEach((b) => {
+      const s = all[b.dataset.id];
+      b.classList.toggle("notext", !M.labelFits(s.label, b.clientWidth));
+    });
+  }
+
+  // span popover
+  const pop = $("pop");
+  const sheet = window.matchMedia("(max-width: 520px)");
+  let openAnchor = null;
+
+  function toolsHtml(t, filesLabel = "Files touched") {
+    if (!t) return `<p class="sub">no tool activity recorded</p>`;
+    const calls = t.calls.reduce((a, c) => a + c.count, 0) + (t.otherCount || 0);
+    const shown = t.files.slice(0, 6);
+    const more = t.files.length - shown.length;
+    const files = t.files.length
+      ? `<ul class="pop-files">${shown.map((f) => `<li>${esc(f)}</li>`).join("")}${more > 0 ? `<li class="more">+${more} more</li>` : ""}</ul>`
+      : `<p class="sub">no files touched</p>`;
+    const chips = t.calls.map((c) => `<span class="chip plain num" title="${esc(fmtMs(c.ms))}">${esc(c.tool)} ${c.count}</span>`)
+      .concat(t.otherCount ? [`<span class="chip plain num">other ${t.otherCount}</span>`] : []);
+    return `${chips.length ? `<div class="tags">${chips.join("")}</div>` : ""}
+      <p class="sub num">${calls} calls · ${fmtMs(t.ms)} tool time</p>
+      <h4>${esc(filesLabel)} (${t.files.length})</h4>${files}
+      ${t.droppedPaths ? `<p class="sub">${plural(t.droppedPaths, "path")} dropped: outside the repository</p>` : ""}`;
+  }
+
+  // Why a gate run, a stage or a task failed. The popover shows a few lines, each message cut;
+  // the task drawer shows every line the view carries, whole.
+  const POP_LINES = 3, POP_MESSAGE = 140;
+  const stageText = { task: "task gate", worker: "worker's gate", merge: "merge gate", final: "final gate" };
+  const blockText = {
+    "gate-red": "its last gate run was RED",
+    "return-rejected": "build check-return rejected its return",
+    "return-not-stored": "no return of it was stored: none came back, or a check-return that records nothing rejected it",
+    halt: "a halt stopped it"
+  };
+  function failureHeadline(g) {
+    const f = g.failure;
+    const tiers = f.tiers.length ? f.tiers.join(", ") + " failed" : g.verdict;
+    return [tiers, f.checkTier ? f.checkTier + " tier" : null, f.stage ? stageText[f.stage] : null].filter(Boolean).join(" · ");
+  }
+  function findingHtml(x, max) {
+    const at = M.location(x.file, x.line);
+    const message = max ? M.clip(x.message, max) : x.message;
+    const cut = !max && x.truncated ? ` <span class="muted">(cut; the report holds the rest)</span>` : "";
+    return `<li><div class="fail-head"><span class="chip ${x.severity === "blocker" || x.severity === "major" ? "bad" : "warn"}">${esc(x.severity)}</span><code>${esc(x.rule)}</code>${at ? `<span class="mono">${esc(at)}</span>` : ""}</div><div class="fail-msg">${esc(message)}${cut}</div></li>`;
+  }
+  function testHtml(t) {
+    const at = M.location(t.file, t.line);
+    const how = t.proof ? "not proven: " + t.proof : "failed" + (t.tier ? " in " + t.tier : "");
+    return `<li><div class="fail-head"><span class="mono">${esc(t.test)}</span></div><div class="fail-msg">${esc(how)}${at ? ` at <span class="mono">${esc(at)}</span>` : ""}</div></li>`;
+  }
+  function more(n, where) { return n > 0 ? `<li class="more">+${n} more ${where}</li>` : ""; }
+  // 1 gate run's failure; `full` is the drawer's form.
+  function gateFailureHtml(g, full) {
+    const f = g.failure;
+    const n = full ? Infinity : POP_LINES;
+    const findings = f.findings.slice(0, n), tests = f.failedTests.slice(0, n);
+    const hiddenF = f.findings.length - findings.length, hiddenT = f.failedTests.length - tests.length;
+    const counts = g.tests ? `<p class="sub num">${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped</p>` : "";
+    const rules = !f.findings.length && Object.keys(g.ruleCounts || {}).length
+      ? `<div class="tags">${Object.entries(g.ruleCounts).map(([k, v]) => `<span class="tag">${esc(k)} ${v}</span>`).join("")}</div>` : "";
+    const where = full ? "in the report" : "in the task drawer";
+    return `<p class="fail-line"><span class="chip bad">${esc(g.verdict)}</span> ${esc(failureHeadline(g))}</p>${counts}
+      ${findings.length ? `<h4>Gating findings</h4><ul class="fail-list">${findings.map((x) => findingHtml(x, full ? 0 : POP_MESSAGE)).join("")}${more(hiddenF, where)}${more(f.moreFindings, "in the report")}</ul>` : rules}
+      ${tests.length ? `<h4>Failing tests</h4><ul class="fail-list">${tests.map(testHtml).join("")}${more(hiddenT, where)}${more(f.moreFailedTests, "in the report")}</ul>` : ""}
+      <p class="sub">run <span class="mono">${esc(g.runId)}</span></p>
+      <p class="sub">${f.report ? `report <code>${esc(f.report)}</code>` : "its report.json isn't in any live checkout"} · <code>${esc(f.command)}</code></p>`;
+  }
+  // What build check-return said about a rejected return; `full` is the drawer's form.
+  function rejectionHtml(r, full) {
+    const shown = r.findings.slice(0, full ? Infinity : POP_LINES);
+    const hidden = r.findings.length - shown.length;
+    const rows = shown.map((x) => `<li><div class="fail-head"><code>${esc(x.rule)}</code></div><div class="fail-msg">${esc(full ? x.message : M.clip(x.message, POP_MESSAGE))}${full && x.truncated ? ` <span class="muted">(cut)</span>` : ""}</div></li>`);
+    const list = shown.length
+      ? `<ul class="fail-list">${rows.join("")}${more(hidden, "in the task drawer")}${more(r.moreFindings, "in check-return's output")}</ul>`
+      : r.rules.length ? `<div class="tags">${r.rules.map((k) => `<span class="tag">${esc(k)}</span>`).join("")}</div>` : "";
+    return `<p class="sub">check-return ${esc(r.verdict)}${r.fix ? " on the fixer's return" : ""}: ${esc(full ? r.message : M.clip(r.message, POP_MESSAGE))}</p>${list}`;
+  }
+  function blockHtml(b, gateOf, full) {
+    const g = b.gateRun ? gateOf(b.gateRun) : null;
+    return `<p class="fail-line"><span class="chip bad">stopped</span> at ${esc(clock(Date.parse(b.at)))}${b.cause ? `: ${esc(blockText[b.cause] || b.cause)}` : ""}</p>
+      ${b.rejection ? rejectionHtml(b.rejection, full) : ""}
+      ${b.halt ? `<p class="sub">halt raised: ${esc(b.halt)}</p>` : ""}
+      ${b.gateRun ? `<p class="sub">last gate run <span class="mono">${esc(b.gateRun)}</span> ${g ? esc(g.verdict) : ""}</p>` : `<p class="sub">no gate run</p>`}`;
+  }
+  // The popover's "Why it failed" section for a span; empty when nothing explains it.
+  function spanFailureHtml(s) {
+    const why = M.failureOf(view, s);
+    if (!why) return "";
+    const parts = [];
+    if (why.block) parts.push(blockHtml(why.block, why.gateOf, false));
+    if (why.gate) parts.push(gateFailureHtml(why.gate, false));
+    why.halts.forEach((h) => {
+      const g = h.gateRun ? why.gateOf(h.gateRun) : null;
+      parts.push(`<p class="fail-line"><span class="chip bad">halted</span> ${esc(h.task || "the run")}: ${esc(h.reason)}</p>${g && g.failure ? gateFailureHtml(g, false) : ""}`);
+    });
+    const task = s.task && taskBy[s.task] ? `<button type="button" class="link-btn" data-open-task="${esc(s.task)}">Open ${esc(s.task)} for every line</button>` : "";
+    const heading = why.gate || why.halts.length ? "Why it failed" : "Why it stopped";
+    return `<div class="pop-fail" role="group" aria-label="${heading}"><h4>${heading}</h4>${parts.join("")}${task}</div>`;
+  }
+
+  function place() {
+    if (!openAnchor) return;
+    if (sheet.matches) { pop.style.left = ""; pop.style.top = ""; return; }
+    const r = openAnchor.getBoundingClientRect();
+    const m = 8, gap = 6;
+    const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    const left = Math.min(Math.max(m, r.left), vw - pw - m);
+    let top = r.bottom + gap;
+    if (top + ph > vh - m) top = r.top - gap - ph;
+    if (top < m) top = Math.max(m, vh - ph - m);
+    pop.style.left = Math.max(m, left) + "px";
+    pop.style.top = top + "px";
+  }
+
+  // Anchors a popover of label and value rows to any element; modules use it through runViewer.
+  function openPopover(anchor, rows, title, extraHtml = "", focus = true) {
+    if (openAnchor) closePop(false);
+    openAnchor = anchor;
+    anchor.classList.add("sel");
+    anchor.setAttribute("aria-expanded", "true");
+    $("pop-title").textContent = title != null ? title : anchor.getAttribute("aria-label") || "";
+    $("pop-body").innerHTML = `<dl>${rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v)}</dd>`).join("")}</dl>${extraHtml}`;
+    pop.hidden = false;
+    place();
+    if (focus) pop.querySelector(".pop-close").focus({ preventScroll: true });
+  }
+
+  function openSpan(bar, focus = true) {
+    const s = all[bar.dataset.id];
+    const outcome = s.outcome ? (s.outcome === "red" ? "RED" : s.outcome === "ok" ? "GREEN" : s.outcome) : null;
+    const rows = [
+      ["phase", s.tier ? `${s.tier} ${s.phase}` : s.phase],
+      ["span", s.phase === "step" ? s.parent : s.id, `<span class="mono">${esc(s.phase === "step" ? s.parent : s.id)}</span>`],
+      ["task", s.task || "none"],
+      ["start", "+" + fmtMin(s.start)],
+      ["duration", M.durationText(s) + (s.approximate ? " (approximate)" : "")],
+      ["gate run", s.gateRun || "none", s.gateRun ? `<span class="mono">${esc(s.gateRun)}</span>` : null],
+      ["outcome", outcome || "none", outcome ? verdictChip(outcome) : null]
+    ];
+    const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
+    openPopover(bar, rows, s.label, `${spanFailureHtml(s)}<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
+  }
+
+  function closePop(restoreFocus = true) {
+    if (!openAnchor) return;
+    const anchor = openAnchor;
+    openAnchor = null;
+    pop.hidden = true;
+    pinned = false;
+    anchor.classList.remove("sel");
+    anchor.setAttribute("aria-expanded", "false");
+    if (restoreFocus && anchor.isConnected) {
+      restoring = true;
+      anchor.focus({ preventScroll: true });
+      restoring = false;
+    }
+  }
+
+  // Hovering or focusing a bar previews its popover without moving focus; a click or Enter pins
+  // it and moves focus in. A preview closes when the pointer or focus leaves its bar.
+  let pinned = false, restoring = false;
+  tl.addEventListener("click", (e) => {
+    const b = e.target.closest(".bar");
+    if (!b) return;
+    if (b === openAnchor && pinned) { closePop(); return; }
+    openSpan(b);
+    pinned = true;
+  });
+  const preview = (b) => { if (b && b !== openAnchor && !pinned && !restoring) { openSpan(b, false); pinned = false; } };
+  tl.addEventListener("focusin", (e) => preview(e.target.closest(".bar")));
+  tl.addEventListener("mouseover", (e) => preview(e.target.closest(".bar")));
+  tl.addEventListener("focusout", (e) => {
+    if (pinned || !openAnchor || e.target !== openAnchor) return;
+    if (!e.relatedTarget || (!pop.contains(e.relatedTarget) && !e.relatedTarget.closest(".bar"))) closePop(false);
+  });
+  tl.addEventListener("mouseout", (e) => {
+    const b = e.target.closest(".bar");
+    if (pinned || !b || b !== openAnchor || document.activeElement === b) return;
+    if (!e.relatedTarget || (!pop.contains(e.relatedTarget) && e.relatedTarget.closest(".bar") !== b)) closePop(false);
+  });
+  pop.addEventListener("click", (e) => {
+    const l = e.target.closest("[data-open-task]");
+    if (l) openTaskDrawer(l.dataset.openTask, openAnchor);
+  });
+  pop.querySelector(".pop-close").addEventListener("click", () => closePop());
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (drawerId) { e.preventDefault(); closeDrawer(); } else if (openAnchor) { e.preventDefault(); closePop(); }
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (openAnchor && !pop.contains(e.target) && !openAnchor.contains(e.target)) closePop();
+  });
+  window.addEventListener("scroll", place, { capture: true, passive: true });
+  window.addEventListener("resize", () => { if (view) sizeTrack(); place(); });
+  sheet.addEventListener("change", place);
+
+  // zoom: scale the track and keep the time at the middle of the visible track in view
+  const zoomBtns = [...document.querySelectorAll("#zoom button")];
+  function setZoom(z) {
+    const labelW = tl.querySelector(".tl-label").offsetWidth;
+    const mid = (labelW + scroller.clientWidth) / 2;
+    const f = (scroller.scrollLeft + mid - labelW) / (tl.offsetWidth - labelW);
+    zoom = z;
+    sizeTrack();
+    scroller.scrollLeft = labelW + f * (tl.offsetWidth - labelW) - mid;
+    zoomBtns.forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.z) === z)));
+    place();
+  }
+  zoomBtns.forEach((b) => b.addEventListener("click", () => setZoom(Number(b.dataset.z))));
+
+  // spec mapping
+  function renderSpec() {
+    $("spec").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
+      view.spec.map((q) => {
+        const ts = q.tasks.map((id) => taskBy[id]).filter(Boolean);
+        const verdicts = ts.map((t) => (gateBy[t.mergeGateRun] ? gateBy[t.mergeGateRun].verdict : null));
+        const v = !q.tasks.length ? `<span class="chip warn">uncovered</span>`
+          : verdicts.includes("RED") ? verdictChip("RED")
+          : verdicts.length && verdicts.every((x) => x === "GREEN") ? verdictChip("GREEN")
+          : `<span class="chip plain">not merged</span>`;
+        return `<tr><td><span class="mono">${esc(q.id)}</span><div class="sub">${esc(q.title)}</div></td>
+          <td><div class="tags">${q.tasks.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div></td>
+          <td><div class="tags">${ts.flatMap((t) => t.commits).map((c) => `<span class="tag">${esc(c)}</span>`).join("")}</div></td>
+          <td>${v}</td></tr>`;
+      }).join("") + `</tbody>`;
+  }
+
+  // proof: the assertion's file, line and kind only; a report never carries source
+  const outcomeText = { proven: ["failed", "ok", "proven"], "passes-reverted": ["passed", "bad", "not proven"], "compile-only": ["didn't compile", "warn", "not proven"], crashed: ["crashed", "warn", "not proven"], skipped: ["skipped", "warn", "not proven"] };
+  function renderProof() {
+    $("proof").innerHTML = `<thead><tr><th>test</th><th>with the change reverted</th><th>assertion</th></tr></thead><tbody>` +
+      view.proofs.map((p) => {
+        const [txt, cls, label] = outcomeText[p.outcome] || [p.outcome, "warn", "unknown"];
+        const a = p.assertion ? `<span class="mono" title="${esc(p.assertion.file)}">${esc(p.assertion.file.split("/").pop())}:${esc(p.assertion.line)}</span><div class="sub">#${esc(p.assertion.kind)}</div>` : `<span class="sub">none failed</span>`;
+        return `<tr><td><span class="mono">${esc(p.test)}</span><div class="sub">${esc(p.task)} · base ${esc(p.proofBase || "none")} · run <span class="mono" title="${esc(p.gateRun)}">${esc(shortRun(p.gateRun))}</span></div></td>
+          <td><span class="chip ${cls}">${esc(label)}</span><div class="sub">${esc(txt)}</div></td><td>${a}</td></tr>`;
+      }).join("") + `</tbody>`;
+  }
+
+  // tokens
+  function tokRows(items, labelKey, timeFn) {
+    const max = Math.max(1, ...items.filter((x) => x.tokens).map((x) => sum(x.tokens)));
+    return items.map((x) => {
+      const t = x.tokens, w = (n) => (n / max) * 100;
+      const bar = t
+        ? `<div class="tok-bar" title="input ${fmtTok(t.input)}, cache read ${fmtTok(t.cacheRead)}, cache write ${fmtTok(t.cacheWrite)}, output ${fmtTok(t.output)}">
+          <i style="width:${w(t.input)}%;background:var(--accent)"></i><i style="width:${w(t.cacheRead)}%;background:var(--bar-review)"></i><i style="width:${w(t.cacheWrite)}%;background:var(--warn)"></i><i style="width:${w(t.output)}%;background:var(--ok)"></i>
+        </div>`
+        : `<div class="tok-bar" title="tokens arrive when the worker's transcript is ingested"></div>`;
+      const time = timeFn ? timeFn(x) : "";
+      return `<div class="tok-row"><span class="mono">${esc(x[labelKey])}</span>${bar}<span class="num" style="text-align:right">${fmtTokens(t)}${time ? `<div class="sub" style="color:var(--muted);font-size:11px">${esc(time)}</div>` : ""}</span></div>`;
+    }).join("");
+  }
+  function renderTokens() {
+    $("tokens").innerHTML = tokRows(view.tasks, "id", (t) => { const s = taskSpan(t.id); return s ? M.durationText(s) : ""; });
+    $("roles").innerHTML = tokRows(view.roles, "role");
+  }
+
+  // gates
+  function renderGates() {
+    $("gates").innerHTML = view.gates.map((g) => {
+      const rules = Object.entries(g.ruleCounts || {});
+      return `<div class="gate"><div class="gate-top">${verdictChip(g.verdict)}<span class="mono">${esc(g.runId)}</span></div>
+        <div class="sub" style="color:var(--muted);font-size:12px">${esc(g.task || "no task")} · swiftgate ${esc(g.command)} · ${fmtMs(g.ms)}${g.tests ? ` · ${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped` : ""}</div>
+        <div class="steps">${g.steps.map((s) => `<span class="step ${s.verdict === "RED" ? "red" : ""}">${esc(s.tier)} ${esc(s.step)} ${fmtMs(s.ms)}</span>`).join("")}</div>
+        ${rules.length ? `<div class="tags">${rules.map(([k, n]) => `<span class="tag">${esc(k)} ${n}</span>`).join("")}</div>` : ""}
+        ${g.failure ? `<div class="gate-fail"><p class="sub">${esc(failureHeadline(g))}</p>${g.failure.findings.length ? `<ul class="fail-list">${g.failure.findings.slice(0, POP_LINES).map((x) => findingHtml(x, POP_MESSAGE)).join("")}${more(g.failure.findings.length - Math.min(POP_LINES, g.failure.findings.length) + g.failure.moreFindings, "")}</ul>` : ""}</div>` : ""}</div>`;
+    }).join("");
+  }
+
+  // task drawer: opened from a board card, a graph node or a link, it reads like a ticket
+  const statusChip = { pending: "plain", "in-progress": "info", done: "ok", blocked: "bad", "needs-replan": "warn", abandoned: "bad" };
+  const statusVar = { pending: "--muted", "in-progress": "--accent", done: "--ok", blocked: "--bad", "needs-replan": "--warn", abandoned: "--bad" };
+  const clock = (ms) => { const d = new Date(ms); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + " UTC"; };
+  const nowMs = () => t0 + wall * 60000;
+  const ago = (ms) => { const d = (nowMs() - ms) / 60000; return d < 1 ? "just now" : d < 60 ? Math.round(d) + "m ago" : Math.floor(d / 60) + "h ago"; };
+  const when = (ms) => `<time title="+${fmtMin((ms - t0) / 60000)} · ${clock(ms)}">${ago(ms)}</time>`;
+  const md = (txt) => esc(txt).replace(/`([^`]+)`/g, "<code>$1</code>");
+  const bullets = (xs) => `<ul class="dr-list">${xs.map((x) => `<li>${md(x)}</li>`).join("")}</ul>`;
+  const card = (label, body) => `<section class="dr-card"><h4>${label}</h4>${body}</section>`;
+
+  function renderDrawer(id) {
+    const t = taskBy[id], b = t.brief;
+    $("dr-id").textContent = t.id;
+    $("dr-status").className = "chip " + (statusChip[t.status] || "plain");
+    $("dr-status").textContent = t.status;
+    $("dr-title").textContent = b ? b.title : t.id;
+    const specColour = Object.fromEntries(view.spec.map((q, i) => [q.id, `--label-${(i % 5) + 1}`]));
+    const writes = t.writes || [];
+    const ws = writes.length
+      ? `<details class="ws"><summary>${plural(writes.length, "file")}</summary><ul class="pop-files">${writes.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>`
+      : `<span class="muted">no files</span>`;
+    const merged = t.mergedAt
+      ? `${(t.commits || []).map((c) => `<code>${esc(c)}</code>`).join("")}<span class="muted">${clock(Date.parse(t.mergedAt))} · ${ago(Date.parse(t.mergedAt))}</span>`
+      : `<span class="muted">not yet</span>`;
+    const created = t.createdAt ? `<span>${clock(Date.parse(t.createdAt))}</span><span class="muted">· ${ago(Date.parse(t.createdAt))}</span>` : `<span class="muted">unknown</span>`;
+    const covers = t.covers || [];
+    const props = [
+      ["status", `<span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span>`],
+      ["worker", `${esc(t.model)} <span class="muted">build worker</span>`],
+      ["wave", `wave ${M.waveOf(view, id)}`],
+      ["spec ids", covers.length ? covers.map((c) => `<span class="label-chip" style="--c:var(${specColour[c] || "--muted"})">${esc(c)}</span>`).join("") : `<span class="muted">none</span>`],
+      ["write set", ws, "block"],
+      ["gate", t.gate ? esc(t.gate) : `<span class="muted">none</span>`],
+      ["created", created],
+      ["merged", merged],
+      ["id", `<span class="mono">${esc(id)}</span>`]
+    ];
+
+    const linkRows = (label, ids) => ids.map((d) => {
+      const x = taskBy[d];
+      if (!x) return `<div class="link-row"><span>${label}</span><span class="mono">${esc(d)}</span></div>`;
+      const goal = x.brief ? x.brief.title : x.status;
+      return `<div class="link-row"><span>${label}</span><button type="button" class="link-btn" data-open="${esc(d)}" style="--c:var(${statusVar[x.status] || "--muted"})" aria-label="${label} ${esc(d)}, ${esc(x.status)}: ${esc(goal)}"><i class="dot"></i><span class="mono">${esc(d)}</span><span class="goal">${esc(goal)}</span></button></div>`;
+    }).join("");
+    const links = linkRows("Blocked by", t.deps || []) + linkRows("Blocks", M.blocks(view, id));
+
+    const ev = M.activity(view, id);
+    const acts = ev.length
+      ? `<ol class="act">${ev.map((e) => `<li style="--c:var(${e.c})"><i class="dot"></i><div class="ev"><span>${esc(e.text)}</span>${(e.codes || []).map((c) => `<code>${esc(c)}</code>`).join("")}${e.sub ? `<span class="sub">${esc(e.sub)}</span>` : ""}</div>${when(e.at)}</li>`).join("")}</ol>`
+      : `<p class="muted">nothing yet</p>`;
+    const ts = taskSpan(id);
+    const redGates = view.gates.filter((g) => g.task === id && g.failure);
+    const gateOf = (rid) => gateBy[rid] || null;
+    const failed = t.blocked || redGates.length
+      ? card(redGates.length ? "Why it failed" : "Why it stopped", `${t.blocked ? blockHtml(t.blocked, gateOf, true) : ""}${redGates.map((g) => `<div class="dr-fail">${gateFailureHtml(g, true)}</div>`).join("")}`)
+      : "";
+
+    $("dr-body").innerHTML = failed +
+      (b ? card("Why", `<p>${md(b.why)}</p>${b.designRef ? `<p class="dr-ref">Implements design ${esc(b.designRef)}</p>` : ""}`) +
+        card("Scope", bullets(b.scope)) +
+        card("Acceptance", bullets(b.acceptance)) +
+        card("Out of scope", bullets(b.outOfScope)) : "") +
+      card("Properties", `<dl class="props">${props.map(([k, v, cls]) => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ""}>${v}</dd>`).join("")}</dl>`) +
+      card("Links", links ? `<div class="links">${links}</div>` : `<p class="muted">no dependencies</p>`) +
+      card("Activity", acts) +
+      `<details class="dr-card dr-fold"><summary>Tool activity</summary><div style="display:grid;gap:8px">${toolsHtml(ts ? M.toolSummary(spans, ts.id) : null)}</div></details>`;
+  }
+
+  const drawer = $("drawer"), scrim = $("drawer-scrim");
+  let drawerId = null, drawerOpener = null;
+  // With no opener given, focus returns on close to whatever had it when the drawer opened.
+  function openTaskDrawer(id, opener) {
+    if (!taskBy[id]) return false;
+    closePop(false);
+    const from = opener || (drawerId ? null : document.activeElement);
+    if (from && from !== drawerOpener && from !== document.body) {
+      if (drawerOpener) { drawerOpener.classList.remove("sel"); drawerOpener.setAttribute("aria-expanded", "false"); }
+      drawerOpener = from;
+      if (opener) { opener.classList.add("sel"); opener.setAttribute("aria-expanded", "true"); }
+    }
+    drawerId = id;
+    renderDrawer(id);
+    drawer.scrollTop = 0;
+    drawer.removeAttribute("inert");
+    drawer.classList.add("open");
+    scrim.classList.add("open");
+    document.documentElement.classList.add("drawer-open");
+    drawer.querySelector(".dr-close").focus({ preventScroll: true });
+    return true;
+  }
+  function closeDrawer() {
+    if (!drawerId) return;
+    drawerId = null;
+    drawer.classList.remove("open");
+    scrim.classList.remove("open");
+    drawer.setAttribute("inert", "");
+    document.documentElement.classList.remove("drawer-open");
+    const o = drawerOpener;
+    drawerOpener = null;
+    if (o) { o.classList.remove("sel"); o.setAttribute("aria-expanded", "false"); if (o.isConnected) o.focus({ preventScroll: true }); }
+  }
+  drawer.querySelector(".dr-close").addEventListener("click", closeDrawer);
+  scrim.addEventListener("pointerdown", (e) => { e.preventDefault(); closeDrawer(); });
+  // Following a link keeps the original opener, so closing still returns focus to it.
+  $("dr-body").addEventListener("click", (e) => { const l = e.target.closest("[data-open]"); if (l) openTaskDrawer(l.dataset.open); });
+  drawer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const f = [...drawer.querySelectorAll("button, summary, [tabindex]:not([tabindex='-1'])")].filter((el) => el.getClientRects().length);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // footer: every damage row is a visible line, never a silent gap
+  function renderFooter() {
+    const damage = (view ? view.damage : []).concat(pageDamage);
+    $("foot").innerHTML = `<span>RunView schema ${view ? esc(view.schemaVersion) : "none"}</span><span>damage: ${damage.length ? damage.length : "none"}</span><span>plan text, ids, counts, times and repo-relative paths; no source or transcripts</span>` +
+      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
+  }
+
+  // Optional modules (board, graph) render into their own hidden panel. One that throws is shown
+  // as a damage line and its panel stays hidden, so it can't blank the core regions.
+  const modules = new Map();
+  function runModule(name, step) {
+    const mod = modules.get(name);
+    const mount = document.querySelector(`[data-module="${CSS.escape(name)}"]`);
+    if (!mod || !mount || !view) return;
+    try {
+      if (step === "render") mod.render(view, mount); else if (mod.apply) mod.apply(view);
+      mount.hidden = false;
+    } catch (error) {
+      mount.hidden = true;
+      pageDamage.push({ source: "module " + name, reason: String(error && error.message ? error.message : error) });
+      renderFooter();
+    }
+  }
+  function register(name, mod) {
+    modules.set(name, mod);
+    runModule(name, "render");
+  }
+
+  // now strip: live mode only, 1 card per running task with stall and halt badges
+  let strip = null;
+  function ensureStrip() {
+    if (strip) return strip;
+    strip = document.createElement("section");
+    strip.className = "panel now";
+    strip.id = "now";
+    strip.setAttribute("aria-label", "Now");
+    strip.innerHTML = `<div class="head"><h2>Now</h2><span class="now-note" id="now-note"></span></div><div class="now-cards" id="now-cards" role="list"></div>`;
+    document.querySelector(".wrap > .panel").after(strip);
+    return strip;
+  }
+  const stageLabel = (w) => {
+    if (w.phase === "gate") { const g = w.gateRun && gateBy[w.gateRun]; return g ? "gate " + M.gateTier(g.command) : "gate"; }
+    return w.phase === "task" ? "starting" : w.phase.replace(/-/g, " ");
+  };
+  const age = (msAgo) => (msAgo < 60000 ? Math.max(0, Math.round(msAgo / 1000)) + "s ago" : fmtMs(msAgo) + " ago");
+
+  function renderNow() {
+    if (!liveMode) return;
+    ensureStrip();
+    const now = Date.now();
+    // Without the preset's stall_min there is nothing to measure a stall against, so the strip says so.
+    const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
+    const cards = M.workers(view, now, stallMin == null ? Infinity : stallMin);
+    const runHalts = M.openHalts(view).filter((h) => h.task == null);
+    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run names no stall_min</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
+      runHalts.map((h) => `<span class="chip bad">run halted: ${esc(h.reason)}</span>`).join("");
+    $("now-cards").innerHTML = cards.length ? cards.map((w) => `<div class="now-card${w.halted ? " halted" : w.stalled ? " stalled" : ""}" role="listitem" data-task="${esc(w.task)}">
+        <div class="now-top"><b class="mono">${esc(w.task)}</b>${w.halted ? `<span class="chip bad" title="${esc(w.halt.reason)}">halted</span>` : ""}${w.stalled ? `<span class="chip warn">stalled</span>` : ""}</div>
+        <div class="now-stage"><span>${esc(stageLabel(w))}</span><span class="num">${esc(fmtMs(w.elapsedMs))}</span></div>
+        <div class="sub num">last event ${w.lastEventMs == null ? "none" : esc(age(now - w.lastEventMs))}</div>
+      </div>`).join("") : `<p class="sub">idle: no task running</p>`;
+  }
+
+  function render() {
+    derive();
+    renderHeader();
+    renderNow();
+    renderTimeline();
+    renderSpec();
+    renderProof();
+    renderTokens();
+    renderGates();
+    renderFooter();
+  }
+
+  // Merges a partial RunView by id and redraws; live mode calls this on each poll.
+  // A redraw keeps what the reader had: the open span popover, the focused bar, and the drawer's
+  // focus and folds, so a 1 s poll never pulls them away.
+  function apply(partial) {
+    view = M.apply(view, partial);
+    const active = document.activeElement;
+    const popSpan = openAnchor && openAnchor.classList.contains("bar") ? openAnchor.dataset.id : null;
+    const popFocus = pop.contains(active);
+    const barFocus = active && active.classList && active.classList.contains("bar") ? active.dataset.id : null;
+    const drawerFocusables = () => [...drawer.querySelectorAll("#dr-body button, #dr-body summary")];
+    const drawerFocus = drawerId ? drawerFocusables().indexOf(active) : -1;
+    const folds = drawerId ? [...drawer.querySelectorAll("#dr-body details")].map((d) => d.open) : [];
+    const wasPinned = pinned;
+    closePop(false);
+    render();
+    modules.forEach((_, name) => runModule(name, "apply"));
+    const bar = (id) => (id ? tl.querySelector(`.bar[data-id="${CSS.escape(id)}"]`) : null);
+    restoring = true;
+    if (barFocus && bar(barFocus)) bar(barFocus).focus({ preventScroll: true });
+    restoring = false;
+    if (popSpan && bar(popSpan)) {
+      openSpan(bar(popSpan), popFocus);
+      pinned = wasPinned;
+    }
+    if (drawerId) {
+      renderDrawer(drawerId);
+      drawer.querySelectorAll("#dr-body details").forEach((d, i) => { if (folds[i]) d.open = true; });
+      if (drawerFocus >= 0 && drawerFocusables()[drawerFocus]) drawerFocusables()[drawerFocus].focus({ preventScroll: true });
+    }
+  }
+
+  // live mode: fetch the whole view once, then merge each change set polled after its cursor
+  const POLL_MS = 1000;
+  let polls = 0, pollFailures = 0;
+  async function fetchJSON(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(`${path.split("?")[0]} answered ${response.status}`);
+    return response.json();
+  }
+  function showLiveError(message) {
+    let line = $("live-error");
+    if (!line) {
+      line = document.createElement("div");
+      line.id = "live-error";
+      line.className = "live-error";
+      line.setAttribute("role", "status");
+      document.querySelector(".wrap > .panel").appendChild(line);
+    }
+    line.textContent = message || "";
+    line.hidden = !message;
+  }
+  async function poll() {
+    try {
+      if (!view) {
+        view = await fetchJSON("/view.json");
+        render();
+      } else {
+        apply(await fetchJSON("/changes?after=" + encodeURIComponent(view.cursor)));
+      }
+      polls++;
+      document.body.dataset.polls = String(polls);
+      showLiveError(null);
+    } catch (error) {
+      pollFailures++;
+      document.body.dataset.pollFailures = String(pollFailures);
+      showLiveError(`live updates paused: ${error.message}; retrying every second`);
+    }
+    setTimeout(poll, POLL_MS);
+  }
+
+  window.runViewer = {
+    register,
+    openPopover: (anchor, rows, title) => openPopover(anchor, rows.map(([k, v]) => [k, v]), title),
+    openTaskDrawer,
+    apply
+  };
+
+  if (liveMode) {
+    document.body.dataset.live = "on";
+    const mode = document.querySelector(".wrap > .panel .head .chip.plain:not(#state)");
+    if (mode) mode.textContent = "Live";
+    renderFooter();
+    poll();
+  } else if (view) render(); else renderFooter();
+})();
+
+</script>
+<script>
+// The board module: 1 card per task in queued, building, gating, review, merged, or the blocked
+// lane. Loaded after the core page as a classic script; it publishes `RunViewBoard` and registers
+// with the page when the page is there.
+(function (root) {
+  const LANES = ["queued", "building", "gating", "review", "merged", "blocked"];
+  const BLOCKED = new Set(["blocked", "needs-replan", "abandoned"]);
+  // An open merge span is still waiting on its merge gate, so it reads as review, not merged.
+  const STAGE = { worker: "building", fix: "building", verify: "gating", gate: "gating", review: "review", merge: "review" };
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+
+  function laneFor(task, own, halted) {
+    if (halted || BLOCKED.has(task.status)) return "blocked";
+    if (task.status === "done") return "merged";
+    const open = own.filter((s) => s.end == null && STAGE[s.phase]).sort((a, b) => ms(b.start) - ms(a.start));
+    if (open.length) return STAGE[open[0].phase];
+    return task.status === "in-progress" ? "building" : "queued";
+  }
+
+  // The verdict of the task's latest finished gate span, else of its last gate record.
+  function lastGate(task, own, gateBy, gates) {
+    const ran = own.filter((s) => s.phase === "gate" && s.gateRun && s.end != null).sort((a, b) => ms(a.start) - ms(b.start));
+    const last = ran[ran.length - 1];
+    if (last) return gateBy[last.gateRun] ? gateBy[last.gateRun].verdict : last.outcome === "red" ? "RED" : "GREEN";
+    const records = gates.filter((g) => g.task === task.id);
+    return records.length ? records[records.length - 1].verdict : null;
+  }
+
+  function elapsed(task, own, cut) {
+    const fmtMin = root.RunViewModel.fmtMin;
+    if (!own.length) return "waiting";
+    const taskSpan = own.find((s) => s.phase === "task");
+    const start = taskSpan ? ms(taskSpan.start) : Math.min(...own.map((s) => ms(s.start)));
+    let end = taskSpan && taskSpan.end != null ? ms(taskSpan.end) : ms(task.mergedAt);
+    if (end == null) end = own.every((s) => s.end != null) && !taskSpan ? Math.max(...own.map((s) => ms(s.end))) : cut;
+    return fmtMin(Math.max(0, end - start) / 60000);
+  }
+
+  // Each lane's cards in the view's task order. `now` cuts open spans; it defaults to the run's last
+  // event, as the timeline does.
+  function columns(view, now) {
+    const cut = now != null ? now : root.RunViewModel.lastEventMs(view);
+    const spans = view.spans || [];
+    const gates = view.gates || [];
+    const gateBy = Object.fromEntries(gates.map((g) => [g.runId, g]));
+    const halted = new Set((view.halts || []).filter((h) => h.task != null && h.answer == null && h.waitMs == null).map((h) => h.task));
+    const out = Object.fromEntries(LANES.map((lane) => [lane, []]));
+    (view.tasks || []).forEach((task) => {
+      const own = spans.filter((s) => s.task === task.id);
+      const lane = laneFor(task, own, halted.has(task.id));
+      out[lane].push({
+        id: task.id, lane, model: task.model, elapsed: elapsed(task, own, cut),
+        lastGate: lastGate(task, own, gateBy, gates), covers: task.covers || []
+      });
+    });
+    return out;
+  }
+
+  root.RunViewBoard = { LANES, columns };
+
+  const runViewer = root.runViewer;
+  if (!runViewer || typeof document === "undefined") return;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const verdictChip = (v) => `<span class="chip ${v === "GREEN" ? "ok" : v === "RED" ? "bad" : "warn"}">${esc(v)}</span>`;
+  const laneColour = { queued: "--muted", building: "--bar-worker", gating: "--warn", review: "--bar-review", merged: "--ok", blocked: "--bad" };
+
+  let board = null, note = null;
+  const lanes = {};
+  // Cards persist by task id, so a card that moves keeps its focus and stays the drawer's opener.
+  const cards = new Map();
+
+  function build(mount) {
+    mount.innerHTML = `<div class="head" style="justify-content:space-between"><h2>Board</h2></div>
+      <p class="sub board-note"></p>
+      <div class="board-scroll" tabindex="0" aria-label="Task board, scrolls horizontally"><div class="board"></div></div>`;
+    note = mount.querySelector(".board-note");
+    board = mount.querySelector(".board");
+    LANES.forEach((lane) => {
+      const el = document.createElement("div");
+      el.className = "lane" + (lane === "blocked" ? " blocked" : "");
+      el.setAttribute("role", "group");
+      el.dataset.lane = lane;
+      board.appendChild(el);
+      lanes[lane] = el;
+    });
+    cards.clear();
+    board.addEventListener("click", (e) => {
+      const c = e.target.closest(".card");
+      if (c) runViewer.openTaskDrawer(c.dataset.task, c);
+    });
+  }
+
+  function cardFor(c) {
+    let el = cards.get(c.id);
+    if (!el) {
+      el = document.createElement("button");
+      el.type = "button";
+      el.className = "card";
+      el.dataset.task = c.id;
+      el.setAttribute("aria-haspopup", "dialog");
+      el.setAttribute("aria-expanded", "false");
+      cards.set(c.id, el);
+    }
+    el.style.setProperty("--c", `var(${laneColour[c.lane]})`);
+    el.setAttribute("aria-label", `${c.id}, ${c.lane}, ${c.model}, ${c.elapsed}, last gate ${c.lastGate || "none"}`);
+    el.innerHTML = `<span class="card-top"><span class="card-id">${esc(c.id)}</span><span class="chip plain">${esc(c.model)}</span></span>
+      <span class="card-meta"><span class="num">${esc(c.elapsed)}</span>${c.lastGate ? verdictChip(c.lastGate) : `<span class="chip plain">no gate yet</span>`}</span>
+      <span class="tags">${c.covers.length ? c.covers.map((t) => `<span class="tag">${esc(t)}</span>`).join("") : `<span class="sub card-none">no spec id</span>`}</span>`;
+    return el;
+  }
+
+  function update(view) {
+    const cut = root.RunViewModel.lastEventMs(view);
+    const byLane = columns(view, cut);
+    const focused = document.activeElement;
+    const seen = new Set();
+    LANES.forEach((lane) => {
+      const inLane = byLane[lane];
+      const head = document.createElement("div");
+      head.className = "lane-head";
+      head.innerHTML = `<span>${lane}</span><span class="num">${inLane.length}</span>`;
+      const body = inLane.length ? inLane.map((c) => { seen.add(c.id); return cardFor(c); }) : [Object.assign(document.createElement("div"), { className: "lane-empty", textContent: lane === "blocked" ? "no halts" : "empty" })];
+      lanes[lane].setAttribute("aria-label", `${lane}, ${inLane.length} tasks`);
+      lanes[lane].replaceChildren(head, ...body);
+    });
+    [...cards.keys()].forEach((id) => { if (!seen.has(id)) cards.delete(id); });
+    if (focused && focused.classList.contains("card") && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
+    const fmtMin = root.RunViewModel.fmtMin;
+    const at = fmtMin(Math.max(0, cut - ms(view.run.startedAt)) / 60000);
+    const total = (view.tasks || []).length;
+    note.textContent = view.run.state === "running"
+      ? `Live at +${at}: ${total - byLane.merged.length} tasks in flight.`
+      : `Final state at +${at}: ${byLane.merged.length} of ${total} merged, ${byLane.blocked.length} blocked.`;
+  }
+
+  runViewer.register("board", {
+    render(view, mount) {
+      if (!board || !mount.contains(board)) build(mount);
+      update(view);
+    },
+    apply: update
+  });
+})(globalThis);
+
+</script>
+<script>
+// The plan graph module: the tasks as a dependency graph in waves left to right, 1 node per task
+// coloured by its board lane and 1 edge per dep. Loaded after the core page as a classic script;
+// it publishes `RunViewGraph` and registers with the page when the page is there.
+(function (root) {
+  // A dep on an id outside `tasks` is left out here; the module reports it as a damage line.
+  function cycleIn(tasks, by) {
+    const state = new Map();
+    const stack = [];
+    let found = null;
+    const visit = (id) => {
+      state.set(id, "open");
+      stack.push(id);
+      for (const d of by.get(id).deps || []) {
+        if (found) break;
+        if (!by.has(d)) continue;
+        if (state.get(d) === "open") found = stack.slice(stack.indexOf(d));
+        else if (!state.has(d)) visit(d);
+      }
+      stack.pop();
+      state.set(id, "done");
+    };
+    for (const t of tasks) {
+      if (found) break;
+      if (!state.has(t.id)) visit(t.id);
+    }
+    return found;
+  }
+
+  // Each task's wave is the length of its longest dep chain. Then 1 pass orders each wave by the
+  // mean centred position of its deps, so edges from a wave's top tend to stay at the top.
+  function layers(tasks) {
+    const by = new Map(tasks.map((t) => [t.id, t]));
+    const cycle = cycleIn(tasks, by);
+    if (cycle) return { waves: [], cycle };
+    const wave = new Map();
+    const waveOf = (id) => {
+      if (!wave.has(id)) {
+        const known = (by.get(id).deps || []).filter((d) => by.has(d));
+        wave.set(id, known.length ? 1 + Math.max(...known.map(waveOf)) : 0);
+      }
+      return wave.get(id);
+    };
+    const waves = [];
+    tasks.forEach((t) => (waves[waveOf(t.id)] = waves[waveOf(t.id)] || []).push(t.id));
+    const pos = new Map();
+    waves.forEach((w, i) => {
+      if (i > 0) {
+        const key = (id) => {
+          const known = (by.get(id).deps || []).filter((d) => pos.has(d));
+          return known.reduce((a, d) => a + pos.get(d), 0) / known.length;
+        };
+        const keys = new Map(w.map((id) => [id, key(id)]));
+        w.sort((a, b) => keys.get(a) - keys.get(b));
+      }
+      w.forEach((id, j) => pos.set(id, j - (w.length - 1) / 2));
+    });
+    return { waves, cycle: null };
+  }
+
+  root.RunViewGraph = { layers };
+
+  const runViewer = root.runViewer;
+  if (!runViewer || typeof document === "undefined") return;
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const ms = (iso) => (iso == null ? null : Date.parse(iso));
+  // Plan stages come from phase spans; before tasks run spec-read, plan and contract, after them final.
+  const PRE = ["spec-read", "plan", "contract"];
+  const POST = ["final"];
+  const STAGE_LABEL = { "spec-read": "spec read", plan: "plan", contract: "contract", final: "final" };
+  const NW = 168, NH = 52, GX = 44, PAD = 20, ROW = 72;
+  // A 12px monospace id fits about 18 characters in a node; the tooltip and label keep the whole id.
+  const fit = (s) => (s.length > 18 ? s.slice(0, 17) + "…" : s);
+
+  // Without the board module a task's lane comes from its status alone.
+  function lanesOf(view) {
+    const out = {};
+    if (root.RunViewBoard) {
+      const cols = root.RunViewBoard.columns(view);
+      Object.keys(cols).forEach((lane) => cols[lane].forEach((c) => (out[c.id] = lane)));
+      return out;
+    }
+    (view.tasks || []).forEach((t) => {
+      out[t.id] = t.status === "done" ? "merged" : ["blocked", "needs-replan", "abandoned"].includes(t.status) ? "blocked" : t.status === "in-progress" ? "building" : "queued";
+    });
+    return out;
+  }
+
+  function stagesOf(view) {
+    const out = {};
+    (view.spans || []).forEach((s) => {
+      if (!STAGE_LABEL[s.phase]) return;
+      const st = out[s.phase] || (out[s.phase] = { phase: s.phase, start: ms(s.start), end: ms(s.end), open: false });
+      st.start = Math.min(st.start, ms(s.start));
+      if (s.end == null) st.open = true; else st.end = Math.max(st.end || 0, ms(s.end));
+    });
+    return out;
+  }
+
+  // The graph's nodes: plan stages present in the spans, chained around the tasks.
+  function nodesOf(view) {
+    const tasks = view.tasks || [];
+    const ids = new Set(tasks.map((t) => t.id));
+    const stages = stagesOf(view);
+    const pre = PRE.filter((p) => stages[p]);
+    const post = POST.filter((p) => stages[p]);
+    const key = (p) => "@" + p;
+    const nodes = [];
+    pre.forEach((p, i) => nodes.push({ key: key(p), stage: stages[p], deps: i ? [key(pre[i - 1])] : [], stageDeps: true }));
+    const depended = new Set(tasks.flatMap((t) => (t.deps || []).filter((d) => ids.has(d))));
+    tasks.forEach((t) => {
+      const known = (t.deps || []).filter((d) => ids.has(d));
+      const lead = !known.length && pre.length ? [key(pre[pre.length - 1])] : [];
+      nodes.push({ key: t.id, task: t, deps: lead.concat(known), lead: lead.length });
+    });
+    const sinks = tasks.filter((t) => !depended.has(t.id)).map((t) => t.id);
+    post.forEach((p, i) => nodes.push({ key: key(p), stage: stages[p], deps: i ? [key(post[i - 1])] : sinks, stageDeps: true }));
+    return nodes;
+  }
+
+  let mount = null, shape = null;
+
+  function taskBits(n, lane) {
+    const t = n.task;
+    const files = t.writes.length + (t.writes.length === 1 ? " file" : " files");
+    const title = t.brief && t.brief.title ? `${t.id}: ${t.brief.title}` : t.id;
+    return { cls: `gnode ln-${lane}`, sub: `${files} · ${t.model}`, title, label: `${t.id}, ${lane}, writes ${files}, ${t.model}` };
+  }
+  function stageBits(n, cut) {
+    const s = n.stage;
+    const state = s.open ? "running" : "done";
+    const sub = s.open ? `running ${root.RunViewModel.fmtMin(Math.max(0, cut - s.start) / 60000)}` : root.RunViewModel.fmtMin(Math.max(0, s.end - s.start) / 60000);
+    const name = STAGE_LABEL[s.phase];
+    return { cls: `gnode stage ln-${state === "done" ? "merged" : "building"}`, sub, title: `${name} stage`, label: `${name} stage, ${state}, ${sub}` };
+  }
+
+  function draw(view, nodes, waves) {
+    const by = new Map(nodes.map((n) => [n.key, n]));
+    const maxRows = Math.max(1, ...waves.map((w) => w.length));
+    const GH = PAD * 2 + NH + (maxRows - 1) * ROW, mid = GH / 2;
+    const GW = PAD * 2 + waves.length * NW + Math.max(0, waves.length - 1) * GX;
+    waves.forEach((w, i) => w.forEach((k, j) => {
+      const n = by.get(k);
+      n.x = PAD + i * (NW + GX);
+      // A lone node sits level with its deps; a crowded wave spreads around the middle.
+      n.cy = w.length === 1 && n.deps.length ? n.deps.reduce((a, d) => a + by.get(d).cy, 0) / n.deps.length : mid + (j - (w.length - 1) / 2) * ROW;
+    }));
+    let svg = `<svg class="graph" viewBox="0 0 ${GW} ${GH}" style="min-width:${GW}px" role="group" aria-label="Plan dependency graph">
+      <defs><marker id="graph-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>`;
+    nodes.forEach((n) => n.deps.forEach((d, i) => {
+      const a = by.get(d), x1 = a.x + NW, x2 = n.x - 2, mx = (x1 + x2) / 2;
+      const kind = n.stageDeps || i < (n.lead || 0) ? "stage" : "dep";
+      svg += `<path class="edge ${kind}" d="M${x1} ${a.cy} C${mx} ${a.cy}, ${mx} ${n.cy}, ${x2} ${n.cy}" marker-end="url(#graph-arrow)"/>`;
+    }));
+    nodes.forEach((n) => {
+      const attr = n.task ? `data-task="${esc(n.task.id)}" aria-haspopup="dialog" aria-expanded="false"` : `data-stage="${esc(n.stage.phase)}"`;
+      const name = n.task ? n.task.id : STAGE_LABEL[n.stage.phase];
+      svg += `<g class="gnode" tabindex="0" role="button" ${attr}><title></title>
+        <rect class="box" x="${n.x}" y="${n.cy - NH / 2}" width="${NW}" height="${NH}" rx="8"/>
+        <circle class="dot" cx="${n.x + 14}" cy="${n.cy - 8}" r="4"/>
+        <text class="gid" x="${n.x + 24}" y="${n.cy - 4}">${esc(fit(name))}</text>
+        <text class="gsub" x="${n.x + 24}" y="${n.cy + 14}"></text></g>`;
+    });
+    mount.querySelector(".graph-scroll").innerHTML = svg + `</svg>`;
+  }
+
+  // Classes, labels and tooltips change in place, so a focused node and the drawer's opener survive a poll.
+  function paint(view, nodes) {
+    const lanes = lanesOf(view);
+    const cut = root.RunViewModel.lastEventMs(view);
+    nodes.forEach((n) => {
+      const el = n.task
+        ? mount.querySelector(`.gnode[data-task="${CSS.escape(n.task.id)}"]`)
+        : mount.querySelector(`.gnode[data-stage="${CSS.escape(n.stage.phase)}"]`);
+      const bits = n.task ? taskBits(n, lanes[n.task.id] || "queued") : stageBits(n, cut);
+      const keep = el.classList.contains("sel");
+      el.setAttribute("class", bits.cls + (keep ? " sel" : ""));
+      if (n.task) el.dataset.lane = lanes[n.task.id] || "queued";
+      el.setAttribute("aria-label", bits.label);
+      el.querySelector("title").textContent = bits.title;
+      el.querySelector(".gsub").textContent = bits.sub;
+    });
+  }
+
+  function stageRows(phase, view) {
+    const s = stagesOf(view)[phase];
+    const fmtMin = root.RunViewModel.fmtMin;
+    const t0 = ms(view.run.startedAt);
+    return [["stage", STAGE_LABEL[phase]], ["start", "+" + fmtMin(Math.max(0, s.start - t0) / 60000)],
+      ["duration", s.open ? "running" : fmtMin(Math.max(0, s.end - s.start) / 60000)]];
+  }
+
+  let current = null;
+  function open(g) {
+    if (g.dataset.task) runViewer.openTaskDrawer(g.dataset.task, g);
+    else if (g.dataset.stage && current) runViewer.openPopover(g, stageRows(g.dataset.stage, current), STAGE_LABEL[g.dataset.stage]);
+  }
+
+  function build(m) {
+    mount = m;
+    shape = null;
+    mount.innerHTML = `<div class="head" style="justify-content:space-between"><h2>Plan</h2>
+        <div class="legend"><span style="--c:var(--ok)">merged</span><span style="--c:var(--accent)">building</span><span style="--c:var(--warn)">gating</span><span style="--c:var(--bar-review)">review</span><span style="--c:var(--bad)">blocked</span><span style="--c:var(--muted)">queued</span></div></div>
+      <div class="graph-notes"></div>
+      <div class="graph-scroll" tabindex="0" aria-label="Plan dependency graph, scrolls horizontally"></div>`;
+    const scroll = mount.querySelector(".graph-scroll");
+    scroll.addEventListener("click", (e) => { const g = e.target.closest(".gnode"); if (g) open(g); });
+    scroll.addEventListener("keydown", (e) => {
+      const g = e.target.closest(".gnode");
+      if (g && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); open(g); }
+    });
+  }
+
+  function update(view) {
+    current = view;
+    const nodes = nodesOf(view);
+    const ids = new Set((view.tasks || []).map((t) => t.id));
+    const unknown = (view.tasks || []).flatMap((t) => (t.deps || []).filter((d) => !ids.has(d)).map((d) => `${t.id} → ${d}`));
+    const { waves, cycle } = layers(nodes.map((n) => ({ id: n.key, deps: n.deps })));
+    const notes = [];
+    if (cycle) notes.push(`plan graph: dep cycle ${cycle.concat(cycle[0]).join(" → ")}; no graph drawn`);
+    if (unknown.length) notes.push(`plan graph: dep on a task outside the plan, not drawn: ${unknown.join(", ")}`);
+    mount.querySelector(".graph-notes").innerHTML = notes.map((n) => `<p class="damage-line">${esc(n)}</p>`).join("");
+    if (cycle) {
+      shape = null;
+      mount.querySelector(".graph-scroll").replaceChildren();
+      return;
+    }
+    const next = JSON.stringify(nodes.map((n) => [n.key, n.deps]));
+    if (next !== shape) {
+      const focused = document.activeElement;
+      const refocus = focused && mount.contains(focused) ? (focused.dataset.task ? `[data-task="${CSS.escape(focused.dataset.task)}"]` : focused.dataset.stage ? `[data-stage="${CSS.escape(focused.dataset.stage)}"]` : null) : null;
+      draw(view, nodes, waves);
+      shape = next;
+      const again = refocus && mount.querySelector(`.gnode${refocus}`);
+      if (again) again.focus({ preventScroll: true });
+    }
+    paint(view, nodes);
+  }
+
+  runViewer.register("graph", {
+    render(view, m) {
+      if (mount !== m || !m.querySelector(".graph-scroll")) build(m);
+      update(view);
+    },
+    apply: update
+  });
+})(globalThis);
+
+</script>
+</body>
+</html>

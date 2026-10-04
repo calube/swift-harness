@@ -78,3 +78,34 @@ framework web application.
 On 2026-10-03 this machine had no `php`, `composer`, `go` or `cargo` on `PATH`; `pnpm`, `java` and `xcodegen` were
 present. The trial installs them into scratch with `mise`, or uses each project's wrapper (`./gradlew`), as the plan's
 risk table says.
+
+## iOS trial
+
+On 2026-10-04 the maintainer asked for 1 more trial, on an iOS app, to prove the Xcode path end to end. This trial
+has its own bar: a public iOS app, not an SDK or library; an OSI license; an Xcode project or workspace, possibly
+with SwiftPM packages; a simulator build with Xcode 26.2 and no signing or secrets; unit tests that run on the
+simulator; a clone under about 500 MB; activity in the last year; and absent from the fixture repositories and the
+rejected list above. A mid-size SwiftUI app with a test target was preferred. Each candidate was checked by cloning
+it and running `xcodebuild -list` and a simulator build of its main scheme, stopping at the first that built and
+tested cleanly.
+
+| | `thunderbird/thunderbird-ios` | `weiran/Hackers` | `Aidoku/Aidoku` |
+|---|---|---|---|
+| URL | https://github.com/thunderbird/thunderbird-ios | https://github.com/weiran/Hackers | https://github.com/Aidoku/Aidoku |
+| Commit checked | `6f023c9a8af66f6e232052295775b179f9e37ea2` | `9760ef5342a7f4ffa0d6ff22e6e6b2acd0dc7017` | `3091ef26e593d303e34afed70bc8c5997c105f80` (`main`, 2026-10-03), pinned |
+| License | MPL-2.0 | MIT | GPL-3.0 |
+| Repository size (`gh api`) | 10.3 MB | 186.9 MB | 5.7 MB |
+| Shape | SwiftUI; a workspace with 1 project, 2 local packages and an `.xctestplan` | SwiftUI; 1 project and 7 local packages | SwiftUI and UIKit, 475 Swift files; 1 project with 14 SwiftPM dependencies, synchronized folders, 1 shared scheme `Aidoku` with the Swift Testing target `AidokuTests` |
+| Result | `xcodebuild -list` fails: the `bolt-design-system` package needs Swift tools 6.3, and Xcode 26.2 has 6.2.1 | not built: every package is `swift-tools-version: 6.4`, `SWIFT_VERSION = 6.4`, and CI runs on Xcode 27 | builds and tests: a cold simulator build in 165 s, then 363 tests passed in 137 s, at a 1-minute load of about 770 to 990 |
+
+Aidoku is the pick. Its build and test need `-skipPackagePluginValidation` (it uses the SwiftLint build-tool plugin)
+and `CODE_SIGNING_ALLOWED=NO`, as its own CI passes; tests ran on a simulator created for the check and deleted
+after it. Its CI builds a nightly archive and runs SwiftLint but runs no tests. The change for its `spec.md` is a
+download queue summary: a value type in `Aidoku/Core/Downloads/Models/`, a first row in `DownloadQueueView` with an
+accessibility identifier, the per-chapter bar's division by zero fixed, and a Swift Testing test. Results are in
+[the trial's README](../../evals/results/2026-10-04-brownfield-trial/aidoku-ios-1/README.md).
+
+Also screened by their tracked files, not built because Aidoku passed first: `mlemgroup/mlem` (GPL-3.0),
+`openhab/openhab-ios` (EPL-2.0), `jellyfin/Swiftfin` (MPL-2.0; only its macro package has tests),
+`Dimillian/IceCubesApp` (AGPL-3.0) and `Ranchero-Software/NetNewsWire` (MIT). `nalexn/clean-architecture-swiftui`
+(MIT) fails the activity bar: it was last pushed on 2025-07-14.

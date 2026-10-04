@@ -1,0 +1,79 @@
+warmup at tree 19f6f6e634617fd7f2e0d4225c6455590f7d199b: /Users/caleb/Developer/trials/aidoku-ios-1/.git/swift-harness/warmup/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json
+Aidoku build: failed, 5166 ms, cold
+  Command line invocation:
+      /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild build -project Aidoku.xcodeproj -scheme Aidoku -destination "generic/platform=iOS Simulator" -skipMacroValidation
+  
+  Resolve Package Graph
+  
+  
+  Resolved source packages:
+    NetworkImage: https://github.com/gonzalezreal/NetworkImage @ 6.0.1
+    Wasm3: https://github.com/Skittyblock/Wasm3 @ main (6a64d8b)
+    SwiftSoup: https://github.com/scinfu/SwiftSoup @ 2.13.7
+    SwiftLintPlugins: https://github.com/SimplyDanny/SwiftLintPlugins @ 0.63.3
+    Texture: https://github.com/Skittyblock/Texture.git @ 3.1.1
+    cmark-gfm: https://github.com/swiftlang/swift-cmark @ 0.8.0
+    swiftui-introspect: https://github.com/siteline/swiftui-introspect @ d2987af
+    swift-markdown-ui: https://github.com/gonzalezreal/swift-markdown-ui @ 2.4.1
+    Nuke: https://github.com/kean/Nuke @ 13.2.0
+    AidokuRunner: https://github.com/Aidoku/AidokuRunner @ main (cc4d06f)
+    Gifu: https://github.com/kaishin/Gifu.git @ 3.5.1
+    zstd: https://github.com/facebook/zstd.git @ 1.5.7
+    hoshidicts: https://github.com/Manhhao/hoshidicts.git @ main (bc62d2b)
+    ZIPFoundation: https://github.com/weichsel/ZIPFoundation.git @ 0.9.20
+  
+  ComputePackagePrebuildTargetDependencyGraph
+  
+  Prepare packages
+  
+  Validate plug-in “SwiftLintBuildToolPlugin” in package “swiftlintplugins”
+  
+  ** BUILD FAILED **
+  
+  
+  The following build commands failed:
+  	Validate plug-in “SwiftLintBuildToolPlugin” in package “swiftlintplugins”
+  	eyJibHVlcHJpbnRQcm92aWRlcl9wcm92aWRlckZpbGVQYXRoU3RyaW5nIjoiXC9Vc2Vyc1wvY2FsZWJcL0RldmVsb3BlclwvdHJpYWxzXC9haWRva3UtaW9zLTFcL0FpZG9rdS54Y29kZXByb2oiLCJ0eXBlIjp7ImJsdWVwcmludFByb3ZpZGVyIjp7fX19
+  	Building project Aidoku with scheme Aidoku
+  (3 failures)
+Aidoku test: failed, 2946 ms, cold
+  
+  
+  Resolved source packages:
+    Wasm3: https://github.com/Skittyblock/Wasm3 @ main (6a64d8b)
+    NetworkImage: https://github.com/gonzalezreal/NetworkImage @ 6.0.1
+    zstd: https://github.com/facebook/zstd.git @ 1.5.7
+    ZIPFoundation: https://github.com/weichsel/ZIPFoundation.git @ 0.9.20
+    Gifu: https://github.com/kaishin/Gifu.git @ 3.5.1
+    SwiftSoup: https://github.com/scinfu/SwiftSoup @ 2.13.7
+    swiftui-introspect: https://github.com/siteline/swiftui-introspect @ d2987af
+    Texture: https://github.com/Skittyblock/Texture.git @ 3.1.1
+    swift-markdown-ui: https://github.com/gonzalezreal/swift-markdown-ui @ 2.4.1
+    Nuke: https://github.com/kean/Nuke @ 13.2.0
+    cmark-gfm: https://github.com/swiftlang/swift-cmark @ 0.8.0
+    hoshidicts: https://github.com/Manhhao/hoshidicts.git @ main (bc62d2b)
+    AidokuRunner: https://github.com/Aidoku/AidokuRunner @ main (cc4d06f)
+    SwiftLintPlugins: https://github.com/SimplyDanny/SwiftLintPlugins @ 0.63.3
+  
+  ComputePackagePrebuildTargetDependencyGraph
+  
+  Prepare packages
+  
+  Validate plug-in “SwiftLintBuildToolPlugin” in package “swiftlintplugins”
+  
+  
+  Test session results, code coverage, and logs:
+  	/Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-anhuedmidscntibnhhvhlgnqtyhj/Logs/Test/Test-Aidoku-2026.10.04_12-25-15--0500.xcresult
+  
+  Testing failed:
+  	Plugin “SwiftLintBuildToolPlugin” from package “SwiftLintPlugins” must be enabled before it can be used
+  	Testing cancelled because the build failed.
+  
+  ** TEST FAILED **
+  
+  
+  The following build commands failed:
+  	Validate plug-in “SwiftLintBuildToolPlugin” in package “swiftlintplugins”
+  	eyJibHVlcHJpbnRQcm92aWRlcl9wcm92aWRlckZpbGVQYXRoU3RyaW5nIjoiXC9Vc2Vyc1wvY2FsZWJcL0RldmVsb3BlclwvdHJpYWxzXC9haWRva3UtaW9zLTFcL0FpZG9rdS54Y29kZXByb2oiLCJ0eXBlIjp7ImJsdWVwcmludFByb3ZpZGVyIjp7fX19
+  	Testing project Aidoku with scheme Aidoku
+  (3 failures)
