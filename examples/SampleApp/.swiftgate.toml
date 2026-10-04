@@ -11,6 +11,14 @@ os = "26.2"
 name = "counter"
 reason = "the one end-to-end path: launch, count, fetch a fact through the live API client"
 
+[[scenarios]]
+name = "live"
+reason = "the shipping dependencies, so a flow runs against the real fact API"
+
+[[scenarios]]
+name = "fixed-fact"
+reason = "the API client returns 1 fixed fact, so the counter flow needs no network"
+
 [clients]
 vendor_modules = []
 
