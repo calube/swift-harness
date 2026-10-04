@@ -307,8 +307,78 @@
     return `box ${box.budgetMin} min (${from}): starts stop ${clock(box.noNewStartsAt)}, cutoff ${clock(box.cutoffAt)}, ends ${clock(box.endsAt)}`;
   }
 
+  // Gate runs in time order: by the end of each run's gate span, falling back to the view's order
+  // for a run with no span.
+  function gatesInTime(view, gates) {
+    const ended = {};
+    (view.spans || []).forEach((s) => { if (s.phase === "gate" && s.gateRun && s.end != null) ended[s.gateRun] = ms(s.end); });
+    const index = new Map((view.gates || []).map((g, i) => [g.runId, i]));
+    return gates.slice().sort((a, b) => {
+      const ta = ended[a.runId], tb = ended[b.runId];
+      return (ta != null && tb != null ? ta - tb : 0) || index.get(a.runId) - index.get(b.runId);
+    });
+  }
+
+  // A task's newest gate run, or null when it has none.
+  function latestGate(view, id) {
+    const own = gatesInTime(view, (view.gates || []).filter((g) => g.task === id));
+    return own.length ? own[own.length - 1] : null;
+  }
+
+  // Gate runs of a task that came after its first RED one.
+  function gateRetries(view) {
+    const byTask = {};
+    (view.gates || []).forEach((g) => { if (g.task != null) (byTask[g.task] = byTask[g.task] || []).push(g); });
+    return Object.keys(byTask).reduce((total, id) => {
+      const runs = gatesInTime(view, byTask[id]);
+      const firstRed = runs.findIndex((g) => g.verdict === "RED");
+      return total + (firstRed < 0 ? 0 : runs.length - firstRed - 1);
+    }, 0);
+  }
+
+  const BLOCKED_STATUS = ["blocked", "needs-replan", "abandoned"];
+  const plural = (n, one, many) => (n === 1 ? one : many || one + "s");
+
+  // Each tab's badges, by tab id: what the tab would show that needs a look, so it reads from any
+  // tab. A badge is `{key, kind, n, text, title}`; a zero count gets none. `now` is the live clock,
+  // null for a report, where an open span never ended; a stall needs both `now` and `stallMin`.
+  function tabBadges(view, opts) {
+    const o = opts || {};
+    const live = o.now != null;
+    const spans = view.spans || [], tasks = view.tasks || [], gates = view.gates || [];
+    const badge = (key, kind, n, text, title) => (n > 0 ? [{ key, kind, n, text, title }] : []);
+    const halts = openHalts(view);
+    const haltedTask = new Set(halts.filter((h) => h.task != null).map((h) => h.task));
+    // Tier and step spans repeat their gate's outcome, so a RED gate counts once.
+    const failed = spans.filter((s) => (s.outcome === "red" || s.outcome === "halted") && s.phase !== "tier" && s.phase !== "step").length;
+    const stalled = live && typeof o.stallMin === "number" ? stalls(view, o.now, o.stallMin).length : 0;
+    const unended = live ? 0 : spans.filter((s) => s.end == null).length;
+    const blocked = tasks.filter((t) => BLOCKED_STATUS.indexOf(t.status) >= 0 || haltedTask.has(t.id)).length;
+    const active = tasks.filter((t) => t.status === "in-progress" && !haltedTask.has(t.id)).length;
+    const merged = tasks.filter((t) => t.status === "done").length;
+    const red = gates.filter((g) => g.verdict === "RED").length;
+    const retries = gateRetries(view);
+    const unproven = (view.proofs || []).filter((p) => p.outcome !== "proven").length;
+    const uncovered = (view.spec || []).filter((q) => !(q.tasks || []).length).length;
+    const pending = tasks.filter((t) => t.tokens == null).length;
+    return {
+      overview: badge("halted", "bad", halts.length, halts.length + " halted", halts.length + " open " + plural(halts.length, "halt")),
+      timeline: badge("failed", "bad", failed, failed + " failed", failed + " red or halted " + plural(failed, "span"))
+        .concat(badge("stalled", "warn", stalled, stalled + " stalled", stalled + " " + plural(stalled, "task") + " quiet past stall_min"))
+        .concat(badge("unended", "plain", unended, unended + " open", unended + " " + plural(unended, "span") + " never ended")),
+      board: badge("blocked", "bad", blocked, blocked + " blocked", blocked + " " + plural(blocked, "task") + " blocked or halted")
+        .concat(badge("active", "info", active, active + " in flight", active + " " + plural(active, "task") + " in progress")),
+      graph: badge("merged", "plain", merged, merged + "/" + tasks.length, merged + " of " + tasks.length + " tasks merged"),
+      spec: badge("uncovered", "warn", uncovered, uncovered + " uncovered", uncovered + " " + plural(uncovered, "requirement") + " no task covers"),
+      gates: badge("red", "bad", red, red + " RED", red + " RED gate " + plural(red, "run"))
+        .concat(badge("retries", "warn", retries, retries + " " + plural(retries, "retry", "retries"), retries + " gate " + plural(retries, "run") + " after a RED one of the same task"))
+        .concat(badge("unproven", "warn", unproven, unproven + " not proven", unproven + " changed " + plural(unproven, "test") + " prove couldn't prove")),
+      tokens: badge("pending", "plain", pending, pending + " pending", pending + " " + plural(pending, "task") + " with tokens not yet ingested")
+    };
+  }
+
   root.RunViewModel = {
-    apply, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
+    apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

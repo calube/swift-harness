@@ -48,19 +48,30 @@ it. A brownfield run's phases before `build start` name the plan slug, and the p
 them in, with spans derived from `discover.run` and `warmup.run`. Requirements come from the plan's design or
 spec page, or from a brownfield `PLAN.md`'s `## Requirements` and each task's `- Covers:` line.
 
-The page has a header and a span timeline with a 1x, 2x and 4x zoom, where each bar opens a popover with its
-tool summary. Below sit requirements against tasks, a row per changed test `prove` ran, tokens per task and
-role, every gate run, and a footer naming what the reader couldn't read. A running worker's tokens read
-"pending" until its ingest. A `swiftgate run`'s header names its time box; its cutoff shows as answered
-`budget` halts.
+The user chose tabs over 1 long page on 2026-10-04. The URL's `#token`, such as `#gates`, picks a tab; the
+default is Overview. Each tab's label carries badges counted from the view.
+
+| Tab | Shows | Badges count |
+|---|---|---|
+| Overview | the run's summary, the now strip in live mode, and a row per task | open halts |
+| Timeline | spans with a 1x, 2x and 4x zoom; a bar opens a popover with its tool summary | red or halted spans, stalled tasks, spans that never ended |
+| Board | the board module | blocked or halted tasks, tasks in progress |
+| Graph | the plan graph module | merged tasks of all |
+| Spec | requirements against tasks, commits and merge gates | uncovered requirements |
+| Gates | every gate run, and a row per changed test `prove` ran | RED runs, a task's runs after its first RED, unproven tests |
+| Tokens | tokens per task and role, "pending" for a running worker until its ingest | pending tasks |
+
+The footer, under every tab, names what the reader couldn't read. A `swiftgate run`'s header names its time
+box; its cutoff shows as `budget` halts.
 
 A red span, a blocked task and a `gate-red` halt say why, in the popover and in more detail in the
 task drawer: see [why a run failed](run-viewer-failures.md).
 
-The board and the plan graph are optional modules: the page inlines every `run-viewer-*.js` and `.css`
-present. The board puts each task in queued, building, gating, review, merged or a blocked lane, which also
-holds a task with an open halt. The graph draws the deps as SVG in waves left to right. A card or node opens
-the task drawer: the brief when the plan has one, properties, links and activity.
+The board and the graph are optional modules: the page inlines every `run-viewer-*.js` and `.css` present, and
+a module's tab shows once it draws. The board puts each task in queued, building, gating, review, merged or a
+blocked lane, which also holds a task with an open halt. The graph draws the deps as SVG in waves. A card, node
+or Overview row opens a task popover: status, column, deps, latest gate, commits, covers and why it failed or
+stopped. Its Open task opens the drawer: the brief, properties, links and activity.
 
 ## Live mode
 
@@ -69,8 +80,8 @@ new one, and 404 for anything else. A changed row comes whole, its failure or bl
 included. An unknown cursor gets the whole view. A request whose `Host` isn't
 `127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere can't reach it through a rebound name.
 
-The page polls `/changes` each second, merges rows by id, and keeps polling after a failure, which it shows
-in the header. A now strip shows each running task's open phase, elapsed time and last event age, a stall
+The page polls `/changes` each second, merges rows by id, keeps the open tab and scroll, and keeps polling after
+a failure, which it shows under the title. A now strip shows each running task's open phase, elapsed time and last event age, a stall
 badge once the preset's `stall_min` passes with no event of that task, and a halt badge until the resume.
 
 ## Privacy

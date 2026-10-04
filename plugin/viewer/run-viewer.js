@@ -123,6 +123,8 @@
   const pop = $("pop");
   const sheet = window.matchMedia("(max-width: 520px)");
   let openAnchor = null;
+  // What the open popover shows: "span", "task", or "other" for a module's rows.
+  let popKind = null;
 
   function toolsHtml(t, filesLabel = "Files touched") {
     if (!t) return `<p class="sub">no tool activity recorded</p>`;
@@ -238,7 +240,7 @@
     anchor.classList.add("sel");
     anchor.setAttribute("aria-expanded", "true");
     $("pop-title").textContent = title != null ? title : anchor.getAttribute("aria-label") || "";
-    $("pop-body").innerHTML = `<dl>${rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v)}</dd>`).join("")}</dl>${extraHtml}`;
+    $("pop-body").innerHTML = `<dl>${rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html != null ? html : esc(v)}</dd>`).join("")}</dl>${extraHtml}`;
     pop.hidden = false;
     place();
     if (focus) pop.querySelector(".pop-close").focus({ preventScroll: true });
@@ -258,12 +260,14 @@
     ];
     const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
     openPopover(bar, rows, s.label, `${spanFailureHtml(s)}<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
+    popKind = "span";
   }
 
   function closePop(restoreFocus = true) {
     if (!openAnchor) return;
     const anchor = openAnchor;
     openAnchor = null;
+    popKind = null;
     pop.hidden = true;
     pinned = false;
     anchor.classList.remove("sel");
@@ -329,7 +333,7 @@
 
   // spec mapping
   function renderSpec() {
-    $("spec").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
+    $("spec-table").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
       view.spec.map((q) => {
         const ts = q.tasks.map((id) => taskBy[id]).filter(Boolean);
         const verdicts = ts.map((t) => (gateBy[t.mergeGateRun] ? gateBy[t.mergeGateRun].verdict : null));
@@ -371,13 +375,13 @@
     }).join("");
   }
   function renderTokens() {
-    $("tokens").innerHTML = tokRows(view.tasks, "id", (t) => { const s = taskSpan(t.id); return s ? M.durationText(s) : ""; });
+    $("token-rows").innerHTML = tokRows(view.tasks, "id", (t) => { const s = taskSpan(t.id); return s ? M.durationText(s) : ""; });
     $("roles").innerHTML = tokRows(view.roles, "role");
   }
 
   // gates
   function renderGates() {
-    $("gates").innerHTML = view.gates.map((g) => {
+    $("gate-list").innerHTML = view.gates.map((g) => {
       const rules = Object.entries(g.ruleCounts || {});
       return `<div class="gate"><div class="gate-top">${verdictChip(g.verdict)}<span class="mono">${esc(g.runId)}</span></div>
         <div class="sub" style="color:var(--muted);font-size:12px">${esc(g.task || "no task")} · swiftgate ${esc(g.command)} · ${fmtMs(g.ms)}${g.tests ? ` · ${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped` : ""}</div>
@@ -485,7 +489,7 @@
     scrim.classList.remove("open");
     drawer.setAttribute("inert", "");
     document.documentElement.classList.remove("drawer-open");
-    const o = drawerOpener;
+    const o = reconnect(drawerOpener);
     drawerOpener = null;
     if (o) { o.classList.remove("sel"); o.setAttribute("aria-expanded", "false"); if (o.isConnected) o.focus({ preventScroll: true }); }
   }
@@ -500,6 +504,210 @@
     const first = f[0], last = f[f.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // An anchor a redraw replaced: the element now in its place, found by its class and task id.
+  function reconnect(el) {
+    if (!el || el.isConnected) return el;
+    const id = el.dataset && el.dataset.task;
+    const cls = el.classList && el.classList[0];
+    return id && cls ? document.querySelector(`.${CSS.escape(cls)}[data-task="${CSS.escape(id)}"]`) : null;
+  }
+
+  // Each task's board lane. Without the board module, a lane comes from the status alone.
+  const LANE_ORDER = ["queued", "building", "gating", "review", "merged", "blocked"];
+  const statusLane = (status) => (status === "done" ? "merged" : ["blocked", "needs-replan", "abandoned"].includes(status) ? "blocked" : status === "in-progress" ? "building" : "queued");
+  function laneMap() {
+    const out = {};
+    if (window.RunViewBoard) {
+      const cols = window.RunViewBoard.columns(view);
+      Object.keys(cols).forEach((lane) => cols[lane].forEach((c) => { out[c.id] = lane; }));
+    } else view.tasks.forEach((t) => { out[t.id] = statusLane(t.status); });
+    return out;
+  }
+
+  // Overview's compact board: the count in each lane, then 1 row per task that opens its details.
+  let taskTableHtml = null;
+  function renderTaskTable() {
+    const lanes = laneMap();
+    $("lane-counts").innerHTML = LANE_ORDER.map((l) => [l, view.tasks.filter((t) => lanes[t.id] === l).length])
+      .filter(([, n]) => n).map(([l, n]) => `<span class="tag">${esc(l)} ${n}</span>`).join("");
+    const html = `<thead><tr><th>task</th><th>status</th><th>column</th><th>latest gate</th><th>commits</th><th>time</th></tr></thead><tbody>` +
+      view.tasks.map((t) => {
+        const g = M.latestGate(view, t.id);
+        const ts = taskSpan(t.id);
+        const commits = (t.commits || []).map((c) => `<span class="tag">${esc(c)}</span>`).join("");
+        return `<tr><td><button type="button" class="task-link" data-task="${esc(t.id)}" aria-haspopup="dialog" aria-expanded="false">${esc(t.id)}</button>${t.brief ? `<div class="sub">${esc(t.brief.title)}</div>` : ""}</td>
+          <td><span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span></td>
+          <td>${esc(lanes[t.id] || "queued")}</td>
+          <td>${g ? verdictChip(g.verdict) : `<span class="sub">none</span>`}</td>
+          <td><div class="tags">${commits || `<span class="sub">none</span>`}</div></td>
+          <td class="num nowrap">${ts ? esc(M.durationText(ts)) : `<span class="sub">${t.status === "pending" ? "waiting" : "no task span"}</span>`}</td></tr>`;
+      }).join("") + `</tbody>`;
+    // An unchanged table keeps its rows, so a poll leaves a focused row and the drawer's opener in place.
+    if (html === taskTableHtml) return;
+    const focused = document.activeElement && document.activeElement.classList.contains("task-link") ? document.activeElement : null;
+    $("task-table").innerHTML = html;
+    taskTableHtml = html;
+    const again = reconnect(focused);
+    if (again && again !== document.activeElement) again.focus({ preventScroll: true });
+  }
+  $("task-table").addEventListener("click", (e) => {
+    const b = e.target.closest(".task-link");
+    if (b) openTaskPopover(b.dataset.task, b);
+  });
+
+  // A task's details, anchored to the board card, graph node or task row that opened it: where it
+  // stands, why it failed or stopped, and the way into its drawer.
+  function taskFailureHtml(t) {
+    const red = view.gates.filter((g) => g.task === t.id && g.failure);
+    if (!t.blocked && !red.length) return "";
+    const heading = red.length ? "Why it failed" : "Why it stopped";
+    const gateOf = (rid) => gateBy[rid] || null;
+    const rest = red.length > 1 ? `<p class="sub">+${plural(red.length - 1, "more RED gate run")} in the task drawer</p>` : "";
+    return `<div class="pop-fail" role="group" aria-label="${heading}"><h4>${heading}</h4>${t.blocked ? blockHtml(t.blocked, gateOf, false) : ""}${red.length ? gateFailureHtml(red[red.length - 1], false) : ""}${rest}</div>`;
+  }
+  function openTaskPopover(id, anchor, focus = true) {
+    const t = taskBy[id];
+    if (!t || !anchor) return false;
+    if (anchor === openAnchor && popKind === "task") { closePop(); return true; }
+    const g = M.latestGate(view, id);
+    const ts = taskSpan(id);
+    const tags = (xs) => (xs.length ? `<span class="tags">${xs.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</span>` : null);
+    const deps = t.deps || [], commits = t.commits || [], covers = t.covers || [];
+    const rows = (t.brief ? [["goal", t.brief.title]] : []).concat([
+      ["status", t.status, `<span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span>`],
+      ["column", laneMap()[id] || "queued"],
+      ["worker", [t.model, ts ? M.durationText(ts) : t.status === "pending" ? "waiting" : "no task span"].filter(Boolean).join(" · ")],
+      ["deps", "none", tags(deps)],
+      ["latest gate", "none", g ? `${verdictChip(g.verdict)} <span class="mono">${esc(g.runId)}</span>` : null],
+      ["commits", "none yet", tags(commits)],
+      ["covers", "none", tags(covers)]
+    ]);
+    openPopover(anchor, rows, id, `${taskFailureHtml(t)}<button type="button" class="link-btn pop-open" data-open-task="${esc(id)}">Open task</button>`, focus);
+    popKind = "task";
+    pinned = true;
+    return true;
+  }
+
+  // Tabs. Each has an id, which is its #token in the URL, a label, the badges it shows and a panel.
+  // The core adds its own here; a module adds one through runViewer.addTab, after the core's.
+  const tablist = $("tabs");
+  const tabs = new Map();
+  let selectedTab = null;
+  const hashTab = () => { try { return decodeURIComponent(location.hash.slice(1)); } catch (_) { return ""; } };
+  // The tab the reader asked for, by link or click; an unknown or unavailable one shows Overview.
+  let wantedTab = hashTab();
+  const failedBadges = new Set();
+
+  function paintTab(tab) {
+    let list = [];
+    if (view && tab.badges) {
+      try { list = tab.badges(view) || []; } catch (error) {
+        if (!failedBadges.has(tab.id)) {
+          failedBadges.add(tab.id);
+          pageDamage.push({ source: "tab " + tab.id, reason: "badges: " + String(error && error.message ? error.message : error) });
+          renderFooter();
+        }
+      }
+    }
+    tab.button.querySelector(".tab-badges").innerHTML = list.map((b) =>
+      `<span class="badge ${esc(b.kind)}" data-key="${esc(b.key)}" data-n="${esc(b.n)}" title="${esc(b.title || b.text)}">${esc(b.text)}</span>`).join("");
+    tab.button.setAttribute("aria-label", [tab.label].concat(list.map((b) => b.text)).join(", "));
+  }
+
+  function showTab(id) {
+    closePop(false);
+    selectedTab = id;
+    tabs.forEach((t) => {
+      const on = t.id === id;
+      t.panel.hidden = !on;
+      t.button.setAttribute("aria-selected", String(on));
+      t.button.tabIndex = on ? 0 : -1;
+    });
+    document.body.dataset.tab = id;
+    const tab = tabs.get(id);
+    if (tab.shown && view) tab.shown();
+  }
+
+  // Hides a tab with nothing to show, and keeps the selection unless it went away.
+  function syncTabs() {
+    tabs.forEach((t) => { t.button.hidden = !t.available(); });
+    const open = (id) => tabs.has(id) && !tabs.get(id).button.hidden;
+    const pick = open(wantedTab) ? wantedTab : open("overview") ? "overview" : [...tabs.keys()].find(open);
+    if (pick && pick !== selectedTab) showTab(pick);
+  }
+
+  function addTab(id, spec) {
+    if (tabs.has(id)) throw new Error(`tab ${id} is already added`);
+    let panel = document.querySelector(`.tab-panel[data-tab="${CSS.escape(id)}"]`);
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "tab-panel";
+      panel.dataset.tab = id;
+      panel.hidden = true;
+      pop.before(panel);
+    }
+    panel.id = "tab-" + id;
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "tab-btn-" + id);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tab";
+    button.id = "tab-btn-" + id;
+    button.dataset.tab = id;
+    button.tabIndex = -1;
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", panel.id);
+    button.setAttribute("aria-selected", "false");
+    button.innerHTML = `<span>${esc(spec.label)}</span><span class="tab-badges"></span>`;
+    tablist.appendChild(button);
+    const tab = { id, label: spec.label, badges: spec.badges || null, shown: spec.shown || null, available: spec.available || (() => true), panel, button };
+    tabs.set(id, tab);
+    paintTab(tab);
+    syncTabs();
+    return panel;
+  }
+
+  function chooseTab(id, focus) {
+    wantedTab = id;
+    // A plain #token is the 1 part of a link that survives publishing; a sandbox may refuse it.
+    try { if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id); } catch (_) {}
+    syncTabs();
+    if (focus) tabs.get(id).button.focus();
+  }
+  tablist.addEventListener("click", (e) => { const b = e.target.closest("[role=tab]"); if (b) chooseTab(b.dataset.tab, false); });
+  tablist.addEventListener("keydown", (e) => {
+    const b = e.target.closest("[role=tab]");
+    if (!b) return;
+    const ids = [...tabs.values()].filter((t) => !t.button.hidden).map((t) => t.id);
+    const i = ids.indexOf(b.dataset.tab);
+    const next = { ArrowRight: ids[(i + 1) % ids.length], ArrowLeft: ids[(i - 1 + ids.length) % ids.length], Home: ids[0], End: ids[ids.length - 1] }[e.key];
+    if (!next) return;
+    e.preventDefault();
+    chooseTab(next, true);
+  });
+  const followHash = () => { wantedTab = hashTab(); syncTabs(); };
+  window.addEventListener("hashchange", followHash);
+  window.addEventListener("popstate", followHash);
+
+  let coreBadges = {};
+  function paintTabs() {
+    if (!view) return;
+    const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
+    coreBadges = M.tabBadges(view, { now: liveNowMs(), stallMin });
+    tabs.forEach(paintTab);
+  }
+  [["overview", "Overview"], ["timeline", "Timeline"], ["board", "Board"], ["graph", "Graph"], ["spec", "Spec"], ["gates", "Gates"], ["tokens", "Tokens"]].forEach(([id, label]) => {
+    // The board and graph are optional modules: their tab shows once the module draws.
+    const mount = document.querySelector(`.tab-panel[data-tab="${id}"] [data-module]`);
+    addTab(id, {
+      label,
+      badges: () => coreBadges[id] || [],
+      available: mount ? () => !mount.hidden : undefined,
+      // A hidden track measured 0 wide, so it sizes again once it shows.
+      shown: id === "timeline" ? sizeTrack : undefined
+    });
   });
 
   // footer: every damage row is a visible line, never a silent gap
@@ -524,6 +732,7 @@
       pageDamage.push({ source: "module " + name, reason: String(error && error.message ? error.message : error) });
       renderFooter();
     }
+    syncTabs();
   }
   function register(name, mod) {
     modules.set(name, mod);
@@ -539,7 +748,7 @@
     strip.id = "now";
     strip.setAttribute("aria-label", "Now");
     strip.innerHTML = `<div class="head"><h2>Now</h2><span class="now-note" id="now-note"></span></div><div class="now-cards" id="now-cards" role="list"></div>`;
-    document.querySelector(".wrap > .panel").after(strip);
+    $("summary").after(strip);
     return strip;
   }
   const stageLabel = (w) => {
@@ -569,12 +778,14 @@
     derive();
     renderHeader();
     renderNow();
+    renderTaskTable();
     renderTimeline();
     renderSpec();
     renderProof();
     renderTokens();
     renderGates();
     renderFooter();
+    paintTabs();
   }
 
   // Merges a partial RunView by id and redraws; live mode calls this on each poll.
@@ -590,6 +801,7 @@
     const drawerFocus = drawerId ? drawerFocusables().indexOf(active) : -1;
     const folds = drawerId ? [...drawer.querySelectorAll("#dr-body details")].map((d) => d.open) : [];
     const wasPinned = pinned;
+    const popTask = popKind === "task" ? { id: openAnchor.dataset.task, anchor: openAnchor } : null;
     closePop(false);
     render();
     modules.forEach((_, name) => runModule(name, "apply"));
@@ -601,6 +813,8 @@
       openSpan(bar(popSpan), popFocus);
       pinned = wasPinned;
     }
+    const taskAnchor = popTask && taskBy[popTask.id] ? reconnect(popTask.anchor) : null;
+    if (taskAnchor) openTaskPopover(popTask.id, taskAnchor, popFocus);
     if (drawerId) {
       renderDrawer(drawerId);
       drawer.querySelectorAll("#dr-body details").forEach((d, i) => { if (folds[i]) d.open = true; });
@@ -623,7 +837,7 @@
       line.id = "live-error";
       line.className = "live-error";
       line.setAttribute("role", "status");
-      document.querySelector(".wrap > .panel").appendChild(line);
+      $("topbar").appendChild(line);
     }
     line.textContent = message || "";
     line.hidden = !message;
@@ -633,6 +847,7 @@
       if (!view) {
         view = await fetchJSON("/view.json");
         render();
+        modules.forEach((_, name) => runModule(name, "render"));
       } else {
         apply(await fetchJSON("/changes?after=" + encodeURIComponent(view.cursor)));
       }
@@ -649,16 +864,21 @@
 
   window.runViewer = {
     register,
-    openPopover: (anchor, rows, title) => openPopover(anchor, rows.map(([k, v]) => [k, v]), title),
+    addTab,
+    openPopover: (anchor, rows, title) => { openPopover(anchor, rows.map(([k, v]) => [k, v]), title); popKind = "other"; },
+    openTaskPopover: (id, anchor) => openTaskPopover(id, anchor),
     openTaskDrawer,
     apply
   };
 
-  if (liveMode) {
-    document.body.dataset.live = "on";
-    const mode = document.querySelector(".wrap > .panel .head .chip.plain:not(#state)");
-    if (mode) mode.textContent = "Live";
-    renderFooter();
-    poll();
-  } else if (view) render(); else renderFooter();
+  // The core draws once every module script has run, so Overview can read the board's lanes.
+  function start() {
+    if (liveMode) {
+      document.body.dataset.live = "on";
+      $("mode").textContent = "Live";
+      renderFooter();
+      poll();
+    } else if (view) render(); else renderFooter();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
