@@ -87,7 +87,8 @@ enum StopHook {
         try RunStore(worktreeRoot: root, events: telemetry.events).record(
           report, finishedAt: Date(), command: command, treeHash: telemetry.tree?.treeHash,
           dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: .slice,
-          testResults: context.tests.cases, baselineCount: parts.baselineCount)
+          testResults: context.tests.cases, baselineCount: parts.baselineCount,
+          proofs: context.proofs.results)
       }
       return (report.verdict, ReportRenderer.human(report))
     } catch {

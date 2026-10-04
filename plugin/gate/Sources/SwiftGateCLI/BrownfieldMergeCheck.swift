@@ -239,7 +239,7 @@ enum BrownfieldMergeCheck {
           root: root, base: base, config: config,
           junitDirectory: dependencies.layout.worktreeRoot.appending(
             path: "junit", directoryHint: .isDirectory),
-          dependencies: dependencies.prove)
+          proofs: context.proofs, dependencies: dependencies.prove)
       }
       context.steps.record(
         .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict)

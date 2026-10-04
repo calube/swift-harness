@@ -106,13 +106,14 @@ struct BrownfieldProveTests {
       allow: [], buildPresets: [:])
   }
 
-  private static func prove(_ clone: Clone, runner: TreeReadingRunner, testFiles: String?)
-    async -> ChangedTestJudgement
-  {
+  private static func prove(
+    _ clone: Clone, runner: TreeReadingRunner, testFiles: String?,
+    proofs: ProveResultCollector = ProveResultCollector()
+  ) async -> ChangedTestJudgement {
     let process = LiveProcessRunner(baseEnvironment: environment)
     return await BrownfieldProve.run(
       root: clone.root, base: "main", config: config(testFiles: testFiles),
-      junitDirectory: clone.base.appending(path: "junit"),
+      junitDirectory: clone.base.appending(path: "junit"), proofs: proofs,
       dependencies: BrownfieldProve.Dependencies(
         git: LiveGit(runner: process, repositoryRoot: clone.root.path),
         scratch: LiveScratchWorktrees(
@@ -178,6 +179,33 @@ struct BrownfieldProveTests {
       judgement.findings.contains {
         $0.ruleID == ProofRules.summaryRuleID && $0.message.contains("whole test command")
       })
+  }
+}
+
+extension BrownfieldProveTests {
+  @Test(
+    "each changed test prove ran is handed over with its outcome and the merge base it reverted to — catches a brownfield run whose proof table stays empty"
+  )
+  func handsOverEachProvedTest() async throws {
+    let clone = try await Self.clone(tests: [
+      "tests/guards.test": "needs new\n", "tests/idle.test": "always\n", "tests/c.test": "crash\n",
+    ])
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let proofs = ProveResultCollector()
+
+    _ = await Self.prove(
+      clone, runner: TreeReadingRunner(), testFiles: "check {files}", proofs: proofs)
+
+    let mergeBase = try await LiveGit(
+      runner: LiveProcessRunner(baseEnvironment: Self.environment),
+      repositoryRoot: clone.root.path
+    ).revision("main")
+    #expect(
+      proofs.results.map { "\($0.target) \($0.test) \($0.outcome.rawValue)" }.sorted() == [
+        "web tests/c.test crashed", "web tests/guards.test proven",
+        "web tests/idle.test passes-reverted",
+      ])
+    #expect(proofs.results.allSatisfy { $0.proofBase == mergeBase && mergeBase != nil })
   }
 }
 
