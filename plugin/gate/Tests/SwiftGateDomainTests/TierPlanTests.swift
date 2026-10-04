@@ -106,8 +106,8 @@ struct TierPlanTests {
 
     #expect(
       selected(plan) == [
-        "APIClient": ["APIClientLiveTests"], "CounterFeature": ["CounterCoreTests"],
-        "GameEngine": ["GameEngineTests"],
+        "APIClient": ["APIClientLiveTests"], "AccessibilityIDs": ["AccessibilityIDsTests"],
+        "CounterFeature": ["CounterCoreTests"], "GameEngine": ["GameEngineTests"],
         "HTTPClient": ["HTTPClientLiveTests", "HTTPClientTests"],
         "LogClient": ["LogClientLiveTests", "LogClientTests"],
       ])

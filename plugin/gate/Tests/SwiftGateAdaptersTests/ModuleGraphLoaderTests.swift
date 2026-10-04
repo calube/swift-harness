@@ -73,7 +73,7 @@ struct ModuleGraphLoaderTests {
     let graph = try await ModuleGraphLoader(swiftPM: swiftPM, root: root)
       .load(config: config(packages: ["examples/SampleApp/Packages/*"]))
 
-    #expect(graph.packages.count == 5)
+    #expect(graph.packages.count == Fixture.samplePackages.count)
     #expect(Set(swiftPM.described) == Set(graph.packages.map(\.path)))
     #expect(
       graph.scope(
