@@ -1,0 +1,8 @@
+$ TYPESAFE_API_KEY=tsk-fake-0000000000000000 swiftgate judge tests --ready --base main
+# started 2026-10-04T02:59:13Z, exit 1
+swiftgate RED · run 20261004T025913Z-477359c2 · 31.1s
+  T0 RED 31.1s
+findings: 2 (1 gating)
+  major    Tests/PriceKitTests/CartTests.swift:4  judge.fails-if-broken: the test would likely still pass if the behavior it names broke (p=0.98, claude/sonnet); escalated to claude because jev gave no answer: jev reported an error:…
+  minor    .  judge.not-run: jev gave no answer for 2 of 2 tests (jev reported an error: Jev refused the key in TYPESAFE_API_KEY (401): {"detail":{"error_type":"authentication_error","mess…
+details: .harness/runs/20261004T025913Z-477359c2/

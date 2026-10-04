@@ -1,0 +1,8 @@
+$ HTTPS_PROXY=http://127.0.0.1:18080 sandbox-exec -f nonet.sb swiftgate judge tests --ready --base main
+# started 2026-10-04T03:00:28Z, exit 1
+swiftgate RED · run 20261004T030028Z-26d3fdc7 · 8.1s
+  T0 RED 8.1s
+findings: 2 (1 gating)
+  major    Tests/PriceKitTests/CartTests.swift:4  judge.fails-if-broken: the test would likely still pass if the behavior it names broke (p=0.97, claude/sonnet); escalated to claude because jev gave no answer: Jev is unreachable: Th…
+  minor    .  judge.not-run: jev gave no answer for 2 of 2 tests (Jev is unreachable: The operation couldn’t be completed. Operation not permitted); their blocking questions went to claude…
+details: .harness/runs/20261004T030028Z-26d3fdc7/

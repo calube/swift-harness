@@ -1,0 +1,8 @@
+$ env -u TYPESAFE_API_KEY swiftgate judge tests --ready --base main
+# started 2026-10-04T03:01:58Z, exit 1
+swiftgate RED · run 20261004T030158Z-4d269042 · 12.5s
+  T0 RED 12.5s
+findings: 2 (1 gating)
+  major    Tests/PriceKitTests/CartTests.swift:4  judge.fails-if-broken: the test would likely still pass if the behavior it names broke (p=0.98, claude/sonnet); escalated to claude because jev gave no answer: jev isn't configured: …
+  minor    .  judge.not-run: jev gave no answer for 2 of 2 tests (jev isn't configured: set TYPESAFE_API_KEY to use the Jev judge backend); their blocking questions went to claude, and the…
+details: .harness/runs/20261004T030158Z-4d269042/

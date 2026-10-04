@@ -1,0 +1,24 @@
+$ swiftgate judge events
+# started 2026-10-04T03:02:21Z, exit 0
+Judge events in <scratch>/consumer/.harness/events/judge.jsonl: 63
+Routes: judge-tests-ready 63
+
+Decisions per question and backend (block / advisory / pass / error, escalated):
+  asserts-implementation [jev]: 10 — 0 / 0 / 8 / 2, escalated 8 of 10
+  fails-if-broken [jev]: 10 — 4 / 0 / 4 / 2, escalated 8 of 10; block reasons: claude 4
+  name-specificity [jev]: 10 — 0 / 0 / 2 / 8, escalated 0 of 10
+  tier [jev]: 10 — 0 / 0 / 2 / 8, escalated 0 of 10
+Escalation: escalated 16 of 40 Jev decisions (40%)
+
+Blocks:
+  Tests/PriceKitTests/CartTests.swift:4 fails-if-broken by jev/jev-1.13.0, reason from claude: The test calls cart.totalCents but discards the result with `_ =` and never asserts or uses #expect, so a wrong total would not make it fail. (run 20261004T025850Z-413cd275)
+  Tests/PriceKitTests/CartTests.swift:4 fails-if-broken by claude/sonnet, reason from claude: The test computes totalCents but discards it with `_ =` and never asserts, so a wrong total would not fail it (only a crash would). (run 20261004T025913Z-477359c2)
+  Tests/PriceKitTests/CartTests.swift:4 fails-if-broken by claude/sonnet, reason from claude: The test computes totalCents but discards it with `_ =` and makes no assertion, so a wrong total would never fail it. It could only fail by crashing. (run 20261004T030028Z-26d3fdc7)
+  Tests/PriceKitTests/CartTests.swift:4 fails-if-broken by claude/sonnet, reason from claude: The test computes totalCents but discards it with `_ =` and never asserts, so a wrong total would not fail it; only a crash would. (run 20261004T030158Z-4d269042)
+Decision errors: notConfigured 4, backend 4, transport 12
+Call errors: notConfigured 2, backend 2, transport 8, launchFailed 2
+
+Calls per backend (latency over calls that reached it):
+  claude: 9 calls, 0 cache hits, 2 errors; p50 5792 ms, p95 28054 ms; cost $0.0379 (2 calls reported none)
+  jev: 14 calls, 0 cache hits, 12 errors; p50 26 ms, p95 386 ms; cost $0.0001 (12 calls reported none)
+Cost: $0.0380
