@@ -75,6 +75,23 @@ struct SimTargetLoaderTests {
   }
 
   @Test(
+    "sim up's app build skips every validation the area's own build skips — catches a sim up build that stops at a package plugin's trust prompt on a clone whose build uses SwiftLint's plugin"
+  )
+  func appBuildSkipsTheAreasValidations() throws {
+    let config = try Self.aidoku()
+    let build = try #require(config.split(separator: "\n").first { $0.hasPrefix("build = ") })
+    let skips = build.split(separator: " ").map {
+      $0.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+    }.filter { $0.hasPrefix("-skip") }
+    #expect(skips == ["-skipMacroValidation", "-skipPackagePluginValidation"])
+
+    let request = AppBuild.Request(
+      container: .project(path: "/clone/Aidoku.xcodeproj"), scheme: "Aidoku",
+      derivedDataPath: "/dd", resultBundlePath: "/b.xcresult")
+    for flag in skips { #expect(request.arguments.contains(flag), "\(flag)") }
+  }
+
+  @Test(
     "an owned repository still reads its .swiftgate.toml, device and iOS version included — catches the owned profile losing its pinned simulator"
   )
   func ownedRepositoryReadsSwiftgateToml() throws {

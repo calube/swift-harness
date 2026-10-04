@@ -263,6 +263,7 @@ struct SimUpTests {
     #expect(build.scheme == "SampleApp")
     #expect(build.derivedDataPath == "/dd")
     #expect(build.arguments.contains("-skipMacroValidation"))
+    #expect(build.arguments.contains("-skipPackagePluginValidation"))
     #expect(build.container == .project(path: worktree.appending(path: "SampleApp.xcodeproj").path))
     #expect(rig.simctl.installedApps == [Self.app.path])
     #expect(
