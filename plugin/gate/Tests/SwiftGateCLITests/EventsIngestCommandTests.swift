@@ -111,6 +111,13 @@ struct EventsIngestCommandTests {
       return metrics
     }
 
+    var toolWindows: [AgentToolsEvent] {
+      EventStoreReader(files: LiveEventStoreFiles(root: repo.root))
+        .read(EventQuery(kinds: [.agentTools])).events.compactMap {
+          if case .agentTools(let tools) = $0.event.payload { tools } else { nil }
+        }
+    }
+
     var usages: [AgentUsageEvent] {
       EventStoreReader(files: LiveEventStoreFiles(root: repo.root))
         .read(EventQuery(kinds: [.agentUsage])).events.compactMap {
@@ -268,16 +275,22 @@ struct EventsIngestCommandTests {
     #expect(output.status == 0)
     let store = try scenario.storeText()
     #expect(!scenario.usages.isEmpty)
+    // The subagent session's Agent call makes a tool window, which must hold no word either.
+    #expect(!scenario.toolWindows.isEmpty)
 
     // An event's own keys and closed values, which a prompt may also use.
     var vocabulary: Set<String> = []
-    for line in store.split(separator: "\n") where line.contains("\"agent.usage\"") {
+    for line in store.split(separator: "\n")
+    where line.contains("\"agent.usage\"") || line.contains("\"agent.tools\"") {
       vocabulary.formUnion(Self.keys(in: try JSONSerialization.jsonObject(with: Data(line.utf8))))
     }
     vocabulary.formUnion(UsageAgent.allCases.map(\.rawValue))
     vocabulary.formUnion(AgentRole.allCases.map(\.rawValue))
     vocabulary.formUnion(
-      [HarnessEventKind.agentUsage.rawValue, HarnessRoute.ingest.rawValue].flatMap {
+      [
+        HarnessEventKind.agentUsage.rawValue, HarnessEventKind.agentTools.rawValue,
+        HarnessRoute.ingest.rawValue,
+      ].flatMap {
         $0.split(separator: ".").map(String.init)
       })
     vocabulary = Set(vocabulary.map { $0.lowercased() })
@@ -386,5 +399,49 @@ struct EventsIngestCommandTests {
     #expect(badTask.status == 2)
     #expect(badTask.stderr.contains("--task"), "\(badTask.stderr)")
     #expect(scenario.usages.isEmpty)
+  }
+
+  @Test(
+    "ingest writes the tool session's windows beside its usage, with repo-relative files only, and a second ingest adds none — catches tool windows not written or doubled"
+  )
+  func toolWindowsAreIngested() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let session = "39933227-0a3a-4a70-b63e-3cd768834ff9"
+    let root = scenario.repo.root.path(percentEncoded: false).trimmingCharacters(
+      in: CharacterSet(charactersIn: "/"))
+    try FileManager.default.createDirectory(
+      at: scenario.repo.root.appending(path: ".git"), withIntermediateDirectories: true)
+    let files = [
+      "\(session).jsonl", "\(session)/subagents/agent-a4ad125449ad0c978.jsonl",
+    ]
+    for file in files {
+      let url = scenario.transcripts.appending(path: file)
+      let text = try String(contentsOf: url, encoding: .utf8)
+      try Data(text.replacingOccurrences(of: "/REPO", with: "/\(root)").utf8).write(to: url)
+    }
+    try SessionRecordStore(worktreeRoot: scenario.repo.root).write(
+      try SessionRecord(
+        sessionId: session, recordedAt: Date(timeIntervalSince1970: 1_790_000_000),
+        pluginRoot: "/plugin", pluginVersion: "0.1.0",
+        treeHash: String(repeating: "a", count: 64),
+        transcriptPath: scenario.transcripts.appending(path: "\(session).jsonl").path))
+
+    let first = scenario.ingest(session, role: .buildWorker, task: "t", buildRun: Self.buildRun)
+    #expect(first.status == 0, "\(first.stderr)")
+    #expect(first.stdout.contains("8 tool calls read, 2 windows new"), "\(first.stdout)")
+    let windows = scenario.toolWindows
+    #expect(windows.count == 2)
+    let main = try #require(windows.first { $0.agent == .main })
+    #expect(main.files == ["Sources/Greeting.swift", "Sources/Farewell.swift"])
+    #expect(main.droppedPaths == 1)
+    #expect(main.task == "t" && main.role == .buildWorker && main.buildRun == Self.buildRun)
+    #expect(windows.first { $0.agent == .subagent }?.agentID == "a4ad125449ad0c978")
+    #expect(!(try scenario.storeText()).contains(root))
+
+    let second = scenario.ingest(session, role: .buildWorker, task: "t", buildRun: Self.buildRun)
+    #expect(second.status == 0, "\(second.stderr)")
+    #expect(second.stdout.contains("0 windows new, 2 already stored"), "\(second.stdout)")
+    #expect(scenario.toolWindows.count == 2)
   }
 }

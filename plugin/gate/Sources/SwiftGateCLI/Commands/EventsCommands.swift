@@ -220,7 +220,8 @@ struct EventsSummaryCommand: AsyncParsableCommand {
   }
 }
 
-/// `events ingest`: each assistant message of a session's transcripts as 1 `agent.usage`.
+/// `events ingest`: each assistant message of a session's transcripts as 1 `agent.usage`, and each
+/// agent's tool calls per window as 1 `agent.tools`.
 enum EventsIngestRun {
   struct Options: Equatable {
     var session: String
@@ -282,6 +283,7 @@ enum EventsIngestRun {
     let sessionTags: (role: AgentRole?, task: String?) =
       options.workflowTranscripts == nil ? (options.role, options.task) : (.orchestrator, nil)
     var transcripts: [UsageTranscript] = []
+    var toolTranscripts: [ToolTranscript] = []
     do throws(TranscriptReadError) {
       let reader = TranscriptReader()
       var files: [(file: TranscriptFile, role: AgentRole?, task: String?)] = []
@@ -300,6 +302,10 @@ enum EventsIngestRun {
             UsageTranscript(
               agent: file.agent, agentID: file.agentID, role: role, task: task,
               messages: try TranscriptUsage.messages(in: file.data)))
+          toolTranscripts.append(
+            ToolTranscript(
+              agent: file.agent, agentID: file.agentID, role: role, task: task,
+              calls: try TranscriptTools.calls(in: file.data)))
         } catch {
           return refused("\(file.label), \(error)")
         }
@@ -309,7 +315,7 @@ enum EventsIngestRun {
     }
 
     let read = EventStoreReader(files: LiveEventStoreFiles(root: root))
-      .read(EventQuery(kinds: [.agentUsage]))
+      .read(EventQuery(kinds: [.agentUsage, .agentTools]))
     let stored = UsageIngest.resolved(
       read.events.compactMap { stored -> AgentUsageEvent? in
         guard case .agentUsage(let usage) = stored.event.payload,
@@ -322,17 +328,35 @@ enum EventsIngestRun {
       sessionID: options.session, transcripts: transcripts, buildRun: options.buildRun,
       stored: Set(stored.map(\.messageID)),
       untagged: Set(stored.filter { $0.role == nil }.map(\.messageID)), prices: prices)
-    if !plan.events.isEmpty {
+    let cwds = Set(toolTranscripts.flatMap { $0.calls.compactMap(\.cwd) })
+    let topLevel = GitTopLevel()
+    let tools = ToolIngest.plan(
+      sessionID: options.session, transcripts: toolTranscripts, buildRun: options.buildRun,
+      topLevels: Dictionary(
+        uniqueKeysWithValues: cwds.compactMap { cwd in
+          topLevel.of(cwd).map { (cwd, $0) }
+        }),
+      stored: Set(
+        read.events.compactMap {
+          if case .agentTools = $0.event.payload { $0.event.eventID } else { nil }
+        }))
+    let events = plan.events + tools.events
+    if !events.isEmpty {
       do throws(HarnessEventWriteError) {
-        try EventWriterFactory.make(root: root, enabled: true).append(contentsOf: plan.events)
+        try EventWriterFactory.make(root: root, enabled: true).append(contentsOf: events)
       } catch {
-        return refused("agent.usage not written: \(error)", stderr: damage)
+        return refused("agent.usage and agent.tools not written: \(error)", stderr: damage)
       }
+    }
+    let dropped = tools.events.reduce(0) { total, event in
+      if case .agentTools(let window) = event.payload { total + window.droppedPaths } else { total }
     }
     var lines = [
       "events ingest: \(plan.messagesRead) messages read, "
         + "\(plan.events.count - plan.retagged) new, \(plan.retagged) retagged, "
-        + "\(plan.alreadyStored) already stored"
+        + "\(plan.alreadyStored) already stored",
+      "events ingest: \(tools.callsRead) tool calls read, \(tools.events.count) windows new, "
+        + "\(tools.alreadyStored) already stored, \(dropped) paths outside the repository dropped",
     ]
     for model in plan.unpriced {
       let why =
@@ -355,8 +379,10 @@ struct EventsIngestCommand: ParsableCommand {
     discussion:
       "Reads, offline, the transcript the session record names, its subagents' transcripts, and "
       + "with --workflow-transcripts every agent-*.jsonl in that directory. Only message ids, "
-      + "model ids, usage counts and times are kept: no transcript text, prompt, tool input or "
-      + "path. A message already stored for the session is skipped, so ingesting again adds "
+      + "model ids, usage counts and times are kept: no transcript text, prompt or tool input. "
+      + "Tool calls are counted by tool per agent per 60 s window, with their time and the "
+      + "repository-relative paths file tools named; any other path is dropped and counted. "
+      + "A message or window already stored for the session is skipped, so ingesting again adds "
       + "nothing, except that a message stored with no role is retagged by an ingest that gives "
       + "it one. With --workflow-transcripts, --role and --task tag the workers and the session's "
       + "own messages are tagged orchestrator; without, they tag the session's. "
