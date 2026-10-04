@@ -16,6 +16,6 @@ public struct TrackedTreeSnapshot: Sendable {
   /// A snapshot of exactly `files`, as a test or a captured fixture holds them: the paths sorted,
   /// and a read of any other path `nil`.
   public init(files: [String: Data]) {
-    self.init(paths: [], read: { _ in nil })
+    self.init(paths: files.keys.sorted(), read: { files[$0] })
   }
 }

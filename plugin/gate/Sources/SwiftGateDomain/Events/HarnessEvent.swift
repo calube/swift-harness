@@ -369,9 +369,10 @@ extension HarnessEvent: Codable {
       payload = .buildHalt(try c.decode(BuildHaltEvent.self, forKey: .payload))
     case .buildResume:
       payload = .buildResume(try c.decode(BuildResumeEvent.self, forKey: .payload))
-    case .discoverRun, .warmupRun:
-      throw DecodingError.dataCorruptedError(
-        forKey: .kind, in: c, debugDescription: "brownfield events aren't read yet")
+    case .discoverRun:
+      payload = .discoverRun(try c.decode(DiscoverRunEvent.self, forKey: .payload))
+    case .warmupRun:
+      payload = .warmupRun(try c.decode(WarmupRunEvent.self, forKey: .payload))
     }
   }
 
@@ -397,7 +398,8 @@ extension HarnessEvent: Codable {
     case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     case .buildHalt(let halt): try c.encode(halt, forKey: .payload)
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
-    case .discoverRun, .warmupRun: return
+    case .discoverRun(let run): try c.encode(run, forKey: .payload)
+    case .warmupRun(let run): try c.encode(run, forKey: .payload)
     }
   }
 }

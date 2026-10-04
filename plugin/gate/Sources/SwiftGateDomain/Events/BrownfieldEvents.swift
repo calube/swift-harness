@@ -29,9 +29,16 @@ public struct DiscoverRunEvent: Sendable, Equatable, Codable {
   /// The event for 1 applied `proposal`. Every command and Xcode table counts once by its
   /// confidence; an orchestrator value counts only in `edited`, which `--set` and `--drop` give.
   public init(proposal: DiscoverProposal, milliseconds: Int, edited: Int) {
+    let confidences = proposal.areas.flatMap { area in
+      area.commands.values.map(\.confidence) + (area.xcode.map { [$0.confidence] } ?? [])
+    }
+    let languages = Set(proposal.areas.map(\.language))
     self.init(
-      milliseconds: milliseconds, areas: 0, languages: [], found: 0, guessed: 0, missing: 0,
-      edited: edited)
+      milliseconds: milliseconds, areas: proposal.areas.count,
+      languages: AreaLanguage.allCases.filter(languages.contains),
+      found: confidences.filter { $0 == .found }.count,
+      guessed: confidences.filter { $0 == .guessed }.count,
+      missing: proposal.areas.reduce(0) { $0 + $1.missing.count }, edited: edited)
   }
 
   private enum CodingKeys: String, CodingKey {

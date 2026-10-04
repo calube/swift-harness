@@ -51,12 +51,13 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
       .missingReason(let path, _, _), .duplicateName(let path, _),
       .judgeHostNotNamed(let path, _, _), .judgeHostMismatch(let path, _, _, _),
       .judgeHostUnused(let path, _), .judgeModelNotPinned(let path, _, _, _),
-      .judgeSecretInConfig(let path):
+      .judgeSecretInConfig(let path), .notInProfile(let path, _, _, _),
+      .xcodeTableMissing(let path, _), .xcodeTableUnexpected(let path, _, _),
+      .exactlyOne(let path, _):
       path
     case .unsupportedSchema: "schema"
     case .tooManyFlows: "flows"
     case .judgeThresholdsInverted: "judge"
-    case .notInProfile, .xcodeTableMissing, .xcodeTableUnexpected, .exactlyOne: ""
     }
   }
 
@@ -111,7 +112,15 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
         + JudgeBackend.allCases.compactMap { backend in
           backend.keyVariable.map { "\(backend.rawValue): \($0)" }
         }.joined(separator: ", ") + ") and remove it here"
-    case .notInProfile, .xcodeTableMissing, .xcodeTableUnexpected, .exactlyOne: ""
+    case .notInProfile(let path, let value, let profile, let allowed):
+      "\(path): \"\(value)\" isn't available in the \(profile.rawValue) profile (allowed: "
+        + allowed.joined(separator: ", ") + ")"
+    case .xcodeTableMissing(let path, let area):
+      "\(path): area \"\(area)\" has kind \"xcode\" but no [areas.xcode] table"
+    case .xcodeTableUnexpected(let path, let area, let kind):
+      "\(path): area \"\(area)\" has kind \"\(kind.rawValue)\", so it takes no [areas.xcode] table"
+    case .exactlyOne(let path, let keys):
+      "\(path): set exactly one of " + keys.joined(separator: ", ")
     }
   }
 }

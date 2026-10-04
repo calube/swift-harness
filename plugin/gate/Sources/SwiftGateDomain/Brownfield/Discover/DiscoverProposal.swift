@@ -63,8 +63,11 @@ extension BrownfieldArea {
   /// inclusion.
   public init(proposed: ProposedArea) {
     self.init(
-      name: "", root: "", language: .other, kind: .command, test: nil, testFiles: nil, lint: nil,
-      build: nil, e2e: nil, testGlobs: [], packs: [], xcode: nil)
+      name: proposed.name, root: proposed.root, language: proposed.language, kind: proposed.kind,
+      test: proposed.commands[.test]?.value, testFiles: proposed.commands[.testFiles]?.value,
+      lint: proposed.commands[.lint]?.value, build: proposed.commands[.build]?.value,
+      e2e: proposed.commands[.e2e]?.value, testGlobs: proposed.testGlobs, packs: [],
+      xcode: proposed.xcode?.value)
   }
 }
 

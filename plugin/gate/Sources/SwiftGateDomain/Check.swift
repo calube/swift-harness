@@ -21,6 +21,16 @@ public enum CheckTier: String, Sendable, CaseIterable {
     }
   }
 
+  /// Position within its profile: each tier runs everything the one before it does. Tiers of
+  /// different profiles are never compared.
+  public var strength: Int {
+    switch self {
+    case .fast, .slice: 0
+    case .push, .merge: 1
+    case .ready, .final: 2
+    }
+  }
+
   /// A step the tier requires that this build cannot run yet. Reported as not run; never green.
   public struct PendingStep: Sendable, Equatable {
     public let name: String

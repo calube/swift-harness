@@ -315,15 +315,6 @@ public enum PlanLintCoverage {
   }
 }
 
-/// `CheckTier`'s strength order (`fast` < `push` < `ready`), local to this file: nothing in
-/// `Check.swift` orders the cases today, and that file is another task's to edit.
 extension CheckTier {
-  fileprivate var rank: Int {
-    switch self {
-    case .fast: return 0
-    case .push: return 1
-    case .ready: return 2
-    case .slice, .merge, .final: return 0
-    }
-  }
+  fileprivate var rank: Int { strength }
 }

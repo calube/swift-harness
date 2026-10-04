@@ -1,4 +1,6 @@
 import ArgumentParser
+import Foundation
+import SwiftGateDomain
 import Testing
 
 @testable import SwiftGateCLI
@@ -179,6 +181,30 @@ struct NewSubcommandRegistrationTests {
       ],
       "design-telemetry"
     ),
+    ("discover", ["discover"], "discover"),
+    (
+      "discover --apply",
+      [
+        "discover", "--apply", "--set", "web.lint=npx eslint {files}", "--drop", "api.lint",
+        "--reason", "no linter configured", "--json",
+      ],
+      "discover"
+    ),
+    ("claude", ["claude", "--resume", "-p", "hello"], "claude"),
+    ("run", ["run", "spec.md"], "start"),
+    ("run start", ["run", "start", "spec.md", "--json"], "start"),
+    ("run report", ["run", "report", "example-plan", "--json"], "report"),
+    ("warmup", ["warmup", "--areas", "api,web"], "warmup"),
+    (
+      "xcode add-file",
+      ["xcode", "add-file", "App/Sources/New.swift", "--target", "App"], "add-file"
+    ),
+    (
+      "allow",
+      ["allow", "neutral.unsafe-shortcut", "api/handlers.py:12", "--reason", "parser checked"],
+      "allow"
+    ),
+    ("plan import", ["plan", "import", "example-plan"], "import"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -218,6 +244,31 @@ struct NewSubcommandRegistrationTests {
     "spec-page check", "spec-page check --json",
     "design-telemetry",
   ]
+
+  @Test(
+    "check --tier slice, merge and final in a brownfield clone exit BLOCKED with swiftgate.not-run naming the tier — catches a stub tier that passes",
+    arguments: [CheckTier.slice, .merge, .final])
+  func brownfieldTiersBlock(_ tier: CheckTier) async throws {
+    let clone = FileManager.default.temporaryDirectory.appending(
+      path: "brownfield-check-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: clone) }
+    let state = clone.appending(path: ".git/swift-harness", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+    try Data("schema = 1\n".utf8).write(to: state.appending(path: "config.toml"))
+
+    let parts = try await BrownfieldCheck.run(
+      root: clone, tier: tier, base: "main",
+      context: GateRun.Context(runID: "r", directory: clone.appending(path: "run")))
+    let report = try RunReport(
+      runID: "r", durationMilliseconds: 0, tiers: parts.tiers, findings: parts.findings)
+
+    #expect(report.verdict == .blocked)
+    #expect(report.verdict.exitCode == 2)
+    #expect(
+      parts.findings.contains {
+        $0.ruleID == "swiftgate.not-run" && $0.message.contains("--tier \(tier.rawValue)")
+      })
+  }
 
   @Test(
     "every §6.1 command parses its documented arguments and resolves to the right leaf command — catches a skill calling an unregistered command",

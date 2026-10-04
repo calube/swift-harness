@@ -830,12 +830,15 @@ extension CheckTier: ExpressibleByArgument {}
 struct CheckCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "check",
-    abstract: "Run a gate tier: fast (T0 + affected T1), push, or ready.")
+    abstract:
+      "Run a gate tier: fast (T0 + affected T1), push, or ready; slice, merge or final in a "
+      + "brownfield clone.")
 
   @Option(
     help: ArgumentHelp(
       "fast: T0 + affected T1. push: + every T1 target, impact, coverage, T1 presence. "
-        + "ready: push + T3, stress, prove, reach, mutate."))
+        + "ready: push + T3, stress, prove, reach, mutate. A brownfield clone gates at slice, "
+        + "merge and final instead."))
   var tier: CheckTier
 
   @Option(help: "Changes are measured from the merge base of HEAD and this ref.")
@@ -884,6 +887,15 @@ struct CheckCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    if tier.profile == .brownfield {
+      try await GateRun.execute(
+        root: root, format: output.format, command: "check \(tier.rawValue)", base: base,
+        checkTier: tier
+      ) { context in
+        try await BrownfieldCheck.run(root: root, tier: tier, base: base, context: context)
+      }
+      return
+    }
     let steps = extraSteps
     try await GateRun.execute(
       root: root, format: output.format, command: "check \(tier.rawValue)",

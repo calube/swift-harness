@@ -9,14 +9,7 @@ public struct TOMLConfigDecoder: ConfigDecoding {
   public init() {}
 
   public func decode(_ text: String) throws(ConfigLoadError) -> Config {
-    let document: ConfigValue
-    do {
-      document = try TOMLDecoder().decode(DecodedValue.self, from: text).value
-    } catch let TOMLDecodingError.invalidSyntax(line, column, message) {
-      throw .syntax(line: line, column: column, message: message)
-    } catch {
-      throw .syntax(line: 0, column: 0, message: String(describing: error))
-    }
+    let document = try Self.document(text)
     do {
       return try ConfigSchema.config(from: document)
     } catch {
@@ -26,10 +19,22 @@ public struct TOMLConfigDecoder: ConfigDecoding {
 
   /// A brownfield clone's `config.toml`, validated by ``BrownfieldConfigSchema``.
   public func decodeBrownfield(_ text: String) throws(ConfigLoadError) -> BrownfieldConfig {
-    BrownfieldConfig(
-      brownfield: BrownfieldSettings(
-        discoveredAt: "", sliceBudgetSeconds: 0, timeBudgetMinutes: 0, sensitive: []),
-      areas: [], allow: [], buildPresets: [:])
+    let document = try Self.document(text)
+    do {
+      return try BrownfieldConfigSchema.config(from: document)
+    } catch {
+      throw .invalid(error)
+    }
+  }
+
+  private static func document(_ text: String) throws(ConfigLoadError) -> ConfigValue {
+    do {
+      return try TOMLDecoder().decode(DecodedValue.self, from: text).value
+    } catch let TOMLDecodingError.invalidSyntax(line, column, message) {
+      throw .syntax(line: line, column: column, message: message)
+    } catch {
+      throw .syntax(line: 0, column: 0, message: String(describing: error))
+    }
   }
 }
 

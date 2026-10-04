@@ -7,6 +7,6 @@ enum BrownfieldMergeCheck {
   static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
     async throws -> GateRunParts
   {
-    GateRunParts()
+    try BrownfieldCheck.notRun(tier, because: "the \(tier.rawValue) tier's steps aren't built yet")
   }
 }

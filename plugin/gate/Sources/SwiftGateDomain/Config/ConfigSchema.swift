@@ -39,7 +39,7 @@ public enum ConfigSchema {
     let judge = readJudge(&reader, root)
     let docs = readDocs(&reader, root)
     let plan = readPlan(&reader, root)
-    let buildPresets = readBuild(&reader, root)
+    let buildPresets = readBuild(&reader, root, profile: .owned)
     let profile = readHarness(&reader, root)
     let telemetry = readTelemetry(&reader, root)
 
@@ -318,9 +318,11 @@ public enum ConfigSchema {
     return TelemetryConfig(enabled: reader.bool(table, "enabled", at: path) ?? true)
   }
 
-  private static func readBuild(_ reader: inout Reader, _ root: [String: ConfigValue])
-    -> [String: BuildPreset]
-  {
+  /// `[build.presets.*]`, shared with ``BrownfieldConfigSchema``: a tier or model value from the
+  /// other profile is an issue naming `profile`.
+  static func readBuild(
+    _ reader: inout Reader, _ root: [String: ConfigValue], profile: RepositoryProfile
+  ) -> [String: BuildPreset] {
     let path = "build"
     guard let table = reader.table(root, path, at: "") else { return [:] }
     reader.rejectUnknownKeys(in: table, at: path, allowed: ["presets"])
@@ -337,31 +339,35 @@ public enum ConfigSchema {
             path: entryPath, expected: "table", found: presetsTable[name]!.typeName))
         continue
       }
-      presets[name] = readPreset(&reader, presetTable, at: entryPath)
+      presets[name] = readPreset(&reader, presetTable, at: entryPath, profile: profile)
     }
     return presets
   }
 
   private static func readPreset(
-    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String
+    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String,
+    profile: RepositoryProfile
   ) -> BuildPreset {
     reader.rejectUnknownKeys(
       in: table, at: path,
       allowed: [
         "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
         "time_budget_min", "stop_starts_before_min", "on_design_conflict", "task_proof",
+        "stall_min",
       ])
     let designTier: BuildPreset.DesignStep =
       readEnum(&reader, table, "design_tier", at: path) ?? .standard
-    let review: BuildPreset.Review = readEnum(&reader, table, "review", at: path) ?? .full
-    let taskGate = readTaskGate(&reader, table, at: path)
-    let mergeGate: CheckTier = readEnum(&reader, table, "merge_gate", at: path) ?? .push
+    let review: BuildPreset.Review =
+      readProfiled(&reader, table, "review", at: path, profile: profile) ?? .full
+    let taskGate = readTaskGate(&reader, table, at: path, profile: profile)
+    let mergeGate: CheckTier =
+      readProfiled(&reader, table, "merge_gate", at: path, profile: profile) ?? .push
     let workerModel: BuildPreset.WorkerModel =
-      readEnum(&reader, table, "worker_model", at: path) ?? .tagged
+      readProfiled(&reader, table, "worker_model", at: path, profile: profile) ?? .tagged
     let readConflict: BuildPreset.OnDesignConflict? =
       readEnum(&reader, table, "on_design_conflict", at: path)
     let taskProof: BuildPreset.TaskProof =
-      readEnum(&reader, table, "task_proof", at: path) ?? .perTask
+      readProfiled(&reader, table, "task_proof", at: path, profile: profile) ?? .perTask
     // With no design there is nothing to amend, so a conflict can only block.
     if designTier == .none, let readConflict, readConflict != .block {
       reader.issues.append(
@@ -376,23 +382,54 @@ public enum ConfigSchema {
       timeBudgetMin: reader.integer(table, "time_budget_min", at: path, required: true) ?? 0,
       stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
         ?? 0,
-      onDesignConflict: readConflict ?? .amend, taskProof: taskProof)
+      onDesignConflict: readConflict ?? .amend, taskProof: taskProof,
+      stallMin: reader.integer(table, "stall_min", at: path))
   }
 
   /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both
   /// legal, so it can't share ``readEnum``'s `CaseIterable` constraint.
   private static func readTaskGate(
-    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String
+    _ reader: inout Reader, _ table: [String: ConfigValue], at path: String,
+    profile: RepositoryProfile
   ) -> BuildPreset.TaskGate {
     guard let raw = reader.string(table, "task_gate", at: path, required: true) else {
       return .ledger
     }
-    if let value = BuildPreset.TaskGate(rawValue: raw) { return value }
-    reader.issues.append(
-      .unknownEnumValue(
-        path: Reader.join(path, "task_gate"), value: raw,
-        allowed: BuildPreset.TaskGate.allowedRawValues))
+    let allowed = ["ledger"] + CheckTier.allCases.filter { $0.profile == profile }.map(\.rawValue)
+    switch BuildPreset.TaskGate(rawValue: raw) {
+    case .ledger?: return .ledger
+    case .tier(let tier)? where tier.profile == profile: return .tier(tier)
+    case .tier?:
+      reader.issues.append(
+        .notInProfile(
+          path: Reader.join(path, "task_gate"), value: raw, profile: profile, allowed: allowed))
+    case nil:
+      reader.issues.append(
+        .unknownEnumValue(path: Reader.join(path, "task_gate"), value: raw, allowed: allowed))
+    }
     return .ledger
+  }
+
+  /// A required closed key whose values belong to 1 profile or both. The allowed list names only
+  /// `profile`'s values; a value of the other profile is a ``ConfigIssue/notInProfile(path:value:profile:allowed:)``.
+  private static func readProfiled<Value>(
+    _ reader: inout Reader, _ table: [String: ConfigValue], _ key: String, at path: String,
+    profile: RepositoryProfile
+  ) -> Value?
+  where Value: RawRepresentable & CaseIterable & ProfileScoped, Value.RawValue == String {
+    guard let raw = reader.string(table, key, at: path, required: true) else { return nil }
+    let allowed = Value.allCases.filter { $0.profiles.contains(profile) }.map(\.rawValue)
+    guard let value = Value(rawValue: raw) else {
+      reader.issues.append(
+        .unknownEnumValue(path: Reader.join(path, key), value: raw, allowed: allowed))
+      return nil
+    }
+    guard value.profiles.contains(profile) else {
+      reader.issues.append(
+        .notInProfile(path: Reader.join(path, key), value: raw, profile: profile, allowed: allowed))
+      return nil
+    }
+    return value
   }
 
   /// Reads a required string key as a closed enum. A value none of `Value`'s cases recognize is
@@ -411,7 +448,7 @@ public enum ConfigSchema {
 
 /// Typed, issue-collecting access to config tables. A read that fails records an issue and
 /// returns `nil`, so callers substitute a placeholder and keep going.
-private struct Reader {
+struct Reader {
   var issues: [ConfigIssue] = []
 
   static func join(_ prefix: String, _ key: String) -> String {

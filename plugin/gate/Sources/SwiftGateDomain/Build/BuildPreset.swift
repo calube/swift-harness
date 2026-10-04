@@ -116,6 +116,9 @@ public struct BuildPreset: Sendable, Equatable {
     case tagged, sonnet, opus
     case claudeSonnet55 = "claude-sonnet-5-5"
     case claudeOpus55 = "claude-opus-5-5"
+
+    /// `sonnet` and `opus` name whichever model is current, not 1 model.
+    public var isAlias: Bool { self == .sonnet || self == .opus }
   }
 
   /// `amend`: the full `--amend` flow. `block`: spec §8.4's block behavior.
@@ -131,4 +134,28 @@ public struct BuildPreset: Sendable, Equatable {
     case final
     case prove
   }
+}
+
+/// A preset value that only some ``RepositoryProfile``s accept.
+protocol ProfileScoped {
+  var profiles: Set<RepositoryProfile> { get }
+}
+
+extension CheckTier: ProfileScoped {
+  var profiles: Set<RepositoryProfile> { [profile] }
+}
+
+extension BuildPreset.Review: ProfileScoped {
+  /// Classified review rests on the judge's diff-risk answer, which only a brownfield run asks.
+  var profiles: Set<RepositoryProfile> { self == .classified ? [.brownfield] : [.owned] }
+}
+
+extension BuildPreset.TaskProof: ProfileScoped {
+  var profiles: Set<RepositoryProfile> { self == .prove ? [.brownfield] : [.owned] }
+}
+
+extension BuildPreset.WorkerModel: ProfileScoped {
+  /// An alias moves to a new model without a change in the clone, and a brownfield run is
+  /// measured per model.
+  var profiles: Set<RepositoryProfile> { isAlias ? [.owned] : [.owned, .brownfield] }
 }
