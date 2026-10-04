@@ -76,15 +76,18 @@ struct QARepo {
 
   func run(
     _ options: QARunRun.Options, events: MemoryEventLog = MemoryEventLog(),
-    suffix: UInt32 = 0xabc, checks: (any QACheckRunning)? = nil
+    suffix: UInt32 = 0xabc, checks: (any QACheckRunning)? = nil,
+    xcresults: (any XcresultReader)? = nil
   ) async -> QAReport {
-    await QARunRun.run(
+    var dependencies = QARunRun.Dependencies(
+      checks: checks ?? QACommandRunner(runner: runner), ports: LiveQAPorts(),
+      scratch: LiveScratchWorktrees(runner: runner, repositoryRoot: root.path),
+      events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
+      runIDSuffix: { suffix }, newEventID: { UUID().uuidString }, timeout: .seconds(120))
+    if let xcresults { dependencies.xcresults = xcresults }
+    return await QARunRun.run(
       root: root, options: options, git: LiveGit(runner: runner, repositoryRoot: root.path),
-      dependencies: QARunRun.Dependencies(
-        checks: checks ?? QACommandRunner(runner: runner), ports: LiveQAPorts(),
-        scratch: LiveScratchWorktrees(runner: runner, repositoryRoot: root.path),
-        events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
-        runIDSuffix: { suffix }, newEventID: { UUID().uuidString }, timeout: .seconds(120)))
+      dependencies: dependencies)
   }
 
   func runDirectory(_ report: QAReport) throws -> URL {

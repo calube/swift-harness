@@ -50,6 +50,32 @@ struct AcceptanceTestReferenceTests {
   }
 
   @Test(
+    "given a result bundle path, an xcode area's command writes its bundle there and names it, and a swiftpm area's doesn't — catches an xcodebuild row left with nothing to show a test ran"
+  )
+  func xcodeResultBundle() throws {
+    let reference = AcceptanceTestReference(area: nil, id: "AidokuTests/LargeDownloadConfirmationTests")
+    let bundle = "/run/qa/01-req-download.acceptance.xcresult"
+    let resolved = try reference.resolve(
+      in: [aidoku], junitPath: "/run/qa/01-req-download.acceptance.junit.xml",
+      resultBundlePath: bundle
+    ).get()
+    #expect(
+      resolved
+        == AcceptanceTestCommand(
+          area: "Aidoku", root: ".",
+          command: aidokuTest + " -only-testing:'AidokuTests/LargeDownloadConfirmationTests'"
+            + " -resultBundlePath '\(bundle)'",
+          resultBundlePath: bundle))
+
+    let swiftpm = area(
+      "Probe", kind: .swiftpm, test: "swift test", testFiles: "swift test --filter {tests}")
+    let narrowed = try AcceptanceTestReference(area: nil, id: "ProbeTests.ResetTests")
+      .resolve(in: [swiftpm], junitPath: nil, resultBundlePath: bundle).get()
+    #expect(narrowed.resultBundlePath == nil)
+    #expect(!narrowed.command.contains("resultBundlePath"), "\(narrowed.command)")
+  }
+
+  @Test(
     "an xcode area runs its test command with -only-testing: the quoted id, in its root — catches the Aidoku trial's acceptance row that /bin/sh ran as a path and exited 126"
   )
   func xcodeOnlyTesting() throws {

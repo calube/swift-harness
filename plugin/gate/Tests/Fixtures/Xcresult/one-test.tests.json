@@ -1,0 +1,53 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "CLONE-UDID",
+      "deviceName" : "swift-harness-PID-capture",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C52",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "duration" : "0.00076s",
+                  "durationInSeconds" : 0.0007600784301757812,
+                  "name" : "testAdds()",
+                  "nodeIdentifier" : "ProbePassXCTests/testAdds()",
+                  "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests/testAdds",
+                  "nodeType" : "Test Case",
+                  "result" : "Passed"
+                }
+              ],
+              "name" : "ProbePassXCTests",
+              "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests/ProbePassXCTests",
+              "nodeType" : "Test Suite",
+              "result" : "Passed"
+            }
+          ],
+          "name" : "CounterUISnapshotTests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/CounterFeature/CounterUISnapshotTests",
+          "nodeType" : "Unit test bundle",
+          "result" : "Passed"
+        }
+      ],
+      "name" : "CounterFeature-Package",
+      "nodeType" : "Test Plan",
+      "result" : "Passed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}
