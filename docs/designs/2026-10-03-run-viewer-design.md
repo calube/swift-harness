@@ -1,7 +1,7 @@
 # swift-harness: the run viewer
 
 <!-- RESUME
-Status: APPROVED 2026-10-03: the user's 14 decisions in §3 (5 at drafting, 4 answers to the open questions, 5 from
+Status: APPROVED 2026-10-03: the user's 15 decisions in §3 (5 at drafting, 4 answers to the open questions, 6 from
 the mock review). §10 records the answered questions.
 Why: a build run spreads across skills, workflows, worktrees and shell commands. Nobody can see it as 1 thing,
 either while it runs or after. Telemetry records most of it, but only as JSON lines and a text summary.
@@ -62,6 +62,7 @@ them how the harness works.
 | 14 | What does a span say about its work? | A tool summary: counts by tool name, total tool time and the repo-relative files touched, from the transcripts `events ingest` already reads. No prose summary of a transcript | user, 2026-10-03 |
 | 15 | Does live mode show the plan's progress at a glance? | A kanban board: 1 card per task in the columns queued, building, gating, review and merged, plus a blocked or halted lane, derived from the ledger and events. A card shows the task id, its worker, elapsed time, the last gate verdict and the spec ids it covers. Cards move on the same 1 s poll. The report shows the final state. A trailing addition: it never blocks the report or the live view | user, 2026-10-03 |
 | 16 | How does the page show the plan's shape? | A dependency graph of the tasks, drawn as inline SVG with a layered layout, waves left to right, nodes coloured by state and edges for deps. Hovering or clicking a node opens the timeline's popover with the task's write set, spec ids and gate. No graph library. A trailing addition, like decision 15 | user, 2026-10-03 |
+| 17 | What opens from a board card or a graph node? | A task drawer that reads like an issue-tracker ticket: the title (the task's 1-line goal) with its id and status; Why, with the design § it implements; Scope; Acceptance (the tests that must fail first, and the gate); Out of scope; Properties (status, worker model, wave, spec ids as label chips, write set, created, merged, id); Links (blocked by and blocks, from the deps); Activity (worker start, gates with verdicts and rules, fixes, review, merge with commits); tool activity, collapsed at the bottom. Timeline bars keep the span popover | user, 2026-10-03 |
 
 ## 4. Spans and proof: the data gap
 
@@ -168,6 +169,8 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
   "spec": [{"id": "req-…", "title": "", "tasks": ["save-queue"]}],
   "tasks": [{"id": "", "status": "", "model": "", "deps": ["task id"], "writes": ["Sources/…"], "gate": "push",
              "covers": ["req-…"], "commits": ["sha"], "gateRun": "", "mergeGateRun": "",
+             "createdAt": "", "mergedAt": null,
+             "brief": {"title": "", "why": "", "designRef": "§4.2", "scope": [""], "acceptance": [""], "outOfScope": [""]},
              "tokens": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}}],
   "roles": [{"role": "build-worker", "tokens": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}}],
   "spans": [{"id": "", "parent": null, "phase": "", "task": null, "gateRun": null,
@@ -190,7 +193,12 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
   <cursor>`, which returns a partial `RunView` and a new cursor. The page merges each array by id. The cursor is
   the byte offset of each active stream file plus the ledger log's length.
 - **Task shape.** `deps`, `writes` (the ledger's write set, repo-relative) and `gate` come from the ledger for the
-  board and the graph; `covers` repeats the task side of `spec` so a card needs no join.
+  board and the graph; `covers` repeats the task side of `spec` so a card needs no join. `createdAt` is the task's
+  first ledger event and `mergedAt` its merge. `brief` is optional: `plan import` reads it from the task's section
+  of the plan, its `- Why:`, `- Scope:`, `- Acceptance:` and `- Out of scope:` lines, into the plan state, and the
+  reader takes it from there. The reader never parses a plan's markdown. A task with no brief shows a drawer with
+  properties, links and activity only. The drawer's wave comes from the deps, and its activity from `spans`,
+  `gates`, `halts` and `commits`; neither is a field.
 - **Damage.** An unreadable file shows in `damage` and in the page footer, never as a silent gap.
 
 ## 7. Layout
@@ -226,7 +234,8 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
 | tokens and time | per task and per role, input, output and cache tokens, wall time |
 | gates | each gate run with tiers, steps, tests and rule counts |
 | board | live mode: 1 card per task in queued, building, gating, review, merged, and a blocked or halted lane; the report shows the final state |
-| plan graph | the tasks as an SVG dependency graph in waves left to right, coloured by state; a node opens the timeline's popover |
+| plan graph | the tasks as an SVG dependency graph in waves left to right, coloured by state; a node opens the task drawer |
+| task drawer | from a board card or a graph node: the brief, properties, links, activity, and tool activity collapsed; a full-height sheet at phone width; Escape closes it and returns focus |
 
 Queued is a `pending` task with no open span. Building is an open `worker` or `fix` span, or `in-progress` with no
 stage span. Gating is an open `verify` span, review an open `review` span, merged a `done` task with its merge.
@@ -245,7 +254,9 @@ worker's tokens read "pending", never 0.
 
 Every `RunView` string comes from a guarded event, a ledger id or write set, a commit sha or a requirement title.
 `agent.tools` is a narrow exception to telemetry's "no tool inputs": it keeps the repo-relative file paths of file
-tools, and only those that pass the guard. It drops absolute, out-of-repository and `~` paths and counts them in
+tools, and only those that pass the guard. A brief holds plan text an agent wrote, not transcript text or source.
+The builder cuts each brief string to 480 bytes. A string the guard rejects drops from the view as a `damage` row
+naming the task and field, so 1 bad line can't fail the report. It drops absolute, out-of-repository and `~` paths and counts them in
 `droppedPaths`. It keeps no other input, no output and no tool name outside `ToolKind`. The builder
 drops `LedgerTask.worktree`, the 1 absolute path the ledger holds. Before rendering, `report` and `view` run
 `EventPayloadGuard` over every string in the `RunView`. A reject fails the command and names the field. No commit
@@ -278,7 +289,7 @@ The user answered each on 2026-10-03, as recommended; §3 rows 8 to 11 record th
 6. Span calls in the build skill, `build-task.js` and the ship skill; `Covers:` in `plan import`.
 7. `swiftgate view`, `/changes` and the now strip.
 8. `agent.tools` from `events ingest`, and its attribution to spans in the reader.
-9. The kanban board, as an optional page module.
+9. The kanban board, as an optional page module. The task drawer sits in the core page (task 4).
 10. The plan graph, as an optional page module.
 
 Tasks 1 to 4 run in parallel after a contract commit holding the types; 5 needs 3 and 4; 6 needs 2; 7 follows 5.
