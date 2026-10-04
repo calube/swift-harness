@@ -128,6 +128,7 @@ struct LivePlanTests {
     #expect(source.briefs.keys.sorted() == ["filter-endpoint", "filter-model", "filter-ui"])
     #expect(source.briefs["filter-ui"]?.title == "The search screen shows filter chips.")
     #expect(read?.designSource == nil)
+    #expect(PlanFile.seedSpecPage(slug: "s").livePlanSource == nil)
   }
 
   @Test(
@@ -296,18 +297,27 @@ struct LivePlanTests {
   }
 
   @Test(
-    "a live plan.json with a design key, an approval or another path fails to decode — catches a live plan read as approved",
+    "a live plan.json with a design key, an approval or another path fails naming it — catches a live plan read as approved",
     arguments: [
-      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","design":"docs/designs/x.md","livePlan":{"path":"PLAN.md","briefs":{}}}"#,
-      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","approval":{"pageSha":"a","by":"user","at":"2026-10-04T00:00:00Z"},"livePlan":{"path":"PLAN.md","briefs":{}}}"#,
-      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","livePlan":{"path":"../PLAN.md","briefs":{}}}"#,
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","design":"docs/designs/x.md","livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+        "`design`"
+      ),
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","approval":{"pageSha":"a","by":"user","at":"2026-10-04T00:00:00Z"},"livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+        "approval"
+      ),
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","livePlan":{"path":"../PLAN.md","briefs":{}}}"#,
+        "`../PLAN.md`"
+      ),
     ])
-  func rejectsMixedLivePlan(_ json: String) {
-    #expect(throws: DecodingError.self) { try PlanFileJSON.decode(Data(json.utf8)) }
-  }
-
-  @Test("a spec-page plan has no live plan source — catches a spec page read as a live plan")
-  func specPageIsNotLive() {
-    #expect(PlanFile.seedSpecPage(slug: "s").livePlanSource == nil)
+  func rejectsMixedLivePlan(_ json: String, _ named: String) {
+    let error = #expect(throws: DecodingError.self) { try PlanFileJSON.decode(Data(json.utf8)) }
+    guard case .dataCorrupted(let context) = error else {
+      Issue.record("expected a corrupted-data error, got \(String(describing: error))")
+      return
+    }
+    #expect(context.debugDescription.contains(named))
   }
 }
