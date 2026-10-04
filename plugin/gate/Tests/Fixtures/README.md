@@ -1185,6 +1185,31 @@ The sources held no machine path, so no `sed` ran. Ledger worktrees are relative
 and `grep -rniE 'sk-ant|api[_-]?key|ANTHROPIC|bearer|password|secret|token=' RunView` matched
 nothing. `store.json` holds each store's random hashing salt, as written.
 
+`RunView/span-sequence/span.jsonl` is the span stream a real `events span` sequence wrote, for the
+span decoder and the run view builder. It holds a `plan` span around a `worker` span, each ended
+once. Between them, 1 second end, 1 orphan end and 1 unknown phase were refused and wrote
+nothing. Captured at the commit that records spans, from `plugin/gate` after `swift build`:
+
+```sh
+SG=$PWD/.build/debug/swiftgate T=$(mktemp -d) && cd $T && export LLVM_PROFILE_FILE=$T/%p.profraw
+git init -q -b main
+printf 'schema = 1\nxcode = "26.2"\napp_scheme = "Probe"\npackages = ["Probe"]\n\n[simulator]\ndevice = "iPhone 17"\nos = "26.2"\n' > .swiftgate.toml
+git add -A && git -c user.name=t -c user.email=t@example.com commit -q -m base
+RUN=20261004T020000Z-5a1e0c0d
+P=$($SG events span start --phase plan --build-run $RUN --role orchestrator)
+W=$($SG events span start --phase worker --build-run $RUN --task counter-reset --role build-worker --parent $P)
+sleep 1
+$SG events span end $W --outcome ok                    # exit 0, "after 1065 ms"
+$SG events span end $W --outcome ok                    # exit 1, "already ended; nothing recorded"
+$SG events span end ffffffffffffffff --outcome ok      # exit 1, "no span ... was started"
+$SG events span start --phase warmup --build-run $RUN  # exit 2, names the 11 phases
+$SG events span end $P --outcome red                   # exit 0, "after 1367 ms"
+cp .harness/events/span.jsonl <fixtures>/RunView/span-sequence/span.jsonl
+```
+
+The file holds the 4 lines written, unedited. `grep -ciE '/Users|/private|/var/folders|/tmp|caleb|swift-harness' RunView/span-sequence/span.jsonl`
+printed 0.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can

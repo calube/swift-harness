@@ -115,13 +115,17 @@ enum BuildHaltRun {
     case refused(Output)
   }
 
-  static func store(command: String) async -> Store {
+  /// - Parameter directory: any checkout of the repository; the command's own by default.
+  static func store(
+    command: String, directory: String = FileManager.default.currentDirectoryPath
+  ) async -> Store {
     func refused(_ why: String) -> Output {
       Output(stdout: "", stderr: "swiftgate \(command): \(why)\n", status: 2)
     }
     let root: URL
     do {
-      let common = try await BuildLoop.git().commonDirectory()
+      let common = try await LiveGit(runner: LiveProcessRunner(), repositoryRoot: directory)
+        .commonDirectory()
       root = URL(
         filePath: try TaskWorktree.mainCheckout(commonDirectory: common),
         directoryHint: .isDirectory)
