@@ -53,7 +53,7 @@ struct SimUpCommand: AsyncParsableCommand {
   }
 
   private func finish(_ result: Result<SimUpStarted, SimUpFailure>) throws {
-    print(Self.output(result, json: json))
+    Console.write(Self.output(result, json: json))
     if case .failure(let failure) = result { throw ExitCode(failure.verdict.exitCode) }
   }
 

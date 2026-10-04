@@ -226,7 +226,7 @@ struct SimHolderTests {
     #expect(SimulatorCloneName.ownerPID(of: device.name) == child)
 
     kill(child, SIGKILL)
-    _ = DetachedLauncherTests.reap(child)
+    _ = await DetachedLauncherTests.reap(child)
     let swept = try await SimulatorClones(
       simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2")
     ).sweepOrphans()

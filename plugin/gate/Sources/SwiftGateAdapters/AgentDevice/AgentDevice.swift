@@ -351,7 +351,8 @@ public struct LiveAgentDevice: AgentDevice {
       failure.output = stdout
       return failure
     } catch {
-      throw .unreadableOutput(command: command, status: status, detail: error.detail, output: stdout)
+      throw .unreadableOutput(
+        command: command, status: status, detail: error.detail, output: stdout)
     }
   }
 

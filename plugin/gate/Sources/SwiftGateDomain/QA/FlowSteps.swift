@@ -70,7 +70,8 @@ public indirect enum FlowJSON: Sendable, Equatable {
     case .string(let value): "\"\(value)\""
     case .array(let values): "[" + values.map(\.rendered).joined(separator: ",") + "]"
     case .object(let fields):
-      "{" + fields.keys.sorted().map { "\"\($0)\":\(fields[$0]?.rendered ?? "null")" }
+      "{"
+        + fields.keys.sorted().map { "\"\($0)\":\(fields[$0]?.rendered ?? "null")" }
         .joined(separator: ",") + "}"
     }
   }
@@ -118,8 +119,7 @@ public struct FlowStep: Sendable, Equatable {
   /// The whole step object, `command` and `input` included.
   public let fields: [String: FlowJSON]
 
-  public init(number: Int, command: String, input: [String: FlowJSON], fields: [String: FlowJSON])
-  {
+  public init(number: Int, command: String, input: [String: FlowJSON], fields: [String: FlowJSON]) {
     self.number = number
     self.command = command
     self.input = input
@@ -149,7 +149,8 @@ public enum FlowSteps {
       let number = offset + 1
       guard case .object(let fields) = item else {
         throw FlowStepsError(
-          reason: "step \(number) is a JSON \(item.kindName), not a {\"command\", \"input\"} object")
+          reason: "step \(number) is a JSON \(item.kindName), not a {\"command\", \"input\"} object"
+        )
       }
       guard case .string(let command)? = fields["command"] else {
         throw FlowStepsError(reason: "step \(number) has no string `command`")

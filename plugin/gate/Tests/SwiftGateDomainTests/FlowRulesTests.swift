@@ -100,7 +100,8 @@ struct FlowRulesTests {
     "a flow whose only wait is a duration fails qa.flow-no-assert — catches a sleep counted as a check"
   )
   func durationWaitOnly() throws {
-    #expect(try Self.check("wait-duration-only.flow.json").map(\.ruleID) == [FlowRules.noAssertRuleID])
+    #expect(
+      try Self.check("wait-duration-only.flow.json").map(\.ruleID) == [FlowRules.noAssertRuleID])
   }
 
   @Test(
@@ -202,7 +203,8 @@ struct FlowRulesTests {
     "a missing required key and a wrong value type each fail qa.flow-schema naming the key — catches a check of key names alone"
   )
   func requiredAndType() throws {
-    let missing = try Self.check(json: #"[{"command":"is","input":{"selector":"id=\"counter.value\""}}]"#)
+    let missing = try Self.check(
+      json: #"[{"command":"is","input":{"selector":"id=\"counter.value\""}}]"#)
     let wrongType = try Self.check(
       json: #"""
         [{"command":"wait","input":{"kind":"selector","selector":"id=\"counter.value\"","timeoutMs":"5s"}}]
@@ -260,7 +262,8 @@ struct FlowSchemaTests {
   )
   func unknownKeyword() throws {
     let error = #expect(throws: FlowSchemaError.self) {
-      _ = try Self.schema(#"{"type":"object","properties":{"name":{"type":"string","pattern":"^a"}}}"#)
+      _ = try Self.schema(
+        #"{"type":"object","properties":{"name":{"type":"string","pattern":"^a"}}}"#)
     }
 
     #expect(error?.reason.contains("pattern") == true)

@@ -55,7 +55,7 @@ extension SimDownTests {
     let target = AgentDeviceTarget(udid: recorded.udid, session: Self.session)
 
     kill(child, SIGKILL)
-    _ = DetachedLauncherTests.reap(child)
+    _ = await DetachedLauncherTests.reap(child)
     let agent = Self.agent(sessionUDID: recorded.udid)
     let down = sweeper(agent, simctl: simctl, isAlive: SimulatorClones.processIsAlive)
     let sweeps = LogLines()

@@ -14,7 +14,8 @@ public final class BusyRecorderDevice: AgentDevice {
     self.device = device
     failure = AgentDeviceFailure(
       code: .deviceInUse, message: "CoreSimulator host recording is already in progress",
-      reason: AgentDeviceFailureReason(rawValue: reason), failedStep: AgentDeviceBatchStep(index: 1, command: "record"))
+      reason: AgentDeviceFailureReason(rawValue: reason),
+      failedStep: AgentDeviceBatchStep(index: 1, command: "record"))
   }
 
   /// How many batches tried to start a recording.

@@ -36,7 +36,8 @@ private final class ReplayedSwiftTest: QACheckRunning {
       let status = try Fixture.text("SwiftTest/\(scenario).status")
         .trimmingCharacters(in: .whitespacesAndNewlines)
       return QACheckOutput(
-        exit: .exited(Int32(status) ?? -1), stdout: try Fixture.text("SwiftTest/\(scenario).stdout"),
+        exit: .exited(Int32(status) ?? -1),
+        stdout: try Fixture.text("SwiftTest/\(scenario).stdout"),
         stderr: try Fixture.text("SwiftTest/\(scenario).stderr"))
     } catch {
       return QACheckOutput(exit: .launchFailed("replaying \(scenario): \(error)"))
@@ -111,21 +112,25 @@ struct QARunTestCountTests {
     #expect(after.rows.first?.message.contains("no test matched `\(Self.id)`") == true)
     #expect(after.findings.map(\.ruleID) == [QAReport.checkUnverifiedRuleID])
     let junit = try #require(base.recorded.first?.environment[QACheckJudgement.reportVariable])
-    #expect(base.recorded.first?.program == .command(
-      "swift test --parallel --filter '\(Self.id)' --xunit-output '\(junit)'"))
+    #expect(
+      base.recorded.first?.program
+        == .command(
+          "swift test --parallel --filter '\(Self.id)' --xunit-output '\(junit)'"))
   }
 
   @Test(
     "a plain command that wrote its swift test report to $QA_JUNIT and ran no test is red at base and unverified after — catches a report of 0 tests read as a pass"
   )
   func plainCommandReportRanNoTest() async throws {
-    let check = "swift test --parallel --filter 'ProbeTests\\.NoSuchTest' --xunit-output \"$QA_JUNIT\""
+    let check =
+      "swift test --parallel --filter 'ProbeTests\\.NoSuchTest' --xunit-output \"$QA_JUNIT\""
     let repo = try await Self.featureRepo([
       validationRow("req-reset", .acceptance, check, after: ["f"])
     ])
     defer { repo.remove() }
 
-    let atBase = await repo.run(QARunRun.Options(atBase: true), checks: ReplayedSwiftTest("no-match"))
+    let atBase = await repo.run(
+      QARunRun.Options(atBase: true), checks: ReplayedSwiftTest("no-match"))
     let after = await repo.run(QARunRun.Options(), suffix: 2, checks: ReplayedSwiftTest("no-match"))
 
     #expect(atBase.rows.map(\.result) == [.red], "\(atBase.message) \(atBase.rows.map(\.message))")

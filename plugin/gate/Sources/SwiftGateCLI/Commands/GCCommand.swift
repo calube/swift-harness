@@ -195,10 +195,8 @@ struct GCCommand: AsyncParsableCommand {
     let down = SimDown.live(runner: runner)
     var summary = await GCRun.run(
       root: root, maxAgeDays: days, eventsOlderThanDays: events ? olderThan : nil, now: Date(),
-      sweepLeases: { await down.sweepDeadHolders(simDirectory: SimDown.simDirectory(for:)) }
-    ) {
-      try await clones.sweepOrphans()
-    }
+      sweepLeases: { await down.sweepDeadHolders(simDirectory: SimDown.simDirectory(for:)) },
+      sweepOrphans: { try await clones.sweepOrphans() })
     summary.errors += claimFailures.withLock { $0 }
     Console.write(try GCRun.render(summary, format: output.format, maxAgeDays: days))
     if !summary.errors.isEmpty { throw ExitCode(Verdict.blocked.exitCode) }

@@ -9,7 +9,8 @@ struct AccessibilityIDReaderTests {
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().deletingLastPathComponent()
     .appending(
-      path: "examples/SampleApp/Packages/AccessibilityIDs/Sources/AccessibilityIDs/AccessibilityID.swift"
+      path:
+        "examples/SampleApp/Packages/AccessibilityIDs/Sources/AccessibilityIDs/AccessibilityID.swift"
     )
 
   @Test(

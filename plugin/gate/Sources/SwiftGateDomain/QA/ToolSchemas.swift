@@ -134,7 +134,9 @@ public final class FlowSchema: Sendable {
   public func violations(of value: FlowJSON, at path: String) -> [String] {
     if let kind, !kind.admits(value) {
       let choices = allowed.map { ", one of \(Self.list($0))" } ?? ""
-      return ["`\(path)` must be \(Self.article(kind.rawValue))\(choices), not \(Self.article(value.kindName))"]
+      return [
+        "`\(path)` must be \(Self.article(kind.rawValue))\(choices), not \(Self.article(value.kindName))"
+      ]
     }
     var found: [String] = []
     if let allowed, !allowed.contains(where: { $0.sameValue(as: value) }) {
@@ -229,7 +231,8 @@ public final class FlowSchema: Sendable {
 
   /// Levenshtein distance, ignoring case.
   static func distance(_ left: String, _ right: String) -> Int {
-    let a = Array(left.lowercased()), b = Array(right.lowercased())
+    let a = Array(left.lowercased())
+    let b = Array(right.lowercased())
     guard !a.isEmpty else { return b.count }
     guard !b.isEmpty else { return a.count }
     var row = Array(0...b.count)
@@ -310,7 +313,8 @@ public struct ToolSchemas: Sendable {
       }
       commands[name] = try FlowSchema(json: input, at: name)
       if name == "batch" {
-        guard case .object(let schema) = input, case .object(let properties)? = schema["properties"],
+        guard case .object(let schema) = input,
+          case .object(let properties)? = schema["properties"],
           case .object(let steps)? = properties["steps"], let items = steps["items"]
         else {
           throw FlowSchemaError(path: "batch", reason: "no `properties.steps.items` schema")

@@ -321,7 +321,8 @@ public enum Warmup {
       steps.append(
         WarmupStepResult(
           step: step, milliseconds: milliseconds, cache: cache,
-          outcome: outcome == .passed ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
+          outcome: outcome == .passed
+            ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
           detail: detail(outcome)))
       baseline.append(
         BaselineRecord(

@@ -337,8 +337,7 @@ public struct SimUp: Sendable {
     return .project(path: absolute)
   }
 
-  private static func rootContainer(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer
-  {
+  private static func rootContainer(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer {
     let entries = (try? FileManager.default.contentsOfDirectory(atPath: worktree.path)) ?? []
     switch AppContainer.choose(among: entries) {
     case .failure(let error):

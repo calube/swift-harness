@@ -73,7 +73,8 @@ struct T3KeptFlowTests {
     let notes = parts.findings.filter { $0.ruleID == QAEvidenceGap.videoUnverifiedRuleID }
     #expect(notes.count == 2)
     #expect(notes.allSatisfy { $0.severity == .nit })
-    #expect(notes.contains { $0.message.contains("testFixedFactScenarioShowsItsFactWithoutNetwork") })
+    #expect(
+      notes.contains { $0.message.contains("testFixedFactScenarioShowsItsFactWithoutNetwork") })
     #expect(parts.tiers.first?.verdict == .green)
   }
 }

@@ -4,7 +4,7 @@ import Testing
 @Suite("Bash guard")
 struct BashGuardTests {
   @Test(
-    "raw xcodebuild is denied wherever it sits in the command line — catches builds bypassing per-worktree DerivedData and the sim lock",
+    "raw xcodebuild is denied wherever it sits in the command line, a heredoc a shell runs or an unquoted heredoc substitutes included — catches builds bypassing per-worktree DerivedData and the sim lock",
     arguments: [
       "xcodebuild test -scheme App",
       "cd App && xcodebuild -scheme App build",
@@ -15,13 +15,19 @@ struct BashGuardTests {
       "bash -c 'xcodebuild test -scheme App'",
       "time env FOO=1 xcodebuild -project A.xcodeproj -list build",
       "xcodebuild -resolvePackageDependencies",
+      "bash <<EOF\nxcodebuild test -scheme App\nEOF",
+      "sh -s <<'EOF'\ncd App && xcodebuild build\nEOF",
+      "cat <<'EOF' | sh\nxcodebuild test -scheme App\nEOF",
+      "cat > out.txt <<EOF\n$(xcodebuild test -scheme App)\nEOF",
+      "cat > out.txt <<EOF\nresult: `xcodebuild build`\nEOF",
+      "cat <<EOF > notes.md && xcodebuild test -scheme App\nhello\nEOF",
     ])
   func rawXcodebuildDenied(command: String) {
     #expect(BashGuard.evaluate(command)?.ruleID == BashGuard.rawXcodebuildRuleID)
   }
 
   @Test(
-    "read-only queries, per-device simctl, worktree DerivedData and look-alikes pass — catches the guards blocking everyday commands",
+    "read-only queries, per-device simctl, worktree DerivedData, look-alikes and xcodebuild words a heredoc or redirect writes into a file pass — catches the guards blocking everyday commands",
     arguments: [
       "xcodebuild -version",
       "xcodebuild -showsdks",
@@ -35,6 +41,11 @@ struct BashGuardTests {
       "rm -rf .harness/DerivedData",
       "rm -rf examples/SampleApp/DerivedData",
       "ls ~/Library/Developer/Xcode/DerivedData",
+      "cat > PLAN.md <<EOF\n| req-check | acceptance | xcodebuild test -scheme App |\nEOF",
+      "cat <<'EOF' > PLAN.md\n| req-check | acceptance | `xcodebuild test -scheme App` |\nEOF",
+      "tee notes.md <<-EOF >/dev/null\n\txcodebuild build -scheme App\n\tEOF",
+      "echo 'xcodebuild test -scheme App' > notes.md",
+      "python3 - <<'EOF'\nimport subprocess\nprint(\"xcodebuild test\")\nEOF",
     ])
   func harmlessCommandsPass(command: String) {
     #expect(BashGuard.evaluate(command) == nil)
