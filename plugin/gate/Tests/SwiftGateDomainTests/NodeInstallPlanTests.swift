@@ -1,5 +1,4 @@
 import Foundation
-import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
 import Testing
@@ -37,12 +36,17 @@ struct NodeInstallPlanTests {
     let files = directory.appending(path: "tree", directoryHint: .isDirectory)
     let snapshot = TrackedTreeSnapshot(
       paths: listing.split(separator: "\n").map(String.init),
-      read: { try? Data(contentsOf: files.appending(path: $0)) })
-    let config = try TOMLConfigDecoder().decodeBrownfield(
-      try Fixture.text("BrownfieldTrial/memos-4-config.toml"))
-    #expect(config.areas.map(\.kind) == [.node, .go])
+      read: { FileManager.default.contents(atPath: files.appending(path: $0).path) })
+    // The areas of the memos trials' `config.toml`: a pnpm web app and a Go module at the root.
+    let areas = [
+      nodeArea("web", root: "web"),
+      BrownfieldArea(
+        name: "memos", root: ".", language: .go, kind: .go, test: "go test -json ./...",
+        testFiles: nil, lint: nil, build: "go build ./...", e2e: nil, testGlobs: [], packs: [],
+        xcode: nil),
+    ]
 
-    let plan = NodeInstallPlan.plan(areas: config.areas, tree: snapshot)
+    let plan = NodeInstallPlan.plan(areas: areas, tree: snapshot)
 
     #expect(
       plan.installs == [
