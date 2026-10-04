@@ -23,11 +23,27 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
   /// The plan's `index.json` status after the import; `nil` before that step.
   var indexStatus: PlanStatus?
   var assumptions: [String] = []
+  /// What became of the contract task `--contract` named; `nil` without the flag.
+  var contract: ContractRecord?
   var message = ""
+
+  /// The contract task `--contract` named, and whether its gate run made it `done`.
+  struct ContractRecord: Sendable, Equatable, Encodable {
+    enum Status: String, Sendable, Encodable {
+      case done, pending
+    }
+
+    var task: String
+    var runId: String
+    var status: Status
+    /// The contract commit recorded as the task's only commit; `nil` while it stays pending.
+    var commit: String?
+    var message: String
+  }
 
   private enum CodingKeys: String, CodingKey {
     case command, plan, status, verdict, tasks, waves, excludeAdded, indexStatus, assumptions,
-      message
+      contract, message
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -42,6 +58,7 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
     try c.encode(excludeAdded, forKey: .excludeAdded)
     try c.encode(indexStatus, forKey: .indexStatus)
     try c.encode(assumptions, forKey: .assumptions)
+    try c.encode(contract, forKey: .contract)
     try c.encode(message, forKey: .message)
   }
 }
@@ -56,7 +73,15 @@ enum PlanImportRun {
   /// it. Nothing is written
   /// unless the clone is brownfield, the plan parses and the link's place is free or already
   /// the link.
-  static func run(slug: String, root: URL, git: any Git) async -> PlanImportReport {
+  /// The contract task and the gate run of its commit, from `--contract` and `--contract-run`.
+  struct Contract: Sendable, Equatable {
+    let task: String
+    let runID: String
+  }
+
+  static func run(
+    slug: String, root: URL, git: any Git, contract: Contract? = nil
+  ) async -> PlanImportReport {
     var report = PlanImportReport(plan: slug)
     let common: String
     do {
@@ -315,13 +340,30 @@ struct PlanImportCommand: AsyncParsableCommand {
   @Argument(help: "The plan's slug.")
   var slug: String
 
+  @Option(help: "The contract task, already landed on the plan branch; needs --contract-run.")
+  var contract: String?
+
+  @Option(help: "The GREEN gate run, in the plan checkout, of the contract commit.")
+  var contractRun: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
+  func validate() throws {
+    guard (contract == nil) == (contractRun == nil) else {
+      throw ValidationError("--contract and --contract-run go together")
+    }
+  }
+
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    var named: PlanImportRun.Contract?
+    if let contract, let contractRun {
+      named = PlanImportRun.Contract(task: contract, runID: contractRun)
+    }
     let report = await PlanImportRun.run(
-      slug: slug, root: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path))
+      slug: slug, root: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path),
+      contract: named)
     Console.write(PlanImportRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
