@@ -378,10 +378,11 @@ enum BrownfieldSliceCheck {
       }
       result.findings += buildOnly(area, because: why)
       return result
-    case .current(let milliseconds, _), .stale(let milliseconds, _, _):
+    case .current(let milliseconds, let at), .stale(let milliseconds, let at, _):
+      let measured = at.commit == change.mergeBase ? "" : ", measured at \(at.commit),"
       why =
-        "its warm test run takes \(seconds(milliseconds)) s, over the \(budget / 1000) s slice "
-        + "budget"
+        "its warm test run\(measured) takes \(seconds(milliseconds)) s, over the "
+        + "\(budget / 1000) s slice budget"
     case .unmeasured:
       why =
         "no warm-up on the first-parent history of the merge base \(change.mergeBase) measured "
