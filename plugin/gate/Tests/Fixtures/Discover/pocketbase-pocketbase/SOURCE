@@ -1,0 +1,5 @@
+url: https://github.com/pocketbase/pocketbase.git
+commit: 5cec579da984436a258602a46a96302fbd31f77c
+commit date: 2026-09-12T15:27:58+03:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

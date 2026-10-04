@@ -1,0 +1,5 @@
+url: https://github.com/mitmproxy/mitmproxy.git
+commit: 3368a0a06ae6195aad817a1ece1aaeb6fe0353a1
+commit date: 2026-10-03T14:44:57Z
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

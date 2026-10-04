@@ -1,0 +1,140 @@
+name: Benchmark
+
+on:
+  pull_request:
+    paths:
+      - crates/**
+      - Cargo.toml
+      - py-polars/tests/benchmark/**
+      - .github/workflows/benchmark.yml
+  push:
+    branches:
+      - main
+      - "1.x"
+    paths:
+      - crates/**
+      - Cargo.toml
+      - py-polars/tests/benchmark/**
+      - .github/workflows/benchmark.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: 1
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Free some disk space (remove unused packages)
+        uses: jlumbroso/free-disk-space@v1.3.1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Set up Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+
+      - name: Create virtual environment
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$GITHUB_WORKSPACE/.venv" >> $GITHUB_ENV
+
+      - name: Install Python dependencies
+        working-directory: py-polars
+        run: |
+          # Install typing-extensions separately whilst the `--extra-index-url` in `requirements-ci.txt`
+          # doesn't have an up-to-date typing-extensions, see
+          # https://github.com/astral-sh/uv/issues/6028#issuecomment-2287232150
+          uv pip install -U typing-extensions
+          uv pip install --compile-bytecode -r requirements-dev.txt -r requirements-ci.txt --verbose --index-strategy=unsafe-best-match
+
+      - name: Set up Rust
+        run: rustup show
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          env-vars: ImageVersion
+          save-if: ${{ github.event_name == 'push' }}
+          # This job builds with `-C target-cpu=native`, which the cache key does
+          # not capture, so reusing artifacts across runner CPUs risks SIGILL and
+          # makes timings incomparable; cache the registry only.
+          cache-targets: false
+
+      - name: Build Polars release build
+        working-directory: py-polars
+        run: |
+          # Make sure we use the Polars we're about to build.
+          uv pip uninstall polars-runtime-32 polars-runtime-64 polars-runtime-compat
+          uv pip install --no-deps -e .
+          maturin build --manifest-path runtime/polars-runtime-32/Cargo.toml --profile nodebug-release --features numa -- -C codegen-units=8 -C lto=thin -C target-cpu=native
+
+      - name: Install Polars release build
+        run: |
+          pip install --force-reinstall target/wheels/polars*.whl
+
+      - name: Set wheel size
+        run: |
+          LIB_SIZE=$(ls -l target/wheels/polars*.whl | awk '{ print $5 }')
+          echo "LIB_SIZE=$LIB_SIZE" >> $GITHUB_ENV
+
+      - name: Comment wheel size
+        uses: actions/github-script@v9
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+              const marker = '<!-- polars-wheel-size-comment -->';
+              const currentSize = process.env.LIB_SIZE || 'Unknown';
+
+              // Convert to MB
+              const currentSizeMB = currentSize !== 'Unknown' ? (currentSize / 1024 / 1024).toFixed(4) : 'Unknown';
+
+              const sha = context.payload.pull_request.head.sha;
+              const shortSha = sha.slice(0, 7);
+              const commitUrl = `${context.payload.repository.html_url}/commit/${sha}`;
+              const commentBody = `${marker}\nThe uncompressed lib size after this PR is **${currentSizeMB} MB** (at [\`${shortSha}\`](${commitUrl})).`;
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              });
+
+              // Look for the existing comment by its hidden marker
+              const existingComment = comments.find(comment => comment.body?.includes(marker));
+
+              if (existingComment) {
+                // Update the existing comment
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingComment.id,
+                  body: commentBody,
+                });
+              } else {
+                // Create a new comment
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: commentBody,
+                });
+              }
+        continue-on-error: true
+
+      - name: Run non-benchmark tests
+        working-directory: py-polars
+        run: pytest -m 'not benchmark and not debug' -n auto
+        env:
+          POLARS_TIMEOUT_MS: 60000
+

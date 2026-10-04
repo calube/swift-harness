@@ -1,0 +1,5 @@
+url: https://github.com/tauri-apps/tauri.git
+commit: 30da1fd6e17de6107ecc850c95dfb16b5729f2dd
+commit date: 2026-09-30T16:50:46-03:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

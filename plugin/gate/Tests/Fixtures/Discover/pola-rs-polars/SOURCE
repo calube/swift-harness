@@ -1,0 +1,5 @@
+url: https://github.com/pola-rs/polars.git
+commit: 9ee0dc5b818afbae7ddba308eddcf3174f6f5843
+commit date: 2026-10-03T15:00:25+02:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

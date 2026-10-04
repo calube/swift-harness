@@ -1,0 +1,68 @@
+# file config
+
+--swiftversion 5.9
+--exclude Pods,Tooling,**Dummy.swift
+
+# format config
+
+--indent 4
+
+--wraparguments before-first
+--importgrouping testable-bottom
+
+--enable blankLinesBetweenScopes
+--enable consecutiveSpaces
+--enable duplicateImports
+--enable elseOnSameLine
+--enable linebreakAtEndOfFile
+--enable redundantParens # https://google.github.io/swift/#parentheses, https://google.github.io/swift/#enum-cases, https://google.github.io/swift/#trailing-closures
+--enable semicolons
+--enable sortedImports
+--enable spaceAroundBraces
+--enable spaceAroundBrackets
+--enable spaceAroundOperators
+--enable spaceInsideBraces
+--enable specifiers
+--enable trailingSpace # https://google.github.io/swift/#horizontal-whitespace
+--enable wrapMultilineStatementBraces
+
+--allman false
+--binarygrouping none
+--closingparen balanced
+--commas always
+--conflictmarkers reject
+--decimalgrouping none
+--elseposition same-line
+--empty void
+--exponentcase lowercase
+--exponentgrouping disabled
+--extensionacl on-declarations
+--fractiongrouping disabled
+--fragment false
+--hexgrouping none
+--hexliteralcase uppercase
+--ifdef no-indent
+--indentcase false
+--linebreaks lf
+--maxwidth none
+--nospaceoperators 
+--nowrapoperators 
+--octalgrouping none
+--operatorfunc spaced
+--patternlet inline
+--self init-only
+--selfrequired 
+--semicolons inline
+--specifierorder 
+--tabwidth unspecified
+--trailingclosures 
+--trimwhitespace always
+--wrapcollections before-first
+--wrapparameters preserve
+--xcodeindentation disabled
+
+--disable unusedArguments
+
+# Preserve the existing rule set when upgrading from SwiftFormat 0.54.2.
+# Adopting these newer default rules is a separate style decision.
+--disable docCommentsBeforeModifiers,fileMacro,modifiersOnSameLine,preferCountWhere,redundantPublic,swiftTestingTestCaseNames

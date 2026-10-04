@@ -1,0 +1,52 @@
+name: CI
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        rails: [ "7.2", "8.0", "8.1" ]
+        ruby: [ "3.2", "3.4" ]
+        allow-fail: [ false ]
+        include:
+          - { ruby: "3.4",  rails: "main", allow-fail: true }
+        exclude:
+          - { ruby: "3.2", rails: "8.0" }
+          - { ruby: "3.2", rails: "8.1" }
+
+    env:
+      FERRUM_PROCESS_TIMEOUT: 25
+      FERRUM_DEFAULT_TIMEOUT: 15
+      RAILS_VERSION: "${{ matrix.rails }}"
+
+    name: ${{ format('Tests (Ruby {0}, Rails {1})', matrix.ruby, matrix.rails) }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          rubygems: latest
+          bundler-cache: true
+
+      - name: Run Bug Template Tests
+        run: ruby bug_report_template.rb || ruby bug_report_template.rb
+
+      - uses: oven-sh/setup-bun@v2
+      - name: Run tests
+        id: test
+        run: bundle exec rake TESTOPT=-vdc
+        continue-on-error: ${{ matrix.allow-fail || false }}
+
+      - name: >-
+          Test outcome: ${{ steps.test.outcome }}
+        # every step must define a `uses` or `run` key
+        run: echo NOOP
+
+      - name: Fail when generated changes are not checked-in
+        run: |
+          git update-index --refresh
+          git diff-index --quiet HEAD --
