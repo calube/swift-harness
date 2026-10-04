@@ -5,16 +5,24 @@ import Foundation
 public struct MinedCommand: Sendable, Equatable {
   public let area: String
   public let step: AreaStep
-  /// Runnable from the repository root.
+  /// Runnable from the area root.
   public let command: String
-  /// Repository-relative path of the file that runs it.
+  /// Repository-relative path of the file that runs it, with a note when the command could not
+  /// be rebased onto the area root.
   public let source: String
+  /// `.found` when the command runs from the area root as CI runs it; `.guessed` when it only
+  /// reaches the area by changing back to where CI ran it.
+  public let confidence: Confidence
 
-  public init(area: String, step: AreaStep, command: String, source: String) {
+  public init(
+    area: String, step: AreaStep, command: String, source: String,
+    confidence: Confidence = .found
+  ) {
     self.area = area
     self.step = step
     self.command = command
     self.source = source
+    self.confidence = confidence
   }
 }
 
