@@ -27,7 +27,8 @@ touched modules and files that import SwiftUI; stay inside them.
 
 ## Inputs
 
-The prompt gives you the review bundle directory, `.harness/runs/<id>/review-input/`. Read, in order:
+The prompt gives you the review bundle directory, `<state root>/runs/<id>/review-input/`, where the
+state root is `.harness/` in an owned repository. Read, in order:
 
 1. `manifest.json`: base, merge base, changed files, and which focuses run.
 2. `diff-numbered.txt`: the change under review, each context and added line prefixed by its

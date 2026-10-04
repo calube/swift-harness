@@ -54,6 +54,33 @@ const baseArgs = (extra = {}) => ({
   ...extra,
 })
 
+// A task in a brownfield clone: a slice gate, the pinned model, prove-only proof, classified
+// review, and the worktree's state root under its git dir.
+const brownfieldArgs = (extra = {}) => {
+  const args = {
+    task: 'search-task',
+    plan: 'search',
+    worktree: '/work/search-task',
+    branch: 'search/search-task',
+    writeSet: ['Core/src/search.rs'],
+    taskGate: 'slice',
+    tests: [],
+    contextPack: '/work/repo/.git/worktrees/search-task/swift-harness/context-pack/worker-search-task.md',
+    model: 'claude-sonnet-5-5',
+    review: 'classified',
+    taskProof: 'prove',
+    planSurface: null,
+    stateRoot: '/work/repo/.git/worktrees/search-task/swift-harness',
+    base: 'search/plan',
+    ...extra,
+  }
+  for (const key of Object.keys(args)) if (args[key] === undefined) delete args[key]
+  return args
+}
+
+const brownfieldReturn = (overrides = {}) =>
+  workerReturn({ task: 'search-task', gate: { tier: 'slice', verdict: 'GREEN', runId: 'r-green' }, testsAdded: [], ...overrides })
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const workerReturn = (overrides = {}) => ({
@@ -636,6 +663,90 @@ const tests = {
       run(args, { workers: [red(), workerReturn({ outcome: 'design-conflict', commits: [], gate: null, designConflict: conflict })] }),
       /spec page section/,
     )
+  },
+
+  async 'the brownfield preset rejects a model alias and runs the worker on a pinned id — catches a brownfield worker on whatever model an alias names today'() {
+    for (const model of ['sonnet', 'opus']) {
+      const calls = []
+      await assert.rejects(
+        script(brownfieldArgs({ model }), async (p, o) => calls.push(o), () => {}),
+        /brownfield profile/,
+        model,
+      )
+      assert.equal(calls.length, 0)
+    }
+    for (const model of ['claude-sonnet-5-5', 'claude-opus-5-5']) {
+      const { workerCalls, result } = await run(brownfieldArgs({ model }), { workers: [brownfieldReturn()] })
+      assert.equal(workerCalls[0].opts.model, model)
+      assert.equal(result.outcome, 'ready-to-merge')
+    }
+    const owned = await run(baseArgs({ model: 'claude-sonnet-5-5', review: 'gate' }))
+    assert.equal(owned.workerCalls[0].opts.model, 'claude-sonnet-5-5', 'an owned preset refused a pinned id')
+  },
+
+  async 'a prove task gate passes --prove and never --mutate, from the plan branch, in every worker prompt — catches prove-only proof still mutating, or a slice gated against main'() {
+    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()] }
+    const { workerCalls } = await run(brownfieldArgs(), behave)
+    assert.equal(workerCalls.length, 2)
+    for (const { prompt } of workerCalls) {
+      assert.ok(prompt.includes('swiftgate check --tier slice --base search/plan --prove'), `no prove gate:\n${prompt}`)
+      assert.ok(!prompt.includes('--mutate'), `a prove worker prompt asks for --mutate:\n${prompt}`)
+      assert.ok(!prompt.includes('--base main'), `a brownfield prompt gates against main:\n${prompt}`)
+      assert.ok(prompt.includes('Task proof: prove'), 'the prompt does not name its proof mode')
+    }
+  },
+
+  async 'paths a worker writes and reads come from the state root in a brownfield clone, and stay .harness in an owned one — catches task-status.json written where check-return never looks'() {
+    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()] }
+    const { workerCalls } = await run(brownfieldArgs(), behave)
+    const state = brownfieldArgs().stateRoot
+    assert.ok(workerCalls[0].prompt.includes(`State root: ${state}`), workerCalls[0].prompt)
+    assert.ok(workerCalls[0].prompt.includes(`${state}/task-status.json`), workerCalls[0].prompt)
+    assert.ok(workerCalls[1].prompt.includes(`read it in ${state}/runs/`), workerCalls[1].prompt)
+    assert.ok(!workerCalls[1].prompt.includes('.harness'), `a brownfield prompt names .harness:\n${workerCalls[1].prompt}`)
+    assert.match(workerCalls[0].opts.schema.properties.gate.properties.runId.description, new RegExp(`${state}/runs/history.jsonl`))
+    const owned = await run(baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()] })
+    assert.ok(owned.workerCalls[1].prompt.includes("read it in the worktree's .harness/runs/"), owned.workerCalls[1].prompt)
+  },
+
+  async 'classified review with no diff-risk answer runs 1 reviewer at medium, verified on the pinned Opus id, and says so — catches classified review silently skipped or run at full depth'() {
+    const findings = [finding({ file: 'Core/src/search.rs' })]
+    const { reviewerCalls, verifyCalls, result, logs } = await run(brownfieldArgs(), {
+      workers: [brownfieldReturn(), brownfieldReturn({ commits: ['77aa001'] })],
+      reviews: { 'test-quality': [{ findings }, { findings: [] }] },
+    })
+    const firstRound = reviewerCalls.filter(c => c.prompt.includes('3f2a91c') && !c.prompt.includes('77aa001'))
+    assert.deepEqual(firstRound.map(c => c.opts.agentType), ['swift-harness:test-quality'])
+    for (const c of reviewerCalls) assert.equal(c.opts.model, 'claude-sonnet-5-5')
+    assert.ok(verifyCalls.length >= 1)
+    for (const c of verifyCalls) assert.equal(c.opts.model, 'claude-opus-5-5')
+    assert.equal(result.review.mode, 'classified')
+    assert.match(result.notes, /medium/)
+    assert.match(result.notes, /diff-risk/)
+    assert.ok(logs.some(l => /diff-risk/.test(l)), 'the medium fallback is not logged')
+    assertTaskReturn(result, 'classified')
+  },
+
+  async 'brownfield-only modes fail under an owned task gate, and owned modes under a slice gate — catches a preset mixing the profiles'() {
+    const accepted = await run(brownfieldArgs(), { workers: [brownfieldReturn()] })
+    assert.equal(accepted.result.outcome, 'ready-to-merge', 'a well-formed brownfield launch was refused')
+    const cases = [
+      baseArgs({ review: 'classified' }),
+      baseArgs({ taskProof: 'prove' }),
+      baseArgs({ review: 'gate', stateRoot: '/work/app-catalog-catalog-list-reducer/.harness', base: 'main', taskGate: 'merge' }),
+      brownfieldArgs({ review: 'full' }),
+      brownfieldArgs({ review: 'gate' }),
+      brownfieldArgs({ taskProof: 'per-task' }),
+      brownfieldArgs({ stateRoot: undefined }),
+      brownfieldArgs({ stateRoot: 'relative/swift-harness' }),
+      brownfieldArgs({ stateRoot: '/work/search-task/.harness' }),
+      brownfieldArgs({ base: undefined }),
+    ]
+    for (const args of cases) {
+      const calls = []
+      await assert.rejects(script(args, async (p, o) => calls.push(o), () => {}), /build-task/, JSON.stringify(args))
+      assert.equal(calls.length, 0)
+    }
   },
 
   async 'invalid args fail before any agent runs — catches a worker launched into the wrong branch or mode'() {

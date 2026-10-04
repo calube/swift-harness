@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate", taskProof: "per-task"|"final", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>"}. Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review only: architecture and test-quality in parallel' },
@@ -34,15 +34,36 @@ const TASK_RETURN_KEYS = [
 const RED_REASONS = ['outside-write-set', 'no-progress', 'environment']
 // A worker never returns review-blocked: only this workflow's review stage decides it.
 const WORKER_OUTCOMES = ['ready-to-merge', 'gate-red', 'design-conflict']
-const TIERS = ['fast', 'push', 'ready']
+// Each profile's tiers, modes and models, as the gate's CheckTier and BuildPreset scope them. The
+// task gate's tier names the profile, so a launch can't mix the two.
+const PROFILES = {
+  owned: {
+    tiers: ['fast', 'push', 'ready'],
+    models: ['sonnet', 'opus', 'claude-sonnet-5-5', 'claude-opus-5-5'],
+    reviews: ['full', 'gate'],
+    proofs: ['per-task', 'final'],
+  },
+  // An alias moves to a new model with no change in the clone, and a brownfield run is measured
+  // per model, so only pinned ids run here.
+  brownfield: {
+    tiers: ['slice', 'merge', 'final'],
+    models: ['claude-sonnet-5-5', 'claude-opus-5-5'],
+    reviews: ['classified'],
+    proofs: ['prove'],
+  },
+}
+const TIERS = [...PROFILES.owned.tiers, ...PROFILES.brownfield.tiers]
 const VERDICTS = ['GREEN', 'RED', 'BLOCKED']
-const MODELS = ['sonnet', 'opus']
-const REVIEW_MODES = ['full', 'gate']
+// Classified review: 1 Sonnet reviewer at medium, the full review at high; Opus verifies every
+// finding that could block.
+const CLASSIFIED_REVIEWERS = { low: [], medium: ['test-quality'], high: ['architecture', 'test-quality'] }
+const CLASSIFIED_REVIEWER_MODEL = 'claude-sonnet-5-5'
+const CLASSIFIED_VERIFIER_MODEL = 'claude-opus-5-5'
 // Every task gate judges impact and diff coverage over its change and compiles the app target, so
 // what the merge gate would catch after a merge, and a view the host build compiles out, fail here.
 const TASK_GATE_STEPS = '--impact --coverage --app-build'
-// The preset's `task_proof`: per-task gates prove and mutate; final leaves both to the build's final ready gate.
-const TASK_PROOFS = ['per-task', 'final']
+// The preset's `task_proof`: per-task gates prove and mutate; final leaves both to the build's
+// final ready gate; prove proves each task's changed tests and never mutates.
 // Discovery reviewers. The worker pack quotes the standards' Architecture section and its module
 // kinds' sections, which is the architecture reviewer's rubric. The verifier only checks their
 // findings: its contract forbids adding any.
@@ -53,7 +74,9 @@ const SEVERITY_RANK = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base']
+// A brownfield worktree keeps its state in its git dir's `swift-harness/`, never in the tree.
+const GIT_DIR_STATE = '/swift-harness'
 
 // A spec page plan's sections a design conflict may cite; such a plan has no design to cite.
 const SPEC_PAGE_SECTIONS = ['slices', 'surface', 'modules']
@@ -84,13 +107,33 @@ function validateArgs(a) {
   if (!stringArray(a.writeSet) || a.writeSet.length === 0) invalid('writeSet must be a non-empty array of paths')
   if (!stringArray(a.tests)) invalid('tests must be an array of test-… ids')
   if (!TIERS.includes(a.taskGate)) invalid(`taskGate must be one of ${TIERS.join(', ')}, got ${JSON.stringify(a.taskGate)}`)
-  if (!MODELS.includes(a.model)) invalid(`model must be one of ${MODELS.join(', ')}, got ${JSON.stringify(a.model)}`)
-  if (!REVIEW_MODES.includes(a.review)) {
-    invalid(`review must be one of ${REVIEW_MODES.join(', ')}, got ${JSON.stringify(a.review)}`)
+  const profile = PROFILES.brownfield.tiers.includes(a.taskGate) ? 'brownfield' : 'owned'
+  const allowed = PROFILES[profile]
+  const inProfile = (key, values) => {
+    if (!values.includes(a[key])) {
+      invalid(`${key} must be one of ${values.join(', ')} in the ${profile} profile (task gate ${a.taskGate}), got ${JSON.stringify(a[key])}`)
+    }
   }
-  if (!TASK_PROOFS.includes(a.taskProof)) {
-    invalid(`taskProof must be one of ${TASK_PROOFS.join(', ')}, got ${JSON.stringify(a.taskProof)}`)
+  inProfile('model', allowed.models)
+  inProfile('review', allowed.reviews)
+  inProfile('taskProof', allowed.proofs)
+  let stateRoot = null
+  if (a.stateRoot !== undefined || profile === 'brownfield') {
+    if (!nonEmptyString(a.stateRoot) || !a.stateRoot.startsWith('/')) {
+      invalid(`stateRoot must be the worktree's absolute state root, got ${JSON.stringify(a.stateRoot)}`)
+    }
+    stateRoot = a.stateRoot.replace(/\/+$/, '')
+    const treeState = `${a.worktree.replace(/\/+$/, '')}/.harness`
+    if (profile === 'owned' && stateRoot !== treeState) {
+      invalid(`stateRoot in the owned profile is the worktree's .harness (${treeState}), got ${JSON.stringify(a.stateRoot)}`)
+    }
+    if (profile === 'brownfield' && !stateRoot.endsWith(GIT_DIR_STATE)) {
+      invalid(`stateRoot in the brownfield profile is <git dir>${GIT_DIR_STATE}, got ${JSON.stringify(a.stateRoot)}`)
+    }
   }
+  // A brownfield task branches from the plan branch; an owned one from main.
+  if (profile === 'brownfield' && !nonEmptyString(a.base)) invalid('base is required in the brownfield profile: the plan branch the task branched from')
+  if (a.base !== undefined && !nonEmptyString(a.base)) invalid(`base must be a branch name, got ${JSON.stringify(a.base)}`)
   // Required even when null, so a skill that forgets the plan's surface fails here, not at the final gate.
   if (a.planSurface !== null && !(typeof a.planSurface === 'string' && SHA.test(a.planSurface))) {
     invalid(
@@ -116,19 +159,21 @@ function validateArgs(a) {
     }
     pluginRoot = a.pluginRoot.replace(/\/+$/, '')
   }
-  return { ...a, reviewers, pluginRoot }
+  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main' }
 }
 
 const A = validateArgs(ARGS)
+// Where the worker's run history, task-status.json and scratch files live.
+const stateDir = A.stateRoot ?? "the worktree's .harness"
 
 const GATE_SCHEMA = {
   type: ['object', 'null'],
   required: ['tier', 'verdict', 'runId'],
   additionalProperties: false,
   properties: {
-    tier: { type: 'string', enum: TIERS },
+    tier: { type: 'string', enum: PROFILES[A.profile].tiers },
     verdict: { type: 'string', enum: VERDICTS },
-    runId: { type: 'string', description: "the run's runID in the worktree's .harness/runs/history.jsonl" },
+    runId: { type: 'string', description: `the run's runID in ${stateDir}/runs/history.jsonl` },
   },
 }
 const DESIGN_CONFLICT_SCHEMA = {
@@ -247,7 +292,7 @@ function workerDefect(r) {
   if (r.surfaceCommit !== null && !nonEmptyString(r.surfaceCommit)) return 'surfaceCommit is neither a sha nor null'
   if (r.gate !== null) {
     const g = r.gate
-    if (!g || typeof g !== 'object' || !TIERS.includes(g.tier) || !VERDICTS.includes(g.verdict) || !nonEmptyString(g.runId)) {
+    if (!g || typeof g !== 'object' || !PROFILES[A.profile].tiers.includes(g.tier) || !VERDICTS.includes(g.verdict) || !nonEmptyString(g.runId)) {
       return `its gate ${JSON.stringify(g)} isn't {tier, verdict, runId}`
     }
   }
@@ -384,13 +429,29 @@ function reconcile(original, checked) {
   })
 }
 
-const proofSteps = A.taskProof === 'per-task' ? '--prove --mutate ' : ''
-const finalProofNote = A.taskProof === 'per-task' ? '' : " The build's final ready gate proves and mutates every task at once."
+const proofSteps = { 'per-task': '--prove --mutate ', final: '', prove: '--prove' }[A.taskProof]
+const finalProofNote = A.taskProof === 'final' ? " The build's final ready gate proves and mutates every task at once." : ''
 
 // A plan with a surface on main: every worker proves at it, and a stub for API it lacks follows it
 // as a second proof base, so the final gate can prove each task's stub in merge order.
+// A slice proves each changed test from the task's own merge base, so it takes no proof base, and
+// it has no owned-profile steps to turn on.
+const brownfieldGateLines = () => [
+  `Task gate: swiftgate check --tier ${A.taskGate} --base ${A.base} ${proofSteps}.`,
+  ...(A.planSurface === null
+    ? []
+    : [
+        `Plan surface: ${A.planSurface}, already on ${A.base}. It holds the plan's API as stubs, so write no surface commit of your own. ` +
+          'When a test needs API the plan surface lacks, commit that API alone as a stub and return its sha as surfaceCommit; with no stub, surfaceCommit is null.',
+      ]),
+  `State root: ${A.stateRoot}. The gate's runs are under ${A.stateRoot}/runs/; write a design-conflict report to ` +
+    `${A.stateRoot}/task-status.json and scratch files under ${A.stateRoot}/tmp/, never inside the worktree.`,
+]
+
 const taskGateLines = () =>
-  A.planSurface === null
+  A.profile === 'brownfield'
+    ? brownfieldGateLines()
+    : A.planSurface === null
     ? [
         `Task gate: swiftgate check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS}, ` +
           `plus --proof-base <surface commit> when the task adds API.${finalProofNote}`,
@@ -460,7 +521,7 @@ const pluginDocs = () =>
       `Review contract for finding kinds and severity: ${A.pluginRoot}/docs/review-contract.md. Read every rule you cite or verify there. `
 
 const changeLines = commits =>
-  `The change is commits ${commits.join(', ')} on ${A.branch}, which branched from main. ` +
+  `The change is commits ${commits.join(', ')} on ${A.branch}, which branched from ${A.base}. ` +
   'Read the write-set files in the worktree; they hold the change. '
 
 function reviewPrompt(reviewer, commits) {
@@ -506,6 +567,7 @@ async function reviewAndVerify(reviewer, commits) {
   try {
     value = await agent(reviewPrompt(reviewer, commits), {
       agentType: `swift-harness:${reviewer}`,
+      ...(A.review === 'classified' ? { model: CLASSIFIED_REVIEWER_MODEL } : {}),
       label: `review:${reviewer}`,
       phase: 'Review',
       schema: REVIEW_SCHEMA,
@@ -523,6 +585,7 @@ async function reviewAndVerify(reviewer, commits) {
   try {
     checked = await agent(verifyPrompt(reviewer, commits, findings), {
       agentType: 'swift-harness:verifier',
+      ...(A.review === 'classified' ? { model: CLASSIFIED_VERIFIER_MODEL } : {}),
       label: `verify:${reviewer}`,
       phase: 'Verify',
       schema: VERIFY_SCHEMA,
@@ -544,7 +607,7 @@ async function reviewAndVerify(reviewer, commits) {
 // One review round. `failed` names each focus left unreviewed: it can't pass the review contract,
 // so it blocks the task. Only a verified blocker or major is blocking.
 async function runReview(commits) {
-  const results = await Promise.all(A.reviewers.map(reviewer => reviewAndVerify(reviewer, commits)))
+  const results = await Promise.all(reviewers.map(reviewer => reviewAndVerify(reviewer, commits)))
   const findings = results.flatMap(r => r.findings ?? [])
   const failed = results.filter(r => r.failed).map(r => r.failed)
   for (const reason of failed) log(`review: ${reason}`)
@@ -570,7 +633,18 @@ function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, ext
 }
 
 const gateFinding = gate =>
-  `gate run ${gate.runId} (swiftgate check --tier ${gate.tier}) is ${gate.verdict}; read it in the worktree's .harness/runs/`
+  `gate run ${gate.runId} (swiftgate check --tier ${gate.tier}) is ${gate.verdict}; read it in ${stateDir}/runs/`
+
+// Classified review's depth. The judge's diff-risk answer never reaches this script, so the
+// review runs at medium and the return's notes and the log say why: never a silent depth.
+const classified =
+  A.review === 'classified'
+    ? { level: 'medium', note: 'review: classified at medium, because no diff-risk answer reached the build-task workflow' }
+    : null
+if (classified) log(classified.note)
+const reviewers = classified ? CLASSIFIED_REVIEWERS[classified.level] : A.reviewers
+const reviewed = A.review !== 'gate' && reviewers.length > 0
+const reviewNote = note => (classified ? [classified.note, note].filter(Boolean).join('\n') : note)
 
 // Attempt 1.
 const first = await runWorker(null)
@@ -585,21 +659,21 @@ if (first.defect) {
   if (w.outcome === 'design-conflict') return taskReturn('design-conflict', w, [], [], [])
   if (w.outcome === 'gate-red') {
     fix = { reason: `${gateFinding(w.gate)}; the earlier worker stopped there (${w.notes})`, earlier: w, findings: [] }
-  } else if (A.review === 'full') {
+  } else if (reviewed) {
     const review = await runReview(w.commits)
     lastFindings = review.findings
     // A fix pass can't make a dead reviewer review, so a failed reviewer returns at once.
     if (review.failed.length) {
-      return taskReturn('review-blocked', w, [], [], review.findings, `review not complete: ${review.failed.join('; ')}`)
+      return taskReturn('review-blocked', w, [], [], review.findings, reviewNote(`review not complete: ${review.failed.join('; ')}`))
     }
-    if (!review.blocking.length) return taskReturn('ready-to-merge', w, [], [], review.findings)
+    if (!review.blocking.length) return taskReturn('ready-to-merge', w, [], [], review.findings, reviewNote())
     fix = {
       reason: `the review found ${review.blocking.length} blocking finding(s) (blocker or major)`,
       earlier: w,
       findings: review.blocking,
     }
   } else {
-    return taskReturn('ready-to-merge', w, [], [], [])
+    return taskReturn('ready-to-merge', w, [], [], [], reviewNote())
   }
 }
 
@@ -616,15 +690,15 @@ if (w2.outcome === 'gate-red') {
   log(`${A.task}: the task gate is still red after the fix pass`)
   return taskReturn('gate-red', w2, earlierCommits, earlierTests, lastFindings)
 }
-if (A.review !== 'full') return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, [])
+if (!reviewed) return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, [], reviewNote())
 
 const commits = union(earlierCommits, w2.commits)
 const review = await runReview(commits)
 if (review.failed.length) {
-  return taskReturn('review-blocked', w2, earlierCommits, earlierTests, review.findings, `review not complete: ${review.failed.join('; ')}`)
+  return taskReturn('review-blocked', w2, earlierCommits, earlierTests, review.findings, reviewNote(`review not complete: ${review.failed.join('; ')}`))
 }
 if (review.blocking.length) {
   log(`${A.task}: ${review.blocking.length} blocking finding(s) remain after the fix pass`)
-  return taskReturn('review-blocked', w2, earlierCommits, earlierTests, review.findings)
+  return taskReturn('review-blocked', w2, earlierCommits, earlierTests, review.findings, reviewNote())
 }
-return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, review.findings)
+return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, review.findings, reviewNote())

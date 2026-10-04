@@ -302,4 +302,25 @@ struct BuildSchedulerTests {
       #expect(result == baseline)
     }
   }
+
+  @Test(
+    "a brownfield preset that leaves the model to the task refuses an alias-tagged task as unpinned-model, where an owned one starts it — catches a brownfield worker on a moving alias"
+  )
+  func brownfieldRefusesAliasTag() {
+    let ledger = Self.ledger([Self.task(id: "a", model: .sonnet)])
+    let brownfield = BuildPreset(
+      designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
+      mergeGate: .merge, workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0,
+      onDesignConflict: .block, taskProof: .prove, stallMin: 2)
+
+    let refused = BuildScheduler.next(
+      ledger: ledger, running: [], preset: brownfield, startedAt: Self.epoch, now: Self.epoch)
+    let started = BuildScheduler.next(
+      ledger: ledger, running: [], preset: Self.preset(workerModel: .tagged),
+      startedAt: Self.epoch, now: Self.epoch)
+
+    #expect(refused.toStart.isEmpty)
+    #expect(refused.refused == [.init(taskID: "a", reason: .unpinnedModel)])
+    #expect(started.toStart == ["a"])
+  }
 }

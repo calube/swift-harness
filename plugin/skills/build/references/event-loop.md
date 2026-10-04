@@ -81,12 +81,12 @@ Workflow({
     worktree: "<absolute worktree path from worktree create>",
     branch: "<slug>/<task>",
     writeSet: ["<the task's writeSet>"],
-    taskGate: "<fast|push|ready>",
+    taskGate: "<fast|push|ready|slice>",
     tests: ["<the task's tests>"],
     contextPack: "<absolute path of .harness/context-pack/worker-<task>.md>",
-    model: "<sonnet|opus>",
-    review: "<full|gate>",
-    taskProof: "<per-task|final>",
+    model: "<sonnet|opus|claude-sonnet-5-5|claude-opus-5-5>",
+    review: "<full|gate|classified>",
+    taskProof: "<per-task|final|prove>",
     planSurface: "<plan.json's surfaceCommit, or null>",
     pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
   }
@@ -113,6 +113,12 @@ Workflow({
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
+  Under `prove`, the brownfield preset's, each task gate proves its changed tests and never mutates.
+- Under the brownfield preset, whose task gate is `slice`, also pass `stateRoot`, the worktree's
+  `$(git -C <worktree> rev-parse --absolute-git-dir)/swift-harness`, and `base`, the plan branch
+  the task branched from. The worker writes `task-status.json` and reads its runs there, where
+  `build check-return` looks. `model` must be a pinned id, and `classified` review runs at `medium`
+  (1 reviewer) and says so in the return's `notes` until a diff-risk answer reaches the workflow.
 
 Unknown or missing args make the workflow throw `build-task: …` at once: that is a skill bug, so fix
 the args and relaunch, and don't count it as the task's attempt.
@@ -279,11 +285,12 @@ orchestrator watches from outside. After each launch, run this with `run_in_back
 `<dir>` is the transcript directory the Workflow tool printed:
 
 ```bash
-d=<dir>; while /bin/sleep 120; do [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -15)" ] && { echo "stalled: $d"; exit 0; }; done
+d=<dir>; m=<stall minutes>; while /bin/sleep 60; do [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
 ```
 
-Every tool call and result appends to an agent's transcript, so 15 minutes with no change means no
-agent in that workflow has moved. Keep the watch's task id beside the workflow's. When the
+`<stall minutes>` is `stallMin` from `build next`'s report, or 15 when the report has none. Every
+tool call and result appends to an agent's transcript, so that long with no change means no agent in
+that workflow has moved. Keep the watch's task id beside the workflow's. When the
 workflow's completion notice arrives, `TaskStop` its watch.
 
 When a watch fires, read the last line of the newest `agent-*.jsonl` in `<dir>`. Halt, and quote its

@@ -51,6 +51,14 @@ enum BuildRecordGateRun {
         return .blocked(command, slug, "plan `\(slug)` has no build run to record the gate in")
       }
       store = latest
+      let profile = try store.record().preset.profile
+      guard tier.profile == profile else {
+        return .blocked(
+          command, slug,
+          "run \(runID) is a `\(tier.rawValue)` gate, which belongs to the "
+            + "\(tier.profile.rawValue) profile, but build run \(store.runID) runs under the "
+            + "\(profile.rawValue) profile; record a gate of its own tiers")
+      }
       try await store.append(.gate(gate))
     } catch {
       return .blocked(command, slug, "recording the gate: \(error)")
