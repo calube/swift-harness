@@ -115,6 +115,26 @@ struct DoctorTests {
   }
 
   @Test(
+    "2 devices matching the base give a sim.base-ambiguous nit naming both UDIDs and stay GREEN, and 1 gives none — catches runs copying different base devices with nothing saying so"
+  )
+  func duplicateBaseDevicesAreANit() throws {
+    let twin = SimulatorDevice(
+      udid: "A", name: "iPhone 17",
+      runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+      state: "Booted", isAvailable: true)
+    let result = Doctor.evaluate(try facts(devices: [Self.base, twin]))
+    let notes = result.findings.filter { $0.ruleID == SimulatorSelection.baseAmbiguousRuleID }
+    let note = try #require(notes.first)
+    #expect(notes.count == 1)
+    #expect(note.severity == .nit)
+    #expect(note.message.contains("(A, B)"))
+    #expect(result.verdict == .green)
+
+    let single = Doctor.evaluate(try facts(devices: [Self.base]))
+    #expect(!ids(single).contains(SimulatorSelection.baseAmbiguousRuleID))
+  }
+
+  @Test(
     "an Xcode other than the pin, a missing simulator runtime, or low disk is BLOCKED — catches Claude editing code to fix the machine"
   )
   func environment() throws {
