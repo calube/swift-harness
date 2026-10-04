@@ -78,6 +78,27 @@ struct QALintCommandTests {
   }
 
   @Test(
+    "a brownfield clone lints against its config.toml, noting that the profile declares no ids instead of naming a missing .swiftgate.toml by absolute path — catches qa lint reading only the owned profile"
+  )
+  func brownfieldCloneNote() throws {
+    let root = try TestTemporaryDirectory.make("qa-lint-brownfield")
+    defer { TestTemporaryDirectory.remove(root) }
+    let state = root.appending(path: ".git/swift-harness", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+    try Data(try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml").utf8)
+      .write(to: state.appending(path: "config.toml"))
+
+    let report = QALintRun.run(
+      files: [Self.flow("typo-id.flow.json")], root: root, pluginRoot: Self.pluginRoot)
+
+    #expect(report.verdict == .green, "\(report.message)")
+    let note = try #require(report.findings.first)
+    #expect(note.ruleID == FlowRules.idsUnknownRuleID)
+    #expect(note.message.contains("brownfield"), "\(note.message)")
+    #expect(!note.message.contains(root.path), "\(note.message)")
+  }
+
+  @Test(
     "a configured id module that doesn't exist is BLOCKED naming the path — catches a broken module read as no ids"
   )
   func missingModuleBlocks() throws {
