@@ -2,7 +2,9 @@ import Foundation
 import SwiftGateDomain
 
 /// Session records under the state root's `hook-state/sessions/`, one `<session id>.json` each, inside
-/// the hook state's own `.gitignore`, so a record never dirties `git status`.
+/// the hook state's own `.gitignore`, so a record never dirties `git status`. Every worktree of a
+/// brownfield clone shares the event store's root: the SessionStart hook records from the main
+/// checkout, and `events ingest` and `doctor` run from the plan checkout or a task worktree.
 public struct SessionRecordStore: Sendable {
   /// Records kept after a write; older ones are pruned.
   public static let retained = 20
@@ -38,7 +40,7 @@ public struct SessionRecordStore: Sendable {
 
   public init(worktreeRoot: URL) {
     self.worktreeRoot = worktreeRoot
-    self.state = StateRootResolver.resolve(worktree: worktreeRoot)
+    self.state = StateRootResolver.eventStore(worktree: worktreeRoot)
   }
 
   public var directoryURL: URL {
