@@ -1,5 +1,5 @@
 {
-  "description": "swift-harness: route every gate through swiftgate. No-ops outside a project with .swiftgate.toml.",
+  "description": "swift-harness: route every gate through swiftgate. No-ops outside a project with .swiftgate.toml, except the review agents' Bash limit.",
   "hooks": {
     "SessionStart": [
       {

@@ -211,6 +211,59 @@ enum RunViewSpans {
     return tiers + placed
   }
 
+  /// A brownfield run's discovery and warm-up, which time themselves in `discover.run` and
+  /// `warmup.run` rather than in spans: each `discover.run` ends at its event and starts `ms`
+  /// earlier. The warm-up writes an area's steps together when the area finishes, so its last
+  /// step ends at the event and each earlier step ends where the next one starts; those
+  /// boundaries are inferred, so each warm-up span is approximate.
+  static func brownfieldSpans(events: [HarnessEvent], parent: String?) -> [RunView.Span] {
+    var spans: [RunView.Span] = []
+    var batch: [(event: HarnessEvent, run: WarmupRunEvent)] = []
+    func flush() {
+      var end = batch.last?.event.time
+      var placed: [RunView.Span] = []
+      for (event, run) in batch.reversed() {
+        guard let stepEnd = end else { break }
+        let start = stepEnd.addingTimeInterval(-seconds(run.milliseconds))
+        placed.append(
+          RunView.Span(
+            id: "warmup:\(run.area):\(run.step.rawValue):\(event.eventID)", parent: parent,
+            phase: .warmup, start: start, end: stepEnd, outcome: outcome(of: run.outcome),
+            approximate: true))
+        end = start
+      }
+      spans += placed.reversed()
+      batch = []
+    }
+    for event in events {
+      switch event.payload {
+      case .discoverRun(let run):
+        spans.append(
+          RunView.Span(
+            id: "discover:\(event.eventID)", parent: parent, phase: .discover,
+            start: event.time.addingTimeInterval(-seconds(run.milliseconds)), end: event.time,
+            outcome: .ok))
+      case .warmupRun(let run):
+        if let last = batch.last, last.run.area != run.area || last.event.time != event.time {
+          flush()
+        }
+        batch.append((event, run))
+      default:
+        continue
+      }
+    }
+    flush()
+    return spans
+  }
+
+  private static func outcome(of warmup: WarmupOutcome) -> SpanOutcome {
+    switch warmup {
+    case .passed: .ok
+    case .failed: .red
+    case .dropped, .notInstalled: .abandoned
+    }
+  }
+
   static func outcome(of verdict: Verdict) -> SpanOutcome {
     switch verdict {
     case .green: .ok
