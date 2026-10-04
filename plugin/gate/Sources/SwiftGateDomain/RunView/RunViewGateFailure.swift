@@ -235,7 +235,7 @@ extension RunView.GateFailure {
 
 extension RunView.TaskBlock {
   private enum CodingKeys: String, CodingKey {
-    case at, cause, halt, gateRun
+    case at, cause, halt, gateRun, rejection
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -244,6 +244,7 @@ extension RunView.TaskBlock {
     try c.encode(cause, forKey: .cause)
     try c.encode(halt, forKey: .halt)
     try c.encode(gateRun, forKey: .gateRun)
+    try c.encode(rejection, forKey: .rejection)
   }
 }
 

@@ -45,6 +45,7 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "agent.usage": "a harness event kind",
     "build.halt": "a harness event kind",
     "build.resume": "a harness event kind",
+    "build.return-checked": "a harness event kind",
     "discover.run": "a harness event kind",
     "warmup.run": "a harness event kind",
     "span.start": "a harness event kind",

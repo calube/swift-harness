@@ -57,13 +57,34 @@ enum RunViewGateFailures {
     }
     causes(&view)
     haltGates(&view)
-    blocks(&view, returns: Set(input.join?.returns.keys.map { $0 } ?? []))
+    blocks(
+      &view, returns: Set(input.join?.returns.keys.map { $0 } ?? []),
+      rejections: rejections(events))
   }
 
-  /// Each task that ended `blocked` or `needs-replan` says why, from what its record holds: its
-  /// newest gate run RED, no return of it stored, or a halt of it. Its task span, which ends
-  /// there, names a RED gate run as its cause.
-  private static func blocks(_ view: inout RunView, returns: Set<String>) {
+  /// Each task's newest `build.return-checked` that wasn't GREEN, unless a later check of it was.
+  private static func rejections(_ events: [HarnessEvent]) -> [String: RunView.ReturnRejection] {
+    var newest: [String: (time: Date, checked: BuildReturnCheckedEvent)] = [:]
+    for event in events {
+      guard case .buildReturnChecked(let checked) = event.payload else { continue }
+      if let seen = newest[checked.task], seen.time > event.time { continue }
+      newest[checked.task] = (event.time, checked)
+    }
+    return newest.compactMapValues { entry in
+      let checked = entry.checked
+      guard checked.verdict != .green else { return nil }
+      return RunView.ReturnRejection(
+        at: entry.time, verdict: checked.verdict, fix: checked.fix, rules: checked.rules,
+        findings: checked.findings, moreFindings: checked.moreFindings, message: checked.message)
+    }
+  }
+
+  /// Each task that ended `blocked` or `needs-replan` says why, from what its record holds:
+  /// `build check-return` rejecting its return, its newest gate run RED, no return of it stored,
+  /// or a halt of it. Its task span, which ends there, names a RED gate run as its cause.
+  private static func blocks(
+    _ view: inout RunView, returns: Set<String>, rejections: [String: RunView.ReturnRejection]
+  ) {
     let stopped: Set<TaskStatus> = [.blocked, .needsReplan]
     for index in view.tasks.indices where stopped.contains(view.tasks[index].status) {
       let task = view.tasks[index].id
@@ -74,11 +95,16 @@ enum RunViewGateFailures {
       let gate = view.spans.filter { $0.phase == .gate && $0.task == task && $0.end != nil }
         .max { ($0.end ?? $0.start) < ($1.end ?? $1.start) }
       let halt = view.halts.filter { $0.task == task }.max { $0.at < $1.at }
+      let rejection = rejections[task]
+      // A rejected return comes first: its rules say what was wrong even when the gate it
+      // claimed was RED.
       let cause: RunView.BlockCause? =
-        gate?.outcome == .red
-        ? .gateRed : !returns.contains(task) ? .returnNotStored : halt == nil ? nil : .halt
+        rejection != nil
+        ? .returnRejected
+        : gate?.outcome == .red
+          ? .gateRed : !returns.contains(task) ? .returnNotStored : halt == nil ? nil : .halt
       view.tasks[index].blocked = RunView.TaskBlock(
-        at: at, cause: cause, halt: halt?.reason, gateRun: gate?.gateRun)
+        at: at, cause: cause, halt: halt?.reason, gateRun: gate?.gateRun, rejection: rejection)
       if cause == .gateRed { view.spans[spanIndex].causeGateRun = gate?.gateRun }
     }
   }

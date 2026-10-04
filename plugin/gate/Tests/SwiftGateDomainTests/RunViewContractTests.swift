@@ -147,7 +147,7 @@ struct RunViewContractTests {
   }
 
   @Test(
-    "a blocked task's reason encodes its time, cause, halt and gate run, absent values as null — catches a block key the page won't read"
+    "a blocked task's reason encodes its time, cause, halt, gate run and rejection, absent values as null — catches a block key the page won't read"
   )
   func encodesTaskBlockKeys() throws {
     var view = view
@@ -156,10 +156,11 @@ struct RunViewContractTests {
     let object = try #require(
       JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
     let block = try #require(first(object["tasks"])["blocked"] as? [String: Any])
-    #expect(keys(block) == ["at", "cause", "halt", "gateRun"])
+    #expect(keys(block) == ["at", "cause", "halt", "gateRun", "rejection"])
     #expect(block["cause"] as? String == "return-not-stored")
     #expect(block["halt"] is NSNull)
     #expect(block["gateRun"] is NSNull)
+    #expect(block["rejection"] is NSNull)
   }
 
   @Test(

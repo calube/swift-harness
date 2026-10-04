@@ -1,0 +1,21 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 86,
+  "findings" : [
+
+  ],
+  "headCommit" : "6fc0cb61bbcb569586d7c60bd7765126ec7912cb",
+  "runID" : "20261004T141210Z-00ea6cf2",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 27,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

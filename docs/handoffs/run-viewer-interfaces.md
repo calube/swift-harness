@@ -20,6 +20,9 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
   `RunStore.record`; brownfield prove writes its own.
 - `AgentToolsEvent` with the closed `ToolKind` and `ToolCallCount`, in stream `usage`.
 - `GateStepEvent.startMs: Int?`, the step's offset from its gate run's start.
+- `BuildReturnCheckedEvent { buildRun, task, fix, verdict, rules: [TaskReturnFinding.Rule], findings:
+  [{rule, message, truncated}], moreFindings, message }`, kind `build.return-checked` in stream `build`,
+  which `build check-return` writes for every verdict through `BuildReturnCheckedEvent.scrubbed(…)`.
 
 **Writers** (`A/`, `C/`).
 - `SpanLog(root:)` with `start(phase:buildRun:task:role:parentSpan:)` and `end(spanID:outcome:)`, which throw
@@ -33,6 +36,8 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
 - `RunView` encodes `schemaVersion` 1 and the design §6 keys, plus `run.stallMin` and the span phases the
   builder derives (`run`, `task`, `merge`, `gate`, `tier`, `step`, `warmup`). Times are ISO-8601 with
   milliseconds; `RunViewJSON.encode(_:)` is the 1 encoder.
+- A blocked task's `blocked.cause` is `return-rejected` when its newest `build.return-checked` wasn't
+  GREEN, and `blocked.rejection` then holds that event's verdict, rules, findings and message.
 - `RunViewBuilder.build(_ input: RunViewInput) -> RunView`. `RunViewInput` carries `events`, `join`,
   `ledger`, `requirements`, `damage`, `briefs`, `workerGateRuns` (a worker's or fixer's own gate runs by
   task) and `launchedAt` (a brownfield launch).

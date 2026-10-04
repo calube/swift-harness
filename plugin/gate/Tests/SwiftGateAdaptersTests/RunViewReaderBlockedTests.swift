@@ -4,30 +4,47 @@ import SwiftGateDomain
 import SwiftGateTestSupport
 import Testing
 
-/// A brownfield clone in a temp directory holding the captured `brownfield-blocked` run: its
-/// shared store, its plan state, and each task worktree with its own run store under its git dir,
-/// as `git worktree add` lays them out. Nothing here reads or writes this checkout's state.
+/// A brownfield clone in a temp directory holding a captured brownfield run: its shared store, its
+/// plan state, and each task worktree with its own run store under its git dir, as `git worktree
+/// add` lays them out. Nothing here reads or writes this checkout's state.
 private struct BlockedClone {
-  static let captured = Fixture.gateDirectory.appending(
-    path: "Tests/Fixtures/RunView/brownfield-blocked", directoryHint: .isDirectory)
-  static let buildRun = "20261004T124141Z-c3747b7a"
+  /// A captured run: its fixture directory, the clone's directory name and its build run.
+  struct Capture {
+    let fixture: String
+    let clone: String
+    let buildRun: String
+  }
+
+  /// The third memos trial: both tasks blocked when check-return, which recorded nothing then,
+  /// rejected their returns.
+  static let memos3 = Capture(
+    fixture: "brownfield-blocked", clone: "memos-3", buildRun: "20261004T124141Z-c3747b7a")
+  /// The fourth memos trial: the web task blocked on a rejected return, recorded by a later
+  /// check-return, and the store task on a design conflict.
+  static let memos4 = Capture(
+    fixture: "brownfield-rejected", clone: "memos-4", buildRun: "20261004T141445Z-85d15f09")
   static let plan = "spec"
   static let store = "share-view-limit-store"
   static let web = "share-view-limit-web"
 
+  let capture: Capture
   let parent: URL
   let common: URL
   var state: StateRoot { .gitDir(common) }
 
-  init() throws {
+  init(_ capture: Capture = memos3) throws {
+    self.capture = capture
+    let captured = Fixture.gateDirectory.appending(
+      path: "Tests/Fixtures/RunView/\(capture.fixture)", directoryHint: .isDirectory)
     let files = FileManager.default
     parent = files.temporaryDirectory.appending(
       path: "run-view-blocked-\(UUID().uuidString)", directoryHint: .isDirectory
     ).resolvingSymlinksInPath()
-    common = parent.appending(path: "memos-3/.git", directoryHint: .isDirectory)
+    common = parent.appending(path: "\(capture.clone)/.git", directoryHint: .isDirectory)
     let harness = common.appending(path: "swift-harness", directoryHint: .isDirectory)
     let planDirectory = harness.appending(path: "plans/\(Self.plan)", directoryHint: .isDirectory)
-    let run = planDirectory.appending(path: "build/\(Self.buildRun)", directoryHint: .isDirectory)
+    let run = planDirectory.appending(
+      path: "build/\(capture.buildRun)", directoryHint: .isDirectory)
     try files.createDirectory(at: run, withIntermediateDirectories: true)
     try Data().write(to: harness.appending(path: "config.toml"))
     let copies: [(String, URL)] = [
@@ -40,9 +57,9 @@ private struct BlockedClone {
       ("returns", run.appending(path: "returns")),
     ]
     for (name, target) in copies {
-      try files.copyItem(at: Self.captured.appending(path: name), to: target)
+      try files.copyItem(at: captured.appending(path: name), to: target)
     }
-    let worktrees = Self.captured.appending(path: "worktrees", directoryHint: .isDirectory)
+    let worktrees = captured.appending(path: "worktrees", directoryHint: .isDirectory)
     for name in try files.contentsOfDirectory(atPath: worktrees.path) where !name.hasPrefix(".") {
       let checkout = parent.appending(path: name, directoryHint: .isDirectory)
       let gitDir = common.appending(path: "worktrees/\(name)", directoryHint: .isDirectory)
@@ -59,7 +76,7 @@ private struct BlockedClone {
 
   func view() throws -> RunView {
     let input = try RunViewReader(commonDirectory: common, stateRoot: state, profile: .brownfield)
-      .read(buildRun: Self.buildRun)
+      .read(buildRun: capture.buildRun)
     return RunViewBuilder.build(input)
   }
 
@@ -117,5 +134,40 @@ struct RunViewReaderBlockedTests {
       #expect(span.end == block.at, "\(task)")
     }
     #expect(view.tasks.filter { $0.status != .blocked }.allSatisfy { $0.blocked == nil })
+  }
+}
+
+@Suite("run view reader: a brownfield run whose return check-return rejected")
+struct RunViewReaderRejectedTests {
+  @Test(
+    "a blocked task whose return check-return rejected says so with the rule and message, and keeps the GREEN slice its worktree ran — catches a rejected-return task with no reason in the view, or its gate dropped"
+  )
+  func rejectedReturnSaysWhy() throws {
+    let clone = try BlockedClone(BlockedClone.memos4)
+    defer { clone.remove() }
+    let view = try clone.view()
+
+    let web = try #require(view.tasks.first { $0.id == BlockedClone.web })
+    let block = try #require(web.blocked)
+    #expect(block.cause == .returnRejected)
+    #expect(block.halt == .question)
+    #expect(block.gateRun == "20261004T141801Z-79b9bebf")
+    let rejection = try #require(block.rejection)
+    #expect(rejection.verdict == .red)
+    #expect(rejection.rules == [.surfaceCommitOffBranch])
+    #expect(
+      rejection.findings.map(\.message) == [
+        "surface commit \"7c3becaa\" isn't on branch spec/share-view-limit-web"
+      ])
+    // The worker's GREEN slice: a rejected return links no gate run, so only the worktree that
+    // ran it names its task.
+    let slice = try #require(view.gates.first { $0.runID == "20261004T141801Z-79b9bebf" })
+    #expect(slice.task == BlockedClone.web)
+    #expect(slice.verdict == .green)
+
+    let store = try #require(view.tasks.first { $0.id == BlockedClone.store })
+    #expect(store.blocked?.cause == .halt)
+    #expect(store.blocked?.rejection == nil)
+    #expect(try RunViewGuard.rejection(of: view) == nil)
   }
 }

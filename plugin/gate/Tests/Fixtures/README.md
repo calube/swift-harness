@@ -2130,6 +2130,39 @@ reader reads none of them. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z
 RunView/brownfield-blocked` and the secrets grep above matched nothing; `/tmp` matches only a
 repo-relative `.harness/tmp/edit.py` in an `agent.tools` file list.
 
+`RunView/brownfield-rejected/` is the state the fourth brownfield trial on `usememos/memos` left
+(`evals/results/2026-10-04-brownfield-trial/memos-4`), build run `20261004T141445Z-85d15f09` of plan
+`spec`, plus 1 `build.return-checked` event. The web task's worker ran its `slice` GREEN in its own
+worktree (`20261004T141801Z-79b9bebf`) and returned `surfaceCommit` as `"\"7c3becaa\""`, which
+`build check-return` rejected, so the task ended `blocked`; the store task ended `blocked` on a design
+conflict. That `check-return` recorded nothing then. The last line of `events/build.jsonl` is the event
+this branch's `check-return` wrote for the same return file, re-run after the trial on a copy of the
+clone, so its time is the capture's, not the run's.
+
+With `T` the trial directory holding `memos-4` and its 3 worktrees `memos-4-spec`,
+`memos-4-spec-share-view-limit-store` and `memos-4-spec-share-view-limit-web`, `X` a scratch directory,
+and `SG` this branch's `swiftgate`, copied after the run ended:
+
+```sh
+cd $T && /bin/cp -c -R memos-4 memos-4-spec memos-4-spec-share-view-limit-store memos-4-spec-share-view-limit-web $X/
+cd $X/memos-4 && git worktree repair $X/memos-4-spec $X/memos-4-spec-share-view-limit-store $X/memos-4-spec-share-view-limit-web
+cd $X/memos-4-spec && $SG build check-return .harness/build/20261004T141445Z-85d15f09/share-view-limit-web.json --plan spec
+G=$X/memos-4/.git C=$G/swift-harness P=$C/plans/spec R=$P/build/20261004T141445Z-85d15f09
+S='s#/Users/[^/"]*/Developer/trials/memos-4-#../memos-4-#g; s#"/private/tmp/[^"]*/spec\.md"#"/spec.md"#g; s#"/Users/[^/"]*/Developer/trials/memos-4/\.git/swift-harness/plans/spec/spec\.md"#"/spec.md"#g'
+cp $C/events/{gate,span,build,brownfield,usage}.jsonl $C/events/store.json events/
+sed -E "$S" $P/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json; cp $P/plan.json plan.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+for w in $G/worktrees/*; do n=$(basename $w); for r in $w/swift-harness/runs/2*/(N); do
+  mkdir -p worktrees/$n/runs/$(basename $r); cp $r/report.json worktrees/$n/runs/$(basename $r)/; done; done
+sed -i '' -E 's#"/Users/[^/"]*/Developer/trials/memos-4/#"<clone>/#g' worktrees/memos-4-spec/runs/20261004T141215Z-31ad3958/report.json
+```
+
+`check-return` printed `RED` with `build-return.surface-commit-off-branch`, as in the trial. The `git
+worktree repair` pointed the copies at each other and left the trial's own checkouts as they were. The
+last `sed` replaced the clone's absolute path in the GREEN merge gate's baseline finding. `grep -rniE
+'/Users|/private|/var/folders|caleb|@[a-z]+\.|home|/tmp' RunView/brownfield-rejected` and the secrets grep
+above matched nothing.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on

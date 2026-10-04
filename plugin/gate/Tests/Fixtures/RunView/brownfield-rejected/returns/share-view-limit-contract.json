@@ -1,0 +1,20 @@
+{
+  "task": "share-view-limit-contract",
+  "outcome": "ready-to-merge",
+  "commits": [
+    "6fc0cb61"
+  ],
+  "gate": {
+    "tier": "slice",
+    "verdict": "GREEN",
+    "runId": "20261004T141540Z-be184a1a"
+  },
+  "review": {
+    "mode": "classified",
+    "findings": []
+  },
+  "testsAdded": [],
+  "notes": "Contract commit 6fc0cb61 on swift-harness/spec, landed by the orchestrator before import. Proto: MemoShare gains `optional int32 view_limit = 4` (OPTIONAL) and `int32 view_count = 5` (OUTPUT_ONLY), regenerated with buf generate (Go `ViewLimit *int32`, `ViewCount int32`; TS `viewLimit?: number`, `viewCount: number`). Store: `store.MemoShare.ViewLimit *int32` (nil = no limit) and `ViewCount int32`; `store.ConsumeMemoShareView{UID string; Now int64}`; `(*Store).ConsumeMemoShareView(ctx, *ConsumeMemoShareView) (*MemoShare, error)` validates a non-empty UID and calls `Driver.ConsumeMemoShareView`, which must return the updated share after counting 1 view, or nil, nil when the share is unknown, expired (expires_ts < Now) or used up. Each driver (sqlite, mysql, postgres) has a stub `ConsumeMemoShareView` returning a not-implemented error at the end of store/db/<driver>/memo_share.go.",
+  "designConflict": null,
+  "surfaceCommit": "6fc0cb61"
+}

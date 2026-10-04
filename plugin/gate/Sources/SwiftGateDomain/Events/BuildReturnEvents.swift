@@ -58,8 +58,16 @@ extension BuildReturnCheckedEvent {
     buildRun: String, task: String, fix: Bool, verdict: Verdict, findings: [TaskReturnFinding],
     message: String, roots: [String]
   ) -> BuildReturnCheckedEvent {
-    BuildReturnCheckedEvent(
-      buildRun: buildRun, task: task, fix: fix, verdict: verdict, rules: [], findings: [],
-      moreFindings: 0, message: message)
+    let roots = RunViewGateFailures.Scrub.roots(roots)
+    var rules: [TaskReturnFinding.Rule] = []
+    for finding in findings where !rules.contains(finding.rule) { rules.append(finding.rule) }
+    let kept = findings.prefix(RunView.maxFailureFindings).map { finding in
+      let (text, truncated) = RunViewGateFailures.Scrub.message(finding.message, roots: roots)
+      return Finding(rule: finding.rule, message: text, truncated: truncated)
+    }
+    return BuildReturnCheckedEvent(
+      buildRun: buildRun, task: task, fix: fix, verdict: verdict, rules: rules,
+      findings: Array(kept), moreFindings: max(0, findings.count - RunView.maxFailureFindings),
+      message: RunViewGateFailures.Scrub.message(message, roots: roots).0)
   }
 }
