@@ -119,7 +119,8 @@ struct DoctorTests {
   )
   func duplicateBaseDevicesAreANit() throws {
     let twin = SimulatorDevice(
-      udid: "A", name: "iPhone 17", runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+      udid: "A", name: "iPhone 17",
+      runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
       state: "Booted", isAvailable: true)
     let result = Doctor.evaluate(try facts(devices: [Self.base, twin]))
     let notes = result.findings.filter { $0.ruleID == SimulatorSelection.baseAmbiguousRuleID }

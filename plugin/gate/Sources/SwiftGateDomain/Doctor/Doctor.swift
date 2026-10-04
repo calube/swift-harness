@@ -304,6 +304,11 @@ public enum Doctor {
       } catch {
         check.block(simulatorRuleID, configFile, error.message)
       }
+      if let note = SimulatorSelection.baseAmbiguityNote(
+        in: devices, config: facts.config.simulator)
+      {
+        check.findings.append(note)
+      }
     }
 
     check.disk(facts.freeBytes)
