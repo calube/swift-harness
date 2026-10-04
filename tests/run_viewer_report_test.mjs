@@ -14,9 +14,12 @@ import { gitPath } from './developer_tools.mjs'
 import { findChrome, launch } from './headless_chrome.mjs'
 
 const plugin = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
-const captured = join(plugin, 'gate/Tests/Fixtures/RunView/build-run-1')
-const buildRun = '20261004T045528Z-58d28c78'
-const plan = '2026-10-03-counter-reset-and-floor'
+const fixtures = join(plugin, 'gate/Tests/Fixtures/RunView')
+// Each captured build run: its fixture directory, build run id and plan slug.
+const RUNS = {
+  first: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor' },
+  spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
+}
 
 function swiftgateBinary() {
   if (process.env.SWIFTGATE_BIN) return process.env.SWIFTGATE_BIN
@@ -25,7 +28,8 @@ function swiftgateBinary() {
 }
 
 // A git repository holding the captured run's plan state and stores, as the run left them.
-function seededRepository() {
+function seededRepository({ dir: fixture, buildRun, plan }) {
+  const captured = join(fixtures, fixture)
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-report-'))
   execFileSync(gitPath, ['init', '-q'], { cwd: dir })
   writeFileSync(join(dir, '.swiftgate.toml'), '')
@@ -63,41 +67,67 @@ if (!findChrome()) {
   process.exit(0)
 }
 
-const repository = seededRepository()
+const repositories = []
+
+// Writes the run's report in a seeded repository and loads it, returning the page's region
+// counts, its embedded view, its text and its console errors.
+async function renderReport(run) {
+  const repository = seededRepository(run)
+  repositories.push(repository)
+  const result = spawnSync(swiftgateBinary(), ['report', '--html', run.buildRun], {
+    cwd: repository,
+    encoding: 'utf8',
+    env: { ...process.env, LLVM_PROFILE_FILE: join(repository, 'profile-%p.profraw'), SWIFTGATE_HARNESS_ROOT: plugin },
+    timeout: 30_000,
+  })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  const report = join(repository, '.harness/reports', `${run.buildRun}.html`)
+  const html = readFileSync(report, 'utf8')
+  assert.doesNotMatch(html, /<script src|<link|http/)
+
+  const { page, close } = await launch()
+  try {
+    await page.viewport(1280, 900)
+    await page.load(pathToFileURL(report).href)
+    const regions = await page.evaluate(REGIONS)
+    const view = JSON.parse(await page.evaluate("document.getElementById('run-view').textContent"))
+    const text = await page.evaluate('document.body.innerText')
+    const barIDs = await page.evaluate("[...new Set([...document.querySelectorAll('#tl .bar')].map(bar => bar.dataset.id))]")
+    return { regions, view, text, barIDs, errors: [...page.errors] }
+  } finally {
+    await close()
+  }
+}
+
+function assertRendered({ regions, view, text, errors }, run, keys) {
+  for (const key of keys) {
+    assert.ok(regions[key] > 0, `region ${key} is empty: ${JSON.stringify(regions)}`)
+  }
+  assert.deepEqual(
+    { spec: regions.spec, proof: regions.proof, tokens: regions.tokens, roles: regions.roles, gates: regions.gates },
+    { spec: view.spec.length, proof: view.proofs.length, tokens: view.tasks.length, roles: view.roles.length, gates: view.gates.length })
+  assert.equal(regions.errors, '0')
+  assert.deepEqual(errors, [])
+  assert.match(text, new RegExp(run.buildRun))
+  assert.doesNotMatch(text, /undefined|NaN|no run data embedded/)
+}
+
+const REGION_KEYS = ['meta', 'stats', 'bars', 'spec', 'tokens', 'roles', 'gates']
+
 const tests = {
   async 'the report of the captured run is 1 file that draws a row for each item in every region with 0 console errors — catches key drift between the encoder and the page'() {
-    const result = spawnSync(swiftgateBinary(), ['report', '--html', buildRun], {
-      cwd: repository,
-      encoding: 'utf8',
-      env: { ...process.env, LLVM_PROFILE_FILE: join(repository, 'profile-%p.profraw'), SWIFTGATE_HARNESS_ROOT: plugin },
-      timeout: 30_000,
-    })
-    assert.equal(result.status, 0, result.stdout + result.stderr)
-    const report = join(repository, '.harness/reports', `${buildRun}.html`)
-    const html = readFileSync(report, 'utf8')
-    assert.doesNotMatch(html, /<script src|<link|http/)
-
-    const { page, close } = await launch()
-    try {
-      await page.viewport(1280, 900)
-      await page.load(pathToFileURL(report).href)
-      const regions = await page.evaluate(REGIONS)
-      for (const key of ['meta', 'stats', 'bars', 'spec', 'tokens', 'roles', 'gates']) {
-        assert.ok(regions[key] > 0, `region ${key} is empty: ${JSON.stringify(regions)}`)
-      }
-      // The captured run predates proof recording, so its proof table is checked against the data.
-      const view = JSON.parse(await page.evaluate("document.getElementById('run-view').textContent"))
-      assert.deepEqual(
-        { spec: regions.spec, proof: regions.proof, tokens: regions.tokens, roles: regions.roles, gates: regions.gates },
-        { spec: view.spec.length, proof: view.proofs.length, tokens: view.tasks.length, roles: view.roles.length, gates: view.gates.length })
-      assert.equal(regions.errors, '0')
-      assert.deepEqual(page.errors, [])
-      const text = await page.evaluate('document.body.innerText')
-      assert.match(text, new RegExp(buildRun))
-      assert.doesNotMatch(text, /undefined|NaN|no run data embedded/)
-    } finally {
-      await close()
-    }
+    // The first captured run predates proof recording, so its proof table is checked against the data.
+    assertRendered(await renderReport(RUNS.first), RUNS.first, REGION_KEYS)
+  },
+  async 'the report of the run captured with spans draws its phase, stage and tool data with 0 console errors — catches a span, proof or tool summary the page fails to draw'() {
+    const rendered = await renderReport(RUNS.spans)
+    assertRendered(rendered, RUNS.spans, REGION_KEYS)
+    const phases = new Set(rendered.view.spans.map(span => span.phase))
+    for (const phase of ['worker', 'final', 'ship']) assert.ok(phases.has(phase), `no ${phase} span in the view`)
+    assert.ok(rendered.view.spans.some(span => span.phase === 'worker' && span.tools), 'no worker span carries tools')
+    // Every emitted span draws its own bar, so a span the page can't place fails here.
+    const emitted = rendered.view.spans.filter(span => ['worker', 'final', 'ship'].includes(span.phase)).map(span => span.id)
+    assert.deepEqual(emitted.filter(id => !rendered.barIDs.includes(id)), [])
   },
 }
 
@@ -113,7 +143,7 @@ try {
     }
   }
 } finally {
-  rmSync(repository, { recursive: true, force: true })
+  for (const repository of repositories) rmSync(repository, { recursive: true, force: true })
 }
 if (failed) {
   console.log(`${failed} failed`)

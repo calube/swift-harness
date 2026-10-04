@@ -1705,6 +1705,49 @@ unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/prove-gate`
 matched nothing.
 
+## Run view: a run with spans
+
+`RunView/build-run-2/` repeats the `build-run-1` capture once the skills and `build-task.js` record
+spans, gates record `prove.result` and `events ingest` writes `agent.tools`. `SOURCE` in that
+directory holds every command, the Claude Code version, the date and the build run id,
+`20261004T095203Z-7053bb32`. The setup, the spec, the commands and the copies are `build-run-1`'s,
+with 1 change: the `capture` preset sets `task_proof = "per-task"`, so each task gate runs
+`--prove --mutate`. The PreToolUse guard that limits review agents' Bash to span lines was not on
+`main` yet; the preset's `review = "gate"` runs no review agent, so it had nothing to limit.
+
+The decomposer again split the 2 requirements into 3 tasks, this time in 2 waves, and the first 2
+ran in parallel:
+
+| Task | Ledger status | What happened |
+|---|---|---|
+| `counter-core-reset-and-decrement-floor` | `done` | task gate GREEN with prove 3 of 3, merged, merge gate GREEN |
+| `counter-ui-reset-button` | `done` | its merge turned the push gate RED (a stale snapshot), `build merge --undo`, the fixer re-recorded the snapshot, the fix merge GREEN |
+| `counter-ui-snapshot-rerecord-with-reset` | `abandoned` | returned no commits, `build-return.no-commits` halted it; the resumed session answered `abandon`, an orchestrator-answered rehearsal, never the user |
+
+The final `ready` gate, run `20261004T101604Z-f2ecc518`, was GREEN.
+
+| File | Holds |
+|---|---|
+| `events/span.jsonl` | 5 spans, each started and ended once: 3 `worker` (1 per task, `--task` set, no parent), `final` and `ship` |
+| `events/usage.jsonl` | 90 `agent.usage` and 29 `agent.tools`, from the skills' own `events ingest` calls |
+| `events/test.jsonl` | 201 `test.result` and 3 `prove.result`, all from the final gate |
+| `events/<stream>.jsonl` | the main store's `build` (1 halt, 1 resume), `gate` (20 `gate.run`, 91 `gate.step`), `hook` and `cache` streams, whole, preflight gates included |
+| `events/imported/<store>/` | the 3 task worktree stores `worktree remove` imported, with their `store.json`; the fixer's holds its `snapshots record` and `check push` runs |
+| `ledger.json`, `ledger-events.jsonl` | the plan's ledger and its build run's `events.jsonl` |
+| `returns/<task>.json` | the 2 checked returns; the abandoned task's was refused, so none was written |
+| `run.json`, `plan.json`, `plan.md`, `spec.md` | the build run record, the plan state, the spec page and the spec |
+
+No store holds either task gate the returns name (`20261004T095307Z-577bdbaf`,
+`20261004T095306Z-43d546a1`), so no `prove.result` names a task. The worker prompt says
+`swiftgate check`, and on the capture machine `swiftgate` on `PATH` was an older installed plugin,
+not the plugin under test; the fixer ran the plugin's own `bin/swiftgate`, and its runs recorded.
+`build-run-1` lost its task gates the same way.
+
+The sources held no machine path, so no `sed` ran.
+`grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/build-run-2`
+and `grep -rniE 'sk-ant|api[_-]?key|ANTHROPIC|bearer|password|secret|token=' RunView/build-run-2`
+matched nothing. Each `agent.tools` `files` list is empty.
+
 ## Run view: a brownfield run's pre-build phases
 
 `RunView/brownfield-prebuild/events/{brownfield,span}.jsonl` are the `brownfield` and `span`

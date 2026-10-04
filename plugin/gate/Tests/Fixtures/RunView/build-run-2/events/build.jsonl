@@ -1,0 +1,2 @@
+{"eventID":"E2F239B9-7B2C-4D48-A873-AF7050F66CCD","kind":"build.halt","payload":{"buildRun":"20261004T095203Z-7053bb32","reason":"question","task":"counter-ui-snapshot-rerecord-with-reset"},"schemaVersion":1,"source":{},"time":"2026-10-04T10:13:32.403Z"}
+{"eventID":"55D7287D-F5E6-4948-B14A-F3BD0F8A785A","kind":"build.resume","parentID":"E2F239B9-7B2C-4D48-A873-AF7050F66CCD","payload":{"answer":"abandon","buildRun":"20261004T095203Z-7053bb32","task":"counter-ui-snapshot-rerecord-with-reset","waitMs":117395},"schemaVersion":1,"source":{},"time":"2026-10-04T10:15:29.798Z"}

@@ -1,0 +1,19 @@
+{
+  "plan" : "2026-10-04-counter-reset-and-floor",
+  "preset" : {
+    "designTier" : "none",
+    "maxParallel" : 2,
+    "mergeGate" : "push",
+    "onDesignConflict" : "block",
+    "review" : "gate",
+    "stopStartsBeforeMin" : 0,
+    "taskGate" : "fast",
+    "taskProof" : "per-task",
+    "timeBudgetMin" : 0,
+    "workerModel" : "sonnet"
+  },
+  "presetName" : "capture",
+  "runId" : "20261004T095203Z-7053bb32",
+  "schemaVersion" : 1,
+  "startedAt" : "2026-10-04T09:52:03Z"
+}
