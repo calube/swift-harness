@@ -1,7 +1,28 @@
-# Simulator QA validation
+# Simulator QA
 
-How `swiftgate qa run` and `swiftgate qa adopt` treat a plan's validation rows. The rule ids they
-report are in [`standards.md` § Rule id index](standards.md#rule-id-index).
+How `swiftgate qa lint` checks flow files, and how `swiftgate qa run` and `swiftgate qa adopt` treat a
+plan's validation rows. Their rule ids are in
+[`standards.md` § Rule id index](standards.md#rule-id-index).
+
+## qa lint
+
+`swiftgate qa lint <flow file>... [--json]` checks `agent-device batch` steps files offline, before
+any device boots (simulator QA amendment §6.1). A steps file is a JSON list of
+`{"command": "<name>", "input": {...}}` steps. The rules check each step against the step schemas
+the pinned `agent-device` reports from its MCP `tools/list`, which ship as
+`qa/agent-device-schemas-<pin>.json` in the plugin. They check each `id="…"` selector against the raw
+values of the 1 `enum AccessibilityID: String` in the Swift file `[qa] accessibility_ids` names. The
+rules never read strings under `text` and `value`, which hold app content, as selectors or refs.
+
+The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) when:
+
+- the plugin root (`SWIFTGATE_HARNESS_ROOT`) is unset;
+- the schema file is missing, doesn't parse, uses a schema keyword the reader doesn't support or
+  records another version than the pin;
+- `.swiftgate.toml` doesn't load;
+- the configured id file doesn't read or holds no single String-backed `AccessibilityID` enum with
+  plain string raw values;
+- or a flow file doesn't read.
 
 ## qa run
 

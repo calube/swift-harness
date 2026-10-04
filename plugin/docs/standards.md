@@ -723,9 +723,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `area.step-dropped`, `area.build-only` | brownfield profile §5.3, §9; a step the orchestrator dropped, and an area whose tests don't fit the `slice` budget so `slice` only builds it and its tests run at `merge`. Report lines that never gate |
 | `baseline.summary` | brownfield profile §10; the failures found at both the head and the merge base, which never gate. A failure is absorbed only when the merge base fails the same step, command and selection with the same test id, or fails the whole step when the head does too. Test ids come from the report discover asks each runner for: `--junitxml` for pytest, the JUnit reporter for vitest, jest-junit for jest when the repository has it, `rspec_junit_formatter` for RSpec when bundled, `--parallel --xunit-output` for `swift test` (with Swift Testing's report beside it), Gradle's and Maven's per-class reports collected into a `{junit}` directory (Gradle with `--continue`), the events Go writes under `-json`, and libtest's own result lines for cargo, run with `--no-fail-fast`. Any other command, jest without jest-junit, RSpec without the formatter, and yarn or bun scripts fail as the whole step. A failure the report can't hold also fails the whole step: a compile or load failure, a Gradle task or Maven goal that failed for anything but failing tests, RSpec's errors outside examples, a Go package or a cargo target that failed with no failing test of its own. The same nit names a baseline file that doesn't decode (it is rerun and replaced, never read as empty) and a merge-base rerun that couldn't run, whose failures then gate |
 
-### Simulator QA validation (`qa run`, `qa adopt`)
-
-See [simulator-qa.md](simulator-qa.md) for `qa run` and `qa adopt`.
+### Simulator QA validation ([`qa run`](simulator-qa.md#qa-run), [`qa adopt`](simulator-qa.md#qa-adopt))
 
 | Rule id | Section |
 |---|---|
@@ -733,9 +731,7 @@ See [simulator-qa.md](simulator-qa.md) for `qa run` and `qa adopt`.
 | `qa.check-unverified` | simulator QA amendment §6.2, §9.1; a row whose check didn't run, a nit that never gates: the flow runner isn't built, a red layer stopped the run, a flow row for its requirement didn't pass, no port could be had, or the process couldn't start |
 | `qa.check-passes-at-base` | simulator QA amendment §5.2, decision 7; `qa run --at-base` found a row passing at the merge base, so its check can't tell the change from its absence (major) |
 
-### Simulator QA flows (`qa lint`)
-
-`swiftgate qa lint <flow file>... [--json]` checks `agent-device batch` steps files offline, before any device boots (simulator QA amendment §6.1). A steps file is a JSON list of `{"command": "<name>", "input": {...}}` steps. The rules check each step against the step schemas the pinned `agent-device` reports from its MCP `tools/list`, which ship as `qa/agent-device-schemas-<pin>.json` in the plugin, and each `id="…"` selector against the raw values of the 1 `enum AccessibilityID: String` in the Swift file `[qa] accessibility_ids` names. Strings under `text` and `value`, which hold app content, are never read as selectors or refs. The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) when the plugin root (`SWIFTGATE_HARNESS_ROOT`) is unset, the schema file is missing, doesn't parse, uses a schema keyword the reader doesn't support or records another version than the pin, `.swiftgate.toml` doesn't load, the configured id file doesn't read or holds no single String-backed `AccessibilityID` enum with plain string raw values, or a flow file doesn't read.
+### Simulator QA flows ([`qa lint`](simulator-qa.md#qa-lint))
 
 | Rule id | Section |
 |---|---|
