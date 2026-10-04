@@ -19,7 +19,8 @@ public struct QARunPlan: Sendable, Equatable {
   }
 
   public static let flowRunnerMissing = "flow runner not built"
-  /// A slower layer can't pass over a broken boundary, so the layers run cheapest first.
+  /// A slower layer can't pass over its requirement's broken boundary, so the layers run cheapest
+  /// first.
   public static let layerOrder: [ValidationLayer] = [.acceptance, .flow, .state]
 
   public let entries: [Entry]
@@ -77,13 +78,14 @@ public struct QARunPlan: Sendable, Equatable {
 
   /// Runs the ready entries layer by layer through `check` and returns 1 row per entry, in plan
   /// order.
-  /// - Parameter atBase: `false` stops at the first layer with a red row, leaving every row of a
-  ///   later layer `unverified`, and runs a state row only once every flow row for its requirement in
-  ///   this plan passed. `true` runs every ready row, since each is expected to fail there, except a
-  ///   state row whose flow row didn't run: with no device, its red would prove nothing.
+  /// - Parameter atBase: `false` leaves a requirement's later-layer rows `unverified` once 1 of its
+  ///   rows reads red, and runs a state row only once every flow row for its requirement in this
+  ///   plan passed; another requirement's red row stops nothing, since it crosses another
+  ///   boundary. `true` runs every ready row, since each is expected to fail there, except a state
+  ///   row whose flow row didn't run: with no device, its red would prove nothing.
   public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
     var rows: [QARow] = []
-    var redLayer: ValidationLayer?
+    var reds: [String: QARow] = [:]
     var flows: [String: [QARow]] = [:]
     for entry in entries {
       let validation = entry.validation
@@ -93,10 +95,14 @@ public struct QARunPlan: Sendable, Equatable {
           entry, result: .waiting,
           message: "waiting on \(entry.waitingOn.joined(separator: ", "))",
           waitingOn: entry.waitingOn)
-      } else if !atBase, let redLayer, Self.precedes(redLayer, validation.layer) {
+      } else if !atBase, let red = reds[validation.requirement],
+        Self.precedes(red.layer, validation.layer)
+      {
         row = Self.row(
           entry, result: .unverified,
-          message: "not run: the \(redLayer.rawValue) layer has a red row")
+          message:
+            "not run: \(red.layer.rawValue) row \(red.row) `\(red.check)` for "
+            + "\(validation.requirement) is red")
       } else if validation.layer == .state,
         let flow = flows[validation.requirement]?.first(where: {
           atBase ? $0.result == .unverified || $0.result == .waiting : $0.result != .pass
@@ -114,7 +120,9 @@ public struct QARunPlan: Sendable, Equatable {
           check: validation.check, runsAfter: validation.runsAfter, result: outcome.result,
           message: outcome.message, exitStatus: outcome.exitStatus,
           milliseconds: outcome.milliseconds, evidence: outcome.evidence)
-        if outcome.result == .red, redLayer == nil { redLayer = validation.layer }
+        if outcome.result == .red, reds[validation.requirement] == nil {
+          reds[validation.requirement] = row
+        }
       }
       if validation.layer == .flow { flows[validation.requirement, default: []].append(row) }
       rows.append(row)

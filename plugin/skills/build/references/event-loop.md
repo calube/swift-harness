@@ -259,8 +259,8 @@ GREEN and recorded, before `ledger set … done`, on `main`:
 ```
 
 It runs only the rows whose `Runs after` names `<task>` and whose other tasks are done, in layer
-order: acceptance, then flow, then state, stopping at the first layer with a red row (simulator QA
-amendment §6). A plan with no table reads GREEN with a note.
+order: acceptance, then flow, then state. A red row stops its own requirement's later layers,
+never another requirement's (simulator QA amendment §6). A plan with no table reads GREEN with a note.
 
 - GREEN: go on. Rows that read `unverified` or `waiting` go in the report with their messages.
 - RED: a red row stops the next merge, as a red `main` does. Run

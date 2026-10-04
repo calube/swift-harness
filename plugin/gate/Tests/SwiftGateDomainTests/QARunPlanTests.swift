@@ -59,25 +59,42 @@ struct QARunPlanTests {
   }
 
   @Test(
-    "a state row after a red acceptance row reads unverified and never runs — catches a slow layer run over a broken boundary"
+    "a flow and a state row after their requirement's red acceptance row read unverified and never run — catches a slow layer run over a broken boundary"
   )
   func redLayerStops() async {
+    let plan = QARunPlan.make(
+      table: Self.table, merged: ["save-ui", "save-api", "list-api"], after: nil)
+    let recorder = Recorder(["curl -fsS http://127.0.0.1:$QA_PORT/drafts": .red])
+
+    let rows = await plan.execute(atBase: false) { recorder.check($0) }
+
+    #expect(!recorder.checks.contains("qa/save.state.sh"))
+    #expect(!recorder.checks.contains("qa/save.flow.json"))
+    for row in rows where row.layer != .acceptance {
+      #expect(row.result == .unverified)
+      #expect(row.message.contains("acceptance row 3"), "\(row.message)")
+      #expect(row.exitStatus == nil)
+    }
+    #expect(rows.first { $0.row == 3 }?.result == .red)
+    #expect(rows.first { $0.row == 3 }?.exitStatus == 1)
+    // Another requirement's acceptance row in the same layer still ran.
+    #expect(rows.first { $0.row == 4 }?.result == .pass)
+  }
+
+  @Test(
+    "another requirement's red acceptance row leaves a requirement's flow and state rows to run — catches a check skipped for a boundary it doesn't cross"
+  )
+  func otherRequirementRedRuns() async {
     let plan = QARunPlan.make(
       table: Self.table, merged: ["save-ui", "save-api", "list-api"], after: nil)
     let recorder = Recorder(["swift test --filter ListTests": .red])
 
     let rows = await plan.execute(atBase: false) { recorder.check($0) }
 
-    #expect(!recorder.checks.contains("qa/save.state.sh"))
-    #expect(!recorder.checks.contains("qa/save.flow.json"))
-    let state = rows.first { $0.layer == .state }
-    #expect(state?.result == .unverified)
-    #expect(state?.message.contains("acceptance") == true)
-    #expect(state?.exitStatus == nil)
+    #expect(recorder.checks.contains("qa/save.flow.json"))
+    #expect(recorder.checks.contains("qa/save.state.sh"))
     #expect(rows.first { $0.row == 4 }?.result == .red)
-    #expect(rows.first { $0.row == 4 }?.exitStatus == 1)
-    // The other acceptance row in the red layer still ran.
-    #expect(rows.first { $0.row == 3 }?.result == .pass)
+    #expect(rows.filter { $0.row != 4 }.allSatisfy { $0.result == .pass })
   }
 
   @Test(

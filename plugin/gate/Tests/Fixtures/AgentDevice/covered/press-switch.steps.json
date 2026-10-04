@@ -1,0 +1,9 @@
+[{"command":"wait","input":{"kind":"selector","selector":"id=\"counter.value\"","timeoutMs":5000}},
+ {"command":"snapshot","input":{}},
+ {"command":"screenshot","input":{"path":"/SCRATCH/1.png"}},
+ {"command":"snapshot","input":{}},
+ {"command":"press","input":{"settle":true,"target":{"kind":"selector","selector":"id=\"counter.confirm\""}}},
+ {"command":"wait","input":{"selector":"id=\"counter.confirm\" value=\"1\"","timeoutMs":5000}},
+ {"command":"snapshot","input":{}},
+ {"command":"screenshot","input":{"path":"/SCRATCH/2.png"}},
+ {"command":"snapshot","input":{}}]

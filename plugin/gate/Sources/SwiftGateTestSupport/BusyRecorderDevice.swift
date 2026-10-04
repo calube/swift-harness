@@ -10,19 +10,11 @@ public final class BusyRecorderDevice: AgentDevice {
   public let failure: AgentDeviceFailure
   private let attempts = Mutex(0)
 
-  /// A reason the pinned version doesn't name.
-  public struct UnknownReason: Error, Equatable {
-    public let reason: String
-  }
-
-  public init(device: any AgentDevice, reason: String = "apple_simulator_recording_busy") throws {
-    guard let known = AgentDeviceFailureReason(rawValue: reason) else {
-      throw UnknownReason(reason: reason)
-    }
+  public init(device: any AgentDevice, reason: String = "apple_simulator_recording_busy") {
     self.device = device
     failure = AgentDeviceFailure(
       code: .deviceInUse, message: "CoreSimulator host recording is already in progress",
-      reason: known, failedStep: AgentDeviceBatchStep(index: 1, command: "record"))
+      reason: AgentDeviceFailureReason(rawValue: reason), failedStep: AgentDeviceBatchStep(index: 1, command: "record"))
   }
 
   /// How many batches tried to start a recording.

@@ -136,7 +136,7 @@ struct FinalPassRecorderTests {
   func busyRecorderPastBoundRunsWithoutVideo() async throws {
     let run = try Run()
     defer { TestTemporaryDirectory.remove(run.root) }
-    let device = try BusyRecorderDevice(
+    let device = BusyRecorderDevice(
       device: LiveAgentDevice(runner: try CapturedBatch.runner("pass")))
     let clock = VirtualHoldClock()
 
@@ -208,7 +208,7 @@ struct FinalPassRecorderTests {
   func otherRefusalRunsOnce() async throws {
     let run = try Run()
     defer { TestTemporaryDirectory.remove(run.root) }
-    let device = try BusyRecorderDevice(
+    let device = BusyRecorderDevice(
       device: LiveAgentDevice(runner: try CapturedBatch.runner("pass")),
       reason: "wait_deadline_exceeded")
     let clock = VirtualHoldClock()
