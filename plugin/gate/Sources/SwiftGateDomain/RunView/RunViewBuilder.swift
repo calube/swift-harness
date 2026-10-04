@@ -45,7 +45,8 @@ public enum RunViewBuilder {
       roles: roles(usage),
       spans: ordered(
         (runSpan.map { [$0] } ?? []) + taskSpans + gates.spans
-          + RunViewSpans.brownfieldSpans(events: events, parent: runSpan?.id)),
+          + RunViewSpans.brownfieldSpans(
+            events: events, parent: runSpan?.id, baselines: input.warmupBaselines)),
       gates: gates.gates,
       halts: halts(events),
       damage: damage)
@@ -59,6 +60,7 @@ public enum RunViewBuilder {
       if let summary = summaries[view.spans[index].id] { view.spans[index].tools = summary }
     }
     RunViewGateFailures.fill(&view, input: input, events: events)
+    RunViewFailureReasons.fill(&view, input: input)
     return view
   }
 

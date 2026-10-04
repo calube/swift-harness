@@ -73,6 +73,7 @@
   // timeline
   const colour = { run: "--bar-phase", task: "--bar-task", worker: "--bar-worker", fix: "--bar-worker", review: "--bar-review", verify: "--bar-gate", merge: "--bar-merge" };
   const barColour = (s) => {
+    if (s.baseline) return "--bar-baseline";
     if (s.phase === "gate" || s.phase === "step") return s.outcome === "red" ? "--bar-red" : "--bar-gate";
     if (s.outcome === "red" || s.outcome === "halted") return "--bar-red";
     return colour[s.phase] || "--bar-phase";
@@ -248,6 +249,9 @@
   function openSpan(bar, focus = true) {
     const s = all[bar.dataset.id];
     const outcome = s.outcome ? (s.outcome === "red" ? "RED" : s.outcome === "ok" ? "GREEN" : s.outcome) : null;
+    // A warm-up step that failed at the base commit, recorded and excused, isn't the run's fault.
+    const outcomeHtml = s.baseline ? `<span class="chip warn" title="fails at the base commit; the baseline recorded it, so gates excuse it">baseline</span>` : outcome ? verdictChip(outcome) : null;
+    const reason = M.failureReason(view, s, liveNowMs() != null);
     const rows = [
       ["phase", s.tier ? `${s.tier} ${s.phase}` : s.phase],
       ["span", s.phase === "step" ? s.parent : s.id, `<span class="mono">${esc(s.phase === "step" ? s.parent : s.id)}</span>`],
@@ -255,8 +259,8 @@
       ["start", "+" + fmtMin(s.start)],
       ["duration", M.durationText(s) + (s.approximate ? " (approximate)" : "")],
       ["gate run", s.gateRun || "none", s.gateRun ? `<span class="mono">${esc(s.gateRun)}</span>` : null],
-      ["outcome", outcome || "none", outcome ? verdictChip(outcome) : null]
-    ];
+      ["outcome", outcome || "none", outcomeHtml]
+    ].concat(reason ? [["failure reason", reason]] : []);
     const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
     openPopover(bar, rows, s.label, `${spanFailureHtml(s)}<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
     popKind = "span";
@@ -419,6 +423,7 @@
     const covers = t.covers || [];
     const props = [
       ["status", `<span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span>`],
+      ...(t.failureReason ? [["failure reason", esc(t.failureReason)]] : []),
       ["worker", `${esc(t.model)} <span class="muted">build worker</span>`],
       ["wave", `wave ${M.waveOf(view, id)}`],
       ["spec ids", covers.length ? covers.map((c) => `<span class="label-chip" style="--c:var(${specColour[c] || "--muted"})">${esc(c)}</span>`).join("") : `<span class="muted">none</span>`],
@@ -580,6 +585,7 @@
       ["worker", [t.model, ts ? M.durationText(ts) : t.status === "pending" ? "waiting" : "no task span"].filter(Boolean).join(" · ")],
       ["deps", "none", tags(deps)],
       ["latest gate", "none", g ? `${verdictChip(g.verdict)} <span class="mono">${esc(g.runId)}</span>` : null],
+      ...(t.failureReason ? [["failure reason", t.failureReason]] : []),
       ["commits", "none yet", tags(commits)],
       ["covers", "none", tags(covers)]
     ]);

@@ -161,6 +161,10 @@ export async function launch({ deadlineMs = 12000 } = {}) {
     async screenshot() {
       return (await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })).data
     },
+    /** Moves the mouse to a point, as a pointer resting on it does. */
+    async hover(x, y) {
+      await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+    },
     async click(x, y) {
       for (const type of ['mousePressed', 'mouseReleased']) {
         await call('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 })

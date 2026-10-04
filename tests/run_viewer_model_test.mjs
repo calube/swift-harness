@@ -254,6 +254,38 @@ const tests = {
     for (const list of Object.values(b)) for (const badge of list) assert.ok(badge.n > 0, `${badge.key} shows a zero badge`)
   },
 
+  'failureReason takes the builder\'s reason, a step row takes its gate\'s, and an open span in a report never ended — catches a red popover with no reason or a live span called failed'() {
+    const reason = 'area.test-failed: 46 tests fail on the merged branch.'
+    const view = runView({
+      spans: [
+        span('g', null, 'gate', 1, 4, { gateRun: 'r1', outcome: 'red', failureReason: reason }),
+        span('w', null, 'warmup', 0, 1, { outcome: 'red', failureReason: 'Base commit\'s tests already fail; 5 recorded as baseline.' }),
+        span('o', null, 'plan', 0, null),
+        span('k', null, 'plan', 0, 1, { outcome: 'ok' }),
+        span('x', null, 'review', 0, 1, { outcome: 'red' }),
+      ],
+    })
+    const byId = Object.fromEntries(view.spans.map((s) => [s.id, s]))
+    assert.equal(M.failureReason(view, byId.w, false), 'Base commit\'s tests already fail; 5 recorded as baseline.')
+    assert.equal(M.failureReason(view, { id: 'g:t2:test', phase: 'step', gateRun: 'r1', outcome: 'red', open: false }, false), reason)
+    assert.equal(M.failureReason(view, byId.o, false), 'Never ended; no end event recorded.')
+    assert.equal(M.failureReason(view, byId.o, true), null)
+    assert.equal(M.failureReason(view, byId.k, false), null)
+    assert.equal(M.failureReason(view, byId.x, false), 'No reason recorded.')
+    const excused = runView({ spans: [span('s', null, 'step', 0, 1, { gateRun: 'r2', outcome: 'red', baseline: true, failureReason: 'Fails at the base commit too; the baseline excused it.' })] })
+    assert.equal(M.failureReason(excused, { id: 'g2:t1:area-test', phase: 'step', gateRun: 'r2', outcome: 'red', open: false }, false), 'Fails at the base commit too; the baseline excused it.')
+  },
+
+  'tabBadges leaves a warm-up step the baseline recorded out of the failed count — catches an expected base failure counted as the run\'s fault'() {
+    const view = runView({
+      spans: [
+        span('w', null, 'warmup', 0, 1, { outcome: 'red', baseline: true }),
+        span('x', null, 'warmup', 1, 2, { outcome: 'red', baseline: false }),
+      ],
+    })
+    assert.deepEqual(M.tabBadges(view, {}).timeline.map((b) => [b.key, b.n]), [['failed', 1]])
+  },
+
   'in live mode tabBadges counts stalled tasks against the clock and no open span as never ended — catches a live run read as a finished report'() {
     const view = runView({
       run: { id: 'run-1', plan: 'sample', preset: 'default', startedAt: at(0), endedAt: null, state: 'running' },
