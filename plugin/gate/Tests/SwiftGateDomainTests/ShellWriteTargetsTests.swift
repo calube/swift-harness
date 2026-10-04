@@ -54,6 +54,7 @@ struct ShellWriteTargetsTests {
       ("cd /wt && echo x > a", "env cd /wt && echo x > a"),
       ("cd /wt && echo x > a", "(cd /wt) && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt | cat && echo x > a"),
+      ("cd /wt && echo x > a", "cd /wt |& cat && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt & echo x > a"),
       ("cd /wt && echo x > a", "cd /wt && pushd -n /main && popd && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt && cd sub && echo x > a"),

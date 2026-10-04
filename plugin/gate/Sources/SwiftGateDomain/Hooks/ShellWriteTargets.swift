@@ -27,7 +27,7 @@ extension ShellSyntax {
   /// name nothing: a static reading can't know them.
   /// - Parameter directoryExists: whether an absolute path is a directory now.
   public static func writeTargets(
-    in line: String, directoryExists: (String) -> Bool = { _ in false }
+    in line: String, directoryExists: (String) -> Bool
   ) -> [ShellWriteTarget] {
     let parsed = parse(line)
     let directories = parsed.filter { !$0.isHeredocBody }.map(\.command)
