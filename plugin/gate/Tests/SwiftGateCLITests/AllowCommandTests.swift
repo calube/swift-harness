@@ -147,9 +147,101 @@ struct AllowCommandTests {
     let root = try Self.makeClone(config: nil)
     defer { try? FileManager.default.removeItem(at: root) }
     let result = await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "r")
-    #expect(result == .failure(.config(.notBrownfield(path: root.path))))
+    #expect(result == .failure(.notBrownfield(path: root.path)))
     #expect(
       !FileManager.default.fileExists(
         atPath: root.appending(path: ".git/swift-harness/config.toml").path))
+  }
+
+  static func layout(_ root: URL) -> BrownfieldStateLayout {
+    BrownfieldStateLayout(
+      commonDir: root.appending(path: ".git", directoryHint: .isDirectory),
+      gitDir: root.appending(path: ".git", directoryHint: .isDirectory))
+  }
+
+  @Test(
+    "allow waits on the lock discover --apply holds and writes nothing while it is held — catches allow and discover locking different files"
+  )
+  func waitsOnDiscoverLock() async throws {
+    let root = try Self.makeClone(config: Self.config)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let configURL = root.appending(path: ".git/swift-harness/config.toml")
+    let original = try Data(contentsOf: configURL)
+    let lease = try await FileCountingLock(
+      directory: Self.layout(root).cloneRoot, name: BrownfieldConfigWriter.lockName,
+      capacity: 1, pollInterval: .milliseconds(5)
+    ).acquire(timeout: .seconds(5))
+    defer { lease.release() }
+
+    let result = await Self.allow(
+      root, "neutral.unsafe-shortcut", "api/handlers.py:2", "r", lockTimeout: .milliseconds(200))
+
+    guard case .failure(.write(.lock(.timedOut))) = result else {
+      Issue.record("expected allow to time out on the held lock, got \(result)")
+      return
+    }
+    #expect(try Data(contentsOf: configURL) == original)
+  }
+
+  @Test(
+    "allow and discover's writer racing on 1 clone both keep their edits — catches a lost allow entry or a lost discover change"
+  )
+  func raceKeepsBothEdits() async throws {
+    let root = try Self.makeClone(config: Self.config)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let lines = (1...12).map { "value\($0) = parse(x)  # type: ignore" }
+    try Data((lines.joined(separator: "\n") + "\n").utf8)
+      .write(to: root.appending(path: "api/handlers.py"))
+    let writer = BrownfieldConfigWriter(
+      layout: Self.layout(root),
+      lock: FileCountingLock(
+        directory: Self.layout(root).cloneRoot, name: BrownfieldConfigWriter.lockName,
+        capacity: 1, pollInterval: .milliseconds(1)))
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for index in 1...lines.count {
+        group.addTask {
+          _ = try await Self.allow(
+            root, "neutral.unsafe-shortcut", "api/handlers.py:\(index)", "reason \(index)"
+          ).get()
+        }
+        group.addTask {
+          try await writer.updateConfig { config throws(BrownfieldConfigWriteError) in
+            guard let config else { throw .rejected("no config") }
+            return BrownfieldConfig(
+              brownfield: BrownfieldSettings(
+                discoveredAt: config.brownfield.discoveredAt,
+                sliceBudgetSeconds: config.brownfield.sliceBudgetSeconds,
+                timeBudgetMinutes: config.brownfield.timeBudgetMinutes,
+                sensitive: config.brownfield.sensitive + ["s\(index)/**"]),
+              areas: config.areas, allow: config.allow, buildPresets: config.buildPresets)
+          }
+        }
+      }
+      try await group.waitForAll()
+    }
+
+    let after = try Self.readConfig(root)
+    #expect(Set(after.allow.map(\.reason)).isSuperset(of: (1...lines.count).map { "reason \($0)" }))
+    #expect(Set(after.brownfield.sensitive).isSuperset(of: (1...lines.count).map { "s\($0)/**" }))
+  }
+
+  @Test(
+    "allow over a config that fails to load fails naming it and leaves it byte for byte — catches a writer that replaces what it couldn't read"
+  )
+  func invalidConfigUntouched() async throws {
+    let root = try Self.makeClone(config: "schema = 1\n[harness]\nprofile = \"owned\"\n")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let configURL = root.appending(path: ".git/swift-harness/config.toml")
+    let original = try Data(contentsOf: configURL)
+
+    let result = await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "r")
+
+    guard case .failure(.write(.malformed(let path, _))) = result else {
+      Issue.record("expected the malformed config to be refused, got \(result)")
+      return
+    }
+    #expect(path == configURL.path)
+    #expect(try Data(contentsOf: configURL) == original)
   }
 }

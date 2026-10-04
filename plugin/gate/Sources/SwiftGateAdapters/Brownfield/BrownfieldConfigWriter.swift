@@ -40,6 +40,7 @@ public struct BrownfieldStateWrite: Sendable {
 /// `swiftgate allow` both go through it: 1 lock for the clone, a read of the current state under
 /// it, and atomic renames, with `config.toml` written last.
 public struct BrownfieldConfigWriter: Sendable {
+  /// The lock under the clone's state root that every writer of it takes.
   public static let lockName = "config.lock"
 
   public let layout: BrownfieldStateLayout
@@ -52,7 +53,9 @@ public struct BrownfieldConfigWriter: Sendable {
   ) {
     self.layout = layout
     self.lock =
-      lock ?? FileCountingLock(directory: layout.cloneRoot, name: Self.lockName, capacity: 1)
+      lock
+      ?? FileCountingLock(
+        directory: layout.cloneRoot, name: Self.lockName, capacity: 1)
     self.timeout = timeout
   }
 
