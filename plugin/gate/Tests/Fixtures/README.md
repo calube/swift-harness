@@ -993,7 +993,7 @@ Here a message's repeated lines carry the same usage.
 (`RunView/build-run-1/SOURCE`), the Workflow agent of task `counter-core-reset-and-decrement-floor`,
 Claude Code 2.1.288 on `claude-sonnet-5-5`. Claude Code wrote it to
 `~/.claude/projects/<cwd slug>/<session_id>/subagents/workflows/wf_4110cb4e-e8d/agent-ad10c26c66ae4d738.jsonl`.
-Its first 2 messages are 2 lines each with 1 `message.id`: input and cache counts repeat exactly,
+Its first 2 messages are 2 lines each with 1 `message.id`: input and cache counts repeat byte for byte,
 and `usage.output_tokens` reads 16, then 350, and 3, then 1077. Only the later line has a
 `stop_reason`, and its `usage.iterations` total agrees with it. The filter drops
 `message.content`, which held the scratch repository's paths, and keeps `stop_reason`:
@@ -1159,10 +1159,10 @@ the resume wrote one, with `repeats an earlier message id with different usage` 
 The first failure came from the SessionStart hook running the shim's last good binary while the
 plugin data cache rebuilt; that older binary refused a `plugin.json` with no `version`.
 
-`events/usage.jsonl` (91 `agent.usage`: 68 main and 11 subagent orchestrator messages, 4 per
-build worker) was written afterwards by `events ingest` from the commit that reads streamed
-messages, in an `rsync` copy of the scratch app without `.harness/derived-data`, reading the
-transcripts Claude Code left. With `SG=<harness>/plugin/bin/swiftgate`,
+`events/usage.jsonl` holds 91 `agent.usage`: 68 main and 11 subagent orchestrator messages, and 4
+per build worker. `events ingest`, from the commit that reads streamed messages, wrote it afterwards
+in an `rsync` copy of the scratch app without `.harness/derived-data`, from the transcripts Claude
+Code left. With `SG=<harness>/plugin/bin/swiftgate`,
 `SES=306d86af-8556-4a2c-8300-5029ecae68b2`, `R=20261004T045528Z-58d28c78` and
 `W=~/.claude/projects/<cwd slug>/$SES/subagents/workflows`, the same flags the run used:
 
