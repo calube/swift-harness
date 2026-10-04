@@ -1,0 +1,26 @@
+{
+  "configurations" : [
+    {
+      "id" : "D5587E5E-B409-46AC-B753-1DBC53FA8838",
+      "name" : "Configuration 1",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "preferredScreenCaptureFormat" : "screenRecording",
+    "uiTestingScreenshotsLifetime" : "keepAlways"
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:SampleApp.xcodeproj",
+        "identifier" : "BE49777E3E8080A9213E0E57",
+        "name" : "SampleAppUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -13,6 +13,8 @@
 		637C7C42635E09761AF9B98C /* HTTPClientLive in Frameworks */ = {isa = PBXBuildFile; productRef = C7410300B48020D33ABCBCB8 /* HTTPClientLive */; };
 		523E539C06EFA4011EF5959C /* LogClientLive in Frameworks */ = {isa = PBXBuildFile; productRef = 26ECA60E10D87AE13CB9A4F4 /* LogClientLive */; };
 		D24C1951E7C790B60AFA52E7 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 5DEE474CFDC7C6C2301D934A /* ComposableArchitecture */; };
+		1E6D6E84D416C1473C76589D /* AccessibilityIDs in Frameworks */ = {isa = PBXBuildFile; productRef = C42F9743B2ABC93A083BDD70 /* AccessibilityIDs */; };
+		E1B759CE2ABFAE82E89FEFF0 /* AccessibilityIDs in Frameworks */ = {isa = PBXBuildFile; productRef = 4B6778414CC8BB2BA944D686 /* AccessibilityIDs */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +56,7 @@
 				637C7C42635E09761AF9B98C /* HTTPClientLive in Frameworks */,
 				523E539C06EFA4011EF5959C /* LogClientLive in Frameworks */,
 				D24C1951E7C790B60AFA52E7 /* ComposableArchitecture in Frameworks */,
+				1E6D6E84D416C1473C76589D /* AccessibilityIDs in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -61,6 +64,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1B759CE2ABFAE82E89FEFF0 /* AccessibilityIDs in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -111,6 +115,7 @@
 				C7410300B48020D33ABCBCB8 /* HTTPClientLive */,
 				26ECA60E10D87AE13CB9A4F4 /* LogClientLive */,
 				5DEE474CFDC7C6C2301D934A /* ComposableArchitecture */,
+				C42F9743B2ABC93A083BDD70 /* AccessibilityIDs */,
 			);
 			productName = SampleApp;
 			productReference = 81918909E83595C8F4212CCC /* SampleApp.app */;
@@ -134,6 +139,7 @@
 			);
 			name = SampleAppUITests;
 			packageProductDependencies = (
+				4B6778414CC8BB2BA944D686 /* AccessibilityIDs */,
 			);
 			productName = SampleAppUITests;
 			productReference = 5FE318CAEC410BF655BDF08E /* SampleAppUITests.xctest */;
@@ -172,6 +178,7 @@
 				98BDB771DEAC75304CF6D296 /* XCLocalSwiftPackageReference "Packages/APIClient" */,
 				C1314C355A9041A3BCFC08C9 /* XCLocalSwiftPackageReference "Packages/HTTPClient" */,
 				BA004C18676691A09E02F6FE /* XCLocalSwiftPackageReference "Packages/LogClient" */,
+				FF113DFEA33A44D2346FD0FA /* XCLocalSwiftPackageReference "Packages/AccessibilityIDs" */,
 				31B7753F9D124D68C8682C6D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -401,6 +408,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Packages/LogClient;
 		};
+		FF113DFEA33A44D2346FD0FA /* XCLocalSwiftPackageReference "Packages/AccessibilityIDs" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AccessibilityIDs;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -444,6 +455,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 31B7753F9D124D68C8682C6D /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
+		};
+		C42F9743B2ABC93A083BDD70 /* AccessibilityIDs */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF113DFEA33A44D2346FD0FA /* XCLocalSwiftPackageReference "Packages/AccessibilityIDs" */;
+			productName = AccessibilityIDs;
+		};
+		4B6778414CC8BB2BA944D686 /* AccessibilityIDs */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FF113DFEA33A44D2346FD0FA /* XCLocalSwiftPackageReference "Packages/AccessibilityIDs" */;
+			productName = AccessibilityIDs;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

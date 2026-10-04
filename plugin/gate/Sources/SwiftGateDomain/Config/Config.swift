@@ -327,6 +327,9 @@ public struct Config: Sendable, Equatable {
           path: "qa.session_timeout_minutes", value: "\(qa.sessionTimeoutMinutes)",
           allowed: "\(timeouts.lowerBound)...\(timeouts.upperBound)"))
     }
+    if let accessibilityIDs = qa.accessibilityIDs {
+      requireText(accessibilityIDs, "qa.accessibility_ids")
+    }
 
     issues += presetIssues(buildPresets)
     if let profile { requireText(profile, "harness.profile") }

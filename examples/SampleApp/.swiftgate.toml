@@ -23,3 +23,6 @@ reason = "tic-tac-toe rules as a pure (State, Input) -> State step with a seeded
 name = "AccessibilityIDs"
 kind = "library"
 reason = "one String-backed enum of identifiers shared by the views and the UI tests; no state, no reducer"
+
+[qa]
+accessibility_ids = "Packages/AccessibilityIDs/Sources/AccessibilityIDs/AccessibilityID.swift"
