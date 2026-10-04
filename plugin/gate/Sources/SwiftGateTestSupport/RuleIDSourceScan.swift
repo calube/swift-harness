@@ -72,8 +72,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   ]
 
   static let fileExtensions: Set<Substring> = [
-    "html", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift", "toml", "txt",
-    "xml", "yaml", "yml",
+    "css", "html", "js", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift",
+    "toml", "txt", "xml", "yaml", "yml",
   ]
 
   /// The ids and families one Swift source file spells out.
