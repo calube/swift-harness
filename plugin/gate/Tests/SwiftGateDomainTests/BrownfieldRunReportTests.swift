@@ -88,11 +88,50 @@ import Testing
       build(events: [
         .merge(.init(task: "report-export-api", preCommit: "a", postCommit: "b", at: at)),
         .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "gate-1", at: at)),
-      ]))
+      ])),
+    validation: RunReportInput<QAReport>? = nil
   ) -> BrownfieldRunReportInputs {
     BrownfieldRunReportInputs(
       slug: "csv", planBranch: "swift-harness/csv", planBranchHead: planBranchHead, plan: plan,
-      baseline: baseline, discover: discover, build: build, ledger: ledger)
+      baseline: baseline, discover: discover, build: build, ledger: ledger,
+      validation: validation)
+  }
+
+  @Test(
+    "a final GREEN over a qa run that verified no row says so straight after the final line — catches a run report that leads with GREEN when no validation row ran"
+  )
+  func validationLineNamesUnverifiedRows() throws {
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("QA/aidoku-validation/final-report.json"))
+
+    let report = BrownfieldRunReport.make(Self.inputs(validation: .read(captured)))
+
+    #expect(
+      report.validation
+        == .init(runID: "20261004T213430Z-5250c2ac", verdict: .green, rows: 3, verified: 0))
+    let head = report.text.split(separator: "\n", omittingEmptySubsequences: false).prefix(2)
+    #expect(
+      Array(head) == [
+        "final: GREEN (gate run gate-1)",
+        "validation: 0 of 3 rows verified (qa run 20261004T213430Z-5250c2ac, GREEN)",
+      ])
+  }
+
+  @Test(
+    "a plan with a validation table and no whole qa run says validation wasn't recorded, and a plan with no table has no validation line — catches a missing qa run read as nothing to verify"
+  )
+  func validationNotRecorded() {
+    let missing = BrownfieldRunReport.make(
+      Self.inputs(validation: .missing(path: "/clone/.harness/runs")))
+    let none = BrownfieldRunReport.make(Self.inputs())
+
+    #expect(missing.validation == nil)
+    #expect(missing.validationNote?.contains("/clone/.harness/runs") == true)
+    #expect(
+      missing.text.split(separator: "\n").dropFirst().first?
+        .hasPrefix("validation: not recorded; ") == true, "\(missing.text)")
+    #expect(none.validationNote == nil)
+    #expect(!none.text.contains("validation:"))
   }
 
   /// The bullets under `## <title>` in the report's text.

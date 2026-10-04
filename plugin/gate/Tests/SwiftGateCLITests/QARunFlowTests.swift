@@ -107,13 +107,15 @@ struct QARunFlowTests {
   }
 
   static func run(
-    _ repo: QARepo, _ simulator: FakeFlowSimulator, events: MemoryEventLog = MemoryEventLog()
+    _ repo: QARepo, _ simulator: FakeFlowSimulator, events: MemoryEventLog = MemoryEventLog(),
+    atBase: Bool = false
   ) async -> QAReport {
     await QARunRun.run(
-      root: repo.root, options: QARunRun.Options(),
+      root: repo.root, options: QARunRun.Options(atBase: atBase),
       git: LiveGit(runner: repo.runner, repositoryRoot: repo.root.path),
       dependencies: QARunRun.Dependencies(
-        checks: QACommandRunner(runner: repo.runner), ports: LiveQAPorts(), scratch: nil,
+        checks: QACommandRunner(runner: repo.runner), ports: LiveQAPorts(),
+        scratch: LiveScratchWorktrees(runner: repo.runner, repositoryRoot: repo.root.path),
         events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
         runIDSuffix: { 0xf10 }, newEventID: { UUID().uuidString }, timeout: .seconds(120),
         flows: simulator, pluginRoot: Fixture.checkoutRoot))
@@ -217,6 +219,26 @@ struct QARunFlowTests {
     let flow = try #require(report.rows.first { $0.layer == .flow })
     #expect(flow.result == .red)
     #expect(flow.message.contains(FlowRules.noAssertRuleID), "\(flow.message)")
+    #expect(simulator.calls.isEmpty)
+  }
+
+  @Test(
+    "at the merge base a flow that fails qa lint brings no device up, so its state row reads unverified and never runs — catches a state check's red on a missing device input counted as its red run"
+  )
+  func lintFailureAtBaseLeavesStateUnverified() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.plan(repo, flow: "QA/get-only.flow.json")
+    let simulator = try await Self.simulator(repo, batch: "pass")
+
+    let report = await Self.run(repo, simulator, atBase: true)
+
+    #expect(report.atBase)
+    #expect(report.rows.first { $0.layer == .flow }?.result == .red)
+    let state = try #require(report.rows.first { $0.layer == .state })
+    #expect(state.result == .unverified, "\(state.message)")
+    #expect(state.message.contains("qa/count.flow.json"), "\(state.message)")
+    #expect(!FileManager.default.fileExists(atPath: Self.marker(repo).path))
     #expect(simulator.calls.isEmpty)
   }
 

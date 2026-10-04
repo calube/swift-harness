@@ -8,6 +8,7 @@ Contents:
 - [State this skill keeps](#state-this-skill-keeps)
 - [Worker pack](#worker-pack): what `context-pack --role worker` derives itself
 - [Launch](#launch): the workflow's args
+- [Validation task](#validation-task): the 1 task that commits nothing
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [After each merge](#after-each-merge): the validation rows a merge unblocks
@@ -18,6 +19,7 @@ Contents:
 - [Stall watch](#stall-watch): a worker that stops without returning
 - [Time budget](#time-budget)
 - [Final gate](#final-gate)
+- [Validate stage](#validate-stage): simulator QA under the preset's `sim_qa`
 - [Resume](#resume)
 
 ## State this skill keeps
@@ -135,6 +137,33 @@ the args and relaunch, and don't count it as the task's attempt.
 
 The workflow runs in the background. Its completion arrives as a notice with its result. Go on
 with other tasks, or end the turn to wait; never poll.
+
+## Validation task
+
+A design plan's decomposer adds 1 validation task when 2 or more tasks build UI. Its write set is
+`.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
+workflow. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
+as for any task, then launch 1 Agent tool call in the background with `subagent_type`
+`general-purpose` and `model` `opus`. Its prompt names the task's worktree, `<slug>` as its plan,
+its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
+surface, and says to work in that worktree and follow
+`${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. When it returns:
+
+1. `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into `<plans>/<slug>/qa/`,
+   where `qa run` reads every check. A non-GREEN adopt halts that task.
+2. `/bin/rm -rf <worktree>/.harness/qa`, then
+   `"$SG" ledger set <slug> <task> done --session <session> --json` and
+   `"$SG" worktree remove <slug> <task> --session <session> --json`.
+3. Confirm each check fails before its tasks merge: `"$SG" qa run --plan <slug> --at-base --json`,
+   in the foreground with the Bash tool's `timeout` at 600000, though a flow row boots a leased
+   device: a headless session ends with its turn when only background Bash work is left, and
+   kills that work. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
+   tell the change from its absence. Name it in the report, and go on. A row that reads
+   `unverified` there has no red run behind it, whatever the worker returned: name it in the
+   report as `no red run` with its message.
+
+Its `missing:` lines name contract names a check needed: each goes in the report, and its row
+reads red until a task adds the name.
 
 ## Returns
 
@@ -259,6 +288,7 @@ the findings or the answer's words.
 | a `design-conflict` return | the reporting task | `amend` |
 | the time budget's cutoff with tasks running | none | `budget` |
 | the final gate not GREEN | none | `gate-red` |
+| the validate stage RED | none | `gate-red` |
 | any other halt: a null workflow, a failed check, `review-blocked`, a `build merge` or `--undo` exit, `proof-bases` exit 2, a resumed `in-progress` task | the task, when there is one | `question` |
 
 | Option the user picks | `--answer` |
@@ -418,9 +448,38 @@ then halt, and quote its findings. Options:
 **finish anyway** (Recommended when every finding is outside this plan's write sets), or **stop**,
 which leaves the index at `building`.
 
-Then the `validate` stage prints `validate: not configured` and passes, and
+Then the [validate stage](#validate-stage) runs, and
 `"$SG" build finish <slug> --session <session> --json` sets the index to `done` when every task is
 `done`, or leaves it `building` with a `resume` note. Its `unfinished` list goes in the report.
+
+## Validate stage
+
+Simulator QA of the merged plan (simulator QA design §8.2, amendment §7 and §9), on `main` after
+the final gate. The preset's `sim_qa` key in `.swiftgate.toml` decides it: `changed` runs it, and
+`off`, or a preset without the key, prints `validate: sim_qa off` and goes on to `build finish`.
+
+At `changed`, with a `<plans>/<slug>/validation.json`, run the final pass first:
+
+```
+"$SG" qa run --plan <slug> --final --json
+```
+
+It runs every row whose tasks merged, records each flow under the 1-slot `sim-record` lock, and
+writes `.harness/runs/<runID>/qa/report.json`. A video the recorder couldn't take is a
+`qa.video-unverified` nit and never fails a row. Keep `runID`, `verdict` and each row's
+`requirement`, `layer`, `result` and `message`.
+
+Then run `/swift-harness:qa`, saying it runs as a validate stage. It takes the final pass's rows
+rather than running them again, drives the screens the plan changed and judges each flow with
+`sim verify`. It hands nothing to `/swift-harness:tdd`, since this skill never edits code.
+
+- GREEN from both: go on.
+- RED from either, a red row or a flow `sim verify` judged RED: halt with reason `gate-red`, and
+  quote each red row as `<requirement> <layer>: <message>` and each finding as `rule: message`.
+  Options: **stop** (Recommended), which leaves the index at `building` so a sprint can fix it, or
+  **finish anyway**.
+- BLOCKED: the QA skill already ran `doctor`. Keep its lines for the report and go on; `sim verify`
+  judged nothing, so the report says QA didn't run.
 
 ## Resume
 

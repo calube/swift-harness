@@ -176,6 +176,10 @@ build, such as a retry, doesn't end this step. Stop only when the build skill st
 skill times each of its halts with `build halt` and `build resume`; a halt in an earlier step has
 no build run to name, so it isn't timed.
 
+The build skill's `validate` stage is ship's simulator QA: after the final gate, under the preset's
+`sim_qa`, it runs `qa run --final` when the plan has a validation table, then `/swift-harness:qa`.
+Ship runs no QA of its own.
+
 ## 7. Report
 
 The report is the `ship` phase, timed as a span inside the build run. Opening it with
@@ -204,4 +208,4 @@ and `<surface>`. List the tasks done, the unfinished
 ones with their status, and each halt with the user's answer; when the build ran,
 `"$SG" events list --kind build.halt --kind build.resume --since <run>` gives each one's reason,
 answer and wait. Give the final gate's verdict and run
-id, and the wall time against `time_budget_min`. When the index stays `building`, name the resume command.
+id, the `validate` stage's QA verdicts or `validate: sim_qa off`, and the wall time against `time_budget_min`. When the index stays `building`, name the resume command.

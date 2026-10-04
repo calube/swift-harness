@@ -116,7 +116,9 @@ For each task in `toStart`:
    transcript directory the Workflow tool printed.
 
 A non-zero exit at any of these halts that task alone. `refused` tasks never start: list them for
-the user once. Then wait for a completion notice.
+the user once. A design plan's validation task commits nothing, so it never runs the build-task
+workflow: launch it as [the validation task](references/event-loop.md#validation-task) says. Then
+wait for a completion notice.
 
 ## 3. On each completion
 
@@ -141,7 +143,9 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
    gate whose every gating finding is one of the step 1 baseline's counts as GREEN: a task that
-   tests 1 of the surface's modules clears its finding and leaves the others.
+   tests 1 of the surface's modules clears its finding and leaves the others. A plan with a
+   `validation.json` then runs the rows this merge unblocks, as
+   [after each merge](references/event-loop.md#after-each-merge) says.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
@@ -165,7 +169,17 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
    and republish the ledger page. Not GREEN: `"$SG" events span end <span> --outcome halted`,
    then halt; after the answer, open a new `final` span before going on. This gate takes no
    baseline: the step 1 baseline, asked for or not, covers only the merge gates.
-2. The `validate` stage: print `validate: not configured` and go on.
+2. The `validate` stage, on merged `main` after the `ready` gate. Read `sim_qa` in
+   `[build.presets.<preset>]` of `.swiftgate.toml`; a preset without it reads `off`. At `off`,
+   print `validate: sim_qa off` and go on. At `changed`:
+   1. When `<plans>/<slug>/validation.json` exists, `"$SG" qa run --plan <slug> --final --json`.
+      It runs every ready row and records each flow with a video, a contact sheet and its logs.
+   2. Then `/swift-harness:qa`, as a validate stage: it takes that run's rows, drives the screens
+      the plan changed, and hands nothing to `/swift-harness:tdd`.
+
+   A RED from either: `"$SG" events span end <span> --outcome halted`, then halt as the
+   [validate stage](references/event-loop.md#validate-stage) says; after the answer, open a new
+   `final` span before going on.
 3. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 4. `"$SG" stats --build <run> --plan <slug>` for the wall time.
@@ -175,7 +189,8 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
 The ledger page link, then: tasks done, and the unfinished ones with their status from `build finish`;
 each halt and the user's answer; each failed `events ingest` or `events span` line; the green-main baseline taken without asking, as
 `rule: file` per finding; the `ready` verdict and run id; wall time against the budget;
-`resume` when the index stays `building`. The claim stays with this session.
+`resume` when the index stays `building`. Then the `validate` stage: its `qa run` id and verdict
+and the QA skill's report, or `validate: sim_qa off`. The claim stays with this session.
 
 ## Rules
 

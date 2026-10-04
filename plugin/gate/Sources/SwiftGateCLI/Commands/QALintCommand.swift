@@ -31,17 +31,24 @@ enum QALintRun {
     } catch {
       return .failure(QALintBlocked(message: "loading the step schemas: \(error)"))
     }
-    let config: Config?
+    let loaded: LoadedConfig?
     do {
-      config = try ConfigLoader().load(repositoryRoot: root)
+      loaded = try ConfigLoader().loadProfile(repositoryRoot: root)
     } catch {
-      return .failure(QALintBlocked(message: "\(Config.fileName) doesn't load: \(error)"))
+      return .failure(QALintBlocked(message: "the config doesn't load: \(error)"))
     }
-    guard let config else {
+    let config: Config
+    switch loaded {
+    case .owned(let owned)?: config = owned
+    case .brownfield?:
       return .success(
         Inputs(
           schemas: schemas,
-          ids: .unconfigured(reason: "\(root.path) has no \(Config.fileName)")))
+          ids: .unconfigured(reason: "a brownfield clone's config.toml declares no accessibility ids")))
+    case nil:
+      return .success(
+        Inputs(
+          schemas: schemas, ids: .unconfigured(reason: "this repository has no \(Config.fileName)")))
     }
     guard let path = config.qa.accessibilityIDs else {
       return .success(

@@ -45,11 +45,15 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
   public let build: RunReportInput<RunReportBuild>
   /// The plan's `ledger.json`, whose task states say whether the run built everything.
   public let ledger: RunReportInput<Ledger>
+  /// The plan's newest `qa run` over every row, neither at the merge base nor `--after` a task;
+  /// `nil` when the plan has no validation table.
+  public let validation: RunReportInput<QAReport>?
 
   public init(
     slug: String, planBranch: String, planBranchHead: String?, plan: RunReportInput<String>,
     baseline: RunReportInput<BaselineFile>, discover: RunReportInput<DiscoverRecord>,
-    build: RunReportInput<RunReportBuild>, ledger: RunReportInput<Ledger>
+    build: RunReportInput<RunReportBuild>, ledger: RunReportInput<Ledger>,
+    validation: RunReportInput<QAReport>? = nil
   ) {
     self.slug = slug
     self.planBranch = planBranch
@@ -59,6 +63,7 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
     self.discover = discover
     self.build = build
     self.ledger = ledger
+    self.validation = validation
   }
 }
 
@@ -118,6 +123,22 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     }
   }
 
+  /// How many validation rows the plan's last whole `qa run` verified: a row is verified when its
+  /// check ran and answered `pass` or `red`.
+  public struct Validation: Sendable, Equatable, Encodable {
+    public let runID: String?
+    public let verdict: Verdict
+    public let rows: Int
+    public let verified: Int
+
+    public init(runID: String?, verdict: Verdict, rows: Int, verified: Int) {
+      self.runID = runID
+      self.verdict = verdict
+      self.rows = rows
+      self.verified = verified
+    }
+  }
+
   public struct DroppedStep: Sendable, Equatable, Encodable {
     public let area: String
     public let step: AreaStep
@@ -137,6 +158,10 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   public let final: Final?
   /// Why ``final`` is `nil`, or what to know about the log it came from.
   public let finalNote: String?
+  /// `nil` when the plan has no validation table, or when ``validationNote`` says why it wasn't read.
+  public let validation: Validation?
+  /// Why ``validation`` is `nil` for a plan with a validation table.
+  public let validationNote: String?
   public let assumptions: Section<String>
   public let baselineFailures: Section<BaselineFailureLine>
   /// Each `## Areas` bullet of `PLAN.md` marked `build-only`, as written.
@@ -158,7 +183,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
     reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>,
     reviewDepths: Section<String> = Section(items: [], note: nil),
-    timeBox: Section<String>? = nil
+    timeBox: Section<String>? = nil, validation: Validation? = nil, validationNote: String? = nil
   ) {
     self.plan = plan
     self.planBranch = planBranch
@@ -173,10 +198,13 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.reviewDepths = reviewDepths
     self.unfinishedTasks = unfinishedTasks
     self.timeBox = timeBox
+    self.validation = validation
+    self.validationNote = validationNote
   }
 
   private enum CodingKeys: String, CodingKey {
-    case plan, planBranch, planBranchHead, final, finalNote, assumptions, baselineFailures
+    case plan, planBranch, planBranchHead, final, finalNote, validation, validationNote
+    case assumptions, baselineFailures
     case buildOnlyAreas, droppedSteps, reviewFallbacks, reviewDepths, unfinishedTasks, timeBox
   }
 
@@ -188,6 +216,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     try c.encode(planBranchHead, forKey: .planBranchHead)
     try c.encode(final, forKey: .final)
     try c.encode(finalNote, forKey: .finalNote)
+    try c.encode(validation, forKey: .validation)
+    try c.encode(validationNote, forKey: .validationNote)
     try c.encode(assumptions, forKey: .assumptions)
     try c.encode(baselineFailures, forKey: .baselineFailures)
     try c.encode(buildOnlyAreas, forKey: .buildOnlyAreas)
@@ -204,6 +234,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
 
   public static func make(_ inputs: BrownfieldRunReportInputs) -> BrownfieldRunReport {
     let (final, finalNote) = Self.final(inputs.build)
+    let (validation, validationNote) = Self.validation(inputs.validation)
     let (assumptions, buildOnly) = Self.planSections(inputs.plan)
     return BrownfieldRunReport(
       plan: inputs.slug, planBranch: inputs.planBranch, planBranchHead: inputs.planBranchHead,
@@ -212,7 +243,20 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       droppedSteps: Self.droppedSteps(inputs.discover),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
-      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build))
+      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
+      validation: validation, validationNote: validationNote)
+  }
+
+  private static func validation(_ input: RunReportInput<QAReport>?) -> (Validation?, String?) {
+    guard let input else { return (nil, nil) }
+    guard case .read(let report) = input else {
+      return (nil, describe(input, what: "a qa run over every row"))
+    }
+    return (
+      Validation(
+        runID: report.runID, verdict: report.verdict, rows: report.rows.count,
+        verified: QAReport.verified(report.rows)), nil
+    )
   }
 
   /// The box's line, then 1 line per task the cutoff abandoned or never started. A task the
@@ -552,6 +596,14 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       out.append("final: \(final.verdict.rawValue) (gate run \(final.runID))\(scope)")
     } else {
       out.append("final: not recorded; \(finalNote ?? "no final gate")")
+    }
+    if let validation {
+      let run = validation.runID.map { "qa run \($0), " } ?? ""
+      out.append(
+        "validation: \(validation.verified) of \(validation.rows) rows verified "
+          + "(\(run)\(validation.verdict.rawValue))")
+    } else if let validationNote {
+      out.append("validation: not recorded; \(validationNote)")
     }
     out.append("")
     out.append("# Run report: \(plan)")

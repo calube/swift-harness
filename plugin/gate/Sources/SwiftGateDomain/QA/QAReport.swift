@@ -46,7 +46,14 @@ public struct QAReport: Sendable, Equatable {
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
       findings: findings, notes: notes,
       message: rows.isEmpty
-        ? "no validation row to run" : "\(rows.count) rows: " + counts.joined(separator: ", "))
+        ? "no validation row to run"
+        : "\(Self.verified(rows)) of \(rows.count) rows verified: "
+          + counts.joined(separator: ", "))
+  }
+
+  /// How many of `rows` ran their check and got an answer, `pass` or `red`.
+  public static func verified(_ rows: [QARow]) -> Int {
+    rows.filter { $0.result == .pass || $0.result == .red }.count
   }
 
   private init(
@@ -110,8 +117,12 @@ public struct QAReport: Sendable, Equatable {
           checkPassesAtBaseRuleID, .major,
           "\(named) passes at the merge base, so it can't tell the change from its absence"
         )
-      case (.unverified, _):
+      case (.unverified, false):
         rule = (checkUnverifiedRuleID, .nit, "\(named): \(row.message)")
+      case (.unverified, true):
+        rule = (
+          checkUnverifiedRuleID, .nit, "\(named): no red run at the merge base: \(row.message)"
+        )
       case (.pass, false), (.red, true), (.waiting, _):
         return nil
       }
