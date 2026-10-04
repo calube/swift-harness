@@ -83,11 +83,11 @@ public struct SimRunStore: Sendable {
   }
 
   /// Numbers the step after the log's last line, moves the staged screenshot to its `NNN.png`,
-  /// writes `treeJSON` unmodified to its `NNN.tree.json`, and appends `makeStep(n)`'s line with
-  /// an fsync, all under an exclusive lock on the log. On a throw no line was appended and the
-  /// step's files are removed.
+  /// writes `treeJSON` unmodified to the step's tree path, and appends `makeStep(n)`'s line with
+  /// an fsync, all under an exclusive lock on the log. A step with no tree takes no `treeJSON`.
+  /// On a throw no line was appended and the step's files are removed.
   public func commit(
-    _ staging: SimStepStaging, treeJSON: Data, makeStep: (Int) -> SimStep
+    _ staging: SimStepStaging, treeJSON: Data?, makeStep: (Int) -> SimStep
   ) throws(SimRunStoreError) -> SimStep {
     let log = stepLog.path
     let fd = open(log, O_RDWR | O_CREAT | O_APPEND | O_CLOEXEC, 0o644)
@@ -103,16 +103,18 @@ public struct SimRunStore: Sendable {
       throw .unreadableSteps(path: log, reason: error)
     }
     let step = makeStep(steps.count + 1)
-    let tree = simDirectory.appending(path: step.tree)
+    let tree = step.tree.map { simDirectory.appending(path: $0) }
     let screenshot = simDirectory.appending(path: step.screenshot)
-    do {
-      try treeJSON.write(to: tree, options: .atomic)
-    } catch {
-      throw .io(operation: "write", path: tree.path, errno: EIO)
+    if let tree, let treeJSON {
+      do {
+        try treeJSON.write(to: tree, options: .atomic)
+      } catch {
+        throw .io(operation: "write", path: tree.path, errno: EIO)
+      }
     }
     guard rename(staging.screenshot.path, screenshot.path) == 0 else {
       let code = errno
-      unlink(tree.path)
+      if let tree { unlink(tree.path) }
       throw .io(operation: "rename", path: screenshot.path, errno: code)
     }
 
@@ -123,7 +125,7 @@ public struct SimRunStore: Sendable {
       let code = written == line.count ? errno : (written < 0 ? writeErrno : EIO)
       // A torn line would make the whole log unreadable, so cut it back to the last full step.
       ftruncate(fd, off_t(existing.count))
-      unlink(tree.path)
+      if let tree { unlink(tree.path) }
       unlink(screenshot.path)
       throw .io(operation: "append", path: log, errno: code)
     }

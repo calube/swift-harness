@@ -105,6 +105,19 @@ public struct SimSnap: Sendable {
       try await dependencies.agentDevice.screenshot(to: staging.screenshot.path, on: target)
       after = try await dependencies.agentDevice.snapshotJSON(on: target)
     } catch {
+      store.appendLog("sim snap: \(error.message)")
+      // A read on an exited app fails; only appstate tells that apart from a driver failure.
+      if (try? await dependencies.agentDevice.appState(on: target)) == .notRunning {
+        throw await recordExit(
+          request, runID: runID, store: store, staging: staging, target: target, start: start)
+      }
+      store.discard(staging)
+      throw Self.failure(error, runID: runID, log: store.agentDeviceLog)
+    }
+    let appState: AgentDeviceAppState
+    do {
+      appState = try await dependencies.agentDevice.appState(on: target)
+    } catch {
       store.discard(staging)
       store.appendLog("sim snap: \(error.message)")
       throw Self.failure(error, runID: runID, log: store.agentDeviceLog)
@@ -118,13 +131,51 @@ public struct SimSnap: Sendable {
         SimStep(
           n: n, label: request.label, assert: request.assert,
           screenshot: SimStep.screenshotPath(n: n), tree: SimStep.treePath(n: n),
-          settled: settled, elapsedMs: Self.milliseconds(elapsed))
+          settled: settled, elapsedMs: Self.milliseconds(elapsed), appState: appState.simAppState)
       }
     } catch {
       store.discard(staging)
       throw SimSnapFailure(rule: .environment, message: error.message, runID: runID)
     }
+    if appState == .notRunning { throw Self.exited(step, runID: runID) }
     return SimSnapped(runID: runID, step: step, simDirectory: store.simDirectory.path)
+  }
+
+  /// Records a step for an app that isn't running: a fresh screenshot, no tree, and the state.
+  /// Returns the failure to throw: `sim.app-exited` once the step is recorded.
+  private func recordExit(
+    _ request: Request, runID: String, store: SimRunStore, staging: SimStepStaging,
+    target: AgentDeviceTarget, start: Duration
+  ) async -> SimSnapFailure {
+    do {
+      try await dependencies.agentDevice.screenshot(to: staging.screenshot.path, on: target)
+    } catch {
+      store.discard(staging)
+      store.appendLog("sim snap: \(error.message)")
+      return Self.failure(error, runID: runID, log: store.agentDeviceLog)
+    }
+    let elapsed = dependencies.clock.now() - start
+    do {
+      let step = try store.commit(staging, treeJSON: nil) { n in
+        SimStep(
+          n: n, label: request.label, assert: request.assert,
+          screenshot: SimStep.screenshotPath(n: n), tree: nil, settled: nil,
+          elapsedMs: Self.milliseconds(elapsed), appState: .notRunning)
+      }
+      return Self.exited(step, runID: runID)
+    } catch {
+      store.discard(staging)
+      return SimSnapFailure(rule: .environment, message: error.message, runID: runID)
+    }
+  }
+
+  private static func exited(_ step: SimStep, runID: String) -> SimSnapFailure {
+    SimSnapFailure(
+      rule: .appExited,
+      message: "run \(runID) step \(SimStep.stem(step.n)) \"\(step.label)\": the app is not "
+        + "running, so it exited or crashed; the step is recorded for sim verify, and sim down "
+        + "copies the crash report into \(SimSession.directoryName)/\(SimCrashReport.directoryName)/",
+      runID: runID)
   }
 
   /// The named run's lease, or the caller's newest one whose holder is alive.
@@ -184,5 +235,17 @@ public struct SimSnap: Sendable {
   private static func milliseconds(_ duration: Duration) -> Int {
     let (seconds, attoseconds) = duration.components
     return Int(seconds) * 1000 + Int(attoseconds / 1_000_000_000_000_000)
+  }
+}
+
+extension AgentDeviceAppState {
+  fileprivate var simAppState: SimAppState {
+    switch self {
+    case .unknown: .unknown
+    case .notRunning: .notRunning
+    case .runningBackgroundSuspended: .runningBackgroundSuspended
+    case .runningBackground: .runningBackground
+    case .runningForeground: .runningForeground
+    }
   }
 }

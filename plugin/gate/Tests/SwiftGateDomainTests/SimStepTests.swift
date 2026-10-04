@@ -140,4 +140,33 @@ struct SimStepTests {
     #expect(object["settled"] as? Bool == true)
     #expect(snapped.text.contains("004"))
   }
+
+  @Test(
+    "a step's app state round-trips, an unknown state fails naming it, and only a not-running step may omit its tree — catches an open app state or a dropped tree passing as an exit"
+  )
+  func appState() throws {
+    var running = Self.step(1)
+    running.appState = .runningForeground
+    #expect(try Self.object(running.line())["appState"] as? String == "runningForeground")
+    #expect(try SimStep.decode(line: running.line()) == running)
+
+    var exited = Self.step(2)
+    exited.tree = nil
+    exited.appState = .notRunning
+    let line = try Self.object(exited.line())
+    #expect(line["tree"] == nil)
+    #expect(line["appState"] as? String == "notRunning")
+    #expect(try SimStep.decode(line: exited.line()) == exited)
+
+    var object = try Self.object(running.line())
+    object["appState"] = "crashed"
+    #expect(throws: SimStepDecodingError.invalidValue(line: 1, key: "appState", value: "crashed")) {
+      try SimStep.decode(line: try JSONSerialization.data(withJSONObject: object))
+    }
+    object = try Self.object(running.line())
+    object.removeValue(forKey: "tree")
+    #expect(throws: SimStepDecodingError.missingKey(line: 1, "tree")) {
+      try SimStep.decode(line: try JSONSerialization.data(withJSONObject: object))
+    }
+  }
 }

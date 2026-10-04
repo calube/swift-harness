@@ -15,6 +15,8 @@ public enum SimEvidenceRule: String, Sendable, Equatable, CaseIterable {
   case a11yIdentifier = "sim.a11y-identifier"
   /// An interactive element in a step's tree has no readable label.
   case a11yLabel = "sim.a11y-label"
+  /// The app wasn't running at a step, or crashed during the run.
+  case appExited = "sim.app-exited"
 
   public var verdict: Verdict { .red }
 }
@@ -33,21 +35,26 @@ public enum SimCheckoutHead: Sendable, Equatable {
   case unreadable(String)
 }
 
-/// A run's `sim/` folder, loaded: the session, the step log, and each file a step names.
+/// A run's `sim/` folder, loaded: the session, the step log, each file a step names, and each
+/// crash report `sim down` copied.
 public struct SimEvidence: Sendable, Equatable {
   public var runID: String
   public var session: SimSession
   public var steps: [SimStep]
   /// Keyed by the path relative to the run's `sim/` folder, as the step line names it.
   public var files: [String: SimEvidenceFile]
+  /// Every file in the run's `sim/crashes/`, keyed by its path relative to `sim/`.
+  public var crashReports: [String: SimEvidenceFile]
 
   public init(
-    runID: String, session: SimSession, steps: [SimStep], files: [String: SimEvidenceFile]
+    runID: String, session: SimSession, steps: [SimStep], files: [String: SimEvidenceFile],
+    crashReports: [String: SimEvidenceFile] = [:]
   ) {
     self.runID = runID
     self.session = session
     self.steps = steps
     self.files = files
+    self.crashReports = crashReports
   }
 
   /// Whether a step line's `path` stays inside the run's `sim/` folder: relative, with no `..`
@@ -104,7 +111,7 @@ public enum SimEvidenceRules {
     for step in evidence.steps {
       findings += stepFindings(step, files: evidence.files)
     }
-    return findings
+    return findings + SimExitRule.findings(evidence)
   }
 
   private static func stepFindings(_ step: SimStep, files: [String: SimEvidenceFile])
@@ -133,8 +140,19 @@ public enum SimEvidenceRules {
     case .read: break
     }
 
+    guard let treePath = step.tree else {
+      // An app that wasn't running had no tree to capture; `sim.app-exited` reports the step.
+      if step.appState != .notRunning {
+        findings.append(
+          SimEvidenceFinding(
+            rule: .evidenceMissing, step: step.n, path: SimStep.logFileName,
+            message: "\(name): records no tree, though the app was "
+              + (step.appState.map { "\($0.rawValue)" } ?? "not recorded as exited")))
+      }
+      return findings
+    }
     let tree: SimTree
-    switch contents(step.tree) {
+    switch contents(treePath) {
     case .missing(let finding):
       findings.append(finding)
       return findings
@@ -145,9 +163,9 @@ public enum SimEvidenceRules {
         switch error {
         case .unknownRole(let role):
           findings.append(
-            missing(step.tree, "holds the role \(role), which the pinned agent-device can't name"))
+            missing(treePath, "holds the role \(role), which the pinned agent-device can't name"))
         case .malformed(let reason):
-          findings.append(missing(step.tree, "doesn't parse as a snapshot: \(reason)"))
+          findings.append(missing(treePath, "doesn't parse as a snapshot: \(reason)"))
         }
         return findings
       }
@@ -155,8 +173,8 @@ public enum SimEvidenceRules {
     if let assert = step.assert, !tree.contains(text: assert) {
       findings.append(
         SimEvidenceFinding(
-          rule: .assertAbsent, step: step.n, path: step.tree,
-          message: "\(name): no element's label or value is \"\(assert)\" in \(step.tree)"))
+          rule: .assertAbsent, step: step.n, path: treePath,
+          message: "\(name): no element's label or value is \"\(assert)\" in \(treePath)"))
     }
     findings += SimAccessibilityRules.findings(tree, step: step)
     return findings

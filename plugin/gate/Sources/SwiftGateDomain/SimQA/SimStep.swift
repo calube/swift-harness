@@ -3,9 +3,10 @@ import Foundation
 /// One line of `sim/steps.ndjson`: what `sim snap` captured at one point of a QA run.
 ///
 /// Encoded as one JSON object with exactly the keys `n`, `label`, `screenshot`, `tree`,
-/// `elapsedMs` and, when set, `assert` and `settled`. Any other key, a missing key, or an empty
-/// string fails decoding: `sim verify` judges the run from these lines, so a line it can't fully
-/// read must stop it rather than pass.
+/// `elapsedMs` and, when set, `assert`, `settled` and `appState`. Only a step whose `appState` is
+/// `notRunning` may omit `tree`: an exited app has no tree to capture. Any other key, a missing
+/// key, an unknown app state, or an empty string fails decoding: `sim verify` judges the run from
+/// these lines, so a line it can't fully read must stop it rather than pass.
 public struct SimStep: Sendable, Equatable {
   /// The step log, inside the run's `sim/` folder.
   public static let logFileName = "steps.ndjson"
@@ -19,18 +20,22 @@ public struct SimStep: Sendable, Equatable {
   public var assert: String?
   /// Relative to the run's `sim/` folder.
   public var screenshot: String
-  /// Relative to the run's `sim/` folder; the `snapshot --json` output, unmodified.
-  public var tree: String
+  /// Relative to the run's `sim/` folder; the `snapshot --json` output, unmodified. `nil` only
+  /// when the app wasn't running, so there was no tree to capture.
+  public var tree: String?
   /// Whether a second snapshot taken after the screenshot held the same elements as the kept
   /// tree, so the screenshot shows the screen the tree records. `nil` when either snapshot
   /// didn't parse, which `sim verify` reports on the tree itself.
   public var settled: Bool?
   /// How long the step's captures took.
   public var elapsedMs: Int
+  /// The app's state after the step's captures; `nil` in a step log written before `sim snap`
+  /// recorded it.
+  public var appState: SimAppState?
 
   public init(
-    n: Int, label: String, assert: String?, screenshot: String, tree: String, settled: Bool?,
-    elapsedMs: Int
+    n: Int, label: String, assert: String?, screenshot: String, tree: String?, settled: Bool?,
+    elapsedMs: Int, appState: SimAppState? = nil
   ) {
     self.n = n
     self.label = label
@@ -39,6 +44,7 @@ public struct SimStep: Sendable, Equatable {
     self.tree = tree
     self.settled = settled
     self.elapsedMs = elapsedMs
+    self.appState = appState
   }
 
   /// `001` for step 1: at least 3 digits, so names sort in step order up to 999.
@@ -67,16 +73,18 @@ public struct SimStep: Sendable, Equatable {
   }
 
   static let keys: Set<String> = [
-    "n", "label", "assert", "screenshot", "tree", "settled", "elapsedMs",
+    "n", "label", "assert", "screenshot", "tree", "settled", "elapsedMs", "appState",
   ]
 
   /// One JSON object with sorted keys and no trailing newline.
   public func line() -> Data {
     var object: [String: Any] = [
-      "n": n, "label": label, "screenshot": screenshot, "tree": tree, "elapsedMs": elapsedMs,
+      "n": n, "label": label, "screenshot": screenshot, "elapsedMs": elapsedMs,
     ]
+    if let tree { object["tree"] = tree }
     if let assert { object["assert"] = assert }
     if let settled { object["settled"] = settled }
+    if let appState { object["appState"] = appState.rawValue }
     // Strings, integers and a boolean always encode.
     return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
   }
@@ -127,10 +135,18 @@ public struct SimStep: Sendable, Equatable {
       }
       settled = flag.boolValue
     }
+    var appState: SimAppState?
+    if let raw = try text("appState") {
+      guard let known = SimAppState(rawValue: raw) else {
+        throw .invalidValue(line: number, key: "appState", value: raw)
+      }
+      appState = known
+    }
+    let tree = appState == .notRunning ? try text("tree") : try required("tree")
     return SimStep(
       n: try integer("n", minimum: 1), label: try required("label"), assert: try text("assert"),
-      screenshot: try required("screenshot"), tree: try required("tree"), settled: settled,
-      elapsedMs: try integer("elapsedMs", minimum: 0))
+      screenshot: try required("screenshot"), tree: tree, settled: settled,
+      elapsedMs: try integer("elapsedMs", minimum: 0), appState: appState)
   }
 
   /// Every line of a step log in order. An empty log has no steps; a blank line, a line that
@@ -150,6 +166,15 @@ public struct SimStep: Sendable, Equatable {
     }
     return steps
   }
+}
+
+/// `XCUIApplication.State` as `agent-device appstate` names it, recorded on each step.
+public enum SimAppState: String, Sendable, Equatable, CaseIterable {
+  case unknown
+  case notRunning
+  case runningBackgroundSuspended
+  case runningBackground
+  case runningForeground
 }
 
 public enum SimStepDecodingError: Error, Sendable, Equatable {
@@ -175,7 +200,7 @@ public enum SimStepDecodingError: Error, Sendable, Equatable {
   }
 }
 
-/// The rule ids `sim snap` reports. A failure writes no step.
+/// The rule ids `sim snap` reports. A failure writes no step, except `sim.app-exited`.
 public enum SimSnapRule: String, Sendable, Equatable, CaseIterable {
   /// The run's lease belongs to another worktree.
   case notOwner = "sim.not-owner"
@@ -183,12 +208,15 @@ public enum SimSnapRule: String, Sendable, Equatable, CaseIterable {
   case sessionGone = "sim.session-gone"
   /// `agent-device` failed for a reason other than a gone device.
   case driverFailed = "sim.driver-failed"
+  /// The app wasn't running at the step. Unlike every other failure, the step is recorded, so
+  /// `sim verify` reports the exit.
+  case appExited = "sim.app-exited"
   /// The run's files couldn't be read or written.
   case environment = "swiftgate.environment"
 
   public var verdict: Verdict {
     switch self {
-    case .notOwner, .sessionGone: .red
+    case .notOwner, .sessionGone, .appExited: .red
     case .driverFailed, .environment: .blocked
     }
   }
@@ -244,7 +272,7 @@ public struct SimSnapped: Sendable, Equatable {
     let object: [String: Any] = [
       "schemaVersion": SimSession.schemaVersion, "verdict": Verdict.green.rawValue,
       "runID": runID, "n": step.n, "label": step.label, "screenshot": path(step.screenshot),
-      "tree": path(step.tree), "settled": step.settled ?? NSNull(),
+      "tree": step.tree.map(path) ?? NSNull(), "settled": step.settled ?? NSNull(),
     ]
     // Strings, integers, a boolean and null always encode.
     return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
@@ -258,7 +286,7 @@ public struct SimSnapped: Sendable, Equatable {
       case nil: "settle unknown: a snapshot didn't parse"
       }
     return "sim snap: run \(runID) step \(SimStep.stem(step.n)) \"\(step.label)\", \(settle); "
-      + "screenshot \(path(step.screenshot)), tree \(path(step.tree))"
+      + "screenshot \(path(step.screenshot)), tree \(step.tree.map(path) ?? "none")"
   }
 
   private func path(_ relative: String) -> String {

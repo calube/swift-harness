@@ -31,8 +31,9 @@ struct SimDownCommand: AsyncParsableCommand {
       dependencies: SimDown.Dependencies(
         agentDevice: LiveAgentDevice(runner: runner),
         leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
-        simctl: LiveSimctl(runner: runner), isAlive: SimulatorClones.processIsAlive,
-        clock: .continuous()))
+        simctl: LiveSimctl(runner: runner),
+        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
+        isAlive: SimulatorClones.processIsAlive, clock: .continuous()))
     let result = await down.run(
       SimDown.Request(
         worktree: CanonicalPath.of(root), runID: runID,
