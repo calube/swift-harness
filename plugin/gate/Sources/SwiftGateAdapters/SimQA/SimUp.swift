@@ -141,7 +141,7 @@ public struct SimUp: Sendable {
     {
       throw failure
     }
-    let container = try Self.container(in: request.worktree)
+    let container = try Self.container(request.target.container, in: request.worktree)
     let startedAt = dependencies.now()
     let headCommit = try await head(runID: request.runID)
     let log = request.simDirectory.appending(path: SimSession.logFileName)
@@ -254,7 +254,25 @@ public struct SimUp: Sendable {
       runID: runID, udid: lease.udid, session: session, scenario: request.scenario)
   }
 
-  private static func container(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer {
+  private static func container(_ named: SimTarget.Container, in worktree: URL)
+    throws(SimUpFailure) -> XcodebuildContainer
+  {
+    let path: String
+    switch named {
+    case .worktreeRoot: return try rootContainer(in: worktree)
+    case .project(let relative), .workspace(let relative): path = relative
+    }
+    guard FileManager.default.fileExists(atPath: worktree.appending(path: path).path) else {
+      throw SimUpFailure(
+        rule: .appBuildFailed, message: "\(path), which the config names, is not in the worktree")
+    }
+    let absolute = worktree.appending(path: path).path
+    if case .workspace = named { return .workspace(path: absolute) }
+    return .project(path: absolute)
+  }
+
+  private static func rootContainer(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer
+  {
     let entries = (try? FileManager.default.contentsOfDirectory(atPath: worktree.path)) ?? []
     switch AppContainer.choose(among: entries) {
     case .failure(let error):
