@@ -66,6 +66,7 @@ enum DoctorRun {
     async let xcode = try? LiveXcodebuild(runner: runner).version()
     async let swift = output(runner, ["swift", "--version"])
     async let devices = listDevices(runner)
+    async let agentDevice = try? LiveAgentDevice(runner: runner).version()
     async let repository = repositoryFacts(root: root, config: config, swiftPM: swiftPM)
     let environment = ProcessInfo.processInfo.environment
     let home = environment["HOME"] ?? NSHomeDirectory()
@@ -81,7 +82,10 @@ enum DoctorRun {
         root: root, packageDirectories: packages.map(\.path)),
       architectureFindings: architecture,
       mermaidCLIInstalled: HarnessFiles.isOnPath("mmdc", path: environment["PATH"] ?? ""),
-      pluginSession: pluginSession(root: root, sessionID: sessionID), judgeKeysSet: judgeKeysSet)
+      pluginSession: pluginSession(root: root, sessionID: sessionID), judgeKeysSet: judgeKeysSet,
+      agentDeviceVersion: await agentDevice,
+      agentDevicePin: ToolPin(
+        version: AgentDevicePin.version, installCommand: AgentDevicePin.installCommand))
   }
 
   /// `sessionID`'s record, or else the newest, and the tree at its `pluginRoot` now. With an id,
@@ -185,7 +189,7 @@ struct DoctorCommand: AsyncParsableCommand {
     commandName: "doctor",
     abstract:
       "Check the machine and repository: Xcode pin, toolchain, simulator runtime, disk, shim, "
-      + "and toolchain-incompatible dependencies.")
+      + "the agent-device pin, and toolchain-incompatible dependencies.")
 
   @OptionGroup var output: OutputOptions
 
