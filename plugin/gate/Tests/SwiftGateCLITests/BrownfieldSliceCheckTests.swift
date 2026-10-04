@@ -217,6 +217,8 @@ struct BrownfieldSliceCheckTests {
     }
     let test = "def test_load():\n    assert load() == 2\n"
 
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
     let parts = try await Self.run(
       clone, areas: [Self.area("app"), Self.area("api"), Self.area("cli")],
       changes: [
@@ -226,11 +228,15 @@ struct BrownfieldSliceCheckTests {
         Change(path: "api/tests/test_load.py", text: test, added: [2...2]),
         Change(path: "cli/src/load.py", text: "x = 1\n", added: [1...1]),
       ],
-      runner: runner, warm: ["app": 45_000, "api": 1000])
+      runner: runner, warm: ["app": 45_000, "api": 1000], context: context)
 
     let app = runner.requests.filter { $0.area == "app" }.map(\.step)
     #expect(app == [.build], "the slow area only builds")
     #expect(runner.requests.contains { $0.area == "api" && $0.step == .testFiles })
+    #expect(
+      context.proofs.results.map { "\($0.target) \($0.test) \($0.outcome.rawValue)" }
+        == ["api tests/test_load.py proven"],
+      "the gate run records the proof of the area that ran its tests, and only that one")
     let buildOnly = parts.findings.filter { $0.ruleID == BrownfieldRuleID.buildOnly.rawValue }
     #expect(buildOnly.map(\.file).sorted() == ["app", "cli"])
     #expect(buildOnly.allSatisfy { $0.severity == .nit })
