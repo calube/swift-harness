@@ -276,6 +276,17 @@ enum QARunRun {
       if row.layer == .state, let ran = stateResults.take(row: entry.row) {
         return ran
       }
+      // A state check reads what its flow left on the device; with none up, its exit means nothing.
+      if row.layer == .state,
+        let flow = plan.entries.last(where: {
+          $0.validation.layer == .flow && $0.validation.requirement == row.requirement
+        })
+      {
+        return QACheckOutcome(
+          result: .unverified,
+          message: "not run: flow row \(flow.row) `\(flow.validation.check)` for "
+            + "\(row.requirement) brought no device up")
+      }
       return await command(entry, in: workingDirectory, device: [:])
     }
 

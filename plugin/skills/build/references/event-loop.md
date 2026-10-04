@@ -157,7 +157,8 @@ surface, and says to work in that worktree and follow
 3. Confirm each check fails before its tasks merge: `"$SG" qa run --plan <slug> --at-base --json`,
    with `run_in_background`, since a flow row boots a leased device. A row that reads `pass` there
    gets `qa.check-passes-at-base`: its check can't tell the change from its absence. Name it in
-   the report, and go on.
+   the report, and go on. A row that reads `unverified` there has no red run behind it, whatever
+   the worker returned: name it in the report as `no red run` with its message.
 
 Its `missing:` lines name contract names a check needed: each goes in the report, and its row
 reads red until a task adds the name.

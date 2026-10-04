@@ -80,5 +80,9 @@ test goes through `prove` with its `--proof-base` before the tasks it waits for.
 
 ```text
 <requirement> <layer> <path>: <failure reason>
+<requirement> <layer> <path>: not run: <why>
 missing: <name> (<requirement>): <why the check needs it>
 ```
+
+A check you couldn't run, such as a flow whose `sim up` failed, returns `not run` with the
+reason, never a guessed failure.

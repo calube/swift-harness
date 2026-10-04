@@ -30,8 +30,8 @@ The row passes only when the batch exits 0 and `sim verify` is GREEN. A failing 
 named by its number in the flow file, with any `sim verify` RED findings added. A steps file
 `agent-device` refuses is `red`. A `sim verify` RED is `red` with its findings. A driver or machine failure, or a failed capture `qa run` added,
 is `unverified`. A state row behind a flow that isn't `pass` reads `unverified`, even when it ran on
-the device first. `--at-base` runs flow rows too, in the scratch tree, and runs the state rows
-whatever the batch showed.
+the device first. `--at-base` runs flow rows too, in the scratch tree, and runs the state rows on
+the flow's device whatever the batch showed; with no device up, they read `unverified`.
 
 ## What a flow leaves
 

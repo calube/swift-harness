@@ -234,6 +234,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
 
   public static func make(_ inputs: BrownfieldRunReportInputs) -> BrownfieldRunReport {
     let (final, finalNote) = Self.final(inputs.build)
+    let (validation, validationNote) = Self.validation(inputs.validation)
     let (assumptions, buildOnly) = Self.planSections(inputs.plan)
     return BrownfieldRunReport(
       plan: inputs.slug, planBranch: inputs.planBranch, planBranchHead: inputs.planBranchHead,
@@ -242,7 +243,20 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       droppedSteps: Self.droppedSteps(inputs.discover),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
-      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build))
+      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
+      validation: validation, validationNote: validationNote)
+  }
+
+  private static func validation(_ input: RunReportInput<QAReport>?) -> (Validation?, String?) {
+    guard let input else { return (nil, nil) }
+    guard case .read(let report) = input else {
+      return (nil, describe(input, what: "a qa run over every row"))
+    }
+    return (
+      Validation(
+        runID: report.runID, verdict: report.verdict, rows: report.rows.count,
+        verified: QAReport.verified(report.rows)), nil
+    )
   }
 
   /// The box's line, then 1 line per task the cutoff abandoned or never started. A task the
@@ -582,6 +596,14 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       out.append("final: \(final.verdict.rawValue) (gate run \(final.runID))\(scope)")
     } else {
       out.append("final: not recorded; \(finalNote ?? "no final gate")")
+    }
+    if let validation {
+      let run = validation.runID.map { "qa run \($0), " } ?? ""
+      out.append(
+        "validation: \(validation.verified) of \(validation.rows) rows verified "
+          + "(\(run)\(validation.verdict.rawValue))")
+    } else if let validationNote {
+      out.append("validation: not recorded; \(validationNote)")
     }
     out.append("")
     out.append("# Run report: \(plan)")

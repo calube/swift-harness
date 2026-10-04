@@ -46,13 +46,15 @@ passes it. A state row runs only once every flow row for its requirement passed.
 
 `--at-base` runs every row, whatever its tasks, at the merge base of `HEAD` and `main` (a brownfield
 clone's plan branch) in a scratch worktree, with no layer stop, and records each failure's exit
-status.
+status. Each `unverified` row's nit there says it has no red run.
 
 `--final` runs every ready row and records each flow, with its logs (see
 [the final pass](simulator-qa-flows.md#the-final-pass)). It takes neither `--at-base` nor `--after`.
 
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
-stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row.
+stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row. Its message leads with
+how many rows got an answer, `pass` or `red`: an unverified row is a nit, so `0 of 3 rows verified`
+can still read GREEN, and `run report` repeats that count under its `final` line.
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 [`simulator-qa-flows.md`](simulator-qa-flows.md).

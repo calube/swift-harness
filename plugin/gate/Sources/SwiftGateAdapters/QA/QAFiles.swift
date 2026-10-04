@@ -90,7 +90,15 @@ extension QAFiles {
   /// passed over.
   public static func newestWholeRun(plan: String, runsDirectory: URL) -> RunReportInput<QAReport>
   {
-    .missing(path: runsDirectory.path)
+    let runs = (try? FileManager.default.contentsOfDirectory(atPath: runsDirectory.path)) ?? []
+    for runID in runs.filter(RunID.isValid).sorted(by: >) {
+      let file = runsDirectory.appending(path: "\(runID)/\(QAReport.directory)/\(QAReport.fileName)")
+      guard let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data),
+        report.plan == plan, !report.atBase, report.after == nil
+      else { continue }
+      return .read(report)
+    }
+    return .missing(path: runsDirectory.path)
   }
 }
 
