@@ -155,9 +155,12 @@ surface, and says to work in that worktree and follow
    `"$SG" ledger set <slug> <task> done --session <session> --json` and
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
 3. Confirm each check fails before its tasks merge: `"$SG" qa run --plan <slug> --at-base --json`,
-   with `run_in_background`, since a flow row boots a leased device. A row that reads `pass` there
-   gets `qa.check-passes-at-base`: its check can't tell the change from its absence. Name it in
-   the report, and go on.
+   in the foreground with the Bash tool's `timeout` at 600000, though a flow row boots a leased
+   device: a headless session ends with its turn when only background Bash work is left, and
+   kills that work. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
+   tell the change from its absence. Name it in the report, and go on. A row that reads
+   `unverified` there has no red run behind it, whatever the worker returned: name it in the
+   report as `no red run` with its message.
 
 Its `missing:` lines name contract names a check needed: each goes in the report, and its row
 reads red until a task adds the name.

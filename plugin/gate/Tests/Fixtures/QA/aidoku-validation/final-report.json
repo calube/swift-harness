@@ -1,0 +1,98 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "c5d44dd53e7a713df0361962a6ea2081e7154b74",
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-setting, flow) `qa/confirm-toggle.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in /TRIALS/aidoku-ios-validation-1-spec",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (req-stored, flow) `qa/confirm-toggle-on.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in /TRIALS/aidoku-ios-validation-1-spec",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-stored, state) `qa/confirm-toggle-on.state.sh`: not run: flow row 2 `qa/confirm-toggle-on.flow.json` for req-stored is unverified",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    }
+  ],
+  "message" : "3 rows: 0 pass, 0 red, 3 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "qa/confirm-toggle.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in /TRIALS/aidoku-ios-validation-1-spec",
+      "ms" : 0,
+      "requirement" : "req-setting",
+      "result" : "unverified",
+      "row" : 1,
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-toggle-on.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in /TRIALS/aidoku-ios-validation-1-spec",
+      "ms" : 0,
+      "requirement" : "req-stored",
+      "result" : "unverified",
+      "row" : 2,
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-toggle-on.state.sh",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "state",
+      "message" : "not run: flow row 2 `qa/confirm-toggle-on.flow.json` for req-stored is unverified",
+      "ms" : 0,
+      "requirement" : "req-stored",
+      "result" : "unverified",
+      "row" : 3,
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261004T213430Z-5250c2ac",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}

@@ -12,7 +12,9 @@
 // which drops its gate reports; an area command prefixed with a package install, which costs
 // every slice the install that worktree creation already ran; a run with no clock for its early
 // steps, a cutoff that halts and asks or skips `final`, and an owned build that loses its halt at
-// the cutoff. Its phase spans are checked with the other skills' telemetry calls.
+// the cutoff; a gate, `qa run` or cutoff timer sent to the background, which a headless run kills
+// when its turn ends with only background Bash work left; and gate JSON written to a shared `/tmp`
+// path another run overwrites. Its phase spans are checked with the other skills' telemetry calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -155,6 +157,68 @@ export function timeBoxProblems(text) {
   if (/\(Recommended\)/.test(bullet) || /\bask/i.test(bullet)) problems.push('the cutoff offers a choice')
   if (!/\bstep 8\b/.test(bullet)) problems.push('the cutoff never goes on to step 8')
   return problems
+}
+
+// A gate or `qa run` call, through `$SG` or any path to the swiftgate binary.
+const GATE_CALL = /(?:swiftgate|\$SG)"?\s+(?:check\s|qa\s+run\b)/
+// Work sent to the background: the Bash tool's flag, or a shell `&` that isn't `&&` or `>&`.
+const BACKGROUND = /run_in_background|(?:^|[^&>])&\s*(?:$|`|;)/m
+// A sleep that times something, not the poll interval of a `while` loop such as the stall watch.
+const SLEEP_TIMER = /(?<![\w/])(?<!while\s+)(?:\/bin\/)?sleep\s+(?:<|\d|\$)/
+// A path in the machine-wide temp directory, which every run on the machine shares.
+const SHARED_TMP = /(?:^|[\s`'"=(>])\/(?:private\/)?tmp\//
+
+/** Each paragraph or list item of `text` with the line it starts on. */
+function blocks(text) {
+  const found = []
+  let start = 0
+  let lines = []
+  for (const [index, line] of text.split('\n').entries()) {
+    const opens = /^\s*(?:[-*]|\d+\.)\s/.test(line) || line.trim() === ''
+    if (opens && lines.length) {
+      found.push({ line: start + 1, text: lines.join('\n') })
+      lines = []
+    }
+    if (line.trim() === '') continue
+    if (!lines.length) start = index
+    lines.push(line)
+  }
+  if (lines.length) found.push({ line: start + 1, text: lines.join('\n') })
+  return found
+}
+
+/** Every way `files` ({relative path: markdown}) leaves a run's work to die with a headless
+ * session or to clash with another run, as `file:line: …`: a gate or `qa run` in the background, a
+ * background sleep timer unless `sleepTimers` is false, and a shared `/tmp` path. */
+export function backgroundWorkProblems(files, { sleepTimers = true } = {}) {
+  const problems = []
+  for (const [file, text] of Object.entries(files)) {
+    for (const block of blocks(text)) {
+      const where = `${file}:${block.line}`
+      const background = BACKGROUND.test(block.text)
+      if (background && GATE_CALL.test(block.text)) problems.push(`${where}: a gate or qa run in the background`)
+      if (sleepTimers && background && SLEEP_TIMER.test(block.text)) problems.push(`${where}: a background sleep timer`)
+      if (SHARED_TMP.test(block.text)) problems.push(`${where}: a shared /tmp path`)
+    }
+  }
+  return problems
+}
+
+/** The Bash calls the trial's headless orchestrator sent to the background, from its captured
+ * stream-json, each rendered as the skill line that would have asked for it. */
+function capturedBackgroundCalls() {
+  const transcript = join(root, '..', 'evals/results/2026-10-04-brownfield-ios-validation/run.jsonl')
+  const rendered = {}
+  for (const line of readFileSync(transcript, 'utf8').split('\n')) {
+    if (!line.trim()) continue
+    const event = JSON.parse(line)
+    if (event.type !== 'assistant') continue
+    for (const content of event.message.content ?? []) {
+      if (content.type !== 'tool_use' || content.name !== 'Bash' || !content.input.run_in_background) continue
+      rendered[`call-${Object.keys(rendered).length + 1}`] = `- \`${content.input.command.split('\n').join(' ')}\` with \`run_in_background\``
+    }
+  }
+  return rendered
 }
 
 /** Every `swiftgate` call in `files` as `path flags…` strings, for presence checks. */
@@ -328,6 +392,35 @@ const tests = {
     assert.match(read('skills/build/SKILL.md'), /a time-budget cutoff/)
     const calls = Object.values(buildSkillFiles()).flatMap(text => extractInvocations(text).map(inv => inv.words.join(' ')))
     assert.deepEqual(calls.filter(call => call.startsWith('build cutoff')), [], 'the owned build decides its cutoff by the brownfield rule')
+  },
+
+  'the run skill and the build loop it follows keep every gate and qa run in the foreground, set no background sleep timer and write no shared /tmp path — catches a headless run that exits mid-gate and kills it, and gate JSON another run overwrites'() {
+    assert.deepEqual(backgroundWorkProblems(runSkillFiles()), [])
+    // The owned build's budget timer stays: its session is interactive, and a run replaces it.
+    assert.deepEqual(backgroundWorkProblems(buildSkillFiles(), { sleepTimers: false }), [])
+    const skill = read('skills/run/SKILL.md')
+    assert.match(skill, /\b600000\b/, 'the run skill never gives its foreground gates the Bash tool\'s longest timeout')
+    assert.match(skill, /\| `<out>` \| `<plan-dir>\/[^`]+`/, 'the run skill never names a per-run directory under <plan-dir> for gate JSON')
+    assert.ok(extractInvocations(cutoffBullet(skill) ?? '').some(inv => inv.words.join(' ').startsWith('run clock <slug>')),
+      'the cutoff is never checked against `swiftgate run clock`')
+  },
+
+  'the background-work check names the trial orchestrator\'s background gates, qa run, cutoff timer and /tmp outputs, and passes its stall watches — catches a checker that passes anything'() {
+    const captured = capturedBackgroundCalls()
+    const problems = backgroundWorkProblems(captured)
+    const flagged = kind => Object.keys(captured).filter(key => problems.includes(`${key}:1: ${kind}`))
+    const text = key => captured[key]
+    const gateCalls = Object.keys(captured).filter(key => /swiftgate (?:check|qa run)/.test(text(key)))
+    assert.ok(gateCalls.length >= 4, `the transcript has ${gateCalls.length} background gate calls; it had the contract slices, qa run --at-base and a merge gate`)
+    assert.deepEqual(flagged('a gate or qa run in the background'), gateCalls)
+    const timers = Object.keys(captured).filter(key => /\/bin\/sleep 2234/.test(text(key)))
+    assert.equal(timers.length, 1, 'the transcript has no background cutoff timer')
+    assert.deepEqual(flagged('a background sleep timer'), timers)
+    const tmp = Object.keys(captured).filter(key => /> \/tmp\/spec-/.test(text(key)))
+    assert.ok(tmp.length >= 4, 'the transcript\'s gates no longer write /tmp/spec-*.json')
+    assert.deepEqual(flagged('a shared /tmp path'), tmp)
+    assert.deepEqual(backgroundWorkProblems({ 'x.md': '- Run `"$SG" check --tier merge --json &` and go on.\n- Then `"$SG" qa run --plan <slug> --json`.' }),
+      ['x.md:1: a gate or qa run in the background'])
   },
 
   'a brownfield design conflict recommends a retry with a widened write set, not stop — catches a brownfield write-set conflict recommending stop'() {

@@ -276,6 +276,17 @@ enum QARunRun {
       if row.layer == .state, let ran = stateResults.take(row: entry.row) {
         return ran
       }
+      // A state check reads what its flow left on the device; with none up, its exit means nothing.
+      if row.layer == .state,
+        let flow = plan.entries.last(where: {
+          $0.validation.layer == .flow && $0.validation.requirement == row.requirement
+        })
+      {
+        return QACheckOutcome(
+          result: .unverified,
+          message: "not run: flow row \(flow.row) `\(flow.validation.check)` for "
+            + "\(row.requirement) brought no device up")
+      }
       return await command(entry, in: workingDirectory, device: [:])
     }
 
@@ -487,26 +498,19 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
 
   func up(_ request: QAFlowSimulatorRequest) async -> Result<SimUpStarted, SimUpFailure> {
     let root = request.worktree
-    let config: Config
-    do {
-      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
-        return .failure(
-          SimUpFailure(rule: .environment, message: "no \(ConfigLoader.fileName) in \(root.path)"))
-      }
-      config = loaded
-    } catch {
-      return .failure(
-        SimUpFailure(rule: .environment, message: "\(ConfigLoader.fileName) doesn't load: \(error)")
-      )
+    let target: SimTarget
+    switch SimTargetLoader.load(worktree: root) {
+    case .success(let loaded): target = loaded
+    case .failure(let failure): return .failure(failure)
     }
-    let maxConcurrent = config.simulator.maxConcurrent
+    let maxConcurrent = target.maxConcurrent
     let dependencies = SimUp.Dependencies(
       agentDevice: agentDevice,
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       launcher: DetachedLauncher(), xcodebuild: LiveXcodebuild(runner: runner),
       simctl: LiveSimctl(
         runner: runner,
-        timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simulator.simctlTimeoutSeconds))),
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(target.simctlTimeoutSeconds))),
       bundles: AppBundleReader(), git: LiveGit(runner: runner, repositoryRoot: root.path),
       isAlive: Self.isAlive, terminate: { _ = kill($0, SIGTERM) },
       slotHolders: {
@@ -516,7 +520,7 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
       now: { Date() })  // swiftgate:allow det.date-init — the CLI edge stamps when the run started
     return await SimUp(dependencies: dependencies).run(
       SimUp.Request(
-        worktree: root, config: config, scenario: request.scenario, runID: request.runID,
+        worktree: root, target: target, scenario: request.scenario, runID: request.runID,
         simDirectory: request.simDirectory,
         derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
         swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
