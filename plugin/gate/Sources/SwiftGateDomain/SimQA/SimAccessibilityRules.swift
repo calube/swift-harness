@@ -15,17 +15,21 @@ public enum SimAccessibilityRules {
   {
     var judged: [SimEvidenceFinding] = []
     var untargeted = 0
+    var navigated = 0
     for element in tree.elements where element.isInteractive {
       let found = findings(element, step: step)
-      let inScope =
-        switch scope {
-        case .everyControl: true
-        case .targeted(let selectors): selectors.contains { $0.matches(element) }
-        case .unaudited: false
-        }
-      if inScope { judged += found } else { untargeted += found.count }
+      switch scope {
+      case .everyControl:
+        judged += found
+      case .targeted(let selectors) where selectors.contains { $0.namesIdentifier(element) }:
+        judged += found
+      case .targeted(let selectors) where selectors.contains { $0.matches(element) }:
+        navigated += found.count
+      case .targeted, .unaudited:
+        untargeted += found.count
+      }
     }
-    return (judged, untargeted, 0)
+    return (judged, untargeted, navigated)
   }
 
   private static func findings(_ element: SimElement, step: SimStep) -> [SimEvidenceFinding] {

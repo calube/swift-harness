@@ -4,11 +4,13 @@ import Foundation
 ///
 /// An owned repository holds every control on every screen to standards §7. A brownfield clone
 /// inherits controls the change never touched, so there the rules judge only what a flow's steps
-/// select, and the rest becomes 1 `sim.a11y-untargeted` nit.
+/// select by `id=`, the identifiers the change's contract names. Controls a step reaches by label,
+/// role or text are existing UI the flow navigates through; their findings and the rest's become
+/// 1 `sim.a11y-untargeted` nit.
 public enum SimAuditScope: Sendable, Equatable {
   /// Every interactive element in each step's tree.
   case everyControl
-  /// Only the interactive elements one of these selectors matches.
+  /// Only the interactive elements one of these selectors names by identifier.
   case targeted([SimSelector])
   /// No element, with why.
   case unaudited(reason: String)
@@ -34,19 +36,22 @@ public enum SimAuditScope: Sendable, Equatable {
   /// The 1 note for the findings this scope left out: `count` on controls no step selects, and
   /// `navigated` on controls steps select only to move through the app. `nil` when it judged
   /// every control or left nothing out.
-  func note(untargeted count: Int, navigated: Int = 0) -> SimVerifyNote? {
-    let findings = count == 1 ? "1 finding" : "\(count) findings"
+  func note(untargeted count: Int, navigated: Int) -> SimVerifyNote? {
+    let total = count + navigated
+    let findings = total == 1 ? "1 finding" : "\(total) findings"
     switch self {
     case .everyControl:
       return nil
-    case .targeted where count == 0:
+    case .targeted where total == 0:
       return nil
     case .targeted:
+      let through =
+        navigated == 0 ? "" : " (\(navigated) on controls the flow only navigates through)"
       return SimVerifyNote(
         rule: Self.untargetedRuleID,
-        message: "\(findings) on controls no flow step selects, each a missing accessibility "
-          + "identifier or readable label: a brownfield clone judges only the controls its flow "
-          + "touches")
+        message: "\(findings) on controls no flow step selects by id\(through), each a missing "
+          + "accessibility identifier or readable label: a brownfield clone judges only the "
+          + "controls its flow's id= selectors name")
     case .unaudited(let reason):
       return SimVerifyNote(
         rule: Self.untargetedRuleID,
@@ -132,27 +137,31 @@ public struct SimSelector: Sendable, Equatable {
   /// Whether `element` satisfies every term of an alternative holding an `id` term: the selector
   /// names it by the identifier the change's contract gives it, not by text or role it inherits.
   public func namesIdentifier(_ element: SimElement) -> Bool {
-    false
+    alternatives.contains { terms in
+      terms.contains { $0.key == "id" } && Self.matches(terms, element)
+    }
   }
 
   /// Whether `element` satisfies every term of some alternative, compared as the pin compares:
   /// trimmed, case-folded, runs of whitespace as 1 space.
   public func matches(_ element: SimElement) -> Bool {
-    alternatives.contains { terms in
-      terms.allSatisfy { term in
-        let actual: String? =
-          switch term.key {
-          case "id": element.identifier
-          case "role": element.role.rawValue
-          case "label": element.label
-          case "value": element.value
-          default:
-            [element.label, element.value, element.identifier].lazy
-              .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-              .first { !$0.isEmpty }
-          }
-        return Self.folded(actual ?? "") == Self.folded(term.value)
-      }
+    alternatives.contains { Self.matches($0, element) }
+  }
+
+  private static func matches(_ terms: [Term], _ element: SimElement) -> Bool {
+    terms.allSatisfy { term in
+      let actual: String? =
+        switch term.key {
+        case "id": element.identifier
+        case "role": element.role.rawValue
+        case "label": element.label
+        case "value": element.value
+        default:
+          [element.label, element.value, element.identifier].lazy
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+        }
+      return folded(actual ?? "") == folded(term.value)
     }
   }
 
