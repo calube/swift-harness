@@ -16,7 +16,7 @@ struct ReviewerBashGuardTests {
   }
 
   @Test(
-    "a reviewer's exact span start and end lines pass, through the shim or \"$SG\", while the same start with `&& rm` is denied — catches the guard blocking the span lines the review prompts hand every reviewer",
+    "a reviewer's exact span start and end lines pass, through the shim or \"$SG\", while the same line with `&& rm`, or through bare swiftgate, is denied — catches the guard blocking the span lines the review prompts hand every reviewer, or passing one PATH resolves",
     arguments: [
       start, end,
       "\"$SG\" events span start --phase verify --build-run r1 --task t --role review",
@@ -27,6 +27,9 @@ struct ReviewerBashGuardTests {
   func exactSpanLinesPass(_ command: String) {
     #expect(verdict(command) == nil, "\(command)")
     #expect(verdict(command + " && rm -rf Sources")?.ruleID == ReviewerBashGuard.ruleID)
+    let arguments = command.split(separator: " ").dropFirst().joined(separator: " ")
+    #expect(
+      verdict("swiftgate " + arguments)?.ruleID == ReviewerBashGuard.ruleID, "\(arguments)")
   }
 
   @Test(
