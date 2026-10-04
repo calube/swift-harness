@@ -33,7 +33,9 @@ Write each check against the contract's names only, so it compiles or parses bef
 exists and fails for the reason the feature is missing.
 
 - **Acceptance**: a test in the module's test target that drives the boundary the row names, in the
-  repository's test framework, or the row's `curl -fsS … | jq -e '<condition>'` command.
+  repository's test framework, or the row's `curl -fsS … | jq -e '<condition>'` command. A test's
+  row names it as `test: <id>`, never by its file: in an `xcode` area the id is
+  `<Target>/<Class>/<method>`, which `qa run` passes to the area's test command as `-only-testing:`.
 - **Flow**: a JSON array of `{"command": "<name>", "input": {...}}` steps for an `agent-device` batch.
   Target elements by `id="…"` selectors whose ids are raw values of the app's `AccessibilityID`
   module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. Every flow

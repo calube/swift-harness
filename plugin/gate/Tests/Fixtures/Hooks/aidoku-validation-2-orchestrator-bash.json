@@ -1,0 +1,6 @@
+[
+  {
+    "command": "SG=\"/HARNESS/plugin/bin/swiftgate\"; cd /CLONE; python3 - <<'EOF'\np='.git/swift-harness/plans/spec/PLAN.md'\ns=open(p).read()\ns=s.replace(\"| req-check | acceptance | `AidokuTests/LargeDownloadConfirmationTests.swift` |\",\"| req-check | acceptance | `xcodebuild test -project Aidoku.xcodeproj -scheme Aidoku -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation -only-testing:AidokuTests/LargeDownloadConfirmationTests` |\")\ns=s.replace(\"## Validation\\n\",\"- The req-check acceptance row first named the test file, which `qa run` can't execute (exit 126 after download-check merged); it now runs the area's test command limited to `LargeDownloadConfirmationTests`. The merge was kept, since its merge gate had already run and proved that test.\\n\\n## Validation\\n\",1)\nopen(p,'w').write(s)\nEOF\n\"$SG\" plan import spec --json | python3 -c \"import json,sys;d=json.load(sys.stdin);print(d['status'],d['message'][:200])\"",
+    "denial": "PreToolUse:Bash hook error: swiftgate guard.raw-xcodebuild: raw xcodebuild bypasses swiftgate's per-worktree DerivedData, simulator lock and evidence rules. Use `swiftgate check --tier fast|push|ready` (or `swiftgate test --tier t2|t3` for simulator tiers). Read-only queries such as `xcodebuild -list` are allowed."
+  }
+]
