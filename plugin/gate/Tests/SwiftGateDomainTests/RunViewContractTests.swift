@@ -89,7 +89,7 @@ struct RunViewContractTests {
     let spans = try #require(object["spans"] as? [[String: Any]])
     let spanKeys: Set<String> = [
       "id", "parent", "phase", "task", "gateRun", "start", "end", "outcome", "approximate", "tools",
-      "causeGateRun", "failureReason", "baseline",
+      "causeGateRun", "failureReason", "baseline", "flow",
     ]
     #expect(spans.map(keys) == [spanKeys, spanKeys])
     #expect(spans[0]["failureReason"] is NSNull)
@@ -97,6 +97,7 @@ struct RunViewContractTests {
     #expect(spans[0]["end"] is NSNull)
     #expect(spans[0]["tools"] is NSNull)
     #expect(spans[0]["causeGateRun"] is NSNull)
+    #expect(spans[0]["flow"] is NSNull)
     #expect(keys(spans[1]["tools"]) == ["calls", "otherCount", "ms", "files", "droppedPaths"])
     #expect(
       keys(first((spans[1]["tools"] as? [String: Any])?["calls"])) == ["tool", "count", "ms"])
@@ -162,23 +163,51 @@ struct RunViewContractTests {
       plan: "p", counts: RunViewValidation.Counts(red: 1),
       rows: [
         RunViewValidation.Row(
-          row: 1, requirement: "req-a", layer: .acceptance, result: .red, qaRun: "q1", at: start)
+          row: 1, requirement: "req-a", layer: .acceptance, result: .red, qaRun: "q1", at: start),
+        RunViewValidation.Row(
+          row: 2, requirement: "req-a", layer: .flow, result: .pass, qaRun: "q1", at: start,
+          flow: RunViewFlow(
+            source: .batch, run: "q1",
+            steps: [RunViewFlow.Step(n: 1, label: nil, offsetMs: 0, ok: true)],
+            videoUnverified: .recorderBusy)),
+      ],
+      keptFlows: [
+        RunViewKeptFlow(
+          name: "counter", test: nil, gateRun: "g1", at: start,
+          flow: RunViewFlow(source: .xcuitest, run: "g1"))
       ])
     let object = try #require(
       JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
     let validation = try #require(object["validation"] as? [String: Any])
-    #expect(keys(validation) == ["plan", "counts", "rows"])
+    #expect(keys(validation) == ["plan", "counts", "rows", "keptFlows"])
     #expect(keys(validation["counts"]) == ["pass", "red", "unverified", "waiting"])
     let row = first(validation["rows"])
     #expect(
       keys(row) == [
         "row", "requirement", "layer", "check", "runsAfter", "result", "message", "exitStatus",
-        "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut",
+        "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut", "flow",
       ])
+    #expect(row["flow"] is NSNull)
     #expect(row["check"] is NSNull)
     #expect(row["exitStatus"] is NSNull)
     #expect(row["result"] as? String == "red")
     #expect(row["at"] as? String == "2026-09-21T14:13:20.250Z")
+    let flowKeys: Set<String> = [
+      "source", "run", "steps", "video", "sheet", "videoUnverified", "sheetUnverified",
+    ]
+    let flow = try #require(
+      ((validation["rows"] as? [[String: Any]])?.last)?["flow"] as? [String: Any])
+    #expect(keys(flow) == flowKeys)
+    #expect(flow["video"] is NSNull)
+    #expect(flow["videoUnverified"] as? String == "recorderBusy")
+    let step = first(flow["steps"])
+    #expect(keys(step) == ["n", "label", "offsetMs", "ok"])
+    #expect(step["label"] is NSNull)
+    let kept = first(validation["keptFlows"])
+    #expect(keys(kept) == ["name", "test", "gateRun", "task", "at", "flow"])
+    #expect(kept["test"] is NSNull)
+    #expect(kept["task"] is NSNull)
+    #expect(keys(kept["flow"]) == flowKeys)
   }
 
   @Test(

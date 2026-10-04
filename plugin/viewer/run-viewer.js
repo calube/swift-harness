@@ -101,11 +101,26 @@
         const textColor = s.phase === "merge" ? "var(--bg)" : "var(--bar-text)";
         const dur = M.durationText(s);
         html += `<button class="bar${s.open ? " open" : ""}" data-id="${esc(s.id)}" style="left:${pct(s.start)}%;width:calc(${pct(Math.max(0, s.end - s.start))}% - 2px);background-color:var(${barColour(s)});color:${textColor}" title="${esc(s.label)} · ${esc(dur)}" aria-label="${esc(s.label)}, ${esc(s.phase)}, ${esc(dur)}" aria-haspopup="dialog" aria-expanded="false">${esc(s.label)}</button>`;
+        if (s.flow) html += ticksHtml(s, pct);
       });
       html += `</div></div>`;
     });
     tl.innerHTML = html;
     sizeTrack();
+  }
+
+  // 1 tick per step of the flow a qa.check span drove, at its offset into the span, linked to
+  // the video at that offset when the flow has one.
+  function ticksHtml(s, pct) {
+    const f = s.flow;
+    return f.steps.map((st) => {
+      const at = Math.min(s.end, Math.max(s.start, s.start + st.offsetMs / 60000));
+      const label = `step ${st.n}${st.label != null ? " " + st.label : ""}, ${st.ok ? "passed" : "failed"}, ${(st.offsetMs / 1000).toFixed(1)} s`;
+      const attrs = `class="tl-tick ${st.ok ? "ok" : "bad"}" data-span="${esc(s.id)}" data-n="${st.n}" style="left:${pct(at)}%" title="${esc(label)}" aria-label="${esc(label)}"`;
+      return f.video != null
+        ? `<a ${attrs} href="${esc(M.evidenceHref(f.run, f.video, st.offsetMs))}" target="_blank" rel="noopener"></a>`
+        : `<span ${attrs} role="img"></span>`;
+    }).join("");
   }
 
   function sizeTrack() {
@@ -590,7 +605,7 @@
       ["commits", "none yet", tags(commits)],
       ["covers", "none", tags(covers)]
     ]);
-    openPopover(anchor, rows, id, `${taskFailureHtml(t)}<button type="button" class="link-btn pop-open" data-open-task="${esc(id)}">Open task</button>`, focus);
+    openPopover(anchor, rows, id, `${taskFailureHtml(t)}${moduleTaskHtml(id)}<button type="button" class="link-btn pop-open" data-open-task="${esc(id)}">Open task</button>`, focus);
     popKind = "task";
     pinned = true;
     return true;
@@ -740,6 +755,20 @@
     }
     syncTabs();
   }
+  // What each module adds to a task's popover; a module that throws adds a damage line instead.
+  function moduleTaskHtml(id) {
+    let html = "";
+    modules.forEach((mod, name) => {
+      if (!mod.taskHtml) return;
+      try {
+        html += mod.taskHtml(view, id) || "";
+      } catch (error) {
+        pageDamage.push({ source: "module " + name, reason: String(error && error.message ? error.message : error) });
+        renderFooter();
+      }
+    });
+    return html;
+  }
   function register(name, mod) {
     modules.set(name, mod);
     runModule(name, "render");
@@ -874,6 +903,8 @@
     // `extraHtml` follows the rows; the module that passes it escapes what it holds.
     openPopover: (anchor, rows, title, extraHtml) => { openPopover(anchor, rows.map(([k, v]) => [k, v]), title, extraHtml || ""); popKind = "other"; },
     openTaskPopover: (id, anchor) => openTaskPopover(id, anchor),
+    // The element the open popover is anchored to; `null` when none is open.
+    popoverAnchor: () => openAnchor,
     openTaskDrawer,
     apply
   };

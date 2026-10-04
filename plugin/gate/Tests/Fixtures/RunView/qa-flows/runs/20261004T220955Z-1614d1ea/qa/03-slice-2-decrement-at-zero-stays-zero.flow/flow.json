@@ -1,0 +1,25 @@
+{
+  "sheet" : "qa/03-slice-2-decrement-at-zero-stays-zero.flow/sheet.png",
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait selector id=\"counter.value\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "press id=\"counter.increment\"",
+      "n" : 2,
+      "offsetMs" : 2803,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"counter.value\" \"5\"",
+      "n" : 3,
+      "offsetMs" : 3758,
+      "ok" : false
+    }
+  ],
+  "video" : "qa/03-slice-2-decrement-at-zero-stays-zero.flow/video.mp4"
+}

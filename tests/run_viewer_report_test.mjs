@@ -21,6 +21,9 @@ const RUNS = {
   first: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor' },
   // The first run's plan state with the qa run sequence captured over that plan's validation table.
   qa: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor', qa: 'qa-checks' },
+  // The same plan state with a captured final qa run over 2 flow rows and a state row, and a
+  // captured T3 run's 2 kept flows, moved onto the run's RED merge gate so the run owns them.
+  flows: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor', qa: 'qa-flows', keptOn: '20261004T050310Z-ed998508' },
   spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
   blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true, clone: 'memos-3' },
   rejected: { dir: 'brownfield-rejected', buildRun: '20261004T141445Z-85d15f09', plan: 'spec', brownfield: true, clone: 'memos-4' },
@@ -96,7 +99,12 @@ function seededRepository(run) {
   if (existsSync(join(captured, 'runs'))) cpSync(join(captured, 'runs'), join(dir, '.harness/runs'), { recursive: true })
   // `qa run`'s stream and run folders, as it left them in the checkout.
   if (run.qa) {
-    cpSync(join(fixtures, run.qa, 'events/qa.jsonl'), join(dir, '.harness/events/qa.jsonl'))
+    const lines = readFileSync(join(fixtures, run.qa, 'events/qa.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => {
+      const event = JSON.parse(line)
+      if (!run.keptOn || event.kind !== 'qa.flow' || event.payload.row != null) return line
+      return JSON.stringify({ ...event, runID: run.keptOn })
+    })
+    writeFileSync(join(dir, '.harness/events/qa.jsonl'), lines.join('\n') + '\n')
     cpSync(join(fixtures, run.qa, 'runs'), join(dir, '.harness/runs'), { recursive: true })
   }
   return { dir, root: dir, report: join(dir, '.harness/reports', `${buildRun}.html`) }
@@ -321,6 +329,36 @@ const tests = {
     assert.match(unverified.text, /not run: the acceptance layer has a red row/)
     const qaBars = rendered.barIDs.filter((id) => id.startsWith('qa:'))
     assert.deepEqual(qaBars.sort(), ['qa:20261004T185048Z-f46593bf:1', 'qa:20261004T185048Z-f46593bf:2', 'qa:20261004T185049Z-a14503a3:1'])
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'the report of a run with a captured final qa run and kept flows draws every flow step linked to its video offset, each contact sheet, the kept flows by flow and test, and 1 timeline tick per step, with no embedded image or video and 0 console errors — catches a flow step the page drops or an embedded thumbnail'() {
+    const rendered = await renderReport(RUNS.flows, async (page) => ({
+      tab: await page.evaluate(VALIDATION),
+      flows: await page.evaluate(`[...document.querySelectorAll('.qa-group:not(.qa-kept) .qa-row')].filter((r) => r.querySelector('.qa-flow')).map((r) => ({ row: r.dataset.row,
+        steps: [...r.querySelectorAll('.qa-step')].map((li) => li.dataset.ok + ' ' + li.querySelector('a').getAttribute('href')), sheet: r.querySelector('.qa-sheet')?.getAttribute('href') }))`),
+      kept: await page.evaluate(`[...document.querySelectorAll('.qa-kept .qa-kept-group')].map((g) => [g.dataset.flow, [...g.querySelectorAll('.qa-kept-flow')].map((r) => r.dataset.test + ' ' + r.querySelectorAll('.qa-step a').length)])`),
+      ticks: await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="timeline"]').click(); return [...document.querySelectorAll('#tl .tl-tick')].map((t) => t.dataset.span + ' ' + t.dataset.n) })()`),
+    }))
+    assertRendered(rendered, RUNS.flows, REGION_KEYS)
+    const { view, acted: { tab, flows, kept, ticks } } = rendered
+    const qaRun = '20261004T220955Z-1614d1ea'
+    assert.deepEqual(tab.rows, ['3:red', '1:pass', '2:pass'])
+    assert.deepEqual(tab.damage, [])
+    assert.equal(tab.media, 0)
+    assert.equal(tab.errors, '0')
+    const flowRows = view.validation.rows.filter((r) => r.flow)
+    flows.sort((a, b) => Number(a.row) - Number(b.row))
+    assert.deepEqual(flows.map((f) => f.row), ['1', '3'])
+    for (const [i, r] of flowRows.entries()) {
+      assert.deepEqual(flows[i].steps, r.flow.steps.map((st) => `${st.ok} ../runs/${qaRun}/${r.flow.video}#t=${st.offsetMs / 1000}`))
+      assert.equal(flows[i].sheet, `../runs/${qaRun}/${r.flow.sheet}`)
+    }
+    assert.deepEqual(flows[1].steps.map((st) => st.split(' ')[0]), ['true', 'true', 'false'])
+    assert.deepEqual(kept, [['counter', [
+      'CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork() 5',
+      'CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount() 8',
+    ]]])
+    assert.deepEqual(ticks.sort(), flowRows.flatMap((r) => r.flow.steps.map((st) => `qa:${qaRun}:${r.row} ${st.n}`)).sort())
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
   async 'focusing the RED merge gate\'s bar shows its tier, rule and file:line in the popover, and the task drawer the whole message, its failing test and report — catches a red span with no failure context'() {

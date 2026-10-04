@@ -1,0 +1,31 @@
+{
+  "sheet" : "qa/01-slice-1-reset-after-increments-shows-zero.flow/sheet.png",
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait selector id=\"counter.value\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "press id=\"counter.increment\"",
+      "n" : 2,
+      "offsetMs" : 2577,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"counter.value\" \"1\"",
+      "n" : 3,
+      "offsetMs" : 3629,
+      "ok" : true
+    },
+    {
+      "label" : "snapshot",
+      "n" : 4,
+      "offsetMs" : 5961,
+      "ok" : true
+    }
+  ],
+  "video" : "qa/01-slice-1-reset-after-increments-shows-zero.flow/video.mp4"
+}

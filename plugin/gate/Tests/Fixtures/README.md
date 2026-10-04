@@ -2373,6 +2373,60 @@ it reads `waiting` on it. Row 5 reads `unverified` behind row 2. The copy leaves
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/qa-checks`
 matched nothing.
 
+## Run view: flow rows and kept flows
+
+`RunView/qa-flows/` is a real `swiftgate qa run --final` over a 3-row validation table, then a real
+`swiftgate test --tier t3` in the same checkout, for the run view's flow steps, kept flows and
+timeline ticks. The table names the plan and tasks of `RunView/build-run-1/`, as
+`RunView/qa-checks/` does. Captured 2026-10-04 with `agent-device` 0.21.18 and Xcode 26.2, from a
+`swiftgate` debug build of this commit's sources, in a `mktemp -d` copy of `examples/SampleApp`;
+`qa run` and T3 each ran on a clone the harness made under its `sim` lock. From `plugin/gate` after
+`swift build --product swiftgate`, with `<harness>` this checkout and `<inputs>` a folder holding
+the 4 input files below:
+
+```sh
+SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
+T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/examples/SampleApp/ $T/app/ && cd $T/app
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
+mkdir -p $P && cp $F/ledger.json $P/ledger.json
+cp $IN/validation.json $IN/counter.flow.json $IN/wrong-count.flow.json $IN/counter.state.sh $P/
+$SG qa run --final              # exit 1, RED: 2 pass, 1 red
+$SG test --tier t3 --json       # exit 0, GREEN: 2 UI tests, both mapped to the counter flow
+Q=20261004T220955Z-1614d1ea G=20261004T221830Z-84cb5ca2 X=<fixtures>/RunView/qa-flows
+mkdir -p $X/events $X/runs/$Q/qa $X/runs/$G
+cp .harness/events/qa.jsonl .harness/events/gate.jsonl $X/events/
+cp .harness/runs/$Q/qa/report.json .harness/runs/$Q/qa/02-*.state.txt $X/runs/$Q/qa/
+for d in .harness/runs/$Q/qa/*.flow; do mkdir -p $X/runs/$Q/qa/$(basename $d); cp $d/flow.json $X/runs/$Q/qa/$(basename $d)/; done
+for d in .harness/runs/$G/qa/xcuitest/*; do mkdir -p $X/runs/$G/qa/xcuitest/$(basename $d); cp $d/flow.json $X/runs/$G/qa/xcuitest/$(basename $d)/; done
+cp .harness/runs/$G/report.json $X/runs/$G/report.json
+```
+
+The inputs were written by hand, the way a plan's validation task writes them: `validation.json`
+holds a flow row running `counter.flow.json`, a state row of the same requirement, and a flow row
+running `wrong-count.flow.json`; `counter.flow.json` is `QA/counter.flow.json`, and
+`wrong-count.flow.json` is the same flow expecting `5`, made with
+`sed 's/"value":"1"/"value":"5"/'`. `counter.state.sh` is
+`test -n "$QA_SIM_UDID" && echo "device $QA_SIM_BUNDLE_ID is up"`.
+
+```json
+{"schemaVersion":1,"unitOnly":[],"rows":[
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"flow","check":"counter.flow.json","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"},
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"state","check":"counter.state.sh","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"},
+{"requirement":"slice-2-decrement-at-zero-stays-zero","layer":"flow","check":"wrong-count.flow.json","runsAfter":["counter-core-reset-and-decrement-floor"],"writer":"counter-core-reset-and-decrement-floor"}
+]}
+```
+
+Everything copied is the commands' output, unedited. The qa stream holds 3 `qa.check` events, 2
+batch `qa.flow` events with video, sheet and steps, row 3's last step not ok, and T3's 2 kept
+`qa.flow` events, each a child of T3's `gate.run` in `events/gate.jsonl`. The copy leaves out each
+run's MP4s, PNGs, `sim/`, `logs` and `container` folders and its own `events/` copies; tests that
+serve a video write their own bytes. Row 1's `qa.check` lasts 356 s: the flow waited for the `sim`
+lock under load. `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/qa-flows`
+matched nothing.
+
 ## Run report: a run that left tasks unfinished
 
 `RunReport/memos-2/{ledger.json,build-events.jsonl}` are the final `ledger.json` and the build run's

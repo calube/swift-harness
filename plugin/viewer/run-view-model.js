@@ -427,8 +427,40 @@
       .concat(badge("waiting", "plain", c.waiting, c.waiting + " waiting", c.waiting + " validation " + plural(c.waiting, "row") + " waiting on a task"));
   }
 
+  // A link to a file a run left, relative to the page: a report sits in `reports/` beside
+  // `runs/`, and the live page at `/` reaches `/runs/`. With `offsetMs` it opens the video there.
+  function evidenceHref(run, path, offsetMs) {
+    const href = "../runs/" + encodeURIComponent(run) + "/" + String(path).split("/").map(encodeURIComponent).join("/");
+    return offsetMs == null ? href : href + "#t=" + Math.max(0, offsetMs) / 1000;
+  }
+
+  // Why a final pass or a kept XCUITest left no video or no contact sheet.
+  const GAP_TEXT = {
+    recorderBusy: "a recording outside the harness held the simulator past the 5-minute retry bound",
+    recordLockTimedOut: "another final pass held the recording slot past the wait",
+    recordFailed: "record start or record stop failed",
+    sheetFailed: "the contact sheet couldn't be made from the video",
+    noVideoAttachment: "the UI test kept no screen recording in its result bundle"
+  };
+  function gapText(reason) {
+    return GAP_TEXT[reason] || "no reason recorded (" + reason + ")";
+  }
+
+  // The kept flows list: 1 group per `[[flows]]` entry, each with its tests in order.
+  function keptFlowGroups(view) {
+    const v = view.validation;
+    if (!v || !v.keptFlows) return [];
+    const groups = new Map();
+    v.keptFlows.forEach((k) => {
+      const key = k.name == null ? null : k.name;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(k);
+    });
+    return [...groups.entries()].map(([name, flows]) => ({ name, flows }));
+  }
+
   root.RunViewModel = {
-    validationGroups, validationBadges,
+    validationGroups, validationBadges, evidenceHref, gapText, keptFlowGroups,
     apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };

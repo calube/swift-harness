@@ -1,0 +1,57 @@
+{
+  "flow" : "counter",
+  "sheet" : "qa/xcuitest/CounterFlowUITests-testIncrementAndDecrementUpdateTheDisplayedCount/sheet.png",
+  "source" : "xcuitest",
+  "steps" : [
+    {
+      "label" : "Open com.example.SampleApp",
+      "n" : 1,
+      "offsetMs" : 2,
+      "ok" : true
+    },
+    {
+      "label" : "Waiting 10.0s for \"counter.value\" StaticText to exist",
+      "n" : 2,
+      "offsetMs" : 3153,
+      "ok" : true
+    },
+    {
+      "label" : "Find the \"counter.value\" StaticText",
+      "n" : 3,
+      "offsetMs" : 4214,
+      "ok" : true
+    },
+    {
+      "label" : "Tap \"counter.increment\" Button",
+      "n" : 4,
+      "offsetMs" : 4221,
+      "ok" : true
+    },
+    {
+      "label" : "Tap \"counter.increment\" Button",
+      "n" : 5,
+      "offsetMs" : 4536,
+      "ok" : true
+    },
+    {
+      "label" : "Find the \"counter.value\" StaticText",
+      "n" : 6,
+      "offsetMs" : 4854,
+      "ok" : true
+    },
+    {
+      "label" : "Tap \"counter.decrement\" Button",
+      "n" : 7,
+      "offsetMs" : 4863,
+      "ok" : true
+    },
+    {
+      "label" : "Find the \"counter.value\" StaticText",
+      "n" : 8,
+      "offsetMs" : 5180,
+      "ok" : true
+    }
+  ],
+  "test" : "CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount()",
+  "video" : "qa/xcuitest/CounterFlowUITests-testIncrementAndDecrementUpdateTheDisplayedCount/video.mp4"
+}

@@ -2,11 +2,15 @@
 // shows only for a run with validation rows, its strip and badges carry the counts, rows group by
 // the task they run after with each group's waiting rows last, a red row opens "Why it failed" with
 // its exit status and saved output, an unverified row opens "Why unverified" naming what didn't
-// run, a qa.check bar on the timeline previews its reason, and no evidence is embedded.
+// run, a qa.check bar on the timeline previews its reason, a flow row lists its steps linked to
+// the video at each offset and links its contact sheet, a flow's qa.check bar carries 1 tick per
+// step, a missing video or sheet opens "Why unverified" with its reason, kept XCUITest flows list
+// by flow and test, a task popover lists the task's rows, and no evidence is embedded.
 // Run: node tests/run_viewer_validation_test.mjs
 // Regressions caught: a Validation tab shown with nothing in it, a red check with no failure
-// context, an unverified row that doesn't say what didn't run, an embedded thumbnail, and a
-// console error from the module.
+// context, an unverified row that doesn't say what didn't run, an embedded thumbnail, a flow step
+// with no video link, a missing sheet read as verified, a dropped kept flow, and a console error
+// from the module.
 import assert from 'node:assert/strict'
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -49,6 +53,34 @@ const view = (extra = {}) => ({
     { id: 'qa:20261003T143000Z-0000aaaa:2', parent: 'run', phase: 'qa.check', task: null, gateRun: null, start: at(20), end: at(30), outcome: 'red', approximate: false, tools: null, causeGateRun: null, failureReason: 'Row 2 acceptance check failed with exit 1.', baseline: false },
   ],
   gates: [], proofs: [], halts: [], validation, damage: [], ...extra,
+})
+
+const QA = '20261003T143000Z-0000aaaa'
+const GATE = '20261003T143500Z-0000bbbb'
+const steps = (oks) => oks.map((ok, i) => ({ n: i + 1, label: ['wait id="counter.value"', 'press id="counter.increment"', 'is text id="counter.value" "1"'][i] ?? null, offsetMs: [0, 2577, 3629][i] ?? 4000, ok }))
+const flowRecord = (row, extra = {}) => ({
+  source: 'batch', run: QA, steps: steps([true, true, true]),
+  video: `qa/0${row}-req-save-note.flow/video.mp4`, sheet: `qa/0${row}-req-save-note.flow/sheet.png`,
+  videoUnverified: null, sheetUnverified: null, ...extra,
+})
+const flowValidation = {
+  plan: 'sample-notes',
+  counts: { pass: 1, red: 1, unverified: 0, waiting: 0 },
+  rows: [
+    row(1, 'flow', 'pass', ['store'], { check: 'save-note.flow.json', ms: 6000, message: 'batch passed', flow: flowRecord(1, { sheet: null, sheetUnverified: 'sheetFailed' }) }),
+    row(2, 'flow', 'red', ['list'], { check: 'list.flow.json', ms: 5000, message: 'step 3 `is` failed', flow: flowRecord(2, { steps: steps([true, true, false]) }) }),
+  ],
+  keptFlows: [
+    { name: 'counter', test: 'CounterFlowUITests/testFact()', gateRun: GATE, task: 'store', at: at(35), flow: { source: 'xcuitest', run: GATE, steps: steps([true, true]), video: 'qa/xcuitest/CounterFlowUITests-testFact/video.mp4', sheet: 'qa/xcuitest/CounterFlowUITests-testFact/sheet.png', videoUnverified: null, sheetUnverified: null } },
+    { name: 'counter', test: 'CounterFlowUITests/testIncrement()', gateRun: GATE, task: null, at: at(35), flow: { source: 'xcuitest', run: GATE, steps: steps([true]), video: null, sheet: null, videoUnverified: 'noVideoAttachment', sheetUnverified: null } },
+  ],
+}
+const flowView = view({
+  validation: flowValidation,
+  spans: [
+    view().spans[0],
+    { id: `qa:${QA}:2`, parent: 'run', phase: 'qa.check', task: null, gateRun: null, start: at(20), end: at(30), outcome: 'red', approximate: false, tools: null, causeGateRun: null, failureReason: 'Row 2 flow check failed.', baseline: false, flow: flowRecord(2, { steps: steps([true, true, false]) }) },
+  ],
 })
 
 const dirs = []
@@ -94,6 +126,12 @@ if (!findChrome()) {
 const { page, close } = await launch({ deadlineMs: 45000 })
 const withRows = writePage(view())
 const withoutRows = writePage(view({ validation: null }))
+const withFlows = writePage(flowView)
+const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
+  const r = document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="${n}"]')
+  return { steps: [...r.querySelectorAll('.qa-step')].map((li) => ({ n: li.dataset.n, ok: li.dataset.ok, mark: li.querySelector('.qa-mark').getAttribute('aria-label'), href: li.querySelector('a')?.getAttribute('href') ?? null, text: li.innerText })),
+    sheet: r.querySelector('.qa-sheet')?.getAttribute('href') ?? null, video: r.querySelector('.qa-video')?.getAttribute('href') ?? null,
+    why: r.querySelector('.qa-why')?.innerText ?? null, text: r.innerText, media: document.querySelectorAll('img, video').length, errors: document.body.dataset.errors } })()`
 
 const tests = {
   async 'a run with validation rows shows the Validation tab last, its badges and strip carry the counts, and rows group by task with each group\'s waiting rows last — catches a shared check shown under 1 task or a count that drifts'() {
@@ -163,6 +201,88 @@ const tests = {
     const pop = await page.evaluate(POPOVER)
     assert.equal(pop.hidden, false)
     assert.deepEqual(pop.rows.find(([label]) => label === 'failure reason'), ['failure reason', 'Row 2 acceptance check failed with exit 1.'])
+  },
+
+  async 'a flow row lists its steps with pass and fail marks, each linked to the video at its offset, and links its video and contact sheet, with no image or video element — catches a step with no video link or an embedded thumbnail'() {
+    await page.load(withFlows)
+    const red = await page.evaluate(FLOW(2))
+    assert.deepEqual(red.steps.map((st) => [st.n, st.ok, st.mark]), [['1', 'true', 'passed'], ['2', 'true', 'passed'], ['3', 'false', 'failed']])
+    assert.deepEqual(red.steps.map((st) => st.href), [0, 2.577, 3.629].map((t) => `../runs/${QA}/qa/02-req-save-note.flow/video.mp4#t=${t}`))
+    assert.match(red.steps[2].text, /step 3 is text id="counter.value" "1"/)
+    assert.equal(red.sheet, `../runs/${QA}/qa/02-req-save-note.flow/sheet.png`)
+    assert.equal(red.video, `../runs/${QA}/qa/02-req-save-note.flow/video.mp4`)
+    assert.equal(red.why, 'Why it failed')
+    assert.equal(red.media, 0)
+    assert.equal(red.errors, '0')
+    assert.deepEqual(page.errors, [])
+  },
+
+  async 'a red flow row\'s "Why it failed" names its failing step — catches a red flow with no failing step'() {
+    await page.load(withFlows)
+    await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="validation"]').click(); document.querySelector('.qa-row[data-row="2"] .qa-why').click() })()`)
+    const rows = Object.fromEntries((await page.evaluate(POPOVER)).rows)
+    assert.equal(rows['failing step'], 'step 3 is text id="counter.value" "1"')
+  },
+
+  async 'a passing flow row with no contact sheet opens "Why unverified" naming the sheet and why, and shows no sheet link — catches a missing sheet read as verified'() {
+    await page.load(withFlows)
+    const pass = await page.evaluate(FLOW(1))
+    assert.equal(pass.sheet, null)
+    assert.match(pass.text, /no contact sheet/)
+    assert.equal(pass.why, 'Why unverified')
+    await page.evaluate(`document.querySelector('.qa-row[data-row="1"] .qa-why').click()`)
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.title, 'Why unverified')
+    const rows = Object.fromEntries(pop.rows)
+    assert.equal(rows["didn't run"], "the video's contact sheet")
+    assert.equal(rows['contact sheet'], "the contact sheet couldn't be made from the video")
+    assert.equal(rows.video, undefined)
+  },
+
+  async 'a flow\'s qa.check bar carries 1 tick per step, each linked to the video at its offset, a failed step marked — catches a flow check with no step ticks'() {
+    await page.viewport(1280, 900)
+    await page.load(withFlows)
+    await page.evaluate(`document.querySelector('[role=tab][data-tab="timeline"]').click()`)
+    const ticks = await page.evaluate(`[...document.querySelectorAll('#tl .tl-tick[data-span="qa:${QA}:2"]')].map((t) => ({ n: t.dataset.n, bad: t.classList.contains('bad'), href: t.getAttribute('href'), label: t.getAttribute('aria-label'), w: t.getBoundingClientRect().width }))`)
+    assert.deepEqual(ticks.map((t) => [t.n, t.bad]), [['1', false], ['2', false], ['3', true]])
+    assert.equal(ticks[2].href, `../runs/${QA}/qa/02-req-save-note.flow/video.mp4#t=3.629`)
+    assert.match(ticks[2].label, /step 3 .*failed, 3\.6 s/)
+    assert.ok(ticks.every((t) => t.w > 0))
+    assert.equal(await page.evaluate(`document.querySelectorAll('img, video').length`), 0)
+  },
+
+  async 'kept XCUITest flows list under "Kept flows" by flow and test, their steps linked to the gate run\'s video, and one with no recording opens "Why unverified" — catches a kept flow dropped from the tab'() {
+    await page.load(withFlows)
+    const kept = await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
+      const s = document.querySelector('.qa-kept')
+      return { label: s?.getAttribute('aria-label'), groups: [...s.querySelectorAll('.qa-kept-group')].map((g) => [g.dataset.flow, [...g.querySelectorAll('.qa-kept-flow')].map((r) => r.dataset.test)]),
+        hrefs: [...s.querySelectorAll('.qa-kept-flow[data-test="CounterFlowUITests/testFact()"] .qa-step a')].map((a) => a.getAttribute('href')),
+        whys: [...s.querySelectorAll('.qa-why')].map((b) => b.closest('.qa-kept-flow').dataset.test) } })()`)
+    assert.equal(kept.label, 'Kept flows')
+    assert.deepEqual(kept.groups, [['counter', ['CounterFlowUITests/testFact()', 'CounterFlowUITests/testIncrement()']]])
+    assert.deepEqual(kept.hrefs, [0, 2.577].map((t) => `../runs/${GATE}/qa/xcuitest/CounterFlowUITests-testFact/video.mp4#t=${t}`))
+    assert.deepEqual(kept.whys, ['CounterFlowUITests/testIncrement()'])
+    await page.evaluate(`document.querySelector('.qa-kept .qa-why').click()`)
+    const rows = Object.fromEntries((await page.evaluate(POPOVER)).rows)
+    assert.equal(rows.video, 'the UI test kept no screen recording in its result bundle')
+    assert.equal(rows['gate run'], GATE)
+  },
+
+  async 'a task popover lists the rows that run after the task, and a row\'s Why button there opens its popover, anchored where the task popover was — catches a task popover with no validation rows'() {
+    await page.load(withRows)
+    await page.evaluate(`document.querySelector('#task-table .task-link[data-task="list"]').click()`)
+    const task = await page.evaluate(`(() => { const p = document.getElementById('pop'); return { title: document.getElementById('pop-title').textContent,
+      rows: [...p.querySelectorAll('.pop-validation .qa-row')].map((r) => r.dataset.row + ':' + r.dataset.result), whys: [...p.querySelectorAll('.pop-validation .qa-why')].map((b) => b.innerText) } })()`)
+    assert.equal(task.title, 'list')
+    assert.deepEqual(task.rows, ['2:red', '3:unverified'])
+    assert.deepEqual(task.whys, ['Why it failed', 'Why unverified'])
+    await page.evaluate(`document.querySelector('#pop .pop-validation .qa-row[data-row="2"] .qa-why').click()`)
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.title, 'Why it failed')
+    assert.equal(Object.fromEntries(pop.rows)['exit status'], '1')
+    await page.press('Escape')
+    assert.equal(await page.evaluate(`document.activeElement?.dataset.task ?? null`), 'list')
+    assert.equal(await page.evaluate(`document.body.dataset.errors`), '0')
   },
 
   async 'a run with no validation rows has no Validation tab and no console error — catches an empty tab'() {

@@ -213,4 +213,60 @@ struct ViewCommandTests {
       #expect(!text.contains("secrets"), "\(text)")
     }
   }
+
+  /// A checkout holding the captured final `qa run`'s stream and run folder, with a video and a
+  /// contact sheet written where its flow row 1 names them, and a file no flow links beside them.
+  static func flowRepository() throws -> (repository: Repository, qaRun: String, flow: String) {
+    let repository = try Repository()
+    let qaRun = "20261004T220955Z-1614d1ea"
+    let captured = Fixture.gateDirectory.appending(
+      path: "Tests/Fixtures/RunView/qa-flows", directoryHint: .isDirectory)
+    let harness = repository.root.appending(path: ".harness", directoryHint: .isDirectory)
+    try FileManager.default.copyItem(
+      at: captured.appending(path: "events/qa.jsonl"),
+      to: harness.appending(path: "events/qa.jsonl"))
+    try FileManager.default.copyItem(
+      at: captured.appending(path: "runs/\(qaRun)"), to: harness.appending(path: "runs/\(qaRun)"))
+    let flow = "qa/01-slice-1-reset-after-increments-shows-zero.flow"
+    let folder = harness.appending(path: "runs/\(qaRun)/\(flow)", directoryHint: .isDirectory)
+    try Data("mp4 bytes".utf8).write(to: folder.appending(path: "video.mp4"))
+    try Data("png bytes".utf8).write(to: folder.appending(path: "sheet.png"))
+    try Data("not linked".utf8).write(to: folder.appending(path: "notes.txt"))
+    return (repository, qaRun, flow)
+  }
+
+  @Test(
+    "GET /runs/<run>/<path> serves a video and a contact sheet a flow of the view links, with their types — catches a live page whose step links 404"
+  )
+  func servesLinkedFlowFiles() throws {
+    let (repository, qaRun, flow) = try Self.flowRepository()
+    defer { repository.remove() }
+    let view = try Self.serve(repository)
+    let video = view.respond(to: Self.get("/runs/\(qaRun)/\(flow)/video.mp4"))
+    #expect(video.status == 200)
+    #expect(video.contentType == "video/mp4")
+    #expect(video.body == Data("mp4 bytes".utf8))
+    let sheet = view.respond(to: Self.get("/runs/\(qaRun)/\(flow)/sheet%2Epng"))
+    #expect(sheet.status == 200)
+    #expect(sheet.contentType == "image/png")
+    #expect(sheet.body == Data("png bytes".utf8))
+  }
+
+  @Test(
+    "GET /runs/ for a file no flow of the view links, or a path that climbs out, answers 404 and reads nothing — catches the live server handing out any file under the checkout"
+  )
+  func refusesUnlinkedRunFiles() throws {
+    let (repository, qaRun, flow) = try Self.flowRepository()
+    defer { repository.remove() }
+    let view = try Self.serve(repository)
+    for path in [
+      "/runs/\(qaRun)/\(flow)/notes.txt", "/runs/\(qaRun)/qa/report.json",
+      "/runs/\(qaRun)/\(flow)/../../../../.swiftgate.toml",
+      "/runs/\(qaRun)/\(flow)/%2E%2E/video.mp4",
+    ] {
+      let response = view.respond(to: Self.get(path))
+      #expect(response.status == 404, "\(path)")
+      #expect(!String(decoding: response.body, as: UTF8.self).contains("bytes"), "\(path)")
+    }
+  }
 }
