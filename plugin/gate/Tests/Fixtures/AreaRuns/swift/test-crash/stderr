@@ -1,0 +1,10 @@
+[1/1] Compiling plugin ArtifactBundleGenPluginCommand
+Building for debugging...
+[1/6] Write sources
+[2/6] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module XcodeGenCoreTests
+[5/6] Compiling XcodeGenCoreTests ArrayExtensionsTests.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking XcodeGenPackageTests
+Build complete! (1.39s)
+error: Exited with unexpected signal code 6

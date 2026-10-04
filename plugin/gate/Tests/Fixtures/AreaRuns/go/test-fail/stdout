@@ -1,0 +1,29 @@
+{"Time":"2026-10-03T22:49:49.600947-05:00","Action":"start","Package":"github.com/pocketbase/pocketbase/tools/list"}
+{"Time":"2026-10-03T22:49:49.852623-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString"}
+{"Time":"2026-10-03T22:49:49.852749-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString","Output":"=== RUN   TestSubtractSliceString\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852833-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/0_[]"}
+{"Time":"2026-10-03T22:49:49.852842-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/0_[]","Output":"=== RUN   TestSubtractSliceString/0_[]\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852859-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/0_[]","Output":"--- PASS: TestSubtractSliceString/0_[] (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852867-05:00","Action":"pass","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/0_[]","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.852884-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/1_[]"}
+{"Time":"2026-10-03T22:49:49.852892-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/1_[]","Output":"=== RUN   TestSubtractSliceString/1_[]\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852902-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/1_[]","Output":"--- PASS: TestSubtractSliceString/1_[] (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852913-05:00","Action":"pass","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/1_[]","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.852923-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"]"}
+{"Time":"2026-10-03T22:49:49.852934-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"]","Output":"=== RUN   TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"]\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852962-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"]","Output":"--- PASS: TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"] (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.852972-05:00","Action":"pass","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/2_[\"1\",\"2\",\"3\",\"4\"]","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.852982-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/3_[]"}
+{"Time":"2026-10-03T22:49:49.852989-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/3_[]","Output":"=== RUN   TestSubtractSliceString/3_[]\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.85301-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/3_[]","Output":"--- PASS: TestSubtractSliceString/3_[] (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.85302-05:00","Action":"pass","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/3_[]","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.853029-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/4_[\"1\",\"3\"]"}
+{"Time":"2026-10-03T22:49:49.853357-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/4_[\"1\",\"3\"]","Output":"=== RUN   TestSubtractSliceString/4_[\"1\",\"3\"]\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.85343-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/4_[\"1\",\"3\"]","Output":"    list_test.go:57: Expected [\"1\",\"3\"], got [\"1\",\"3\",\"7\"]\n","OutputType":"error"}
+{"Time":"2026-10-03T22:49:49.853441-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/4_[\"1\",\"3\"]","Output":"--- FAIL: TestSubtractSliceString/4_[\"1\",\"3\"] (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.85345-05:00","Action":"fail","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString/4_[\"1\",\"3\"]","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.853459-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString","Output":"--- FAIL: TestSubtractSliceString (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.853468-05:00","Action":"fail","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestSubtractSliceString","Elapsed":0}
+{"Time":"2026-10-03T22:49:49.853487-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.853542-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Output":"FAIL\tgithub.com/pocketbase/pocketbase/tools/list\t0.252s\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:49.853554-05:00","Action":"fail","Package":"github.com/pocketbase/pocketbase/tools/list","Elapsed":0.253}

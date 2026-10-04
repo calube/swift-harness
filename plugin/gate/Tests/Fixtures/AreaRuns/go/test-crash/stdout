@@ -1,0 +1,5 @@
+{"Time":"2026-10-03T22:49:50.571153-05:00","Action":"start","Package":"github.com/pocketbase/pocketbase/tools/list"}
+{"Time":"2026-10-03T22:49:50.881956-05:00","Action":"run","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestExit"}
+{"Time":"2026-10-03T22:49:50.882019-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Test":"TestExit","Output":"=== RUN   TestExit\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:50.882322-05:00","Action":"output","Package":"github.com/pocketbase/pocketbase/tools/list","Output":"FAIL\tgithub.com/pocketbase/pocketbase/tools/list\t0.311s\n","OutputType":"frame"}
+{"Time":"2026-10-03T22:49:50.882337-05:00","Action":"fail","Package":"github.com/pocketbase/pocketbase/tools/list","Elapsed":0.311}

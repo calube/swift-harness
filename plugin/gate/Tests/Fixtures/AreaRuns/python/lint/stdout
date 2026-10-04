@@ -1,0 +1,4 @@
+gguf-py/gguf/utility.py:8:1: F401 'tempfile' imported but unused
+gguf-py/gguf/utility.py:342:1: E302 expected 2 blank lines, found 0
+gguf-py/gguf/utility.py:343:5: F841 local variable 'value' is assigned to but never used
+gguf-py/gguf/utility.py:343:14: W291 trailing whitespace

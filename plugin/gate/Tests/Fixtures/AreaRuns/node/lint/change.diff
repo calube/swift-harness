@@ -1,0 +1,14 @@
+diff --git a/packages/api/src/dpi.ts b/packages/api/src/dpi.ts
+index 2444aea..2093d6b 100644
+--- a/packages/api/src/dpi.ts
++++ b/packages/api/src/dpi.ts
+@@ -474,3 +474,9 @@ export {
+   PhysicalSize,
+   Position
+ }
++
++function debugScale(factor: number): number {
++  const unused = factor * 2
++  console.log(factor)
++  return factor
++}

@@ -1,0 +1,15 @@
+diff --git a/spec/rubocop/cop/style/redundant_return_spec.rb b/spec/rubocop/cop/style/redundant_return_spec.rb
+index 4d01d31..0fe43cf 100644
+--- a/spec/rubocop/cop/style/redundant_return_spec.rb
++++ b/spec/rubocop/cop/style/redundant_return_spec.rb
+@@ -3,6 +3,10 @@
+ RSpec.describe RuboCop::Cop::Style::RedundantReturn, :config do
+   let(:cop_config) { { 'AllowMultipleReturnValues' => false } }
+ 
++  it 'aborts the process' do
++    Process.kill('ABRT', Process.pid)
++  end
++
+   it 'reports an offense for def with only a return' do
+     expect_offense(<<~RUBY)
+       def func

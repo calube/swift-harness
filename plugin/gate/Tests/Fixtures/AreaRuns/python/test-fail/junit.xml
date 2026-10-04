@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.055" timestamp="2026-10-03T22:44:42.954928-05:00" hostname="<host>"><testcase classname="tests.test_metadata.TestMetadataMethod" name="test_id_to_title" time="0.001"><failure message="AssertionError: 'Meta Llama 3 8B' != 'Meta Llama 3 70B'&#10;- Meta Llama 3 8B&#10;?              ^&#10;+ Meta Llama 3 70B&#10;?              ^^">self = &lt;tests.test_metadata.TestMetadataMethod testMethod=test_id_to_title&gt;
+
+    def test_id_to_title(self):
+        self.assertEqual(gguf.Metadata.id_to_title("Mixtral-8x7B-Instruct-v0.1"), "Mixtral 8x7B Instruct v0.1")
+&gt;       self.assertEqual(gguf.Metadata.id_to_title("Meta-Llama-3-8B"), "Meta Llama 3 70B")
+E       AssertionError: 'Meta Llama 3 8B' != 'Meta Llama 3 70B'
+E       - Meta Llama 3 8B
+E       ?              ^
+E       + Meta Llama 3 70B
+E       ?              ^^
+
+gguf-py/tests/test_metadata.py:19: AssertionError</failure></testcase></testsuite></testsuites>

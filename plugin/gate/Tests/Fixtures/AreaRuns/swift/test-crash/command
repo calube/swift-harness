@@ -1,0 +1,1 @@
+swift test --parallel --filter XcodeGenCoreTests.ArrayExtensionsTests --xunit-output .area-junit.xml

@@ -1,0 +1,13 @@
+diff --git a/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java b/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
+index 2d0ea5d..2e768b4 100644
+--- a/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
++++ b/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
+@@ -33,7 +33,7 @@ class SecurityUtilsUnitTest {
+         securityContext.setAuthentication(new UsernamePasswordAuthenticationToken("admin", "admin"));
+         SecurityContextHolder.setContext(securityContext);
+         Optional<String> login = SecurityUtils.getCurrentUserLogin();
+-        assertThat(login).contains("admin");
++        assertThat(login).contains("root");
+     }
+ 
+     @Test

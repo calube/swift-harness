@@ -1,0 +1,1 @@
+bundle exec rubocop app/lib/hashtag_normalizer.rb

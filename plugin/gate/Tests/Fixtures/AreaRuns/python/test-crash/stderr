@@ -1,0 +1,35 @@
+Fatal Python error: Aborted
+
+Current thread 0x00000001efc65e80 (most recent call first):
+  File "<repo>/gguf-py/tests/test_metadata.py", line 244 in test_abort
+  File "<home>/.local/share/uv/python/cpython-3.13.11-macos-aarch64-none/lib/python3.13/unittest/case.py", line 606 in _callTestMethod
+  File "<home>/.local/share/uv/python/cpython-3.13.11-macos-aarch64-none/lib/python3.13/unittest/case.py", line 651 in run
+  File "<home>/.local/share/uv/python/cpython-3.13.11-macos-aarch64-none/lib/python3.13/unittest/case.py", line 707 in __call__
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/unittest.py", line 410 in runtest
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 184 in pytest_runtest_call
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 250 in <lambda>
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 361 in from_call
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 249 in call_and_report
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 139 in runtestprotocol
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/runner.py", line 118 in pytest_runtest_protocol
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/main.py", line 408 in pytest_runtestloop
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/main.py", line 384 in _main
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/main.py", line 330 in wrap_session
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/main.py", line 377 in pytest_cmdline_main
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_callers.py", line 121 in _multicall
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_manager.py", line 120 in _hookexec
+  File "<scratch>/venv-py/lib/python3.13/site-packages/pluggy/_hooks.py", line 512 in __call__
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/config/__init__.py", line 229 in _main
+  File "<scratch>/venv-py/lib/python3.13/site-packages/_pytest/config/__init__.py", line 253 in _console_main
+  File "<scratch>/venv-py/bin/pytest", line 10 in <module>
+
+Extension modules: numpy._core._multiarray_umath, numpy.linalg._umath_linalg, yaml._yaml (total: 3)

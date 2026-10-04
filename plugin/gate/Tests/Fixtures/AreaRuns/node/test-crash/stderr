@@ -1,0 +1,55 @@
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in <repo>/packages/turbo-utils/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+----- Native stack trace -----
+
+ 1: 0x100bd7f44 node::(anonymous namespace)::DefaultAbortHandler(char const*, char const*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 2: 0x100c7f168 node::Abort(v8::FunctionCallbackInfo<v8::Value> const&) [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 3: 0x101aea818 Builtins_CallApiCallbackGeneric [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 4: 0x101ae8bec Builtins_InterpreterEntryTrampoline [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 5: 0x101ae8bec Builtins_InterpreterEntryTrampoline [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 6: 0x101bfb3dc Builtins_PromiseConstructor [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 7: 0x101ae9550 Builtins_InterpreterPushArgsThenFastConstructFunction [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 8: 0x101c79628 Builtins_ConstructHandler [<scratch>/mise/installs/node/24.21.0/bin/node]
+ 9: 0x101ae8bec Builtins_InterpreterEntryTrampoline [<scratch>/mise/installs/node/24.21.0/bin/node]
+10: 0x101ae8bec Builtins_InterpreterEntryTrampoline [<scratch>/mise/installs/node/24.21.0/bin/node]
+11: 0x101b277e8 Builtins_AsyncFunctionAwaitResolveClosure [<scratch>/mise/installs/node/24.21.0/bin/node]
+12: 0x101bfce58 Builtins_PromiseFulfillReactionJob [<scratch>/mise/installs/node/24.21.0/bin/node]
+13: 0x101b16bd0 Builtins_RunMicrotasks [<scratch>/mise/installs/node/24.21.0/bin/node]
+14: 0x101ae67b0 Builtins_JSRunMicrotasksEntry [<scratch>/mise/installs/node/24.21.0/bin/node]
+15: 0x100ffe960 v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [<scratch>/mise/installs/node/24.21.0/bin/node]
+16: 0x100fff1d4 v8::internal::(anonymous namespace)::InvokeWithTryCatch(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [<scratch>/mise/installs/node/24.21.0/bin/node]
+17: 0x100fff310 v8::internal::Execution::TryRunMicrotasks(v8::internal::Isolate*, v8::internal::MicrotaskQueue*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+18: 0x10102e0b4 v8::internal::MicrotaskQueue::RunMicrotasks(v8::internal::Isolate*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+19: 0x10102ea14 v8::internal::MicrotaskQueue::PerformCheckpoint(v8::Isolate*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+20: 0x101aea818 Builtins_CallApiCallbackGeneric [<scratch>/mise/installs/node/24.21.0/bin/node]
+21: 0x124c0da54 
+22: 0x101ae68cc Builtins_JSEntryTrampoline [<scratch>/mise/installs/node/24.21.0/bin/node]
+23: 0x101ae6570 Builtins_JSEntry [<scratch>/mise/installs/node/24.21.0/bin/node]
+24: 0x100ffe9a8 v8::internal::(anonymous namespace)::Invoke(v8::internal::Isolate*, v8::internal::(anonymous namespace)::InvokeParams const&) [<scratch>/mise/installs/node/24.21.0/bin/node]
+25: 0x100ffe30c v8::internal::Execution::Call(v8::internal::Isolate*, v8::internal::DirectHandle<v8::internal::Object>, v8::internal::DirectHandle<v8::internal::Object>, v8::base::Vector<v8::internal::DirectHandle<v8::internal::Object> const>) [<scratch>/mise/installs/node/24.21.0/bin/node]
+26: 0x100e72c90 v8::Function::Call(v8::Isolate*, v8::Local<v8::Context>, v8::Local<v8::Value>, int, v8::Local<v8::Value>*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+27: 0x100aab180 node::InternalCallbackScope::Close() [<scratch>/mise/installs/node/24.21.0/bin/node]
+28: 0x100aab3b0 node::InternalMakeCallback(node::Environment*, v8::Local<v8::Object>, v8::Local<v8::Object>, v8::Local<v8::Function>, int, v8::Local<v8::Value>*, node::async_context, v8::Local<v8::Value>) [<scratch>/mise/installs/node/24.21.0/bin/node]
+29: 0x100ac3f80 node::AsyncWrap::MakeCallback(v8::Local<v8::Function>, int, v8::Local<v8::Value>*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+30: 0x100d3ad14 node::StreamBase::CallJSOnreadMethod(long, v8::Local<v8::ArrayBuffer>, unsigned long, node::StreamBase::StreamBaseJSChecks) [<scratch>/mise/installs/node/24.21.0/bin/node]
+31: 0x100d3c4ec node::EmitToJSStreamListener::OnStreamRead(long, uv_buf_t const&) [<scratch>/mise/installs/node/24.21.0/bin/node]
+32: 0x100d41dc0 node::LibuvStreamWrap::OnUvRead(long, uv_buf_t const*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+33: 0x100d424f0 node::LibuvStreamWrap::ReadStart()::$_1::__invoke(uv_stream_s*, long, uv_buf_t const*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+34: 0x101ad1684 uv__stream_io [<scratch>/mise/installs/node/24.21.0/bin/node]
+35: 0x101ad8eb8 uv__io_poll [<scratch>/mise/installs/node/24.21.0/bin/node]
+36: 0x101ac50ec uv_run [<scratch>/mise/installs/node/24.21.0/bin/node]
+37: 0x100aac6a8 node::SpinEventLoopInternal(node::Environment*) [<scratch>/mise/installs/node/24.21.0/bin/node]
+38: 0x100c33f24 node::NodeMainInstance::Run() [<scratch>/mise/installs/node/24.21.0/bin/node]
+39: 0x100b847d8 node::Start(int, char**) [<scratch>/mise/installs/node/24.21.0/bin/node]
+40: 0x183727e00 start [/usr/lib/dyld]
+
+----- JavaScript stack trace -----
+
+1: <repo>/packages/turbo-utils/__tests__/convert-case.test.ts:18:17
+2: Promise.finally.completed (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+3: callAsyncCircusFn (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+4: _callCircusTest (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+5: processTicksAndRejections (node:internal/process/task_queues:104:5)
+
+

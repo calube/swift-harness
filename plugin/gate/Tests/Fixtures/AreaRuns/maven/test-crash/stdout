@@ -1,0 +1,125 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------< io.github.jhipster.sample:jhipster-sample-application >--------
+[INFO] Building Jhipster Sample Application 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-versions) @ jhipster-sample-application ---
+[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireMavenVersion passed
+[INFO] Rule 1: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-dependencyConvergence) @ jhipster-sample-application ---
+[WARNING] Rule 0: org.apache.maven.enforcer.rules.dependency.DependencyConvergence failed with message:
+Failed while enforcing releasability.
+
+Dependency convergence error for org.apache.commons:commons-text:jar:1.15.0. Paths to dependency are:
++-io.github.jhipster.sample:jhipster-sample-application:jar:0.0.1-SNAPSHOT
+  +-org.liquibase:liquibase-core:jar:5.0.3:compile
+    +-org.apache.commons:commons-text:jar:1.15.0:compile
+and
++-io.github.jhipster.sample:jhipster-sample-application:jar:0.0.1-SNAPSHOT
+  +-org.liquibase:liquibase-core:jar:5.0.3:compile
+    +-com.opencsv:opencsv:jar:5.12.0:compile
+      +-org.apache.commons:commons-text:jar:1.13.1:compile
+
+[INFO] 
+[INFO] --- properties:1.3.1:read-project-properties (default) @ jhipster-sample-application ---
+[INFO] Loading 40 properties from File: <repo>/sonar-project.properties
+[INFO] 
+[INFO] --- jacoco:0.8.15:prepare-agent (pre-unit-tests) @ jhipster-sample-application ---
+[INFO] argLine set to -javaagent:<scratch>/m2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=<repo>/target/jacoco.exec -Xmx1G
+[INFO] 
+[INFO] --- spotless:3.10.2:apply (spotless) @ jhipster-sample-application ---
+[INFO] Spotless.Java is keeping 136 files clean - 0 were changed to be clean, 1 were already clean, 135 were skipped because caching determined they were already clean
+[INFO] 
+[INFO] --- spring-boot:4.1.1:build-info (build-info) @ jhipster-sample-application ---
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ jhipster-sample-application ---
+[INFO] Copying 5 resources from src/main/resources to target/classes
+[INFO] Copying 23 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ jhipster-sample-application ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ jhipster-sample-application ---
+[INFO] Copying 11 resources from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ jhipster-sample-application ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 54 source files with javac [debug parameters release 21] to target/test-classes
+[INFO] Hibernate compile-time tooling 7.4.5.Final
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ jhipster-sample-application ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.539 s
+[INFO] Finished at: 2026-10-03T23:05:19-05:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test (default-test) on project jhipster-sample-application: 
+[ERROR] 
+[ERROR] See <repo>/target/surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
+[ERROR] Command was /bin/sh -c cd '<repo>' && '<scratch>/mise/installs/java/temurin-21.0.12+101.0.LTS/bin/java' '-javaagent:<scratch>/m2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=<repo>/target/jacoco.exec' '-Xmx1G' '-jar' '<repo>/target/surefire/surefirebooter-20261003230517853_3.jar' '<repo>/target/surefire' '2026-10-03T23-05-17_825-jvmRun1' 'surefire-20261003230517853_1tmp' 'surefire_0-20261003230517853_2tmp'
+[ERROR] Error occurred in starting fork, check output in log
+[ERROR] Process Exit Code: 3
+[ERROR] Crashed tests:
+[ERROR] io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[ERROR] org.apache.maven.surefire.booter.SurefireBooterForkException: The forked VM terminated without properly saying goodbye. VM crash or System.exit called?
+[ERROR] Command was /bin/sh -c cd '<repo>' && '<scratch>/mise/installs/java/temurin-21.0.12+101.0.LTS/bin/java' '-javaagent:<scratch>/m2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=<repo>/target/jacoco.exec' '-Xmx1G' '-jar' '<repo>/target/surefire/surefirebooter-20261003230517853_3.jar' '<repo>/target/surefire' '2026-10-03T23-05-17_825-jvmRun1' 'surefire-20261003230517853_1tmp' 'surefire_0-20261003230517853_2tmp'
+[ERROR] Error occurred in starting fork, check output in log
+[ERROR] Process Exit Code: 3
+[ERROR] Crashed tests:
+[ERROR] io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[ERROR] 	at org.apache.maven.plugin.surefire.booterclient.ForkStarter.fork(ForkStarter.java:643)
+[ERROR] 	at org.apache.maven.plugin.surefire.booterclient.ForkStarter.run(ForkStarter.java:285)
+[ERROR] 	at org.apache.maven.plugin.surefire.booterclient.ForkStarter.run(ForkStarter.java:250)
+[ERROR] 	at org.apache.maven.plugin.surefire.AbstractSurefireMojo.executeProvider(AbstractSurefireMojo.java:1356)
+[ERROR] 	at org.apache.maven.plugin.surefire.AbstractSurefireMojo.executeAfterPreconditionsChecked(AbstractSurefireMojo.java:1154)
+[ERROR] 	at org.apache.maven.plugin.surefire.AbstractSurefireMojo.execute(AbstractSurefireMojo.java:988)
+[ERROR] 	at org.apache.maven.plugin.DefaultBuildPluginManager.executeMojo(DefaultBuildPluginManager.java:126)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute2(MojoExecutor.java:328)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.doExecute(MojoExecutor.java:316)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.execute(MojoExecutor.java:212)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.execute(MojoExecutor.java:174)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.access$000(MojoExecutor.java:75)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor$1.run(MojoExecutor.java:162)
+[ERROR] 	at org.apache.maven.plugin.DefaultMojosExecutionStrategy.execute(DefaultMojosExecutionStrategy.java:39)
+[ERROR] 	at org.apache.maven.lifecycle.internal.MojoExecutor.execute(MojoExecutor.java:159)
+[ERROR] 	at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject(LifecycleModuleBuilder.java:105)
+[ERROR] 	at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject(LifecycleModuleBuilder.java:73)
+[ERROR] 	at org.apache.maven.lifecycle.internal.builder.singlethreaded.SingleThreadedBuilder.build(SingleThreadedBuilder.java:53)
+[ERROR] 	at org.apache.maven.lifecycle.internal.LifecycleStarter.execute(LifecycleStarter.java:118)
+[ERROR] 	at org.apache.maven.DefaultMaven.doExecute(DefaultMaven.java:261)
+[ERROR] 	at org.apache.maven.DefaultMaven.doExecute(DefaultMaven.java:173)
+[ERROR] 	at org.apache.maven.DefaultMaven.execute(DefaultMaven.java:101)
+[ERROR] 	at org.apache.maven.cli.MavenCli.execute(MavenCli.java:919)
+[ERROR] 	at org.apache.maven.cli.MavenCli.doMain(MavenCli.java:285)
+[ERROR] 	at org.apache.maven.cli.MavenCli.main(MavenCli.java:207)
+[ERROR] 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+[ERROR] 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+[ERROR] 	at org.codehaus.plexus.classworlds.launcher.Launcher.launchEnhanced(Launcher.java:255)
+[ERROR] 	at org.codehaus.plexus.classworlds.launcher.Launcher.launch(Launcher.java:201)
+[ERROR] 	at org.codehaus.plexus.classworlds.launcher.Launcher.mainWithExitCode(Launcher.java:362)
+[ERROR] 	at org.codehaus.plexus.classworlds.launcher.Launcher.main(Launcher.java:314)
+[ERROR] 
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException

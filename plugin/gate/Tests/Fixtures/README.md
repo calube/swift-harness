@@ -1200,3 +1200,271 @@ and `swift/nonisolated-unsafe` is a new test file that asserts.
 No small Java commit adding an assertion-free test turned up in `square/okhttp` or
 `square/javapoet`, so Java has no `test-no-assertion` case. Kotlin has no string-literal false
 positive case.
+
+## Area runs
+
+`AreaRuns/<ecosystem>/<case>/` holds 1 real run of a repository's own test runner or linter, as the
+brownfield area runner sees it. Each case directory has these files:
+
+- `command`: the exact string run through `/bin/sh -c` from the directory named below.
+- `exit`: the status `/bin/sh` reported. Above 128, the process died of signal `exit - 128`.
+- `stdout` and `stderr`, and `junit.xml` when the runner wrote one.
+- `change.diff`: `git diff` of the edit in the scratch clone before the run, so a reader can map
+  findings to added lines.
+
+The cases `test-pass`, `test-fail` and `test-crash` run 1 passing, 1 failing and 1 crashing test;
+`lint` runs the linter on 1 changed file with findings. The capture edited each file with the
+command listed, ran the case, then reverted the file with `git checkout`.
+
+Captured 2026-10-03 on macOS 26 (arm64) under heavy load, so durations in the output are not
+representative. Tools went into scratch only, through `mise` with `MISE_DATA_DIR` under `$TMPDIR`
+(mise 2025.12.7) or the repository's wrapper. Every clone was `git clone --depth 1 <url>` into
+`$SCRATCH/repos`:
+
+| Ecosystem | Repository @ commit | Ran from | Tools |
+|---|---|---|---|
+| `python` | `ggml-org/llama.cpp` @ `11fe02151f79c41d0d4af7da708755d73b9c0da6` | repository root | Python 3.13.11 (uv venv), pytest 9.1.1, flake8 7.4.1 (pycodestyle 2.15.0, pyflakes 4.0.2) |
+| `node` tests | `vercel/turborepo` @ `66dbdb377cae04107ef03e155ad1bd55c5a479ac` | `packages/turbo-utils` | node 24.21.0, pnpm 12.0.0, jest 30.3.0, jest-junit 16.0.0 |
+| `node` lint | `tauri-apps/tauri` @ `30da1fd6e17de6107ecc850c95dfb16b5729f2dd` | `packages/api` | node 24.21.0, pnpm 12.4.2, ESLint 10.0.2 |
+| `go` | `pocketbase/pocketbase` @ `5cec579da984436a258602a46a96302fbd31f77c` | repository root | go 1.27.1 (`GOTOOLCHAIN=local`), golangci-lint 2.14.0 |
+| `cargo` | `astral-sh/ruff` @ `1df6db3e463ffa1b587dcf47f25360d40389b0f7` | repository root | rustup with the repository's `rust-toolchain.toml`: cargo 1.99.0, clippy 0.1.99 |
+| `gradle` | `square/okhttp` @ `75d8f91cfe2495b79d07b1dabe05789caa429ac2` | repository root | Temurin JDK 21.0.12, `./gradlew` (Gradle 9.6.1), Spotless 8.10.3 with ktlint 1.8.0 |
+| `maven` | `jhipster/jhipster-sample-app` @ `6b000b5d23a36c45e01472471b84a44fa2464044` | repository root | Temurin JDK 21.0.12, `./mvnw` (Maven 3.9.16), Surefire 3.5.6, maven-checkstyle-plugin 3.6.0 with Checkstyle 14.1.0 and nohttp-checkstyle 0.0.11 |
+| `ruby` tests | `rubocop/rubocop` @ `ec1080049ab773c5b5cca42cf963349be293c0a7` | repository root | Ruby 4.0.7, Bundler 4.0.20, rspec-core 3.13.6 |
+| `ruby` lint | `mastodon/mastodon` @ `79f21a20736ba85a0b59c976cddbf88e880b28c9` | repository root | Ruby 4.0.7, Bundler 4.0.20, RuboCop 1.91.0 |
+| `swift` tests | `yonaskolb/XcodeGen` @ `366592bc5be446b427fc8e2a21520344460f96ab` | repository root | Apple Swift 6.2 (swiftlang-6.2.3.3.20) |
+| `swift` lint | `element-hq/element-x-ios` @ `9f141585a2eb641c38e18c21d7030e4b95a53a19` | repository root | SwiftLint 0.65.1 (the repository pins none) |
+
+The Ruby tests come from `rubocop/rubocop`, which is not in the plan's fixture list: every spec in
+`mastodon/mastodon` and `discourse/discourse` loads Rails with Postgres and Redis. Neither Ruby
+repository bundles `rspec_junit_formatter`, so `ruby` has no `junit.xml`. Cargo and Go write no JUnit;
+Go's `-json` stream is the structured output. No tool was missing.
+
+### Scratch environment and helpers
+
+```sh
+export SCRATCH=${TMPDIR%/}/area-outputs SCRATCH_P=$(cd "$SCRATCH" && pwd -P)
+export MISE_DATA_DIR=$SCRATCH/mise MISE_CACHE_DIR=$SCRATCH/mise-cache MISE_YES=1
+export RUSTUP_HOME=$SCRATCH/rustup CARGO_HOME=$SCRATCH/cargo UV_CACHE_DIR=$SCRATCH/uv-cache
+export GOPATH=$SCRATCH/gopath GOMODCACHE=$SCRATCH/gopath/pkg/mod GOCACHE=$SCRATCH/gocache
+export npm_config_cache=$SCRATCH/npm-cache GRADLE_USER_HOME=$SCRATCH/gradle
+export MAVEN_OPTS=-Dmaven.repo.local=$SCRATCH/m2 MAVEN_USER_HOME=$SCRATCH/m2home
+export GEM_HOME=$SCRATCH/gems XDG_CACHE_HOME=$SCRATCH/xdg-cache
+export F=<worktree>/plugin/gate/Tests/Fixtures/AreaRuns CAP=$SCRATCH/cap.sh
+mise install go@1.27 golangci-lint@latest java@temurin-21 node@24 ruby@4.0.7 rust@1.90 swiftlint@latest
+mise exec node@24 -- npm i -g --prefix $SCRATCH/pnpm12 pnpm@12.0.0    # and pnpm@12.4.2 into $SCRATCH/pnpm124
+```
+
+`$SCRATCH/cap.sh`:
+
+```sh
+#!/bin/sh
+# cap.sh <fixture-dir> <command> [junit-file]
+d="$1"; c="$2"; j="$3"; mkdir -p "$d"
+printf '%s\n' "$c" > "$d/command"
+/bin/sh -c "$c" > "$d/stdout" 2> "$d/stderr"
+echo $? > "$d/exit"
+if [ -n "$j" ] && [ -f "$j" ]; then mv "$j" "$d/junit.xml"; fi
+"$(dirname "$0")/scrub.sh" "$d"/stdout "$d"/stderr $( [ -f "$d/junit.xml" ] && echo "$d/junit.xml" )
+```
+
+`$SCRATCH/scrub.sh` replaces machine paths, the host name and the user name. After the last capture
+it ran once more over every `stdout`, `stderr` and `junit.xml` (from inside a clone; it is
+idempotent), because the user-name and `$TMPDIR` rules came last:
+
+```sh
+#!/bin/sh
+R=$(git rev-parse --show-toplevel); R_L=${R#/private}; T=${TMPDIR%/}
+for f in "$@"; do
+  sed -i '' -e "s#${R}#<repo>#g" -e "s#${R_L}#<repo>#g" \
+    -e "s#${SCRATCH_P}#<scratch>#g" -e "s#${SCRATCH}#<scratch>#g" \
+    -e "s#/private${T}#<tmp>#g" -e "s#${T}#<tmp>#g" -e "s#${HOME}#<home>#g" \
+    -e "s#$(hostname)#<host>#g" -e "s#\"$(id -un)\"#\"<user>\"#g" "$f"
+done
+```
+
+So `<repo>` is the clone's root (not the directory the command ran in), `<scratch>` the scratch
+directory, `<home>` the home directory, `<tmp>` `$TMPDIR`, and `<host>` and `<user>` the machine's
+names. `grep -rIl -i -e caleb -e /Users/ -e /private/ -e /var/folders AreaRuns` prints nothing.
+
+### Captures
+
+`python` (llama.cpp; `uv venv $SCRATCH/venv-py && uv pip install -e gguf-py pytest flake8`):
+
+```sh
+T=gguf-py/tests/test_metadata.py
+$CAP $F/python/test-pass "pytest $T::TestMetadataMethod::test_id_to_title --junitxml=.area-junit.xml" .area-junit.xml
+sed -i '' 's/"Meta Llama 3 8B")/"Meta Llama 3 70B")/' $T
+$CAP $F/python/test-fail "pytest $T::TestMetadataMethod::test_id_to_title --junitxml=.area-junit.xml" .area-junit.xml
+printf '\n\nclass TestAbort(unittest.TestCase):\n\n    def test_abort(self):\n        os.abort()\n' >> $T
+$CAP $F/python/test-crash "pytest $T --junitxml=.area-junit.xml" .area-junit.xml
+L=gguf-py/gguf/utility.py
+sed -i '' '1,/^import /s/^\(import .*\)$/\1\nimport tempfile/' $L; printf 'def _unused():\n    value = 1 \n' >> $L
+$CAP $F/python/lint "flake8 $L"
+```
+
+`node` tests (turborepo; `pnpm install --store-dir $SCRATCH/pnpm-store --filter "@turbo/utils..."`,
+then `pnpm add -D jest-junit@16.0.0 --filter @turbo/utils`, every command under
+`mise exec node@24`):
+
+```sh
+cd packages/turbo-utils; T=__tests__/convert-case.test.ts
+C="JEST_JUNIT_OUTPUT_FILE=.area-junit.xml pnpm exec jest $T --reporters=default --reporters=jest-junit"
+$CAP $F/node/test-pass "$C" .area-junit.xml
+sed -i '' 's/{ input: "hello_world", expected: "helloWorld", to: "camel" }/{ input: "hello_world", expected: "hello_world", to: "camel" }/' $T
+$CAP $F/node/test-fail "$C" .area-junit.xml
+printf '\ndescribe("abort", () => {\n  it("aborts the process", () => {\n    process.abort();\n  });\n});\n' >> $T
+$CAP $F/node/test-crash "$C" .area-junit.xml
+```
+
+`node` lint (tauri; `pnpm install --store-dir $SCRATCH/pnpm-store --filter "@tauri-apps/api"`):
+
+```sh
+cd packages/api; L=src/dpi.ts
+printf '\nfunction debugScale(factor: number): number {\n  const unused = factor * 2\n  console.log(factor)\n  return factor\n}\n' >> $L
+$CAP $F/node/lint "pnpm exec eslint $L"
+```
+
+`go` (pocketbase; `go mod download`, under `mise exec go@1.27 golangci-lint@latest`):
+
+```sh
+T=tools/list/list_test.go
+$CAP $F/go/test-pass "go test -json -run '^TestSubtractSliceString\$' ./tools/list"
+sed -i '' 's/`\["1","3","7"\]`/`["1","3"]`/' $T
+$CAP $F/go/test-fail "go test -json -run '^TestSubtractSliceString\$' ./tools/list"
+printf 'package list_test\n\nimport (\n\t"os"\n\t"testing"\n)\n\nfunc TestExit(t *testing.T) {\n\tos.Exit(3)\n}\n' > tools/list/exit_test.go
+$CAP $F/go/test-crash "go test -json -run '^(TestSubtractSliceString|TestExit)\$' ./tools/list"
+L=tools/list/list.go
+printf '\nfunc unusedHelper() int {\n\n\tx := 1\n\tx = 2\n\treturn x\n}\n' >> $L
+$CAP $F/go/lint "golangci-lint run -c ./golangci.yml ./tools/list/..."
+```
+
+`cargo` (ruff; `PATH=$CARGO_HOME/bin:$PATH`, so rustup reads the repository's pin):
+
+```sh
+T=crates/ruff_text_size/tests/main.rs
+$CAP $F/cargo/test-pass "cargo test -p ruff_text_size --test main -- --exact sum"
+sed -i '' 's/assert_eq!(xs.iter().sum::<TextSize>(), size(3));/assert_eq!(xs.iter().sum::<TextSize>(), size(4));/' $T
+$CAP $F/cargo/test-fail "cargo test -p ruff_text_size --test main -- --exact sum"
+printf '\n#[test]\nfn aborts() {\n    std::process::abort();\n}\n' >> $T
+$CAP $F/cargo/test-crash "cargo test -p ruff_text_size --test main"
+L=crates/ruff_text_size/src/size.rs
+printf '\npub fn is_empty_list(values: &Vec<u32>) -> bool {\n    values.len() == 0\n}\n' >> $L
+$CAP $F/cargo/lint "cargo clippy -p ruff_text_size --locked"
+```
+
+`gradle` (okhttp, under `mise exec java@temurin-21`; `rm -rf okhttp-sse/build/test-results` before each
+test run):
+
+```sh
+T=okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
+J=okhttp-sse/build/test-results/test/TEST-okhttp3.sse.internal.ServerSentEventIteratorTest.xml
+C="./gradlew :okhttp-sse:test --tests 'okhttp3.sse.internal.ServerSentEventIteratorTest.multiline'"
+$CAP $F/gradle/test-pass "$C" $J
+sed -i '' 's|Event(null, null, "YHOO\\n+2\\n10")|Event(null, null, "YHOO\\n+2\\n11")|' $T
+$CAP $F/gradle/test-fail "$C" $J
+perl -0pi -e 's/(class ServerSentEventIteratorTest \{\n)/$1  \@Test\n  fun exits() {\n    System.exit(3)\n  }\n\n/' $T
+$CAP $F/gradle/test-crash "./gradlew :okhttp-sse:test --tests 'okhttp3.sse.internal.ServerSentEventIteratorTest'" $J
+L=okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt
+perl -0pi -e 's/(package okhttp3.sse\n\n)/$1import java.util.*\n/' $L; printf '\ninternal fun debugName(id:Int) : String = "source-"+id\n' >> $L
+$CAP $F/gradle/lint "./gradlew :okhttp-sse:spotlessKotlinCheck"
+```
+
+`maven` (jhipster-sample-app, under `mise exec java@temurin-21`; `-P-webapp` skips the profile that
+installs node; `rm -rf target/surefire-reports` before each test run):
+
+```sh
+T=src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
+J=target/surefire-reports/TEST-io.github.jhipster.sample.security.SecurityUtilsUnitTest.xml
+C="./mvnw -ntp -P-webapp test -Dtest='SecurityUtilsUnitTest#testGetCurrentUserLogin'"
+$CAP $F/maven/test-pass "$C" $J
+sed -i '' 's/assertThat(login).contains("admin");/assertThat(login).contains("root");/' $T
+$CAP $F/maven/test-fail "$C" $J
+perl -0pi -e 's/(class SecurityUtilsUnitTest \{\n)/$1\n    \@Test\n    void exits() {\n        System.exit(3);\n    }\n/' $T
+$CAP $F/maven/test-crash "./mvnw -ntp -P-webapp test -Dtest=SecurityUtilsUnitTest" $J
+printf '\nSee http://example.com/docs for the old guide.\n' >> README.md
+$CAP $F/maven/lint "./mvnw -ntp -P-webapp checkstyle:check"
+```
+
+`ruby` tests (rubocop; `BUNDLE_PATH=$SCRATCH/bundle-rubocop bundle install`, under `mise exec ruby@4.0.7`):
+
+```sh
+T=spec/rubocop/cop/style/redundant_return_spec.rb
+$CAP $F/ruby/test-pass "bundle exec rspec $T:6"
+perl -0pi -e 's/(    expect_correction\(<<~RUBY\)\n      def func\n        )something/${1}something_else/' $T
+$CAP $F/ruby/test-fail "bundle exec rspec $T:6"
+perl -0pi -e "s/(  let\(:cop_config\) \{ \{ 'AllowMultipleReturnValues' => false \} \}\n)/\$1\n  it 'aborts the process' do\n    Process.kill('ABRT', Process.pid)\n  end\n/" $T
+$CAP $F/ruby/test-crash "bundle exec rspec $T:6:7"
+```
+
+`ruby` lint (mastodon; `BUNDLE_ONLY=development BUNDLE_PATH=$SCRATCH/bundle bundle install`, the
+group that holds RuboCop and its plugins):
+
+```sh
+L=app/lib/hashtag_normalizer.rb
+perl -0pi -e 's/(  private\n)/  def debug_label(str)\n    unused = str.length\n    return "tag: " + str\n  end\n\n$1/' $L
+$CAP $F/ruby/lint "bundle exec rubocop $L"
+```
+
+`swift` tests (XcodeGen; `swift build --build-tests` first; `rm -f .area-junit-swift-testing.xml`
+after each run):
+
+```sh
+T=Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
+C="swift test --parallel --filter XcodeGenCoreTests.ArrayExtensionsTests/testSearchingForFirstIndex --xunit-output .area-junit.xml"
+$CAP $F/swift/test-pass "$C" .area-junit.xml
+sed -i '' 's/XCTAssertEqual(array.firstIndex(where: { $0 > 2 }), 2)/XCTAssertEqual(array.firstIndex(where: { $0 > 2 }), 3)/' $T
+$CAP $F/swift/test-fail "$C" .area-junit.xml
+perl -0pi -e 's/(class ArrayExtensionsTests: XCTestCase \{\n)/$1\n    func testAbort() {\n        abort()\n    }\n/' $T
+$CAP $F/swift/test-crash "swift test --parallel --filter XcodeGenCoreTests.ArrayExtensionsTests --xunit-output .area-junit.xml" .area-junit.xml
+```
+
+`swift` lint (element-x-ios, under `mise exec swiftlint@latest`; the repository's `.swiftlint.yml`):
+
+```sh
+L=ElementX/Sources/Other/Extensions/Array.swift
+printf '\nfunc firstLabel(_ values: [Any]) -> String {\n    let label = values.first as! String\n    return URL(string: label)!.absoluteString\n}\n' >> $L
+$CAP $F/swift/lint "swiftlint lint --quiet $L"
+```
+
+### What each case shows
+
+| Case | exit | JUnit (tests / failures) | Signature a reader relies on |
+|---|---|---|---|
+| `python/test-pass` | 0 | 1 / 0 | `1 passed` |
+| `python/test-fail` | 1 | 1 / 1 | `FAILED gguf-py/tests/test_metadata.py::TestMetadataMethod::test_id_to_title` |
+| `python/test-crash` | 134 (SIGABRT) | none written | stderr `Fatal Python error: Aborted`; 5 tests passed before it |
+| `node/test-pass` | 0 | 4 / 0 | `Tests: 4 passed` (1 `it.each` over 4 rows) |
+| `node/test-fail` | 1 | 4 / 1 | `Tests: 1 failed, 3 passed` |
+| `node/test-crash` | 1 | none written | `pnpm exec` turns the signal into status 1; only stderr's native and JavaScript stack traces show the abort |
+| `go/test-pass` | 0 | — | `-json` events, final `"Action":"pass"` |
+| `go/test-fail` | 1 | — | `"Action":"fail"` for `TestSubtractSliceString` and its subtest `4_["1","3"]` |
+| `go/test-crash` | 1 | — | `TestExit` has a `run` event and no `pass` or `fail`; the package `fail`s; `TestSubtractSliceString` never ran (files run in name order) |
+| `cargo/test-pass` | 0 | — | `test sum ... ok` |
+| `cargo/test-fail` | 101 | — | `test sum ... FAILED`, panic at `crates/ruff_text_size/tests/main.rs:17:5` |
+| `cargo/test-crash` | 101 | — | stderr `process didn't exit successfully: ... (signal: 6, SIGABRT: process abort signal)`; stdout stops after `running 9 tests` |
+| `gradle/test-pass` | 0 | 1 / 0 | `BUILD SUCCESSFUL` |
+| `gradle/test-fail` | 1 | 1 / 1 | `ServerSentEventIteratorTest > multiline() FAILED` |
+| `gradle/test-crash` | 1 | 12 / 0, 1 skipped | stderr `Process 'Gradle Test Executor 4' finished with non-zero exit value 3`; the JUnit file marks `exits()` `<skipped/>`, so JUnit alone reads as a pass |
+| `maven/test-pass` | 0 | 1 / 0 | `Tests run: 1, Failures: 0` |
+| `maven/test-fail` | 1 | 1 / 1 | `Tests run: 1, Failures: 1` |
+| `maven/test-crash` | 1 | none written | `The forked VM terminated without properly saying goodbye. VM crash or System.exit called?` |
+| `ruby/test-pass` | 0 | — | `1 example, 0 failures` |
+| `ruby/test-fail` | 1 | — | `1 example, 1 failure`, `rspec ./spec/rubocop/cop/style/redundant_return_spec.rb:6` |
+| `ruby/test-crash` | 134 (SIGABRT) | — | stderr `[BUG] Aborted` and Ruby's crash report (about 250 KB) |
+| `swift/test-pass` | 0 | 1 / 0 | `--xunit-output` writes only with `--parallel`; without it no file appears |
+| `swift/test-fail` | 1 | 1 / 1 | `ArrayExtensionsTests.swift:8: error: ... XCTAssertEqual failed` |
+| `swift/test-crash` | 1 | 5 / 1 | stderr `error: Exited with unexpected signal code 6`; JUnit marks `testAbort` `<failure message="failure">` |
+
+Lint findings, by path relative to `<repo>` and line, on the lines `change.diff` adds:
+
+| Case | exit | Findings | Path form in the output |
+|---|---|---|---|
+| `python/lint` (flake8) | 1 | `gguf-py/gguf/utility.py` 8 F401, 342 E302, 343 F841, 343 W291 | repository-relative, `path:line:col: CODE message` |
+| `node/lint` (ESLint stylish) | 1 | `packages/api/src/dpi.ts` 478 and 479 `@typescript-eslint/no-unused-vars`, 480 `no-console` | absolute (`<repo>/packages/api/src/dpi.ts`) heading, then `line:col  error  message  rule` |
+| `go/lint` (golangci-lint) | 1 | `tools/list/list.go` 167 ineffassign, 165 unused | repository-relative, `path:line:col: message (linter)` |
+| `cargo/lint` (Clippy) | 0 | `crates/ruff_text_size/src/size.rs` 221 `dead_code`, 221 `clippy::ptr_arg`, 222 `clippy::len_zero`, 221 `unreachable_pub` | repository-relative `--> path:line:col`; warnings only, so status 0 |
+| `gradle/lint` (Spotless ktlint) | 1 | `okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt` 18 `standard:no-wildcard-imports` | module-relative (`src/main/kotlin/...:L18`), in stderr's failure block |
+| `maven/lint` (Checkstyle) | 1 | `README.md` 301 NoHttp | `[ERROR] README.md:[301,6] (extension) NoHttp: ...` |
+| `ruby/lint` (RuboCop) | 1 | `app/lib/hashtag_normalizer.rb` 9 `Lint/UselessAssignment`, 10 `Style/RedundantReturn`, 10 `Style/StringConcatenation`, 10 `Style/StringLiterals` | repository-relative, `path:line:col: S: [Correctable] Cop: message` |
+| `swift/lint` (SwiftLint) | 2 | `ElementX/Sources/Other/Extensions/Array.swift` 100 `force_cast` (error), 101 `force_unwrapping` (warning) | absolute (`<repo>/...`), `path:line:col: severity: message (rule)` |

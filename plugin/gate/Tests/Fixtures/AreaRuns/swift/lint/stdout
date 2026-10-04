@@ -1,0 +1,2 @@
+<repo>/ElementX/Sources/Other/Extensions/Array.swift:100:30: error: Force Cast Violation: Force casts should be avoided (force_cast)
+<repo>/ElementX/Sources/Other/Extensions/Array.swift:101:30: warning: Force Unwrapping Violation: Force unwrapping should be avoided (force_unwrapping)

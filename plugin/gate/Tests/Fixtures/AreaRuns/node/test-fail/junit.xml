@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="4" failures="1" errors="0" time="1.082">
+  <testsuite name="convertCase" errors="0" failures="1" skipped="0" timestamp="2026-10-04T03:47:49" time="0.644" tests="4">
+    <testcase classname="convertCase should convert &apos;hello_world&apos; to &apos;camel&apos;" name="convertCase should convert &apos;hello_world&apos; to &apos;camel&apos;" time="0.002">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: &quot;hello_world&quot;
+Received: &quot;helloWorld&quot;
+    at <repo>/packages/turbo-utils/__tests__/convert-case.test.ts:21:42
+    at Object.&lt;anonymous&gt; (<repo>/node_modules/.pnpm/jest-each@30.3.0/node_modules/jest-each/build/index.js:80:140)
+    at Promise.finally.completed (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1557:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1497:10)
+    at _callCircusTest (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1007:40)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at _runTest (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:947:3)
+    at <repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:849:7
+    at _runTestsForDescribeBlock (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:862:11)
+    at _runTestsForDescribeBlock (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:857:11)
+    at run (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:761:3)
+    at runAndTransformResultsToJestFormat (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/jestAdapterInit.js:1918:21)
+    at jestAdapter (<repo>/node_modules/.pnpm/jest-circus@30.3.0/node_modules/jest-circus/build/runner.js:101:19)
+    at runTestInternal (<repo>/node_modules/.pnpm/jest-runner@30.3.0/node_modules/jest-runner/build/index.js:275:16)
+    at runTest (<repo>/node_modules/.pnpm/jest-runner@30.3.0/node_modules/jest-runner/build/index.js:343:7)</failure>
+    </testcase>
+    <testcase classname="convertCase should convert &apos;hello-world&apos; to &apos;camel&apos;" name="convertCase should convert &apos;hello-world&apos; to &apos;camel&apos;" time="0">
+    </testcase>
+    <testcase classname="convertCase should convert &apos;helloWorld&apos; to &apos;camel&apos;" name="convertCase should convert &apos;helloWorld&apos; to &apos;camel&apos;" time="0">
+    </testcase>
+    <testcase classname="convertCase should convert &apos;helloworld&apos; to &apos;camel&apos;" name="convertCase should convert &apos;helloworld&apos; to &apos;camel&apos;" time="0.001">
+    </testcase>
+  </testsuite>
+</testsuites>

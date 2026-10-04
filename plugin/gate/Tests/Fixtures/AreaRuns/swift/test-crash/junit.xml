@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<testsuites>
+<testsuite name="TestResults" errors="0" tests="5" failures="1" time="0.20199333399999997">
+<testcase classname="XcodeGenCoreTests.ArrayExtensionsTests" name="testEmptyArray" time="0.040404667">
+</testcase>
+<testcase classname="XcodeGenCoreTests.ArrayExtensionsTests" name="testSearchingForFirstIndex" time="0.040385875">
+</testcase>
+<testcase classname="XcodeGenCoreTests.ArrayExtensionsTests" name="testIndexCannotBeFound" time="0.04040975">
+</testcase>
+<testcase classname="XcodeGenCoreTests.ArrayExtensionsTests" name="testSearchingReturnsFirstIndexWhenMultipleElementsHaveSameValue" time="0.0403875">
+</testcase>
+<testcase classname="XcodeGenCoreTests.ArrayExtensionsTests" name="testAbort" time="0.040405542">
+<failure message="failure"></failure>
+</testcase>
+</testsuite>
+</testsuites>

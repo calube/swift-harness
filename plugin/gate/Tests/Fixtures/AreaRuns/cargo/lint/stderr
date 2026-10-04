@@ -1,0 +1,45 @@
+    Checking ruff_text_size v0.0.16 (<repo>/crates/ruff_text_size)
+warning: function `is_empty_list` is never used
+   --> crates/ruff_text_size/src/size.rs:221:8
+    |
+221 | pub fn is_empty_list(values: &Vec<u32>) -> bool {
+    |        ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: writing `&Vec` instead of `&[_]` involves a new object where a slice will do
+   --> crates/ruff_text_size/src/size.rs:221:30
+    |
+221 | pub fn is_empty_list(values: &Vec<u32>) -> bool {
+    |                              ^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#ptr_arg
+    = note: `#[warn(clippy::ptr_arg)]` on by default
+help: change this to
+    |
+221 - pub fn is_empty_list(values: &Vec<u32>) -> bool {
+221 + pub fn is_empty_list(values: &[u32]) -> bool {
+    |
+
+warning: length comparison to zero
+   --> crates/ruff_text_size/src/size.rs:222:5
+    |
+222 |     values.len() == 0
+    |     ^^^^^^^^^^^^^^^^^ help: using `is_empty` is clearer and more explicit: `values.is_empty()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#len_zero
+    = note: `#[warn(clippy::len_zero)]` on by default
+
+warning: unreachable `pub` item
+   --> crates/ruff_text_size/src/size.rs:221:1
+    |
+221 | pub fn is_empty_list(values: &Vec<u32>) -> bool {
+    | ---^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    | |
+    | help: consider restricting its visibility: `pub(crate)`
+    |
+    = help: or consider exporting it for use by other crates
+    = note: requested on the command line with `-W unreachable-pub`
+
+warning: `ruff_text_size` (lib) generated 4 warnings (run `cargo clippy --fix --lib -p ruff_text_size -- ` to apply 2 suggestions)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.72s

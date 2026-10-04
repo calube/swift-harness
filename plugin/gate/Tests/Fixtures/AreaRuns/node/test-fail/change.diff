@@ -1,0 +1,13 @@
+diff --git a/packages/turbo-utils/__tests__/convert-case.test.ts b/packages/turbo-utils/__tests__/convert-case.test.ts
+index 429907e..d328c07 100644
+--- a/packages/turbo-utils/__tests__/convert-case.test.ts
++++ b/packages/turbo-utils/__tests__/convert-case.test.ts
+@@ -9,7 +9,7 @@ interface TestCase {
+ 
+ describe("convertCase", () => {
+   const testCases: Array<TestCase> = [
+-    { input: "hello_world", expected: "helloWorld", to: "camel" },
++    { input: "hello_world", expected: "hello_world", to: "camel" },
+     { input: "hello-world", expected: "helloWorld", to: "camel" },
+     { input: "helloWorld", expected: "helloWorld", to: "camel" },
+     { input: "helloworld", expected: "helloworld", to: "camel" }

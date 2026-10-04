@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.11, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo>/gguf-py
+configfile: pyproject.toml
+collected 1 item
+
+gguf-py/tests/test_metadata.py F                                         [100%]
+
+=================================== FAILURES ===================================
+_____________________ TestMetadataMethod.test_id_to_title ______________________
+
+self = <tests.test_metadata.TestMetadataMethod testMethod=test_id_to_title>
+
+    def test_id_to_title(self):
+        self.assertEqual(gguf.Metadata.id_to_title("Mixtral-8x7B-Instruct-v0.1"), "Mixtral 8x7B Instruct v0.1")
+>       self.assertEqual(gguf.Metadata.id_to_title("Meta-Llama-3-8B"), "Meta Llama 3 70B")
+E       AssertionError: 'Meta Llama 3 8B' != 'Meta Llama 3 70B'
+E       - Meta Llama 3 8B
+E       ?              ^
+E       + Meta Llama 3 70B
+E       ?              ^^
+
+gguf-py/tests/test_metadata.py:19: AssertionError
+- generated xml file: <repo>/.area-junit.xml -
+=========================== short test summary info ============================
+FAILED gguf-py/tests/test_metadata.py::TestMetadataMethod::test_id_to_title
+============================== 1 failed in 0.05s ===============================

@@ -1,0 +1,19 @@
+Inspecting 1 file
+W
+
+Offenses:
+
+app/lib/hashtag_normalizer.rb:9:5: W: [Correctable] Lint/UselessAssignment: Useless assignment to variable - unused. (https://rubystyle.guide#underscore-unused-vars)
+    unused = str.length
+    ^^^^^^
+app/lib/hashtag_normalizer.rb:10:5: C: [Correctable] Style/RedundantReturn: Redundant return detected. (https://rubystyle.guide#no-explicit-return)
+    return "tag: " + str
+    ^^^^^^
+app/lib/hashtag_normalizer.rb:10:12: C: [Correctable] Style/StringConcatenation: Prefer string interpolation to string concatenation. (https://rubystyle.guide#string-interpolation)
+    return "tag: " + str
+           ^^^^^^^^^^^^^
+app/lib/hashtag_normalizer.rb:10:12: C: [Correctable] Style/StringLiterals: Prefer single-quoted strings when you don't need string interpolation or special symbols. (https://rubystyle.guide#consistent-string-literals)
+    return "tag: " + str
+           ^^^^^^^
+
+1 file inspected, 4 offenses detected, 4 offenses autocorrectable

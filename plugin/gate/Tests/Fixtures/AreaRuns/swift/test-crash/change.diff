@@ -1,0 +1,15 @@
+diff --git a/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift b/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
+index f158314..d6cacc1 100644
+--- a/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
++++ b/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
+@@ -2,6 +2,10 @@ import XCTest
+ @testable import XcodeGenCore
+ 
+ class ArrayExtensionsTests: XCTestCase {
++
++    func testAbort() {
++        abort()
++    }
+     
+     func testSearchingForFirstIndex() {
+         let array = SortedArray([1, 2, 3, 4 ,5])

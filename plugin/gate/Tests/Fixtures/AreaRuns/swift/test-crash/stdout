@@ -1,0 +1,10 @@
+[1/5] Testing XcodeGenCoreTests.ArrayExtensionsTests/testEmptyArray
+[2/5] Testing XcodeGenCoreTests.ArrayExtensionsTests/testSearchingForFirstIndex
+[3/5] Testing XcodeGenCoreTests.ArrayExtensionsTests/testIndexCannotBeFound
+[4/5] Testing XcodeGenCoreTests.ArrayExtensionsTests/testSearchingReturnsFirstIndexWhenMultipleElementsHaveSameValue
+[5/5] Testing XcodeGenCoreTests.ArrayExtensionsTests/testAbort
+Test Suite 'Selected tests' started at 2026-10-03 23:19:16.059.
+Test Suite 'XcodeGenPackageTests.xctest' started at 2026-10-03 23:19:16.060.
+Test Suite 'ArrayExtensionsTests' started at 2026-10-03 23:19:16.060.
+Test Case '-[XcodeGenCoreTests.ArrayExtensionsTests testAbort]' started.
+

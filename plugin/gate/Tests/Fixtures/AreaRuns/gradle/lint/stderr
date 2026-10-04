@@ -1,0 +1,16 @@
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':okhttp-sse:spotlessKotlinCheck' (registered by plugin 'okhttp.quality-conventions').
+> There were 1 lint error(s), they must be fixed or suppressed.
+  src/main/kotlin/okhttp3/sse/EventSources.kt:L18 ktlint(standard:no-wildcard-imports) Wildcard import
+  Resolve these lints or suppress with `suppressLintsFor`
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 17s

@@ -1,0 +1,23 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------< io.github.jhipster.sample:jhipster-sample-application >--------
+[INFO] Building Jhipster Sample Application 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- checkstyle:3.6.0:check (default-cli) @ jhipster-sample-application ---
+[INFO] There is 1 error reported by Checkstyle 14.1.0 with checkstyle.xml ruleset.
+[ERROR] README.md:[301,6] (extension) NoHttp: http:// URLs are not allowed but got 'http://example.com/docs'. Use https:// instead.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  8.901 s
+[INFO] Finished at: 2026-10-03T23:05:40-05:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:check (default-cli) on project jhipster-sample-application: You have 1 Checkstyle violation. -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

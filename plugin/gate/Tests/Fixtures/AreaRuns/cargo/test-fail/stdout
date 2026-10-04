@@ -1,0 +1,20 @@
+
+running 1 test
+test sum ... FAILED
+
+failures:
+
+---- sum stdout ----
+
+thread 'sum' (57245896) panicked at crates/ruff_text_size/tests/main.rs:17:5:
+assertion `left == right` failed
+  left: 3
+ right: 4
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    sum
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+

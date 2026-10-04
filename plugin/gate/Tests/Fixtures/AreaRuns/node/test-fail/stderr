@@ -1,0 +1,25 @@
+ts-jest[config] (WARN) 
+    The "ts-jest" config option "isolatedModules" is deprecated and will be removed in v30.0.0. Please use "isolatedModules: true" in <repo>/packages/turbo-utils/tsconfig.json instead, see https://www.typescriptlang.org/tsconfig/#isolatedModules
+  
+FAIL __tests__/convert-case.test.ts
+  ● convertCase › should convert 'hello_world' to 'camel'
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "hello_world"
+    Received: "helloWorld"
+
+      19 |     "should convert '$input' to '$to'",
+      20 |     ({ input, expected, to }) => {
+    > 21 |       expect(convertCase(input, { to })).toBe(expected);
+         |                                          ^
+      22 |     }
+      23 |   );
+      24 | });
+
+      at __tests__/convert-case.test.ts:21:42
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 3 passed, 4 total
+Snapshots:   0 total
+Time:        1.119 s

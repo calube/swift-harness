@@ -1,0 +1,18 @@
+diff --git a/okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt b/okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt
+index 0725aab..2352540 100644
+--- a/okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt
++++ b/okhttp-sse/src/main/kotlin/okhttp3/sse/EventSources.kt
+@@ -15,6 +15,7 @@
+  */
+ package okhttp3.sse
+ 
++import java.util.*
+ import okhttp3.Call
+ import okhttp3.OkHttpClient
+ import okhttp3.Response
+@@ -52,3 +53,5 @@ object EventSources {
+     eventSource.processResponse(response)
+   }
+ }
++
++internal fun debugName(id:Int) : String = "source-"+id

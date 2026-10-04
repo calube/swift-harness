@@ -1,0 +1,13 @@
+diff --git a/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift b/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
+index f158314..f6cd420 100644
+--- a/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
++++ b/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift
+@@ -5,7 +5,7 @@ class ArrayExtensionsTests: XCTestCase {
+     
+     func testSearchingForFirstIndex() {
+         let array = SortedArray([1, 2, 3, 4 ,5])
+-        XCTAssertEqual(array.firstIndex(where: { $0 > 2 }), 2)
++        XCTAssertEqual(array.firstIndex(where: { $0 > 2 }), 3)
+     }
+     
+     func testIndexCannotBeFound() {

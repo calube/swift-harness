@@ -1,0 +1,91 @@
+Scope: all 21 workspace projects
+✓ Lockfile at ../../pnpm-lock.yaml passes supply-chain policies (verified 30s ago)
+Downloading @oxlint/binding-darwin-arm64@1.78.0: 0.00 B/5.81 MB
+Downloading @typescript/typescript-darwin-arm64@7.0.2: 0.00 B/9.27 MB
+Downloading @next/swc-darwin-arm64@16.3.6: 0.00 B/31.69 MB
+Downloading hls.js@1.6.15: 0.00 B/5.86 MB
+Downloading @icons-pack/react-simple-icons@13.8.0: 0.00 B/6.93 MB
+Downloading @rolldown/binding-darwin-arm64@1.0.0-beta.9: 0.00 B/6.17 MB
+Downloading recheck-macos-arm64@4.5.0: 0.00 B/8.59 MB
+Downloading @vscode/vsce-sign-darwin-arm64@2.0.6: 0.00 B/6.29 MB
+Downloading dashjs@5.1.1: 0.00 B/26.37 MB
+Downloading @swc/core-darwin-arm64@1.15.11: 0.00 B/9.28 MB
+Downloading mermaid@11.16.0: 0.00 B/17.60 MB
+Downloading eve@0.40.0: 0.00 B/8.12 MB
+Downloading @rolldown/binding-darwin-arm64@1.1.2: 0.00 B/7.59 MB
+Downloading next@16.3.6: 0.00 B/41.74 MB
+Downloading @typescript/native-preview-darwin-arm64@7.0.0-dev.20260523.1: 0.00 B/9.75 MB
+Downloading cytoscape-fcose@2.2.0: 0.00 B/7.60 MB
+../..                                    | Progress: resolved 1932, reused 0, downloaded 284, added 276
+[WARN] Tarball download average speed 18 KiB/s (size 49 KiB) is below 50 KiB/s: https://registry.npmjs.org/postcss/-/postcss-8.5.19.tgz (GET)
+[WARN] Tarball download average speed 36 KiB/s (size 123 KiB) is below 50 KiB/s: https://registry.npmjs.org/diff/-/diff-5.2.2.tgz (GET)
+../..                                    | Progress: resolved 1932, reused 0, downloaded 316, added 312
+Downloading recheck-jar@4.5.0: 0.00 B/21.06 MB
+Downloading turbo-darwin-arm64@2.8.3: 0.00 B/12.58 MB
+Downloading @img/sharp-libvips-darwin-arm64@1.3.3: 0.00 B/8.30 MB
+Downloading recheck-jar@4.5.0: 11.21 MB/21.06 MB
+Downloading dashjs@5.1.1: 26.37 MB/26.37 MB, done
+../..                                    | Progress: resolved 1932, reused 0, downloaded 502, added 487
+../..                                    | Progress: resolved 1932, reused 0, downloaded 502, added 489
+../..                                    | Progress: resolved 1932, reused 0, downloaded 566, added 546
+../..                                    | Progress: resolved 1932, reused 0, downloaded 628, added 615
+../..                                    | Progress: resolved 1932, reused 0, downloaded 722, added 708
+../..                                    | Progress: resolved 1932, reused 0, downloaded 751, added 768
+../..                                    | Progress: resolved 1932, reused 0, downloaded 876, added 879
+../..                                    | Progress: resolved 1932, reused 0, downloaded 922, added 928
+../..                                    | Progress: resolved 1932, reused 0, downloaded 970, added 988
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1002, added 1024
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1065, added 1072
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1184, added 1184
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1192, added 1216
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1224, added 1232
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1224, added 1233
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1350, added 1344
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1384, added 1377
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1416, added 1422
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1416, added 1440
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1575, added 1571
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1703, added 1697
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1703, added 1715
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1799, added 1815
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1885, added 1888
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1895, added 1909
+../..                                    | Progress: resolved 1932, reused 0, downloaded 1907, added 1932, done
+.../esbuild@0.28.1/node_modules/esbuild postinstall$ node install.js
+.../node_modules/protobufjs postinstall$ node scripts/postinstall
+.../node_modules/@swc/core postinstall$ node postinstall.js
+.../node_modules/@swc/core postinstall$ node postinstall.js
+.../node_modules/protobufjs postinstall: Done
+.../esbuild@0.28.1/node_modules/esbuild postinstall: Done
+.../node_modules/@swc/core postinstall: Done
+.../node_modules/@swc/core postinstall: Done
+.../node_modules/@google/genai preinstall$ echo 'preinstall: no-op'
+.../node_modules/@google/genai preinstall: preinstall: no-op
+.../node_modules/@google/genai preinstall: Done
+../.. prepare$ husky install
+../.. prepare: husky - Git hooks installed
+../.. prepare: Done
+../../apps/docs postinstall$ fumadocs-mdx
+../../apps/docs postinstall: [MDX] generated files in 9.212082999999438ms
+../../apps/docs postinstall: Done
+Done in 1m 4.7s using pnpm v12.0.0
+jest-haste-map: Haste module naming collision: web
+  The following files share their name; please adjust your hasteImpl:
+    * <rootDir>/__fixtures__/common/jsonc-workspace-configs/apps/web/package.json
+    * <rootDir>/__fixtures__/common/old-workspace-config/apps/web/package.json
+
+jest-haste-map: Haste module naming collision: docs
+  The following files share their name; please adjust your hasteImpl:
+    * <rootDir>/__fixtures__/common/old-workspace-config/apps/docs/package.json
+    * <rootDir>/__fixtures__/common/workspace-configs/apps/docs/package.json
+
+jest-haste-map: Haste module naming collision: utils
+  The following files share their name; please adjust your hasteImpl:
+    * <rootDir>/__fixtures__/common/old-workspace-config/packages/utils/package.json
+    * <rootDir>/__fixtures__/common/workspace-configs/packages/utils/package.json
+
+jest-haste-map: Haste module naming collision: ui
+  The following files share their name; please adjust your hasteImpl:
+    * <rootDir>/__fixtures__/common/old-workspace-config/packages/ui/package.json
+    * <rootDir>/__fixtures__/common/workspace-configs/packages/ui/package.json
+

@@ -1,0 +1,4 @@
+   Compiling ruff_text_size v0.0.16 (<repo>/crates/ruff_text_size)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.25s
+     Running tests/main.rs (target/debug/deps/main-dcb56bc05740446d)
+error: test failed, to rerun pass `-p ruff_text_size --test main`

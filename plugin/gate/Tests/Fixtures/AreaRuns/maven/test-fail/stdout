@@ -1,0 +1,100 @@
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] -------< io.github.jhipster.sample:jhipster-sample-application >--------
+[INFO] Building Jhipster Sample Application 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-versions) @ jhipster-sample-application ---
+[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireMavenVersion passed
+[INFO] Rule 1: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
+[INFO] 
+[INFO] --- enforcer:3.6.3:enforce (enforce-dependencyConvergence) @ jhipster-sample-application ---
+[WARNING] Rule 0: org.apache.maven.enforcer.rules.dependency.DependencyConvergence failed with message:
+Failed while enforcing releasability.
+
+Dependency convergence error for org.apache.commons:commons-text:jar:1.15.0. Paths to dependency are:
++-io.github.jhipster.sample:jhipster-sample-application:jar:0.0.1-SNAPSHOT
+  +-org.liquibase:liquibase-core:jar:5.0.3:compile
+    +-org.apache.commons:commons-text:jar:1.15.0:compile
+and
++-io.github.jhipster.sample:jhipster-sample-application:jar:0.0.1-SNAPSHOT
+  +-org.liquibase:liquibase-core:jar:5.0.3:compile
+    +-com.opencsv:opencsv:jar:5.12.0:compile
+      +-org.apache.commons:commons-text:jar:1.13.1:compile
+
+[INFO] 
+[INFO] --- properties:1.3.1:read-project-properties (default) @ jhipster-sample-application ---
+[INFO] Loading 40 properties from File: <repo>/sonar-project.properties
+[INFO] 
+[INFO] --- jacoco:0.8.15:prepare-agent (pre-unit-tests) @ jhipster-sample-application ---
+[INFO] argLine set to -javaagent:<scratch>/m2/org/jacoco/org.jacoco.agent/0.8.15/org.jacoco.agent-0.8.15-runtime.jar=destfile=<repo>/target/jacoco.exec -Xmx1G
+[INFO] 
+[INFO] --- spotless:3.10.2:apply (spotless) @ jhipster-sample-application ---
+[INFO] Spotless.Java is keeping 136 files clean - 0 were changed to be clean, 1 were already clean, 135 were skipped because caching determined they were already clean
+[INFO] 
+[INFO] --- spring-boot:4.1.1:build-info (build-info) @ jhipster-sample-application ---
+[INFO] 
+[INFO] --- resources:3.5.0:resources (default-resources) @ jhipster-sample-application ---
+[INFO] Copying 5 resources from src/main/resources to target/classes
+[INFO] Copying 23 resources from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ jhipster-sample-application ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.5.0:testResources (default-testResources) @ jhipster-sample-application ---
+[INFO] Copying 11 resources from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ jhipster-sample-application ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 54 source files with javac [debug parameters release 21] to target/test-classes
+[INFO] Hibernate compile-time tooling 7.4.5.Final
+[INFO] 
+[INFO] --- surefire:3.5.6:test (default-test) @ jhipster-sample-application ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 0.062 s <<< FAILURE! -- in io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[ERROR] io.github.jhipster.sample.security.SecurityUtilsUnitTest.testGetCurrentUserLogin -- Time elapsed: 0.054 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: 
+
+Expecting actual:
+  Optional[admin]
+to contain:
+  "root"
+but did not.
+	at io.github.jhipster.sample.security.SecurityUtilsUnitTest.testGetCurrentUserLogin(SecurityUtilsUnitTest.java:36)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   SecurityUtilsUnitTest.testGetCurrentUserLogin:36 
+Expecting actual:
+  Optional[admin]
+to contain:
+  "root"
+but did not.
+[INFO] 
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.296 s
+[INFO] Finished at: 2026-10-03T23:05:13-05:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.6:test (default-test) on project jhipster-sample-application: There are test failures.
+[ERROR] 
+[ERROR] See <repo>/target/surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
