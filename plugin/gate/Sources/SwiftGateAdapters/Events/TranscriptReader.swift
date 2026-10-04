@@ -50,6 +50,26 @@ public struct TranscriptReader: Sendable {
       + (hasSubagents ? try agents(in: subagents) : [])
   }
 
+  /// The session's subagent `id`: `agent-<id>.jsonl` in the `subagents` directory beside `path`.
+  public func subagent(_ id: String, ofSessionAt path: URL) throws(TranscriptReadError)
+    -> TranscriptFile
+  {
+    let name = "agent-\(id).jsonl"
+    guard Self.isAgentID(id) else {
+      throw TranscriptReadError(
+        "--agent-id \(id) is not an agent id of letters, digits, `_` and `-`")
+    }
+    let url = path.deletingPathExtension().appending(
+      path: "subagents/\(name)", directoryHint: .notDirectory)
+    do {
+      return TranscriptFile(
+        agent: .subagent, agentID: id, label: name, data: try Data(contentsOf: url))
+    } catch {
+      throw TranscriptReadError(
+        "no subagent \(id) in this session: \(name) can't be read: \(Self.why(error))")
+    }
+  }
+
   /// Each `agent-*.jsonl` directly in `directory`, sorted by name.
   public func workflow(in directory: URL) throws(TranscriptReadError) -> [TranscriptFile] {
     try agents(in: directory)
