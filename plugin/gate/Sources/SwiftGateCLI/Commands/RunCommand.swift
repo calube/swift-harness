@@ -66,16 +66,56 @@ extension RunCommand {
   }
 
   /// Prepares the clone and launches the orchestrator in it. `announce` sees what was prepared
-  /// before the launch, which replaces this process.
+  /// before the launch, which replaces this process. Whatever can be checked before preparing is
+  /// checked first, and a launch that fails anyway takes back what was prepared, so a failed run
+  /// leaves no plan dir, plan branch or warm-up to collide with the next.
   static func start(
     spec: String, directory: URL, slug: String?, extra: [String], dependencies: Dependencies,
     claude: any ClaudeLaunching, announce: (RunPrepared) -> Void = { _ in }
   ) async throws(RunStartError) -> RunPrepared {
+    if let option = RunLaunch.conflictingOption(in: extra) {
+      throw RunStartError(
+        message: "\(option) would start claude under another session than the one `run` writes "
+          + "into the plan's lock, and the plan-state guard would refuse that session's PLAN.md; "
+          + "drop it")
+    }
+    _ = try claude.resolve()
     let prepared = try await prepare(
       spec: spec, directory: directory, slug: slug, dependencies: dependencies)
     announce(prepared)
-    try launch(prepared, extra: extra, claude: claude)
+    do {
+      try launch(prepared, extra: extra, claude: claude)
+    } catch {
+      let left = await rollBack(prepared, dependencies: dependencies)
+      throw RunStartError(
+        message: error.message
+          + (left.isEmpty
+            ? "; the prepared run was removed"
+            : "; removing the prepared run left: " + left.joined(separator: "; ")))
+    }
     return prepared
+  }
+
+  /// Stops the warm-up, deletes the plan branch while it still points at the base, and removes
+  /// the plan dir with its lock. Returns what couldn't be undone.
+  static func rollBack(_ prepared: RunPrepared, dependencies: Dependencies) async -> [String] {
+    var left: [String] = []
+    if let pid = prepared.warmupPID {
+      dependencies.warmup.stop(pid: pid)
+    } else {
+      left.append("a warm-up whose pid is unknown, logging to \(prepared.warmupLog)")
+    }
+    let branch = prepared.clock.planBranch
+    let deleted = try? await git(
+      ["update-ref", "-d", "refs/heads/\(branch)", prepared.clock.base], root: prepared.root,
+      runner: dependencies.runner)
+    if deleted == nil { left.append("the branch \(branch)") }
+    do {
+      try FileManager.default.removeItem(atPath: prepared.planDirectory)
+    } catch {
+      left.append("the plan dir \(prepared.planDirectory): \(error.localizedDescription)")
+    }
+    return left
   }
 
   /// Starts the clock, copies an untracked spec into the plan dir, applies discovery, starts the
@@ -114,6 +154,15 @@ extension RunCommand {
       requested, origin: origin, layout: layout, root: rootPath, runner: runner)
     let planBranch = BrownfieldRunReport.planBranch(slug: slug)
     let planDirectory = layout.plan(slug: slug)
+    let session = dependencies.newSession()
+    let lock: PlanLock
+    do {
+      lock = PlanLock(
+        plan: try PlanStateLayout(commonDirectory: layout.commonDir.path(percentEncoded: false))
+          .plan(slug))
+    } catch {
+      throw RunStartError(message: "plan \(slug): \(error)")
+    }
     let files = FileManager.default
     do {
       try files.createDirectory(at: planDirectory, withIntermediateDirectories: true)
@@ -126,7 +175,19 @@ extension RunCommand {
     let discovered: DiscoverCommand.Outcome
     let warmupLog = layout.worktreeRoot.appending(path: "logs/warmup-\(slug).log")
     let warmupPID: Int32?
+    var branched = false
     do throws(RunStartError) {
+      // The session `claude` starts under holds the lock, so the plan-state guard lets that main
+      // session, and none of its subagents, write the plan's files.
+      let claimed: PlanLock.ClaimOutcome
+      do {
+        claimed = try lock.claim(session: session)
+      } catch {
+        throw RunStartError(message: "claiming plan \(slug) for session \(session): \(error)")
+      }
+      guard claimed == .claimed else {
+        throw RunStartError(message: "plan \(slug)'s lock was already taken: \(claimed)")
+      }
       let read =
         source == .tracked
         ? origin : planDirectory.appending(path: RunClock.specCopyName).path(percentEncoded: false)
@@ -147,20 +208,25 @@ extension RunCommand {
           message: "\(layout.settings.path) wasn't written, so claude would start with no hooks: "
             + discovered.notes.joined(separator: "; "))
       }
+      guard
+        try await git(["branch", "--no-track", planBranch, base], root: rootPath, runner: runner)
+          != nil
+      else {
+        throw RunStartError(message: "git branch \(planBranch) \(base) failed")
+      }
+      branched = true
       warmupPID = try await dependencies.warmup.spawn(directory: root, log: warmupLog)
     } catch {
+      if branched {
+        _ = try? await git(
+          ["update-ref", "-d", "refs/heads/\(planBranch)", base], root: rootPath, runner: runner)
+      }
       try? files.removeItem(at: planDirectory)
       throw error
     }
 
-    guard
-      try await git(["branch", "--no-track", planBranch, base], root: rootPath, runner: runner)
-        != nil
-    else {
-      throw RunStartError(message: "git branch \(planBranch) \(base) failed")
-    }
     return RunPrepared(
-      slug: slug, session: dependencies.newSession(), root: rootPath,
+      slug: slug, session: session, root: rootPath,
       planDirectory: planDirectory.path(percentEncoded: false),
       clock: clock, settings: layout.settings.path(percentEncoded: false),
       warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID,
@@ -174,7 +240,7 @@ extension RunCommand {
     let prompt = RunLaunch.prompt(
       slug: prepared.slug, spec: prepared.clock.spec, planBranch: prepared.clock.planBranch)
     try claude.launch(
-      executable: "claude",
+      executable: try claude.resolve(),
       arguments: RunLaunch.arguments(
         settings: prepared.settings, session: prepared.session, prompt: prompt, extra: extra),
       directory: URL(filePath: prepared.root, directoryHint: .isDirectory))
@@ -270,7 +336,8 @@ struct LiveWarmupSpawner: WarmupSpawning {
         message: "creating the warm-up log's directory: \(error.localizedDescription)")
     }
     // A non-interactive shell's background job ignores SIGINT, and nohup covers SIGHUP, so
-    // stopping the orchestrator from the terminal leaves the warm-up running to the end.
+    // stopping the orchestrator from the terminal leaves the warm-up running to the end. The
+    // shell leads a process group of its own, which the background warm-up keeps.
     let script = #"log="$1"; shift; nohup "$@" </dev/null >>"$log" 2>&1 & echo $!"#
     let output: ProcessOutput
     do {
@@ -288,7 +355,16 @@ struct LiveWarmupSpawner: WarmupSpawning {
     return Int32(output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
-  func stop(pid: Int32) {}
+  /// Signals the warm-up's process group, which holds the warm-up and whatever it started there,
+  /// never this process's own.
+  func stop(pid: Int32) {
+    let group = getpgid(pid)
+    if group > 0, group != getpgrp() {
+      kill(-group, SIGTERM)
+    } else {
+      kill(pid, SIGTERM)
+    }
+  }
 }
 
 /// Replaces this process with `claude`, leaving it the terminal's foreground process.
@@ -296,7 +372,28 @@ struct ExecClaudeLauncher: ClaudeLaunching {
   /// The `PATH` searched for `claude`.
   var searchPath: String? = ProcessInfo.processInfo.environment["PATH"]
 
-  func resolve() throws(RunStartError) -> String { "claude" }
+  /// The first executable `claude` in ``searchPath``, absolute, so `exec` runs exactly what was
+  /// checked before the run was prepared.
+  func resolve() throws(RunStartError) -> String {
+    let current = URL(
+      filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    for entry in (searchPath ?? "").split(separator: ":") {
+      let directory =
+        entry.hasPrefix("/")
+        ? URL(filePath: String(entry), directoryHint: .isDirectory)
+        : current.appending(path: String(entry), directoryHint: .isDirectory)
+      let candidate = directory.appending(path: "claude").standardized.path(percentEncoded: false)
+      var isDirectory: ObjCBool = false
+      if FileManager.default.fileExists(atPath: candidate, isDirectory: &isDirectory),
+        !isDirectory.boolValue, FileManager.default.isExecutableFile(atPath: candidate)
+      {
+        return candidate
+      }
+    }
+    throw RunStartError(
+      message: "no executable claude on PATH (\(searchPath ?? "unset")), so nothing was prepared; "
+        + "put claude on PATH and run again")
+  }
 
   func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError) {
     guard FileManager.default.changeCurrentDirectoryPath(directory.path(percentEncoded: false))
@@ -305,9 +402,9 @@ struct ExecClaudeLauncher: ClaudeLaunching {
     }
     let argv = ["claude"] + arguments
     var pointers = argv.map { strdup($0) } + [nil]
-    execvp(executable, &pointers)
+    execv(executable, &pointers)
     throw RunStartError(
-      message: "claude could not start: \(String(cString: strerror(errno))); is it on PATH?")
+      message: "\(executable) could not start: \(String(cString: strerror(errno)))")
   }
 }
 

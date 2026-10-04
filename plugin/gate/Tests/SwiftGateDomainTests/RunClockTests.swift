@@ -68,7 +68,7 @@ import Testing
   }
 
   @Test(
-    "claude's argv carries the settings, the pinned model, then the prompt before the extra arguments — catches a variadic extra option swallowing the prompt"
+    "claude's argv carries the settings, the pinned model and the session id, then the prompt before the extra arguments — catches a variadic extra option swallowing the prompt"
   )
   func launchArgumentsOrder() {
     let prompt = RunLaunch.prompt(
@@ -80,11 +80,23 @@ import Testing
         + "Spec: /repo/spec.md. Plan branch: swift-harness/export.")
     #expect(
       RunLaunch.arguments(
-        settings: "/repo/.claude/settings.json", session: "", prompt: prompt,
-        extra: ["--add-dir", "/a", "/b"])
+        settings: "/repo/.claude/settings.json", session: "0b6f3c2e-8d1a-4f5b-9c7e-2a4d6f8b0c1e",
+        prompt: prompt, extra: ["--add-dir", "/a", "/b"])
         == [
-          "--settings", "/repo/.claude/settings.json", "--model", "claude-opus-5-5", prompt,
-          "--add-dir", "/a", "/b",
+          "--settings", "/repo/.claude/settings.json", "--model", "claude-opus-5-5",
+          "--session-id", "0b6f3c2e-8d1a-4f5b-9c7e-2a4d6f8b0c1e", prompt, "--add-dir", "/a", "/b",
         ])
+  }
+
+  @Test(
+    "an extra option that would change the session is named, in either spelling, and one after `--` is not — catches claude starting under a session that doesn't hold the plan's lock"
+  )
+  func conflictingSessionOptions() {
+    #expect(RunLaunch.conflictingOption(in: ["-p", "--session-id", "x"]) == "--session-id")
+    #expect(RunLaunch.conflictingOption(in: ["--resume=abc"]) == "--resume")
+    #expect(RunLaunch.conflictingOption(in: ["-c"]) == "-c")
+    #expect(RunLaunch.conflictingOption(in: ["--fork-session"]) == "--fork-session")
+    #expect(RunLaunch.conflictingOption(in: ["-p", "--verbose", "--add-dir", "/a"]) == nil)
+    #expect(RunLaunch.conflictingOption(in: ["--", "--resume"]) == nil)
   }
 }
