@@ -23,7 +23,7 @@ struct CalibrateBuildTests {
 
     /// The build agents and seeds as this checkout has them, without its pass record.
     init(agents: [String] = ["build-worker", "build-fixer"]) throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(
           path: "swiftgate-calibrate-build-\(UUID().uuidString)", directoryHint: .isDirectory
         )
@@ -54,7 +54,7 @@ struct CalibrateBuildTests {
 
     func data(_ path: String) -> Data? { try? Data(contentsOf: root.appending(path: path)) }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   // MARK: - The fake agent
@@ -64,28 +64,23 @@ struct CalibrateBuildTests {
   }
 
   @discardableResult
-  static func git(_ arguments: [String], in directory: String) throws -> String {
-    let process = Process()
-    process.executableURL = URL(filePath: "/usr/bin/git")
-    process.arguments =
-      ["-C", directory, "-c", "user.name=fake agent", "-c", "user.email=agent@example.invalid"]
-      + arguments
+  static func git(_ arguments: [String], in directory: String) async throws -> String {
     var environment = ProcessInfo.processInfo.environment
     for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"] {
       environment[key] = nil
     }
-    process.environment = environment
-    let output = Pipe()
-    process.standardOutput = output
-    process.standardError = output
-    try process.run()
-    let data = output.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    let text = String(decoding: data, as: UTF8.self)
-    guard process.terminationStatus == 0 else {
+    let output = try await LiveProcessRunner(baseEnvironment: environment).run(
+      ProcessInvocation(
+        executable: "/usr/bin/git",
+        arguments: [
+          "-C", directory, "-c", "user.name=fake agent", "-c", "user.email=agent@example.invalid",
+        ] + arguments,
+        timeout: .seconds(60)))
+    let text = output.stdout.text + output.stderr.text
+    guard output.status.isSuccess else {
       throw GitFailed(description: "git \(arguments.joined(separator: " ")): \(text)")
     }
-    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   /// What the fake agent does beyond the known correct diff.
@@ -113,17 +108,17 @@ struct CalibrateBuildTests {
 
   /// Plays whichever build agent the system prompt names, in the sandbox the invocation runs in.
   static func agent(_ repository: Repository, misstep: Misstep = .none) -> FakeProcessRunner {
-    FakeProcessRunner { invocation throws(ProcessRunnerError) in
+    FakeProcessRunner(asyncHandler: { invocation async throws(ProcessRunnerError) in
       do {
-        return try play(invocation, repository: repository, misstep: misstep)
+        return try await play(invocation, repository: repository, misstep: misstep)
       } catch {
         return ProcessOutput(status: .exited(1), stdout: "", stderr: "fake agent: \(error)")
       }
-    }
+    })
   }
 
   static func play(_ invocation: ProcessInvocation, repository: Repository, misstep: Misstep)
-    throws -> ProcessOutput
+    async throws -> ProcessOutput
   {
     let arguments = invocation.arguments
     let systemPrompt =
@@ -145,12 +140,12 @@ struct CalibrateBuildTests {
       try? fileManager.removeItem(at: to)
       try fileManager.copyItem(at: from, to: to)
     }
-    try git(["add", "-A"], in: worktree)
-    try git(["commit", "-q", "--no-edit", "-m", "Keep both greetings"], in: worktree)
-    let head = try git(["rev-parse", "HEAD"], in: worktree)
-    let branch = try git(["symbolic-ref", "--short", "HEAD"], in: worktree)
+    try await git(["add", "-A"], in: worktree)
+    try await git(["commit", "-q", "--no-edit", "-m", "Keep both greetings"], in: worktree)
+    let head = try await git(["rev-parse", "HEAD"], in: worktree)
+    let branch = try await git(["symbolic-ref", "--short", "HEAD"], in: worktree)
     if case .commitToMain = misstep {
-      try git(["update-ref", "refs/heads/main", head], in: worktree)
+      try await git(["update-ref", "refs/heads/main", head], in: worktree)
     }
 
     let runID = "20260927T100000Z-0a1b2c3d"

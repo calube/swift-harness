@@ -34,7 +34,7 @@ struct DoctorCommandTests {
 
   init() throws {
     func directory(_ prefix: String) -> URL {
-      FileManager.default.temporaryDirectory
+      TestTemporaryDirectory.root
         .appending(path: "\(prefix)-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
     }
@@ -52,8 +52,8 @@ struct DoctorCommandTests {
   }
 
   private func cleanUp() {
-    try? FileManager.default.removeItem(at: repository)
-    try? FileManager.default.removeItem(at: plugin)
+    TestTemporaryDirectory.remove(repository)
+    TestTemporaryDirectory.remove(plugin)
   }
 
   /// Records `id` as starting now-ish, against the plugin tree as it is on disk.

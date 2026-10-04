@@ -17,7 +17,7 @@ struct DesignSeedsSelfTestTests {
   }
 
   private static func tempRoot() -> URL {
-    FileManager.default.temporaryDirectory
+    TestTemporaryDirectory.root
       .appending(path: "swiftgate-design-seeds-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
   }

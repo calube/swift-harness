@@ -13,7 +13,7 @@ import Testing
 private struct TemporaryRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -26,7 +26,7 @@ private struct TemporaryRepo {
   var git: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-commit-msg-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -34,7 +34,7 @@ private struct TemporaryRepo {
     try await run("git", "config", "commit.gpgsign", "false")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   @discardableResult
   func run(_ executable: String, _ arguments: String...) async throws -> String {

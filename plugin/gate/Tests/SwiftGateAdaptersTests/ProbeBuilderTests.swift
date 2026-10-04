@@ -53,11 +53,11 @@ struct ProbeBuilderTests {
   }
 
   static func withSandbox(_ body: (Sandbox) async throws -> Void) async throws {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: root) }
+    defer { TestTemporaryDirectory.remove(root) }
     try await body(Sandbox(root: root))
   }
 

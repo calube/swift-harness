@@ -8,12 +8,13 @@
 // plan-lint still reads at the old designSha; a done task's renamed test id, or a module's own
 // test target, keeping a replan red; and a skill step whose command no longer runs.
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitPath } from './developer_tools.mjs'
+import { removeTempTree } from './temp_tree.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const planSkill = () => readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
@@ -145,7 +146,7 @@ function withRepo(body) {
   try {
     return body({ dir, run, skill, plans, readJSON, writeJSON, commitDesign })
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 

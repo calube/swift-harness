@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 /// A real repository: a root commit, then a commit that adds, changes and deletes Swift files and
@@ -8,7 +9,7 @@ import Testing
 struct SurfaceRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -25,7 +26,7 @@ struct SurfaceRepo {
   }
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-surface-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -47,7 +48,7 @@ struct SurfaceRepo {
     head = try await git("rev-parse", "HEAD")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func write(_ path: String, _ text: String) throws {
     let url = root.appending(path: path)

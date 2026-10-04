@@ -13,7 +13,7 @@ import Testing
 private struct RunClone {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -32,7 +32,7 @@ private struct RunClone {
   }
 
   init(files: [String: String]) async throws {
-    let temporary = FileManager.default.temporaryDirectory
+    let temporary = TestTemporaryDirectory.root
       .appending(path: "swiftgate-run-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
     // Git reports real paths, and resolvingSymlinksInPath keeps /var rather than /private/var.
@@ -91,7 +91,7 @@ private struct RunClone {
       warmup: warmup, plugins: plugins, now: now)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 
   /// The PreToolUse hook's decision on a Write of `path` by `session`, from the recorded live
   /// payloads, followed by the rule that denied it: `nil` when the hook leaves the call to the

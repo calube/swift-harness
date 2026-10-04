@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -13,13 +14,13 @@ struct EvidenceCaptureCommandTests {
   static let design = "docs/ordering/designs/queue.md"
 
   static func withTempRoot(_ body: (URL) async throws -> Void) async throws {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-evidence-capture-\(UUID().uuidString)", directoryHint: .isDirectory
       )
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: root) }
+    defer { TestTemporaryDirectory.remove(root) }
     try await body(root)
   }
 

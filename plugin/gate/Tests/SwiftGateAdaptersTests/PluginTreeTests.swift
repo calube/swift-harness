@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 /// A plugin-shaped directory in a temp dir: a manifest, the three prompt trees, and the files
@@ -20,7 +21,7 @@ struct TemporaryPlugin {
   let root: URL
 
   init(_ files: [String: String] = Self.files) throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-plugin-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     for (path, content) in files { try write(path, content) }
@@ -33,7 +34,7 @@ struct TemporaryPlugin {
     try Data(content.utf8).write(to: url)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 }
 
 @Suite("Plugin tree hash")

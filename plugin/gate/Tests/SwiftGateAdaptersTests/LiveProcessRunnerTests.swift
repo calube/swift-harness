@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -428,16 +429,24 @@ struct LiveProcessRunnerTests {
   }
 
   @Test(
-    "standard input is a file already unlinked when the child reads it — catches every run with stdin leaving a temp file behind"
+    "standard input of any size reaches the child whole through a pipe, and a child that never reads it still ends the run — catches stdin files named in the shared temp directory, where a killed run leaves them"
   )
-  func standardInputFileIsUnlinked() async throws {
-    let output = try await runner.run(
-      ProcessInvocation(
-        executable: "/usr/bin/stat", arguments: ["-L", "-f", "%l", "/dev/stdin"],
-        standardInput: Data("input".utf8), timeout: .seconds(10)))
+  func standardInputIsAPipe() async throws {
+    for size in [5, 4 << 20] {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "/bin/sh",
+          arguments: ["-c", "/usr/bin/stat -L -f %HT /dev/stdin; /usr/bin/wc -c | tr -d ' '"],
+          standardInput: Data(repeating: 0x61, count: size), timeout: .seconds(30)))
 
-    #expect(output.status == .exited(0), "\(output.stderr.text)")
-    #expect(output.stdout.text == "0\n", "stdin's file still has a name")
+      #expect(output.status == .exited(0), "\(output.stderr.text)")
+      #expect(output.stdout.text == "Fifo File\n\(size)\n", "\(size) bytes")
+    }
+    let unread = try await runner.run(
+      ProcessInvocation(
+        executable: "/usr/bin/true", standardInput: Data(repeating: 0x61, count: 4 << 20),
+        timeout: .seconds(30)))
+    #expect(unread.status == .exited(0))
   }
 
   @Test(
@@ -489,7 +498,7 @@ private struct HeldPipe {
   private let directory: URL
 
   init() throws {
-    directory = FileManager.default.temporaryDirectory.appending(
+    directory = TestTemporaryDirectory.root.appending(
       path: "swiftgate-held-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     path = directory.appending(path: "held").path
@@ -498,7 +507,7 @@ private struct HeldPipe {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: directory) }
+  func remove() { TestTemporaryDirectory.remove(directory) }
 
   /// The lines written, finishing once every writer has closed the pipe: for a tree that holds it
   /// for life, once the whole tree is gone. Reads on a dedicated thread: opening the pipe for

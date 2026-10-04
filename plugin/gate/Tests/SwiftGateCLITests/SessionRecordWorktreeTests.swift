@@ -18,7 +18,7 @@ private struct LinkedClone {
   let taskWorktree: URL
 
   init() throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "swiftgate-linked-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     clone = base.appending(path: "memos", directoryHint: .isDirectory)

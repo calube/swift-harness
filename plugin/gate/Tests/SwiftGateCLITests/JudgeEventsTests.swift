@@ -250,7 +250,7 @@ struct JudgeEventsTests {
   // MARK: - judge events
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-judge-events-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 

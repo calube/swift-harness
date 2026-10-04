@@ -12,7 +12,7 @@ import Testing
 private struct BashWriteScenario {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -64,7 +64,7 @@ private struct BashWriteScenario {
   }
 
   func remove() {
-    try? FileManager.default.removeItem(at: worktree)
+    TestTemporaryDirectory.remove(worktree)
     main.remove()
   }
 

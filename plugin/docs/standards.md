@@ -86,6 +86,11 @@ Third-party suppressions (`swiftlint:disable*`, `swiftformat:disable`, `peripher
 - **Tell:** `.defaultIsolation(MainActor.self)` in a Core package manifest; `CaseReducerState` conformance errors on `@Reducer` enums.
 - **Enforced by:** arch (package manifest default isolation) + review (`@MainActor` on the UI types) · **Source:** [TCA #3768](https://github.com/pointfreeco/swift-composable-architecture/issues/3768). Incident: none yet.
 
+**C6. Never block a cooperative-pool thread.**
+- **Do:** await, or run blocking work on a thread of its own.
+- **Tell:** `waitUntilExit()`, a semaphore `wait` or blocking `flock` in async code or tests.
+- **Enforced by:** `safety.blocking-in-async` · **Source:** [Swift concurrency: Behind the scenes](https://developer.apple.com/videos/play/wwdc2021/10254/). Incident: 2026-10-04, starved gate tests.
+
 ## 2. Architecture
 
 Every module keeps three invariants: logic lives in a platform-neutral, host-testable Core module and the UI module is thin; every source of nondeterminism is a dependency; Core tests run under `swift test` on the host in seconds.
@@ -621,6 +626,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `obs.direct-logger`, `obs.direct-signposter`, `obs.print` | O3 |
 | `safety.try-bang`, `safety.as-bang`, `safety.fatal-error` | E2 |
 | `safety.unchecked-sendable`, `safety.nonisolated-unsafe`, `safety.preconcurrency` | C2 |
+| `safety.blocking-in-async` | C6 |
 | `tca.banned-api` | A6 |
 | `snap.record-mode` | playbook P4 |
 | `arch.undeclared-kind`, `arch.config-module-mismatch` | A1, A3 |

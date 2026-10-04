@@ -22,7 +22,7 @@ private struct PrebuildClone {
 
   /// `launched` is when `swiftgate run` started the plan, written as its `clock.json`.
   init(launched: Date) throws {
-    parent = FileManager.default.temporaryDirectory.appending(
+    parent = TestTemporaryDirectory.root.appending(
       path: "run-view-prebuild-\(UUID().uuidString)", directoryHint: .isDirectory)
     common = parent.appending(path: "app/.git", directoryHint: .isDirectory)
     let run = Self.captured.appending(path: "build-run-1", directoryHint: .isDirectory)
@@ -68,7 +68,7 @@ private struct PrebuildClone {
     RunViewReader(commonDirectory: common, stateRoot: state, profile: .brownfield)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: parent) }
+  func remove() { TestTemporaryDirectory.remove(parent) }
 }
 
 private func time(_ text: String) throws -> Date {

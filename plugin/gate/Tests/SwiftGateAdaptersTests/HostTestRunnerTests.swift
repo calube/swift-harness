@@ -15,7 +15,7 @@ struct HostTestRunnerTests {
     ])
 
   private func scratch() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-t1-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url

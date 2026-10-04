@@ -8,7 +8,7 @@ import Testing
 @Suite("event store: guard, rotation, sealing, identity and the writer factory")
 struct EventSegmentStoreTests {
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-segments-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -52,7 +52,9 @@ struct EventSegmentStoreTests {
     try await withThrowingTaskGroup(of: Void.self) { group in
       for writer in 0..<8 {
         group.addTask {
-          for index in 0..<500 { try files.append(Self.decision("w\(writer)-\(index)")) }
+          try await OffPool.run {
+            for index in 0..<500 { try files.append(Self.decision("w\(writer)-\(index)")) }
+          }
         }
       }
       try await group.waitForAll()
@@ -216,7 +218,9 @@ struct EventSegmentStoreTests {
       try lines.write(to: directory.appending(path: EventSegmentLayout.plainName(1)))
 
       try await withThrowingTaskGroup(of: Void.self) { group in
-        for _ in 0..<2 { group.addTask { try store.sealPending(.judge) } }
+        for _ in 0..<2 {
+          group.addTask { try await OffPool.run { try store.sealPending(.judge) } }
+        }
         try await group.waitForAll()
       }
 
@@ -269,7 +273,7 @@ struct EventSegmentStoreTests {
     let store = EventSegmentStore(root: root)
 
     let identities = try await withThrowingTaskGroup(of: EventStoreIdentity.self) { group in
-      for _ in 0..<8 { group.addTask { try store.identity() } }
+      for _ in 0..<8 { group.addTask { try await OffPool.run { try store.identity() } } }
       return try await group.reduce(into: [EventStoreIdentity]()) { $0.append($1) }
     }
 

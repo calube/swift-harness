@@ -8,7 +8,7 @@ import Testing
 @Suite("run store gate events")
 struct RunStoreEventsTests {
   private static func temporaryRoot() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-run-events-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     return root

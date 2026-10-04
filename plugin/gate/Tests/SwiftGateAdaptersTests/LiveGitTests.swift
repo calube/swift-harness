@@ -16,19 +16,15 @@ struct TemporaryGitRepository {
     if let directory = ProcessInfo.processInfo.environment["DEVELOPER_DIR"] {
       return directory + "/usr/bin"
     }
-    let process = Process()
-    let stdout = Pipe()
-    process.executableURL = URL(filePath: "/usr/bin/xcode-select")
-    process.arguments = ["-p"]
-    process.standardOutput = stdout
-    process.standardError = FileHandle.nullDevice
-    guard (try? process.run()) != nil else { return nil }
-    let data = stdout.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0 else { return nil }
-    let directory = String(decoding: data, as: UTF8.self)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    return directory.isEmpty ? nil : directory + "/usr/bin"
+    // What `xcode-select -p` prints, read without running it: a first access runs inside a
+    // `static let`'s once-guard on a pool thread, where every other test touching this type
+    // would wait out a child process.
+    let fileManager = FileManager.default
+    let selected =
+      (try? fileManager.destinationOfSymbolicLink(atPath: "/var/db/xcode_select_link"))
+      ?? ["/Applications/Xcode.app/Contents/Developer", "/Library/Developer/CommandLineTools"]
+      .first { fileManager.fileExists(atPath: $0) }
+    return selected.map { $0 + "/usr/bin" }
   }()
 
   static let environment: [String: String] = [
@@ -36,7 +32,7 @@ struct TemporaryGitRepository {
       ([developerTools].compactMap { $0 } + [
         "/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin",
       ]).joined(separator: ":"),
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -49,7 +45,7 @@ struct TemporaryGitRepository {
   var adapter: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-git-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -57,7 +53,7 @@ struct TemporaryGitRepository {
     try await git("config", "commit.gpgsign", "false")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   @discardableResult
   func git(_ arguments: String...) async throws -> String {

@@ -19,7 +19,7 @@ struct HookCommand: AsyncParsableCommand {
   var source: HookSource = .plugin
 
   func run() async throws {
-    let input = FileHandle.standardInput.readDataToEndOfFile()
+    let input = await OffPool.run { FileHandle.standardInput.readDataToEndOfFile() }
     let environment = ProcessInfo.processInfo.environment
     let result = await Self.execute(
       event, input: input, source: source, environment: environment

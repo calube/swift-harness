@@ -61,6 +61,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "step.slice": "a `sprint.json` field a decoding error names",
     "swiftgate.process": "a thread name",
     "swiftgate.measured-process": "a thread name",
+    "swiftgate.blocking": "a thread name",
+    "swiftgate.stdin": "a thread name",
     "config.syntax": "a self-test answer label for a parse error `swiftgate.config` reports",
     "pytest.raises": "a pytest call the neutral assertion table matches",
     "pytest.skip": "a pytest call the neutral unsafe-shortcut table matches",

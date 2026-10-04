@@ -10,7 +10,7 @@ struct JudgeDatasetLoaderTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory.appending(
+      root = TestTemporaryDirectory.root.appending(
         path: "judge-dataset-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }

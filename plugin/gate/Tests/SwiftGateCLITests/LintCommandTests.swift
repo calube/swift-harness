@@ -23,7 +23,7 @@ struct LintCommandTests {
     """
 
   private func makeRepository(_ files: [String: String]) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-lint-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     for (path, content) in files {

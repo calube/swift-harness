@@ -32,7 +32,7 @@ private struct AliasedRepositories {
   let runner = LiveProcessRunner(baseEnvironment: TemporaryGitRepository.environment)
 
   init() throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-plan-lock-cache-\(UUID().uuidString)", directoryHint: .isDirectory
       )
@@ -43,7 +43,7 @@ private struct AliasedRepositories {
     try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: real)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 
   /// A repository with one commit at `real/<name>`.
   func repository(_ name: String) async throws -> URL {

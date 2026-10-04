@@ -64,7 +64,7 @@ struct BootstrapCommandTests {
     let probe: FakeBootstrapProbe
 
     init(copyingSampleApp: Bool, probe: FakeBootstrapProbe) throws {
-      let base = FileManager.default.temporaryDirectory
+      let base = TestTemporaryDirectory.root
         .appending(path: "swiftgate-bootstrap-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       repository = base.appending(path: "repo", directoryHint: .isDirectory)
@@ -113,7 +113,7 @@ struct BootstrapCommandTests {
     }
 
     func remove() {
-      try? FileManager.default.removeItem(at: repository.deletingLastPathComponent())
+      TestTemporaryDirectory.remove(repository.deletingLastPathComponent())
     }
 
     /// Every path under the repository and the home directory, with file contents or link

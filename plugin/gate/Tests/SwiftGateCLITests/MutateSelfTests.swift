@@ -25,7 +25,7 @@ struct MutateSelfTests {
     let runner = LiveProcessRunner()
 
     init(tests: String) async throws {
-      let temporary = FileManager.default.temporaryDirectory
+      let temporary = TestTemporaryDirectory.root
         .appending(path: "swiftgate-mutate-self-\(UUID().uuidString)", directoryHint: .isDirectory)
       try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
       // SwiftPM reports the temporary directory with its `/private` prefix, which Foundation's
@@ -43,7 +43,7 @@ struct MutateSelfTests {
       try FileManager.default.copyItem(
         at: MutateSelfTests.fixtures.appending(path: "Scorer"),
         to: root.appending(path: "Scorer"))
-      try? FileManager.default.removeItem(at: root.appending(path: "Scorer/.build"))
+      TestTemporaryDirectory.remove(root.appending(path: "Scorer/.build"))
       try Data(".build/\n".utf8).write(to: root.appending(path: ".gitignore"))
       try await git("init", "-q", "-b", "main")
       try await git("add", "-A")
@@ -59,7 +59,7 @@ struct MutateSelfTests {
       }
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+    func remove() { TestTemporaryDirectory.remove(root.deletingLastPathComponent()) }
 
     func git(_ arguments: String...) async throws {
       let output = try await runner.run(

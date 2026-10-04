@@ -27,7 +27,7 @@ struct GateBinaryEventsTests {
     var plugin: URL { root.appending(path: "plugin", directoryHint: .isDirectory) }
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-binary-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.createDirectory(
@@ -42,31 +42,23 @@ struct GateBinaryEventsTests {
     }
 
     /// Runs `hook pre-tool-use` on an allowed Bash call with `shim` added to the environment.
-    func hook(shim: [String: String]) throws -> (status: Int32, stderr: String) {
-      let process = Process()
-      process.executableURL = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate")
-      process.arguments = ["hook", "pre-tool-use"]
-      process.currentDirectoryURL = project
+    func hook(shim: [String: String]) async throws -> (
+      status: SwiftGateAdapters.ExitStatus, stderr: String
+    ) {
       var environment = ProcessInfo.processInfo.environment
       environment[GateBinary.sourceHashVariable] = nil
       environment[GateBinaryReader.harnessRootVariable] = nil
       environment["LLVM_PROFILE_FILE"] = root.appending(path: "%p.profraw").path
       environment.merge(shim) { _, new in new }
-      process.environment = environment
-      let input = Pipe()
-      let errors = Pipe()
-      process.standardInput = input
-      process.standardError = errors
-      process.standardOutput = FileHandle.nullDevice
-      try process.run()
-      input.fileHandleForWriting.write(
-        Data(
-          #"{"session_id":"s-1","cwd":"\#(project.path)","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#
-            .utf8))
-      try input.fileHandleForWriting.close()
-      let data = errors.fileHandleForReading.readDataToEndOfFile()
-      process.waitUntilExit()
-      return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+      let output = try await LiveProcessRunner(baseEnvironment: environment).run(
+        ProcessInvocation(
+          executable: Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path,
+          arguments: ["hook", "pre-tool-use"], workingDirectory: project.path,
+          standardInput: Data(
+            #"{"session_id":"s-1","cwd":"\#(project.path)","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}"#
+              .utf8),
+          timeout: .seconds(120)))
+      return (output.status, output.stderr.text)
     }
 
     var hookStream: String {
@@ -80,16 +72,16 @@ struct GateBinaryEventsTests {
   @Test(
     "a hook run with the shim's hash and plugin root writes an event naming that hash and the plugin's version — catches an event written without the binary hash when the shim set it"
   )
-  func shimHashReachesTheEvent() throws {
+  func shimHashReachesTheEvent() async throws {
     let project = try Project()
     defer { try? FileManager.default.removeItem(at: project.root) }
 
-    let result = try project.hook(shim: [
+    let result = try await project.hook(shim: [
       GateBinary.sourceHashVariable: Self.hash,
       GateBinaryReader.harnessRootVariable: project.plugin.path,
     ])
 
-    #expect(result.status == 0, "\(result.stderr)")
+    #expect(result.status == .exited(0), "\(result.stderr)")
     let events = try HarnessEventJSON.decode(Data(project.hookStream.utf8)).events
     #expect(events.count == 1)
     #expect(
@@ -101,14 +93,14 @@ struct GateBinaryEventsTests {
   @Test(
     "a hash variable holding an absolute path writes the event with no binary and never the path — catches an absolute path in the binary field"
   )
-  func pathValuedHashIsLeftOut() throws {
+  func pathValuedHashIsLeftOut() async throws {
     let project = try Project()
     defer { try? FileManager.default.removeItem(at: project.root) }
     let path = project.root.appending(path: "cache/bin/\(Self.hash)/swiftgate").path
 
-    let result = try project.hook(shim: [GateBinary.sourceHashVariable: path])
+    let result = try await project.hook(shim: [GateBinary.sourceHashVariable: path])
 
-    #expect(result.status == 0, "\(result.stderr)")
+    #expect(result.status == .exited(0), "\(result.stderr)")
     let events = try HarnessEventJSON.decode(Data(project.hookStream.utf8)).events
     #expect(events.count == 1)
     #expect(events.first?.source.binary == nil)

@@ -7,12 +7,19 @@ public final class FakeProcessRunner: ProcessRunner {
   public typealias Handler =
     @Sendable (ProcessInvocation) throws(ProcessRunnerError) ->
     ProcessOutput
+  /// For a script that itself runs real processes, which it must await rather than block on.
+  public typealias AsyncHandler =
+    @Sendable (ProcessInvocation) async throws(ProcessRunnerError) -> ProcessOutput
 
-  private let handler: Handler
+  private let handler: AsyncHandler
   private let recorded = Mutex<[ProcessInvocation]>([])
 
   public init(handler: @escaping Handler) {
-    self.handler = handler
+    self.handler = { invocation throws(ProcessRunnerError) in try handler(invocation) }
+  }
+
+  public init(asyncHandler: @escaping AsyncHandler) {
+    self.handler = asyncHandler
   }
 
   public var invocations: [ProcessInvocation] { recorded.withLock { $0 } }
@@ -21,6 +28,6 @@ public final class FakeProcessRunner: ProcessRunner {
     -> ProcessOutput
   {
     recorded.withLock { $0.append(invocation) }
-    return try handler(invocation)
+    return try await handler(invocation)
   }
 }

@@ -1,12 +1,13 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("Warm-up times store")
 struct WarmupTimesStoreTests {
   private static func layout() throws -> (BrownfieldStateLayout, URL) {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-warmup-store-\(UUID().uuidString)", directoryHint: .isDirectory)
     let gitDir = root.appending(path: ".git", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: gitDir, withIntermediateDirectories: true)

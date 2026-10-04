@@ -31,7 +31,7 @@ private struct SurfaceReturnScenario {
   ///   - surfaceFiles: the files the plan surface commit adds on `main`.
   ///   - planFile: whether `plan.json` records the surface commit, records none, or is absent.
   init(surfaceFiles: [String: String], planFile: PlanFileState = .surface) async throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "check-return-surface-\(UUID().uuidString)", directoryHint: .isDirectory)
     let main = base.appending(path: "app", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: main, withIntermediateDirectories: true)
@@ -144,7 +144,7 @@ private struct SurfaceReturnScenario {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 }
 
 @Suite("build check-return against the plan surface")

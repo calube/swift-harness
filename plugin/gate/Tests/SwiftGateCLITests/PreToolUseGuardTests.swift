@@ -525,7 +525,7 @@ struct DesignOwnershipHookTests {
 struct NestedProjectDesignTests {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
   ]
 
@@ -591,7 +591,7 @@ private final class CommonDirectoryCallCounter: ProcessRunner {
 private struct CachedGuardScenario {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
@@ -612,7 +612,7 @@ private struct CachedGuardScenario {
   let counter: CommonDirectoryCallCounter
 
   init() async throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "swiftgate-cached-guard-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let real = base.appending(path: "real", directoryHint: .isDirectory)
@@ -650,7 +650,7 @@ private struct CachedGuardScenario {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 
   static func write(_ absolute: String, _ content: String) throws {
     let url = URL(filePath: absolute)

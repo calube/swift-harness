@@ -22,7 +22,7 @@ struct DesignRenderCommandTests {
     let root: URL
 
     init(doc: String, claims: String?) throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(
           path: "swiftgate-design-render-\(UUID().uuidString)", directoryHint: .isDirectory
         )
@@ -48,7 +48,7 @@ struct DesignRenderCommandTests {
         root: root, git: FakeGit(), runner: runner)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   static func validDoc() throws -> String {

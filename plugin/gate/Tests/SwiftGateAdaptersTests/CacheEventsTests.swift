@@ -45,7 +45,7 @@ struct CacheEventsTests {
     let reported = Lines()
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-cache-events-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.createDirectory(
@@ -102,7 +102,7 @@ struct CacheEventsTests {
       }
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   private struct NotACacheLookup: Error {

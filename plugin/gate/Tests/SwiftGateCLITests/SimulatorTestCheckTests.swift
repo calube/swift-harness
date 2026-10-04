@@ -12,7 +12,7 @@ private struct SimulatorRepository {
   let root: URL
 
   init(appContainer: String? = "SampleApp.xcodeproj") throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-sim-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -22,7 +22,7 @@ private struct SimulatorRepository {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func context() -> GateRun.Context {
     GateRun.Context(runID: "r", directory: root.appending(path: ".harness/runs/r"))

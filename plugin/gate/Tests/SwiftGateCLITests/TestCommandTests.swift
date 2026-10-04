@@ -23,7 +23,7 @@ struct ProbeRepository {
     """
 
   init(config: String? = Self.config) throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-probe-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let package = root.appending(path: "XUnitProbe", directoryHint: .isDirectory)
@@ -35,7 +35,7 @@ struct ProbeRepository {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func write(_ path: String, _ content: String) throws {
     let url = root.appending(path: path)

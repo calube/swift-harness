@@ -181,7 +181,7 @@ struct JudgeAskCommand: AsyncParsableCommand {
     do {
       data =
         input == "-"
-        ? FileHandle.standardInput.readDataToEndOfFile()
+        ? await OffPool.run { FileHandle.standardInput.readDataToEndOfFile() }
         : try Data(contentsOf: URL(filePath: input, relativeTo: root))
     } catch {
       throw Self.fail(

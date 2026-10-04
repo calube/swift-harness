@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 /// `swift test` puts its own test-runner helper (`xctest` on this toolchain, `swiftpm-testing-helper`
@@ -41,7 +42,7 @@ struct MutationOrphanTests {
 
     init() throws {
       uniqueToken = "swiftgate-mutation-orphan-\(UUID().uuidString)"
-      root = FileManager.default.temporaryDirectory.appending(
+      root = TestTemporaryDirectory.root.appending(
         path: uniqueToken, directoryHint: .isDirectory)
       let hang = root.appending(path: "Hang", directoryHint: .isDirectory)
       let sourceFile = hang.appending(path: "Sources/Hang/Hang.swift")
@@ -75,7 +76,22 @@ struct MutationOrphanTests {
       ).write(to: hang.appending(path: "Tests/HangTests/HangTests.swift"))
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
+
+    /// Makes a package for `body`, then kills whatever it left running and removes it, whether
+    /// `body` throws or not.
+    static func with(_ body: (Package) async throws -> Void) async throws {
+      let package = try Package()
+      let outcome: Result<Void, any Error>
+      do {
+        outcome = .success(try await body(package))
+      } catch {
+        outcome = .failure(error)
+      }
+      await package.killSurvivors()
+      package.remove()
+      try outcome.get()
+    }
 
     /// Waits until no process anywhere on the machine names this package's one-of-a-kind temp
     /// path — the mark of a real orphan, not just this test's own already-reaped child — and
@@ -85,12 +101,21 @@ struct MutationOrphanTests {
     /// so a single look races the kill. The wait is on each survivor's own exit, through kqueue.
     /// An orphan nothing signalled spins for `hangSeconds`, long past the deadline, so it still
     /// fails.
-    func survivors(reapedWithin deadline: Duration) throws -> [String] {
+    func survivors(reapedWithin deadline: Duration) async throws -> [String] {
+      let pids = try await survivors()
+      try await OffPool.run { () throws(POSIXError) in
+        try Self.awaitExits(of: pids, within: deadline)
+      }
+      return try await survivorLines().map(String.init)
+    }
+
+    /// Blocks on kqueue until every one of `pids` has exited or `deadline` has passed.
+    private static func awaitExits(of pids: [pid_t], within deadline: Duration) throws(POSIXError) {
       let queue = kqueue()
       guard queue >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
       defer { close(queue) }
       var watched = 0
-      for pid in try survivors() {
+      for pid in pids {
         var change = kevent(
           ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
           fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
@@ -113,38 +138,31 @@ struct MutationOrphanTests {
           throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
       }
-      return try survivorLines().map(String.init)
     }
 
     /// Every process whose command line names this package's temp path, by pid.
-    func survivors() throws -> [pid_t] {
-      try survivorLines().compactMap {
+    func survivors() async throws -> [pid_t] {
+      try await survivorLines().compactMap {
         pid_t($0.split(separator: " ", maxSplits: 1).first ?? "")
       }
     }
 
     /// The `pid ppid pgid state command` line of every process whose command line names this
-    /// package's temp path. Reads the pipe before waiting on the process: on a machine busy enough
-    /// to fill it, waiting first deadlocks against the child blocked writing to a full pipe nobody
-    /// is draining.
-    private func survivorLines() throws -> [Substring] {
-      let pipe = Pipe()
-      let process = Process()
-      process.executableURL = URL(filePath: "/bin/ps")
-      process.arguments = ["-Ao", "pid=,ppid=,pgid=,stat=,command="]
-      process.standardOutput = pipe
-      try process.run()
-      let data = pipe.fileHandleForReading.readDataToEndOfFile()
-      process.waitUntilExit()
-      return String(decoding: data, as: UTF8.self).split(separator: "\n")
+    /// package's temp path.
+    private func survivorLines() async throws -> [Substring] {
+      let output = try await LiveProcessRunner().run(
+        ProcessInvocation(
+          executable: "/bin/ps", arguments: ["-Ao", "pid=,ppid=,pgid=,stat=,command="],
+          timeout: .seconds(60)))
+      return output.stdout.text.split(separator: "\n")
         .map { line in line.drop { $0 == " " } }
         .filter { $0.contains(uniqueToken) }
     }
 
     /// Kills whatever is still running from this package, whether the test passed or failed, so
     /// a run against an unfixed runner doesn't leave its orphan spinning until the deadline.
-    func killSurvivors() {
-      for pid in (try? survivors()) ?? [] { kill(pid, SIGKILL) }
+    func killSurvivors() async {
+      for pid in (try? await survivors()) ?? [] { kill(pid, SIGKILL) }
     }
   }
 
@@ -153,39 +171,36 @@ struct MutationOrphanTests {
     .timeLimit(.minutes(10))
   )
   func timeoutTakesTheProcessTreeDown() async throws {
-    let package = try Package()
-    defer {
-      package.killSurvivors()
-      package.remove()
-    }
-    let toolchain = LiveMutationToolchain(runner: LiveProcessRunner())
-    let selection = HostTestSelection(
-      packagePath: "Hang",
-      targets: [TestTargetReference(name: "HangTests", path: "Hang/Tests/HangTests")])
-    func reportPath() -> String {
-      package.root.appending(path: "reports/\(UUID().uuidString).xml").path
-    }
+    try await Package.with { package in
+      let toolchain = LiveMutationToolchain(runner: LiveProcessRunner())
+      let selection = HostTestSelection(
+        packagePath: "Hang",
+        targets: [TestTargetReference(name: "HangTests", path: "Hang/Tests/HangTests")])
+      func reportPath() -> String {
+        package.root.appending(path: "reports/\(UUID().uuidString).xml").path
+      }
 
-    let built = await toolchain.buildTests(root: package.root, packageDirectory: "Hang")
-    guard case .built = built else {
-      Issue.record("expected the mutant to build, got \(built)")
-      return
-    }
+      let built = await toolchain.buildTests(root: package.root, packageDirectory: "Hang")
+      guard case .built = built else {
+        Issue.record("expected the mutant to build, got \(built)")
+        return
+      }
 
-    let (result, _) = await toolchain.test(
-      root: package.root, selection: selection, timeout: .seconds(5), reportPath: reportPath())
-    guard case .timedOut = result else {
-      Issue.record("expected timedOut, got \(result)")
-      return
-    }
+      let (result, _) = await toolchain.test(
+        root: package.root, selection: selection, timeout: .seconds(5), reportPath: reportPath())
+      guard case .timedOut = result else {
+        Issue.record("expected timedOut, got \(result)")
+        return
+      }
 
-    let survivors = try package.survivors(reapedWithin: Self.reapDeadline)
-    #expect(
-      survivors.isEmpty,
-      """
-      \(survivors.count) descendant(s) of the timed-out test run still running \(Self.reapDeadline) \
-      after the runner returned (pid ppid pgid state command):
-      \(survivors.joined(separator: "\n"))
-      """)
+      let survivors = try await package.survivors(reapedWithin: Self.reapDeadline)
+      #expect(
+        survivors.isEmpty,
+        """
+        \(survivors.count) descendant(s) of the timed-out test run still running \(Self.reapDeadline) \
+        after the runner returned (pid ppid pgid state command):
+        \(survivors.joined(separator: "\n"))
+        """)
+    }
   }
 }

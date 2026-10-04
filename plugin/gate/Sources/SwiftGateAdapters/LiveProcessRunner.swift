@@ -41,18 +41,24 @@ public struct LiveProcessRunner: ProcessRunner {
     -> ProcessOutput
   {
     let environment = effectiveEnvironment(overlay: invocation.environmentOverlay)
-    let path = try resolveExecutable(invocation.executable, environment: environment)
-    let spawn = SpawnRequest(
-      path: path, invocation: invocation, environment: environment,
-      terminationGracePeriod: terminationGracePeriod, postExitDrainLimit: postExitDrainLimit,
-      now: now)
     let cancellation = CancellationSignal()
 
     let result = await withTaskCancellationHandler {
       await withCheckedContinuation {
         (continuation: CheckedContinuation<Result<ProcessOutput, ProcessRunnerError>, Never>) in
-        let thread = Thread {
-          continuation.resume(returning: spawn.execute(cancellation: cancellation))
+        // Resolving the executable runs `xcode-select` once per process, so it happens here too.
+        let thread = Thread { [self] in
+          let resolved = Result { () throws(ProcessRunnerError) -> String in
+            try resolveExecutable(invocation.executable, environment: environment)
+          }
+          continuation.resume(
+            returning: resolved.flatMap { path in
+              SpawnRequest(
+                path: path, invocation: invocation, environment: environment,
+                terminationGracePeriod: terminationGracePeriod,
+                postExitDrainLimit: postExitDrainLimit, now: now
+              ).execute(cancellation: cancellation)
+            })
         }
         thread.name = "swiftgate.process"
         thread.start()
@@ -227,7 +233,7 @@ private struct SpawnRequest: Sendable {
 
     let stdin: Int32?
     do {
-      stdin = try invocation.standardInput.map(Self.unlinkedFile(holding:))
+      stdin = try invocation.standardInput.map(Self.standardInputPipe(holding:))
     } catch {
       stdoutPipe.closeAll()
       stderrPipe.closeAll()
@@ -318,30 +324,58 @@ private struct SpawnRequest: Sendable {
     }
   }
 
-  /// Standard input is a file rather than a pipe: the child reads it at its own pace, so a child
-  /// that writes a lot before reading cannot deadlock against a parent blocked on a full pipe.
-  private static func unlinkedFile(holding data: Data) throws(SystemError) -> Int32 {
-    var template = Array((NSTemporaryDirectory() + "swiftgate-stdin.XXXXXX").utf8CString)
-    let fd = template.withUnsafeMutableBufferPointer { mkstemp($0.baseAddress) }
-    guard fd >= 0 else { throw SystemError(code: errno) }
-    // mkstemp filled in the X's; the trailing NUL is not part of the path.
-    unlink(String(decoding: template.dropLast().map { UInt8(bitPattern: $0) }, as: UTF8.self))
-    _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+  /// Standard input is a pipe, and no file ever has a name for it, so a run killed midway leaves
+  /// nothing behind in the temp directory. What fits in the pipe's buffer is written before the
+  /// spawn; the rest is written by a thread of its own, so a child that writes a lot before it
+  /// reads can't deadlock against a parent blocked on a full pipe.
+  private static func standardInputPipe(holding data: Data) throws(SystemError) -> Int32 {
+    var fds: [Int32] = [0, 0]
+    guard pipe(&fds) == 0 else { throw SystemError(code: errno) }
+    let (read, write) = (fds[0], fds[1])
+    for fd in fds { _ = fcntl(fd, F_SETFD, FD_CLOEXEC) }
+    // A child that exits without reading fails the write with EPIPE instead of signalling us.
+    _ = fcntl(write, F_SETNOSIGPIPE, 1)
+    _ = fcntl(write, F_SETFL, fcntl(write, F_GETFL) | O_NONBLOCK)
+    let written: Int
+    do throws(SystemError) {
+      written = try writeUntilFull(data, to: write)
+    } catch {
+      close(read)
+      close(write)
+      throw error
+    }
+    guard written < data.count else {
+      close(write)
+      return read
+    }
+    _ = fcntl(write, F_SETFL, fcntl(write, F_GETFL) & ~O_NONBLOCK)
+    let rest = data.subdata(in: written..<data.count)
+    let writer = Thread {
+      _ = try? writeUntilFull(rest, to: write)
+      close(write)
+    }
+    writer.name = "swiftgate.stdin"
+    writer.start()
+    return read
+  }
+
+  /// Writes from the start of `data` until it is all written or a non-blocking `fd` is full;
+  /// returns how much was written. Any error but a full pipe is thrown, EPIPE included.
+  private static func writeUntilFull(_ data: Data, to fd: Int32) throws(SystemError) -> Int {
     var offset = 0
     while offset < data.count {
-      let written = data.withUnsafeBytes { buffer in
+      let count = data.withUnsafeBytes { buffer in
         Darwin.write(fd, buffer.baseAddress?.advanced(by: offset), data.count - offset)
       }
-      // A write to a local regular file is never interrupted by a signal.
-      if written < 0 {
-        let code = errno
-        close(fd)
-        throw SystemError(code: code)
+      if count >= 0 {
+        offset += count
+      } else if errno == EAGAIN {
+        break
+      } else if errno != EINTR {
+        throw SystemError(code: errno)
       }
-      offset += written
     }
-    lseek(fd, 0, SEEK_SET)
-    return fd
+    return offset
   }
 
   private func spawn(stdin: Int32?, stdout: Int32, stderr: Int32) -> Result<pid_t, SystemError> {

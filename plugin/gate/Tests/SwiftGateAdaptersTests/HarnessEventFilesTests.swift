@@ -12,7 +12,7 @@ struct HarnessEventFilesTests {
     declaredTier: "T1")
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-events-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -45,7 +45,9 @@ struct HarnessEventFilesTests {
     try await withThrowingTaskGroup(of: Void.self) { group in
       for writer in 0..<16 {
         group.addTask {
-          for index in 0..<40 { try files.append(Self.call("w\(writer)-\(index)")) }
+          try await OffPool.run {
+            for index in 0..<40 { try files.append(Self.call("w\(writer)-\(index)")) }
+          }
         }
       }
       try await group.waitForAll()

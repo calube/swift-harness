@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 /// Claims shaped like spec §5.2 examples. Every package claim cites a `.build/checkouts` path at
@@ -39,7 +40,7 @@ private struct ScratchHome {
   let url: URL
 
   init() throws {
-    url = FileManager.default.temporaryDirectory
+    url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-evidence-cache-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -55,7 +56,7 @@ private struct ScratchHome {
         pollInterval: .milliseconds(2)))
   }
 
-  func remove() { try? FileManager.default.removeItem(at: url) }
+  func remove() { TestTemporaryDirectory.remove(url) }
 }
 
 /// Relaunches this test bundle under the swift-testing helper that is running it, so a test can

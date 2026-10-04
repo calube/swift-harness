@@ -66,7 +66,7 @@ struct EventsSummaryRollupTests {
   /// 3 captured runs, each sealed into its own `test` segment with its rollup, a 4th run's
   /// results still active, and the captured gate, hook, cache and judge lines.
   static func store() throws -> URL {
-    let root = FileManager.default.temporaryDirectory.appending(
+    let root = TestTemporaryDirectory.root.appending(
       path: "swiftgate-summary-rollup-\(UUID().uuidString)", directoryHint: .isDirectory)
     let sealing = EventSegmentStore(root: root, rotationBytes: { _ in 1 << 20 })
     for copy in 0..<3 {
