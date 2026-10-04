@@ -25,10 +25,13 @@ public enum BaselineStepResult: Sendable, Hashable {
   case failedTests(Set<String>)
   /// Failed with no test id to read: no JUnit, an unreadable report, a crash or a timeout.
   case failed
+  /// Exited 127: the shell couldn't find the command's tool, so the step checked nothing.
+  case notInstalled
 
   public static func of(_ outcome: AreaCommandOutcome) -> BaselineStepResult {
     switch outcome {
     case .passed: return .passed
+    case .failed(127, _, _): return .notInstalled
     case .failed(_, _, let junit?):
       let tests = Self.failingTests(junit)
       return tests.isEmpty ? .failed : .failedTests(tests)
@@ -129,6 +132,7 @@ public struct BaselineFile: Sendable, Equatable {
       switch (record.result, record.tests) {
       case (.passed, nil): result = .passed
       case (.failed, nil): result = .failed
+      case (.notInstalled, nil): result = .notInstalled
       case (.failedTests, let tests?) where !tests.isEmpty: result = .failedTests(Set(tests))
       default:
         throw BaselineFileError(
@@ -153,6 +157,7 @@ public struct BaselineFile: Sendable, Equatable {
           switch record.result {
           case .passed: (.passed, nil)
           case .failed: (.failed, nil)
+          case .notInstalled: (.notInstalled, nil)
           case .failedTests(let tests): (.failedTests, tests.sorted())
           }
         return StoredRecord(
@@ -182,6 +187,7 @@ public struct BaselineFile: Sendable, Equatable {
   private enum StoredResult: String, Codable {
     case passed, failed
     case failedTests = "failed-tests"
+    case notInstalled = "not-installed"
   }
 
   private struct StoredRecord: Codable {
@@ -206,10 +212,16 @@ public struct BaselineVerdict: Sendable, Equatable {
   public let absorbed: [BaselineFailure]
   /// Failing at the head only, or with no answer at the base: these gate.
   public let remaining: [BaselineFailure]
+  /// Not installed at both the head and the base tree: neither absorbed nor gating, and reported.
+  public let notInstalled: [BaselineStepKey]
 
-  public init(absorbed: [BaselineFailure] = [], remaining: [BaselineFailure] = []) {
+  public init(
+    absorbed: [BaselineFailure] = [], remaining: [BaselineFailure] = [],
+    notInstalled: [BaselineStepKey] = []
+  ) {
     self.absorbed = absorbed
     self.remaining = remaining
+    self.notInstalled = notInstalled
   }
 
   /// `gate.run`'s `baselineCount`.
@@ -231,6 +243,21 @@ public struct BaselineVerdict: Sendable, Equatable {
   }
 }
 
+extension BaselineVerdict {
+  /// 1 non-gating `area.step-dropped` per step whose tool isn't installed.
+  public func notInstalledFindings(file: String) -> [Finding] {
+    notInstalled.compactMap { key in
+      try? Finding(
+        ruleID: BrownfieldRuleID.stepDropped.rawValue, severity: .minor, file: file, line: nil,
+        message:
+          "\(key.area) \(key.step.rawValue): its command's tool isn't installed (exit 127 at the "
+          + "head and the merge base), so the step checked nothing; put the tool on PATH or drop "
+          + "the step",
+        failureScenario: nil)
+    }
+  }
+}
+
 public enum Baseline {
   /// The failures a step's result holds.
   public static func failures(of key: BaselineStepKey, _ result: BaselineStepResult)
@@ -239,6 +266,7 @@ public enum Baseline {
     switch result {
     case .passed: []
     case .failed: [BaselineFailure(key: key, test: nil)]
+    case .notInstalled: []
     case .failedTests(let tests):
       tests.sorted().map { BaselineFailure(key: key, test: $0) }
     }
@@ -246,12 +274,24 @@ public enum Baseline {
 
   /// A head failure is absorbed only when the base answer for the same key holds the same
   /// failure: a whole-step failure never absorbs a named test, nor a named test a whole step.
+  /// A step not installed at the head is never absorbed: it is reported when the base can't run
+  /// it either, and gates when the base can.
   public static func compare(
     head: [BaselineStepKey: BaselineStepResult], base: [BaselineStepKey: BaselineStepResult]
   ) -> BaselineVerdict {
     var absorbed: [BaselineFailure] = []
     var remaining: [BaselineFailure] = []
+    var notInstalled: [BaselineStepKey] = []
     for key in head.keys.sorted(by: Self.order) {
+      if head[key] == .notInstalled {
+        // A whole-step failure recorded before not-installed was its own answer reads the same.
+        if base[key] == .notInstalled || base[key] == .failed {
+          notInstalled.append(key)
+        } else {
+          remaining.append(BaselineFailure(key: key, test: nil))
+        }
+        continue
+      }
       let known = Set(base[key].map { failures(of: key, $0) } ?? [])
       for failure in failures(of: key, head[key] ?? .passed) {
         if known.contains(failure) {
@@ -261,7 +301,7 @@ public enum Baseline {
         }
       }
     }
-    return BaselineVerdict(absorbed: absorbed, remaining: remaining)
+    return BaselineVerdict(absorbed: absorbed, remaining: remaining, notInstalled: notInstalled)
   }
 
   private static func order(_ lhs: BaselineStepKey, _ rhs: BaselineStepKey) -> Bool {

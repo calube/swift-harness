@@ -211,6 +211,27 @@ import Testing
     #expect(lines("Dropped steps", in: report.text) == ["api lint: ruff isn't installed"])
   }
 
+  @Test(
+    "a step the baseline found not installed is a dropped step, not a baseline failure — catches a missing linter listed as the base tree failing"
+  )
+  func notInstalledIsDroppedNotBaseline() {
+    let lint = BaselineStepKey(
+      area: "web", step: .lint, command: "eslint {files}", selection: ["web/export.ts"])
+    let file = BaselineFile(
+      tree: "abc123", records: Self.baseline.records + [.init(key: lint, result: .notInstalled)])
+    let report = BrownfieldRunReport.make(
+      Self.inputs(baseline: .read(file), discover: .read(Self.discover())))
+
+    #expect(
+      report.baselineFailures.items == [
+        .init(area: "api", step: .test, test: "tests.test_dates.test_leap_year")
+      ])
+    #expect(!lines("Baseline failures", in: report.text).contains { $0.contains("lint") })
+    let dropped = lines("Dropped steps", in: report.text)
+    #expect(dropped.contains { $0.hasPrefix("web lint: ") && $0.contains("isn't installed") })
+    #expect(report.droppedSteps.items.filter { $0.area == "web" && $0.step == .lint }.count == 1)
+  }
+
   @Test("the final verdict leads the report, the last final gate winning — catches a stale verdict")
   func finalVerdictFirst() {
     let report = BrownfieldRunReport.make(

@@ -46,6 +46,8 @@ public enum RunViewFailureReasons {
       return ("Dependency install failed.", false)
     case (.build, .failed?), (.build, .failedTests?):
       return ("Base commit doesn't build; failure recorded as baseline.", true)
+    case (.build, .notInstalled?), (.test, .notInstalled?):
+      return ("The tool this step needs isn't installed at the base commit.", false)
     case (.build, .passed?):
       return ("Build failed here, but the baseline records a pass.", false)
     case (.build, nil):

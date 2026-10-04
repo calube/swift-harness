@@ -190,6 +190,30 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "final reports a lint whose tool isn't on PATH at the head and the merge base as not installed, never absorbed — catches a final GREEN with lint absorbed as the whole step every gate"
+  )
+  func lintNotInstalledIsReported() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let missing = try Fixture.areaRun("swift/lint-not-installed")
+    let runner = FakeAreaCommandRunner { request in request.step == .lint ? missing : .passed }
+
+    let parts = try await Self.run(
+      clone, tier: .final, areas: [Self.area("web", lint: "swiftlint lint {files}")],
+      changed: ["web/src/lib.js"], runner: runner)
+
+    #expect(runner.requests.contains { $0.step == .lint && clone.inScratch($0) })
+    #expect(parts.baselineCount == 0)
+    #expect(!parts.findings.contains { $0.ruleID == BrownfieldRuleID.baselineSummary.rawValue })
+    #expect(
+      parts.findings.contains {
+        $0.ruleID == BrownfieldRuleID.stepDropped.rawValue && $0.message.contains("web lint")
+          && $0.message.contains("isn't installed")
+      })
+    #expect(Self.verdict(parts) == .green)
+  }
+
+  @Test(
     "merge and final hand gate.run the count of failures the baseline absorbed, 0 when none failed — catches the final gate of the fifth memos trial, which absorbed 3 and wrote no baselineCount"
   )
   func baselineCountReachesTheGateRun() async throws {

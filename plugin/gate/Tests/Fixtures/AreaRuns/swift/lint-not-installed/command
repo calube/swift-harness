@@ -1,0 +1,1 @@
+swiftlint lint --config .swiftlint.yml Aidoku/Core/Downloads/Models/Download.swift

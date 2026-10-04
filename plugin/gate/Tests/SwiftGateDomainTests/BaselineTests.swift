@@ -69,6 +69,45 @@ struct BaselineTests {
   }
 
   @Test(
+    "a step not installed at both trees is reported, neither absorbed nor gating, and one not installed at the head only gates — catches a missing linter absorbed as a known failure"
+  )
+  func notInstalledIsReportedNotAbsorbed() throws {
+    let lint = BaselineStepKey(
+      area: "Aidoku", step: .lint, command: "swiftlint lint --config .swiftlint.yml {files}",
+      selection: ["Aidoku/Core/Downloads/Models/Download.swift"])
+    let both = Baseline.compare(head: [lint: .notInstalled], base: [lint: .notInstalled])
+    let headOnly = Baseline.compare(head: [lint: .notInstalled], base: [lint: .passed])
+
+    #expect(both.absorbed.isEmpty && both.remaining.isEmpty)
+    #expect(both.notInstalled == [lint])
+    #expect(both.baselineCount == 0)
+    #expect(both.summary(file: "baseline/t.json") == nil)
+    #expect(headOnly.remaining == [BaselineFailure(key: lint, test: nil)])
+    #expect(headOnly.notInstalled.isEmpty)
+
+    let findings = both.notInstalledFindings(file: "baseline/t.json")
+    #expect(findings.count == 1)
+    let finding = try #require(findings.first)
+    #expect(finding.ruleID == BrownfieldRuleID.stepDropped.rawValue)
+    #expect(!finding.severity.failsGate)
+    #expect(finding.severity != .nit, "a step that checked nothing is no nit")
+    #expect(finding.message.contains("Aidoku lint") && finding.message.contains("isn't installed"))
+    #expect(BaselineVerdict().notInstalledFindings(file: "baseline/t.json").isEmpty)
+  }
+
+  @Test(
+    "a not-installed answer round-trips and lists no baseline failure — catches a missing tool stored as a failed step"
+  )
+  func notInstalledRoundTrips() throws {
+    let lint = BaselineStepKey(area: "web", step: .lint, command: "eslint {files}")
+    let file = BaselineFile(tree: "abc", records: [.init(key: lint, result: .notInstalled)])
+
+    #expect(String(decoding: file.encoded(), as: UTF8.self).contains("\"not-installed\""))
+    #expect(try BaselineFile.decode(file.encoded(), tree: "abc") == file)
+    #expect(Baseline.failures(of: lint, .notInstalled).isEmpty)
+  }
+
+  @Test(
     "a file round-trips, and a newer answer for a key replaces the older — catches a merge that keeps a stale answer"
   )
   func fileRoundTripsAndMerges() throws {
@@ -169,6 +208,17 @@ struct BaselineAreaRunTests {
     ])
   func runsWithoutTestIDs(ecosystem: String, run: String, expected: BaselineStepResult) throws {
     #expect(BaselineStepResult.of(try Self.outcome(ecosystem, run)) == expected)
+  }
+
+  @Test(
+    "a captured lint whose tool isn't on PATH reads as not installed — catches exit 127 read as the step failing"
+  )
+  func missingToolReadsAsNotInstalled() throws {
+    let outcome = try Fixture.areaRun("swift/lint-not-installed")
+    #expect(outcome.toolNotInstalled)
+    #expect(BaselineStepResult.of(outcome) == .notInstalled)
+    #expect(!(try Self.outcome("swift", "lint")).toolNotInstalled)
+    #expect(!(try Self.outcome("python", "test-crash")).toolNotInstalled)
   }
 
   @Test(

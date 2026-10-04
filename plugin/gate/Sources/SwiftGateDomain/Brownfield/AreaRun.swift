@@ -38,3 +38,10 @@ public enum AreaCommandOutcome: Sendable, Equatable {
   case crashed(signal: Int32?, tail: String)
   case timedOut(tail: String)
 }
+
+extension AreaCommandOutcome {
+  /// `/bin/sh` exits 127 when it can't find the command's tool.
+  public var toolNotInstalled: Bool {
+    if case .failed(127, _, _) = self { true } else { false }
+  }
+}

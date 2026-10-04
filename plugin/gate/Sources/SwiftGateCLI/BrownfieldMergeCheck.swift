@@ -186,7 +186,7 @@ enum BrownfieldMergeCheck {
     let failing = stepRuns.filter { run in
       switch run.outcome {
       case .passed: false
-      default: run.step != .lint || run.lintUnread
+      default: run.step != .lint || run.lintUnread || run.outcome.toolNotInstalled
       }
     }
     if !failing.isEmpty {

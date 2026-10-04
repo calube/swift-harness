@@ -1744,6 +1744,19 @@ The Ruby tests come from `rubocop/rubocop`, which is not in the plan's fixture l
 repository bundles `rspec_junit_formatter`, so `ruby` has no `junit.xml`. Cargo and Go write no JUnit;
 Go's `-json` stream is the structured output. No tool was missing.
 
+`swift/lint-not-installed` is the one case whose tool is missing on purpose: `swift/lint`'s linter
+with `swiftlint` off `PATH`, as a run whose shell never activated the repository's tool manager sees
+it. Captured 2026-10-04 on macOS 26.5.1 from a clone of `Aidoku/Aidoku` at
+`3091ef26e593d303e34afed70bc8c5997c105f80`, with no edit, so it has no `change.diff`:
+
+```sh
+cd <clone> && c='swiftlint lint --config .swiftlint.yml Aidoku/Core/Downloads/Models/Download.swift'
+printf '%s\n' "$c" > $F/swift/lint-not-installed/command
+env -i HOME=/nonexistent PATH=/usr/bin:/bin /bin/sh -c "$c" \
+  > $F/swift/lint-not-installed/stdout 2> $F/swift/lint-not-installed/stderr
+echo $? > $F/swift/lint-not-installed/exit    # 127
+```
+
 ### Scratch environment and helpers
 
 ```sh

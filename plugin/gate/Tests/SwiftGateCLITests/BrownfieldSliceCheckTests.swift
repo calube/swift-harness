@@ -254,6 +254,70 @@ struct BrownfieldSliceCheckTests {
     #expect(Self.verdict(parts) == .green)
   }
 
+  @Test(
+    "an area whose warm test time fits the budget but whose change selects no test still builds — catches a slice GREEN in a second on a commit that adds a type and compiles nothing"
+  )
+  func noSelectedTestStillBuilds() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let scratch = clone.scratch.path(percentEncoded: false)
+    let runner = FakeAreaCommandRunner { request in
+      request.step == .build && !request.workingDirectory.hasPrefix(scratch)
+        ? .failed(exit: 65, tail: "** BUILD FAILED **", junit: nil) : .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: [Self.area("api")],
+      changes: [Change(path: "api/src/summary.py", text: "x = 1\n", added: [1...1])],
+      runner: runner, warm: ["api": 2_455], context: context)
+
+    #expect(
+      runner.requests.contains { $0.area == "api" && $0.step == .build && !clone.inScratch($0) },
+      "the change's code is compiled at the head")
+    #expect(context.steps.steps.contains { $0.step == .areaBuild && $0.area == "api" })
+    #expect(!runner.requests.contains { $0.step == .testFiles || $0.step == .test })
+    #expect(Self.gating(parts) == ["area.build-failed api"])
+  }
+
+  @Test(
+    "a lint whose tool isn't on PATH at the head and the merge base is reported as not installed, never absorbed — catches a missing linter that checks nothing all run behind the baseline"
+  )
+  func lintNotInstalledIsReported() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let missing = try Fixture.areaRun("swift/lint-not-installed")
+    let runner = FakeAreaCommandRunner { request in request.step == .lint ? missing : .passed }
+    let lint = "swiftlint lint --config .swiftlint.yml {files}"
+    let path = "api/src/summary.py"
+
+    let parts = try await Self.run(
+      clone, areas: [Self.area("api", lint: lint)],
+      changes: [Change(path: path, text: "x = 1\n", added: [1...1])], runner: runner)
+
+    #expect(
+      runner.requests.contains { $0.step == .lint && clone.inScratch($0) },
+      "the merge base answers for the lint")
+    #expect(parts.baselineCount == 0)
+    #expect(
+      !parts.findings.contains {
+        $0.ruleID == BrownfieldRuleID.baselineSummary.rawValue && $0.message.contains("lint")
+      })
+    let dropped = parts.findings.filter {
+      $0.ruleID == BrownfieldRuleID.stepDropped.rawValue && $0.message.contains("api lint")
+    }
+    #expect(dropped.count == 1)
+    #expect(dropped.first?.message.contains("isn't installed") == true)
+    #expect(dropped.first?.severity == .minor)
+    #expect(Self.gating(parts) == [])
+    let recorded = BaselineStore(
+      layout: clone.layout, runner: runner, scratch: FakeScratchWorktrees(root: clone.scratch)
+    ).load(tree: "tree0").results
+    #expect(
+      recorded[BaselineStepKey(area: "api", step: .lint, command: lint, selection: [path])]
+        == .notInstalled)
+  }
+
   /// A task branched from a plan branch: its merge base `base0` is a merge after the contract
   /// `contract0`, and only the run's base `start0` was warmed.
   private static let planHistory = [
