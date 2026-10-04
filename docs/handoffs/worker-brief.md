@@ -97,6 +97,11 @@ The maintainer chose build speed until a cleanup on 2026-10-04. Until this secti
 - A green run with zero tests is not green. Confirm the test count your change should have moved.
 - A cloned `plugin/gate/.build` keeps a `ModuleCache` with headers that point at the old path. If the build fails
   on stale module paths, delete `ModuleCache` directories with `/usr/bin/find`, not a shell alias.
+- The session scratchpad is shared by every worker. Give each gate log a unique name, with your branch and a
+  timestamp (`gate-<branch>-$(date +%H%M%S).log`). Two gates redirected to the same name with `>` each write
+  at their own offset, so the file can hold one worker's report followed by another's, or lose one entirely.
+  The run id in the report's first line names the run; its `.harness/runs/<id>/` is in your worktree only
+  if the run was yours.
 - `rm` and `cp` are aliased to `rm -i` / `cp -i` in this shell and hang waiting for input. Use `/bin/rm -f`
   and `/bin/cp -f`.
 - A test that runs a real `swiftgate` binary sets `cwd` and `LLVM_PROFILE_FILE` to a temp dir, or the coverage
