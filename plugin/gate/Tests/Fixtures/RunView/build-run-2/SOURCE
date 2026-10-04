@@ -1,0 +1,60 @@
+Build run: 20261004T095203Z-7053bb32
+Plan: 2026-10-04-counter-reset-and-floor (spec page plan, preset "capture")
+Captured: 2026-10-04, Claude Code 2.1.288, main session claude-opus-5-5, workers claude-sonnet-5-5
+Session: 2af0f601-e397-4872-a742-dca067ce9dce (the ship run and its resume)
+Wall time: ship session 09:46:36Z to its halt at 10:13:32Z, resume to 10:19:23Z; build run 09:52:03Z start
+
+The capture of build-run-1, repeated once span calls, prove results and tool summaries record.
+The one change: the capture preset's task_proof is "per-task", so each task gate runs prove.
+
+Scratch repository, from the swift-harness repository root (<harness> below):
+
+  S=$(mktemp -d)
+  /bin/cp -R examples/SampleApp/. $S/app
+  cd $S/app && git init -q -b main && git add -A && git commit -qm SampleApp
+  HOME=$S/home <harness>/plugin/bin/swiftgate bootstrap --apply
+  # lefthook-local.yml (excluded in .git/info/exclude) points the git hooks at <harness>/plugin/bin/swiftgate
+  # .swiftgate.toml gains [harness] profile = "capture", [build.presets.capture] and
+  # [docs] managed_files = ["docs/index.md", "AGENTS.md"]
+  # docs/specs/counter-reset-and-floor.md (spec.md here, build-run-1's spec) committed, routed from docs/index.md
+  git add -A && git commit -qm 'Bootstrap the harness and add the counter reset spec'
+  git init -q --bare $S/origin.git && git remote add origin $S/origin.git && git push -q -u origin main --no-verify
+  for p in Packages/*; do swift build --build-tests --package-path $p; done
+  /bin/rm -rf .harness/events
+
+[build.presets.capture]:
+  design_tier = "none", max_parallel = 2, review = "gate", task_gate = "fast", merge_gate = "push",
+  worker_model = "sonnet", time_budget_min = 0, stop_starts_before_min = 0,
+  on_design_conflict = "block", task_proof = "per-task"
+
+Run, from $S/app:
+
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p \
+    '/swift-harness:ship docs/specs/counter-reset-and-floor.md --preset capture' \
+    --plugin-dir <harness>/plugin --model opus --setting-sources project,local \
+    --permission-mode bypassPermissions --max-budget-usd 40 --output-format json
+
+  It halted on counter-ui-snapshot-rerecord-with-reset (build-return.no-commits). Resumed with:
+
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p \
+    'Orchestrator-answered capture rehearsal, not the user: 2. Abandon it. Then finish the build and the ship report as the skills say.' \
+    --resume 2af0f601-e397-4872-a742-dca067ce9dce --plugin-dir <harness>/plugin --model opus --setting-sources project,local \
+    --permission-mode bypassPermissions --max-budget-usd 20 --output-format json
+
+  total_cost_usd: 3.08 for the ship run, 3.34 for the resume.
+
+Copied unedited, from $S/app, with P=.git/swift-harness/plans/2026-10-04-counter-reset-and-floor
+and R=$P/build/20261004T095203Z-7053bb32:
+
+  .harness/events/*.jsonl, store.json   -> events/
+  .harness/events/imported/<store>/*    -> events/imported/<store>/
+  $P/ledger.json                         -> ledger.json
+  $R/events.jsonl                        -> ledger-events.jsonl
+  $R/run.json                            -> run.json
+  $R/returns/*.json                      -> returns/
+  $P/plan.json                           -> plan.json
+  $P/spec-page.md                        -> plan.md
+  docs/specs/counter-reset-and-floor.md  -> spec.md
+
+The skills ran every events ingest and events span call themselves; the ship report says each
+succeeded. No command ran after the build to fill a stream.

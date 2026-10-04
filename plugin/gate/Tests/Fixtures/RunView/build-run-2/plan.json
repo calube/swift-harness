@@ -1,0 +1,16 @@
+{
+  "approval" : {
+    "at" : "2026-10-04T09:48:40Z",
+    "by" : "spec-quotes",
+    "pageSha" : "a56057ab854b56d6ab0914966331e9fb4447a0b6b073411bcbd8213843652dd1"
+  },
+  "resume" : "planned; 3 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "2026-10-04-counter-reset-and-floor",
+  "source" : "specPage",
+  "specPage" : {
+    "pageSha" : "a56057ab854b56d6ab0914966331e9fb4447a0b6b073411bcbd8213843652dd1",
+    "path" : "spec-page.md"
+  },
+  "surfaceCommit" : "e886f30deabf5cd673052eface297bb927816e6e"
+}
