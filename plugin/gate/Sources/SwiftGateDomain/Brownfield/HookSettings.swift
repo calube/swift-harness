@@ -15,7 +15,9 @@ public enum HookSettings {
       let object = try? JSONSerialization.jsonObject(with: hooksJSON) as? [String: Any],
       let hooks = object["hooks"] as? [String: Any], !hooks.isEmpty
     else { return nil }
-    let root = pluginRoot.count > 1 && pluginRoot.hasSuffix("/") ? String(pluginRoot.dropLast()) : pluginRoot
+    let root =
+      pluginRoot.count > 1 && pluginRoot.hasSuffix("/")
+      ? String(pluginRoot.dropLast()) : pluginRoot
     let settings: [String: Any] = ["hooks": substitute(hooks, root: root)]
     return try? JSONSerialization.data(
       withJSONObject: settings, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
