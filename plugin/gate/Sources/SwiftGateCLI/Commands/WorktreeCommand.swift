@@ -219,8 +219,9 @@ enum WorktreeRun {
           "branch \(names.branch) isn't merged into \(names.baseBranch); merge it first")
       }
       if FileManager.default.fileExists(atPath: names.path) {
-        keeping = keepRuns(of: names)
-        events = copyEvents(of: names)
+        keeping = keepRuns(from: names.path, into: names.mainCheckout)
+        events = copyEvents(
+          from: names.path, into: names.mainCheckout, commonDirectory: names.commonDirectory)
         try await workspace.removeWorktree(at: names.path, force: false)
       }
       try await workspace.deleteBranch(names.branch)
@@ -237,7 +238,7 @@ enum WorktreeRun {
   }
 
   /// What `remove` did with a worktree's `.harness/events/`.
-  private struct KeptEvents {
+  struct KeptEvents {
     var copied: WorktreeReport.CopiedEvents?
     var unkept: WorktreeReport.UnkeptEvents?
     var message = ""
@@ -245,17 +246,19 @@ enum WorktreeRun {
 
   /// Copies the worktree's event store into the main checkout's imports, so its judge audit log
   /// and telemetry outlive it. A copy that fails is named; removal still goes ahead, as for runs.
-  private static func copyEvents(of names: TaskWorktree) -> KeptEvents {
+  static func copyEvents(from path: String, into mainCheckout: String, commonDirectory: String)
+    -> KeptEvents
+  {
     let copyUp = EventCopyUp(
-      source: URL(filePath: names.path, directoryHint: .isDirectory),
-      destination: URL(filePath: names.mainCheckout, directoryHint: .isDirectory))
+      source: URL(filePath: path, directoryHint: .isDirectory),
+      destination: URL(filePath: mainCheckout, directoryHint: .isDirectory))
     let outcome: EventCopyUpOutcome
     do throws(EventCopyUpError) {
       outcome = try copyUp.run()
     } catch {
       let reason = "\(error)"
       // The judge's audit trail must outlive the worktree, so its events move whole instead.
-      let common = URL(filePath: names.commonDirectory, directoryHint: .isDirectory)
+      let common = URL(filePath: commonDirectory, directoryHint: .isDirectory)
       do throws(EventCopyUpError) {
         let moved = try copyUp.moveAside(commonDirectory: common)
         return KeptEvents(
@@ -288,7 +291,7 @@ enum WorktreeRun {
   }
 
   /// What `remove` copied out of a worktree's runs before deleting it.
-  private struct KeptRuns {
+  struct KeptRuns {
     var kept: [String] = []
     var unkept: [WorktreeReport.UnkeptRun] = []
     var message = ""
@@ -297,13 +300,12 @@ enum WorktreeRun {
   /// Copies the worktree's gate reports into the main checkout, so a task gate's evidence
   /// outlives the worktree. A run it can't copy is named; removal still goes ahead, since the
   /// branch is merged and a report is diagnostics, not work.
-  private static func keepRuns(of names: TaskWorktree) -> KeptRuns {
-    let main = RunStore(
-      worktreeRoot: URL(filePath: names.mainCheckout, directoryHint: .isDirectory))
+  static func keepRuns(from path: String, into mainCheckout: String) -> KeptRuns {
+    let main = RunStore(worktreeRoot: URL(filePath: mainCheckout, directoryHint: .isDirectory))
     let into = main.state.url(RunLayout.runsDirectory).path
     let outcome: RunKeepOutcome
     do throws(RunStoreError) {
-      outcome = try RunStore(worktreeRoot: URL(filePath: names.path, directoryHint: .isDirectory))
+      outcome = try RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
         .keepRuns(in: main)
     } catch {
       return KeptRuns(message: "; kept no gate reports, listing them failed: \(error)")

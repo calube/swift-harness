@@ -348,6 +348,39 @@ printf '%s\n' "$cached_hash" >"${pointer[0]}"
 "$shim" --version >/dev/null 2>"$work/err-restore" || fail "the restored cache did not run"
 [ ! -s "$work/err-restore" ] || fail "the restored cache rebuilt: $(cat "$work/err-restore")"
 
+# A session `swiftgate run` starts with --plugin-dir gives the plugin's hooks a data directory of
+# their own. When it holds only an older binary but the user cache, which the run warmed, holds
+# this exact hash, a hook must run the exact one, never the older one while a rebuild runs. The
+# held stand-in swift keeps any rebuild from landing, so only the reuse can supply the binary.
+inline="$work/inline-data"
+user_cache="$XDG_CACHE_HOME/swift-harness"
+mkdir -p "$user_cache/bin/$cached_hash" "$inline/bin/$decoy" "$inline/last-good"
+/bin/cp -f "$cache/bin/$cached_hash/swiftgate" "$user_cache/bin/$cached_hash/swiftgate"
+printf '#!/bin/sh\necho decoy\n' >"$inline/bin/$decoy/swiftgate"
+chmod +x "$inline/bin/$decoy/swiftgate"
+pointer_name="$(basename "${pointer[0]}")"
+printf '%s\n' "$decoy" >"$inline/last-good/$pointer_name"
+inline_out="$(cd "$work/project" && echo "$deny_payload" |
+  CLAUDE_PLUGIN_DATA="$inline" PATH="$held_bin:$PATH" "$shim" hook pre-tool-use)" ||
+  fail "a plugin hook with its own data directory exited non-zero"
+if [ -d "$inline/building-$cached_hash" ]; then
+  stop_rebuild
+  rmdir "$inline/building-$cached_hash" 2>/dev/null || true
+  fail "a plugin hook started a rebuild though the user cache held its exact hash $cached_hash"
+fi
+case "$inline_out" in
+  *'"permissionDecision":"deny"'*) ;;
+  *) fail "a plugin hook ran a binary of another hash, not the exact one in the user cache: '$inline_out'" ;;
+esac
+[ -x "$inline/bin/$cached_hash/swiftgate" ] ||
+  fail "the exact-hash binary was not reused into the plugin's data directory"
+[ "$(cat "$inline/last-good/$pointer_name")" = "$cached_hash" ] ||
+  fail "the reused binary was not recorded as the plugin data directory's last good binary"
+CLAUDE_PLUGIN_DATA="$inline" "$shim" --version >/dev/null 2>"$work/err-inline" ||
+  fail "the reused binary did not run"
+[ ! -s "$work/err-inline" ] || fail "the reused binary rebuilt: $(cat "$work/err-inline")"
+/bin/rm -rf "$inline" "$user_cache"
+
 # Bootstrap links ~/.local/bin/swiftgate, which git hooks call, to the shim it ran through: the
 # plugin's own. A link left at a checkout-root bin/swiftgate from before the plugin moved into
 # plugin/ is repointed, whether its old target still exists or not.

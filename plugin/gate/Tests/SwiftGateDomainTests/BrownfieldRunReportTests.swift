@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite struct BrownfieldRunReportTests {
@@ -68,7 +69,17 @@ import Testing
 
   private static let at = Date(timeIntervalSince1970: 100)
 
+  /// A ledger whose every task is done, as a run that built its whole plan leaves it.
+  private static let finishedLedger = Ledger(
+    schemaVersion: 1, resume: "done", maxParallel: 3,
+    tasks: ["report-export-contract", "report-export-api"].map {
+      LedgerTask(
+        id: $0, deps: [], writeSet: ["api/"], gate: .slice, tests: [], covers: [], estLines: 40,
+        status: .done, worktree: "/CLONE/.git/swift-harness/plans/csv/worktrees/\($0)")
+    }, waves: [["report-export-contract"], ["report-export-api"]])
+
   private static func inputs(
+    ledger: RunReportInput<Ledger> = .read(finishedLedger),
     planBranchHead: String? = "f00dbeef",
     plan: RunReportInput<String> = .read(planText),
     baseline: RunReportInput<BaselineFile> = .read(baseline),
@@ -81,7 +92,7 @@ import Testing
   ) -> BrownfieldRunReportInputs {
     BrownfieldRunReportInputs(
       slug: "csv", planBranch: "swift-harness/csv", planBranchHead: planBranchHead, plan: plan,
-      baseline: baseline, discover: discover, build: build)
+      baseline: baseline, discover: discover, build: build, ledger: ledger)
   }
 
   /// The bullets under `## <title>` in the report's text.
@@ -235,5 +246,87 @@ import Testing
     #expect((baseline["note"] as? String)?.contains("/b.json") == true)
     let final = try #require(object["final"] as? [String: Any])
     #expect(final["verdict"] as? String == "GREEN")
+  }
+
+  /// The second memos trial's ledger and build log: the contract done, 2 tasks blocked, 1
+  /// pending, and a GREEN `final` that gated the contract alone.
+  private static func memosTrial() throws -> (ledger: Ledger, build: RunReportBuild) {
+    let directory = Fixture.directory.appending(path: "RunReport/memos-2")
+    let ledger = try LedgerJSON.decode(Data(contentsOf: directory.appending(path: "ledger.json")))
+    let log = BuildEventJSON.decode(
+      try Data(contentsOf: directory.appending(path: "build-events.jsonl")))
+    return (ledger, RunReportBuild(record: build(events: []).record, log: log))
+  }
+
+  @Test(
+    "a run that left tasks blocked or pending leads with incomplete and names each one, never with final GREEN — catches a report that reads a contract-only final as a finished run"
+  )
+  func unfinishedRunLeadsIncomplete() throws {
+    let trial = try Self.memosTrial()
+    let report = BrownfieldRunReport.make(
+      Self.inputs(ledger: .read(trial.ledger), build: .read(trial.build)))
+
+    #expect(
+      report.unfinishedTasks.items == [
+        .init(id: "share-view-limit-store", status: .blocked),
+        .init(id: "share-view-limit-api", status: .pending),
+        .init(id: "share-view-limit-web", status: .blocked),
+      ])
+    #expect(report.final?.verdict == .green)
+    let text = report.text.split(separator: "\n").map(String.init)
+    let first = text.first ?? ""
+    #expect(first.hasPrefix("run: INCOMPLETE"), "\(first)")
+    #expect(!first.contains("GREEN"), "\(first)")
+    for (task, state) in [
+      ("share-view-limit-store", "blocked"), ("share-view-limit-api", "pending"),
+      ("share-view-limit-web", "blocked"),
+    ] {
+      #expect(first.contains("\(task) (\(state))"), "\(first)")
+      #expect(lines("Unfinished tasks", in: report.text).contains("\(task): \(state)"))
+    }
+    let second = text.dropFirst().first ?? ""
+    #expect(second.hasPrefix("final: GREEN"), "\(second)")
+    #expect(second.contains("only what merged"), "\(second)")
+  }
+
+  @Test(
+    "a ledger that can't be read leaves the run's completeness unknown on the first line — catches a GREEN headline over tasks nobody could count"
+  )
+  func unreadableLedgerLeadsUnknown() {
+    let report = BrownfieldRunReport.make(
+      Self.inputs(ledger: .missing(path: "/clone/.git/swift-harness/plans/csv/ledger.json")))
+    let first = report.text.split(separator: "\n").first.map(String.init) ?? ""
+    #expect(first.hasPrefix("run: completeness unknown"), "\(first)")
+    #expect(first.contains("ledger.json"), "\(first)")
+    #expect(!first.contains("GREEN"), "\(first)")
+    #expect(report.unfinishedTasks.note?.contains("ledger.json") == true)
+  }
+
+  @Test(
+    "a run whose every task is done says so with an empty unfinished list — catches a finished run reported as incomplete"
+  )
+  func finishedRunHasNoUnfinishedTasks() {
+    let report = BrownfieldRunReport.make(Self.inputs())
+    #expect(report.unfinishedTasks == .init(items: [], note: nil))
+    #expect(report.text.hasPrefix("final: GREEN"))
+    #expect(lines("Unfinished tasks", in: report.text) == ["none"])
+  }
+
+  @Test(
+    "the JSON lists each unfinished task with its state — catches an incomplete run that only the text admits"
+  )
+  func unfinishedTasksInJSON() throws {
+    let trial = try Self.memosTrial()
+    let report = BrownfieldRunReport.make(
+      Self.inputs(ledger: .read(trial.ledger), build: .read(trial.build)))
+    let data = try JSONEncoder().encode(report)
+    let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let section = try #require(object["unfinishedTasks"] as? [String: Any])
+    let items = try #require(section["items"] as? [[String: String]])
+    #expect(
+      items.map { $0["id"] ?? "" } == [
+        "share-view-limit-store", "share-view-limit-api", "share-view-limit-web",
+      ])
+    #expect(items.map { $0["status"] ?? "" } == ["blocked", "pending", "blocked"])
   }
 }
