@@ -531,6 +531,9 @@ public struct JudgeThresholds: Sendable, Equatable {
   public let advisory: Double
   public let block: Double
 
+  /// What a `[judge]` table gets for a threshold key it leaves out.
+  public static let defaults = JudgeThresholds(advisory: 0.6, block: 0.9)
+
   public init(advisory: Double, block: Double) {
     self.advisory = advisory
     self.block = block

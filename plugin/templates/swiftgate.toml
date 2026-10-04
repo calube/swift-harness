@@ -45,14 +45,14 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # architecture = 120
 
 # The test-quality judge sends test source and diffs to a model, so it is off until a repository
-# opts in. Both thresholds are required. `backend = "jev"` also needs `send_to = "api.typesafe.ai"`,
+# opts in. Each threshold is optional and defaults to the value shown. `backend = "jev"` also needs `send_to = "api.typesafe.ai"`,
 # naming the third-party host, and its `model` must be a versioned id (default "jev-1.13.0"; the
 # aliases "jev-latest" and "jev-preview" are refused). The API key never goes here: Jev reads it
 # from TYPESAFE_API_KEY in the environment.
 # [judge]
 # backend = "claude"           # none | claude | jev
-# advisory_threshold = 0.6
-# block_threshold = 0.9
+# advisory_threshold = 0.6    # default
+# block_threshold = 0.9        # default
 # send_to = "api.typesafe.ai"  # with backend = "jev" only
 
 # Local telemetry: gate runs, steps and test results, hook decisions, cache lookups, build halts

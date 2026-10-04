@@ -100,17 +100,26 @@ struct PluginTreeTests {
   }
 
   @Test(
-    "a plugin root with no manifest, a manifest that isn't JSON, or one with no version fails naming the manifest — catches a hash recorded without the version it claims to cover",
-    arguments: ["missing", "not json", "no version"])
+    "a plugin root with no manifest, a manifest that isn't a JSON object, or one whose version isn't a non-empty string fails naming the manifest, while one with no version reads as unpinned — catches a hash recorded without the version it claims to cover, or a plugin versioned by its marketplace commit failing every SessionStart record",
+    arguments: ["missing", "not json", "array", "empty version", "number version", "no version"])
   func manifestProblemsFail(problem: String) throws {
     var files = TemporaryPlugin.files
     switch problem {
     case "missing": files[".claude-plugin/plugin.json"] = nil
     case "not json": files[".claude-plugin/plugin.json"] = "{"
+    case "array": files[".claude-plugin/plugin.json"] = "[]"
+    case "empty version": files[".claude-plugin/plugin.json"] = #"{"name":"x","version":""}"#
+    case "number version": files[".claude-plugin/plugin.json"] = #"{"name":"x","version":1}"#
     default: files[".claude-plugin/plugin.json"] = #"{"name":"swift-harness"}"#
     }
     let plugin = try TemporaryPlugin(files)
     defer { plugin.remove() }
+    if problem == "no version" {
+      var tree: PluginTree?
+      #expect(throws: Never.self) { tree = try PluginTree.read(root: plugin.root) }
+      #expect(tree?.version == PluginTree.unpinnedVersion)
+      return
+    }
     let manifest = plugin.root.appending(path: ".claude-plugin/plugin.json").path
     do {
       _ = try PluginTree.hash(root: plugin.root)

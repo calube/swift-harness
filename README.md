@@ -208,6 +208,14 @@ then `--apply`), which writes `.swiftgate.toml`, `AGENTS.md`, the git hooks, and
 To try a checkout without installing anything, pass its plugin directory for 1 session:
 `claude --plugin-dir /path/to/swift-harness/plugin`.
 
+To pick up new commits, run `claude plugin marketplace update swift-harness`, then
+`claude plugin update swift-harness@swift-harness`. Claude Code takes an install's version from
+`plugin.json`'s `version`, then the marketplace entry's `version`, then the first 12 characters of
+the marketplace clone's commit. `plugin update` skips an install whose version string hasn't
+changed. Neither manifest pins a version, so every commit counts as a new one. The maintainer
+chose this over raising a version on every change. `swiftgate check --tier push` fails if either
+manifest gains a `version` (`plugin-version.pinned`).
+
 <details>
 <summary>Why project or local scope, not user scope</summary>
 

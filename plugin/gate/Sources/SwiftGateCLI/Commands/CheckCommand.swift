@@ -203,13 +203,14 @@ enum CheckRun {
             context: context, dependencies: dependencies.simulator))
       }
     }
-    // Design-doc evidence, calibration freshness and the docs gates need no module graph, so they
-    // run independent of it.
+    // Design-doc evidence, calibration freshness, the docs gates and the plugin version check need
+    // no module graph, so they run independent of it.
     if tier != .fast {
       let (docs, milliseconds) = try await GateRun.timed { () async throws -> [Finding] in
         try await PushDocGates.run(root: root, runner: dependencies.runner)
           + CalibrationFreshness.run(root: root)
           + PushDocsLintProse.run(root: root, runner: dependencies.runner, git: git, base: base)
+          + PluginVersionCheck.run(root: root)
       }
       context.steps.record(.docs, tier: nil, milliseconds: milliseconds, verdict: gateVerdict(docs))
       parts.findings += docs
