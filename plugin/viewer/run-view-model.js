@@ -240,8 +240,23 @@
     return { calls: sorted, otherCount, ms: total, files, droppedPaths };
   }
 
+  // Tasks whose open span has had no event of that task for `stallMin` minutes at `nowMs`.
+  function stalls(view, nowMs, stallMin) {
+    return [];
+  }
+
+  // Halts with no resume yet.
+  function openHalts(view) {
+    return [];
+  }
+
+  // The now strip: 1 card per task with an open task span.
+  function workers(view, nowMs, stallMin) {
+    return [];
+  }
+
   root.RunViewModel = {
-    apply, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    apply, stalls, openHalts, workers, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);
