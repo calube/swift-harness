@@ -119,6 +119,11 @@ public struct ArtifactPageShell: Sendable, Equatable {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     let encoded = (try? encoder.encode(data)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
+    return scriptSafe(json: encoded)
+  }
+
+  /// `encoded`, a JSON text, safe to embed in a `<script type="application/json">` block.
+  public static func scriptSafe(json encoded: String) -> String {
     // Inside JSON, `<`, `>`, `&` and the two line separators only occur in strings, where the
     // `\u` form means the same value; replacing them keeps `</script>` and `<!--` out of the block.
     return
