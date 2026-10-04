@@ -101,10 +101,12 @@ Workflow({
 - `model`: the task's `model` when the preset's `workerModel` is `tagged`, else the preset's
   `workerModel`. `build next` refuses a task with no model to use, so one always exists.
 - `review`: the preset's `review`. Leave out `reviewers`; `full` then runs both.
-- `pluginRoot`: the absolute plugin root. A workflow script can't read the environment, and the
-  reviewers and their verifiers need it to open the plugin's `docs/standards.md` and
-  `docs/testing-playbook.md`. Without it the verifier can't confirm a finding that cites a playbook
-  rule (`P1`–`P11`), so that finding never blocks the task.
+- `pluginRoot`: the absolute plugin root, required. A workflow script can't read the environment.
+  Every stage runs its gate, span and diff-risk commands through `<pluginRoot>/bin/swiftgate`: a
+  `swiftgate` on `PATH` may be an older installed plugin, whose gate code differs and whose runs
+  no store of this build holds. The reviewers and their verifiers also open the plugin's
+  `docs/standards.md` and `docs/testing-playbook.md` there. Leaving it out throws
+  `build-task: pluginRoot is required`.
 - `planSurface`: `surfaceCommit` from `plan.json`, or JSON `null` when the plan has none; never
   leave it out. With a sha, the worker writes no surface of its own: its task gate adds
   `--proof-base <planSurface>`, and when a test needs API the plan surface lacks it commits that API
@@ -125,7 +127,7 @@ Workflow({
   `build check-return` looks. `model` must be a pinned id. `classified` review takes its depth
   from `swiftgate judge diff-risk --base <base> --json` after the first green gate: `low` the gate
   only, `medium` 1 Sonnet reviewer, `high` the full review. With no level it runs at `medium` and
-  says why in the log and the return's `notes`. Pass `pluginRoot` so the workflow names the shim.
+  says why in the log and the return's `notes`.
 
 Unknown or missing args make the workflow throw `build-task: …` at once: that is a skill bug, so fix
 the args and relaunch, and don't count it as the task's attempt.
@@ -171,8 +173,11 @@ is a red gate, and the fixer gets only the new findings.
 
 An `--undo` that exits non-zero halts: `main` may still hold the red merge. Quote its `reason`.
 
-Then the fixer, 1 attempt. Launch `swift-harness:build-fixer` with the Agent tool, in the foreground,
-and give it:
+Then the fixer, 1 attempt. Open its span first, a fix pass inside the task as the workflow's own
+fix pass is: `"$SG" events span start --phase fix --build-run <run> --task <task> --role build-worker`,
+kept as `<span>`.
+
+Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and give it:
 
 - the plan slug and the task id;
 - `fixWorktree` and `fixBranch` from the `build merge` JSON;
@@ -181,7 +186,20 @@ and give it:
   conflict, that's the merged task whose `writeSet` holds a conflicted file; otherwise, or when none
   does, the task merged last;
 - the merge gate tier, and `--base <surfaceCommit>` for a plan with a surface, so its gate in the
-  fix worktree measures from where `main`'s gates do.
+  fix worktree measures from where `main`'s gates do;
+- the absolute path `$SG` holds, the plugin under test's `bin/swiftgate`, to run its gate and every
+  other `swiftgate` command through: a `swiftgate` on `PATH` may be another install, whose runs no
+  store of this build holds.
+
+When it returns, end the span by its outcome: `"$SG" events span end <span> --outcome ok` for
+`ready-to-merge`, else `"$SG" events span end <span> --outcome red`.
+
+Then record its usage under the task it fixed:
+`"$SG" events ingest --session <session> --agent-id <agent> --role build-worker --task <task> --build-run <run>`,
+where `<agent>` is the id the Agent tool's result names in its `agentId: <agent>` line. The fixer is
+this session's own subagent, which every other ingest files as the orchestrator's, so run this one
+first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
+other non-zero exit prints 1 line for the report and the step goes on.
 
 Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
@@ -233,8 +251,9 @@ Each completion notice, whatever the task's outcome, first runs:
 ```
 
 It reads the token counts of the workflow's agents from `<transcripts>`, tagged with the task, and
-this session's own, tagged `orchestrator`, all under `<run>`, so `events summary --build-run <run>` prices the build by
-role, task and model. Ingesting again adds nothing, so a retried task's second completion stores
+this session's own, tagged `orchestrator`, all under `<run>`, so `events summary --build-run <run>`
+prices the build by role, task and model. The merge fixer, which this session launches itself, gets
+its own ingest first ([conflict or red main](#conflict-or-red-main)). Ingesting again adds nothing, so a retried task's second completion stores
 only its new messages. Only ids, model ids, counts and times are kept: no transcript text or path.
 
 Telemetry never stops the build. With `[telemetry] enabled = false` the command exits 2 and says
