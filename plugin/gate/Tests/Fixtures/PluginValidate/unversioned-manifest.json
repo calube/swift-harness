@@ -1,0 +1,19 @@
+{
+  "success": false,
+  "strict": true,
+  "target": "/REPO/plugin/.claude-plugin/plugin.json",
+  "manifest": {
+    "file": "/REPO/plugin/.claude-plugin/plugin.json",
+    "type": "plugin",
+    "errors": [],
+    "warnings": [
+      {
+        "path": "version",
+        "message": "No version specified. Consider adding a version following semver (e.g., \"1.0.0\")",
+        "code": null
+      }
+    ],
+    "notes": []
+  },
+  "contents": []
+}
