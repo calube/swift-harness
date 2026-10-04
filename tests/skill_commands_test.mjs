@@ -1036,6 +1036,31 @@ function h2Section(text, heading) {
   return at < 0 ? '' : padded.slice(at + 1).split(/\n## /)[0]
 }
 
+/**
+ * Where a skill that drives `swiftgate` can lose its first call to a cold shim build: a release
+ * build outlasts the Bash tool's default 120 s timeout, the call moves to the background, and a
+ * headless session that ends its turn kills it with no verdict. Each problem is 1 string: no
+ * `## Foreground work` section before step 1, or one that never warms the binary with
+ * `"$SG" --version`, never names the 600000 ms timeout, or never rules out `run_in_background`.
+ */
+export function warmUpProblems(text) {
+  const padded = `\n${text}`
+  const at = padded.indexOf('\n## Foreground work')
+  if (at < 0) return ['no `## Foreground work` section']
+  const problems = []
+  const firstStep = padded.search(/\n## 1\. /)
+  if (firstStep >= 0 && at > firstStep) problems.push('`## Foreground work` comes after step 1')
+  const section = h2Section(text, 'Foreground work')
+  if (!extractInvocations(section).some(inv => inv.words[0] === '--version')) {
+    problems.push('`## Foreground work` never warms the binary with `"$SG" --version`')
+  }
+  if (!/\b600000\b/.test(section)) problems.push('`## Foreground work` never sets the Bash timeout to 600000')
+  if (!/\brun_in_background\b/.test(section)) problems.push('`## Foreground work` never rules out `run_in_background`')
+  return problems
+}
+
+const WARMED_SKILLS = ['qa', 'build', 'sprint', 'run']
+
 const runValidationFileNames = [
   'skills/run/SKILL.md', 'skills/run/references/plan-shape.md', 'skills/qa/references/validation-worker.md',
   'skills/build/references/event-loop.md',
@@ -2002,6 +2027,27 @@ const tests = {
     ])
     const reflowed = skill.replace('1. Run the ready gate.', '1. Run the ready gate. This gate takes no\n   baseline.')
     assert.ok(!surfaceBaselineProblems(reflowed).includes('the final gate never says it takes no baseline'))
+  },
+
+  'the qa, build, sprint and run skills warm the swiftgate binary in the foreground before step 1, at the Bash tool\'s 600000 ms timeout, and keep every call out of the background — catches a cold shim build that a headless session kills with no verdict'() {
+    for (const skill of WARMED_SKILLS) {
+      assert.deepEqual(warmUpProblems(readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8')), [], `the ${skill} skill`)
+    }
+    const qa = h2Section(readFileSync(join(root, 'skills/qa/SKILL.md'), 'utf8'), 'Foreground work')
+    assert.match(qa, /`qa run`/, 'the qa skill\'s foreground rule never names `qa run`')
+    assert.match(qa, /`sim /, 'the qa skill\'s foreground rule never names the `sim` commands')
+  },
+
+  'the warm-up check names a missing section, one after step 1, and a missing warm-up, timeout and background rule — catches a check that passes anything'() {
+    assert.deepEqual(warmUpProblems('## 1. Run\n\n`"$SG" qa run --json`\n'), ['no `## Foreground work` section'])
+    assert.deepEqual(warmUpProblems('## 1. Run\n\nText.\n\n## Foreground work\n\nRun it.\n'), [
+      '`## Foreground work` comes after step 1',
+      '`## Foreground work` never warms the binary with `"$SG" --version`',
+      '`## Foreground work` never sets the Bash timeout to 600000',
+      '`## Foreground work` never rules out `run_in_background`',
+    ])
+    const good = '## Foreground work\n\nFirst `"$SG" --version` with `timeout` 600000; never `run_in_background`.\n\n## 1. Run\n'
+    assert.deepEqual(warmUpProblems(good), [])
   },
 }
 

@@ -72,11 +72,13 @@ nothing merged.
 ## Foreground work
 
 A headless run ends when a turn ends with only background Bash work left, and that work dies
-with it: a gate cut short leaves no run and no verdict. So every `check`, `qa run`, `build
-cutoff` and area command runs in the foreground, with the Bash tool's `timeout` at 600000, its
-longest. Never pass `run_in_background` to one and never end one with a shell `&`. The 1 kind of
-background work in a run is the Workflow and Agent tool calls, which keep the session alive until
-they return; no timer runs beside them.
+with it: a gate cut short leaves no run and no verdict. On a cold cache, the first `swiftgate`
+call also builds the binary, which can take minutes, so before step 1 warm it with
+`"$SG" --version`. That call and every `check`, `qa run`, `build cutoff` and area command run in
+the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
+`run_in_background` to one and never end one with a shell `&`. The 1 kind of background work in a
+run is the Workflow and Agent tool calls, which keep the session alive until they return; no timer
+runs beside them.
 
 ## 1. Read the spec
 
