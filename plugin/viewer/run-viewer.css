@@ -229,3 +229,14 @@ html.drawer-open { overflow: hidden; }
   .tl-label { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+/* now strip (live mode) and the failed-poll line */
+.now-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.now-card { background: var(--sunken); border-radius: var(--radius-md); padding: 10px 12px; display: grid; gap: 4px; border-left: 3px solid var(--accent); min-width: 0; }
+.now-card.stalled { border-left-color: var(--warn); }
+.now-card.halted { border-left-color: var(--bad); }
+.now-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.now-top b { overflow-wrap: anywhere; }
+.now-stage { display: flex; justify-content: space-between; gap: 8px; }
+.now-card .sub, .now .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.now-note { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.live-error { color: var(--bad); background: var(--bad-soft); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; }
