@@ -72,6 +72,22 @@ extension ConfigLoader {
   public func loadProfile(repositoryRoot: URL, commonDir: URL) throws(ProfileLoadError)
     -> LoadedConfig?
   {
+    let committed = repositoryRoot.appending(path: Self.fileName, directoryHint: .notDirectory)
+    let common = commonDir.appending(
+      path: StateRootResolver.commonConfigFile, directoryHint: .notDirectory)
+    let files = FileManager.default
+    let hasCommitted = files.fileExists(atPath: committed.path)
+    let hasCommon = files.fileExists(atPath: common.path)
+    if hasCommitted && hasCommon {
+      throw .conflict(committed: committed.path, common: common.path)
+    }
+    if hasCommon {
+      do {
+        return .brownfield(try TOMLConfigDecoder().decodeBrownfield(try Self.text(of: common)))
+      } catch {
+        throw .brownfield(path: common.path, error)
+      }
+    }
     do {
       return try load(repositoryRoot: repositoryRoot).map(LoadedConfig.owned)
     } catch {
@@ -81,5 +97,20 @@ extension ConfigLoader {
 
   /// The git common dir of the worktree at or above `directory`, from git's own pointer files;
   /// `nil` outside a git worktree.
-  public static func commonDirectory(enclosing directory: URL) -> URL? { nil }
+  public static func commonDirectory(enclosing directory: URL) -> URL? {
+    StateRootResolver.gitDirectory(enclosing: directory).map(StateRootResolver.commonDirectory(of:))
+  }
+
+  private static func text(of file: URL) throws(ConfigLoadError) -> String {
+    let data: Data
+    do {
+      data = try Data(contentsOf: file)
+    } catch {
+      throw .unreadable(path: file.path, reason: error.localizedDescription)
+    }
+    guard let text = String(data: data, encoding: .utf8) else {
+      throw .unreadable(path: file.path, reason: "not valid UTF-8")
+    }
+    return text
+  }
 }

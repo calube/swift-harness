@@ -11,9 +11,12 @@ enum PreToolUseHook {
   /// The JSON to print, or `nil` to leave the call to the normal permission flow. A subagent's
   /// call is never left to that flow: a background agent can't answer a prompt, so it gets an
   /// explicit allow or deny.
-  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
-    -> String?
-  {
+  /// - Parameter brownfield: the clone's state when it runs the brownfield profile, which adds
+  ///   the dirty-file guard and drops this harness's comment advice on a commit.
+  static func run(
+    _ payload: HookPayload, root: URL, dependencies: HookDependencies,
+    brownfield: BrownfieldStateLayout? = nil
+  ) async -> String? {
     let home = dependencies.environment["HOME"]
     let reads = PlanStateReads(root: root, sessionID: payload.sessionID, dependencies: dependencies)
     var writes: [String] = []
@@ -22,6 +25,22 @@ enum PreToolUseHook {
     case "Bash"?:
       guard let command = payload.command else { break }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let brownfield {
+        switch DirtyFileRead.read(brownfield.discoverDirty) {
+        case .absent: break
+        case .listed(let dirty):
+          if let violation = DirtyFileGuard.evaluate(
+            command, cwd: payload.cwd, repositoryRoot: root.path, dirty: dirty)
+          {
+            return deny(violation)
+          }
+        case .unreadable(let path, let reason):
+          context = joined(
+            context,
+            "swiftgate: \(path) can't be read (\(reason)), so staging isn't checked against the "
+              + "files that held uncommitted work before this run; stage only files you wrote")
+        }
+      }
       if let violation = PlanCommandGuard.evaluate(
         command, sessionID: payload.sessionID, agentID: payload.agentID)
       {
@@ -36,8 +55,8 @@ enum PreToolUseHook {
         }
         writes.append(path)
       }
-      if BashGuard.isGitCommit(command) {
-        context = await commitContext(root: root, dependencies: dependencies)
+      if brownfield == nil, BashGuard.isGitCommit(command) {
+        context = joined(context, await commitContext(root: root, dependencies: dependencies))
       }
     case let tool? where fileTools.contains(tool):
       guard let path = payload.filePath else { break }

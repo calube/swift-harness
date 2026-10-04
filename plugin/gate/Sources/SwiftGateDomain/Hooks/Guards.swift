@@ -618,6 +618,123 @@ public enum DirtyFileGuard {
   public static func evaluate(
     _ command: String, cwd: String, repositoryRoot: String, dirty: DirtyFileList
   ) -> GuardViolation? {
-    nil
+    guard !dirty.paths.isEmpty else { return nil }
+    let root = lexical(repositoryRoot)
+    for simple in ShellSyntax.simpleCommands(in: command) where simple.name == "git" {
+      let git = ShellSyntax.gitInvocation(simple.arguments)
+      let directory = git.directory.map { absolute($0, in: cwd) } ?? cwd
+      let staged: Staging
+      switch git.subcommand {
+      case "add"?, "stage"?: staged = addStaging(Array(git.arguments))
+      case "commit"?: staged = commitStaging(Array(git.arguments))
+      default: continue
+      }
+      let hit: [String]
+      switch staged {
+      case .nothing: continue
+      case .everything: hit = dirty.paths
+      case .pathspecs(let specs):
+        let covered = specs.compactMap { relative(absolute($0, in: directory), to: root) }
+        hit = dirty.paths.filter { path in
+          covered.contains { $0.isEmpty || path == $0 || path.hasPrefix($0 + "/") }
+        }
+      }
+      guard !hit.isEmpty else { continue }
+      return GuardViolation(
+        ruleID: ruleID,
+        reason:
+          "this would stage \(hit.sorted().joined(separator: ", ")), which held uncommitted work "
+          + "before this run started; that work is the user's, so stage your own files by name")
+    }
+    return nil
+  }
+
+  private enum Staging {
+    case nothing
+    case everything
+    case pathspecs([String])
+  }
+
+  /// `git add` options that consume the next word.
+  private static let addOptionsWithValues: Set<String> = ["--chmod", "--pathspec-from-file"]
+  /// `git commit` short options that consume the rest of their cluster or the next word.
+  private static let commitShortValues: Set<Character> = ["m", "F", "C", "c", "t"]
+  private static let commitLongValues: Set<String> = [
+    "--message", "--file", "--reuse-message", "--reedit-message", "--template", "--author",
+    "--date", "--cleanup", "--fixup", "--squash", "--trailer", "--pathspec-from-file",
+  ]
+
+  private static func addStaging(_ arguments: [String]) -> Staging {
+    var specs: [String] = []
+    var all = false
+    var rest = arguments[...]
+    while let word = rest.popFirst() {
+      if word == "--" {
+        specs += rest
+        break
+      }
+      switch word {
+      case "-n", "--dry-run": return .nothing
+      case "-A", "--all", "-u", "--update", "--no-ignore-removal": all = true
+      case let option where addOptionsWithValues.contains(option): _ = rest.popFirst()
+      case let option where option.hasPrefix("-"): continue
+      default: specs.append(word)
+      }
+    }
+    if specs.isEmpty { return all ? .everything : .nothing }
+    return .pathspecs(specs)
+  }
+
+  private static func commitStaging(_ arguments: [String]) -> Staging {
+    var specs: [String] = []
+    var all = false
+    var rest = arguments[...]
+    while let word = rest.popFirst() {
+      if word == "--" {
+        specs += rest
+        break
+      }
+      if word.hasPrefix("--") {
+        let name = String(word.prefix { $0 != "=" })
+        if name == "--all" { all = true }
+        if commitLongValues.contains(name), !word.contains("=") { _ = rest.popFirst() }
+      } else if word.hasPrefix("-"), word.count > 1 {
+        for (offset, flag) in word.dropFirst().enumerated() {
+          if flag == "a" { all = true }
+          if commitShortValues.contains(flag) {
+            if offset == word.count - 2 { _ = rest.popFirst() }
+            break
+          }
+        }
+      } else {
+        specs.append(word)
+      }
+    }
+    if all { return .everything }
+    return specs.isEmpty ? .nothing : .pathspecs(specs)
+  }
+
+  private static func absolute(_ path: String, in directory: String) -> String {
+    lexical(path.hasPrefix("/") ? path : directory + "/" + path)
+  }
+
+  /// `path` relative to `root`, `""` for the root itself, `nil` outside it.
+  private static func relative(_ path: String, to root: String) -> String? {
+    if path == root { return "" }
+    let prefix = root == "/" ? "/" : root + "/"
+    return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : nil
+  }
+
+  /// `.` and `..` removed without touching the filesystem.
+  private static func lexical(_ path: String) -> String {
+    var parts: [Substring] = []
+    for part in path.split(separator: "/") {
+      switch part {
+      case ".": continue
+      case "..": _ = parts.popLast()
+      default: parts.append(part)
+      }
+    }
+    return "/" + parts.joined(separator: "/")
   }
 }
