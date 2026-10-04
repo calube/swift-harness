@@ -25,8 +25,12 @@ enum BrownfieldMergeCheck {
     static let liveDeadline: Duration = .seconds(3600)
 
     /// The clone's config and state, live git, scratch trees under the worktree's git dir and
-    /// `/bin/sh` commands.
-    static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
+    /// `/bin/sh` commands. `slice` builds only the areas whose warm test time, as the warm-up
+    /// measured it at the merge base with `base`, doesn't fit the slice budget; with no `base`,
+    /// every area.
+    static func live(root: URL, base: String? = nil) async throws(BrownfieldCheckSetupError)
+      -> Dependencies
+    {
       let process = LiveProcessRunner()
       let tracked = GitTrackedTree(runner: process, directory: root)
       let layout: BrownfieldStateLayout
@@ -56,25 +60,33 @@ enum BrownfieldMergeCheck {
       let runner = LiveAreaCommandRunner(processRunner: process)
       let prove = BrownfieldProve.Dependencies.live(
         root: root, layout: layout, runner: runner, deadline: liveDeadline)
+      let tree: @Sendable (String) async throws -> String = { commit in
+        let output = try await process.run(
+          ProcessInvocation(
+            executable: "git", arguments: ["rev-parse", "--verify", "\(commit)^{tree}"],
+            workingDirectory: root.path, timeout: .seconds(60)))
+        let tree = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard output.status.isSuccess, !tree.isEmpty else {
+          throw BrownfieldCheckSetupError(
+            reason: "git rev-parse \(commit)^{tree}: \(output.stderr.text)")
+        }
+        return tree
+      }
+      // With no merge base or no warm-up there, no area is known to have run its changed tests
+      // at `slice`, so every touched area proves again here.
+      var times = WarmupTimesFile(tree: "")
+      if let base, let mergeBase = try? await prove.git.mergeBase("HEAD", base),
+        let baseTree = try? await tree(mergeBase)
+      {
+        times = WarmupTimesStore(layout: layout).load(tree: baseTree).file
+      }
+      let budget = config.brownfield.sliceBudgetSeconds
       return Dependencies(
         config: config, layout: layout, git: prove.git, runner: runner,
         baseline: BaselineStore(layout: layout, runner: runner, scratch: prove.scratch),
-        prove: prove, trackedTree: snapshot,
-        tree: { commit in
-          let output = try await process.run(
-            ProcessInvocation(
-              executable: "git", arguments: ["rev-parse", "--verify", "\(commit)^{tree}"],
-              workingDirectory: root.path, timeout: .seconds(60)))
-          let tree = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
-          guard output.status.isSuccess, !tree.isEmpty else {
-            throw BrownfieldCheckSetupError(
-              reason: "git rev-parse \(commit)^{tree}: \(output.stderr.text)")
-          }
-          return tree
-        },
-        // The warm-up's test times aren't read here, so no area is known to have run its
-        // changed tests at `slice`: every touched area proves again at `merge`.
-        sliceBuildsOnly: { _ in true }, deadline: liveDeadline)
+        prove: prove, trackedTree: snapshot, tree: tree,
+        sliceBuildsOnly: { [times] area in times.buildsOnly(area.name, budgetSeconds: budget) },
+        deadline: liveDeadline)
     }
   }
 
@@ -83,7 +95,7 @@ enum BrownfieldMergeCheck {
   {
     let dependencies: Dependencies
     do {
-      dependencies = try await .live(root: root)
+      dependencies = try await .live(root: root, base: base)
     } catch {
       return try BrownfieldCheck.notRun(tier, because: error.reason)
     }

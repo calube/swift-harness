@@ -270,6 +270,7 @@ struct NewSubcommandRegistrationTests {
     "plan import",
     "report --html", "report --json --out",
     "events span start", "events span end",
+    "warmup",
   ]
 
   @Test(
