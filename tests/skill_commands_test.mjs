@@ -601,7 +601,8 @@ function shipSpecPageWalk(calls) {
       '[simulator]', 'device = "iPhone 17"', 'os = "26.2"', '',
       '[build.presets.nodesign]', 'design_tier = "none"', 'max_parallel = 3', 'review = "gate"',
       'task_gate = "fast"', 'merge_gate = "push"', 'worker_model = "tagged"', 'time_budget_min = 0',
-      'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"', '',
+      'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"',
+      'sim_qa = "off"', '',
     ].join('\n'))
     run(gitPath, ['init', '-q', '-b', 'main'])
     run(gitPath, ['add', '-A'])
