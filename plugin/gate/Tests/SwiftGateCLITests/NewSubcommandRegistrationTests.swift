@@ -231,7 +231,7 @@ struct NewSubcommandRegistrationTests {
   /// under the git common dir; `design-scope` instead exits 2 for a real reason (no
   /// `--frame-answers` given) that the generic "not implemented" check can't tell apart from a
   /// stub. Either way their behaviour is covered by their own suites (`PlanClaimCommandTests`,
-  /// `IndexSetCommandTests`, `PlanStateAuthorityTests`, `LedgerSetCommandTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`, `BuildCheckReturnTests`, `BuildMergeTests`). Listed by
+  /// `IndexSetCommandTests`, `PlanStateAuthorityTests`, `LedgerSetCommandTests`, `DesignDiffCommandTests`, `DesignScopeCommandTests`, `BuildCheckReturnTests`, `BuildMergeTests`, `EventsSpanCommandTests`). Listed by
   /// exact invocation name so a still-stubbed sibling never drops out of the stub check by
   /// sharing a prefix.
   static let implemented: Set<String> = [
@@ -269,6 +269,7 @@ struct NewSubcommandRegistrationTests {
     "claude",
     "plan import",
     "report --html", "report --json --out",
+    "events span start", "events span end",
   ]
 
   @Test(
