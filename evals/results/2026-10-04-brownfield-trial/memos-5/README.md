@@ -62,7 +62,7 @@ which needs no halt.
 
 Both areas' warm test runs took longer than the 30 s budget (`memos` 83.8 s, `web` 84.1 s, both cold at a load of up
 to 192), so every slice built and linted with no tests. The task slices said so for another reason too: their base
-tree was never warmed (finding 3).
+tree had no warm-up (finding 3).
 
 | Slice | Task | Time | Load | `area-lint memos` | `area-build memos` | `area-lint web` | `area-build web` |
 |---|---|---|---|---|---|---|---|
@@ -91,7 +91,7 @@ this run: all 3 `judge.call` events are diff-risk.
   session.
 - Post-run ingest: the run ingested each workflow and the fixer, but not the orchestrator's own last turn: the
   events summed to $4.06. I ran `swiftgate events ingest --session 56eaccaa-… --role orchestrator --build-run
-  20261004T160656Z-0ad8c7c2` after the run: `64 messages read, 6 new`. `events.jsonl` is exported after it.
+  20261004T160656Z-0ad8c7c2` after the run: `64 messages read, 6 new`. I exported `events.jsonl` after it.
 - Warm-up, from `warmup.run` events, all `cold`:
   - `memos`: build passed in 2.8 s, and test failed in 83.8 s (the baseline failure memos-3 and memos-4 saw).
   - `web`: build passed in 18.6 s, and test failed in 84.1 s.
@@ -133,7 +133,7 @@ this run: all 3 `judge.call` events are diff-risk.
    - File: `plugin/gate/Sources/SwiftGateCLI/Commands/BuildMergeCommand.swift` reads no `build.return-checked`
      event.
    - Suggested fix: `build merge` refuses unless the latest `build.return-checked` for the task (or the fix, with
-     `--fix`) in this build run is GREEN and names the commits being merged. Test: a RED check followed by `build
+     `--fix`) in this build run is GREEN and names the commits it merges. Test: a RED check followed by `build
      merge` exits non-zero and merges nothing.
 2. **`check-return` accepts a task gate run on a dirty tree at a commit before the task's own.**
    - The store task's return names `slice` run `20261004T160820Z-3c3ed983` (`gate.run` `36939D61-…`): `dirty:
@@ -180,13 +180,13 @@ this run: all 3 `judge.call` events are diff-risk.
    "Review depth" line per merged task, with the diff-risk level, and the same in the run view's task drawer.
 8. **Worker stages still return quoted span ids.** The workflows logged `the worker stage returned
    "\"44b7bfe58637a914\"", not a span id` 3 times: the store and API worker stages and the API
-   `review:architecture` stage, so no later stage names those spans. The
-   `surfaceCommit` half of the memos-4 finding is fixed; this half isn't. File: `plugin/workflows/build-task.js`.
+   `review:architecture` stage, so no later stage names those spans. Main fixed the `surfaceCommit` half of the
+   memos-4 finding, but not this half. File: `plugin/workflows/build-task.js`.
    Suggested fix: the same pattern and retry for `span` as for `surfaceCommit`.
 9. **Slice p95 misses the budget on Go lint** (known). `golangci-lint run ./...` took 24.6 to 38.6 s whenever it
    linted many packages: the cold probe, the contract, and the dirty-tree slices. Scoping it to the changed
    packages would keep these under 10 s.
-10. **Node dependencies aren't installed per task worktree** (known). The web worker installed them itself.
+10. **No step installs node dependencies in a task worktree** (known). The web worker installed them itself.
 11. **A stall watcher outlived its workflow.** The orchestrator's watcher for the store workflow printed `stalled`
     at about 16:12Z, 3 minutes after that workflow returned, and nobody stopped it. It had no effect. File:
     `plugin/skills/build/` (the stall-watch step). Suggested fix: stop the watcher when its workflow's
