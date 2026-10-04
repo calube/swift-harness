@@ -14,9 +14,12 @@
 
   const pageDamage = [];
   let view = null;
+  // Served by `swiftgate view` the page carries no data and fetches it; opened as a file, it is a report.
+  let liveMode = false;
   try {
     const text = $("run-view").textContent.trim();
     if (text) view = JSON.parse(text);
+    else if (/^https?:$/.test(location.protocol)) liveMode = true;
     else pageDamage.push({ source: "page", reason: "no run data embedded" });
   } catch (error) {
     pageDamage.push({ source: "page", reason: "run data is not JSON: " + error.message });
@@ -25,8 +28,11 @@
   // State the page derives from the view on each render.
   let spans = [], wall = 0, t0 = 0, byId = {}, kids = {}, gateBy = {}, taskBy = {};
 
+  // A live run's open spans grow with the clock; a finished run stops at its last event.
+  const liveNowMs = () => (liveMode && view.run.state !== "done" ? Date.now() : null);
+
   function derive() {
-    const n = M.normalize(view);
+    const n = M.normalize(view, liveNowMs());
     spans = n.spans; wall = n.wall || 1; t0 = n.t0;
     byId = {}; kids = {};
     spans.forEach((s) => { byId[s.id] = s; (kids[s.parent] = kids[s.parent] || []).push(s); });
@@ -149,7 +155,7 @@
   }
 
   // Anchors a popover of label and value rows to any element; modules use it through runViewer.
-  function openPopover(anchor, rows, title, extraHtml = "") {
+  function openPopover(anchor, rows, title, extraHtml = "", focus = true) {
     if (openAnchor) closePop(false);
     openAnchor = anchor;
     anchor.classList.add("sel");
@@ -158,10 +164,10 @@
     $("pop-body").innerHTML = `<dl>${rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v)}</dd>`).join("")}</dl>${extraHtml}`;
     pop.hidden = false;
     place();
-    pop.querySelector(".pop-close").focus({ preventScroll: true });
+    if (focus) pop.querySelector(".pop-close").focus({ preventScroll: true });
   }
 
-  function openSpan(bar) {
+  function openSpan(bar, focus = true) {
     const s = all[bar.dataset.id];
     const outcome = s.outcome ? (s.outcome === "red" ? "RED" : s.outcome === "ok" ? "GREEN" : s.outcome) : null;
     const rows = [
@@ -174,7 +180,7 @@
       ["outcome", outcome || "none", outcome ? verdictChip(outcome) : null]
     ];
     const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
-    openPopover(bar, rows, s.label, `<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`);
+    openPopover(bar, rows, s.label, `<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
   }
 
   function closePop(restoreFocus = true) {
@@ -415,9 +421,45 @@
     runModule(name, "render");
   }
 
+  // now strip: live mode only, 1 card per running task with stall and halt badges
+  let strip = null;
+  function ensureStrip() {
+    if (strip) return strip;
+    strip = document.createElement("section");
+    strip.className = "panel now";
+    strip.id = "now";
+    strip.setAttribute("aria-label", "Now");
+    strip.innerHTML = `<div class="head"><h2>Now</h2><span class="now-note" id="now-note"></span></div><div class="now-cards" id="now-cards" role="list"></div>`;
+    document.querySelector(".wrap > .panel").after(strip);
+    return strip;
+  }
+  const stageLabel = (w) => {
+    if (w.phase === "gate") { const g = w.gateRun && gateBy[w.gateRun]; return g ? "gate " + M.gateTier(g.command) : "gate"; }
+    return w.phase === "task" ? "starting" : w.phase.replace(/-/g, " ");
+  };
+  const age = (msAgo) => (msAgo < 60000 ? Math.max(0, Math.round(msAgo / 1000)) + "s ago" : fmtMs(msAgo) + " ago");
+
+  function renderNow() {
+    if (!liveMode) return;
+    ensureStrip();
+    const now = Date.now();
+    // Without the preset's stall_min there is nothing to measure a stall against, so the strip says so.
+    const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
+    const cards = M.workers(view, now, stallMin == null ? Infinity : stallMin);
+    const runHalts = M.openHalts(view).filter((h) => h.task == null);
+    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run names no stall_min</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
+      runHalts.map((h) => `<span class="chip bad">run halted: ${esc(h.reason)}</span>`).join("");
+    $("now-cards").innerHTML = cards.length ? cards.map((w) => `<div class="now-card${w.halted ? " halted" : w.stalled ? " stalled" : ""}" role="listitem" data-task="${esc(w.task)}">
+        <div class="now-top"><b class="mono">${esc(w.task)}</b>${w.halted ? `<span class="chip bad" title="${esc(w.halt.reason)}">halted</span>` : ""}${w.stalled ? `<span class="chip warn">stalled</span>` : ""}</div>
+        <div class="now-stage"><span>${esc(stageLabel(w))}</span><span class="num">${esc(fmtMs(w.elapsedMs))}</span></div>
+        <div class="sub num">last event ${w.lastEventMs == null ? "none" : esc(age(now - w.lastEventMs))}</div>
+      </div>`).join("") : `<p class="sub">idle: no task running</p>`;
+  }
+
   function render() {
     derive();
     renderHeader();
+    renderNow();
     renderTimeline();
     renderSpec();
     renderProof();
@@ -427,12 +469,67 @@
   }
 
   // Merges a partial RunView by id and redraws; live mode calls this on each poll.
+  // A redraw keeps what the reader had: the open span popover, the focused bar, and the drawer's
+  // focus and folds, so a 1 s poll never pulls them away.
   function apply(partial) {
     view = M.apply(view, partial);
+    const active = document.activeElement;
+    const popSpan = openAnchor && openAnchor.classList.contains("bar") ? openAnchor.dataset.id : null;
+    const popFocus = pop.contains(active);
+    const barFocus = active && active.classList && active.classList.contains("bar") ? active.dataset.id : null;
+    const drawerFocusables = () => [...drawer.querySelectorAll("#dr-body button, #dr-body summary")];
+    const drawerFocus = drawerId ? drawerFocusables().indexOf(active) : -1;
+    const folds = drawerId ? [...drawer.querySelectorAll("#dr-body details")].map((d) => d.open) : [];
     closePop(false);
     render();
     modules.forEach((_, name) => runModule(name, "apply"));
-    if (drawerId) renderDrawer(drawerId);
+    const bar = (id) => (id ? tl.querySelector(`.bar[data-id="${CSS.escape(id)}"]`) : null);
+    if (barFocus && bar(barFocus)) bar(barFocus).focus({ preventScroll: true });
+    if (popSpan && bar(popSpan)) openSpan(bar(popSpan), popFocus);
+    if (drawerId) {
+      renderDrawer(drawerId);
+      drawer.querySelectorAll("#dr-body details").forEach((d, i) => { if (folds[i]) d.open = true; });
+      if (drawerFocus >= 0 && drawerFocusables()[drawerFocus]) drawerFocusables()[drawerFocus].focus({ preventScroll: true });
+    }
+  }
+
+  // live mode: fetch the whole view once, then merge each change set polled after its cursor
+  const POLL_MS = 1000;
+  let polls = 0, pollFailures = 0;
+  async function fetchJSON(path) {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) throw new Error(`${path.split("?")[0]} answered ${response.status}`);
+    return response.json();
+  }
+  function showLiveError(message) {
+    let line = $("live-error");
+    if (!line) {
+      line = document.createElement("div");
+      line.id = "live-error";
+      line.className = "live-error";
+      line.setAttribute("role", "status");
+      document.querySelector(".wrap > .panel").appendChild(line);
+    }
+    line.textContent = message || "";
+    line.hidden = !message;
+  }
+  async function poll() {
+    try {
+      if (!view) {
+        view = await fetchJSON("/view.json");
+        render();
+      } else {
+        apply(await fetchJSON("/changes?after=" + encodeURIComponent(view.cursor)));
+      }
+      polls++;
+      document.body.dataset.polls = String(polls);
+      showLiveError(null);
+    } catch (error) {
+      pollFailures++;
+      document.body.dataset.pollFailures = String(pollFailures);
+      showLiveError(`live updates paused: ${error.message}; retrying every second`);
+    }
+    setTimeout(poll, POLL_MS);
   }
 
   window.runViewer = {
@@ -442,5 +539,11 @@
     apply
   };
 
-  if (view) render(); else renderFooter();
+  if (liveMode) {
+    document.body.dataset.live = "on";
+    const mode = document.querySelector(".wrap > .panel .head .chip.plain:not(#state)");
+    if (mode) mode.textContent = "Live";
+    renderFooter();
+    poll();
+  } else if (view) render(); else renderFooter();
 })();

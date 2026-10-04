@@ -1,12 +1,15 @@
 // Checks the run viewer page in headless Chrome with a RunView built here: every region draws,
 // the span popover works from the keyboard and closes on Escape or an outside click, it is a bottom
 // sheet at phone width, the zoom scales the track and not the page, the task drawer opens with and
-// without a brief, and a module that throws can't blank the page.
+// without a brief, and a module that throws can't blank the page. Served by a stub server, the page
+// polls for changes, merges each partial, and shows the now strip; the embedded report hides it.
 // Run: node tests/run_viewer_page_test.mjs
 // Regressions caught: a popover the keyboard can't reach or that keeps focus, a zoom that widens
 // the page, a drawer that needs a brief, a module able to blank the core regions, and a console
-// error on load.
+// error on load, a poll that refetches the whole view, a failed poll that stops live mode, and a
+// strip shown in a static report.
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -84,6 +87,74 @@ function writePage(extraScript) {
   writeFileSync(join(dir, 'run-viewer.html'), html)
   return { dir, url: pathToFileURL(join(dir, 'run-viewer.html')).href }
 }
+
+// A live view whose times sit around the test's own clock, since the page measures open spans and
+// stalls against Date.now().
+const nowAt = Date.now()
+const ago = (minutes) => new Date(nowAt - minutes * 60000).toISOString()
+const liveView = {
+  schemaVersion: 1, cursor: 'c0',
+  run: { id: '20261003T140000Z-live0001', plan: 'sample-notes', preset: 'default', stallMin: 3, startedAt: ago(12), endedAt: null, state: 'running' },
+  spec: [{ id: 'req-save-note', title: 'Save a note', tasks: ['store', 'list'] }],
+  tasks: [
+    { ...view.tasks[0], status: 'in-progress', mergedAt: null, commits: [], mergeGateRun: null, gateRun: null, createdAt: ago(11), tokens: null },
+    { ...view.tasks[1], createdAt: ago(11) },
+  ],
+  roles: [],
+  spans: [
+    span('r1', null, 'run', 0, null, { start: ago(12) }),
+    span('t-store', 'r1', 'task', 0, null, { task: 'store', start: ago(10) }),
+    span('w-store', 't-store', 'worker', 0, null, { task: 'store', start: ago(10) }),
+    span('t-list', 'r1', 'task', 0, null, { task: 'list', start: ago(10) }),
+    span('w-list', 't-list', 'worker', 0, null, { task: 'list', start: ago(10) }),
+  ],
+  gates: [], proofs: [], halts: [], damage: [],
+}
+// Each cursor's answer. The second request after c1 fails once, so a failed poll must keep going.
+const changes = {
+  c0: [{ cursor: 'c1', spans: [span('w-store', 't-store', 'worker', 0, 0, { task: 'store', start: ago(10), end: ago(1), outcome: 'ok' }), span('g-store', 't-store', 'gate', 0, null, { task: 'store', start: ago(1) })] }],
+  c1: [null, { cursor: 'c2', spans: [span('v-store', 't-store', 'verify', 0, null, { task: 'store', start: ago(0.5) })] }],
+  c2: [{ cursor: 'c3', halts: [{ task: 'list', reason: 'gate-red', at: ago(9), answer: null, waitMs: null }] }],
+  c3: [{ cursor: 'c3' }],
+}
+
+function startLiveServer() {
+  const requests = []
+  const missing = []
+  const seen = {}
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1')
+    requests.push(url.pathname + url.search)
+    const json = (status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
+    if (url.pathname === '/view.json') return json(200, liveView)
+    if (url.pathname === '/changes') {
+      const after = url.searchParams.get('after')
+      const answers = changes[after]
+      if (!answers) return json(400, { error: 'unknown cursor' })
+      const n = seen[after] = (seen[after] ?? -1) + 1
+      const body = answers[Math.min(n, answers.length - 1)]
+      return body ? json(200, body) : json(503, { error: 'store busy' })
+    }
+    const name = url.pathname === '/' ? 'run-viewer.html' : url.pathname.slice(1)
+    if (!PAGE_FILES.includes(name)) { missing.push(url.pathname); res.writeHead(404); return res.end() }
+    const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'
+    res.writeHead(200, { 'content-type': type })
+    res.end(readFileSync(new URL(name, viewer)))
+  })
+  return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({
+    server, requests, missing, url: `http://127.0.0.1:${server.address().port}/`,
+  })))
+}
+
+// Resolves once `condition` (an expression over the page) holds, read on every DOM change, or
+// rejects naming it after `ms`. The page's own 1 s poll drives the changes; nothing here sleeps.
+const until = (condition, ms = 6000) => `new Promise((resolve, reject) => {
+  const check = () => { const v = (${condition}); if (v) { observer.disconnect(); clearTimeout(timer); resolve(v) } }
+  const observer = new MutationObserver(check)
+  const timer = setTimeout(() => { observer.disconnect(); reject(new Error(${JSON.stringify('timed out waiting for: ' + condition)})) }, ${ms})
+  observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true })
+  check()
+})`
 
 const REGIONS = `(() => ({
   meta: document.querySelectorAll('#meta span').length,
@@ -238,6 +309,45 @@ const tests = {
     const line = await page.evaluate("[...document.querySelectorAll('#foot .damage-line')].map((l) => l.textContent).join('\\n')")
     assert.match(line, /board/)
     assert.equal(await page.evaluate("document.querySelector('[data-module=\"board\"]').hidden"), true)
+  },
+
+  async 'served, the page merges 3 polled partials through a failed poll, the cursor advances, and the strip badges a halt and a stall, which the embedded report hides — catches a poll that refetches everything'() {
+    const live = await startLiveServer()
+    try {
+      await page.load(live.url)
+      const failedLine = await page.evaluate(until("document.body.dataset.pollFailures === '1' && document.getElementById('live-error').textContent"))
+      assert.match(failedLine, /503/, 'a failed poll shows no line in the header')
+      await page.evaluate(until("Number(document.body.dataset.polls) >= 4"))
+      const after = live.requests.filter((r) => r.startsWith('/changes')).map((r) => new URL(r, 'http://x').searchParams.get('after'))
+      assert.deepEqual(after.slice(0, 4), ['c0', 'c1', 'c1', 'c2'], 'the cursor does not advance with each answer')
+      assert.equal(live.requests.filter((r) => r === '/view.json').length, 1, 'the page refetches the full view')
+      const state = await page.evaluate(`(() => ({
+        error: document.getElementById('live-error').hidden,
+        cards: [...document.querySelectorAll('#now .now-card')].map((c) => ({ task: c.dataset.task, text: c.textContent })),
+        storeWorkerOpen: document.querySelector('#tl .bar[data-id="w-store"]').classList.contains('open'),
+        verify: !!document.querySelector('#tl .bar[data-id="v-store"]'),
+        text: document.body.innerText,
+        errors: document.body.dataset.errors,
+      }))()`)
+      assert.equal(state.error, true, 'the failed-poll line stays after a poll succeeds')
+      assert.equal(state.storeWorkerOpen, false, 'the first partial did not end the worker span')
+      assert.ok(state.verify, 'the second partial did not add its span')
+      assert.deepEqual(state.cards.map((c) => c.task), ['store', 'list'])
+      assert.match(state.cards[0].text, /verify/, 'the card does not name the newest open stage')
+      assert.doesNotMatch(state.cards[0].text, /halted|stalled/)
+      assert.match(state.cards[1].text, /halted/, 'the halted task shows no halt badge')
+      assert.match(state.cards[1].text, /stalled/, 'a task quiet past stall_min shows no stall badge')
+      assert.match(state.text, /pending/, 'a running worker\'s tokens do not read pending')
+      assert.equal(state.errors, '0')
+      // Chrome logs each failed load; the stubbed 503 is meant, and the browser asks for a favicon.
+      assert.deepEqual(live.missing.filter((p) => p !== '/favicon.ico'), [], 'the page asks for a file it does not ship')
+      assert.deepEqual(page.errors.filter((e) => !/status of (503|404)/.test(e)), [])
+    } finally {
+      await new Promise((resolve) => live.server.close(resolve))
+    }
+    await page.load(main.url)
+    const embedded = await page.evaluate("({ strip: document.getElementById('now')?.offsetHeight ?? 0, live: document.body.dataset.live ?? null })")
+    assert.deepEqual(embedded, { strip: 0, live: null }, 'the embedded report shows the now strip')
   },
 }
 
