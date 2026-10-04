@@ -1,0 +1,7 @@
+{"at":"2026-10-04T14:15:00Z","from":"pending","kind":"transition","task":"share-view-limit-contract","to":"in-progress"}
+{"at":"2026-10-04T14:15:00Z","from":"in-progress","kind":"transition","task":"share-view-limit-contract","to":"done"}
+{"at":"2026-10-04T14:16:57Z","from":"pending","kind":"transition","task":"share-view-limit-store","to":"in-progress"}
+{"at":"2026-10-04T14:16:57Z","from":"pending","kind":"transition","task":"share-view-limit-web","to":"in-progress"}
+{"at":"2026-10-04T14:23:28Z","from":"in-progress","kind":"transition","task":"share-view-limit-web","to":"blocked"}
+{"at":"2026-10-04T14:23:58Z","from":"in-progress","kind":"transition","task":"share-view-limit-store","to":"blocked"}
+{"at":"2026-10-04T14:23:59Z","from":"pending","kind":"transition","task":"share-view-limit-api","to":"blocked"}
