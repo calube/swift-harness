@@ -177,6 +177,9 @@ public struct RunViewReader: RunViewReading {
             source: display(path),
             reason: "malformed spec page: \(problems.map(\.message).joined(separator: "; "))"))
       }
+    case .livePlan:
+      // A live plan names tasks, not requirement ids, so it has no spec rows to show.
+      break
     case .design(let design):
       let checkout: String
       do {
