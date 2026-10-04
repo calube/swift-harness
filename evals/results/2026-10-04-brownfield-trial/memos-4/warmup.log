@@ -1,0 +1,85 @@
+warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: /Users/caleb/Developer/trials/memos-4/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
+web build: passed, 11583 ms, cold
+web test: failed, 34701 ms, cold
+    }
+  
+   ❯ tests/filtered-memo-stats.test.ts:81:53
+       79|     const { result } = renderHook(() => useFilteredMemoStats({ userNam…
+       80|
+       81|     expect(result.current.statistics.activityStats).toEqual({ "2026-05…
+         |                                                     ^
+       82|     expect(result.current.statistics.timeBasis).toBe("update_time");
+       83|   });
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+  
+   FAIL  tests/filtered-memo-stats.test.ts > useFilteredMemoStats > falls back to created timestamps when updated array is empty (old server)
+  AssertionError: expected { '2026-04-30': 1 } to deeply equal { '2026-05-01': 1 }
+  
+  - Expected
+  + Received
+  
+    {
+  -   "2026-05-01": 1,
+  +   "2026-04-30": 1,
+    }
+  
+   ❯ tests/filtered-memo-stats.test.ts:106:53
+      104|     const { result } = renderHook(() => useFilteredMemoStats({ userNam…
+      105|
+      106|     expect(result.current.statistics.activityStats).toEqual({ "2026-05…
+         |                                                     ^
+      107|     expect(warn).toHaveBeenCalled();
+      108|     warn.mockRestore();
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+  
+  
+   Test Files  1 failed | 193 passed (194)
+        Tests  3 failed | 1769 passed (1772)
+     Start at  09:06:42
+     Duration  29.15s (transform 21.79s, setup 43.72s, import 121.54s, tests 42.27s, environment 180.93s)
+  
+   ELIFECYCLE  Test failed. See above for more details.
+memos build: passed, 2011 ms, cold
+memos test: failed, 39552 ms, cold
+  {"Time":"2026-10-04T09:07:02.96855-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterMimeTypeInList","Elapsed":0.02}
+  {"Time":"2026-10-04T09:07:02.968551-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentInvalidUID","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.968553-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestMemoFilterCreatedTsWithNow","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.968555-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderStore","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.968556-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAuthenticationConfigurationMutation","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.973056-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderUpdateMultipleFields","Output":"--- SKIP: TestIdentityProviderUpdateMultipleFields (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.973071-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderUpdateMultipleFields","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.973074-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentListWithPagination","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.973077-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAuthenticationConfigurationMutation","Output":"--- SKIP: TestAuthenticationConfigurationMutation (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.973078-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAuthenticationConfigurationMutation","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.97308-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentStorageUsage","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.973082-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentListWithPagination","Output":"--- SKIP: TestAttachmentListWithPagination (0.00s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.973083-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentListWithPagination","Elapsed":0}
+  {"Time":"2026-10-04T09:07:02.973085-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.973086-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentStorageUsage","Output":"--- SKIP: TestAttachmentStorageUsage (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.973087-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentStorageUsage","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.973088-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Output":"--- SKIP: TestAttachmentFilterFilenameEndsWith (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.97309-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameEndsWith","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.973868-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestGetDatabaseSize","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:02.973878-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestGetDatabaseSize","Output":"--- SKIP: TestGetDatabaseSize (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.97388-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestGetDatabaseSize","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.973882-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentInvalidUID","Output":"--- SKIP: TestAttachmentInvalidUID (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.973883-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentInvalidUID","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.974125-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderUpdateConfig","Output":"--- SKIP: TestIdentityProviderUpdateConfig (0.02s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.974341-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderUpdateConfig","Elapsed":0.02}
+  {"Time":"2026-10-04T09:07:02.974813-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderStore","Output":"--- SKIP: TestIdentityProviderStore (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.974859-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestIdentityProviderStore","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.974903-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestMemoFilterCreatedTsWithNow","Output":"--- SKIP: TestMemoFilterCreatedTsWithNow (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:02.974915-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestMemoFilterCreatedTsWithNow","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:02.974918-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameSpecialCharacters","Output":"--- SKIP: TestAttachmentFilterFilenameSpecialCharacters (0.01s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:03.000375-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentFilterFilenameSpecialCharacters","Elapsed":0.01}
+  {"Time":"2026-10-04T09:07:03.00052-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentGetByUID","Output":"    containers.go:195: Docker is not running. Testcontainers can't perform is work without it: rootless Docker not found, failed to create Docker provider\n"}
+  {"Time":"2026-10-04T09:07:03.000536-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentGetByUID","Output":"--- SKIP: TestAttachmentGetByUID (0.03s)\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:03.00054-05:00","Action":"skip","Package":"github.com/usememos/memos/store/test","Test":"TestAttachmentGetByUID","Elapsed":0.03}
+  {"Time":"2026-10-04T09:07:03.000541-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"PASS\n","OutputType":"frame"}
+  {"Time":"2026-10-04T09:07:03.000544-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"ok  \tgithub.com/usememos/memos/store/test\t1.307s\n"}
+  {"Time":"2026-10-04T09:07:03.144812-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"\n"}
+  {"Time":"2026-10-04T09:07:03.144838-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"PASS: all drivers\n"}
+  {"Time":"2026-10-04T09:07:03.145976-05:00","Action":"output","Package":"github.com/usememos/memos/store/test","Output":"ok  \tgithub.com/usememos/memos/store/test\t24.806s\n"}
+  {"Time":"2026-10-04T09:07:03.146011-05:00","Action":"pass","Package":"github.com/usememos/memos/store/test","Elapsed":24.807}
