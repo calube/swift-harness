@@ -22,6 +22,8 @@ public enum RunLayout {
   public static let probeDirectory = "probe"
   public static let contextPackDirectory = "context-pack"
   public static let designRenderDirectory = "design-render"
+  /// Each build run's self-contained report page, `<build run id>.html`.
+  public static let reportsDirectory = "reports"
   /// What a build worker reports from its task worktree.
   public static let taskStatusFile = "task-status.json"
   public static let impactExemptionsFile = "impact-exemptions.json"

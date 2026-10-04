@@ -77,8 +77,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   ]
 
   static let fileExtensions: Set<Substring> = [
-    "html", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift", "toml", "txt",
-    "xml", "yaml", "yml",
+    "css", "html", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift", "toml",
+    "txt", "xml", "yaml", "yml",
     // Build file extensions discovery reads: `build.gradle.kts`, `mix.exs`, `go.mod`, `build.zig`.
     "gradle", "kts", "exs", "mod", "zig",
     // Node, Python and Ruby files discovery reads: `eslint.config.mjs`, `setup.cfg`, `tox.ini`.

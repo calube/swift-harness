@@ -7,6 +7,7 @@ public enum RunViewBuilder {
     let ledgerEvents = input.join?.events ?? []
     let tasks = input.ledger?.tasks ?? []
     var join = RunViewSpans.join(input.join)
+    join.taskOfGateRun.merge(input.workerGateRuns) { named, _ in named }
 
     let times = events.map(\.time) + ledgerEvents.map(\.at)
     let startedAt = input.join?.record?.startedAt ?? times.min()
