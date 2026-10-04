@@ -7,6 +7,8 @@ public struct PluginTree: Sendable, Equatable {
   /// The trees hashed, relative to the plugin root.
   public static let trees = ["agents", "skills", "workflows"]
   public static let manifest = ".claude-plugin/plugin.json"
+  /// The version a manifest with no `version` reads as.
+  public static let unpinnedVersion = "unpinned"
 
   public let version: String
   /// Lowercase hex SHA-256 over `version` and every file's relative path and bytes in `trees`.
