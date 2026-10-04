@@ -18,6 +18,7 @@ check's exit status passes a row. Video, logs and stored data become evidence be
 ### Non-goals
 
 - Android, physical devices and CI. The approved design (§1) keeps them out, and this amendment keeps them out.
+- Web and other non-iOS UI. This amendment covers iOS only.
 - A new regression gate. Kept flows stay T3 XCUITest ([ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md)); prepared flows serve 1 run.
 - Visual diffing of video frames. T2 snapshot tests own pixels.
 
@@ -85,7 +86,7 @@ New `plan-lint` rules, each with a fixture and a rule-index row, flag:
 - a requirement with no row outside `unit` and no stated reason;
 - a `Runs after` naming no ledger task;
 - a `state` row with no `flow` row for the same requirement and task;
-- a `flow` row in a repository with no iOS area, unless the web path holds (§8.3).
+- a `flow` row in a repository with no iOS area.
 
 ## 5. Preparing checks during the build
 
@@ -182,7 +183,6 @@ Limits the installed help states:
   `DEVICE_IN_USE` with reason `apple_simulator_recording_busy`. The `sim` lock lets 2 QA runs share the Mac (approved
   design §7), so recording needs its own 1-slot lock (decision 6).
 - **Mac only.** `record contact-sheet` decodes with AVFoundation and refuses other hosts.
-- **MP4 only.** It refuses a WebM recording with `contact_sheet_container_unsupported`. A web flow keeps screenshots.
 - **Coverage, not review.** The sheet samples a bounded grid, so a brief flash between samples doesn't show.
 - **Android** splits recordings over 180 s, but Android stays a non-goal here.
 
@@ -222,12 +222,32 @@ Each flow's batch adds `snapshot` and `screenshot` steps at every assertion, so 
 asserted step, and the 7 `sim verify` rules keep their input. Whether `batch --json` returns each step's snapshot
 in a form `sim snap` can store is unverified, and the fixture capture task settles it (§11).
 
-### 8.3 Web
+### 8.3 Running beside another session
 
-`agent-device` drives a browser through `--platform web`, backed by a pinned `agent-browser`. Its help says web
-needs Node 24 or later and a `web setup` and `web doctor` first. This Mac runs Node 22.23.3, and no one has run
-`web setup` here. The flow layer for web stays off until a capture run proves it; acceptance and state rows apply to
-any repository.
+Another session on the same Mac may drive its own simulator, record its own screen or run its own server. The gate
+already isolates its devices; this section states what the other session must leave alone, and what QA adds.
+
+- **Simulators.** Each simulator-tier run finds the base device by the `[simulator]` `device` name and `os`
+  version in `.swiftgate.toml`, uses a copy of it, and deletes the copy at the end:
+  - It clones the base when the base is shut down. When the base is running, it creates a fresh device of the same
+    type and runtime instead, and never clones a booted device.
+  - Every copy carries a `swift-harness-<pid>-` name. The sweep deletes only devices with that name whose owner
+    process has died, so it never touches a device another session named.
+  - A machine-wide `sim` counting lock caps how many copies exist at once (`[simulator] max_concurrent`). It counts
+    harness copies only; another session's own simulators don't take a slot.
+  - The base lookup takes the lowest UDID among devices that share the base's name and `os`. Another session must
+    therefore use its own simulator under a different name, and never boot or change the base device: each clone
+    copies the base's installed apps and settings.
+- **Checkouts.** Each session works in its own clone or worktree of the app, never 1 shared checkout. The simulator
+  tiers already build into DerivedData per worktree, so 2 sessions never share build products.
+- **Screen recording.** The Mac allows 1 simulator recording at a time, whoever started it. The recording lock
+  (decision 6) orders the harness's own final passes. A recording that another session holds still returns
+  `apple_simulator_recording_busy`. On that reason, `qa run --final` waits and retries within a bounded time
+  (decision 14). Past the bound, it runs the flow without video and marks that flow's video `unverified`. The row
+  still passes or fails on its assertions and state check alone (§6.2).
+- **Backend ports.** An acceptance row that starts a server picks a free port for that run and passes it to every
+  check in the row (decision 15). A fixed port could collide with another session's server, and the row would then
+  test the wrong process.
 
 ## 9. How this fits the rest of the harness
 
@@ -236,7 +256,7 @@ any repository.
 | `/swift-harness:design` | none to the template: `## Requirements` already gives the ids. The design's surface section names the check targets (§4.2) |
 | `/swift-harness:plan` | the decomposer adds the validation task and the table; `plan-lint` gains the §4.3 rules |
 | Build executor | after each merge, `swiftgate qa run --after <task>`; the `validate` stage runs `swiftgate qa run --final` on merged `main` instead of printing `validate: not configured` |
-| Brownfield | `PLAN.md` gains `## Validation`. Acceptance and state rows apply in any language with no simulator, and run at `merge`. Flow rows run at `final`, for iOS areas, and for web only after §8.3 holds |
+| Brownfield | `PLAN.md` gains `## Validation`. Acceptance and state rows apply in any language with no simulator, and run at `merge`. Flow rows run at `final`, for iOS areas only |
 | `/swift-validate` | its block gains 1 row per validation row, with result and evidence, under "Simulator QA" (approved design §8.2) |
 | Run viewer | a `qa.check` event per row feeds a validation column in the spec region. A red row reuses the "Why it failed" popover with layer, check, failing step or exit status, and evidence paths relative to the run |
 
@@ -272,9 +292,8 @@ and any row that reads `unverified`.
 | 9 | Recording lock | §7 a `sim` lock with 2 slots | conflicts | the host-wide recording lock means 2 QA runs can't record at once; a 1-slot recording lock or serial final passes fixes it |
 | 10 | Logs, network, trace, app data | §1 non-goal: profiling | extends | evidence, not timing; sub-project 4 keeps `perf` |
 | 11 | Android evidence | §1 non-goal: Android | conflicts | out of scope; this amendment drops it |
-| 12 | Web flows | §1 non-goal is iOS only; brownfield §1 non-goal: QA for areas that aren't iOS | conflicts | needs a user decision and a capture run first |
-| 13 | Report with requirement rows | §8.2 a "Simulator QA" row in `/swift-validate` | extends | 1 row per check instead of 1 per verify run |
-| 14 | The pin | plan: 0.21.16 | changes | this Mac runs 0.21.18, and every help text this amendment cites comes from 0.21.18 |
+| 12 | Report with requirement rows | §8.2 a "Simulator QA" row in `/swift-validate` | extends | 1 row per check instead of 1 per verify run |
+| 13 | The pin | plan: 0.21.16 | changes | this Mac runs 0.21.18, and every help text this amendment cites comes from 0.21.18 |
 
 ## 11. Verified against the installed tool
 
@@ -289,7 +308,6 @@ Captured on 2026-10-04 on this Mac. Nothing here comes from memory.
 | `agent-device help logs`, `help network` | `logs path\|start\|stop\|clear [--restart]\|doctor\|mark`; `network dump [limit] [summary\|headers\|body\|all]` |
 | `agent-device help wait`, `help is`, `help get` | `wait text <text> [timeoutMs]`, `wait absent <selector>`; `is <predicate> <selector> [value]`; `get text\|attrs <@ref\|selector>` reads without a predicate |
 | `agent-device help workflow` | selectors take the form `id="…"` and `label="…"`; "get text alone ... is not enough" |
-| `agent-device help web` | `--platform web`; needs Node 24+ and `web setup`; its example records to `.webm` |
 | A batch whose `wait` fails, with and without `--json` | exit 1; the message names the failing step's index and command |
 | A batch with no `--udid` on this Mac | `AMBIGUOUS_MATCH` across 11 devices, so every call passes the leased UDID |
 
@@ -312,9 +330,12 @@ with `--udid`.
 | 9 | Do sprint and design-free ship get the table? | (a) not in the first cut; (b) yes, as an optional spec-page section | (a) | user |
 | 10 | Where does the report live? | (a) `.harness/runs/<runID>/qa/report.json`, rows in `/swift-validate`, and a run viewer validation column; (b) the first 2 only, no viewer change | (a) | user |
 | 11 | Do flows run after each merge, or only at `validate`? | (a) after each merge for the rows it unblocks, stop at the first red layer; (b) acceptance after each merge, flow and state at `validate` only | (a) | user |
-| 12 | Web flows in brownfield? | (a) off until a capture run on Node 24 proves `--platform web`; (b) never | (a) | user |
-| 13 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a) | user |
-| 14 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | user |
+| 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a) | user |
+| 13 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | user |
+| 14 | How long does `qa run --final` wait when another recording holds the Mac? | (a) retry every 15 s for up to 5 minutes per flow, then run without video and mark the video `unverified`; (b) no wait: mark it `unverified` at once; (c) wait with no bound | (a): a bound keeps the final pass from hanging on a session the harness can't see | user |
+| 15 | How does a server's port reach its checks? | (a) the row binds port 0, reads the port the OS assigned, and passes it as the `QA_PORT` environment variable to the row's commands and scripts; (b) a port range per worktree in `.swiftgate.toml` | (a): no config, no collisions between runs | user |
+| 16 | What happens when more than 1 device shares the base's name and `os`? | (a) a non-gating note naming each UDID, and the lowest UDID as today; (b) `BLOCKED` until 1 remains; (c) no change | (a): no silent pick, and no new way to block a gate | user |
+| 17 | Kept flows: XCUITest or `agent-device` batch? | (a) keep the split: batch for prepared flows that serve 1 run, XCUITest for kept regression flows; a prepared flow that proves its worth moves to XCUITest through its contract-named identifiers; (b) promote batch flows to the kept regression format: a tracked `qa/` folder, plus a new ADR superseding that part of [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a), for now: `agent-device` is pre-1.0 and its pin has already moved from 0.21.16 to 0.21.18; XCUITest compiles against the app and already runs in the gate; the §11 items (`batch --json`, `record` inside a batch, the `--session` and `--udid` binding) are still unverified; and every replay would depend on the `sim up` UDID lease. Revisit once the capture task settles §11 and the steps format holds across releases | user |
 
 ## 13. Changes to the plan, once approved
 
