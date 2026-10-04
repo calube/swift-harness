@@ -93,21 +93,30 @@ private struct ReturnScenario {
 
   /// Records a gate run in the task worktree's run store through the writer `check` uses. A
   /// worker's gate runs `prove`, `mutate` and the task gate's steps by default, as the worker
-  /// contract asks.
+  /// contract asks, on a clean tree at the checkout's `HEAD` unless `head` names another commit.
   func recordGateRun(
     tier: CheckTier, verdict: Verdict, suffix: UInt32, in checkout: URL? = nil,
     steps: [String]? = ["prove", "mutate", "impact", "coverage", "app-build"],
-    proofBases: [String]? = nil
-  ) throws -> String {
+    proofBases: [String]? = nil, head: String? = nil, dirty: Bool? = false
+  ) async throws -> String {
     let runID = RunID.make(startedAt: Self.finishedAt, suffix: suffix)
     let report = try RunReport(
       runID: runID, durationMilliseconds: 1200,
       tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1200, testCounts: nil)],
       findings: [])
-    try RunStore(worktreeRoot: checkout ?? worktree).record(
+    let checkout = checkout ?? worktree
+    try RunStore(worktreeRoot: checkout).record(
       report, finishedAt: Self.finishedAt, command: "check \(tier.rawValue)", steps: steps,
-      proofBases: proofBases)
+      proofBases: proofBases, headCommit: try await resolved(head, in: checkout), dirty: dirty)
     return runID
+  }
+
+  /// `head`, or else `HEAD` of `checkout`, read as `check` reads it when a run starts.
+  private func resolved(_ head: String?, in checkout: URL) async throws -> String {
+    if let head { return head }
+    return try #require(
+      try await LiveGit(runner: runner, repositoryRoot: checkout.path).revision("HEAD"),
+      "\(checkout.path) has no HEAD")
   }
 
   func returnValue(
@@ -206,7 +215,7 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let (fix, commit) = try await scenario.cutFixWorktree()
-    let runID = try scenario.recordGateRun(
+    let runID = try await scenario.recordGateRun(
       tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
     let fixReturn = scenario.returnValue(
       commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: runID))
@@ -227,9 +236,9 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let (fix, commit) = try await scenario.cutFixWorktree()
-    let fixRun = try scenario.recordGateRun(
+    let fixRun = try await scenario.recordGateRun(
       tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
-    let workerRun = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let workerRun = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let fixer = try await scenario.check(
       scenario.returnValue(
@@ -253,7 +262,7 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario(ledgerGate: .push, presetGate: .tier(.push))
     defer { scenario.remove() }
     let (fix, commit) = try await scenario.cutFixWorktree()
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2, in: fix)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2, in: fix)
 
     let report = try await scenario.check(
       scenario.returnValue(
@@ -270,7 +279,7 @@ struct BuildCheckReturnTests {
   func honestReturnPasses() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
@@ -286,8 +295,8 @@ struct BuildCheckReturnTests {
   func unexplainedEditOutsideWriteSetFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
     let commit = try await scenario.commitFiles(["Sources/Queue/Queue.swift", "App/AppView.swift"])
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(
@@ -305,8 +314,8 @@ struct BuildCheckReturnTests {
   func explainedEditOutsideWriteSetFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
     let commit = try await scenario.commitFiles(["App/AppView.swift"])
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(
@@ -325,7 +334,7 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let (fix, commit) = try await scenario.cutFixWorktree(files: ["App/AppView.swift"])
-    let runID = try scenario.recordGateRun(tier: .ready, verdict: .green, suffix: 2, in: fix)
+    let runID = try await scenario.recordGateRun(tier: .ready, verdict: .green, suffix: 2, in: fix)
     let gate = TaskReturn.Gate(tier: .ready, verdict: .green, runID: runID)
 
     let explained = try await scenario.check(
@@ -347,7 +356,8 @@ struct BuildCheckReturnTests {
   func greenGateWithoutProofFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+    let runID = try await scenario.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: nil)
 
     let report = try await scenario.check(
       scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
@@ -362,13 +372,15 @@ struct BuildCheckReturnTests {
   func proofRequirementFollowsThePresetsTaskProof() async throws {
     let perTask = try await ReturnScenario(taskProof: .perTask)
     defer { perTask.remove() }
-    let perTaskRun = try perTask.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+    let perTaskRun = try await perTask.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: nil)
     let perTaskReport = try await perTask.check(
       perTask.returnValue(gate: .init(tier: .push, verdict: .green, runID: perTaskRun)))
 
     let final = try await ReturnScenario(taskProof: .final)
     defer { final.remove() }
-    let finalRun = try final.recordGateRun(tier: .push, verdict: .green, suffix: 1, steps: nil)
+    let finalRun = try await final.recordGateRun(
+      tier: .push, verdict: .green, suffix: 1, steps: nil)
     let finalReport = try await final.check(
       final.returnValue(gate: .init(tier: .push, verdict: .green, runID: finalRun)))
 
@@ -382,10 +394,10 @@ struct BuildCheckReturnTests {
   func workerGateWithoutAppBuildFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let workerRun = try scenario.recordGateRun(
+    let workerRun = try await scenario.recordGateRun(
       tier: .push, verdict: .green, suffix: 1, steps: ["prove", "mutate"])
     let (fix, commit) = try await scenario.cutFixWorktree()
-    let fixRun = try scenario.recordGateRun(
+    let fixRun = try await scenario.recordGateRun(
       tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
 
     let worker = try await scenario.check(
@@ -410,7 +422,8 @@ struct BuildCheckReturnTests {
   func runWithoutRecordedStepsNamesEachMissingStep() async throws {
     let scenario = try await ReturnScenario(ledgerGate: .fast, taskProof: .final)
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .fast, verdict: .green, suffix: 1, steps: nil)
+    let runID = try await scenario.recordGateRun(
+      tier: .fast, verdict: .green, suffix: 1, steps: nil)
 
     let report = try await scenario.check(
       scenario.returnValue(gate: .init(tier: .fast, verdict: .green, runID: runID)))
@@ -429,16 +442,16 @@ struct BuildCheckReturnTests {
   func runWithEveryStepPasses() async throws {
     let perTask = try await ReturnScenario(taskProof: .perTask)
     defer { perTask.remove() }
-    let perTaskRun = try perTask.recordGateRun(
+    let perTaskRun = try await perTask.recordGateRun(
       tier: .push, verdict: .green, suffix: 1, steps: ["prove", "mutate", "app-build"])
     let perTaskReport = try await perTask.check(
       perTask.returnValue(gate: .init(tier: .push, verdict: .green, runID: perTaskRun)))
 
     let final = try await ReturnScenario(taskProof: .final)
     defer { final.remove() }
-    let finalRun = try final.recordGateRun(
+    let finalRun = try await final.recordGateRun(
       tier: .push, verdict: .green, suffix: 1, steps: ["app-build"])
-    let skipped = try final.recordGateRun(tier: .push, verdict: .green, suffix: 2, steps: nil)
+    let skipped = try await final.recordGateRun(tier: .push, verdict: .green, suffix: 2, steps: nil)
     let finalReport = try await final.check(
       final.returnValue(gate: .init(tier: .push, verdict: .green, runID: finalRun)))
     let skippedReport = try await final.check(
@@ -458,9 +471,9 @@ struct BuildCheckReturnTests {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
     let surface = try await scenario.commitFiles(["Sources/Queue/Queue.swift"])
-    let proven = try scenario.recordGateRun(
+    let proven = try await scenario.recordGateRun(
       tier: .push, verdict: .green, suffix: 1, proofBases: [surface])
-    let unproven = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let unproven = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
 
     let withProof = try await scenario.check(
       scenario.returnValue(
@@ -481,7 +494,7 @@ struct BuildCheckReturnTests {
   func surfaceCommitOffBranchFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(
+    let runID = try await scenario.recordGateRun(
       tier: .push, verdict: .green, suffix: 1, proofBases: ["0123456789abcdef"])
 
     let report = try await scenario.check(
@@ -498,8 +511,8 @@ struct BuildCheckReturnTests {
   func editsInsideWriteSetAreQuiet() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
     let commit = try await scenario.commitFiles(["Sources/Queue/Queue.swift"])
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(
@@ -516,7 +529,7 @@ struct BuildCheckReturnTests {
   func commitOnAnotherBranchFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(
@@ -534,7 +547,7 @@ struct BuildCheckReturnTests {
   func unknownRunIDFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    _ = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    _ = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
     let invented = RunID.make(startedAt: ReturnScenario.finishedAt, suffix: 0xdead)
 
     let report = try await scenario.check(
@@ -550,7 +563,7 @@ struct BuildCheckReturnTests {
   func redRunClaimedGreenFails() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .red, suffix: 1)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .red, suffix: 1)
 
     let report = try await scenario.check(
       scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
@@ -565,7 +578,7 @@ struct BuildCheckReturnTests {
   func lowerTierThanTaskGateFails() async throws {
     let ledgerGated = try await ReturnScenario(ledgerGate: .push, presetGate: .ledger)
     defer { ledgerGated.remove() }
-    let fastRun = try ledgerGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
+    let fastRun = try await ledgerGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
     let report = try await ledgerGated.check(
       ledgerGated.returnValue(gate: .init(tier: .fast, verdict: .green, runID: fastRun)))
     #expect(report.findings.map(\.rule) == [.gateBelowTaskGate])
@@ -573,7 +586,7 @@ struct BuildCheckReturnTests {
 
     let presetGated = try await ReturnScenario(ledgerGate: .fast, presetGate: .tier(.push))
     defer { presetGated.remove() }
-    let presetRun = try presetGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
+    let presetRun = try await presetGated.recordGateRun(tier: .fast, verdict: .green, suffix: 1)
     let presetReport = try await presetGated.check(
       presetGated.returnValue(gate: .init(tier: .fast, verdict: .green, runID: presetRun)))
     #expect(presetReport.findings.map(\.rule) == [.gateBelowTaskGate])
@@ -611,7 +624,7 @@ struct BuildCheckReturnTests {
   func unknownOutcomeFailsDecoding() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
     let valid = try TaskReturnJSON.encode(
       scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
     var object = try #require(try JSONSerialization.jsonObject(with: valid) as? [String: Any])
@@ -702,7 +715,7 @@ struct BuildCheckReturnRecordTests {
   func rejectionIsRecorded() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
     let quoted = "\"\(scenario.taskCommit.prefix(8))\""
     let result = try await Self.checked(
       scenario,
@@ -731,7 +744,7 @@ struct BuildCheckReturnRecordTests {
   func blockedCheckIsRecordedScrubbed() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let runID = try scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
     try FileManager.default.removeItem(at: scenario.worktree)
     let result = try await Self.checked(
       scenario, scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID)))
@@ -744,5 +757,78 @@ struct BuildCheckReturnRecordTests {
     #expect(event.message.contains("has no worktree"))
     #expect(!event.message.contains(scenario.base.lastPathComponent), "\(event.message)")
     #expect(!event.message.contains("/var/"), "\(event.message)")
+  }
+
+  /// The `return-check` events in the plan's newest build run.
+  private static func returnChecks(_ scenario: ReturnScenario) async throws
+    -> [BuildEvent.ReturnCheck]
+  {
+    let run = try #require(
+      try await BuildRunStore.latest(plan: ReturnScenario.plan, git: scenario.git))
+    return try run.events().events.compactMap { event in
+      guard case .returnCheck(let check) = event else { return nil }
+      return check
+    }
+  }
+
+  @Test(
+    "with telemetry off, a GREEN check is recorded in the build run as a return-check naming the return's full last commit, and a RED one with its rules, both under the id the report's telemetry would carry — catches a verdict build merge can't read"
+  )
+  func verdictIsRecordedInTheBuildRun() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let short = String(scenario.taskCommit.prefix(10))
+    let gate = TaskReturn.Gate(tier: .push, verdict: .green, runID: runID)
+
+    let green = await BuildCheckReturnRun.check(
+      file: try scenario.write(
+        try TaskReturnJSON.encode(scenario.returnValue(commits: [short], gate: gate))),
+      plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+    let red = await BuildCheckReturnRun.check(
+      file: try scenario.write(
+        try TaskReturnJSON.encode(scenario.returnValue(commits: [short], gate: gate, review: nil))),
+      plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+
+    #expect(green.report.verdict == .green, "\(green.report.findings)")
+    #expect(green.notRecorded == [] && red.notRecorded == [])
+    let checks = try await Self.returnChecks(scenario)
+    #expect(checks.map(\.verdict) == [.green, .red])
+    #expect(checks.map(\.commit) == [scenario.taskCommit, scenario.taskCommit])
+    #expect(checks.map(\.task) == [ReturnScenario.task, ReturnScenario.task])
+    #expect(checks.last?.rules == [.reviewMissing])
+    #expect(Set(checks.map(\.checkID)).count == 2)
+  }
+
+  @Test(
+    "a GREEN return citing a gate run recorded at the commit before its last, or on a dirty tree at its last, fails build-return.stale-gate with exit 1 — catches a stale-head or dirty-tree gate accepted"
+  )
+  func staleGateRunFails() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let early = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let last = try await scenario.commitFiles(["Sources/Queue/Queue.swift"])
+    let dirty = try await scenario.recordGateRun(
+      tier: .push, verdict: .green, suffix: 3, dirty: true)
+    let clean = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 4)
+    func check(_ runID: String) async throws -> BuildCheckReturnReport {
+      try await scenario.check(
+        scenario.returnValue(
+          commits: [scenario.taskCommit, last],
+          gate: .init(tier: .push, verdict: .green, runID: runID)))
+    }
+
+    let staleHead = try await check(early)
+    let dirtyTree = try await check(dirty)
+    let fresh = try await check(clean)
+
+    #expect(staleHead.findings.map(\.rule) == [.staleGate], "\(staleHead.findings)")
+    #expect(staleHead.findings.first?.message.contains(scenario.taskCommit) == true)
+    #expect(staleHead.findings.first?.message.contains(last) == true)
+    #expect(staleHead.verdict.exitCode == 1)
+    #expect(dirtyTree.findings.map(\.rule) == [.staleGate], "\(dirtyTree.findings)")
+    #expect(dirtyTree.findings.first?.message.contains("uncommitted") == true)
+    #expect(fresh.findings == [])
+    #expect(fresh.commit == last)
   }
 }

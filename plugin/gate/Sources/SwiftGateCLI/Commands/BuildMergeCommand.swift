@@ -56,8 +56,12 @@ struct BuildMergeCommand: AsyncParsableCommand {
       + "out at <git-common-dir>/swift-harness/plans/<plan>/checkout, merges land there, and the "
       + "fix worktree is that plan's worktrees/fix-<task>; the user's branch never moves. "
       + "--fix merges the fixer's branch <plan>/fix-<task> under the same checks and "
-      + "records it as the task's merge. Exits 0 when "
-      + "merged or undone; 1 on a conflict, when --session doesn't hold the plan's lock, or when "
+      + "records it as the task's merge. A merge needs the build run's newest `build "
+      + "check-return` of the task's return (with --fix, the fixer's) to be GREEN for the "
+      + "commit the branch is at; otherwise it refuses with return-unchecked, return-not-green "
+      + "(naming the check's id and rules) or return-stale. Exits 0 when "
+      + "merged or undone; 1 on a conflict, when --session doesn't hold the plan's lock, when "
+      + "the return isn't checked GREEN at the branch tip, or when "
       + "main isn't clean, on main, or where the last merge left it; 2 for a missing --session, "
       + "no build run, a damaged events log, or a failed git step.")
 

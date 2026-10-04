@@ -1220,7 +1220,7 @@ private enum BuildSeedRunners {
         findings: [])
       try RunStore(worktreeRoot: worktree).record(
         report, finishedAt: startedAt, command: "check \(CheckTier.push.rawValue)",
-        steps: ["prove", "mutate", "app-build"])
+        steps: ["prove", "mutate", "app-build"], headCommit: taskCommit, dirty: false)
     } catch {
       return .blocked("could not stage plan state: \(error)")
     }
@@ -1244,8 +1244,9 @@ private enum BuildSeedRunners {
   // MARK: build merge
 
   /// A repository whose build run's last merge left `main` at its first commit, with the task
-  /// branch one commit ahead. An `after-last-merge.txt` in the case is committed onto `main`
-  /// afterwards, as another session's merge would be.
+  /// branch one commit ahead and its return checked GREEN at that commit. An
+  /// `after-last-merge.txt` in the case is committed onto `main` afterwards, as another session's
+  /// merge would be.
   static func merge(caseDirectory: URL, checks: BuildSeedChecks) async -> SeedRunOutcome {
     let moved = try? String(
       contentsOf: caseDirectory.appending(path: "after-last-merge.txt"), encoding: .utf8)
@@ -1261,6 +1262,7 @@ private enum BuildSeedRunners {
       await repo.git("checkout", "-q", "-b", branch),
       repo.write("Sources/Queue/Queue.swift", "enum Queue {}\n"),
       await repo.git("add", "-A"), await repo.git("commit", "-q", "-m", "Add the queue"),
+      let taskTip = await seed.output(["rev-parse", "HEAD"]),
       await repo.git("checkout", "-q", "main")
     else { return .blocked("could not build the temp repo") }
     do throws(BuildRunStoreError) {
@@ -1270,6 +1272,11 @@ private enum BuildSeedRunners {
       try await run.append(
         .merge(
           .init(task: "earlier-task", preCommit: lastMerge, postCommit: lastMerge, at: startedAt)))
+      try await run.append(
+        .returnCheck(
+          .init(
+            task: task, fix: false, verdict: .green, commit: taskTip, checkID: "self-test-check",
+            rules: [], at: startedAt)))
     } catch {
       return .blocked("could not stage the build run: \(error)")
     }

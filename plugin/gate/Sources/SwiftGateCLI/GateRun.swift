@@ -93,8 +93,9 @@ enum GateRun {
 
   /// Where a run's events go, and the tree it starts on. `events` stands in for the project's
   /// writer; without it, a root with no loadable `.swiftgate.toml` gets no writer, and
-  /// `[telemetry] enabled = false` gets one that keeps nothing. The tree is read only for a
-  /// writer that keeps events; a git failure says so on stderr and leaves it unknown.
+  /// `[telemetry] enabled = false` gets one that keeps nothing. The tree is read whatever the
+  /// writer, since the run's history line records whether it was dirty and `build check-return`
+  /// rejects a gate that was; a git failure says so on stderr and leaves it unknown.
   static func telemetry(
     root: URL, events: (any HarnessEventWriting)?, workingTree: (any WorkingTreeReading)?
   ) async -> (events: (any HarnessEventWriting)?, tree: WorkingTreeState?) {
@@ -104,7 +105,6 @@ enum GateRun {
     } else {
       writer = TelemetryOptIn.writer(root: root)
     }
-    guard let writer, !(writer is DisabledEventWriter) else { return (writer, nil) }
     let reader = workingTree ?? LiveWorkingTree(runner: LiveProcessRunner(), root: root)
     do {
       return (writer, try await reader.state())

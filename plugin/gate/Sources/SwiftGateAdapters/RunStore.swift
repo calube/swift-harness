@@ -76,7 +76,8 @@ public struct RunStore: Sendable {
   /// - Parameters:
   ///   - headCommit: the commit `HEAD` was at when the run started, in both.
   ///   - treeHash: `HEAD^{tree}` when the run started on a clean tree, for the `gate.run` only.
-  ///   - dirty: whether it started on a dirty tree; `nil` when git couldn't say.
+  ///   - dirty: whether it started on a dirty tree, in the history line and the `gate.run`; `nil`
+  ///     when git couldn't say.
   ///   - gateSteps: each timed step, 1 `gate.step` apiece.
   ///   - checkTier: the `check` tier the run gated at, as the events' source.
   ///   - testResults: each test case the run's tiers reported, 1 `test.result` apiece, in the
@@ -104,7 +105,7 @@ public struct RunStore: Sendable {
       line = try RunHistoryJSON.encodeLine(
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,
-          proofBases: proofBases, headCommit: headCommit, base: base))
+          proofBases: proofBases, headCommit: headCommit, base: base, dirty: dirty))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }

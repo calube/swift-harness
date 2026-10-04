@@ -278,6 +278,13 @@ struct BuildPlanBranchTests {
     try #require(created.status == .created, "\(created.message)")
     let tip = try await scenario.commitTask()
     let profile = BuildPresetCatalog.profile(root: scenario.user)
+    let run = try #require(
+      try await BuildRunStore.latest(plan: PlanBranchScenario.slug, git: scenario.git))
+    try await run.append(
+      .returnCheck(
+        .init(
+          task: PlanBranchScenario.task, fix: false, verdict: .green, commit: tip,
+          checkID: "green-check", rules: [], at: PinnedClock().now())))
 
     let report = await BuildMergeRun.run(
       slug: PlanBranchScenario.slug, task: PlanBranchScenario.task, undo: false,
