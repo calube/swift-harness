@@ -329,7 +329,7 @@ struct SimDownTests {
     let udid = try #require(lease?.udid)
 
     kill(child, SIGKILL)
-    _ = DetachedLauncherTests.reap(child)
+    _ = await DetachedLauncherTests.reap(child)
     let agent = FakeAgentDevice()
     let failures = LogLines()
     let swept = try await SimulatorClones(
