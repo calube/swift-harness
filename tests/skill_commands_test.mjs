@@ -1831,7 +1831,7 @@ const tests = {
     const contract = validationContract()
     assert.deepEqual(contract.tableFields, ['schemaVersion', 'rows', 'unitOnly'])
     assert.deepEqual(contract.rowFields.map(f => f.name), ['requirement', 'layer', 'check', 'runsAfter', 'writer', 'reason'])
-    assert.equal(contract.ruleIDs.length, 4)
+    assert.equal(contract.ruleIDs.length, 5)
     assert.deepEqual(validationTableProblems(planValidationFiles(), contract), [])
     const { problems } = scanSkills(join(root, 'skills/plan'), help, root)
     assert.deepEqual(problems, [])
@@ -1859,6 +1859,7 @@ const tests = {
       'the plan skill never names `plan-lint.validation-unknown-task`',
       'the plan skill never names `plan-lint.validation-state-without-flow`',
       'the plan skill never names `plan-lint.validation-flow-without-ios`',
+      'the plan skill never names `plan-lint.validation-check-source-file`',
       'the reference\'s `validation.json` keys are rows, schemaVersion, not schemaVersion, rows, unitOnly',
       'the reference\'s `validation.json` has no `schemaVersion` 1',
       'the decomposer\'s req-one unit row has keys requirement, layer, check, runsAfter, writer, why, not requirement, layer, check, runsAfter, writer, reason',
@@ -1869,6 +1870,7 @@ const tests = {
       'the decomposer\'s fix round never names `plan-lint.validation-unknown-task`',
       'the decomposer\'s fix round never names `plan-lint.validation-state-without-flow`',
       'the decomposer\'s fix round never names `plan-lint.validation-flow-without-ios`',
+      'the decomposer\'s fix round never names `plan-lint.validation-check-source-file`',
     ])
     assert.deepEqual(validationTableProblems({ plan: '', stateFiles: '', agent: '' }, contract).slice(0, 2), [
       'step 5 never writes `<plans>/<slug>/validation.json`',

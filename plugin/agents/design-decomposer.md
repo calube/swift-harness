@@ -132,7 +132,8 @@ after the tasks it names merge.
     after a `flow` row for the same requirement.
 
   Never `unit`: each task's own tests are its unit tests and get no row.
-- `"check"`: what the row runs. A test as `<TestTarget>/<testName>`; a flow as
+- `"check"`: what the row runs. A test as `test: <Target>/<Class>/<method>` in a repository with
+  an `xcode` area, or `test: <selector>` otherwise, never a test source file; a flow as
   `qa/<name>.flow.json`; a state script as `qa/<name>.state.sh`. A check targets only names the
   design fixes, such as accessibility identifiers, routes, storage keys and log lines, so it can
   be written before the code.
@@ -200,7 +201,7 @@ Return exactly one JSON object:
       {
         "requirement": "req-offline-queue-drains-on-reconnect",
         "layer": "acceptance",
-        "check": "OrderQueueCoreTests/drainsThroughLiveClientOnReconnect",
+        "check": "test: OrderQueueCoreTests/OrderQueueCoreTests/drainsThroughLiveClientOnReconnect",
         "runsAfter": ["offline-queue-client-interface", "offline-queue-core-reducer"],
         "writer": "offline-queue-core-reducer"
       }
@@ -296,6 +297,8 @@ A finding names its rule id, its severity and, for a task-level rule, the task i
   the same requirement and `"runsAfter"`, or drop the `state` row.
 - `plan-lint.validation-flow-without-ios`: the repository has no app to drive; check the boundary
   with an `acceptance` row instead.
+- `plan-lint.validation-check-source-file`: name the test in the row's `"check"` as
+  `test: <Target>/<Class>/<method>`, or `test: <selector>` with no `xcode` area, not its file.
 - `plan-lint.waves-mismatch`, `plan-lint.pack-missing`, `plan-lint.pack-unknown-task`: these come
   from the skill's scheduling or pack building, not your tasks. Leave the tasks as they are and
   list each in `"unresolved"`, unless the finding names a task id you got wrong.
