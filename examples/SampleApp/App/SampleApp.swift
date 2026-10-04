@@ -10,11 +10,21 @@ import SwiftUI
 /// conformances supply the live values the features resolve at runtime.
 @main
 struct SampleApp: App {
-  @MainActor static let store = Store(initialState: CounterFeature.State()) { CounterFeature() }
+  let store: StoreOf<CounterFeature>
+
+  init() {
+    #if DEBUG
+      if let scenario = Scenario.selected(by: ProcessInfo.processInfo.arguments) {
+        prepareDependencies { scenario.apply(to: &$0) }
+      }
+    #endif
+    // prepareDependencies must run before the first store exists, or the store keeps live values.
+    store = Store(initialState: CounterFeature.State()) { CounterFeature() }
+  }
 
   var body: some Scene {
     WindowGroup {
-      CounterView(store: Self.store)
+      CounterView(store: store)
     }
   }
 }

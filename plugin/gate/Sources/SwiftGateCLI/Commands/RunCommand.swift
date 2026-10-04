@@ -351,6 +351,9 @@ struct LiveWarmupSpawner: WarmupSpawning {
   /// This swiftgate binary.
   var executable: String = Bundle.main.executablePath ?? CommandLine.arguments[0]
   var arguments = ["warmup"]
+  /// The binary this process runs as, which the warm-up's events name: the entry point clears
+  /// the hash from this process's environment, so the child can't inherit it.
+  var binary: GateBinary? = GateBinaryScope.current
 
   func spawn(directory: URL, log: URL) async throws(RunStartError) -> Int32? {
     do {
@@ -370,6 +373,7 @@ struct LiveWarmupSpawner: WarmupSpawning {
         ProcessInvocation(
           executable: "/bin/sh",
           arguments: ["-c", script, "sh", log.path(percentEncoded: false), executable] + arguments,
+          environmentOverlay: [GateBinary.sourceHashVariable: binary?.sourceHash],
           workingDirectory: directory.path(percentEncoded: false), timeout: .seconds(60)))
     } catch {
       throw RunStartError(message: "starting the warm-up: \(error)")
