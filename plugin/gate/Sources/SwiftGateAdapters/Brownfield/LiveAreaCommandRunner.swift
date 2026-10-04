@@ -35,7 +35,16 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
       case .timedOut(_, _, let stdout, _):
         return AreaOutcomeReading.timedOut(output: stdout.text)
       case .launchFailed(_, let reason):
-        // Status 127 is what `/bin/sh` reports for a command it can't start.
+        // Status 127 is what `/bin/sh` reports for a command it can't start. A missing working
+        // directory fails the launch with the same errno as a missing shell, so name it.
+        var isDirectory: ObjCBool = false
+        if !FileManager.default.fileExists(
+          atPath: request.workingDirectory, isDirectory: &isDirectory) || !isDirectory.boolValue
+        {
+          return .failed(
+            exit: 127, tail: "working directory \(request.workingDirectory) doesn't exist",
+            junit: nil)
+        }
         return .failed(exit: 127, tail: "could not start /bin/sh: \(reason)", junit: nil)
       case .cancelled:
         return .failed(exit: 130, tail: "cancelled before it finished", junit: nil)
