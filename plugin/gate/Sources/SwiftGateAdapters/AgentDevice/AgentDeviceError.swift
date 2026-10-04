@@ -14,6 +14,8 @@ public enum AgentDeviceErrorCode: String, Sendable, Equatable, CaseIterable {
 /// The `error.details.reason` values the pinned version was seen to print.
 public enum AgentDeviceFailureReason: String, Sendable, Equatable, CaseIterable {
   case waitDeadlineExceeded = "wait_deadline_exceeded"
+  /// An `is` step whose predicate didn't hold.
+  case predicateFailed = "predicate_failed"
 }
 
 /// The batch step that stopped a batch: its 1-based index and its command.
@@ -34,15 +36,19 @@ public struct AgentDeviceFailure: Sendable, Equatable {
   public var reason: AgentDeviceFailureReason?
   /// Set only when a batch stopped at a step.
   public var failedStep: AgentDeviceBatchStep?
+  /// The failure envelope exactly as printed, kept as evidence; `nil` when the failure was
+  /// built rather than read.
+  public var output: Data?
 
   public init(
     code: AgentDeviceErrorCode, message: String, reason: AgentDeviceFailureReason? = nil,
-    failedStep: AgentDeviceBatchStep? = nil
+    failedStep: AgentDeviceBatchStep? = nil, output: Data? = nil
   ) {
     self.code = code
     self.message = message
     self.reason = reason
     self.failedStep = failedStep
+    self.output = output
   }
 }
 

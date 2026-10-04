@@ -577,7 +577,7 @@ public struct RunViewReader: RunViewReading {
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
     case .discoverRun, .warmupRun: return prebuild.holds(event.time)
     case .qaCheck(let check): return qaWindow?.holds(check, qaRun: event.runID) ?? false
-    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
+    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup, .qaFlow:
       return false
     }
   }

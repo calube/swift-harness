@@ -132,6 +132,33 @@ struct QARunPlanTests {
   }
 
   @Test(
+    "each requirement's state rows run straight after its last flow row, while that flow's device is still up, and a red state row leaves the next flow to run — catches a state check run after its flow's device is gone"
+  )
+  func stateFollowsItsFlow() async {
+    let table = ValidationTable(rows: [
+      Self.row("req-list", .state, "qa/list.state.sh", after: ["list-ui"]),
+      Self.row("req-save", .state, "qa/save.state.sh", after: ["save-ui"]),
+      Self.row("req-save", .flow, "qa/save.flow.json", after: ["save-ui"]),
+      Self.row("req-list", .flow, "qa/list.flow.json", after: ["list-ui"]),
+      Self.row("req-sync", .state, "qa/sync.state.sh", after: ["sync-api"]),
+    ])
+    let plan = QARunPlan.make(
+      table: table, merged: ["list-ui", "save-ui", "sync-api"], after: nil)
+    let recorder = Recorder(["qa/save.state.sh": .red])
+
+    let rows = await plan.execute(atBase: false) { recorder.check($0) }
+
+    #expect(plan.entries.map(\.row) == [3, 2, 4, 1, 5])
+    #expect(
+      recorder.checks == [
+        "qa/save.flow.json", "qa/save.state.sh", "qa/list.flow.json", "qa/list.state.sh",
+        "qa/sync.state.sh",
+      ])
+    #expect(rows.first { $0.row == 4 }?.result == .pass)
+    #expect(rows.first { $0.row == 1 }?.result == .pass)
+  }
+
+  @Test(
     "at the merge base every row runs, whatever merged and whatever failed before it — catches a red-run proof that skips the rows it should record"
   )
   func atBaseRunsEverything() async {

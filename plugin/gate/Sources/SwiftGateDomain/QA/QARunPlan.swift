@@ -1,7 +1,8 @@
 import Foundation
 
 /// Which validation rows 1 `qa run` takes, in the order it runs them: acceptance, then flow, then
-/// state, each layer in table order.
+/// state, each layer in table order, except that a requirement's state rows run straight after its
+/// last flow row, on that flow's device.
 public struct QARunPlan: Sendable, Equatable {
   public struct Entry: Sendable, Equatable {
     /// 1-based position in the table's `rows`.
@@ -36,7 +37,7 @@ public struct QARunPlan: Sendable, Equatable {
     -> QARunPlan
   {
     let numbered = table.rows.enumerated().map { (row: $0.offset + 1, validation: $0.element) }
-    let entries = layerOrder.flatMap { layer in
+    let layered = layerOrder.flatMap { layer in
       numbered
         .filter { $0.validation.layer == layer }
         .filter { candidate in after.map { candidate.validation.runsAfter.contains($0) } ?? true }
@@ -48,13 +49,36 @@ public struct QARunPlan: Sendable, Equatable {
           return Entry(row: candidate.row, validation: candidate.validation, waitingOn: unmerged)
         }
     }
-    return QARunPlan(entries: entries)
+    return QARunPlan(entries: statesAfterTheirFlows(layered))
+  }
+
+  /// Moves each requirement's state rows to just after its last flow row: a state check reads
+  /// what the flow left on its device, which goes back before the next flow starts. A state row
+  /// whose requirement has no flow row stays at the end.
+  private static func statesAfterTheirFlows(_ entries: [Entry]) -> [Entry] {
+    let flowRequirements = Set(
+      entries.filter { $0.validation.layer == .flow }.map(\.validation.requirement))
+    let attached = entries.filter {
+      $0.validation.layer == .state && flowRequirements.contains($0.validation.requirement)
+    }
+    var ordered: [Entry] = []
+    let flows = entries.filter { $0.validation.layer == .flow }
+    for entry in entries where !attached.contains(entry) {
+      ordered.append(entry)
+      let requirement = entry.validation.requirement
+      if entry.validation.layer == .flow,
+        flows.last(where: { $0.validation.requirement == requirement }) == entry
+      {
+        ordered += attached.filter { $0.validation.requirement == requirement }
+      }
+    }
+    return ordered
   }
 
   /// Runs the ready entries layer by layer through `check` and returns 1 row per entry, in plan
   /// order.
-  /// - Parameter atBase: `false` stops at the first layer with a red row, leaving every later
-  ///   row `unverified`, and runs a state row only once every flow row for its requirement in
+  /// - Parameter atBase: `false` stops at the first layer with a red row, leaving every row of a
+  ///   later layer `unverified`, and runs a state row only once every flow row for its requirement in
   ///   this plan passed. `true` runs every ready row, since each is expected to fail there.
   public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
     var rows: [QARow] = []
@@ -68,7 +92,7 @@ public struct QARunPlan: Sendable, Equatable {
           entry, result: .waiting,
           message: "waiting on \(entry.waitingOn.joined(separator: ", "))",
           waitingOn: entry.waitingOn)
-      } else if !atBase, let redLayer, redLayer != validation.layer {
+      } else if !atBase, let redLayer, Self.precedes(redLayer, validation.layer) {
         row = Self.row(
           entry, result: .unverified,
           message: "not run: the \(redLayer.rawValue) layer has a red row")
@@ -93,6 +117,11 @@ public struct QARunPlan: Sendable, Equatable {
       rows.append(row)
     }
     return rows
+  }
+
+  /// Whether `earlier` runs before `later` in ``layerOrder``.
+  private static func precedes(_ earlier: ValidationLayer, _ later: ValidationLayer) -> Bool {
+    (layerOrder.firstIndex(of: earlier) ?? 0) < (layerOrder.firstIndex(of: later) ?? 0)
   }
 
   private static func row(

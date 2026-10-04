@@ -1,7 +1,9 @@
 import ArgumentParser
+import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import Synchronization
 
 /// `qa run`'s behaviour, apart from argument parsing so tests drive it against a temp repository.
 enum QARunRun {
@@ -26,6 +28,10 @@ enum QARunRun {
     var runIDSuffix: @Sendable () -> UInt32
     var newEventID: @Sendable () -> String
     var timeout: Duration = QARunRun.checkTimeout
+    /// The device flow rows run on; `nil` leaves every flow row `unverified`.
+    var flows: (any QAFlowSimulating)?
+    /// The plugin root `qa lint` reads the pinned step schemas from.
+    var pluginRoot: URL?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -122,7 +128,9 @@ enum QARunRun {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
     let checks = Checks(
-      planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies)
+      planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies,
+      runID: runID, plan: runPlan, atBase: options.atBase,
+      flows: dependencies.flows.map { QAFlowRunner(simulator: $0) })
 
     var notes: [String] = []
     let rows: [QARow]
@@ -162,6 +170,7 @@ enum QARunRun {
       }
       rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
     }
+    let flowRecords = await checks.flowRecords()
 
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
     if let events {
@@ -173,9 +182,20 @@ enum QARunRun {
               eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
               source: HarnessEventSource(route: nil),
               payload: .qaCheck(QACheckEvent(plan: slug, row: row, atBase: options.atBase)))
-          })
+          }
+            + rows.compactMap { row in
+              flowRecords[row.row].map { record in
+                HarnessEvent(
+                  eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
+                  source: HarnessEventSource(route: nil),
+                  payload: .qaFlow(
+                    QAFlowEvent(
+                      plan: slug, row: row.row, requirement: row.requirement,
+                      atBase: options.atBase, record: record)))
+              }
+            })
       } catch {
-        notes.append("qa.check events not written: \(error)")
+        notes.append("qa.check and qa.flow events not written: \(error)")
       }
     } else {
       notes.append("qa.check events not written: \(root.path) has no config that loads")
@@ -199,17 +219,90 @@ enum QARunRun {
     return report
   }
 
-  /// Runs 1 acceptance or state row's check and saves what it printed.
+  /// Runs 1 row's check and saves what it printed: an acceptance or state row's command or
+  /// script, or a flow row through ``QAFlowRunner``.
   private struct Checks: Sendable {
     let planDirectory: String
     let qaDirectory: URL
     let dependencies: Dependencies
+    let runID: String
+    let plan: QARunPlan
+    let atBase: Bool
+    let flows: QAFlowRunner?
+    /// State rows a flow row already ran on its device, by row.
+    let stateResults = StateResults()
+
+    final class StateResults: Sendable {
+      private let results = Mutex<[Int: QACheckOutcome]>([:])
+
+      func store(_ outcome: QACheckOutcome, row: Int) {
+        results.withLock { $0[row] = outcome }
+      }
+
+      func take(row: Int) -> QACheckOutcome? {
+        results.withLock { $0.removeValue(forKey: row) }
+      }
+    }
+
+    func flowRecords() async -> [Int: QAFlowRecord] {
+      await flows?.records ?? [:]
+    }
 
     func run(_ entry: QARunPlan.Entry, in workingDirectory: String) async -> QACheckOutcome {
       let row = entry.validation
       if row.layer == .flow {
+        return await flow(entry, in: workingDirectory)
+      }
+      if row.layer == .state, let ran = stateResults.take(row: entry.row) {
+        return ran
+      }
+      return await command(entry, in: workingDirectory, device: [:])
+    }
+
+    /// The ready state rows the flow row `entry` runs on its device: its requirement's, when no
+    /// later flow row has the same requirement.
+    private func stateRows(of entry: QARunPlan.Entry) -> [QARunPlan.Entry] {
+      let requirement = entry.validation.requirement
+      let later = plan.entries.drop { $0.row != entry.row }.dropFirst()
+        .filter { $0.validation.requirement == requirement }
+      guard !later.contains(where: { $0.validation.layer == .flow }) else { return [] }
+      return later.filter { $0.validation.layer == .state && $0.waitingOn.isEmpty }
+    }
+
+    private func flow(_ entry: QARunPlan.Entry, in workingDirectory: String) async
+      -> QACheckOutcome
+    {
+      guard let flows else {
         return QACheckOutcome(result: .unverified, message: QARunPlan.flowRunnerMissing)
       }
+      let row = entry.validation
+      let stepsFile = URL(filePath: planDirectory).appending(path: row.check)
+      let worktree = URL(filePath: workingDirectory, directoryHint: .isDirectory)
+      let lint = QALintRun.run(
+        files: [stepsFile.path], root: worktree, pluginRoot: dependencies.pluginRoot)
+      let name = String(Self.evidenceName(entry).dropLast(".txt".count))
+      let states = stateRows(of: entry)
+      return await flows.run(
+        QAFlowRow(
+          row: entry.row, requirement: row.requirement, stepsFile: stepsFile, worktree: worktree,
+          directory: qaDirectory.appending(path: name, directoryHint: .isDirectory),
+          relativeDirectory: "\(QAReport.directory)/\(name)", runID: "\(runID)-row\(entry.row)",
+          atBase: atBase),
+        lint: lint
+      ) { device in
+        for state in states {
+          stateResults.store(
+            await command(state, in: workingDirectory, device: device), row: state.row)
+        }
+      }
+    }
+
+    /// Runs an acceptance row's command or a state row's script, with `device`'s variables
+    /// when its flow's device is up.
+    private func command(
+      _ entry: QARunPlan.Entry, in workingDirectory: String, device: [String: String]
+    ) async -> QACheckOutcome {
+      let row = entry.validation
       let port: Int
       do {
         port = try dependencies.ports.assignPort()
@@ -230,7 +323,7 @@ enum QARunRun {
           environment: [
             "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
             "QA_EVIDENCE_DIR": qaDirectory.path,
-          ], timeout: dependencies.timeout))
+          ].merging(device, uniquingKeysWith: { own, _ in own }), timeout: dependencies.timeout))
 
       let result: QAResult
       let status: String
@@ -333,8 +426,106 @@ struct QARunCommand: AsyncParsableCommand {
         },
         newEventID: {
           UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
+        }, flows: LiveQAFlowSimulator(runner: runner),
+        pluginRoot: ProcessInfo.processInfo.environment[QALintRun.harnessRootVariable].map {
+          URL(filePath: $0, directoryHint: .isDirectory)
         }))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
+  }
+}
+
+/// `sim up`, `sim verify` and `sim down` as their commands run them, for the tree a flow row runs
+/// in: the checkout, or a scratch tree at the merge base.
+struct LiveQAFlowSimulator: QAFlowSimulating {
+  let runner: any ProcessRunner
+  let agentDevice: any AgentDevice
+
+  init(runner: any ProcessRunner) {
+    self.runner = runner
+    self.agentDevice = LiveAgentDevice(runner: runner)
+  }
+
+  /// `qa run` starts each holder itself and outlives it, so a holder that exited stays a zombie
+  /// child, which `kill(pid, 0)` still finds, until it is reaped here.
+  @Sendable static func isAlive(_ pid: Int32) -> Bool {
+    var status: Int32 = 0
+    if waitpid(pid, &status, WNOHANG) == pid { return false }
+    return SimulatorClones.processIsAlive(pid)
+  }
+
+  func up(_ request: QAFlowSimulatorRequest) async -> Result<SimUpStarted, SimUpFailure> {
+    let root = request.worktree
+    let config: Config
+    do {
+      guard let loaded = try ConfigLoader().load(repositoryRoot: root) else {
+        return .failure(
+          SimUpFailure(rule: .environment, message: "no \(ConfigLoader.fileName) in \(root.path)"))
+      }
+      config = loaded
+    } catch {
+      return .failure(
+        SimUpFailure(rule: .environment, message: "\(ConfigLoader.fileName) doesn't load: \(error)")
+      )
+    }
+    let maxConcurrent = config.simulator.maxConcurrent
+    let dependencies = SimUp.Dependencies(
+      agentDevice: agentDevice,
+      leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+      launcher: DetachedLauncher(), xcodebuild: LiveXcodebuild(runner: runner),
+      simctl: LiveSimctl(
+        runner: runner,
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simulator.simctlTimeoutSeconds))),
+      bundles: AppBundleReader(), git: LiveGit(runner: runner, repositoryRoot: root.path),
+      isAlive: Self.isAlive, terminate: { _ = kill($0, SIGTERM) },
+      slotHolders: {
+        SimUp.liveSlotHolders(
+          lockDirectory: FileCountingLock.defaultDirectory(), capacity: maxConcurrent)
+      }, clock: .continuous(),
+      now: { Date() })  // swiftgate:allow det.date-init — the CLI edge stamps when the run started
+    return await SimUp(dependencies: dependencies).run(
+      SimUp.Request(
+        worktree: root, config: config, scenario: request.scenario, runID: request.runID,
+        simDirectory: request.simDirectory,
+        derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
+        swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
+  }
+
+  func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {
+    let root = request.worktree
+    let checkoutHead: SimCheckoutHead
+    do {
+      let sha = try await LiveGit(runner: runner, repositoryRoot: root.path).revision("HEAD")
+      checkoutHead = sha.map { .commit($0) } ?? .unreadable("HEAD names no commit yet")
+    } catch {
+      checkoutHead = .unreadable(String(describing: error))
+    }
+    let simDirectory = request.simDirectory
+    return SimVerify(
+      dependencies: SimVerify.Dependencies(
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        isAlive: Self.isAlive, clock: .continuous(),
+        now: { Date() })  // swiftgate:allow det.date-init — the history line's finish time
+    ).run(
+      SimVerify.Request(
+        worktree: CanonicalPath.of(root), runID: request.runID, checkoutHead: checkoutHead,
+        simDirectory: { _ in simDirectory },
+        historyFile: StateRootResolver.resolve(worktree: root)
+          .url(RunLayout.historyFile, directoryHint: .notDirectory)))
+  }
+
+  func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {
+    let simDirectory = request.simDirectory
+    return await SimDown(
+      dependencies: SimDown.Dependencies(
+        agentDevice: agentDevice,
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        simctl: LiveSimctl(runner: runner),
+        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
+        isAlive: Self.isAlive, clock: .continuous())
+    ).run(
+      SimDown.Request(
+        worktree: CanonicalPath.of(request.worktree), runID: request.runID,
+        simDirectory: { _ in simDirectory }))
   }
 }

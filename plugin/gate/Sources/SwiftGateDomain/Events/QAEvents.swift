@@ -41,3 +41,37 @@ public struct QACheckEvent: Sendable, Equatable, Codable {
     case milliseconds = "ms"
   }
 }
+
+/// `qa.flow`: 1 flow's steps, whichever source ran it. A batch flow's event joins its `qa.check`
+/// by `plan` and `row` within the run; labels name selectors and commands, never output.
+public struct QAFlowEvent: Sendable, Equatable, Codable {
+  /// `nil` for a kept XCUITest flow, which no validation row runs.
+  public let plan: String?
+  /// 1-based position in `validation.json`'s `rows`; `nil` for a kept XCUITest flow.
+  public let row: Int?
+  public let requirement: String?
+  public let atBase: Bool
+  public let source: QAFlowSource
+  public let steps: [QAFlowStep]
+  /// Run-relative; absent until a final pass records one.
+  public let video: String?
+  /// Run-relative; absent until a final pass makes one.
+  public let sheet: String?
+
+  public init(
+    plan: String?, row: Int?, requirement: String?, atBase: Bool, record: QAFlowRecord
+  ) {
+    self.plan = plan
+    self.row = row
+    self.requirement = requirement
+    self.atBase = atBase
+    self.source = record.source
+    self.steps = record.steps
+    self.video = record.video
+    self.sheet = record.sheet
+  }
+
+  public var record: QAFlowRecord {
+    QAFlowRecord(source: source, steps: steps, video: video, sheet: sheet)
+  }
+}

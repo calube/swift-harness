@@ -329,7 +329,9 @@ public struct LiveAgentDevice: AgentDevice {
     throws(AgentDeviceError) -> AgentDeviceFailure
   {
     do {
-      return try AgentDeviceError.decodeFailure(stdout)
+      var failure = try AgentDeviceError.decodeFailure(stdout)
+      failure.output = stdout
+      return failure
     } catch {
       throw .unreadableOutput(command: command, status: status, detail: error.detail)
     }

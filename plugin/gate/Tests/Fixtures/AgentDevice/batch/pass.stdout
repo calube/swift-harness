@@ -1,0 +1,769 @@
+{
+  "success": true,
+  "data": {
+    "total": 10,
+    "executed": 10,
+    "totalDurationMs": 4872,
+    "results": [
+      {
+        "step": 1,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 422,
+          "selector": "id=\"counter.value\""
+        },
+        "durationMs": 426
+      },
+      {
+        "step": 2,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "SampleApp",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 63260,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "0",
+              "identifier": "counter.value",
+              "rect": {
+                "x": 180.16666666666669,
+                "y": 358.1666666666667,
+                "width": 41.66666666666666,
+                "height": 76.66666666666669
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "text"
+            },
+            {
+              "index": 2,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Decrement",
+              "identifier": "counter.decrement",
+              "rect": {
+                "x": 131.66666666666666,
+                "y": 469,
+                "width": 53.33333333333334,
+                "height": 20.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "button"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Increment",
+              "identifier": "counter.increment",
+              "rect": {
+                "x": 217,
+                "y": 459,
+                "width": 53.333333333333314,
+                "height": 40.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "button"
+            },
+            {
+              "index": 4,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Cat fact",
+              "identifier": "counter.fact",
+              "rect": {
+                "x": 171,
+                "y": 523.6666666666666,
+                "width": 60.333333333333314,
+                "height": 20.33333333333337
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "button"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 5,
+            "totalNodeCount": 5,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 2,
+              "p50Ms": 380,
+              "p95Ms": 420,
+              "maxMs": 420,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 2
+              }
+            }
+          },
+          "appName": "com.example.SampleApp",
+          "appBundleId": "com.example.SampleApp",
+          "refsGeneration": 585438
+        },
+        "durationMs": 386
+      },
+      {
+        "step": 3,
+        "command": "screenshot",
+        "ok": true,
+        "data": {
+          "path": "/SCRATCH/1.png",
+          "message": "Saved screenshot: /SCRATCH/1.png",
+          "width": 402,
+          "height": 874,
+          "logicalWidth": 402,
+          "logicalHeight": 874,
+          "pixelDensity": 1
+        },
+        "durationMs": 512
+      },
+      {
+        "step": 4,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "SampleApp",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 63260,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "0",
+              "identifier": "counter.value",
+              "rect": {
+                "x": 180.16666666666669,
+                "y": 358.1666666666667,
+                "width": 41.66666666666666,
+                "height": 76.66666666666669
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "text"
+            },
+            {
+              "index": 2,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Decrement",
+              "identifier": "counter.decrement",
+              "rect": {
+                "x": 131.66666666666666,
+                "y": 469,
+                "width": 53.33333333333334,
+                "height": 20.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "button"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Increment",
+              "identifier": "counter.increment",
+              "rect": {
+                "x": 217,
+                "y": 459,
+                "width": 53.333333333333314,
+                "height": 40.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "button"
+            },
+            {
+              "index": 4,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Cat fact",
+              "identifier": "counter.fact",
+              "rect": {
+                "x": 171,
+                "y": 523.6666666666666,
+                "width": 60.333333333333314,
+                "height": 20.33333333333337
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "button"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 5,
+            "totalNodeCount": 5,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 3,
+              "p50Ms": 381,
+              "p95Ms": 420,
+              "maxMs": 420,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 3
+              }
+            }
+          },
+          "appName": "com.example.SampleApp",
+          "appBundleId": "com.example.SampleApp",
+          "refsGeneration": 585439
+        },
+        "durationMs": 383
+      },
+      {
+        "step": 5,
+        "command": "press",
+        "ok": true,
+        "data": {
+          "x": 244,
+          "y": 479,
+          "runnerMainThreadBusy": false,
+          "message": "Tapped id=\"counter.increment\" (244, 479)",
+          "referenceWidth": 402,
+          "referenceHeight": 874,
+          "targetKind": "selector",
+          "selector": "id=\"counter.increment\"",
+          "selectorChain": [
+            "id=\"counter.increment\"",
+            "role=\"button\" label=\"Increment\"",
+            "label=\"Increment\""
+          ],
+          "refLabel": "Increment",
+          "resolution": {
+            "source": "runtime",
+            "phase": "pre-action",
+            "kind": "unique"
+          }
+        },
+        "durationMs": 1201
+      },
+      {
+        "step": 6,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "text",
+          "pass": true,
+          "selector": "id=\"counter.value\"",
+          "text": "1"
+        },
+        "durationMs": 427
+      },
+      {
+        "step": 7,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "SampleApp",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 63260,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "1",
+              "identifier": "counter.value",
+              "rect": {
+                "x": 180.16666666666669,
+                "y": 358.1666666666667,
+                "width": 41.66666666666666,
+                "height": 76.66666666666669
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "text"
+            },
+            {
+              "index": 2,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Decrement",
+              "identifier": "counter.decrement",
+              "rect": {
+                "x": 131.66666666666666,
+                "y": 469,
+                "width": 53.33333333333334,
+                "height": 20.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "button"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Increment",
+              "identifier": "counter.increment",
+              "rect": {
+                "x": 217,
+                "y": 459,
+                "width": 53.333333333333314,
+                "height": 40.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "button"
+            },
+            {
+              "index": 4,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Cat fact",
+              "identifier": "counter.fact",
+              "rect": {
+                "x": 171,
+                "y": 523.6666666666666,
+                "width": 60.333333333333314,
+                "height": 20.33333333333337
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "button"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 5,
+            "totalNodeCount": 5,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 6,
+              "p50Ms": 383,
+              "p95Ms": 422,
+              "maxMs": 422,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 6
+              }
+            }
+          },
+          "appName": "com.example.SampleApp",
+          "appBundleId": "com.example.SampleApp",
+          "refsGeneration": 585443
+        },
+        "durationMs": 386
+      },
+      {
+        "step": 8,
+        "command": "screenshot",
+        "ok": true,
+        "data": {
+          "path": "/SCRATCH/2.png",
+          "message": "Saved screenshot: /SCRATCH/2.png",
+          "width": 402,
+          "height": 874,
+          "logicalWidth": 402,
+          "logicalHeight": 874,
+          "pixelDensity": 1
+        },
+        "durationMs": 365
+      },
+      {
+        "step": 9,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "SampleApp",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 63260,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "1",
+              "identifier": "counter.value",
+              "rect": {
+                "x": 180.16666666666669,
+                "y": 358.1666666666667,
+                "width": 41.66666666666666,
+                "height": 76.66666666666669
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "text"
+            },
+            {
+              "index": 2,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Decrement",
+              "identifier": "counter.decrement",
+              "rect": {
+                "x": 131.66666666666666,
+                "y": 469,
+                "width": 53.33333333333334,
+                "height": 20.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "button"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Increment",
+              "identifier": "counter.increment",
+              "rect": {
+                "x": 217,
+                "y": 459,
+                "width": 53.333333333333314,
+                "height": 40.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "button"
+            },
+            {
+              "index": 4,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Cat fact",
+              "identifier": "counter.fact",
+              "rect": {
+                "x": 171,
+                "y": 523.6666666666666,
+                "width": 60.333333333333314,
+                "height": 20.33333333333337
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "button"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 5,
+            "totalNodeCount": 5,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 7,
+              "p50Ms": 385,
+              "p95Ms": 422,
+              "maxMs": 422,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 7
+              }
+            }
+          },
+          "appName": "com.example.SampleApp",
+          "appBundleId": "com.example.SampleApp",
+          "refsGeneration": 585444
+        },
+        "durationMs": 402
+      },
+      {
+        "step": 10,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "SampleApp",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 63260,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "1",
+              "identifier": "counter.value",
+              "rect": {
+                "x": 180.16666666666669,
+                "y": 358.1666666666667,
+                "width": 41.66666666666666,
+                "height": 76.66666666666669
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "text"
+            },
+            {
+              "index": 2,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Decrement",
+              "identifier": "counter.decrement",
+              "rect": {
+                "x": 131.66666666666666,
+                "y": 469,
+                "width": 53.33333333333334,
+                "height": 20.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "button"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Increment",
+              "identifier": "counter.increment",
+              "rect": {
+                "x": 217,
+                "y": 459,
+                "width": 53.333333333333314,
+                "height": 40.666666666666686
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "button"
+            },
+            {
+              "index": 4,
+              "parentIndex": 0,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Cat fact",
+              "identifier": "counter.fact",
+              "rect": {
+                "x": 171,
+                "y": 523.6666666666666,
+                "width": 60.333333333333314,
+                "height": 20.33333333333337
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 63260,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "button"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 5,
+            "totalNodeCount": 5,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 8,
+              "p50Ms": 383,
+              "p95Ms": 422,
+              "maxMs": 422,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 8
+              }
+            }
+          },
+          "appName": "com.example.SampleApp",
+          "appBundleId": "com.example.SampleApp",
+          "refsGeneration": 585445
+        },
+        "durationMs": 384
+      }
+    ]
+  }
+}
