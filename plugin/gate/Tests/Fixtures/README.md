@@ -321,7 +321,7 @@ file holds a local path.
 ### AgentDevice/crash
 
 A real `sim up` run against `examples/SampleApp` on 2026-10-04, with `agent-device` 0.21.18 on a
-clone `sim up` made from the configured iPhone 17 (iOS 26.2), whose app was killed with `SIGABRT`.
+clone `sim up` made from the configured iPhone 17 (iOS 26.2), then a `SIGABRT` that ended its app.
 The iOS runtime has no `kill`, so `xcrun simctl spawn <udid> kill -ABRT <pid>` fails with
 `NSPOSIXErrorDomain` code 2; a simulator app is a Mac process, so the Mac's `kill` reaches it. From
 `examples/SampleApp`, with the worktree's `swift build --product swiftgate`:
@@ -338,11 +338,11 @@ agent-device screenshot <scratch>/after-crash.png --udid <udid> --session <sessi
 ../../plugin/gate/.build/debug/swiftgate sim down --json
 ```
 
-`launchctl list` gives the app's PID, and `ps` shows it is the run's device's `SampleApp`. Each
-`agent-device` call's stdout, stderr and exit status are kept as `crash/<call>.{stdout,stderr,status}`;
-`$HOME` is replaced with `/HOME` and the scratch path with `/SCRATCH`. The crash report is copied
-unmodified from `~/Library/Logs/DiagnosticReports/`; macOS had already written `/Users/USER` for the
-home folder.
+`launchctl list` gives the app's PID, and `ps` shows it is the run's device's `SampleApp`.
+`crash/<call>.{stdout,stderr,status}` holds each `agent-device` call's stdout, stderr and exit
+status, with `/HOME` for `$HOME` and `/SCRATCH` for the scratch path. The crash report is the file
+macOS wrote in `~/Library/Logs/DiagnosticReports/`, unmodified; macOS had already written
+`/Users/USER` for the home folder.
 
 | Files | From |
 |---|---|

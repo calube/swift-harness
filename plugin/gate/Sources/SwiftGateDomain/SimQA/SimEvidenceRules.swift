@@ -111,7 +111,7 @@ public enum SimEvidenceRules {
     for step in evidence.steps {
       findings += stepFindings(step, files: evidence.files)
     }
-    return findings
+    return findings + SimExitRule.findings(evidence)
   }
 
   private static func stepFindings(_ step: SimStep, files: [String: SimEvidenceFile])
@@ -140,7 +140,17 @@ public enum SimEvidenceRules {
     case .read: break
     }
 
-    guard let treePath = step.tree else { return findings }
+    guard let treePath = step.tree else {
+      // An app that wasn't running had no tree to capture; `sim.app-exited` reports the step.
+      if step.appState != .notRunning {
+        findings.append(
+          SimEvidenceFinding(
+            rule: .evidenceMissing, step: step.n, path: SimStep.logFileName,
+            message: "\(name): records no tree, though the app was "
+              + (step.appState.map { "\($0.rawValue)" } ?? "not recorded as exited")))
+      }
+      return findings
+    }
     let tree: SimTree
     switch contents(treePath) {
     case .missing(let finding):

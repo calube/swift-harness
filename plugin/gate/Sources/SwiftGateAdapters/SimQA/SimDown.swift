@@ -86,7 +86,30 @@ public struct SimDown: Sendable {
         runID: runID)
     }
     let store = SimRunStore(simDirectory: request.simDirectory(runID))
+    let released: Result<SimDowned, SimDownFailure>
+    do throws(SimDownFailure) {
+      released = .success(try await release(lease, store: store, notes: notes))
+    } catch {
+      released = .failure(error)
+    }
+    // Last, so macOS has had the teardown's time to write a report for a late crash.
+    let collection = await collectCrashReports(store: store)
+    switch released {
+    case .success(var downed):
+      downed.notes += collection.notes
+      downed.crashReports = collection.copied
+      return downed
+    case .failure(let failure):
+      for note in collection.notes { store.appendLog("sim down: \(note)") }
+      throw failure
+    }
+  }
 
+  private func release(_ lease: SimLease, store: SimRunStore, notes: [String])
+    async throws(SimDownFailure) -> SimDowned
+  {
+    var notes = notes
+    let runID = lease.runID
     // The session goes first: `close` names the device, which is gone once the holder returns.
     var driverProblems: [String] = []
     if let session = lease.session {
@@ -116,6 +139,57 @@ public struct SimDown: Sendable {
         runID: runID)
     }
     return SimDowned(outcome: .released(runID: runID, udid: lease.udid), notes: notes)
+  }
+
+  /// Copies the run's crash reports into `sim/crashes/`. When the step log records more exits
+  /// than reports found, it polls for up to `crashReportWait`, since macOS writes a report some
+  /// seconds after the crash, then notes the shortfall.
+  private func collectCrashReports(store: SimRunStore) async -> SimCrashCollection {
+    let session: SimSession
+    do {
+      session = try store.session()
+    } catch {
+      return SimCrashCollection(
+        copied: [], notes: ["crash reports not collected: \(error.message)"])
+    }
+    var steps: [SimStep] = []
+    var notes: [String] = []
+    do {
+      steps = try store.steps()
+    } catch {
+      notes.append("recorded exits not counted: \(error.message)")
+    }
+    var previous: SimAppState?
+    var exits = 0
+    for step in steps {
+      if step.appState == .notRunning && previous != .notRunning { exits += 1 }
+      previous = step.appState
+    }
+    let start = dependencies.clock.now()
+    while true {
+      let collection = dependencies.crashReports.collect(
+        for: session, into: store.simDirectory)
+      if collection.copied.count >= exits {
+        return SimCrashCollection(copied: collection.copied, notes: notes + collection.notes)
+      }
+      if dependencies.clock.now() - start >= dependencies.crashReportWait {
+        let missing = exits - collection.copied.count
+        return SimCrashCollection(
+          copied: collection.copied,
+          notes: notes + collection.notes + [
+            "no crash report for \(missing == 1 ? "1 recorded exit" : "\(missing) recorded exits") "
+              + "appeared in \(dependencies.crashReports.directory.path) within "
+              + "\(dependencies.crashReportWait.components.seconds) s"
+          ])
+      }
+      do {
+        try await dependencies.clock.sleep(dependencies.pollInterval)
+      } catch {
+        return SimCrashCollection(
+          copied: collection.copied,
+          notes: notes + collection.notes + ["crash report wait cancelled"])
+      }
+    }
   }
 
   /// The named run's lease, or the caller's newest one whether or not its holder lives, so a

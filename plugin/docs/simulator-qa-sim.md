@@ -22,6 +22,13 @@ it holds more than whitespace and differs from the identifier. Static text, imag
 need neither. These 2 rules check standards §7 on the screen the app drew, so an icon-only
 button with no `.accessibilityLabel` fails here even when review missed it.
 
+`sim snap` records each step's `appState` from `agent-device appstate`. When it finds the app
+`notRunning`, it keeps the step with its screenshot and no tree, and exits 1 with `sim.app-exited`.
+`sim verify` reports that step as `sim.app-exited`, naming the run's next crash report in
+`sim/crashes/`, and reports any crash report no step claimed. It skips reports of another app,
+another device or an earlier run. `sim down` copies the reports, so run `sim verify` after it to
+name them.
+
 Each judged run writes `sim/report.json` with keys `schemaVersion`, `command`, `runID`, `verdict`,
 `stepCount`, `headCommit` (the commit `sim up` built), `checkoutHead`, `blocked` and `findings`,
 each `{rule, step, path, message}` with `path` relative to `sim/`. Unknown values are `null`. It
@@ -39,6 +46,9 @@ also appends a `sim verify` line to the runs history with the run id and verdict
    `sim down` waits up to 2 minutes for the holder to exit and the device to go. If the holder
    died holding it, `sim down` deletes that one device, which is named for the dead PID.
 4. `agent-device device release --stale --udid <udid>` clears claims whose owner is dead.
+5. It copies into `sim/crashes/` each `.ips` crash report of the run's app on its device since
+   `startedAt`, from the user's `DiagnosticReports` log folder. A report lands seconds after its
+   crash, so with fewer reports than recorded exits it waits up to 30 s, then notes the shortfall.
 
 A close that fails, a session still listed, or a failed release is `sim.driver-failed`: BLOCKED
 (exit 3) after the device is given back, with each problem appended to `sim/agent-device.log`. A
@@ -46,8 +56,9 @@ lease that can't be removed, or a holder or device still there after the wait, i
 `swiftgate.environment` (exit 3).
 
 With no lease left, `sim down` does nothing and exits 0, so a second call is harmless. The JSON is
-`{schemaVersion, verdict, released, runID, udid, notes}`; `notes` names an unreadable lease or a
-session listing that failed, and never fails the call.
+`{schemaVersion, verdict, released, runID, udid, crashReports, notes}`; `notes` names an
+unreadable lease, a session listing that failed or a crash report it couldn't copy, and never fails
+the call.
 
 `swiftgate gc`, and the orphan sweep each `sim hold` runs before taking a device, run the same
 `device release --stale --udid` on every orphaned device they delete. An `agent-device` that can't

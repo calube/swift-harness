@@ -163,7 +163,34 @@ public struct SimVerify: Sendable {
         files[path] = .unreadable(error.localizedDescription)
       }
     }
-    return SimEvidence(runID: runID, session: session, steps: steps, files: files)
+    return SimEvidence(
+      runID: runID, session: session, steps: steps, files: files,
+      crashReports: crashReports(in: store.simDirectory))
+  }
+
+  /// Every file in `sim/crashes/`, keyed `crashes/<name>`; none when the folder isn't there. A
+  /// folder that can't be listed is 1 unreadable entry, so the run can't pass without it.
+  private static func crashReports(in simDirectory: URL) -> [String: SimEvidenceFile] {
+    let directory = simDirectory.appending(
+      path: SimCrashReport.directoryName, directoryHint: .isDirectory)
+    let names: [String]
+    do {
+      names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+    } catch CocoaError.fileReadNoSuchFile {
+      return [:]
+    } catch {
+      return [SimCrashReport.directoryName: .unreadable(error.localizedDescription)]
+    }
+    var reports: [String: SimEvidenceFile] = [:]
+    for name in names where !name.hasPrefix(".") {
+      let path = SimCrashReport.path(fileName: name)
+      do {
+        reports[path] = .present(try Data(contentsOf: directory.appending(path: name)))
+      } catch {
+        reports[path] = .unreadable(error.localizedDescription)
+      }
+    }
+    return reports
   }
 
   /// Writes `sim/report.json` and appends the history line; returns 1 line per failure. The run's

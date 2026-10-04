@@ -71,8 +71,8 @@ public struct SimDowned: Sendable, Equatable {
     self.crashReports = crashReports
   }
 
-  /// `{schemaVersion, verdict, released, runID, udid, notes}`, `runID` and `udid` `null` when
-  /// they are unknown.
+  /// `{schemaVersion, verdict, released, runID, udid, crashReports, notes}`, `runID` and `udid`
+  /// `null` when they are unknown.
   public func json() -> Data {
     let runID: String?
     let udid: String?
@@ -87,7 +87,7 @@ public struct SimDowned: Sendable, Equatable {
     let object: [String: Any] = [
       "schemaVersion": SimSession.schemaVersion, "verdict": Verdict.green.rawValue,
       "released": udid != nil, "runID": runID ?? NSNull(), "udid": udid ?? NSNull(),
-      "notes": notes,
+      "crashReports": crashReports, "notes": notes,
     ]
     // Strings, an integer, a boolean, a list of strings and null always encode.
     return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
@@ -101,6 +101,7 @@ public struct SimDowned: Sendable, Equatable {
       case .released(let runID, let udid):
         "sim down: run \(runID) released \(udid): session closed, device deleted, claims released"
       }
-    return ([head] + notes.map { "  note: \($0)" }).joined(separator: "\n")
+    let reports = crashReports.map { "  crash report: \($0)" }
+    return ([head] + reports + notes.map { "  note: \($0)" }).joined(separator: "\n")
   }
 }

@@ -73,7 +73,7 @@ public struct SimStep: Sendable, Equatable {
   }
 
   static let keys: Set<String> = [
-    "n", "label", "assert", "screenshot", "tree", "settled", "elapsedMs",
+    "n", "label", "assert", "screenshot", "tree", "settled", "elapsedMs", "appState",
   ]
 
   /// One JSON object with sorted keys and no trailing newline.
@@ -84,6 +84,7 @@ public struct SimStep: Sendable, Equatable {
     if let tree { object["tree"] = tree }
     if let assert { object["assert"] = assert }
     if let settled { object["settled"] = settled }
+    if let appState { object["appState"] = appState.rawValue }
     // Strings, integers and a boolean always encode.
     return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
   }
@@ -134,10 +135,18 @@ public struct SimStep: Sendable, Equatable {
       }
       settled = flag.boolValue
     }
+    var appState: SimAppState?
+    if let raw = try text("appState") {
+      guard let known = SimAppState(rawValue: raw) else {
+        throw .invalidValue(line: number, key: "appState", value: raw)
+      }
+      appState = known
+    }
+    let tree = appState == .notRunning ? try text("tree") : try required("tree")
     return SimStep(
       n: try integer("n", minimum: 1), label: try required("label"), assert: try text("assert"),
-      screenshot: try required("screenshot"), tree: try required("tree"), settled: settled,
-      elapsedMs: try integer("elapsedMs", minimum: 0))
+      screenshot: try required("screenshot"), tree: tree, settled: settled,
+      elapsedMs: try integer("elapsedMs", minimum: 0), appState: appState)
   }
 
   /// Every line of a step log in order. An empty log has no steps; a blank line, a line that
