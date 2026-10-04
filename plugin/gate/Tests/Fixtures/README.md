@@ -1327,6 +1327,17 @@ Then `rm -rf "$R"`, except for the 2 rows below.
 (^|/)(Package(@swift-[0-9.]+)?\.swift|project\.ya?ml|Project\.swift|Workspace\.swift|Tuist\.swift|Tuist/Config\.swift|Tuist/Package\.swift|Cargo\.toml|go\.mod|go\.work|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|gradle\.properties|gradle-wrapper\.properties|libs\.versions\.toml|pom\.xml|maven-wrapper\.properties|package\.json|pnpm-workspace\.yaml|lerna\.json|nx\.json|turbo\.json|rush\.json|\.yarnrc\.yml|pyproject\.toml|setup\.cfg|tox\.ini|pytest\.ini|Gemfile|\.rspec|Rakefile|mix\.exs|CMakeLists\.txt|CMakePresets\.json|(GNU)?[Mm]akefile|[Jj]ustfile|\.gitlab-ci\.yml|[^/]+\.xcscheme|contents\.xcworkspacedata|project\.pbxproj|\.swiftlint\.ya?ml|\.swiftformat|\.swift-format|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.prettierrc(\.[a-z]+)?|ruff\.toml|\.ruff\.toml|\.flake8|\.pylintrc|mypy\.ini|\.rubocop\.yml|\.golangci\.(ya?ml|toml)|\.?clippy\.toml|\.?rustfmt\.toml|detekt(-config)?\.ya?ml|\.editorconfig|\.credo\.exs|\.formatter\.exs|\.clang-format|\.clang-tidy|\.tool-versions|\.?mise\.toml|\.nvmrc|\.node-version|\.python-version|\.ruby-version|rust-toolchain(\.toml)?|\.swift-version|\.xcode-version|\.java-version|\.sdkmanrc|\.go-version|Mintfile)$|(^|/)\.github/workflows/[^/]+\.ya?ml$
 ```
 
+`usememos-memos` (Go, TypeScript; MIT) came later, on 2026-10-04, from the first brownfield trial's pinned clone
+rather than from GitHub. It holds `web/pnpm-workspace.yaml` with pnpm settings and no `packages:` key, and a
+backend workflow whose test step sets `DRIVER` in its own `env:`. Capture it with the commands above, with `R`
+a scratch directory, the commit `0d989707f82c33f74bb852edd8965ec88fcf041b` and, in place of the first 2 lines,
+a clone of that local checkout, which already holds the commit:
+
+```sh
+git clone -q --no-checkout <path to the trial's memos clone> "$R"
+git -C "$R" reset -q 0d989707f82c33f74bb852edd8965ec88fcf041b
+```
+
 The 2 `after-build/` directories are the negative case: build output on disk that git ignores.
 After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
 or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
