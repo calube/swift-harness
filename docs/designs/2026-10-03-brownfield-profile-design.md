@@ -1,7 +1,7 @@
 # swift-harness: the brownfield profile
 
 <!-- RESUME
-Status: APPROVED DRAFT 2026-10-03: all questions decided; next is a plan.
+Status: APPROVED by the user 2026-10-03, with 16 decisions; next is a plan.
 Why: the harness assumes it owns the repository. Bootstrap writes `.swiftgate.toml` and git hooks into the tree,
 the default rules assume TCA, `@Dependency` and module kinds, and every change passes through design, plan and
 build stages. None of that fits a repository someone else owns, with several languages and its own commands.
@@ -12,25 +12,26 @@ Read first: this header, §3, §5, §8 and §17.
 
 ## 1. Purpose
 
-Let the harness work in a repository it doesn't own. Such a repository can hold a TypeScript server, an Android
-app and an iOS app, with its own architecture, an Xcode project from XcodeGen or kept by hand, and its own
-commands. The harness adds proof that tests are real and a fast parallel workflow, and leaves no trace in the tree.
+Let the harness work in a repository it doesn't own. Such a repository can hold any mix of languages and build
+systems, with its own architecture and its own commands. The harness adds proof that tests are real and a fast
+parallel workflow, and leaves no trace in the tree. It reads a provided `spec.md` and builds it in 1 shot, with no
+input from the user.
 
-Input: the code in §2, 36 hitches from timed practice runs (§16), and a fast session without the harness in a
-repository of this class. That session planned, landed a contract commit, and ran 2 workers with disjoint files.
+Input: the code in §2 and 36 hitches from timed practice runs (§16).
 
 ### Goals
 
 - From clone to first gate in under 3 minutes, with 0 findings on code the change didn't touch.
 - A per-slice gate of 30 s or less that still proves each changed test fails with the change reverted.
 - 1 workflow for every language in the repository, driven by the repository's own commands.
-- No file written into the working tree, and no commit the user didn't ask for.
+- From `spec.md` to a plan branch with `final` GREEN and a report, with 0 user input.
+- No file written into the working tree, and no commit on the user's checked-out branch.
 
 ### Non-goals
 
 - Changing the repository's architecture, project structure, lint config or CI.
 - Our standards by default. TCA, `@Dependency` and module kinds become opt-in packs (§6).
-- A design doc, a ledger page or an approval stage beyond the user's "go" on the plan.
+- A design doc, a ledger page, a confirm step or any approval stage (§11.6).
 - Mutation testing per task, and simulator QA for areas that aren't iOS.
 
 ## 2. What exists today
@@ -63,6 +64,7 @@ repository of this class. That session planned, landed a contract commit, and ra
 | Xcode projects | record how sources join targets; gate new files; never restructure (user, 2026-10-03) | §8 |
 | Pass bar | 3 unfamiliar public repositories with more than 1 language (user, 2026-10-03) | §14 |
 | Workflow | Opus plans, Sonnet 5.5 explores, builds and does QA, Jev classifies; contract commit first; 1 live `PLAN.md` (user, 2026-10-03) | §11 |
+| Approval | none: `swiftgate run <spec.md>` applies discover, plans, builds and ends with `final` and a report (user, 2026-10-03) | §11.6 |
 
 ## 4. State, config and hooks
 
@@ -71,11 +73,11 @@ worktree's own git dir.
 
 | Path | Holds | Scope |
 |---|---|---|
-| `<common>/swift-harness/config.toml` | the confirmed config (§5.3) | clone |
+| `<common>/swift-harness/config.toml` | the applied config (§5.3) | clone |
 | `<common>/swift-harness/settings.json` | the hook wiring, the same 4 events as `plugin/hooks/hooks.json` | clone |
 | `<common>/swift-harness/discover/` | the last proposal and its inputs' hashes | clone |
 | `<common>/swift-harness/baseline/<tree>.json` | known failures at a base tree (§10) | clone |
-| `<common>/swift-harness/plans/<slug>/` | `PLAN.md`, the executor's `ledger.json`, the lock | clone |
+| `<common>/swift-harness/plans/<slug>/` | `PLAN.md`, a copy of an untracked `spec.md`, `ledger.json`, the lock, the report | clone |
 | `<git-dir>/swift-harness/` | what `.harness/` holds today: runs, events, caches, hook state | worktree |
 
 `swiftgate claude` starts `claude --settings <common>/swift-harness/settings.json`. `ConfigLoader` reads a
@@ -88,33 +90,38 @@ file the workflow puts in the tree is the `PLAN.md` symlink (§11.4), listed in 
 ### 5.1 What it reads
 
 `swiftgate discover` reads tracked files only (`git ls-files`), so leftover build output never becomes an area.
-It runs no build and opens no socket. Its budget is 5 s for 10,000 tracked files, and 1 tree gives 1 proposal.
+It runs no build and makes no network call. Its budget is 5 s for 10,000 tracked files, and 1 tree gives 1 proposal.
 
 | Signal | Proposes |
 |---|---|
-| `pnpm-workspace.yaml`, `package.json` scripts, `tsconfig*.json`, `vitest.config.*`, `jest.config.*`, `.eslintrc*`, `biome.json` | a node area per workspace package, its `test`, `lint` and `build` scripts, the runner's file filter |
-| `settings.gradle(.kts)`, `build.gradle(.kts)`, `gradlew` | a gradle area per included module, `./gradlew :<m>:test`, `--tests` filter, `lint` or `detekt` or `ktlint` tasks |
-| `Package.swift` | a swiftpm area, `swift test --filter` |
-| `*.xcodeproj/project.pbxproj`, `project.yml`, `Project.swift`, `*.xcworkspace` | an xcode area: targets, schemes, test targets, how sources join targets (§8) |
-| `.swiftlint.yml`, `.swift-format`, `ktlint` and `detekt` configs, `Makefile`, `justfile`, `bin/*` scripts, CI workflow files | the repository's own lint config, and commands CI already runs, which outrank guesses |
+| `Package.swift`, `*.xcodeproj`, `*.xcworkspace`, `project.yml`, `Project.swift` | swiftpm or xcode: an area per package or project; targets, schemes, test targets, how sources join targets (§8) |
+| `Cargo.toml`, `go.mod` | cargo or go: an area per crate or module; the test command with a name filter; its linter |
+| `build.gradle(.kts)`, `pom.xml` | jvm: an area per module; the test task with a filter; its linter |
+| `package.json` and its workspace file | node: an area per package; its test, lint and build scripts |
+| `pyproject.toml`, `setup.cfg` | python: an area per project; the test runner with a filter; its linter |
+| `Gemfile`, `mix.exs`, `CMakeLists.txt`, others | command: an area with the commands CI runs |
+| lint configs, `Makefile`, `justfile`, `bin/*`, CI workflow files | the repository's own lint config, and the commands CI already runs, which outrank guesses |
 
 Each cached answer's key covers the build file's bytes and the listing of the directories it names.
 
 ### 5.2 Output
 
-Discover prints each proposed value with its source and confidence. The user edits or confirms, and
-`discover --apply` writes `config.toml` and `settings.json`.
+Discover applies its proposal: `swiftgate run` calls `discover --apply`, which writes `config.toml` and
+`settings.json` with no confirm step. The warm-up runs every proposed command (§11.2), so a guessed command
+proves itself before planning finishes. `swiftgate discover` alone prints the proposal, each value with its
+source and confidence, for a user who wants to read it.
 
 ```text
-swiftgate discover · 3 areas · 1.8s · proposal at <common>/swift-harness/discover/proposal.toml
-area     language    root      value       command or setting                                      source                 confidence
-server   typescript  server    test        pnpm --filter server test                               server/package.json    found
-server   typescript  server    test_files  pnpm --filter server exec vitest run {files}            vitest.config.ts       found
-android  kotlin      android   test        ./gradlew :app:testDebugUnitTest                        android/app/build.gradle.kts  guessed
-ios      swift       ios       test        swift test --package-path ios                           ios/Package.swift      found
-ios      swift       ios       build       xcodebuild build -project ios/App.xcodeproj -scheme App  ios/project.yml        found
-ios      swift       ios       inclusion   xcodegen (spec ios/project.yml; xcodegen not installed)  ios/project.yml        found
-missing: android lint (no lint task found)
+swiftgate discover · 4 areas · 1.8s · applied to <common>/swift-harness/config.toml
+area  language    root  value       command or setting                                 source                     confidence
+api   python      api   test        pytest api/tests                                   api/pyproject.toml         found
+api   python      api   test_files  pytest {tests}                                     api/pyproject.toml         found
+web   javascript  web   test        npm --prefix web test                              web/package.json           found
+web   javascript  web   lint        npx eslint {files}                                 .github/workflows/ci.yml   guessed
+core  swift       Core  test        swift test --package-path Core                     Core/Package.swift         found
+app   swift       App   build       xcodebuild build -workspace App/App.xcworkspace -scheme App  App/Project.swift  found
+app   swift       App   inclusion   tuist (manifest App/Project.swift)                 App/Project.swift          found
+missing: api lint (no linter configured)
 ```
 
 ### 5.3 Config schema
@@ -127,35 +134,45 @@ profile = "brownfield"
 [brownfield]
 discovered_at = "<HEAD sha>"
 slice_budget_s = 30
-time_budget_min = 0          # 0: no budget; the clock starts at the brief
+time_budget_min = 0          # 0: no budget; the clock starts when `swiftgate run` reads spec.md
 
 [[areas]]
-name = "ios"
-root = "ios"
-language = "swift"           # swift | kotlin | typescript | javascript | other
-kind = "xcode"               # xcode | swiftpm | gradle | node | command
-test = "swift test --package-path ios"
-test_files = "swift test --package-path ios --filter {tests}"
-build = "xcodebuild build -project ios/App.xcodeproj -scheme App -destination 'generic/platform=iOS Simulator'"
+name = "core"
+root = "Core"
+language = "swift"           # swift | java | kotlin | javascript | typescript | python | go | rust | ruby | other
+kind = "swiftpm"             # xcode | swiftpm | jvm | node | python | cargo | go | command
+test = "swift test --package-path Core"
+test_files = "swift test --package-path Core --filter {tests}"
 lint = "swiftlint lint --config .swiftlint.yml {files}"
-test_globs = ["ios/Tests/**/*.swift"]
+test_globs = ["Core/Tests/**/*.swift"]
 packs = []                   # opt-in: "tca", "dependencies", "module-kinds"
 
+[[areas]]
+name = "app"
+root = "App"
+language = "swift"
+kind = "xcode"
+build = "xcodebuild build -workspace App/App.xcworkspace -scheme App -destination 'generic/platform=iOS Simulator'"
+
 [areas.xcode]
-project = "ios/App.xcodeproj"
-inclusion = "xcodegen"       # synchronized | xcodegen | tuist | explicit
-spec = "ios/project.yml"
+workspace = "App/App.xcworkspace"
+inclusion = "tuist"          # synchronized | xcodegen | tuist | explicit
+manifest = "App/Project.swift"
 schemes = ["App"]
 
 [[allow]]                    # an inline swiftgate:allow still counts (§17 decision 9)
 rule = "neutral.unsafe-shortcut"
-path = "server/src/x.ts"
+path = "api/handlers.py"
 line_sha = "<sha256 of the line>"
 reason = "the parser guarantees a value here"
 ```
 
 `{files}` and `{tests}` expand to the changed test files or ids. Without `test_files`, prove runs the whole `test`
 command and says so.
+
+Only `discover --apply` writes `config.toml`; nobody edits it by hand. When Opus can't make an area's command work,
+that step drops for the area with a report line: a failing `build` drops the area, and a failing `test` leaves it
+build-only.
 
 ## 6. Rules
 
@@ -196,7 +213,7 @@ The helper never moves groups, renames targets or changes build settings. Worker
 |---|---|---|---|
 | `slice` | each task's gate, the Stop hook | neutral rules and lint on changed files; each touched area's changed tests at the task head; prove of those tests | 30 s, p95 |
 | `merge` | after each merge, on the plan branch | each touched area's `test`, `lint` and `build`, against the baseline | the area's own time, measured |
-| `final` | on request | `merge` for every area, plus UI and end-to-end commands discovery found | measured |
+| `final` | at the end of every run | `merge` for every area, plus UI and end-to-end commands discovery found | measured |
 
 Prove reverts the task's non-test changes in a scratch worktree and reruns its changed tests through
 `test_files`. After a crash it reruns each test alone, so 1 trap doesn't mark its siblings. `fast`, `push` and
@@ -204,15 +221,19 @@ Prove reverts the task's non-test changes in a scratch worktree and reruns its c
 
 When an area's smallest test run can't fit 30 s, such as app-hosted Xcode tests, `slice` runs the selected tests
 if a warm run fits. Otherwise it only builds; those tests and their prove move to `merge`, and the report says so.
+The warm-up (§11.2) measures each area's warm test time before planning, so `PLAN.md` names the build-only areas
+up front.
 
-Worktrees share the package stores: the pnpm store, the Gradle cache and a per-area DerivedData seed. Each area's
-cold cost is a `gate.step` measurement.
+Worktrees share each ecosystem's package and build caches, and a per-area DerivedData seed. The warm-up fills them
+at the base tree, so a worker's first build is incremental; the contract commit still recompiles its dependents.
+Each area's cold cost is the warm-up's first run, and a `gate.step` measures it again on a cold store.
 
 ## 10. Baseline
 
 A gate that sees a failing test or command reruns it at the merge base in a scratch worktree and caches the
-answer in `baseline/<tree>.json`. A failure at both trees goes to the report's `baseline` section and never
-gates. Discovery records files already modified in the tree, and workers never stage them.
+answer in `baseline/<tree>.json`. The warm-up's test run at the base tree (§11.2) fills that file before any
+worker starts. A failure at both trees goes to the report's `baseline` section and never gates. Discovery records
+files already modified in the tree, and workers never stage them.
 
 ## 11. Workflow
 
@@ -220,51 +241,72 @@ gates. Discovery records files already modified in the tree, and workers never s
 
 | Role | Model | Does |
 |---|---|---|
-| orchestrator, planner | Opus | reads the brief, picks areas, drafts and finishes `PLAN.md`, merges, decides every blocking question |
-| explorer | Sonnet 5.5, pinned by id | 1 per area the brief touches, read-only |
+| orchestrator, planner | Opus | reads `spec.md`, picks areas, drafts and finishes `PLAN.md`, merges, answers every open question |
+| explorer | Sonnet 5.5, pinned by id | 1 per area `spec.md` touches, read-only |
 | worker, QA | Sonnet 5.5, pinned by id | builds 1 task in its worktree; QA drives the app when the risk class asks for it |
 | classifier | Jev | test quality at gates through the built cascade to Claude; each slice's diff risk; pre-sorting review findings by severity |
 
-The orchestrator makes routine operational choices, such as git hook use or the trial repositories, without
-asking the user.
+The orchestrator makes every choice without asking the user, from git hook use to a reading of an ambiguous
+spec, and records each assumption in `PLAN.md`.
 
 ### 11.2 Research to plan, about 8 minutes
 
 ```mermaid
 flowchart LR
-  brief[brief] --> areas[discover areas the brief touches]
+  spec[spec.md] --> areas[discover areas spec.md touches]
   areas -->|small repo or 1 area| opus[Opus reads directly]
   areas -->|several areas| ex[1 Sonnet explorer per area, parallel, deadline]
   areas --> skel[Opus drafts the plan skeleton]
+  areas --> warm[warm-up, all areas in parallel: generate, build, then test, at the base tree]
+  warm -->|warm test times, baseline| plan
   ex --> plan[PLAN.md]
   opus --> plan
   skel --> plan
-  plan --> go{user says go}
-  go --> contract[contract commit]
+  plan --> contract[contract commit]
   contract --> workers[workers in worktrees, disjoint write sets]
 ```
 
 Each explorer has a 3-minute soft and 4-minute hard deadline, and returns entry points, files to change, nearby
 tests, working commands, risks and unknowns in 300 words or fewer. Opus drops a late report and names the area.
 
+Once discover picks the touched areas, a warm-up runs each area's `build` and then its `test` at the base tree.
+Every area warms in parallel at full speed, alongside the explorers. XcodeGen and Tuist areas run `generate` first,
+or report the "not installed" case discover reports. When the repository commits the generated project, generate and
+the warm build run in a scratch worktree under the git dir, so the user's tree shows no diff; a gitignored project
+generates in place. Build output goes under the git dir, such as `-derivedDataPath`, or into paths the repository
+already ignores. The warm-up fills the shared stores (§9) and gives warm test times for `slice`, each area's cold
+cost and the base tree's baseline (§10). It waits for nothing and always runs to the end; its caches, times and
+baseline serve the next run on that tree. When a guessed command fails, Opus fixes the config before planning
+finishes. A command Opus can't fix becomes `missing`: that step drops for its area, with a report line.
+
 ### 11.3 Contract commit and write sets
 
 The first commit holds the new types and signatures, compiles in every touched area, and changes no behavior.
-Write sets come from the target graph: Xcode membership, `swift package describe`, Gradle and workspace
-dependencies. A task that changes a target's types owns every target that reads them, unless the contract commit
+Write sets come from the target graph: Xcode membership, `swift package describe`, and each build
+system's module dependencies. A task that changes a target's types owns every target that reads them, unless the contract commit
 landed them. Each removal has an owning task. Workers commit through the repository's own git hooks and never
 use `--no-verify`; our commit-msg comments check doesn't run in this profile.
 
 ### 11.4 The plan file
 
 The plan is 1 live file, `<common>/swift-harness/plans/<slug>/PLAN.md`. A git-excluded `PLAN.md` symlink at the
-root points to it; workers read it by absolute path. `plan import` derives the executor's `ledger.json`. Opus
-commits a snapshot only when the user asks.
+root points to it; workers read it by absolute path. `plan import` derives the executor's `ledger.json`. Its
+"Assumptions" section records each reading Opus made of an ambiguous spec. Opus commits a snapshot only when the
+user asks.
 
 ### 11.5 Review depth
 
 Jev rates each slice's diff `low`, `medium` or `high`: the gate only, 1 Sonnet reviewer, or a full review plus QA.
 Paths the config marks sensitive are always `high`. Opus decides every finding that would block.
+
+### 11.6 One-shot run
+
+The user provides the spec; the harness never writes it. `swiftgate run <spec.md>` reads it by path and copies an
+untracked spec under the git dir, so the tree stays clean. The executor starts as soon as `PLAN.md` exists. The
+user may read or edit `PLAN.md` or stop the run, but the run never asks them to. Every commit, from the contract
+commit to each merge, lands on the plan branch in worktrees under the git dir. `final` runs at the end. The report
+lists the assumptions, the baseline failures, the build-only areas and the plan branch to merge. The user's
+checked-out branch changes only when they merge.
 
 ## 12. Telemetry
 
@@ -273,6 +315,7 @@ Events go to `<git-dir>/swift-harness/events/`; worktree removal copies them up 
 | Change | Payload |
 |---|---|
 | new kind `discover.run` | `ms`, `areas`, `languages`, `found`, `guessed`, `missing`, `edited` |
+| new kind `warmup.run`, 1 per area | `area`, `ms`, `cold` or `warm`, `outcome` |
 | `gate.step` gains `area?` and steps `area-test`, `area-lint`, `area-build`, `neutral`, `baseline`, `xcode-membership` | as today |
 | `gate.run` gains `baselineCount` | count of failures the baseline absorbed |
 | `judge.decision` question sets `diff-risk` and `finding-severity` | as today |
@@ -303,7 +346,7 @@ A `--preset` from another profile fails and names the profile.
 | clone to first gate | under 3 min | clone time to the first `gate.run` |
 | findings on untouched code | 0 | a gate on an empty commit, and on a 1-line change |
 | per-slice gate | 30 s or less, p95 | `gate.run` with `command = slice` |
-| real change | 1 built end to end per repository | the plan's tasks merged, `merge` GREEN |
+| one-shot run | 1 per repository: a provided `spec.md` to a plan branch, every merge and `final` GREEN, 0 human input | `gate.run` with `command = final`, and no user prompt in the session |
 
 The orchestrator picks the 3 repositories itself: public, more than 1 language, none tied to any practice task.
 
@@ -337,8 +380,8 @@ The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 | `--preset default` with no warning | §13 |
 | previous attempt's design run dir left behind | §1: no design run |
 | docs-lint skipped prose on a new router | §6: no docs rules in this profile |
-| budget clock starts at `build start` | §5.3: the clock starts at the brief |
-| AppCore and AppUI split into 2 tasks | §11.3: a task owns every target that reads its types |
+| budget clock starts at `build start` | §5.3: the clock starts when `swiftgate run` reads `spec.md` |
+| a core module and its UI module split into 2 tasks | §11.3: a task owns every target that reads its types |
 | 230 s merge gate after a new dependency | §9: shared package stores, cold cost measured (§17 decision 11) |
 | starter script's macro trust | not addressed: a practice script, not the harness |
 | stray `grep`; the Sonnet 5.5 doubt | not addressed: assistant mistakes |
@@ -361,20 +404,26 @@ The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 | 8 | What is the workflow? | Opus orchestrates and plans; Sonnet 5.5 explores, builds and does QA; Jev classifies; about 8 minutes to a plan; contract commit, then workers with disjoint write sets; 1 live `PLAN.md`; no design doc, ledger page or approval stage beyond "go" | user, 2026-10-03 |
 | 9 | Where does an escape-hatch allow live, when the team didn't ask for our comments in its code? | In `config.toml` as `[[allow]]` entries keyed by rule, path and the line's hash, each with a reason; an inline `swiftgate:allow` still counts | user, 2026-10-03 |
 | 10 | What does `slice` do for an area whose smallest test run can't fit 30 s? | Run the selected tests when a warm run fits; otherwise build only, move those tests and their prove to `merge`, and add a report line | user, 2026-10-03 |
-| 11 | Do worktrees install dependencies per task? | They share package stores: the pnpm store, the Gradle cache, a per-area DerivedData seed; each area's cold cost is measured in `gate.step` | user, 2026-10-03 |
+| 11 | Do worktrees install dependencies per task? | They share each ecosystem's package and build caches, and a per-area DerivedData seed; each area's cold cost is measured in `gate.step` | user, 2026-10-03 |
 | 12 | Do workers run the repository's own git hooks? | Yes, never with `--no-verify`; our commit-msg comments check doesn't run in this profile | user, 2026-10-03 |
 | 13 | Which 3 public repositories form the trial? | The orchestrator picks them with no user step: public, more than 1 language, none tied to any practice task | user, 2026-10-03 |
+| 14 | Can the slow builds start before the plan exists? | Yes: as soon as discover finishes, every touched area warms in parallel at full speed: `generate` for XcodeGen and Tuist (in a scratch worktree when the repository commits the project), then `build`, then `test`, at the base tree; no file in the tree; it fills the shared stores, measures warm test times and cold cost, and pre-fills the baseline; it waits for nothing, runs to the end, and its results serve the next run on that tree | user, 2026-10-03 |
+| 15 | Does any stage wait for the user? | No. `swiftgate run <spec.md>` reads a provided spec by path and copies an untracked one under the git dir; the clock starts there. The executor starts once `PLAN.md` exists; Opus answers every open question and records each assumption in its "Assumptions" section. The user may read, edit or stop, but is never asked. Every commit lands on the plan branch in worktrees under the git dir. `final` runs at the end of every run, then a report. Pass bar: 1 one-shot run per repository with 0 human input. Supersedes decision 8's "go" and decision 7's "1 real change each" | user, 2026-10-03 |
+| 16 | Does the user confirm discover's proposal? | No. `discover --apply` runs on its own, and the warm-up runs every proposed command. Opus fixes a failing guess before planning finishes; one it can't fix becomes `missing`, and that step drops for its area with a report line. `swiftgate discover` alone still prints the proposal. Supersedes decision 4's "that the user confirms" | user, 2026-10-03 |
 
 ## 18. Tasks for a later plan
 
 1. State root seam: `RunLayout` and the 80 `.harness/` literals resolve through 1 root; `ConfigLoader` reads the
    common dir; `doctor.config-conflict`.
-2. `swiftgate discover` with fixtures captured from real public repositories, and `discover --apply`.
+2. `swiftgate discover` with fixtures captured from real public repositories, and `discover --apply` with no
+   confirm step.
 3. `settings.json` hook wiring and `swiftgate claude`.
 4. Neutral rules and their rule-index rows, each with a captured fixture per language.
-5. Area command runner and the `slice` and `merge` tiers, with baseline reruns.
+5. Area command runner and the `slice` and `merge` tiers, with baseline reruns, and the parallel warm-up with
+   `warmup.run`.
 6. Prove over `test_files` for every area kind, with crash isolation.
 7. Xcode inclusion reader, `xcode.file-not-in-target` and `swiftgate xcode add-file`.
-8. `plan import`, the `brownfield` preset keys and pinned model ids in `build-task.js`.
+8. `swiftgate run <spec.md>`, `plan import` with the "Assumptions" section, the `brownfield` preset keys, pinned
+   model ids in `build-task.js`, and the end-of-run `final` and report.
 9. Jev `diff-risk` and `finding-severity` question sets.
 10. Telemetry additions, then the 3-repository trial.
