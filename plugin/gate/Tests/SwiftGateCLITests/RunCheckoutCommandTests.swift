@@ -30,8 +30,14 @@ struct RunCheckoutCommandTests {
       ])
     }
     let runs = StateRootResolver.resolve(worktree: checkout).url(RunLayout.runsDirectory)
-    let ids = try FileManager.default.contentsOfDirectory(atPath: runs.path).filter(RunID.isValid)
-    return try #require(ids.first)
+    let ids = try FileManager.default.contentsOfDirectory(atPath: runs.path).filter {
+      var isDirectory: ObjCBool = false
+      let path = runs.appending(path: $0).path
+      return RunID.isValid($0)
+        && FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        && isDirectory.boolValue
+    }
+    return try #require(ids.count == 1 ? ids.first : nil, "expected 1 gate run, found \(ids)")
   }
 
   @Test(
