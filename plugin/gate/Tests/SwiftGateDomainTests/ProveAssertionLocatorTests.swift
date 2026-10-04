@@ -27,29 +27,23 @@ struct ProveAssertionLocatorTests {
   private static let recordedRoot = "\(Fixture.repositoryRoot)/gate/Fixtures/swifttest"
 
   @Test(
-    "an XCTest failure under the run's root is located repo-relative with kind xct-assert — catches the printed absolute path kept"
+    "an XCTest failure under the run's root is located repo-relative with kind xct-assert, and outside it has no location — catches the printed absolute path kept"
   )
   func xctestLocated() throws {
     let found = ProveAssertionLocator.firstFailure(
       of: Self.xcTest, in: try Self.evidence(root: Self.recordedRoot)
     ) { _, _ in nil }
 
-    #expect(found == ProveAssertion(file: Self.file, line: 7, kind: .xctAssert))
-  }
-
-  @Test(
-    "an XCTest failure outside the run's root has no location — catches an absolute path recorded"
-  )
-  func xctestOutsideRoot() throws {
-    let found = ProveAssertionLocator.firstFailure(
+    let outside = ProveAssertionLocator.firstFailure(
       of: Self.xcTest, in: try Self.evidence(root: "/elsewhere")
     ) { _, _ in nil }
 
-    #expect(found == nil)
+    #expect(found == ProveAssertion(file: Self.file, line: 7, kind: .xctAssert))
+    #expect(outside == nil)
   }
 
   @Test(
-    "a Swift Testing issue inside the test's lines takes the test's file, and its source line decides expect or require — catches a bare file name stored, or require read as expect"
+    "a Swift Testing issue inside the test's lines takes the test's file, and its source line decides expect or require, and an issue outside its lines is not its own — catches a bare file name stored, or require read as expect"
   )
   func swiftTestingLocated() throws {
     let evidence = try Self.evidence(root: Self.recordedRoot)
@@ -66,22 +60,13 @@ struct ProveAssertionLocatorTests {
 
     #expect(expectFound == ProveAssertion(file: Self.file, line: 13, kind: .expect))
     #expect(requireFound == ProveAssertion(file: Self.file, line: 13, kind: .require))
-    #expect(asked == ["\(Self.file):13"])
-  }
-
-  @Test(
-    "a Swift Testing issue outside the test's lines is not the test's — catches another test's failure recorded as this one's"
-  )
-  func swiftTestingOutsideTest() throws {
     let elsewhere = ChangedTest(
       framework: .swiftTesting, target: "ProbeTests", suites: ["PassSwiftTests"],
       function: "doubles()", file: Self.file, line: 1, lastLine: 4)
+    let notOwn = ProveAssertionLocator.firstFailure(of: elsewhere, in: evidence) { _, _ in nil }
 
-    let found = ProveAssertionLocator.firstFailure(
-      of: elsewhere, in: try Self.evidence(root: Self.recordedRoot)
-    ) { _, _ in nil }
-
-    #expect(found == nil)
+    #expect(asked == ["\(Self.file):13"])
+    #expect(notOwn == nil)
   }
 
   @Test(
