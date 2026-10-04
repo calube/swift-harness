@@ -1,0 +1,8 @@
+2026-10-03 22:45:53.716 xcodebuild[77196:56913802] Error Domain=NSCocoaErrorDomain Code=3840 "JSON text did not start with array or object and option to allow fragments not set. around line 1, column 0." UserInfo={NSDebugDescription=JSON text did not start with array or object and option to allow fragments not set. around line 1, column 0., NSJSONSerializationErrorIndex=0}
+2026-10-03 22:45:53.718 xcodebuild[77196:56913802] Writing error result bundle to /TMP/ResultBundle_2026-03-10_22-45-0053.xcresult
+xcodebuild: error: Unable to read project 'KaMPKitiOS.xcodeproj'.
+	Reason: The project ‘KaMPKitiOS’ is damaged and cannot be opened due to a parse error. Examine the project file for invalid edits or unresolved source control conflicts.
+
+Path: /REPO/KaMPKitiOS.xcodeproj
+
+

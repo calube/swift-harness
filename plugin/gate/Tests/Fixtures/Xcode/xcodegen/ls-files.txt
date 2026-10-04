@@ -1,0 +1,16 @@
+Tests/Fixtures/SPM/FooFeature/Package.swift
+Tests/Fixtures/SPM/FooFeature/Sources/FooDomain/FooDomain.swift
+Tests/Fixtures/SPM/FooFeature/Sources/FooUI/FooUI.swift
+Tests/Fixtures/SPM/SPM.xcodeproj/project.pbxproj
+Tests/Fixtures/SPM/SPM.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+Tests/Fixtures/SPM/SPM.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+Tests/Fixtures/SPM/SPM.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+Tests/Fixtures/SPM/SPM.xcodeproj/xcshareddata/xcschemes/App.xcscheme
+Tests/Fixtures/SPM/SPM/App.xctestplan
+Tests/Fixtures/SPM/SPM/AppDelegate.swift
+Tests/Fixtures/SPM/SPM/Assets.xcassets/AppIcon.appiconset/Contents.json
+Tests/Fixtures/SPM/SPM/Assets.xcassets/Contents.json
+Tests/Fixtures/SPM/SPM/Info.plist
+Tests/Fixtures/SPM/SPMTests/SPMTests.swift
+Tests/Fixtures/SPM/StaticLibrary/StaticLibrary.swift
+Tests/Fixtures/SPM/project.yml

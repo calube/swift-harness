@@ -1,0 +1,8 @@
+url: https://github.com/touchlab/KaMPKit
+commit: 4af02006be4be589e6848f097a92d97539300821
+commit-date: 2026-09-18T16:10:35-03:00
+license: Apache-2.0
+languages: Kotlin, Swift
+captured-utc: 2026-10-04
+command: git clone --filter=blob:none --no-checkout https://github.com/touchlab/KaMPKit.git && git checkout 4af02006be4be589e6848f097a92d97539300821
+kind: explicit file lists

@@ -1,0 +1,8 @@
+url: https://github.com/yonaskolb/XcodeGen
+commit: 90dfa9da31eeb3b95153e22f46dce676d9ebaba7
+commit-date: 2026-03-11T00:47:41+11:00
+license: MIT
+languages: C, C++, Makefile, Objective-C, Shell, Swift
+captured-utc: 2026-10-04
+command: git clone --filter=blob:none --no-checkout https://github.com/yonaskolb/XcodeGen.git && git checkout 90dfa9da31eeb3b95153e22f46dce676d9ebaba7
+kind: XcodeGen project.yml with its generated project tracked

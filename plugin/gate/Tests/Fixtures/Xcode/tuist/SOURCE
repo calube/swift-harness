@@ -1,0 +1,9 @@
+url: https://github.com/tuist/tuist
+commit: 7e114b65d7b4fd5eaa9409d6ddbf697ce42d9d8e
+commit-date: 2026-09-28T12:22:21+02:00
+license: NOASSERTION
+languages: Awk, Batchfile, C, C++, CSS, Dockerfile, Elixir, Go, Go Template, HCL, HTML, JavaScript, Kotlin, Objective-C, PLpgSQL, Python, Rust, Shell, Starlark, Swift, TypeScript
+captured-utc: 2026-10-04
+command: git clone --filter=blob:none --no-checkout https://github.com/tuist/tuist.git && git checkout 7e114b65d7b4fd5eaa9409d6ddbf697ce42d9d8e
+kind: Tuist Project.swift with its generated project ignored
+license-note: LICENSE.md licenses everything MIT except server/, kura/ and atlas/ (MPL-2.0)

@@ -1,0 +1,17 @@
+{
+  "project" : {
+    "configurations" : [
+      "Debug",
+      "Release"
+    ],
+    "name" : "KaMPKitiOS",
+    "schemes" : [
+      "KaMPKitiOS"
+    ],
+    "targets" : [
+      "KaMPKitiOS",
+      "KaMPKitiOSTests",
+      "KaMPKitiOSUITests"
+    ]
+  }
+}
