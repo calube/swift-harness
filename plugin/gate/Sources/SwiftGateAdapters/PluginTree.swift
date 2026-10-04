@@ -10,6 +10,8 @@ public struct PluginTree: Sendable, Equatable {
   /// The version a manifest with no `version` reads as.
   public static let unpinnedVersion = "unpinned"
 
+  /// `plugin.json`'s `version`, or `unpinnedVersion` when it has none and Claude Code versions the
+  /// install by its marketplace commit instead.
   public let version: String
   /// Lowercase hex SHA-256 over `version` and every file's relative path and bytes in `trees`.
   public let hash: String
@@ -56,8 +58,12 @@ public struct PluginTree: Sendable, Equatable {
     } catch {
       throw .manifest(path: url.path, reason: error.localizedDescription)
     }
-    guard let version = (object as? [String: Any])?["version"] as? String, !version.isEmpty else {
-      throw .manifest(path: url.path, reason: "no string \"version\"")
+    guard let manifest = object as? [String: Any] else {
+      throw .manifest(path: url.path, reason: "not a JSON object")
+    }
+    guard let raw = manifest["version"] else { return unpinnedVersion }
+    guard let version = raw as? String, !version.isEmpty else {
+      throw .manifest(path: url.path, reason: "\"version\" isn't a non-empty string")
     }
     return version
   }
@@ -105,7 +111,8 @@ public struct PluginTree: Sendable, Equatable {
 }
 
 public enum PluginTreeError: Error, Sendable, Equatable, CustomStringConvertible {
-  /// `.claude-plugin/plugin.json` is missing, isn't JSON, or has no string `version`.
+  /// `.claude-plugin/plugin.json` is missing, isn't a JSON object, or has a `version` that isn't a
+  /// non-empty string.
   case manifest(path: String, reason: String)
   case unreadable(path: String, reason: String)
 

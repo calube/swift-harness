@@ -1,6 +1,5 @@
 {
   "name": "swift-harness",
-  "version": "0.1.0",
   "description": "Engineering harness for SwiftUI iOS apps: standards, testing playbook, the swiftgate gate tool, hooks, skills, and review workflows.",
   "author": { "name": "Caleb Davis" },
   "repository": "https://github.com/calube/swift-harness",
