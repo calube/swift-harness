@@ -48,6 +48,7 @@ public enum CICommandMining {
       }
       candidates += WorkflowRuns.runs(in: text).flatMap { run in
         ShellSegments.candidates(script: run.script, directory: run.directory, source: path)
+          .map { $0.inEnvironment(run.environment) }
       }
     }
     for path in paths where ["Makefile", "makefile", "GNUmakefile"].contains(basename(path)) {
@@ -87,18 +88,23 @@ public enum CICommandMining {
     }
     return candidates.compactMap { candidate in
       guard let area = attribute(candidate, to: areas) else { return nil }
+      let note =
+        candidate.leftOut.isEmpty ? "" : " (\(WorkflowEnvironment.note(candidate.leftOut)))"
       if let command = candidate.retarget?(area.root) {
         return MinedCommand(
-          area: area.name, step: candidate.step, command: command, source: candidate.source)
+          area: area.name, step: candidate.step, command: candidate.withEnvironment(command),
+          source: candidate.source + note)
       }
-      let command = inDirectory(relative(candidate.cwd, to: area.root), candidate.segment)
+      let command = inDirectory(
+        relative(candidate.cwd, to: area.root), candidate.withEnvironment(candidate.segment))
       guard contains(area.root, candidate.cwd) else {
         return MinedCommand(
           area: area.name, step: candidate.step, command: command,
-          source: candidate.source + " (runs from the repository root)", confidence: .guessed)
+          source: candidate.source + " (runs from the repository root)" + note,
+          confidence: .guessed)
       }
       return MinedCommand(
-        area: area.name, step: candidate.step, command: command, source: candidate.source)
+        area: area.name, step: candidate.step, command: command, source: candidate.source + note)
     }
   }
 
@@ -145,6 +151,27 @@ public enum CICommandMining {
     /// The command with its directory flag pointed at the area root it is given, so it runs from
     /// there; `nil` when it has no directory flag or the flag points outside that root.
     var retarget: ((String) -> String?)? = nil
+    /// The workflow's `env:` in effect for the step, less the names the command assigns itself.
+    var environment: [WorkflowEnvironment.Variable] = []
+    /// What the step's `env:` set that the command can't carry.
+    var leftOut: [WorkflowEnvironment.LeftOut] = []
+
+    /// This candidate run with `environment`: a name the command assigns itself keeps its own
+    /// value, as the shell gives it.
+    func inEnvironment(_ environment: WorkflowEnvironment) -> Candidate {
+      let assigned = Set(
+        segment.split(separator: " ").prefix { $0.contains("=") && !$0.hasPrefix("-") }
+          .map { String($0.prefix { $0 != "=" }) })
+      var copy = self
+      copy.environment = environment.variables.filter { !assigned.contains($0.name) }
+      copy.leftOut = environment.leftOut.filter { !assigned.contains($0.name) }
+      return copy
+    }
+
+    func withEnvironment(_ command: String) -> String {
+      let assignments = environment.map { "\($0.name)=\(WorkflowEnvironment.quote($0.value))" }
+      return (assignments + [command]).joined(separator: " ")
+    }
   }
 
   static func attribute(_ candidate: Candidate, to areas: [ProposedArea]) -> ProposedArea? {
@@ -310,11 +337,13 @@ enum WorkflowRuns {
   struct Run: Equatable {
     let script: [String]
     let directory: String
+    let environment: WorkflowEnvironment
   }
 
   static func runs(in text: String) -> [Run] {
     let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     let defaults = defaultDirectories(lines)
+    let scopes = environmentScopes(lines)
     var runs: [Run] = []
     for (index, line) in lines.enumerated() {
       let indent = line.prefix { $0 == " " }.count
@@ -331,7 +360,7 @@ enum WorkflowRuns {
         let content = text.trimmingCharacters(in: .whitespaces)
         guard let colon = content.firstIndex(of: ":") else { continue }
         let key = String(content[..<colon])
-        guard key == "run" || key == "working-directory" else { continue }
+        guard ["run", "working-directory", "env"].contains(key) else { continue }
         keyed.append(
           (
             key, content[content.index(after: colon)...].trimmingCharacters(in: .whitespaces),
@@ -353,35 +382,96 @@ enum WorkflowRuns {
       } else {
         script = [unquoted(value)]
       }
-      runs.append(Run(script: script, directory: directory))
+      var environment = scopes(index)
+      if let env = keyed.first(where: { $0.key == "env" }) {
+        let entries =
+          env.value.isEmpty
+          ? mapEntries(item[(env.line + 1)...], deeperThan: column) : nil
+        environment = environment.narrowed(by: entries, scope: "step")
+      }
+      runs.append(Run(script: script, directory: directory, environment: environment))
     }
     return runs
+  }
+
+  /// The `env:` of the workflow and of the job holding each line, the job's over the
+  /// workflow's.
+  private static func environmentScopes(_ lines: [String]) -> (Int) -> WorkflowEnvironment {
+    let workflow = WorkflowEnvironment().narrowed(
+      by: scopeEnv(lines, in: 0..<lines.count, indent: 0), scope: "workflow")
+    let jobs = jobSpans(lines).map { job in
+      (
+        span: job.span,
+        environment: job.child.map {
+          workflow.narrowed(by: scopeEnv(lines, in: job.span.dropFirst(), indent: $0), scope: "job")
+        } ?? workflow
+      )
+    }
+    return { index in jobs.first { $0.span.contains(index) }?.environment ?? workflow }
+  }
+
+  /// The entries of the `env:` key at `indent` within `span`: `[]` when there is none, `nil` when
+  /// it is written inline, which this line reader can't read.
+  private static func scopeEnv(_ lines: [String], in span: Range<Int>, indent: Int)
+    -> [(name: String, value: String)]?
+  {
+    guard
+      let start = span.first(where: {
+        leading(lines[$0]) == indent && lines[$0].dropFirst(indent).hasPrefix("env:")
+      })
+    else { return [] }
+    let inline = stripComment(
+      lines[start].dropFirst(indent + "env:".count).trimmingCharacters(in: .whitespaces))
+    guard inline.isEmpty else { return nil }
+    return mapEntries(lines[(start + 1)..<span.upperBound], deeperThan: indent)
+  }
+
+  /// The `KEY: value` lines of the mapping that opens on the lines after its key, as written but
+  /// unquoted, stopping at the first line no deeper than `indent`.
+  private static func mapEntries(_ lines: ArraySlice<String>, deeperThan indent: Int)
+    -> [(name: String, value: String)]
+  {
+    let body = lines.prefix { isBlank($0) || isComment($0) || leading($0) > indent }
+      .filter { !isBlank($0) && !isComment($0) }
+    guard let column = body.first.map(leading) else { return [] }
+    return body.filter { leading($0) == column }.compactMap { line in
+      let content = line.dropFirst(column)
+      guard let colon = content.firstIndex(of: ":") else { return nil }
+      let name = unquoted(String(content[..<colon]).trimmingCharacters(in: .whitespaces))
+      let value = content[content.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      return (name, unquoted(stripComment(value)))
+    }
   }
 
   /// The default directory of the step at each line: its job's `defaults.run.working-directory`,
   /// else the workflow's, else `.`; `nil` when the default leaves the repository.
   private static func defaultDirectories(_ lines: [String]) -> (Int) -> String? {
     let workflow = defaultDirectory(lines, in: 0..<lines.count, indent: 0)
-    var jobs: [(span: Range<Int>, directory: String)] = []
-    if let start = lines.firstIndex(where: { $0.hasPrefix("jobs:") }) {
-      let next = lines[(start + 1)...].firstIndex(where: { !isBlank($0) && leading($0) == 0 })
-      let body = (start + 1)..<(next ?? lines.count)
-      let keys = body.filter { !isBlank(lines[$0]) && !isComment(lines[$0]) }
-      let column = keys.first.map { leading(lines[$0]) } ?? 0
-      let starts = keys.filter { leading(lines[$0]) == column }
-      for (offset, jobStart) in starts.enumerated() {
-        let end = offset + 1 < starts.count ? starts[offset + 1] : body.upperBound
-        let inner = (jobStart + 1)..<end
-        let child = inner.first { !isBlank(lines[$0]) && !isComment(lines[$0]) }
-          .map { leading(lines[$0]) }
-        if let child, let directory = defaultDirectory(lines, in: inner, indent: child) {
-          jobs.append((jobStart..<end, directory))
-        }
-      }
+    let jobs: [(span: Range<Int>, directory: String)] = jobSpans(lines).compactMap { job in
+      guard let child = job.child,
+        let directory = defaultDirectory(lines, in: job.span.dropFirst(), indent: child)
+      else { return nil }
+      return (job.span, directory)
     }
     return { index in
       CICommandMining.join(
         ".", jobs.first { $0.span.contains(index) }?.directory ?? workflow ?? ".")
+    }
+  }
+
+  /// Each job under `jobs:`, from its key line to the next job's, with the column of its own keys.
+  private static func jobSpans(_ lines: [String]) -> [(span: Range<Int>, child: Int?)] {
+    guard let start = lines.firstIndex(where: { $0.hasPrefix("jobs:") }) else { return [] }
+    let next = lines[(start + 1)...].firstIndex(where: { !isBlank($0) && leading($0) == 0 })
+    let body = (start + 1)..<(next ?? lines.count)
+    let keys = body.filter { !isBlank(lines[$0]) && !isComment(lines[$0]) }
+    let column = keys.first.map { leading(lines[$0]) } ?? 0
+    let starts = keys.filter { leading(lines[$0]) == column }
+    return starts.enumerated().map { offset, jobStart in
+      let end = offset + 1 < starts.count ? starts[offset + 1] : body.upperBound
+      let child = ((jobStart + 1)..<end).first { !isBlank(lines[$0]) && !isComment(lines[$0]) }
+        .map { leading(lines[$0]) }
+      return (jobStart..<end, child)
     }
   }
 
@@ -604,5 +694,82 @@ enum ShellSegments {
   private static func splitFlag(_ word: String) -> (String, String?) {
     guard word.hasPrefix("-"), let equals = word.firstIndex(of: "=") else { return (word, nil) }
     return (String(word[..<equals]), String(word[word.index(after: equals)...]))
+  }
+}
+
+/// The `env:` a workflow step runs with: the workflow's, then its job's, then its own, the
+/// narrowest scope winning for each name. A value is carried only when it is a literal, or
+/// `${{ env.NAME }}` naming a value already carried; a secret or any other expression is left out
+/// and named, so the mined command never holds a secret or a value CI alone knows.
+struct WorkflowEnvironment: Equatable {
+  struct Variable: Equatable {
+    let name: String
+    let value: String
+  }
+
+  struct LeftOut: Equatable {
+    let name: String
+    let reason: String
+  }
+
+  private(set) var variables: [Variable] = []
+  private(set) var leftOut: [LeftOut] = []
+
+  /// This environment with `entries` from a narrower `scope` laid over it; `nil` entries are an
+  /// `env:` this can't read, which is named and leaves the wider values in place.
+  func narrowed(by entries: [(name: String, value: String)]?, scope: String)
+    -> WorkflowEnvironment
+  {
+    var result = self
+    guard let entries else {
+      result.leftOut.append(LeftOut(name: "the \(scope) env:", reason: "is written inline"))
+      return result
+    }
+    for (name, raw) in entries {
+      result.variables.removeAll { $0.name == name }
+      result.leftOut.removeAll { $0.name == name }
+      switch resolve(raw, in: self) {
+      case .success(let value): result.variables.append(Variable(name: name, value: value))
+      case .failure(let reason): result.leftOut.append(LeftOut(name: name, reason: reason.text))
+      }
+    }
+    return result
+  }
+
+  private struct Unresolved: Error {
+    let text: String
+  }
+
+  private func resolve(_ raw: String, in wider: WorkflowEnvironment) -> Result<String, Unresolved> {
+    if raw.hasPrefix("|") || raw.hasPrefix(">") {
+      return .failure(Unresolved(text: "spans several lines"))
+    }
+    if raw.contains("secrets.") { return .failure(Unresolved(text: "is a secret")) }
+    var value = ""
+    var rest = Substring(raw)
+    while let open = rest.range(of: "${{") {
+      guard let close = rest[open.upperBound...].range(of: "}}") else {
+        return .failure(Unresolved(text: "is an expression discover can't resolve"))
+      }
+      let expression = rest[open.upperBound..<close.lowerBound].trimmingCharacters(in: .whitespaces)
+      guard expression.hasPrefix("env."),
+        let known = wider.variables.first(where: { $0.name == expression.dropFirst(4) })
+      else { return .failure(Unresolved(text: "is an expression discover can't resolve")) }
+      value += rest[..<open.lowerBound] + known.value
+      rest = rest[close.upperBound...]
+    }
+    return .success(value + rest)
+  }
+
+  /// The source note for what a command left out.
+  static func note(_ leftOut: [LeftOut]) -> String {
+    "left out CI env: " + leftOut.map { "\($0.name) \($0.reason)" }.joined(separator: ", ")
+  }
+
+  /// `value` as 1 shell word that the shell leaves as written.
+  static func quote(_ value: String) -> String {
+    let plain = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-./:@%+,="))
+    if value.unicodeScalars.allSatisfy(plain.contains) { return value }
+    return "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
   }
 }
