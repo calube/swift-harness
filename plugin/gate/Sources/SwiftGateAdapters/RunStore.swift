@@ -129,18 +129,19 @@ public struct RunStore: Sendable {
           report, finishedAt: finishedAt, command: command, headCommit: headCommit, base: base,
           treeHash: treeHash, dirty: dirty, steps: gateSteps + [recordStep],
           checkTier: checkTier, testResults: testResults, baselineCount: baselineCount,
-          proofs: proofs))
+          proofs: proofs, flows: flows))
     } catch {
       throw .eventsUnwritten(error)
     }
   }
 
-  /// The run's `gate.run`, then each step's `gate.step`, each case's `test.result` and each
-  /// proof's `prove.result` pointing at it.
+  /// The run's `gate.run`, then each step's `gate.step`, each case's `test.result`, each
+  /// proof's `prove.result` and each kept flow's `qa.flow` pointing at it.
   private func gateEvents(
     _ report: RunReport, finishedAt: Date, command: String?, headCommit: String?, base: String?,
     treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?,
-    testResults: [TestCaseResult], baselineCount: Int?, proofs: [ProvedTest]
+    testResults: [TestCaseResult], baselineCount: Int?, proofs: [ProvedTest],
+    flows: [QAFlowRecord]
   ) throws(HarnessEventWriteError) -> [HarnessEvent] {
     let payload: GateRunEvent
     do {
@@ -164,6 +165,10 @@ public struct RunStore: Sendable {
     return [run] + steps.map { child(.gateStep(GateStepEvent($0))) }
       + testResults.map { child(.testResult(TestResultEvent($0))) }
       + proofs.map { child(.proveResult(ProveResultEvent($0))) }
+      + flows.map {
+        child(
+          .qaFlow(QAFlowEvent(plan: nil, row: nil, requirement: nil, atBase: false, record: $0)))
+      }
   }
 
   public func readHistory() throws(RunStoreError) -> (

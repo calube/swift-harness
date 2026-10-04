@@ -15,6 +15,7 @@ into a committed file.
 | Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |
 | Checking flow files with `swiftgate qa lint`, or running a plan's validation rows with `qa run` and `qa adopt` | [`simulator-qa.md`](simulator-qa.md) |
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
+| How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Seeing a build run as 1 page (`swiftgate report --html`, `swiftgate view`), or emitting a span with `swiftgate events span` | [`run-viewer.md`](run-viewer.md) |
 

@@ -52,6 +52,12 @@ public struct SimulatorTestRunner: Sendable {
       .appending(path: job.name, directoryHint: .isDirectory)
   }
 
+  /// Where a job's result bundle goes under a run's output directory.
+  public static func bundlePath(outputDirectory: URL, tier: Tier, job: SimulatorJob) -> URL {
+    outputDirectory.appending(path: tier.rawValue.lowercased(), directoryHint: .isDirectory)
+      .appending(path: "\(job.name).xcresult")
+  }
+
   public func run(
     _ jobs: [SimulatorJob], tier: Tier, outputDirectory: URL, recording: SnapshotRecording
   ) async -> [SimulatorJobResult] {

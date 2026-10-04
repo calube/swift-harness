@@ -110,6 +110,10 @@ enum SimulatorTestCheck {
           extra += FlowCoverage.findings(
             uiTests: cases.filter(\.isUITest).map(\.identifier), flows: config.flows,
             maxFlows: config.pyramid.maxFlows, file: file)
+          if let recorder = dependencies.keptFlows {
+            extra += try await keptFlows(
+              cases, job: job, config: config, recorder: recorder, context: context, file: file)
+          }
         }
       }
     }
@@ -122,6 +126,31 @@ enum SimulatorTestCheck {
       .simulator, tier: tier, milliseconds: milliseconds, verdict: combined.tier.verdict,
       derivedData: derivedData)
     return GateRunParts(tiers: [combined.tier], findings: combined.findings + extra)
+  }
+
+  /// Each UI test mapped to a `[[flows]]` entry becomes a `qa.flow` record for the run, and each
+  /// piece of its evidence left unsaved a nit.
+  private static func keptFlows(
+    _ cases: [XcresultTestCase], job: SimulatorJob, config: Config,
+    recorder: XCUITestFlowRecorder, context: GateRun.Context, file: String
+  ) async throws -> [Finding] {
+    let tests = cases.filter(\.isUITest).compactMap { test in
+      FlowCoverage.flow(forTest: test.identifier, flows: config.flows).map {
+        KeptFlowTest(identifier: test.identifier, flow: $0.name, passed: test.result == .passed)
+      }
+    }
+    guard !tests.isEmpty else { return [] }
+    let kept = await recorder.record(
+      tests,
+      bundlePath: SimulatorTestRunner.bundlePath(
+        outputDirectory: context.directory, tier: .t3, job: job
+      ).path, runDirectory: context.directory)
+    context.flows.record(kept.records)
+    return try kept.gaps.map { gap in
+      try Finding(
+        ruleID: gap.ruleID, severity: .nit, file: file, line: nil,
+        message: "kept flow \(gap.test): \(gap.detail)", failureScenario: nil)
+    }
   }
 
   private static func note(_ message: String) throws(ReportContractViolation) -> Finding {

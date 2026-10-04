@@ -84,7 +84,7 @@ enum GateRun {
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
         testResults: context.tests.cases, baselineCount: parts.baselineCount,
-        proofs: context.proofs.results)
+        proofs: context.proofs.results, flows: context.flows.flows)
     }
     Console.write(
       try ReportRenderer.render(

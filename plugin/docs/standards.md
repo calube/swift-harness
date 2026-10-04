@@ -731,8 +731,8 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `qa.check-failed` | simulator QA amendment §6, §6.2; a row whose check ran and failed (major). Its message names the row, the requirement, the layer and why: the exit status, the signal or the timeout |
 | `qa.check-unverified` | simulator QA amendment §6.2, §9.1; a row whose check didn't run, a nit that never gates: the flow runner isn't built, a red layer stopped the run, a flow row for its requirement didn't pass, no port could be had, or the process couldn't start |
 | `qa.check-passes-at-base` | simulator QA amendment §5.2, decision 7; `qa run --at-base` found a row passing at the merge base, so its check can't tell the change from its absence (major) |
-| `qa.video-unverified` | simulator QA amendment §7, §8.3, decisions 6 and 14; a `qa run --final` flow left no video, a nit that never gates: the Mac's recorder stayed busy past 5 minutes, the `sim-record` slot stayed held, or `record start` or `stop` failed. A missing contact sheet is the same nit |
-| `qa.evidence-unsaved` | simulator QA amendment §8.1, decision 3; a `qa run --final` flow's app log, network dump, trace, unified log or data container wasn't saved, a nit that never gates, naming the call |
+| `qa.video-unverified` | simulator QA amendment §7, §8.3, decisions 6 and 14; a `qa run --final` flow left no video, a nit that never gates: the Mac's recorder stayed busy past 5 minutes, the `sim-record` slot stayed held, or `record start` or `stop` failed, or a kept T3 flow kept none. A missing contact sheet is the same nit |
+| `qa.evidence-unsaved` | simulator QA amendment §8.1, decision 3; a `qa run --final` flow's app log, network dump, trace, unified log or data container, or a kept flow's activities, wasn't saved, a nit that never gates, naming the call |
 
 ### Simulator QA flows ([`qa lint`](simulator-qa.md#qa-lint))
 

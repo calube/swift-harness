@@ -78,13 +78,30 @@ public struct LiveXcresultReader: XcresultReader {
   public func activities(bundlePath: String, testID: String) async throws(XcresultReadError)
     -> Data
   {
-    Data()
+    let output = try await xcresulttool([
+      "get", "test-results", "activities", "--test-id", testID, "--path", bundlePath,
+    ])
+    guard output.status.isSuccess else {
+      throw .failed(status: output.status, stderr: Self.firstLine(output.stderr.text))
+    }
+    return output.stdout.bytes
   }
 
   public func exportAttachments(bundlePath: String, testID: String, to directory: String)
     async throws(XcresultReadError) -> Data
   {
-    Data()
+    let output = try await xcresulttool([
+      "export", "attachments", "--test-id", testID, "--path", bundlePath, "--output-path",
+      directory,
+    ])
+    guard output.status.isSuccess else {
+      throw .failed(status: output.status, stderr: Self.firstLine(output.stderr.text))
+    }
+    let manifest = URL(filePath: directory).appending(path: "manifest.json")
+    guard let data = FileManager.default.contents(atPath: manifest.path) else {
+      throw .failed(status: output.status, stderr: "export attachments wrote no manifest.json")
+    }
+    return data
   }
 
   private func xcresulttool(_ arguments: [String]) async throws(XcresultReadError)
