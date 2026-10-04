@@ -1,0 +1,24 @@
+/* plan graph: layered left to right, scrolls inside its own box at narrow widths */
+.graph-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.graph-scroll:empty { display: none; }
+.graph-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.graph { display: block; width: 100%; height: auto; }
+.graph .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .75; }
+.graph .edge.stage { stroke-dasharray: 4 3; }
+.graph .arrow { fill: var(--muted); }
+.gnode { cursor: pointer; outline: none; --sc: var(--muted); --sf: var(--surface); }
+.gnode .box { fill: var(--sf); stroke: var(--sc); stroke-width: 1.5; }
+.gnode.stage .box { stroke-dasharray: 5 3; }
+.gnode .dot { fill: var(--sc); }
+.gnode .gid { fill: var(--fg); font: 600 12px var(--font-mono); }
+.gnode .gsub { fill: var(--muted); font: 11px var(--font-ui); font-variant-numeric: tabular-nums; }
+.gnode:hover .box { stroke-width: 2.5; }
+.gnode:focus-visible .box { stroke: var(--accent); stroke-width: 3; }
+.gnode.sel .box { stroke: var(--fg); stroke-width: 2.5; }
+.gnode.ln-merged { --sc: var(--ok); --sf: var(--ok-soft); }
+.gnode.ln-building { --sc: var(--accent); --sf: var(--accent-soft); }
+.gnode.ln-gating { --sc: var(--warn); --sf: var(--warn-soft); }
+.gnode.ln-review { --sc: var(--bar-review); --sf: color-mix(in srgb, var(--bar-review) 16%, var(--surface)); }
+.gnode.ln-blocked { --sc: var(--bad); --sf: var(--bad-soft); }
+.graph-notes:empty { display: none; }
+.graph-notes .damage-line { margin: 0 0 8px; }
