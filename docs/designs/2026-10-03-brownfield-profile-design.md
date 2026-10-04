@@ -204,15 +204,19 @@ Prove reverts the task's non-test changes in a scratch worktree and reruns its c
 
 When an area's smallest test run can't fit 30 s, such as app-hosted Xcode tests, `slice` runs the selected tests
 if a warm run fits. Otherwise it only builds; those tests and their prove move to `merge`, and the report says so.
+The warm-up (§11.2) measures each area's warm test time before planning, so `PLAN.md` names the build-only areas
+up front.
 
-Worktrees share the package stores: the pnpm store, the Gradle cache and a per-area DerivedData seed. Each area's
-cold cost is a `gate.step` measurement.
+Worktrees share the package stores: the pnpm store, the Gradle cache and a per-area DerivedData seed. The warm-up
+fills them at the base tree, so a worker's first build is incremental; the contract commit still recompiles its
+dependents. Each area's cold cost is the warm-up's first run, and a `gate.step` measures it again on a cold store.
 
 ## 10. Baseline
 
 A gate that sees a failing test or command reruns it at the merge base in a scratch worktree and caches the
-answer in `baseline/<tree>.json`. A failure at both trees goes to the report's `baseline` section and never
-gates. Discovery records files already modified in the tree, and workers never stage them.
+answer in `baseline/<tree>.json`. The warm-up's test run at the base tree (§11.2) fills that file before any
+worker starts. A failure at both trees goes to the report's `baseline` section and never gates. Discovery records
+files already modified in the tree, and workers never stage them.
 
 ## 11. Workflow
 
@@ -236,6 +240,8 @@ flowchart LR
   areas -->|small repo or 1 area| opus[Opus reads directly]
   areas -->|several areas| ex[1 Sonnet explorer per area, parallel, deadline]
   areas --> skel[Opus drafts the plan skeleton]
+  areas --> warm[warm-up, all areas in parallel: generate, build, then test, at the base tree]
+  warm -->|warm test times, baseline| plan
   ex --> plan[PLAN.md]
   opus --> plan
   skel --> plan
@@ -246,6 +252,16 @@ flowchart LR
 
 Each explorer has a 3-minute soft and 4-minute hard deadline, and returns entry points, files to change, nearby
 tests, working commands, risks and unknowns in 300 words or fewer. Opus drops a late report and names the area.
+
+Once discover picks the touched areas, a warm-up runs each area's `build` and then its `test` at the base tree.
+Every area warms in parallel at full speed, alongside the explorers. XcodeGen and Tuist areas run `generate`
+first, or report the "not installed" case discover reports. When the repository commits the generated
+project, generate and the warm build run in a scratch worktree under the git dir, so the user's tree shows no
+diff; a gitignored project generates in place. Build output goes under the git dir, such as `-derivedDataPath`, or into paths the
+repository already ignores. The warm-up fills the shared stores (§9) and gives warm test times for `slice`, each
+area's cold cost and the base tree's baseline (§10). It never waits for "go" and always runs to the end; its
+caches, times and baseline serve the next run on that tree. The contract commit and the workers still wait for
+"go".
 
 ### 11.3 Contract commit and write sets
 
@@ -273,6 +289,7 @@ Events go to `<git-dir>/swift-harness/events/`; worktree removal copies them up 
 | Change | Payload |
 |---|---|
 | new kind `discover.run` | `ms`, `areas`, `languages`, `found`, `guessed`, `missing`, `edited` |
+| new kind `warmup.run`, 1 per area | `area`, `ms`, `cold` or `warm`, `outcome` |
 | `gate.step` gains `area?` and steps `area-test`, `area-lint`, `area-build`, `neutral`, `baseline`, `xcode-membership` | as today |
 | `gate.run` gains `baselineCount` | count of failures the baseline absorbed |
 | `judge.decision` question sets `diff-risk` and `finding-severity` | as today |
@@ -364,6 +381,7 @@ The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 | 11 | Do worktrees install dependencies per task? | They share package stores: the pnpm store, the Gradle cache, a per-area DerivedData seed; each area's cold cost is measured in `gate.step` | user, 2026-10-03 |
 | 12 | Do workers run the repository's own git hooks? | Yes, never with `--no-verify`; our commit-msg comments check doesn't run in this profile | user, 2026-10-03 |
 | 13 | Which 3 public repositories form the trial? | The orchestrator picks them with no user step: public, more than 1 language, none tied to any practice task | user, 2026-10-03 |
+| 14 | Can the slow builds start before "go"? | Yes: as soon as discover finishes, every touched area warms in parallel at full speed: `generate` for XcodeGen and Tuist (in a scratch worktree when the repository commits the project), then `build`, then `test`, at the base tree; no file in the tree; it fills the shared stores, measures warm test times and cold cost, and pre-fills the baseline; it never waits for "go", runs to the end, and its results serve the next run on that tree | user, 2026-10-03 |
 
 ## 18. Tasks for a later plan
 
@@ -372,7 +390,8 @@ The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 2. `swiftgate discover` with fixtures captured from real public repositories, and `discover --apply`.
 3. `settings.json` hook wiring and `swiftgate claude`.
 4. Neutral rules and their rule-index rows, each with a captured fixture per language.
-5. Area command runner and the `slice` and `merge` tiers, with baseline reruns.
+5. Area command runner and the `slice` and `merge` tiers, with baseline reruns, and the parallel warm-up with
+   `warmup.run`.
 6. Prove over `test_files` for every area kind, with crash isolation.
 7. Xcode inclusion reader, `xcode.file-not-in-target` and `swiftgate xcode add-file`.
 8. `plan import`, the `brownfield` preset keys and pinned model ids in `build-task.js`.
