@@ -986,6 +986,21 @@ const tests = {
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
   },
 
+  'the run skill names every brownfield command with the flags the CLI has — catches a run step calling a command or flag that drifted'() {
+    const { problems, resolved } = scanSkills(join(root, 'skills/run'), help, root)
+    assert.deepEqual(problems, [])
+    const has = (path, flag) => resolved.some(r => r.path === path && (!flag || r.flags.includes(flag)))
+    for (const [path, flag] of [
+      ['discover', '--json'], ['discover', '--set'], ['discover', '--drop'], ['discover', '--reason'],
+      ['events list', '--kind'], ['allow', '--reason'], ['plan import', '--json'], ['build start', '--preset'],
+      ['build start', '--session'], ['check', '--tier'], ['check', '--base'], ['run report', null],
+    ]) assert.ok(has(path, flag), `the run skill never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
+    const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
+    assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
+    const { resolved: bootstrap } = scanSkills(join(root, 'skills/bootstrap'), help, root)
+    assert.ok(bootstrap.some(r => r.path === 'discover' && r.flags.includes('--apply')), 'the bootstrap skill never runs `swiftgate discover --apply`')
+  },
+
   'the build skill packs a spec page plan\'s workers with --spec-page and hands plan.json\'s surfaceCommit to every worker — catches a worker proving at the wrong base or packed from a design the plan lacks'() {
     const files = buildSkillFiles()
     const { resolved } = scanSkills(join(root, 'skills/build'), help, root)
