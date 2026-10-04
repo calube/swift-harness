@@ -140,13 +140,17 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 // `reviews[reviewer]` is a list of returns, one per review round. `verifies[reviewer]` is a list
 // of verifier answers, one per verify call for that reviewer: a function gets the findings it
 // was sent, and a missing entry confirms every finding.
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {} } = {}) {
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate } = {}) {
   const calls = []
   let inFlight = 0
   let maxReviewersInFlight = 0
   const perReviewer = {}
   const perVerifier = {}
   const agent = async (prompt, opts) => {
+    if (typeof opts.label === 'string' && opts.label.startsWith('span:')) {
+      assert.ok(swiftgate, `a span call ran with no build run: ${opts.label}`)
+      return swiftgate.run(prompt, opts)
+    }
     calls.push({ prompt, opts })
     if (opts.agentType === WORKER) {
       const n = calls.filter(c => c.opts.agentType === WORKER).length
@@ -186,6 +190,64 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   return { result, calls, workerCalls, reviewerCalls, verifyCalls, maxReviewersInFlight, logs }
 }
 
+// A fake `swiftgate events span`: the span agent's prompt lists numbered commands, and this answers
+// each as the real command would, recording every start and end in call order. `exit(n, command)`
+// forces the n-th command's exit status; `off` answers every start as telemetry-off does.
+function fakeSwiftgate({ exit = () => 0, off = false } = {}) {
+  const events = []
+  const agentCalls = []
+  let next = 0
+  let n = 0
+  const run = (prompt, opts) => {
+    agentCalls.push({ prompt, opts })
+    assert.equal(opts.agentType, 'general-purpose', 'the span agent is not a plain command runner')
+    const marker = 'Commands:\n'
+    assert.ok(prompt.includes(marker), 'the span prompt lists no commands')
+    const commands = prompt.slice(prompt.indexOf(marker) + marker.length).split('\n')
+      .filter(line => /^\d+\. /.test(line)).map(line => line.replace(/^\d+\. /, ''))
+    return {
+      results: commands.map(command => {
+        n++
+        const forced = exit(n, command)
+        if (forced) return { exitStatus: forced, stdout: '' }
+        const words = (command.slice(command.indexOf('events span ')).match(/'[^']*'|\S+/g) ?? [])
+          .map(w => w.replace(/^'|'$/g, ''))
+        const flag = name => (words.includes(name) ? words[words.indexOf(name) + 1] : undefined)
+        if (words[2] === 'start') {
+          if (off) return { exitStatus: 0, stdout: '' }
+          const id = (++next).toString(16).padStart(16, '0')
+          events.push({ kind: 'start', id, phase: flag('--phase'), buildRun: flag('--build-run'), task: flag('--task'), role: flag('--role'), parent: flag('--parent') })
+          return { exitStatus: 0, stdout: id }
+        }
+        assert.equal(words[2], 'end', `unexpected span command ${command}`)
+        const id = words[3]
+        if (!events.some(e => e.kind === 'start' && e.id === id) || events.some(e => e.kind === 'end' && e.id === id)) {
+          return { exitStatus: 1, stdout: '' }
+        }
+        events.push({ kind: 'end', id, outcome: flag('--outcome') })
+        return { exitStatus: 0, stdout: `events span end: recorded ${flag('--outcome')} for span ${id}` }
+      }),
+    }
+  }
+  const starts = () => events.filter(e => e.kind === 'start')
+  const endOf = id => events.find(e => e.kind === 'end' && e.id === id)
+  return { run, events, agentCalls, starts, endOf }
+}
+
+// Each start names the task and build run, its parent ended before it started, and it ended itself.
+function assertSpanChain(sg, buildRun, task) {
+  for (const start of sg.starts()) {
+    assert.equal(start.task, task, `span ${start.phase} names task ${start.task}`)
+    assert.equal(start.buildRun, buildRun)
+    assert.ok(sg.endOf(start.id), `span ${start.phase} ${start.id} never ended`)
+    if (start.parent === undefined) continue
+    const parentEnd = sg.events.indexOf(sg.endOf(start.parent))
+    assert.ok(parentEnd >= 0 && parentEnd < sg.events.indexOf(start), `span ${start.phase} started before its parent ended`)
+  }
+}
+
+const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
+
 // The contract `build check-return` decodes: exactly TaskReturn's keys, `review` always filled.
 function assertTaskReturn(result, mode) {
   assert.deepEqual(Object.keys(result).sort(), [...TASK_RETURN_KEYS].sort(), JSON.stringify(result))
@@ -200,6 +262,90 @@ function assertTaskReturn(result, mode) {
 }
 
 const tests = {
+  async 'a task run records its stages in order, each parented to the one before — catches stages started flat'() {
+    const sg = fakeSwiftgate()
+    const { result } = await run(baseArgs({ buildRun: BUILD_RUN }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+      swiftgate: sg,
+    })
+    assert.equal(result.outcome, 'ready-to-merge')
+    const shape = sg.starts().map(s => {
+      const parent = sg.starts().find(p => p.id === s.parent)
+      return `${s.phase}:${s.role}<${parent ? parent.phase : '-'}=${sg.endOf(s.id).outcome}`
+    })
+    assert.deepEqual(shape.sort(), [
+      'fix:build-worker<verify=ok',
+      'review:review<fix=ok',
+      'review:review<fix=ok',
+      'review:review<worker=ok',
+      'review:review<worker=ok',
+      'verify:review<review=red',
+      'worker:build-worker<-=ok',
+    ].sort())
+    assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
+    const fix = sg.starts().find(s => s.phase === 'fix')
+    assert.equal(sg.starts().find(s => s.id === fix.parent).phase, 'verify', 'the fix pass is not parented to the verify that blocked')
+  },
+
+  async 'a red gate parents the fix pass to the worker and ends the worker red — catches a fix span hung off nothing'() {
+    const sg = fakeSwiftgate()
+    const { result } = await run(baseArgs({ buildRun: BUILD_RUN, review: 'gate' }), { workers: [red(), workerReturn()], swiftgate: sg })
+    assert.equal(result.outcome, 'ready-to-merge')
+    const [worker, fix, ...rest] = sg.starts()
+    assert.deepEqual([worker.phase, fix.phase, rest.length], ['worker', 'fix', 0])
+    assert.equal(fix.parent, worker.id)
+    assert.equal(sg.endOf(worker.id).outcome, 'red')
+    assert.equal(sg.endOf(fix.id).outcome, 'ok')
+    assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
+  },
+
+  async 'a halted task ends its open span halted — catches a span left open when the task throws'() {
+    const sg = fakeSwiftgate()
+    await assert.rejects(run(baseArgs({ buildRun: BUILD_RUN, review: 'gate' }), { workers: [red(), null], swiftgate: sg }), /build-worker/)
+    const fix = sg.starts().find(s => s.phase === 'fix')
+    assert.ok(fix, 'no fix span started')
+    assert.equal(sg.endOf(fix.id)?.outcome, 'halted')
+    assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
+  },
+
+  async 'a span call that exits 1 leaves the task outcome unchanged and is logged — catches telemetry failing a task'() {
+    const behave = () => ({
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    const plain = await run(baseArgs(), behave())
+    for (const exit of [() => 1, (n, command) => (command.includes(' end ') ? 1 : 0)]) {
+      const sg = fakeSwiftgate({ exit })
+      const spanned = await run(baseArgs({ buildRun: BUILD_RUN }), { ...behave(), swiftgate: sg })
+      assert.deepEqual(spanned.result, plain.result)
+      assert.ok(sg.agentCalls.length > 0, 'no span call ran')
+      assert.ok(spanned.logs.some(l => /span/.test(l) && /exit 1/.test(l)), `no log names the failed span call: ${spanned.logs.join(' | ')}`)
+    }
+    const thrown = await run(baseArgs({ buildRun: BUILD_RUN }), {
+      ...behave(),
+      swiftgate: { run: () => { throw new Error('span agent died') } },
+    })
+    assert.deepEqual(thrown.result, plain.result)
+  },
+
+  async 'telemetry off stops span calls after the first start — catches an agent spent per stage on a repo that opted out'() {
+    const sg = fakeSwiftgate({ off: true })
+    const { result } = await run(baseArgs({ buildRun: BUILD_RUN }), { swiftgate: sg })
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.equal(sg.agentCalls.length, 1)
+  },
+
+  async 'with no build run no span call runs, and a malformed one throws before any agent — catches a span command built from an unchecked id'() {
+    const { result } = await run(baseArgs())
+    assert.equal(result.outcome, 'ready-to-merge')
+    for (const buildRun of ['', 'x; rm -rf ~', 42]) {
+      const calls = []
+      await assert.rejects(script(baseArgs({ buildRun }), async (p, o) => calls.push(o), () => {}), /^Error: build-task: buildRun /)
+      assert.equal(calls.length, 0)
+    }
+  },
+
   async 'review gate spawns no reviewer and returns review.mode gate — catches a gate-only preset still paying for reviewers'() {
     const { result, reviewerCalls, workerCalls } = await run(baseArgs({ review: 'gate' }))
     assert.equal(reviewerCalls.length, 0)

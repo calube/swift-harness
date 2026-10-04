@@ -61,3 +61,56 @@ follow. Each wave appends a section. Paths use the plan's abbreviations (`D/`, `
 **Open follow-up for wave 2.** Plugin skills, agents and `review.js` still spell `.harness/…`, including the
 `task-status.json` path workers write. `executor-takes-the-brownfield-preset` resolves them through the state
 root.
+
+## Waves 2 and 3
+
+**Runner and outcomes.**
+- `LiveAreaCommandRunner(processRunner:)` runs `/bin/sh` in the area root and kills the process group on timeout.
+- `AreaCommandOutcome.crashed(signal:)` takes `Int32?`.
+- `AreaCommandExpansion.prepare(area:step:repositoryRoot:files:tests:junitPath:deadline:environment:)`.
+- `AreaOutcomeReading.outcome(end:output:junit:)` and `AreaCacheEnvironment.make(area:layout:tree:)`.
+
+**Rules and lint.**
+- `NeutralRules.check(_:added:allow:)` returns `{findings, judgeCandidates, allowances}`; then
+  `NeutralRules.noAssertionFinding(for:)`.
+- `AllowMatching.lineSHA(_:)`. `swiftgate allow` writes through `BrownfieldConfigWriter` (lock `config.lock`), the
+  only config writer.
+- `LintOutputParser.read(_:added:)` returns `{findings, notes}`.
+
+**Prove and baseline.**
+- `BrownfieldProve.run(root:base:config:junitDirectory:dependencies:)` and `ChangedTestIDs`.
+- `BaselineStore(layout:runner:scratch:lock:lockTimeout:).lookupOrRerun(_:base:)` returns a `BaselineVerdict`.
+
+**Discover.**
+- `Discover.propose`, `DiscoverEdit.parse`, `Discover.applying`, `CICommandMining.commands`.
+- Mined and read commands run from the area root.
+- `last.json` is a `DiscoverRecord`. `dirty.json` is `{head, paths}`, and `DirtyFileGuard` reads it.
+
+**Config and hooks.**
+- `ConfigLoader().loadProfile(repositoryRoot:commonDir:)` returns `.owned` or `.brownfield`.
+- `ProjectRoot.locateProfile(from:)`. `HookRunner.brownfieldEvents` covers SessionStart, PreToolUse and Stop; Stop
+  runs `slice`.
+
+**Xcode.**
+- `PBXProject(parsing:)`, `TargetMembership(project:projectPath:).newFileFindings(_:inclusion:)`.
+- `XcodeGenerator(runner:repositoryRoot:layout:).generate(_:) { … }` generates in a scratch tree when the project
+  is tracked.
+
+**Tiers and warm-up.**
+- `BrownfieldSliceCheck` and `BrownfieldMergeCheck.run(root:tier:base:context:dependencies:)` are live.
+- `swiftgate warmup [--areas] [--json]` writes `warmup/<tree>.json`, which both tiers read for build-only decisions.
+
+**Plan, executor and report.**
+- `plan import <slug>` goes through `LivePlanParser`; `plan.json` gains a `livePlan` source with task briefs.
+- In a brownfield clone, `build worktree create` and `build merge` use the plan branch `swift-harness/<slug>`:
+  worktrees in `<plan-dir>/worktrees/<task>` and merges in `<plan-dir>/checkout`.
+- `swiftgate run report <slug>` writes `REPORT.md`.
+- The run skill is `plugin/skills/run/SKILL.md`, with a `brownfield-explorer` agent on `claude-sonnet-5-5`.
+
+**Telemetry.**
+- `events ingest` keeps the last line of a streamed message.
+- `swiftgate events span start|end` prints the span id on stdout; empty stdout means telemetry is off.
+
+**Open.**
+- Brownfield telemetry writes no events until `brownfield-gates-record-and-judge` merges.
+- `prove.result` is recorded for owned repositories only until `brownfield-prove-records-results` merges.
