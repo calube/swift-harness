@@ -69,17 +69,33 @@ public struct TaskWorktree: Sendable, Equatable {
   public init(
     commonDirectory: String, plan: String, task: String, profile: RepositoryProfile = .owned
   ) throws(GitWorkspaceError) {
-    let main = URL(
-      filePath: try Self.mainCheckout(commonDirectory: commonDirectory),
-      directoryHint: .isDirectory)
-    mainCheckout = main.path
-    path =
-      main.deletingLastPathComponent()
-      .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
     branch = "\(plan)/\(task)"
-    baseBranch = Self.base
     self.commonDirectory = commonDirectory
+    switch profile {
+    case .owned:
+      let main = URL(
+        filePath: try Self.mainCheckout(commonDirectory: commonDirectory),
+        directoryHint: .isDirectory)
+      mainCheckout = main.path
+      path =
+        main.deletingLastPathComponent()
+        .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
+      baseBranch = Self.base
+    case .brownfield:
+      let directory: String
+      do throws(PlanStateLayoutError) {
+        directory = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan).directory
+      } catch {
+        throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
+      }
+      mainCheckout = directory + "/" + Self.planCheckoutName
+      path = directory + "/worktrees/" + task
+      baseBranch = BrownfieldRunReport.planBranch(slug: plan)
+    }
   }
+
+  /// A brownfield plan's checkout of its plan branch, inside the plan's directory.
+  public static let planCheckoutName = "checkout"
 
   /// The checkout whose `.git` is `commonDirectory`, the same from every linked worktree.
   /// - Throws: ``GitWorkspaceError/git(_:)`` for a bare repository, which has no main checkout to
@@ -106,6 +122,11 @@ public enum WarmBuild {
     public let missingPackageBuilds: [String]
     /// The DerivedData directory, when it exists.
     public let derivedData: String?
+
+    /// Nothing to clone and nothing missing: what a brownfield worktree gets, since its clone
+    /// configures no packages.
+    public static let nothing = Survey(
+      packageBuilds: [], missingPackageBuilds: [], derivedData: nil)
 
     /// Everything there is to clone.
     public var clonable: [String] { packageBuilds + (derivedData.map { [$0] } ?? []) }

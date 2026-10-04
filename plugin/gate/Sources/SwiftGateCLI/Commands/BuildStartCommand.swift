@@ -181,13 +181,16 @@ struct BuildPresetCatalog: Sendable, Equatable {
   /// The profile of the repository holding `root`, decided as ``load(root:git:)`` decides it: by
   /// which config file exists, without parsing either.
   static func profile(root: URL) -> RepositoryProfile {
-    .owned
+    switch StateRootResolver.resolve(worktree: root) {
+    case .tree: .owned
+    case .gitDir: .brownfield
+    }
   }
 
   /// An owned repository's `.swiftgate.toml`, or a brownfield clone's `config.toml` under the git
   /// common dir, chosen as ``StateRootResolver`` chooses the state root.
   static func load(root: URL, git: any Git) async throws(BuildLoopError) -> Self {
-    guard case .gitDir = StateRootResolver.resolve(worktree: root) else {
+    guard profile(root: root) == .brownfield else {
       do {
         return .owned(try ConfigLoader().load(repositoryRoot: root)?.buildPresets ?? [:])
       } catch {

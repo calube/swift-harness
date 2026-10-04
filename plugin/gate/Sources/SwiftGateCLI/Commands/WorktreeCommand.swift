@@ -85,17 +85,26 @@ enum WorktreeRun {
   ) async -> WorktreeReport {
     let command = "worktree create"
     let context: HeldTask
-    switch await HeldTask.resolve(command, slug: slug, task: task, session: session, git: git) {
+    switch await HeldTask.resolve(
+      command, slug: slug, task: task, session: session, git: git, profile: profile)
+    {
     case .success(let resolved): context = resolved
     case .failure(let refusal): return refusal.report
     }
     let names = context.names
     let report = Reporter(command: command, slug: slug, task: task, names: names)
 
+    // A brownfield clone has no `.swiftgate.toml` naming packages, so there's no warm build to
+    // clone; each area's own build warms the worktree.
     let survey: WarmBuild.Survey
-    switch surveyWarmBuild(mainCheckout: names.mainCheckout) {
-    case .success(let found): survey = found
-    case .failure(let problem): return report.blocked(problem.message)
+    switch profile {
+    case .owned:
+      switch surveyWarmBuild(mainCheckout: names.mainCheckout) {
+      case .success(let found): survey = found
+      case .failure(let problem): return report.blocked(problem.message)
+      }
+    case .brownfield:
+      survey = .nothing
     }
     if FileManager.default.fileExists(atPath: names.path) {
       return report.refused("\(names.path) already exists; remove it or pick another task")
@@ -105,7 +114,7 @@ enum WorktreeRun {
         return report.refused("branch \(names.branch) already exists")
       }
       try await workspace.addWorktree(
-        at: names.path, branch: names.branch, from: TaskWorktree.base)
+        at: names.path, branch: names.branch, from: names.baseBranch)
     } catch {
       return report.blocked("\(error)")
     }
@@ -178,7 +187,9 @@ enum WorktreeRun {
   ) async -> WorktreeReport {
     let command = "worktree remove"
     let context: HeldTask
-    switch await HeldTask.resolve(command, slug: slug, task: task, session: session, git: git) {
+    switch await HeldTask.resolve(
+      command, slug: slug, task: task, session: session, git: git, profile: profile)
+    {
     case .success(let resolved): context = resolved
     case .failure(let refusal): return refusal.report
     }
@@ -187,7 +198,8 @@ enum WorktreeRun {
       // The fix worktree `build merge` cuts for this task, named the way it names it.
       do {
         names = try TaskWorktree(
-          commonDirectory: try await git.commonDirectory(), plan: slug, task: "fix-\(task)")
+          commonDirectory: try await git.commonDirectory(), plan: slug, task: "fix-\(task)",
+          profile: profile)
       } catch {
         return Reporter(command: command, slug: slug, task: task, names: nil).blocked(
           "\(error)")
@@ -202,9 +214,9 @@ enum WorktreeRun {
       guard try await workspace.branchExists(names.branch) else {
         return report.refused("branch \(names.branch) doesn't exist")
       }
-      guard try await workspace.isMerged(names.branch, into: TaskWorktree.base) else {
+      guard try await workspace.isMerged(names.branch, into: names.baseBranch) else {
         return report.refused(
-          "branch \(names.branch) isn't merged into \(TaskWorktree.base); merge it first")
+          "branch \(names.branch) isn't merged into \(names.baseBranch); merge it first")
       }
       if FileManager.default.fileExists(atPath: names.path) {
         keeping = keepRuns(of: names)
@@ -243,8 +255,7 @@ enum WorktreeRun {
     } catch {
       let reason = "\(error)"
       // The judge's audit trail must outlive the worktree, so its events move whole instead.
-      let common = URL(filePath: names.mainCheckout, directoryHint: .isDirectory)
-        .appending(path: ".git", directoryHint: .isDirectory)
+      let common = URL(filePath: names.commonDirectory, directoryHint: .isDirectory)
       do throws(EventCopyUpError) {
         let moved = try copyUp.moveAside(commonDirectory: common)
         return KeptEvents(
@@ -362,7 +373,8 @@ private struct HeldTask {
   let names: TaskWorktree
 
   static func resolve(
-    _ command: String, slug: String, task: String, session: String?, git: any Git
+    _ command: String, slug: String, task: String, session: String?, git: any Git,
+    profile: RepositoryProfile
   ) async -> Result<HeldTask, Refusal> {
     let report = Reporter(command: command, slug: slug, task: task, names: nil)
     guard let session else {
@@ -389,7 +401,7 @@ private struct HeldTask {
       return .failure(Refusal(report: report.blocked("invalid plan name `\(slug)`: \(error)")))
     }
     do throws(GitWorkspaceError) {
-      names = try TaskWorktree(commonDirectory: common, plan: slug, task: task)
+      names = try TaskWorktree(commonDirectory: common, plan: slug, task: task, profile: profile)
     } catch {
       return .failure(Refusal(report: report.blocked("\(error)")))
     }
@@ -505,7 +517,10 @@ struct WorktreeCreateCommand: AsyncParsableCommand {
     discussion:
       "Adds ../<repo>-<plan>-<task> beside the main checkout on branch <plan>/<task> from main, "
       + "APFS-clones every configured package's .build and the DerivedData under .harness/, "
-      + "deletes each cloned module cache, and sets the task's branch in the ledger. Exits 0 when "
+      + "deletes each cloned module cache, and sets the task's branch in the ledger. In a "
+      + "brownfield clone it adds <git-common-dir>/swift-harness/plans/<plan>/worktrees/<task> "
+      + "on <plan>/<task> from the plan branch swift-harness/<plan> instead, and clones nothing. "
+      + "Exits 0 when "
       + "created; 1 when this session doesn't hold the plan's lock, the task isn't in the ledger, "
       + "or the worktree path or branch exists; 2 for a missing flag, an unreadable ledger or "
       + "config, or a failed git or clone step (the new worktree and branch are then removed).")
@@ -527,7 +542,8 @@ struct WorktreeCreateCommand: AsyncParsableCommand {
     let report = await WorktreeRun.create(
       slug: plan, task: task, session: session,
       git: LiveGit(runner: runner, repositoryRoot: root),
-      workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root))
+      workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root),
+      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)))
     Console.write(WorktreeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
@@ -562,7 +578,8 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
       + "events/ to the main checkout's events/imported/<storeID>/; when that copy fails, moves "
       + "them to events/unkept/<storeID>/ (or the git common dir's "
       + "swift-harness/unkept-events/<storeID>/), naming any it couldn't keep. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
-      + "the ledger, or its branch is missing or not merged into main; 2 for a missing flag or a "
+      + "the ledger, or its branch is missing or not merged into main (the plan branch in a "
+      + "brownfield clone); 2 for a missing flag or a "
       + "failed git step, such as a worktree with uncommitted changes.")
 
   @Argument(help: "The plan's slug.")
@@ -588,7 +605,8 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
     let report = await WorktreeRun.remove(
       slug: plan, task: task, fix: fix, session: session,
       git: LiveGit(runner: runner, repositoryRoot: root),
-      workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root))
+      workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root),
+      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)))
     Console.write(WorktreeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

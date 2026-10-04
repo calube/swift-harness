@@ -56,7 +56,7 @@ enum BuildCheckReturnRun {
     do throws(Blocked) {
       var warnings: [String] = []
       let evidence = try await gather(
-        taskReturn, plan: plan, fix: fix, git: git, warnings: &warnings)
+        taskReturn, plan: plan, fix: fix, git: git, profile: profile, warnings: &warnings)
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       return BuildCheckReturnReport(
         command: command, plan: plan, task: taskReturn.task,
@@ -71,7 +71,7 @@ enum BuildCheckReturnRun {
 
   private static func gather(
     _ taskReturn: TaskReturn, plan slug: String, fix: Bool, git: any Git,
-    warnings: inout [String]
+    profile: RepositoryProfile, warnings: inout [String]
   ) async throws(Blocked) -> TaskReturnEvidence {
     let store: PlanStateStore
     do throws(PlanStateStoreError) {
@@ -94,7 +94,7 @@ enum BuildCheckReturnRun {
     do {
       names = try TaskWorktree(
         commonDirectory: try await git.commonDirectory(), plan: slug,
-        task: fix ? "fix-\(task.id)" : task.id)
+        task: fix ? "fix-\(task.id)" : task.id, profile: profile)
     } catch {
       throw Blocked("can't name task `\(task.id)`'s worktree: \(error)")
     }
@@ -468,7 +468,8 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let report = await BuildCheckReturnRun.run(file: file, plan: plan, fix: fix, git: git)
+    let report = await BuildCheckReturnRun.run(
+      file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root))
     Console.write(BuildCheckReturnRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
