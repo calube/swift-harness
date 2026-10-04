@@ -14,7 +14,11 @@ public struct RunViewReader: RunViewReading {
     self.stateRoot = stateRoot
   }
 
+  /// Until the stores are read, every run reads as damage, so an empty view never passes for a
+  /// run with no events.
   public func read(buildRun: String) throws -> RunViewInput {
-    RunViewInput(buildRun: buildRun)
+    RunViewInput(
+      buildRun: buildRun,
+      damage: [RunView.Damage(source: buildRun, reason: "the run's stores aren't read yet")])
   }
 }
