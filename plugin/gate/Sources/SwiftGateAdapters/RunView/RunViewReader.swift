@@ -194,6 +194,9 @@ public struct RunViewReader: RunViewReading {
       state.requirements = document.requirements.map {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
+    case .livePlan:
+      // A live plan has tasks and assumptions but no requirement list to show.
+      break
     }
     return state
   }
