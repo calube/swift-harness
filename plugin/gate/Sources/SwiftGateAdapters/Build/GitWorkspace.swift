@@ -82,20 +82,28 @@ public struct TaskWorktree: Sendable, Equatable {
         .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
       baseBranch = Self.base
     case .brownfield:
-      let directory: String
-      do throws(PlanStateLayoutError) {
-        directory = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan).directory
-      } catch {
-        throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
-      }
-      mainCheckout = directory + "/" + Self.planCheckoutName
-      path = directory + "/worktrees/" + task
+      mainCheckout = try Self.planCheckout(commonDirectory: commonDirectory, plan: plan)
+      path = URL(filePath: mainCheckout).deletingLastPathComponent().path + "/worktrees/" + task
       baseBranch = BrownfieldRunReport.planBranch(slug: plan)
     }
   }
 
-  /// A brownfield plan's checkout of its plan branch, inside the plan's directory.
-  public static let planCheckoutName = "checkout"
+  /// A brownfield plan's checkout of its plan branch: where the orchestrator commits the
+  /// contract, `build merge` lands each task and the `merge` and `final` gates run. Every caller
+  /// that creates, finds or removes that checkout names it through this function.
+  /// - Throws: ``GitWorkspaceError/git(_:)`` for a plan name that isn't 1 path component, or a
+  ///   `commonDirectory` that isn't absolute.
+  public static func planCheckout(commonDirectory: String, plan: String)
+    throws(GitWorkspaceError) -> String
+  {
+    let directory: String
+    do throws(PlanStateLayoutError) {
+      directory = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan).directory
+    } catch {
+      throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
+    }
+    return directory + "/checkout"
+  }
 
   /// The checkout whose `.git` is `commonDirectory`, the same from every linked worktree.
   /// - Throws: ``GitWorkspaceError/git(_:)`` for a bare repository, which has no main checkout to
