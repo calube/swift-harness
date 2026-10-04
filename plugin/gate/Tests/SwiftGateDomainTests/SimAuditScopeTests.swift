@@ -90,23 +90,23 @@ struct SimAuditScopeTests {
   }
 
   @Test(
-    "a targeted control missing an identifier is RED: the trial flow's role=button label=\"Settings\" selects the tab bar's Settings button in every step, while the back button it also matches carries one — catches a targeted audit that drops sim.a11y-identifier"
+    "a control the flow only navigates through doesn't gate: role=button label=\"Settings\" reaches the tab bar's Settings button, missing an identifier in every step, and its 5 findings join the nit, counted apart — catches existing UI gating the change"
   )
-  func targetedControlWithoutIdentifierIsRed() throws {
+  func navigatedControlJoinsTheNit() throws {
     let report = try Self.judged(try Self.targeted([#"role=button label=\"Settings\""#]))
-    #expect(report.findings.map(\.rule) == Array(repeating: .a11yIdentifier, count: 5))
-    #expect(report.findings.map(\.step) == [1, 2, 3, 4, 5])
+    #expect(report.findings.isEmpty, "\(report.findings.map(\.message))")
+    #expect(report.verdict == .green)
+    #expect(report.notes.map(\.rule) == [SimAuditScope.untargetedRuleID])
+    #expect(report.notes.first?.message.hasPrefix("183 ") == true, "\(report.notes)")
     #expect(
-      report.findings.allSatisfy {
-        $0.message.hasSuffix("Button \"Settings\" has no accessibility identifier")
-      })
-    #expect(report.verdict == .red)
+      report.notes.first?.message.contains("5 on controls the flow only navigates through")
+        == true, "\(report.notes)")
   }
 
   @Test(
-    "the trial's own flow file narrows the audit to the Settings tab and the new switch: 9 findings, and the other 174 as the nit — catches selectors missed inside a press target or a scroll's until"
+    "the trial's own flow file gates only the new switch it names by id: its 4 missing labels, while the Settings tab button it presses gates nothing and its 5 findings join the nit — catches row 1 RED on the tab bar"
   )
-  func trialFlowFileTargetsWhatItTouches() throws {
+  func trialFlowFileGatesOnlyItsContract() throws {
     let steps = try FlowSteps.parse(try Self.file("flow.json"))
     let audit = SimAuditScope.scope(profile: .brownfield, flowSteps: steps)
     guard case .targeted(let selectors) = audit else {
@@ -120,9 +120,34 @@ struct SimAuditScopeTests {
         #"id="\#(Self.newSwitch)" value="0""#,
       ])
     let report = try Self.judged(audit)
-    #expect(report.findings.filter { $0.rule == .a11yIdentifier }.count == 5)
-    #expect(report.findings.filter { $0.rule == .a11yLabel }.count == 4)
-    #expect(report.notes.first?.message.hasPrefix("174 ") == true, "\(report.notes)")
+    #expect(!report.findings.contains { $0.message.contains(#"Button "Settings""#) })
+    #expect(report.findings.map(\.rule) == Array(repeating: .a11yLabel, count: 4))
+    #expect(report.findings.allSatisfy { $0.message.contains("Switch \(Self.newSwitch)") })
+    #expect(report.verdict == .red)
+    #expect(report.notes.first?.message.hasPrefix("179 ") == true, "\(report.notes)")
+    #expect(
+      report.notes.first?.message.contains("5 on controls the flow only navigates through")
+        == true, "\(report.notes)")
+  }
+
+  @Test(
+    "a control a flow selects by id gates even when a label selector also reaches it, in 1 alternative or 2 selectors, while the label selector alone only navigates — catches a label term letting a contract control off"
+  )
+  func idSelectedControlGatesWhateverElseSelectsIt() throws {
+    let step = try #require(try Self.evidence().steps.first)
+    let tree = SimTree(
+      roots: [Self.element(.switch, identifier: "a.b", label: "a.b")], isTruncated: false)
+    func audited(_ selectors: [String]) throws -> (Int, Int, Int) {
+      let found = SimAccessibilityRules.audit(
+        tree, step: step,
+        scope: .targeted(try selectors.map { try #require(SimSelector.parse($0)) }))
+      return (found.findings.count, found.untargeted, found.navigated)
+    }
+    #expect(try audited([#"id="a.b" label="a.b""#]) == (1, 0, 0))
+    #expect(try audited([#"label="a.b""#, #"id="a.b""#]) == (1, 0, 0))
+    #expect(try audited([#"label="a.b" || id="a.b""#]) == (1, 0, 0))
+    #expect(try audited([#"label="a.b""#]) == (0, 0, 1))
+    #expect(try audited([#"label=other"#]) == (0, 1, 0))
   }
 
   @Test(

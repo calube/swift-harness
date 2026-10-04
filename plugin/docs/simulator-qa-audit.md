@@ -19,14 +19,18 @@ An owned repository (a committed `.swiftgate.toml`) judges every control on ever
 or without one.
 
 A brownfield clone inherits controls the change never touched, so a whole-screen audit would make
-every flow RED. There, `qa run` judges only the controls its flow file's selectors match: each
-`id=`, `role=`, `label=`, `value=` or `text=` selector in a step's input, outside what a step types
-or compares. Matching follows the pinned `agent-device`: trimmed, case-folded, `||` between
-alternatives. A control the flow presses or waits on is still held to both rules, so a tab the
-flow taps that has no identifier is RED.
+every flow RED. There, `qa run` judges only the controls its flow file names by `id=`: the
+identifiers the change's contract gives its new controls. Selectors come from a step's input,
+outside what a step types or compares. Matching follows the pinned `agent-device`: trimmed,
+case-folded, `||` between alternatives. A control is judged when an alternative holding an `id=`
+term matches it, even if a `label=` selector reaches it too.
 
-Every finding left out becomes 1 `sim.a11y-untargeted` nit that gives the count, such as "174
-findings on controls no flow step selects". A standalone `sim verify` in a brownfield clone has no
+A control the flow reaches only by `role=`, `label=`, `value=` or `text=` is existing UI it
+navigates through, such as a tab it taps by its title. Its findings don't gate.
+
+Every finding left out becomes 1 `sim.a11y-untargeted` nit that gives the count, with the
+navigated ones counted apart, such as "179 findings on controls no flow step selects by id (5 on
+controls the flow only navigates through)". A standalone `sim verify` in a brownfield clone has no
 flow, so it judges no control, and its nit says why.
 
 The nit never changes the verdict. `sim/report.json` lists it under `notes` as `{rule, message}`,
