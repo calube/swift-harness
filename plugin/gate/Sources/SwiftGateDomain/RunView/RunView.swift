@@ -198,6 +198,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     case fix
     case final
     case ship
+    /// 1 validation row's check in 1 `qa run`, derived from `qa.check`.
+    case qaCheck = "qa.check"
   }
 
   /// The tool calls attributed to 1 span.
@@ -398,12 +400,15 @@ public struct RunView: Sendable, Equatable, Encodable {
   public var gates: [Gate]
   public var proofs: [Proof]
   public var halts: [Halt]
+  /// What the run's validation rows showed; `nil` when no `qa run` checked a row of the plan
+  /// during the run.
+  public var validation: RunViewValidation?
   public var damage: [Damage]
 
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
     spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [], halts: [Halt] = [],
-    damage: [Damage] = []
+    validation: RunViewValidation? = nil, damage: [Damage] = []
   ) {
     self.cursor = cursor
     self.run = run
@@ -414,11 +419,13 @@ public struct RunView: Sendable, Equatable, Encodable {
     self.gates = gates
     self.proofs = proofs
     self.halts = halts
+    self.validation = validation
     self.damage = damage
   }
 
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, damage
+    case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, validation
+    case damage
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -433,6 +440,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(gates, forKey: .gates)
     try c.encode(proofs, forKey: .proofs)
     try c.encode(halts, forKey: .halts)
+    try c.encode(validation, forKey: .validation)
     try c.encode(damage, forKey: .damage)
   }
 }
