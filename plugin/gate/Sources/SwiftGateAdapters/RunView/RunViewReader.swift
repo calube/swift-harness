@@ -29,7 +29,7 @@ public struct RunViewReader: RunViewReading {
     var ledger: Ledger?
     var requirements: [RunViewRequirement] = []
     if let join {
-      let plan = planState(join.plan, damage: &damage)
+      let plan = try planState(join.plan, damage: &damage)
       ledger = plan.ledger
       requirements = plan.requirements
     }
@@ -142,22 +142,13 @@ public struct RunViewReader: RunViewReading {
     var requirements: [RunViewRequirement] = []
   }
 
-  private func planState(_ plan: String, damage: inout [RunView.Damage]) -> PlanState {
+  /// - Throws: ``PlanStateLayoutError`` for a relative common dir, a caller's mistake.
+  private func planState(_ plan: String, damage: inout [RunView.Damage]) throws -> PlanState {
     var state = PlanState()
-    let paths: PlanStateLayout.Plan
-    do {
-      paths = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan)
-    } catch {
-      damage.append(RunView.Damage(source: plan, reason: "no plan state path: \(error)"))
-      return state
-    }
-    if let data = read(paths.ledgerFile, damage: &damage) {
-      do {
-        state.ledger = try LedgerJSON.decode(data)
-      } catch {
-        damage.append(RunView.Damage(source: display(paths.ledgerFile), reason: "\(error)"))
-      }
-    }
+    let paths = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan)
+    // The build join reads the same file and already names it when it's missing or undecodable.
+    state.ledger = (try? Data(contentsOf: URL(filePath: paths.ledgerFile)))
+      .flatMap { try? LedgerJSON.decode($0) }
     guard let data = read(paths.planFile, damage: &damage) else { return state }
     let file: PlanFile
     do {
@@ -213,13 +204,11 @@ public struct RunViewReader: RunViewReading {
   {
     do {
       return try Data(contentsOf: URL(filePath: path))
-    } catch CocoaError.fileReadNoSuchFile {
-      damage.append(RunView.Damage(source: source ?? display(path), reason: "missing"))
     } catch {
       damage.append(
         RunView.Damage(source: source ?? display(path), reason: error.localizedDescription))
+      return nil
     }
-    return nil
   }
 
   /// `path`, under the common dir, relative to it.
