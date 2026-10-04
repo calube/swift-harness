@@ -33,11 +33,13 @@ validation.json; with none it is GREEN with a note, and with several it exits 2 
 runs once every `Runs after` task is `done` in the ledger, the `--after` task counting as merged;
 `--after` keeps only the rows that name it, and a row with an unmerged task reads `waiting`.
 
-Rows run in the current checkout in layer order, acceptance, then flow, then state, and a layer with
-a red row leaves every later layer's rows `unverified`. A requirement's state rows run straight after
+Rows run in the current checkout in layer order, acceptance, then flow, then state. A red row
+leaves its own requirement's later-layer rows `unverified`; other requirements' rows still run. A requirement's state rows run straight after
 its last flow row, on that flow's device. An acceptance or state check is a shell command run by
 `/bin/sh -c`, or a file under the plan's state directory such as `qa/<name>.state.sh`, run as its own
-program when executable and by `/bin/sh` otherwise. Each gets `QA_PORT`, a loopback port the OS
+program when executable and by `/bin/sh` otherwise. An acceptance check `test: <id>` (or
+`test <area>: <id>`) runs the area's test command narrowed to that test: `-only-testing:<id>` for
+an `xcode` area, `test_files` with `{tests}` or `{files}` otherwise. Each gets `QA_PORT`, a loopback port the OS
 assigned that run, `QA_DIR`, the plan's `qa/` folder, and `QA_EVIDENCE_DIR`, the run's `qa/` folder.
 
 Exit 0 is `pass`; any other exit, a signal or the 10-minute timeout is `red`; a check that couldn't

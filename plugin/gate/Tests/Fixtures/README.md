@@ -371,6 +371,30 @@ Observed behavior the runner relies on:
   `details.step` and `details.command`, and the steps before it under
   `details.partialResults`, each with its `data`.
 
+### AgentDevice/covered
+
+A batch that stops on a failure reason the 3 original cases didn't name, captured on 2026-10-04
+with `agent-device` 0.21.18 on a clone `swiftgate sim up` made from the configured iPhone 17
+(iOS 26.2). The iOS validation trial's second attempt on `Aidoku/Aidoku`
+(`evals/results/2026-10-04-brownfield-ios-validation-2/`, finding 4) hit it pressing a SwiftUI
+toggle whose label is hidden, but kept no batch output. The capture repeats that shape on
+`examples/SampleApp` with `change.diff` applied: 1 such toggle, `id="counter.confirm"`. From the
+repository root:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/covered/capture.sh plugin/bin/swiftgate
+```
+
+The script applies `change.diff`, runs `sim up --json` in `examples/SampleApp`, runs the batch
+with `--udid` and `--session` from its output, and on exit runs `sim down` and reverts the diff.
+`press-switch.flow.json` is the flow as a validation worker writes it, and
+`press-switch.steps.json` the batch `qa run` drives from it, its screenshot paths under
+`/SCRATCH`. The outputs are scrubbed as in `AgentDevice/batch`.
+
+| Files | Batch |
+|---|---|
+| `press-switch.{steps.json,stdout,stderr,status}` | wait for the counter, then press the toggle by its id: step 5, the `press`, exits 1 with `COMMAND_FAILED`, `details.reason` `covered_by_interactive_descendants`, `details.step` 5 and the 4 steps before it under `details.partialResults` |
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -2467,6 +2491,22 @@ The `sed` replaces the trial clone's parent folder in each `sim up` message with
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation`
 matched nothing.
 
+## qa run: a state row behind another requirement's red flow
+
+`QA/aidoku-validation-2/` holds what the iOS validation trial's second attempt on `Aidoku/Aidoku`
+left (`evals/results/2026-10-04-brownfield-ios-validation-2/`, finding 3). `validation.json` is
+the plan's table: a flow row for `req-setting`, then a flow row and a state row for `req-stored`.
+`after-report.json` is `qa run --after download-setting`'s report: row 1 red, row 2 unverified,
+and row 3 unverified behind row 1. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2 F=plugin/gate/Tests/Fixtures/QA/aidoku-validation-2
+mkdir -p $F && cp $S/validation.json $F/validation.json
+cp $S/qa-runs/20261004T222811Z-0be8aeb0/report.json $F/after-report.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-2` matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
@@ -2747,6 +2787,46 @@ cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
 matched nothing.
+
+## Brownfield trial: an iOS plan whose acceptance row names a source file
+
+`BrownfieldTrial/aidoku-validation-2-PLAN.md` is the `PLAN.md` the orchestrator first wrote in
+the second iOS validation trial on `Aidoku/Aidoku` (finding 2): its `req-check` acceptance row's
+`Check` is the test file `AidokuTests/LargeDownloadConfirmationTests.swift`, which `plan import`
+accepted and `qa run` then ran as a shell command. `Hooks/aidoku-validation-2-orchestrator-bash.json`
+holds the 1 Bash call `guard.raw-xcodebuild` denied in that run: a `python3 - <<'EOF'` script that
+only rewrote that row in `PLAN.md`, with the denial text. `H` is the harness checkout the trial
+ran and `C` the clone. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2 F=plugin/gate/Tests/Fixtures H=… C=… python3 - <<'PY'
+import json, os
+S, F, H, C = (os.environ[k] for k in ("S", "F", "H", "C"))
+uses, denied, plan = {}, [], None
+for line in open(f"{S}/run.jsonl"):
+    entry = json.loads(line)
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list): continue
+    for block in content:
+        if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            command = block["input"]["command"]
+            uses[block["id"]] = command
+            if plan is None and "| req-check | acceptance |" in command and command.startswith("cat <<'EOF' >"):
+                plan = command.split("\n", 1)[1].rsplit("\nEOF", 1)[0] + "\n"
+        if block.get("type") == "tool_result" and block.get("tool_use_id") in uses:
+            text = block.get("content")
+            text = text if isinstance(text, str) else json.dumps(text)
+            if "guard.raw-xcodebuild" in text:
+                denied.append({"command": uses[block["tool_use_id"]], "denial": text})
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+open(f"{F}/Hooks/aidoku-validation-2-orchestrator-bash.json", "w").write(
+    scrub(json.dumps(denied, indent=2, ensure_ascii=False) + "\n"))
+open(f"{F}/BrownfieldTrial/aidoku-validation-2-PLAN.md", "w").write(scrub(plan))
+PY
+```
+
+The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
+both files matched nothing.
 
 ## Brownfield trial: a flow row's sim run on an iOS clone
 

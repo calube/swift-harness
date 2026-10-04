@@ -145,6 +145,30 @@ export function workerProblems(text) {
   return problems
 }
 
+/**
+ * Where a validation worker's red run falls short of the judge `qa run` uses after the merge: its
+ * `## Record why each check fails now` section runs a flow through `sim up`, `sim snap`, `sim down`
+ * and `sim verify`, in that order, takes the red run from `sim verify`, and never counts a raw
+ * `agent-device batch` result as one. A worker that read its red from the batch alone first saw the
+ * audit and press failures only after its tasks merged.
+ */
+export function redRunProblems(text) {
+  const section_ = section(text, 'Record why each check fails now')
+  if (!section_) return ['the brief has no `## Record why each check fails now` section']
+  const problems = []
+  const steps = simStepLines(section_)
+  const order = ['up', 'snap', 'down', 'verify']
+  for (const step of order) if (!(step in steps)) problems.push(`the red run never runs \`sim ${step}\``)
+  const present = order.filter(step => step in steps)
+  for (let i = 1; i < present.length; i++) {
+    if (steps[present[i]] < steps[present[i - 1]]) problems.push(`the red run's \`sim ${present[i]}\` comes before \`sim ${present[i - 1]}\``)
+  }
+  const prose = flat(section_)
+  if (!/red run is `sim verify`'s/.test(prose)) problems.push('the red run is never `sim verify`\'s verdict')
+  if (!/batch[^.]*\bnever a red run\b/i.test(prose)) problems.push('the brief never says a batch\'s output alone is not a red run')
+  return problems
+}
+
 // Words a generic skill never carries: every template preset but `default`, every captured spec
 // page's title, and the example app's name.
 function nonGenericWords() {
@@ -255,6 +279,24 @@ const tests = {
       'the brief never says `qa run --at-base` confirms the red run',
     ])
     assert.deepEqual(workerProblems('# Brief\n'), ['the brief has no `## Write set` section'])
+  },
+
+  'the validation worker records each flow\'s red run through sim up, snap, down and verify, and takes it from sim verify, never a raw batch — catches a pre-merge red the post-merge judge disagrees with'() {
+    assert.deepEqual(redRunProblems(read(WORKER)), [])
+  },
+
+  'the red-run check names a batch-only red run, a verify before down and a missing section — catches a check that passes anything'() {
+    const text = ['# Brief', '', '## Record why each check fails now', '', '```bash',
+      '"$SG" sim up --json', 'agent-device batch --steps-file f --udid <udid> --session <session> --json',
+      '"$SG" sim verify <runID> --json', '"$SG" sim down <runID> --json', '```', '',
+      'Record the failing step\'s number and message from the batch output.', '', '## Return', ''].join('\n')
+    assert.deepEqual(redRunProblems(text), [
+      'the red run never runs `sim snap`',
+      'the red run\'s `sim verify` comes before `sim down`',
+      'the red run is never `sim verify`\'s verdict',
+      'the brief never says a batch\'s output alone is not a red run',
+    ])
+    assert.deepEqual(redRunProblems('# Brief\n'), ['the brief has no `## Record why each check fails now` section'])
   },
 
   'the QA skill is a plugin skill named qa whose text names no preset, captured page or example app — catches a skill tuned to one app'() {

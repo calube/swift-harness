@@ -155,6 +155,40 @@ struct QARunFlowTests {
   }
 
   @Test(
+    "the captured press on a switch its own UISwitch covers is red at step 2 `press`, and the row keeps batch.json as printed and a flow.json that marks step 2 failed — catches a failure reason swiftgate has no name for read as unverified, with its output lost and step 1 blamed"
+  )
+  func coveredPressIsRedAtItsStep() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    let directory = "AgentDevice/covered"
+    try Self.plan(repo, flow: "\(directory)/press-switch.flow.json")
+    let simulator = try FakeFlowSimulator(
+      batch: "press-switch", head: try await repo.git("rev-parse", "HEAD"),
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: Self.marker(repo),
+      agentDevice: LiveAgentDevice(
+        runner: try CapturedBatch.runner("press-switch", directory: directory)))
+
+    let report = await Self.run(repo, simulator)
+
+    let flow = try #require(report.rows.first { $0.layer == .flow })
+    #expect(flow.result == .red, "\(flow.message)")
+    #expect(flow.message.hasPrefix("step 2 `press` failed"), "\(flow.message)")
+    let run = try repo.runDirectory(report)
+    let batchPath = try #require(
+      flow.evidence.first { $0.hasSuffix("/\(BatchFlowRunner.outputFileName)") })
+    #expect(
+      try Data(contentsOf: run.appending(path: batchPath))
+        == (try Fixture.data("\(directory)/press-switch.stdout")))
+    let recordPath = try #require(flow.evidence.first { $0.hasSuffix(QAFlowRecord.fileName) })
+    let record = try JSONDecoder().decode(
+      QAFlowRecord.self, from: Data(contentsOf: run.appending(path: recordPath)))
+    #expect(record.steps.map(\.n) == [1, 2])
+    #expect(record.steps.map(\.ok) == [true, false])
+    #expect(!FileManager.default.fileExists(atPath: Self.marker(repo).path))
+  }
+
+  @Test(
     "the captured passing batch with sim verify GREEN passes, its state row runs while the device is still held, then sim down, then sim verify, and the flow leaves its qa.flow record — catches a state check that reads a device already deleted, or a verify that misses the crash reports sim down collects"
   )
   func passingBatchRunsStateOnDevice() async throws {

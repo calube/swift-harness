@@ -30,9 +30,11 @@ struct BatchFlowRunnerTests {
       ).encoded().write(to: sim.appending(path: SimSession.fileName))
     }
 
-    func run(_ runner: FakeProcessRunner) async -> BatchFlowOutcome {
+    func run(_ runner: FakeProcessRunner, flow: String = "QA/counter.flow.json") async
+      -> BatchFlowOutcome
+    {
       await BatchFlowRunner(agentDevice: LiveAgentDevice(runner: runner)).run(
-        stepsFile: Fixture.directory.appending(path: "QA/counter.flow.json"), on: target,
+        stepsFile: Fixture.directory.appending(path: flow), on: target,
         store: store, flowDirectory: flowDirectory)
     }
   }
@@ -149,5 +151,33 @@ struct BatchFlowRunnerTests {
     }
     #expect(why.contains("not installed"))
     #expect(try run.store.steps().isEmpty)
+    #expect(unstarted.record.steps.isEmpty)
+    #expect(unstarted.files.map(\.lastPathComponent) == [BatchFlowRunner.stepsFileName])
+  }
+
+  @Test(
+    "the captured press on a switch its own UISwitch covers stops at the flow file's step 2 `press`, keeps the batch output as printed, and marks step 2 failed, not step 1 — catches a failure reason swiftgate has no name for losing the output and blaming the first step"
+  )
+  func coveredPressNamesStep() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+    let directory = "AgentDevice/covered"
+
+    let outcome = await run.run(
+      try CapturedBatch.runner("press-switch", directory: directory),
+      flow: "\(directory)/press-switch.flow.json")
+
+    guard case .flow(let stop, let message)? = outcome.stop else {
+      Issue.record("expected a flow stop, got \(String(describing: outcome.stop))")
+      return
+    }
+    #expect(stop == .step(n: 2, command: "press"))
+    #expect(message.contains("interactive descendants"), "\(message)")
+    #expect(outcome.record.steps.map(\.n) == [1, 2])
+    #expect(outcome.record.steps.map(\.ok) == [true, false])
+    #expect(try run.store.steps().map(\.n) == [1])
+    #expect(
+      try Data(contentsOf: run.flowDirectory.appending(path: BatchFlowRunner.outputFileName))
+        == (try Fixture.data("\(directory)/press-switch.stdout")))
   }
 }

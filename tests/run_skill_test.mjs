@@ -138,6 +138,59 @@ function cutoffBullet(text) {
   return next < 0 ? rest : rest.slice(0, next)
 }
 
+/** The bullet of `text` that starts at `marker`, up to the next bullet at its indent. */
+function bulletAt(text, marker) {
+  const start = text.indexOf(marker)
+  if (start < 0) return null
+  const lineStart = text.lastIndexOf('\n', start) + 1
+  const indent = /^\s*/.exec(text.slice(lineStart))[0]
+  const rest = text.slice(start)
+  const next = rest.search(new RegExp(`\\n${indent}- `))
+  return next < 0 ? rest : rest.slice(0, next)
+}
+
+/** Every way `text` lets a validation task's checks reach a merge with no red run behind them:
+ * no `qa run --at-base` after `qa adopt`, an at-base run that reads as optional, or a task its
+ * rows wait for that may merge before it. */
+export function atBaseProblems(text) {
+  const calls = extractInvocations(text)
+  const adopt = calls.find(inv => inv.words.join(' ').startsWith('qa adopt'))
+  if (!adopt) return ['never runs `swiftgate qa adopt`']
+  const problems = []
+  const atBase = calls.find(inv => inv.words[0] === 'qa' && inv.words[1] === 'run' && inv.words.includes('--at-base'))
+  if (!atBase) problems.push('never runs `swiftgate qa run --at-base`')
+  else if (atBase.line < adopt.line) problems.push('runs `qa run --at-base` before `qa adopt`')
+  const prose = text.replace(/\s+/g, ' ')
+  if (!/`--at-base` run is never skipped/.test(prose)) problems.push('never says the `--at-base` run is never skipped')
+  if (!/no task[^.]*`Runs after`[^.]*merges before/.test(prose)) {
+    problems.push('lets a task a row\'s `Runs after` names merge before the `--at-base` run')
+  }
+  return problems
+}
+
+/** Every way the `qa run --after` step `text` lets a RED validation row stand: no recorded
+ * `gate-red` halt, no undo, no fixer, or a merge kept on judgement without `--at-base` evidence. */
+export function validationRedProblems(text) {
+  if (!text) return ['no step runs `qa run --after`']
+  const problems = []
+  const calls = extractInvocations(text).map(inv => inv.words.join(' '))
+  if (!calls.some(call => call.startsWith('qa run --plan <slug> --after <task>'))) problems.push('never runs `swiftgate qa run --after`')
+  if (!calls.some(call => call.startsWith('build halt --run <run> --task <task> --reason gate-red'))) {
+    problems.push('a RED `qa run --after` records no `gate-red` halt')
+  }
+  if (!calls.some(call => /^build merge <slug> <task> --undo\b/.test(call))) problems.push('a RED `qa run --after` never undoes the merge')
+  if (!calls.some(call => call.startsWith('build resume --run <run> --task <task> --answer retry'))) {
+    problems.push('the `gate-red` halt is never resumed with `retry`')
+  }
+  const prose = text.replace(/\s+/g, ' ')
+  if (!/\bfixer\b/.test(prose)) problems.push('a RED `qa run --after` queues no fixer')
+  if (!/never keep the merge on (?:your|its) own judgement/i.test(prose)) problems.push('never forbids keeping the merge on judgement')
+  if (!/pre-existing[^.]*`--at-base`|`--at-base`[^.]*pre-existing/i.test(prose)) {
+    problems.push('the pre-existing-issue exception never needs `--at-base` evidence')
+  }
+  return problems
+}
+
 /** Every way the run skill `text` lets a run outgrow its time box: no clock for its early steps, a
  * cutoff that halts and asks or records its own halt, or one that skips `final`. */
 export function timeBoxProblems(text) {
@@ -421,6 +474,50 @@ const tests = {
     assert.deepEqual(flagged('a shared /tmp path'), tmp)
     assert.deepEqual(backgroundWorkProblems({ 'x.md': '- Run `"$SG" check --tier merge --json &` and go on.\n- Then `"$SG" qa run --plan <slug> --json`.' }),
       ['x.md:1: a gate or qa run in the background'])
+  },
+
+  'the run skill and the build loop run qa run --at-base after qa adopt, never skip it, and merge no task its rows wait for before it — catches checks adopted after their tasks merged with no red run'() {
+    const skill = read('skills/run/SKILL.md')
+    assert.deepEqual(atBaseProblems(skill), [], 'skills/run/SKILL.md')
+    const loop = read('skills/build/references/event-loop.md')
+    assert.deepEqual(atBaseProblems(section(loop, 'Validation task') ?? ''), [], 'event-loop.md#validation-task')
+  },
+
+  'the at-base check names a missing at-base run, one before the adopt, an optional one and an early merge — catches a checker that passes anything'() {
+    assert.deepEqual(atBaseProblems('1. `"$SG" qa run --plan <slug> --at-base --json`\n2. `"$SG" qa adopt <worktree> --json`\n'), [
+      'runs `qa run --at-base` before `qa adopt`',
+      'never says the `--at-base` run is never skipped',
+      'lets a task a row\'s `Runs after` names merge before the `--at-base` run',
+    ])
+    assert.deepEqual(atBaseProblems('`"$SG" qa adopt <worktree> --json`'), [
+      'never runs `swiftgate qa run --at-base`',
+      'never says the `--at-base` run is never skipped',
+      'lets a task a row\'s `Runs after` names merge before the `--at-base` run',
+    ])
+    assert.deepEqual(atBaseProblems('no adopt'), ['never runs `swiftgate qa adopt`'])
+  },
+
+  'a RED qa run --after records a gate-red halt, undoes the merge and queues the fixer, with no override but at-base evidence — catches a validation red kept on judgement'() {
+    const skill = read('skills/run/SKILL.md')
+    assert.deepEqual(validationRedProblems(bulletAt(skill, '**Validate each merge**')), [], 'skills/run/SKILL.md')
+    const loop = read('skills/build/references/event-loop.md')
+    assert.deepEqual(validationRedProblems(section(loop, 'After each merge')), [], 'event-loop.md#after-each-merge')
+    const halts = section(loop, 'Recording halts') ?? ''
+    assert.ok(halts.split('\n').some(line => line.startsWith('|') && line.includes('`qa run --after`') && line.includes('`gate-red`')),
+      'the halt table has no `gate-red` row for a RED `qa run --after`')
+  },
+
+  'the validation-red check names each missing duty of the trial\'s rule, a RED that only counts as a red merge gate — catches a checker that passes anything'() {
+    const before = '- **Validate each merge**: `"$SG" qa run --plan <slug> --after <task> --json` in `<checkout>`. A RED\n  verdict counts as a red merge gate, wherever the loop or the cutoff handles one.\n'
+    assert.deepEqual(validationRedProblems(bulletAt(before, '**Validate each merge**')), [
+      'a RED `qa run --after` records no `gate-red` halt',
+      'a RED `qa run --after` never undoes the merge',
+      'the `gate-red` halt is never resumed with `retry`',
+      'a RED `qa run --after` queues no fixer',
+      'never forbids keeping the merge on judgement',
+      'the pre-existing-issue exception never needs `--at-base` evidence',
+    ])
+    assert.deepEqual(validationRedProblems(null), ['no step runs `qa run --after`'])
   },
 
   'a brownfield design conflict recommends a retry with a widened write set, not stop — catches a brownfield write-set conflict recommending stop'() {

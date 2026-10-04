@@ -137,19 +137,23 @@ struct SimUpTests {
   }
 
   func run(
-    _ rig: Rig, scenario: String? = "fixed-fact", leaseTimeout: Duration = .seconds(60)
+    _ rig: Rig, scenario: String? = "fixed-fact", leaseTimeout: Duration = .seconds(60),
+    runID: String = SimUpTests.runID, git: FakeGit = FakeGit(revisions: ["HEAD": SimUpTests.head]),
+    derivedDataPath: String = "/dd"
   ) async throws -> Result<SimUpStarted, SimUpFailure> {
     let alive = rig.alive
     let terminated = rig.terminated
     let dependencies = SimUp.Dependencies(
       agentDevice: rig.agent, leases: store, launcher: rig.launcher, xcodebuild: rig.xcodebuild,
-      simctl: rig.simctl, bundles: rig.bundles, git: FakeGit(revisions: ["HEAD": Self.head]),
+      simctl: rig.simctl, bundles: rig.bundles, git: git,
       isAlive: { _ in alive }, terminate: { terminated.append($0) },
       slotHolders: { [31337, 31338] }, clock: rig.clock.clock,
       now: { Date(timeIntervalSince1970: 1_791_115_200) })
     let request = SimUp.Request(
-      worktree: worktree, config: try Self.config(), scenario: scenario, runID: Self.runID,
-      simDirectory: simDirectory, derivedDataPath: "/dd", swiftgateExecutable: "/plugin/bin/sg")
+      worktree: worktree, config: try Self.config(), scenario: scenario, runID: runID,
+      simDirectory: worktree.appending(
+        path: ".harness/runs/\(runID)/sim", directoryHint: .isDirectory),
+      derivedDataPath: derivedDataPath, swiftgateExecutable: "/plugin/bin/sg")
     return await SimUp(
       dependencies: dependencies, leaseTimeout: leaseTimeout, pollInterval: .seconds(1)
     ).run(request)
@@ -343,6 +347,78 @@ struct SimUpTests {
     #expect(failure.rule == .appInstallFailed)
     #expect(failure.message.contains("bad bundle"))
     #expect(try store.read(runID: Self.runID) == nil)
+  }
+
+  static let secondRunID = "20261004T120500Z-5e6f7a8b"
+  static let otherHead = "89abcdef0123456789abcdef0123456789abcdef"
+
+  var derivedData: String {
+    root.appending(path: "derived-data/sim-up", directoryHint: .isDirectory).path
+  }
+
+  /// Runs `sim up` twice in this worktree's DerivedData, the first at `HEAD` with no changes, and
+  /// returns how many builds the two ran.
+  func buildsAcrossTwoRuns(second git: FakeGit) async throws -> Int {
+    let rig = rig()
+    _ = try await run(rig, derivedDataPath: derivedData).get()
+    _ = try await run(rig, runID: Self.secondRunID, git: git, derivedDataPath: derivedData).get()
+    #expect(rig.simctl.installedApps == [Self.app.path, Self.app.path])
+    return rig.xcodebuild.buildRequests.count
+  }
+
+  @Test(
+    "a second sim up at the same commit with no source change installs the first build's app without building — catches every sim up of a validation worker paying a full build"
+  )
+  func reusesTheBuildAtTheSameCommit() async throws {
+    #expect(try await buildsAcrossTwoRuns(second: FakeGit(revisions: ["HEAD": Self.head])) == 1)
+    let buildLog = worktree.appending(path: ".harness/runs/\(Self.secondRunID)/sim/build.log")
+    #expect(try String(contentsOf: buildLog, encoding: .utf8).contains(Self.head))
+  }
+
+  @Test(
+    "a second sim up at a new commit builds again — catches an old build installed after the code moved"
+  )
+  func rebuildsAtANewCommit() async throws {
+    #expect(
+      try await buildsAcrossTwoRuns(second: FakeGit(revisions: ["HEAD": Self.otherHead])) == 2)
+  }
+
+  @Test(
+    "an uncommitted source change builds again, while a change only under .harness/ reuses the build — catches an edit missing from the app, and flow files forcing a rebuild"
+  )
+  func uncommittedChanges() async throws {
+    let edited = FakeGit(
+      changed: ["App/View.swift"], revisions: ["HEAD": Self.head],
+      contentHashes: ["App/View.swift": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"])
+    #expect(try await buildsAcrossTwoRuns(second: edited) == 2)
+
+    let flowsOnly = FakeGit(
+      changed: [".harness/qa/plan/a.flow.json"], revisions: ["HEAD": Self.head],
+      contentHashes: [".harness/qa/plan/a.flow.json": "0d1e2f"])
+    let other = try SimUpTests()
+    #expect(try await other.buildsAcrossTwoRuns(second: flowsOnly) == 1)
+  }
+
+  @Test(
+    "a failed build removes the stamp, so the next sim up builds even at the stamped commit — catches products a failed build half-overwrote installed as the stamped build"
+  )
+  func failedBuildIsNotReused() async throws {
+    var failing = rig()
+    _ = try await run(failing, derivedDataPath: derivedData).get()
+    failing.xcodebuild = FakeXcodebuild(buildStatus: .exited(65))
+    let failure = try #require(
+      Self.failure(
+        try await run(
+          failing, runID: Self.secondRunID,
+          git: FakeGit(revisions: ["HEAD": Self.otherHead]), derivedDataPath: derivedData)))
+    #expect(failure.rule == .appBuildFailed)
+
+    let retry = rig()
+    _ = try await run(
+      retry, runID: "20261004T121000Z-9c0d1e2f", git: FakeGit(revisions: ["HEAD": Self.head]),
+      derivedDataPath: derivedData
+    ).get()
+    #expect(retry.xcodebuild.buildRequests.count == 1)
   }
 
   @Test(

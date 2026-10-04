@@ -1,0 +1,42 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/confirm-large-downloads-toggle.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-setting",
+      "runsAfter" : [
+        "download-setting"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-large-downloads-stored.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-stored",
+      "runsAfter" : [
+        "download-setting"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-large-downloads-stored.state.sh",
+      "layer" : "state",
+      "requirement" : "req-stored",
+      "runsAfter" : [
+        "download-setting"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "`AidokuTests/LargeDownloadConfirmationTests.swift` in the app test target stores the setting in a dedicated suite and asks about 50 and 51 chapters; download-check's merge gate ran it and its prove showed it fails with the source reverted",
+      "requirement" : "req-check"
+    },
+    {
+      "reason" : "needs a source with more than 50 chapters on the simulator; req-check's acceptance test proves the decision and review checks the MangaView wiring",
+      "requirement" : "req-prompt"
+    }
+  ]
+}

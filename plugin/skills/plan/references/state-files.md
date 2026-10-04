@@ -102,7 +102,7 @@ tasks merge.
     {
       "requirement": "req-offline-queue-drains-on-reconnect",
       "layer": "acceptance",
-      "check": "OrderQueueCoreTests/drainsThroughLiveClientOnReconnect",
+      "check": "test: OrderQueueCoreTests/OrderQueueCoreTests/drainsThroughLiveClientOnReconnect",
       "runsAfter": ["offline-queue-client-interface", "offline-queue-core-reducer"],
       "writer": "offline-queue-core-reducer"
     }
