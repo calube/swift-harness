@@ -110,11 +110,7 @@ public enum SimulatorSelection {
   public static func baseDevice(in devices: [SimulatorDevice], config: SimulatorConfig)
     throws(SimulatorSelectionError) -> SimulatorDevice
   {
-    let matches = devices.filter { device in
-      device.isAvailable && device.name == config.device
-        && SimulatorCloneName.ownerPID(of: device.name) == nil
-        && device.runtime.map { $0.platform == "iOS" && $0.version == config.os } == true
-    }
+    let matches = baseCandidates(in: devices, config: config)
     guard let base = matches.min(by: { $0.udid < $1.udid }) else {
       let runtimes = Set(
         devices.compactMap { $0.runtime }.filter { $0.platform == "iOS" }.map(\.version))
@@ -129,7 +125,25 @@ public enum SimulatorSelection {
   public static func baseAmbiguityNote(in devices: [SimulatorDevice], config: SimulatorConfig)
     -> Finding?
   {
-    nil
+    let udids = baseCandidates(in: devices, config: config).map(\.udid).sorted()
+    guard udids.count > 1 else { return nil }
+    return try? Finding(
+      ruleID: baseAmbiguousRuleID, severity: .nit, file: Config.fileName, line: nil,
+      message:
+        "\(udids.count) available \"\(config.device)\" simulators on iOS \(config.os) "
+        + "(\(udids.joined(separator: ", "))); using the lowest UDID, \(udids[0]). Delete or "
+        + "rename the others so every run copies the same device",
+      failureScenario: nil)
+  }
+
+  private static func baseCandidates(in devices: [SimulatorDevice], config: SimulatorConfig)
+    -> [SimulatorDevice]
+  {
+    devices.filter { device in
+      device.isAvailable && device.name == config.device
+        && SimulatorCloneName.ownerPID(of: device.name) == nil
+        && device.runtime.map { $0.platform == "iOS" && $0.version == config.os } == true
+    }
   }
 
   /// Harness clones whose owning process is gone.

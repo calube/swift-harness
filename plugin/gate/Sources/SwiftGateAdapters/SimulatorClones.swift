@@ -124,6 +124,9 @@ public struct SimulatorClones: Sendable {
     } catch {
       throw .selection(error)
     }
+    if let note = SimulatorSelection.baseAmbiguityNote(in: devices, config: config) {
+      notes?(note)
+    }
     let provision: SimulatorProvision
     do {
       provision = try SimulatorSelection.provision(from: base)

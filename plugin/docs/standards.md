@@ -679,6 +679,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 |---|---|
 | `format.parse`, and `format.<rule>` for each `swift format lint --strict` rule | [Platform and toolchain](#platform-and-toolchain) |
 | `swiftgate.allow-missing-reason` | [Escape hatches](#escape-hatches) |
+| `sim.base-ambiguous` | simulator QA amendment §8.3; several devices match the base: a nit naming each UDID, lowest used |
 | `swiftgate.config`, `swiftgate.environment`, `swiftgate.scopes-fallback`, `swiftgate.not-run`, `swiftgate.nothing-selected`, `swiftgate.budget` | the gate's own notes: an invalid `.swiftgate.toml` is RED, a missing tool or input is BLOCKED, the rest never gate |
 | `swiftgate.resolved-file-rewritten` | every `swift build`/`swift test`/`xcodebuild` invocation a gate run makes is pinned to the committed `Package.resolved` (`--only-use-versions-from-resolved-file`, `-onlyUsePackageVersionsFromResolvedFile`); as a backstop, `swiftgate check`/`test`/etc. hash every `Package.resolved` in the working tree before and after the run, and a change gates major — the same edit `guard.package-resolved` denies by hand must never happen silently by machine |
 | `swiftgate.resolved-file-stale` | that same pin rejects a manifest the committed `Package.resolved` doesn't cover (a dependency added with no committed `Package.resolved` at all, or one the manifest has outrun): major, named apart from `t1.no-evidence`, with the fix in the message (`swift package resolve` in the package directory, then commit `Package.resolved`) |
