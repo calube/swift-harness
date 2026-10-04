@@ -981,6 +981,7 @@ const tests = {
       ['build check-return', '--plan'], ['build check-return', '--fix'], ['build merge', '--undo'],
       ['build merge', '--fix'], ['check', '--tier'], ['worktree remove', '--session'],
       ['worktree remove', '--fix'], ['design-render', '--ledger'], ['build finish', '--session'], ['stats', '--build'],
+      ['events span start', '--phase'], ['events span start', '--build-run'], ['events span end', '--outcome'],
     ]) assert.ok(has(path, flag), `the build skill never runs \`swiftgate ${path} ${flag}\``)
     const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
@@ -994,6 +995,7 @@ const tests = {
       ['discover', '--json'], ['discover', '--set'], ['discover', '--drop'], ['discover', '--reason'],
       ['events list', '--kind'], ['allow', '--reason'], ['plan import', '--json'], ['build start', '--preset'],
       ['build start', '--session'], ['check', '--tier'], ['check', '--base'], ['run report', null],
+      ['events span start', '--phase'], ['events span start', '--build-run'], ['events span end', '--outcome'],
     ]) assert.ok(has(path, flag), `the run skill never runs \`swiftgate ${path}${flag ? ` ${flag}` : ''}\``)
     const unsessioned = resolved.filter(r => SESSION_COMMANDS.includes(r.path) && !r.flags.includes('--session'))
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
