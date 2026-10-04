@@ -37,6 +37,14 @@ protocol ClaudeLaunching: Sendable {
   func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError)
 }
 
+/// Builds the swiftgate binary of each plugin the session loads with `--plugin-dir`, before the
+/// session starts, so none of that plugin's hooks runs an older binary while its own builds.
+protocol PluginWarming: Sendable {
+  /// Builds `directory`'s gate, or each child plugin's when `directory` is a folder of plugins.
+  /// Returns the shims it ran; a directory with no swiftgate shim is another plugin and is skipped.
+  func warm(directory: URL) async throws(RunStartError) -> [String]
+}
+
 /// What `run` prepared before launching the orchestrator.
 struct RunPrepared: Sendable, Equatable, Encodable {
   let slug: String
@@ -60,6 +68,7 @@ extension RunCommand {
     var runner: any ProcessRunner = LiveProcessRunner()
     var discover = DiscoverCommand.Dependencies()
     var warmup: any WarmupSpawning = LiveWarmupSpawner()
+    var plugins: any PluginWarming = LivePluginWarmer()
     var now: @Sendable () -> Date = { Date() }
     /// The orchestrator's session id, a UUID as `claude --session-id` requires.
     var newSession: @Sendable () -> String = { UUID().uuidString.lowercased() }
@@ -84,6 +93,7 @@ extension RunCommand {
       spec: spec, directory: directory, slug: slug, dependencies: dependencies)
     announce(prepared)
     do {
+      try await warmPlugins(prepared, extra: extra, plugins: dependencies.plugins)
       try launch(prepared, extra: extra, claude: claude)
     } catch {
       let left = await rollBack(prepared, dependencies: dependencies)
@@ -233,6 +243,21 @@ extension RunCommand {
       notes: discovered.notes)
   }
 
+  /// Builds the gate of every plugin `extra` loads with `--plugin-dir`. `claude` starts in the
+  /// clone's root, so a relative directory is read from there.
+  static func warmPlugins(
+    _ prepared: RunPrepared, extra: [String], plugins: any PluginWarming
+  ) async throws(RunStartError) {
+    let root = URL(filePath: prepared.root, directoryHint: .isDirectory)
+    for directory in RunLaunch.pluginDirectories(in: extra) {
+      let url =
+        directory.hasPrefix("/")
+        ? URL(filePath: directory, directoryHint: .isDirectory)
+        : root.appending(path: directory, directoryHint: .isDirectory)
+      _ = try await plugins.warm(directory: url.standardized)
+    }
+  }
+
   /// Starts the orchestrator on the run skill for `prepared`, with `extra` passed to `claude`.
   static func launch(
     _ prepared: RunPrepared, extra: [String], claude: any ClaudeLaunching
@@ -364,6 +389,55 @@ struct LiveWarmupSpawner: WarmupSpawning {
     } else {
       kill(pid, SIGTERM)
     }
+  }
+}
+
+/// Runs each plugin's `bin/swiftgate --version`, which builds that gate into the cache the shim
+/// picks with no plugin data directory: the cache a plugin hook's shim reuses an exact-hash binary
+/// from.
+struct LivePluginWarmer: PluginWarming {
+  var runner: any ProcessRunner = LiveProcessRunner()
+
+  /// A cold build takes minutes; this bound only stops one that hangs.
+  var timeout: Duration = .seconds(30 * 60)
+
+  func warm(directory: URL) async throws(RunStartError) -> [String] {
+    let shims = Self.shims(in: directory)
+    for shim in shims {
+      let output: ProcessOutput
+      do {
+        // The shim picks CLAUDE_PLUGIN_DATA over the user cache, and the session gives each
+        // plugin's hooks a data directory of its own, so a build there would reach no hook.
+        output = try await runner.run(
+          ProcessInvocation(
+            executable: shim, arguments: ["--version"],
+            environmentOverlay: ["CLAUDE_PLUGIN_DATA": nil],
+            workingDirectory: directory.path(percentEncoded: false), timeout: timeout))
+      } catch {
+        throw RunStartError(message: "building the plugin gate \(shim): \(error)")
+      }
+      guard output.status.isSuccess else {
+        throw RunStartError(
+          message: "building the plugin gate \(shim) failed, so its hooks would run an older "
+            + "binary: \(output.stderr.text.suffix(2000))")
+      }
+    }
+    return shims
+  }
+
+  /// `directory`'s own shim, or else each child plugin's, since `--plugin-dir` on a folder of
+  /// plugins loads every child.
+  static func shims(in directory: URL) -> [String] {
+    let files = FileManager.default
+    let shim = { (plugin: URL) -> String? in
+      let path = plugin.appending(path: "bin/swiftgate").path(percentEncoded: false)
+      return files.isExecutableFile(atPath: path) ? path : nil
+    }
+    if let own = shim(directory) { return [own] }
+    let children =
+      (try? files.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+    return children.sorted { $0.path < $1.path }.compactMap(shim)
   }
 }
 
