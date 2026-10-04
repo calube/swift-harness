@@ -196,4 +196,118 @@ struct LivePlanTests {
     #expect(LivePlanExclude.adding(to: once) == nil)
     #expect(LivePlanExclude.adding(to: nil) == "/PLAN.md\n")
   }
+
+  @Test(
+    "each malformed task line fails naming the task and the value — catches a section imported with a guessed field",
+    arguments: [
+      (
+        "### `t`\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `a`",
+        LivePlanError.missingGoal(task: "t")
+      ),
+      (
+        "### `t`\nGoal.\n- Writes: `a`",
+        .missingField(task: "t", field: "- Deps: … · Gate: … · estLines: …")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · estLines: 1\n- Writes: `a`",
+        .missingField(task: "t", field: "Gate")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice\n- Writes: `a`",
+        .missingField(task: "t", field: "estLines")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · Model: haiku · estLines: 1\n- Writes: `a`",
+        .unknownModel(task: "t", value: "haiku")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: -3\n- Writes: `a`",
+        .invalidEstLines(task: "t", value: "-3")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `/etc/hosts`",
+        .invalidWrite(task: "t", path: "/etc/hosts")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `../up`",
+        .invalidWrite(task: "t", path: "../up")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `a`\n\n### `t`\nAgain.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `b`",
+        .duplicateTask("t")
+      ),
+    ])
+  func malformedTask(_ text: String, _ expected: LivePlanError) {
+    #expect(throws: expected) { try LivePlanParser.parse(text) }
+    #expect(expected.message.contains("`t`"))
+  }
+
+  @Test("a dependency cycle fails naming its tasks — catches a ledger no wave can start")
+  func cycle() throws {
+    let text = """
+      ### `a`
+      A.
+      - Deps: `b` · Gate: slice · estLines: 1
+      - Writes: `a/`
+
+      ### `b`
+      B.
+      - Deps: `a` · Gate: slice · estLines: 1
+      - Writes: `b/`
+      """
+    let plan = try LivePlanParser.parse(text)
+    #expect(throws: LivePlanError.cycle(ids: ["a", "b"])) {
+      try plan.ledger(maxParallel: 2, existing: nil) { $0 }
+    }
+    #expect(LivePlanError.cycle(ids: ["a", "b", "a"]).message.contains("a -> b -> a"))
+    #expect(LivePlanError.noTasks.message.contains("### <task-id>"))
+    #expect(LivePlanError.missingDependency(task: "a", dependency: "z").message.contains("`z`"))
+    #expect(LivePlanError.noWrites(task: "a").message.contains("`a`"))
+    #expect(LivePlanError.unknownGate(task: "a", value: "x").message.contains("`x`"))
+    #expect(LivePlanError.ownedProfileGate(task: "a", tier: .push).message.contains("`push`"))
+  }
+
+  @Test(
+    "wrapped lines join the value above them — catches a why or assumption cut at its first line")
+  func continuations() throws {
+    let text = """
+      ## Assumptions
+      - Filters combine
+        with AND.
+
+      ### `t`
+      Goal.
+      - Deps: none · Gate: slice · estLines: 1
+      - Why: The view needs
+        the matched filter.
+      - Scope:
+        - the chip row
+          and its state
+      - a note with no field
+        that belongs to nothing
+      - Writes: `a`
+      """
+    let plan = try LivePlanParser.parse(text)
+    #expect(plan.assumptions == ["Filters combine with AND."])
+    let brief = try #require(plan.tasks.first?.brief)
+    #expect(brief.why == "The view needs the matched filter.")
+    #expect(brief.scope == ["the chip row and its state"])
+    #expect(plan.tasks.first?.writes == ["a"])
+  }
+
+  @Test(
+    "a live plan.json with a design key, an approval or another path fails to decode — catches a live plan read as approved",
+    arguments: [
+      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","design":"docs/designs/x.md","livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","approval":{"pageSha":"a","by":"user","at":"2026-10-04T00:00:00Z"},"livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+      #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","livePlan":{"path":"../PLAN.md","briefs":{}}}"#,
+    ])
+  func rejectsMixedLivePlan(_ json: String) {
+    #expect(throws: DecodingError.self) { try PlanFileJSON.decode(Data(json.utf8)) }
+  }
+
+  @Test("a spec-page plan has no live plan source — catches a spec page read as a live plan")
+  func specPageIsNotLive() {
+    #expect(PlanFile.seedSpecPage(slug: "s").livePlanSource == nil)
+  }
 }
