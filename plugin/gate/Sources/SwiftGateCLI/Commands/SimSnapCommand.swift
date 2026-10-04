@@ -45,7 +45,7 @@ struct SimSnapCommand: AsyncParsableCommand {
       SimSnap.Request(
         worktree: CanonicalPath.of(root), runID: runID, label: label, assert: assert,
         simDirectory: { state.url(SimSession.directory(runID: $0), directoryHint: .isDirectory) }))
-    print(Self.output(result, json: json))
+    Console.write(Self.output(result, json: json))
     if case .failure(let failure) = result { throw ExitCode(failure.verdict.exitCode) }
   }
 

@@ -49,7 +49,7 @@ struct SimVerifyCommand: AsyncParsableCommand {
           Data("swiftgate: could not record sim verify: \(line)\n".utf8))
       }
     }
-    print(Self.output(result, json: json))
+    Console.write(Self.output(result, json: json))
     let verdict =
       switch result {
       case .success(let verified): verified.report.verdict
