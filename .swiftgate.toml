@@ -6,6 +6,7 @@ app_scheme = "swiftgate"
 packages = ["plugin/gate"]
 exclude = [
   "plugin/gate/Fixtures", "plugin/gate/Tests/Fixtures/Discover", "examples", "evals/corpora", "evals/apps",
+  "plugin/templates",
 ]
 
 [simulator]

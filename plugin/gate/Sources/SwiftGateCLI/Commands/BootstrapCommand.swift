@@ -42,15 +42,21 @@ enum BootstrapRun {
       xcodeVersion: await xcode, devices: await devices)
     let registryPath = environment.home.appending(path: ProjectRegistry.path).path
     let shimPath = environment.home.appending(path: DoctorRun.shimPath).path
+    let appSources = BootstrapFiles.appSources(root: root)
+    var existing = BootstrapFiles.entries(root: root)
+    for entryPoint in appSources.entryPoints {
+      let path = ScenarioStamp.path(beside: entryPoint)
+      existing[path] = BootstrapFiles.entry(root: root, path: path)
+    }
     return BootstrapInputs(
-      root: root.path, existing: BootstrapFiles.entries(root: root), templates: templates,
+      root: root.path, existing: existing, templates: templates,
       config: BootstrapFiles.configState(root: root), inferred: ConfigInference.infer(survey),
       swiftLintInstalled: environment.swiftLintInstalled,
       lefthookInstalled: environment.lefthookInstalled, git: await git,
       registry: BootstrapFiles.registryState(path: registryPath), registryPath: registryPath,
       shim: HarnessFiles.shimStatus(linkPath: shimPath, harnessRoot: environment.harnessRoot.path),
       shimPath: shimPath, shimTarget: environment.harnessRoot.appending(path: "bin/swiftgate").path,
-      profile: profile)
+      profile: profile, appSources: appSources)
   }
 
   static func run(root: URL, apply: Bool, profile: String? = nil, environment: Environment) async
@@ -110,7 +116,8 @@ struct BootstrapCommand: AsyncParsableCommand {
     abstract: "Stamp or upgrade this repository's harness layer. Dry run unless --apply.",
     discussion: """
       Writes AGENTS.md (managed block) and a CLAUDE.md symlink, .swiftgate.toml (only when \
-      missing), .swift-format, .swiftlint.yml (when swiftlint is installed), lefthook.yml, \
+      missing), Scenario.swift beside a single @main App file when it creates the config, \
+      .swift-format, .swiftlint.yml (when swiftlint is installed), lefthook.yml, \
       .gitignore entries and .harness/plans/index.json. With --apply it also registers the \
       repository in ~/.swift-harness/projects.json, links ~/.local/bin/swiftgate to this \
       plugin's shim, and runs `lefthook install`. Run it from the repository root.
