@@ -188,7 +188,10 @@ struct AgentDeviceTests {
     try await device.screenshot(to: "/run/sim/1.png", on: target)
     _ = try await device.appState(on: target)
     _ = try await device.sessions(on: target)
-    _ = try? await device.waitForText("Absent", timeoutMilliseconds: 2000, on: target)
+    // The recorded wait timed out, so the call throws after it ran.
+    await #expect(throws: AgentDeviceError.self) {
+      try await device.waitForText("Absent", timeoutMilliseconds: 2000, on: target)
+    }
     _ = try await device.batch(stepsFile: "/flows/pass.json", on: target)
     try await device.recordStart(to: "/run/qa/flow.mp4", on: target)
     _ = try await device.recordStop(on: target)
