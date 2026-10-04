@@ -26,7 +26,10 @@ enum BrownfieldMergeCheck {
 
     /// The clone's config and state, live git, scratch trees under the worktree's git dir and
     /// `/bin/sh` commands.
-    static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
+    /// - Parameter base: what `merge` compares against; `nil` when the caller has none.
+    static func live(root: URL, base: String? = nil) async throws(BrownfieldCheckSetupError)
+      -> Dependencies
+    {
       let process = LiveProcessRunner()
       let tracked = GitTrackedTree(runner: process, directory: root)
       let layout: BrownfieldStateLayout
@@ -83,7 +86,7 @@ enum BrownfieldMergeCheck {
   {
     let dependencies: Dependencies
     do {
-      dependencies = try await .live(root: root)
+      dependencies = try await .live(root: root, base: base)
     } catch {
       return try BrownfieldCheck.notRun(tier, because: error.reason)
     }
