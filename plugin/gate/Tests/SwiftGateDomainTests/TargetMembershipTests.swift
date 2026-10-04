@@ -119,16 +119,23 @@ struct TargetMembershipTests {
   }
 
   @Test(
-    "a new Swift file outside every source root, or a new file that isn't Swift, is not a finding — catches files the project doesn't own flagged"
+    "among new files, only a Swift file under a source root is a finding, never one outside every source root or one that isn't Swift — catches files the project doesn't own flagged"
   )
   func outsideSourceRoots() throws {
     let explicit = try CapturedXcodeProject.explicit.membership().newFileFindings(
-      ["ios/Tooling.swift", "ios/KaMPKitiOS/notes.md", "shared/src/Model.swift"],
+      [
+        "ios/Tooling.swift", "ios/KaMPKitiOS/notes.md", "shared/src/Model.swift",
+        "ios/KaMPKitiOS/Added.swift",
+      ],
       inclusion: .explicit)
-    #expect(explicit.isEmpty)
+    #expect(explicit.map(\.file) == ["ios/KaMPKitiOS/Added.swift"])
     let xcodegen = try CapturedXcodeProject.xcodegen.membership().newFileFindings(
-      ["Tests/Fixtures/SPM/FooFeature/Sources/FooDomain/Added.swift"], inclusion: .xcodegen)
-    #expect(xcodegen.isEmpty)
+      [
+        "Tests/Fixtures/SPM/FooFeature/Sources/FooDomain/Added.swift",
+        "Tests/Fixtures/SPM/StaticLibrary/Added.swift",
+      ],
+      inclusion: .xcodegen)
+    #expect(xcodegen.map(\.file) == ["Tests/Fixtures/SPM/StaticLibrary/Added.swift"])
   }
 
   @Test(
