@@ -5,6 +5,7 @@ public enum PlanLintValidation {
   public static let unknownTaskRuleID = "plan-lint.validation-unknown-task"
   public static let stateWithoutFlowRuleID = "plan-lint.validation-state-without-flow"
   public static let flowWithoutIOSRuleID = "plan-lint.validation-flow-without-ios"
+  public static let checkSourceFileRuleID = "plan-lint.validation-check-source-file"
 
   /// Every finding, each `major`: uncovered requirements in plan order, then each row's findings
   /// in table order.
