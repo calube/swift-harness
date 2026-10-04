@@ -26,6 +26,14 @@ public enum StateRootResolver {
     return .gitDir(gitDir)
   }
 
+  /// `brownfield` when `worktree`'s state lives under its git dir, else `owned`.
+  public static func profile(worktree: URL) -> RepositoryProfile {
+    switch resolve(worktree: worktree) {
+    case .tree: .owned
+    case .gitDir: .brownfield
+    }
+  }
+
   /// Where `worktree`'s shared event streams and session records live. Every worktree of a brownfield clone writes to
   /// the main checkout's store under the common dir: a worktree's own git dir goes when the
   /// worktree is removed, and a removal that skips the copy-up would take its events with it.

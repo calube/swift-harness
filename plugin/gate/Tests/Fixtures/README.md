@@ -2748,6 +2748,28 @@ cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
 matched nothing.
 
+## Brownfield trial: a flow row's sim run on an iOS clone
+
+`BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
+`Aidoku/Aidoku`, from its last `qa run` (`20261004T223404Z-be50ef8e`). `flow.json` is the flow file
+the validation worker wrote. `sim/` holds that row's `session.json`, `steps.ndjson`, the 5
+`snapshot --json` trees `sim snap` recorded, and the `report.json` `sim verify` wrote: RED on 183
+findings, 103 `sim.a11y-identifier` and 80 `sim.a11y-label`, all but the new switch's on controls
+the app already had. The screenshots stay out; no rule reads their bytes. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2
+R=$S/qa-runs/20261004T223404Z-be50ef8e/01-req-setting.flow
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/aidoku-setting-flow
+mkdir -p $F/sim/steps
+cp $S/qa/confirm-large-downloads-toggle.flow.json $F/flow.json
+cp $R/sim/session.json $R/sim/steps.ndjson $R/sim/report.json $F/sim/
+cp $R/sim/steps/*.tree.json $F/sim/steps/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-setting-flow` matched
+nothing.
+
 ## Node installs: 1 lockfile per package manager
 
 `NodeInstall/<manager>/` holds a 1-dependency `package.json` and the lockfile its manager wrote installing it:

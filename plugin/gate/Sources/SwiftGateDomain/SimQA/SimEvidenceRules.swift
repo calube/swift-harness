@@ -93,6 +93,15 @@ public enum SimEvidenceRules {
   public static func findings(_ evidence: SimEvidence, checkoutHead: String?)
     -> [SimEvidenceFinding]
   {
+    judge(evidence, checkoutHead: checkoutHead, audit: .everyControl).findings
+  }
+
+  /// ``findings(_:checkoutHead:)`` with the accessibility rules narrowed to `audit`, and the
+  /// notes that say what the narrowing left out.
+  public static func judge(
+    _ evidence: SimEvidence, checkoutHead: String?, audit: SimAuditScope
+  ) -> (findings: [SimEvidenceFinding], notes: [SimVerifyNote]) {
+    var untargeted = 0
     var findings: [SimEvidenceFinding] = []
     if evidence.steps.isEmpty {
       findings.append(
@@ -109,14 +118,19 @@ public enum SimEvidenceRules {
             + "\(checkoutHead): run sim up again on this commit"))
     }
     for step in evidence.steps {
-      findings += stepFindings(step, files: evidence.files)
+      findings += stepFindings(
+        step, files: evidence.files, audit: audit, untargeted: &untargeted)
     }
-    return findings + SimExitRule.findings(evidence)
+    return (
+      findings + SimExitRule.findings(evidence),
+      audit.note(untargeted: untargeted).map { [$0] } ?? []
+    )
   }
 
-  private static func stepFindings(_ step: SimStep, files: [String: SimEvidenceFile])
-    -> [SimEvidenceFinding]
-  {
+  private static func stepFindings(
+    _ step: SimStep, files: [String: SimEvidenceFile], audit: SimAuditScope,
+    untargeted: inout Int
+  ) -> [SimEvidenceFinding] {
     let name = "step \(SimStep.stem(step.n)) \"\(step.label)\""
     func missing(_ path: String, _ why: String) -> SimEvidenceFinding {
       SimEvidenceFinding(
@@ -176,7 +190,9 @@ public enum SimEvidenceRules {
           rule: .assertAbsent, step: step.n, path: treePath,
           message: "\(name): no element's label or value is \"\(assert)\" in \(treePath)"))
     }
-    findings += SimAccessibilityRules.findings(tree, step: step)
+    let audited = SimAccessibilityRules.audit(tree, step: step, scope: audit)
+    untargeted += audited.untargeted
+    findings += audited.findings
     return findings
   }
 }
@@ -197,10 +213,12 @@ public struct SimVerifyReport: Sendable, Equatable {
   public var findings: [SimEvidenceFinding]
   /// Why the run couldn't be fully judged; `nil` when it was.
   public var blocked: String?
+  /// What the run's audit scope left unjudged. Notes never change the verdict.
+  public var notes: [SimVerifyNote]
 
   public init(
     runID: String, stepCount: Int?, headCommit: String?, checkoutHead: String?,
-    findings: [SimEvidenceFinding], blocked: String?
+    findings: [SimEvidenceFinding], blocked: String?, notes: [SimVerifyNote] = []
   ) {
     self.runID = runID
     self.stepCount = stepCount
@@ -208,19 +226,21 @@ public struct SimVerifyReport: Sendable, Equatable {
     self.checkoutHead = checkoutHead
     self.findings = findings
     self.blocked = blocked
+    self.notes = notes
   }
 
-  /// The rules applied to a loaded run. An unreadable HEAD leaves the run `BLOCKED` unless
-  /// another rule finds it `RED`.
-  public static func judged(_ evidence: SimEvidence, checkoutHead: SimCheckoutHead)
-    -> SimVerifyReport
-  {
+  /// The rules applied to a loaded run, the accessibility rules over `audit`. An unreadable HEAD
+  /// leaves the run `BLOCKED` unless another rule finds it `RED`.
+  public static func judged(
+    _ evidence: SimEvidence, checkoutHead: SimCheckoutHead, audit: SimAuditScope = .everyControl
+  ) -> SimVerifyReport {
     let head = checkoutHead.commit
+    let judged = SimEvidenceRules.judge(evidence, checkoutHead: head, audit: audit)
     return SimVerifyReport(
       runID: evidence.runID, stepCount: evidence.steps.count,
-      headCommit: evidence.session.headCommit, checkoutHead: head,
-      findings: SimEvidenceRules.findings(evidence, checkoutHead: head),
-      blocked: checkoutHead.reason.map { "can't read the checkout's HEAD: \($0)" })
+      headCommit: evidence.session.headCommit, checkoutHead: head, findings: judged.findings,
+      blocked: checkoutHead.reason.map { "can't read the checkout's HEAD: \($0)" },
+      notes: judged.notes)
   }
 
   /// A run whose `session.json` or step log couldn't be read: `BLOCKED`, never `GREEN`.
@@ -238,7 +258,8 @@ public struct SimVerifyReport: Sendable, Equatable {
   }
 
   /// `{schemaVersion, command, runID, verdict, stepCount, headCommit, checkoutHead, blocked,
-  /// findings: [{rule, step, path, message}]}`, with `null` for each unknown value.
+  /// findings: [{rule, step, path, message}], notes: [{rule, message}]}`, with `null` for each
+  /// unknown value.
   public func json() -> Data {
     let object: [String: Any] = [
       "schemaVersion": SimSession.schemaVersion, "command": Self.command, "runID": runID,
@@ -251,6 +272,7 @@ public struct SimVerifyReport: Sendable, Equatable {
           "path": finding.path ?? NSNull(), "message": finding.message,
         ]
       },
+      "notes": notes.map { ["rule": $0.rule, "message": $0.message] },
     ]
     // Strings, integers, arrays, objects and null always encode.
     return
@@ -262,12 +284,13 @@ public struct SimVerifyReport: Sendable, Equatable {
     let steps = stepCount.map { $0 == 1 ? "1 step" : "\($0) steps" } ?? "steps unread"
     var lines = ["sim verify \(verdict.rawValue): run \(runID), \(steps)"]
     lines += findings.map { "  \($0.rule.rawValue): \($0.message)" }
+    lines += notes.map { "  nit \($0.rule): \($0.message)" }
     if let blocked { lines.append("  BLOCKED: \(blocked)") }
     return lines.joined(separator: "\n")
   }
 
-  /// The report as a history line's ``RunReport``: 1 T3 tier carrying the verdict, and 1 major
-  /// finding per rule finding, its file relative to the run directory.
+  /// The report as a history line's ``RunReport``: 1 T3 tier carrying the verdict, 1 major
+  /// finding per rule finding, its file relative to the run directory, and 1 nit per note.
   public func runReport(durationMilliseconds: Int) throws(ReportContractViolation) -> RunReport {
     var mapped: [Finding] = []
     for finding in findings {
@@ -276,6 +299,13 @@ public struct SimVerifyReport: Sendable, Equatable {
           ruleID: finding.rule.rawValue, severity: .major,
           file: "\(SimSession.directoryName)/\(finding.path ?? SimStep.logFileName)", line: nil,
           message: finding.message, failureScenario: nil))
+    }
+    for note in notes {
+      mapped.append(
+        try Finding(
+          ruleID: note.rule, severity: .nit,
+          file: "\(SimSession.directoryName)/\(Self.fileName)", line: nil, message: note.message,
+          failureScenario: nil))
     }
     return try RunReport(
       runID: runID, durationMilliseconds: durationMilliseconds,
