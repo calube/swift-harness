@@ -276,6 +276,44 @@ The rest (`pre-tool-use-bash-git-commit`, `pre-tool-use-edit-snapshot`,
 from the documented schema: no live session produced a Write, a subagent or a resume. Tests swap
 `/REPO` for a probe repository. Re-record whenever Claude Code's hook contract changes.
 
+`memos-3-worker-bash.json` holds the 4 Bash calls `guard.build-agent-main-checkout` denied 2 build
+workers in the third brownfield trial on `usememos/memos` (2026-10-04,
+`evals/results/2026-10-04-brownfield-trial/memos-3/`, finding 3). Each worker started in the
+clone's main checkout and `cd`'d into its own task worktree first. Each entry is the call's
+`agentType` (from the subagent's `.meta.json`), the transcript's `cwd`, the `tool_input.command`
+and the denial text the hook returned. `T` is the session's `subagents/workflows` directory
+under `~/.claude/projects/`, `C` the clone and `H` the harness checkout the trial ran:
+
+```sh
+F=plugin/gate/Tests/Fixtures/Hooks/memos-3-worker-bash.json T=… C=… H=… python3 - <<'PY'
+import json, os, glob
+T, C, H, F = (os.environ[k] for k in "TCHF")
+calls = []
+for path in sorted(glob.glob(f"{T}/*/agent-*.jsonl")):
+    agent = json.load(open(path[:-len(".jsonl")] + ".meta.json"))["agentType"]
+    uses = {}
+    for line in open(path):
+        entry = json.loads(line)
+        content = entry.get("message", {}).get("content")
+        if not isinstance(content, list): continue
+        for block in content:
+            if block.get("type") == "tool_use" and block.get("name") == "Bash":
+                uses[block["id"]] = (block["input"]["command"], entry["cwd"])
+            if block.get("type") == "tool_result" and block["tool_use_id"] in uses:
+                text = json.dumps(block.get("content"))
+                if "guard.build-agent-main-checkout" in text:
+                    command, cwd = uses[block["tool_use_id"]]
+                    calls.append({"agentType": agent, "cwd": cwd, "command": command,
+                                  "denial": json.loads(text) if text.startswith('"') else text})
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+out = json.dumps(calls, indent=2, ensure_ascii=False) + "\n"
+open(F, "w").write(scrub(out))
+PY
+```
+
+The scrub turns the harness checkout into `/HARNESS` and the clone into `/CLONE`, so the task
+worktrees beside it read `/CLONE-spec-share-view-limit-web` and `-store`; nothing else changed.
+
 Live payloads differ from the documented examples only in fields swiftgate does not read:
 SessionStart has no `model` in a headless session; Bash `tool_input` omits `timeout` and
 `run_in_background` unless the model sets them; PostToolUse carries `effort` and a full

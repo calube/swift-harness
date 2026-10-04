@@ -26,7 +26,7 @@ public enum StateRootResolver {
     return .gitDir(gitDir)
   }
 
-  /// Where `worktree`'s shared event streams live. Every worktree of a brownfield clone writes to
+  /// Where `worktree`'s shared event streams and session records live. Every worktree of a brownfield clone writes to
   /// the main checkout's store under the common dir: a worktree's own git dir goes when the
   /// worktree is removed, and a removal that skips the copy-up would take its events with it.
   /// Elsewhere it is the worktree's own state root.
