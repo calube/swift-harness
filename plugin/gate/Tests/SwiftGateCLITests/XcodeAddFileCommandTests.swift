@@ -70,7 +70,7 @@ struct XcodeAddFileCommandTests {
 
   /// A clone with its own `.git`, holding the captured explicit project and a new Swift file.
   static func makeClone(inclusion: String = "explicit") async throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-xcode-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let project = root.appending(path: projectPath, directoryHint: .isDirectory)

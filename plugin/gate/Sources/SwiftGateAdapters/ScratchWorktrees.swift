@@ -245,11 +245,15 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     }
   }
 
+  /// The tree walks and deletions run off the pool: a scratch tree is a whole checkout, and
+  /// deleting one takes seconds under load.
   private func remove(_ scratch: URL, toplevel: URL) async {
+    // Every scratch tree has a fresh path, so SwiftPM's locks for its packages are never reused.
+    await OffPool.run { TemporaryDirectories.removeSwiftPMLocks(under: scratch) }
     _ = try? await git(
       ["worktree", "remove", "--force", "--force", scratch.path], in: toplevel.path)
     if FileManager.default.fileExists(atPath: scratch.path) {
-      try? FileManager.default.removeItem(at: scratch)
+      await OffPool.run { try? FileManager.default.removeItem(at: scratch) }
       _ = try? await git(["worktree", "prune"], in: toplevel.path)
     }
   }
@@ -267,17 +271,24 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     for tree in trees {
       guard let owner = Self.owner(of: URL(filePath: tree).lastPathComponent), !Self.isAlive(owner)
       else { continue }
+      await OffPool.run {
+        TemporaryDirectories.removeSwiftPMLocks(
+          under: URL(filePath: tree, directoryHint: .isDirectory))
+      }
       do throws(ScratchWorktreeError) {
         _ = try await git(["worktree", "remove", "--force", "--force", tree], in: repositoryRoot)
         sweep.removed.append(tree)
       } catch {
-        do {
-          if FileManager.default.fileExists(atPath: tree) {
-            try FileManager.default.removeItem(atPath: tree)
+        let removal = await OffPool.run {
+          Result {
+            if FileManager.default.fileExists(atPath: tree) {
+              try FileManager.default.removeItem(atPath: tree)
+            }
           }
-          sweep.removed.append(tree)
-        } catch let removal {
-          sweep.failures.append("\(tree): \(error); \(removal)")
+        }
+        switch removal {
+        case .success: sweep.removed.append(tree)
+        case .failure(let removal): sweep.failures.append("\(tree): \(error); \(removal)")
         }
       }
     }
@@ -301,16 +312,20 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
   }
 
   /// Removes scratch trees whose owning process no longer exists, then drops their registrations.
+  /// Off the pool: the parent can be a directory as large as the system temp directory.
   private func sweepOrphans(in parent: URL, prefix: String, toplevel: URL) async {
-    let entries = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
-    var removed = false
-    for entry in entries where entry.hasPrefix(prefix) {
-      let fields = entry.dropFirst(prefix.count).split(separator: "-")
-      guard let pid = fields.first.flatMap({ Int32($0) }), pid > 0,
-        kill(pid, 0) == -1, errno == ESRCH
-      else { continue }
-      try? FileManager.default.removeItem(at: parent.appending(path: entry))
-      removed = true
+    let removed = await OffPool.run {
+      let entries = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
+      var removed = false
+      for entry in entries where entry.hasPrefix(prefix) {
+        let fields = entry.dropFirst(prefix.count).split(separator: "-")
+        guard let pid = fields.first.flatMap({ Int32($0) }), pid > 0,
+          kill(pid, 0) == -1, errno == ESRCH
+        else { continue }
+        TemporaryDirectories.remove(parent.appending(path: entry, directoryHint: .isDirectory))
+        removed = true
+      }
+      return removed
     }
     if removed { _ = try? await git(["worktree", "prune"], in: toplevel.path) }
   }

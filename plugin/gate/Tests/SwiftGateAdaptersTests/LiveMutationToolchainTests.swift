@@ -13,7 +13,7 @@ struct LiveMutationToolchainTests {
     targets: [TestTargetReference(name: "ProbeTests", path: "Packages/Probe/Tests/ProbeTests")])
 
   private static func reportPath() -> String {
-    FileManager.default.temporaryDirectory
+    TestTemporaryDirectory.root
       .appending(path: "swiftgate-mutate-\(UUID().uuidString)/1-probe.xml").path
   }
 

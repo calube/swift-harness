@@ -12,7 +12,7 @@ import Testing
 private struct DocsRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -49,7 +49,7 @@ private struct DocsRepo {
   let runner = LiveProcessRunner(baseEnvironment: Self.environment)
 
   init() async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-push-docs-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try write("XUnitProbe/Package.swift", "// swift-tools-version: 6.2\n")
@@ -66,7 +66,7 @@ private struct DocsRepo {
     try await git("config", "commit.gpgsign", "false")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func git(_ arguments: String...) async throws {
     let output = try await runner.run(

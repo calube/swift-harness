@@ -12,7 +12,7 @@ import Testing
 private struct PlanLintRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -108,7 +108,7 @@ private struct PlanLintRepo {
   /// Commits the approved design (status `proposed`), then a commit that only flips its status to
   /// `approved`, so the approved revision always sits behind a later commit.
   init(workerPackTokenBudget: Int? = nil) async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-plan-lint-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -124,7 +124,7 @@ private struct PlanLintRepo {
     try await commit("status only")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func run(_ arguments: String...) async throws { try await run(arguments, in: root) }
 

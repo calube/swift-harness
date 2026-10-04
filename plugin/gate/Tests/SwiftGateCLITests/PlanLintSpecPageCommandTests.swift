@@ -12,7 +12,7 @@ import Testing
 private struct SpecPageLintRepo {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
   ]
@@ -66,7 +66,7 @@ private struct SpecPageLintRepo {
   }
 
   init(workerPackTokenBudget: Int? = nil) async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(
         path: "swiftgate-plan-lint-spec-page-\(UUID().uuidString)", directoryHint: .isDirectory
       )
@@ -86,7 +86,7 @@ private struct SpecPageLintRepo {
     try #require(claimed.verdict == .green, "\(claimed.message)")
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func write(_ path: String, _ content: String) throws {
     let url = root.appending(path: path)

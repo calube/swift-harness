@@ -30,7 +30,7 @@ struct BaselineStoreTests {
     let scratchTree: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory.appending(
+      root = TestTemporaryDirectory.root.appending(
         path: "baseline-store-\(UUID().uuidString)", directoryHint: .isDirectory)
       layout = BrownfieldStateLayout(
         commonDir: root.appending(path: "repo/.git", directoryHint: .isDirectory),
@@ -39,7 +39,7 @@ struct BaselineStoreTests {
       try FileManager.default.createDirectory(at: scratchTree, withIntermediateDirectories: true)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   static let base = BaselineBase(commit: "1111111", tree: "aaaa")

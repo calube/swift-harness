@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -43,7 +44,7 @@ private final class TreeReadingRunner: AreaCommandRunning {
 struct BrownfieldProveTests {
   private static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path, "GIT_CONFIG_NOSYSTEM": "1",
+    "HOME": TestTemporaryDirectory.sharedHome.path, "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "Test",
     "GIT_AUTHOR_EMAIL": "test@example.com", "GIT_COMMITTER_NAME": "Test",
     "GIT_COMMITTER_EMAIL": "test@example.com",
@@ -76,7 +77,7 @@ struct BrownfieldProveTests {
   /// `main` holds `src/lib.txt` = `old`; the checked-out `task` branch changes it to `new` and
   /// commits `tests`.
   private static func clone(tests: [String: String]) async throws -> Clone {
-    let base = FileManager.default.temporaryDirectory.appending(
+    let base = TestTemporaryDirectory.root.appending(
       path: "swiftgate-brownfield-prove-\(UUID().uuidString)", directoryHint: .isDirectory
     )
     .resolvingSymlinksInPath()

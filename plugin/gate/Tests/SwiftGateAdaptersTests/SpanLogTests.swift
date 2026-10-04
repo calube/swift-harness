@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("span log")
@@ -9,7 +10,7 @@ struct SpanLogTests {
   static let spanID = "5a1e0c0d5a1e0c0d"
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-span-log-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -105,8 +106,10 @@ struct SpanLogTests {
     let results = await withTaskGroup(of: Result<HarnessEvent, SpanLogError>.self) { group in
       for ender in 0..<enders {
         group.addTask {
-          Result { () throws(SpanLogError) -> HarnessEvent in
-            try Self.log(root, at: 5, id: "end-\(ender)").end(spanID: Self.spanID, outcome: .ok)
+          await OffPool.run {
+            Result { () throws(SpanLogError) -> HarnessEvent in
+              try Self.log(root, at: 5, id: "end-\(ender)").end(spanID: Self.spanID, outcome: .ok)
+            }
           }
         }
       }

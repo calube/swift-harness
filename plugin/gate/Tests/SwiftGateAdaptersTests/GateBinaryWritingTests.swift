@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("events name the gate binary that wrote them")
@@ -8,7 +9,7 @@ struct GateBinaryWritingTests {
   static let hash = "b49790db12112294"
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-binary-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 

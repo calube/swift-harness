@@ -47,7 +47,7 @@ private struct WorktreeScenario {
     waves: [["cli"], ["docs"]])
 
   init(warm: Bool = true) throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "swiftgate-worktree-\(UUID().uuidString)", directoryHint: .isDirectory)
     main = base.appending(path: "app", directoryHint: .isDirectory)
     let files = FileManager.default
@@ -80,7 +80,7 @@ private struct WorktreeScenario {
     try LedgerJSON.decode(Data(contentsOf: URL(filePath: try layout(plan).ledgerFile)))
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 }
 
 @Suite("worktree create, warm-check and remove")

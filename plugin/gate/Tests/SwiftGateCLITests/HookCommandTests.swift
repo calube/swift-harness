@@ -69,7 +69,7 @@ struct SharedPlanState {
   let commonDirectory: URL
 
   init() {
-    commonDirectory = FileManager.default.temporaryDirectory
+    commonDirectory = TestTemporaryDirectory.root
       .appending(path: "swiftgate-common-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -84,7 +84,7 @@ struct SharedPlanState {
     FakeGit(changed: [], mergeBase: "base", commonDirectory: commonDirectory.path)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: commonDirectory) }
+  func remove() { TestTemporaryDirectory.remove(commonDirectory) }
 }
 
 struct FixedXcode: XcodeSelection {
@@ -262,8 +262,9 @@ struct HookCommandTests {
       "common dir exists but has no index.json yet" as String,
     ])
   func sessionStartDegradesWithoutSharedState(scenario: String) async throws {
-    let commonDirectory = FileManager.default.temporaryDirectory
+    let commonDirectory = TestTemporaryDirectory.root
       .appending(path: "swiftgate-common-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { TestTemporaryDirectory.remove(commonDirectory) }
     if scenario.contains("exists") {
       try FileManager.default.createDirectory(
         at: commonDirectory, withIntermediateDirectories: true)
@@ -618,7 +619,7 @@ struct HookCommandTests {
 
 @Suite("swiftgate hook recording")
 struct HookRecordingTests {
-  let scratch = FileManager.default.temporaryDirectory
+  let scratch = TestTemporaryDirectory.root
     .appending(path: "swiftgate-hookrec-\(UUID().uuidString)", directoryHint: .isDirectory)
 
   @Test(
@@ -687,7 +688,7 @@ struct SessionStartRecordTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-plugin-copy-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -697,7 +698,7 @@ struct SessionStartRecordTests {
       }
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   static func harness(plugin: CopiedPlugin) throws -> HookHarness {

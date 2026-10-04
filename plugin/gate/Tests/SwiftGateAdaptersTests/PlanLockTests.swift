@@ -167,41 +167,41 @@ struct PlanLockTests {
   @Test(
     "on a filesystem without hard links neither the lock nor plan.json is published and no staging file is left — catches a failed link treated as a lost race",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
-  func noHardLinksBlocksPublishing() throws {
-    let volume = try FATVolume()
-    defer { volume.detach() }
-    let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
-    let lock = PlanLock(plan: plan)
+  func noHardLinksBlocksPublishing() async throws {
+    try await FATVolume.with { volume in
+      let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
+      let lock = PlanLock(plan: plan)
 
-    let claimError = try #require(throws: PlanLockError.self) {
-      try lock.claim(session: Self.alice)
-    }
-    let seedError = try #require(throws: PlanLockError.self) {
-      try lock.seedPlanFile(Data("{}".utf8))
-    }
+      let claimError = try #require(throws: PlanLockError.self) {
+        try lock.claim(session: Self.alice)
+      }
+      let seedError = try #require(throws: PlanLockError.self) {
+        try lock.seedPlanFile(Data("{}".utf8))
+      }
 
-    #expect(Self.isIO(claimError, mentioning: "linking \(plan.orchestratorLock)"))
-    #expect(Self.isIO(seedError, mentioning: "linking \(plan.planFile)"))
-    #expect(FileSystemConditions.contents(of: plan.directory).isEmpty)
-    #expect(try lock.holder() == nil)
+      #expect(Self.isIO(claimError, mentioning: "linking \(plan.orchestratorLock)"))
+      #expect(Self.isIO(seedError, mentioning: "linking \(plan.planFile)"))
+      #expect(FileSystemConditions.contents(of: plan.directory).isEmpty)
+      #expect(try lock.holder() == nil)
+    }
   }
 
   @Test(
     "a full volume fails the staging write and removes the half-written staging file — catches a partial lock file left behind",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
-  func fullVolumeFailsStagingWrite() throws {
-    let volume = try FATVolume()
-    defer { volume.detach() }
-    let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
-    try FileManager.default.createDirectory(
-      atPath: plan.directory, withIntermediateDirectories: true)
-    try volume.fill()
+  func fullVolumeFailsStagingWrite() async throws {
+    try await FATVolume.with { volume in
+      let plan = try PlanStateLayout(commonDirectory: volume.mountPoint.path).plan("search")
+      try FileManager.default.createDirectory(
+        atPath: plan.directory, withIntermediateDirectories: true)
+      try volume.fill()
 
-    let error = try #require(throws: PlanLockError.self) {
-      try PlanLock(plan: plan).claim(session: Self.alice)
+      let error = try #require(throws: PlanLockError.self) {
+        try PlanLock(plan: plan).claim(session: Self.alice)
+      }
+
+      #expect(Self.isIO(error, mentioning: "writing \(plan.directory)/.staging."))
+      #expect(FileSystemConditions.contents(of: plan.directory).isEmpty)
     }
-
-    #expect(Self.isIO(error, mentioning: "writing \(plan.directory)/.staging."))
-    #expect(FileSystemConditions.contents(of: plan.directory).isEmpty)
   }
 }

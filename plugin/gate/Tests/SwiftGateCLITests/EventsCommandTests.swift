@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -11,7 +12,7 @@ struct EventsCommandTests {
   static let now = Date(timeIntervalSince1970: 1_790_000_000 + 86_400)
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-events-command-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 

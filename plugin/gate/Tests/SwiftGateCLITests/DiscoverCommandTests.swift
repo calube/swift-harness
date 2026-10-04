@@ -12,7 +12,7 @@ import Testing
 struct TemporaryClone {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
@@ -29,7 +29,7 @@ struct TemporaryClone {
 
   /// A clone with `files` committed on `main`.
   init(files: [String: String]) async throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-discover-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -87,7 +87,7 @@ struct TemporaryClone {
       runner: runner, readers: readers, harnessRoot: nil, events: events)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 }
 
 /// 1 area per tracked `package.json` or `Package.swift`, named by its directory: a stand-in for

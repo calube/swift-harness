@@ -3,7 +3,8 @@ import SwiftGateAdapters
 import Synchronization
 
 /// A scripted ``MutationToolchain``. Handlers see the scratch root, so they can read the file a
-/// mutant was written to; every call is recorded.
+/// mutant was written to; every call is recorded. Each handler runs on a thread of its own, as the
+/// live toolchain's processes do, so a handler may block to hold workers in step.
 public final class FakeMutationToolchain: MutationToolchain {
   public struct TestCall: Sendable, Equatable {
     public let root: URL
@@ -36,7 +37,8 @@ public final class FakeMutationToolchain: MutationToolchain {
 
   public func buildTests(root: URL, packageDirectory: String) async -> MutantBuildResult {
     recordedBuilds.withLock { $0.append(root) }
-    return buildHandler(root, packageDirectory)
+    let handler = buildHandler
+    return await OffPool.run { handler(root, packageDirectory) }
   }
 
   public func test(
@@ -45,7 +47,8 @@ public final class FakeMutationToolchain: MutationToolchain {
     recordedTests.withLock {
       $0.append(TestCall(root: root, selection: selection, timeout: timeout))
     }
-    let (result, elapsed) = testHandler(root, selection)
+    let handler = testHandler
+    let (result, elapsed) = await OffPool.run { handler(root, selection) }
     return (result, elapsed)
   }
 }
@@ -76,7 +79,7 @@ public final class CopyingScratchWorktrees: ScratchWorktrees {
     if let failure { throw failure }
     let token = UUID().uuidString  // swiftgate:allow det.uuid-init — unique directory
     let name = "swiftgate-fake-scratch-\(token)"
-    let tree = FileManager.default.temporaryDirectory.appending(
+    let tree = TestTemporaryDirectory.root.appending(
       path: name, directoryHint: .isDirectory)
     do {
       try FileManager.default.copyItem(at: seed, to: tree)
@@ -85,7 +88,7 @@ public final class CopyingScratchWorktrees: ScratchWorktrees {
     }
     made.withLock { $0.append(tree) }
     let result = await body(tree)
-    try? FileManager.default.removeItem(at: tree)
+    TestTemporaryDirectory.remove(tree)
     return result
   }
 }

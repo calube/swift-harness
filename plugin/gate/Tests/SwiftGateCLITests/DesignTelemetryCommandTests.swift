@@ -18,7 +18,7 @@ struct DesignTelemetryCommandTests {
     static let runID = "design-20260928T010000Z"
 
     init(withRunDirectory: Bool = true) throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(
           path: "swiftgate-design-telemetry-\(UUID().uuidString)", directoryHint: .isDirectory
         )
@@ -28,7 +28,7 @@ struct DesignTelemetryCommandTests {
         withIntermediateDirectories: true)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     func text(_ relativePath: String) throws -> String {
       try String(contentsOf: root.appending(path: relativePath), encoding: .utf8)

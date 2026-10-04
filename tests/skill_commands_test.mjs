@@ -6,11 +6,12 @@
 // that leaves out a flag or workflow arg the callee requires.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gitPath } from './developer_tools.mjs'
+import { removeTempTree } from './temp_tree.mjs'
 
 // The plugin directory: every path this test reads is relative to it.
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
@@ -222,7 +223,7 @@ function realHelp() {
     }
     return cache.get(key)
   }
-  help.cleanup = () => rmSync(dir, { recursive: true, force: true })
+  help.cleanup = () => removeTempTree(dir)
   return help
 }
 
@@ -235,7 +236,7 @@ function withTempSkill(files, body) {
     }
     return body(dir)
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 
@@ -295,7 +296,7 @@ function sprintMachineSteps() {
       writeFileSync(join(plans, 'sprint.json'), JSON.stringify(sprintStateAfter(status.next, sha)))
     }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 
@@ -371,7 +372,7 @@ function sprintWalk(proofBases) {
     const finish = sg(['sprint', 'finish', '--gate', '20260101T000002Z-0000cccc'])
     return { ...finish, mainMoved: run(gitPath, ['rev-parse', 'main']).trim() === head }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 
@@ -629,7 +630,7 @@ function shipSpecPageWalk(calls) {
     const planFile = existsSync(join(plans, 'demo/plan.json')) ? JSON.parse(readFileSync(join(plans, 'demo/plan.json'), 'utf8')) : null
     return { steps, planFile, surface, main: run(gitPath, ['rev-parse', 'main']).trim() }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 
@@ -805,7 +806,7 @@ export function buildGateWalk(gates) {
     if (merge) results.push(gate('merge', fill(merge.words)))
     return { surface, results }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 
@@ -940,7 +941,7 @@ export function surfaceBaselineWalk(gates, rule) {
     const beside = Object.fromEntries(gating.filter(f => !feed.includes(f)).map(f => [name(f), decide([...feed, f])]))
     return { verdict: report.verdict, gating: gating.map(name), alone: decide(feed), all: decide(gating), beside }
   } finally {
-    rmSync(dir, { recursive: true, force: true })
+    removeTempTree(dir)
   }
 }
 

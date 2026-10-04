@@ -7,7 +7,7 @@ import Testing
 @Suite("Hook adapters")
 struct HookAdaptersTests {
   private func temporaryDirectory() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-hook-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

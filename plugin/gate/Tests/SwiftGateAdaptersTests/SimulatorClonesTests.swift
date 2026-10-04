@@ -36,7 +36,7 @@ struct SimulatorClonesTests {
   }
 
   private func lockDirectory() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-sim-lock-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -282,7 +282,7 @@ struct SimulatorClonesBootedBaseTests {
   }
 
   private static func lock() -> (FileCountingLock, URL) {
-    let directory = FileManager.default.temporaryDirectory.appending(
+    let directory = TestTemporaryDirectory.root.appending(
       path: "swiftgate-sim-lock-\(UUID().uuidString)", directoryHint: .isDirectory)
     return (FileCountingLock(directory: directory, name: "sim", capacity: 2), directory)
   }

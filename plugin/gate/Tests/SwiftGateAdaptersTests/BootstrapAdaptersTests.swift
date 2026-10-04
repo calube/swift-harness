@@ -7,7 +7,7 @@ import Testing
 @Suite("bootstrap adapters")
 struct BootstrapAdaptersTests {
   private func scratch() throws -> URL {
-    let url = FileManager.default.temporaryDirectory
+    let url = TestTemporaryDirectory.root
       .appending(path: "swiftgate-bootstrap-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

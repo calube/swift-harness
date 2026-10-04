@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -57,7 +58,7 @@ struct AllowCommandTests {
 
   /// A clone with its own `.git` directory, so no test touches this checkout's common dir.
   static func makeClone(config: String?) throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-allow-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let state = root.appending(path: ".git/swift-harness", directoryHint: .isDirectory)

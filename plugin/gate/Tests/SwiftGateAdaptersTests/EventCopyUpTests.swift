@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -24,7 +25,7 @@ struct EventCopyUpTests {
     }
 
     func remove() {
-      for root in [main, worktree] { try? FileManager.default.removeItem(at: root) }
+      for root in [main, worktree] { TestTemporaryDirectory.remove(root) }
     }
   }
 

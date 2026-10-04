@@ -18,7 +18,7 @@ struct EvidenceCacheRecordCommandTests {
 
   private static let gitEnvironment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
@@ -31,7 +31,7 @@ struct EvidenceCacheRecordCommandTests {
     let runner = LiveProcessRunner(baseEnvironment: EvidenceCacheRecordCommandTests.gitEnvironment)
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-cache-record-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -40,7 +40,7 @@ struct EvidenceCacheRecordCommandTests {
     var cacheHome: String { root.appending(path: "cache-home").path }
     var cacheRoot: URL { URL(filePath: EvidenceCacheLayout(home: cacheHome).root) }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     func write(_ contents: String, at relativePath: String) throws {
       let url = root.appending(path: relativePath)

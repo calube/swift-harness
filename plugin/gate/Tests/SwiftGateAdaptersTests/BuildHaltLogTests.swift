@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("build halt log")
@@ -8,7 +9,7 @@ struct BuildHaltLogTests {
   static let start = Date(timeIntervalSince1970: 1_790_000_000)
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-build-halt-log-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 

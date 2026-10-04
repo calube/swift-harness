@@ -77,7 +77,7 @@ public struct BuildCalibrationRunner: Sendable {
     let sandbox = sandboxRoot.appending(
       path: "\(agent.name)-\(seed.name)", directoryHint: .isDirectory)
     // A leftover from an earlier run under the same root would be laid over, not replaced.
-    try? FileManager.default.removeItem(at: sandbox)
+    TemporaryDirectories.remove(sandbox)
     let repository = Sandbox(
       directory: sandbox, seed: root.appending(path: seed.directory, directoryHint: .isDirectory),
       tools: tools)
@@ -121,7 +121,7 @@ public struct BuildCalibrationRunner: Sendable {
       try await repository.acceptance(tip: tip, tests: seed.label.tests, timeout: testTimeout))
 
     let met = answers.allSatisfy(\.met)
-    if met { try? FileManager.default.removeItem(at: sandbox) }
+    if met { TemporaryDirectories.remove(sandbox) }
     return CaseRun(
       result: .init(
         agent: agent.name, caseName: seed.name, model: model(of: agent), answers: answers),

@@ -24,7 +24,7 @@ struct ContextPackSpecPageTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(
           path: "swiftgate-context-pack-spec-page-\(UUID().uuidString)",
           directoryHint: .isDirectory
@@ -33,7 +33,7 @@ struct ContextPackSpecPageTests {
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     @discardableResult
     func write(_ contents: String, at relativePath: String) throws -> String {

@@ -105,7 +105,10 @@ public struct FileCountingLock: CountingLock {
     let guardPath = directory.appending(path: "\(name).guard").path
     let guardFD = try Self.open(guardPath)
     defer { close(guardFD) }
-    guard flock(guardFD, LOCK_EX) == 0 else {
+    // Never a blocking wait: the caller is async, and a scan someone else is running counts as
+    // no free slot this round, retried after the poll interval like a held slot.
+    guard flock(guardFD, LOCK_EX | LOCK_NB) == 0 else {
+      if errno == EWOULDBLOCK { return nil }
       throw .io(operation: "flock", path: guardPath, errno: errno)
     }
     defer { flock(guardFD, LOCK_UN) }

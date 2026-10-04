@@ -11,7 +11,7 @@ struct DesignCalibrationTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(
           path: "swiftgate-calibration-hash-\(UUID().uuidString)", directoryHint: .isDirectory
         )

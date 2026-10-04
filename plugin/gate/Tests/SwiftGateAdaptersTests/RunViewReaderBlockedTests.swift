@@ -37,7 +37,7 @@ private struct BlockedClone {
     let captured = Fixture.gateDirectory.appending(
       path: "Tests/Fixtures/RunView/\(capture.fixture)", directoryHint: .isDirectory)
     let files = FileManager.default
-    parent = files.temporaryDirectory.appending(
+    parent = TestTemporaryDirectory.root.appending(
       path: "run-view-blocked-\(UUID().uuidString)", directoryHint: .isDirectory
     ).resolvingSymlinksInPath()
     common = parent.appending(path: "\(capture.clone)/.git", directoryHint: .isDirectory)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateAdapters
+import SwiftGateTestSupport
 import Testing
 
 @Suite("LiveScratchWorktrees")
@@ -35,7 +36,7 @@ struct ScratchWorktreesTests {
 
     func remove() {
       repository.remove()
-      try? FileManager.default.removeItem(at: temporary)
+      TestTemporaryDirectory.remove(temporary)
     }
   }
 

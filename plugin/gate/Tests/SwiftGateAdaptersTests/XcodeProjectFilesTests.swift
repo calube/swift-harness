@@ -10,7 +10,7 @@ struct XcodeProjectFilesTests {
   static let pbxproj = projectPath + "/project.pbxproj"
 
   static func makeTree() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-xcode-files-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(
       at: root.appending(path: projectPath), withIntermediateDirectories: true)

@@ -64,7 +64,7 @@ struct PluginValidateCheckTests {
     let root: URL
 
     init(withPlugin: Bool = true) async throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "plugin-validate-\(UUID().uuidString)", directoryHint: .isDirectory)
         .resolvingSymlinksInPath()
       try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -81,7 +81,7 @@ struct PluginValidateCheckTests {
       #expect(initialized.status.isSuccess)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     /// A captured report re-rooted here, as the validator prints absolute paths.
     func json(_ report: String) -> String {

@@ -43,7 +43,7 @@ private struct DesignScopeRepository {
   }
 
   init(withConfig: Bool = true) throws {
-    root = FileManager.default.temporaryDirectory
+    root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-design-scope-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     let package = root.appending(path: Self.packagePath, directoryHint: .isDirectory)
@@ -55,7 +55,7 @@ private struct DesignScopeRepository {
     }
   }
 
-  func remove() { try? FileManager.default.removeItem(at: root) }
+  func remove() { TestTemporaryDirectory.remove(root) }
 
   func frameAnswersFile(_ contents: String) throws -> URL {
     let url = root.appending(path: "frame-answers-\(UUID().uuidString).json")

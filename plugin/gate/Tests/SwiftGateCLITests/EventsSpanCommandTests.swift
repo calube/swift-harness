@@ -13,7 +13,7 @@ struct EventsSpanCommandTests {
   static let spanID = "00c0ffee12345678"
 
   static func temporaryRoot() -> URL {
-    FileManager.default.temporaryDirectory.appending(
+    TestTemporaryDirectory.root.appending(
       path: "swiftgate-span-\(UUID().uuidString)", directoryHint: .isDirectory)
   }
 
@@ -252,7 +252,7 @@ struct EventsSpanCommandTests {
 
   static let gitEnvironment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",

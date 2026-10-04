@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -10,7 +11,7 @@ import Testing
 struct ScratchWorktreeSweepTests {
   private static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path, "GIT_CONFIG_NOSYSTEM": "1",
+    "HOME": TestTemporaryDirectory.sharedHome.path, "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "Test",
     "GIT_AUTHOR_EMAIL": "test@example.com", "GIT_COMMITTER_NAME": "Test",
     "GIT_COMMITTER_EMAIL": "test@example.com",
@@ -28,12 +29,14 @@ struct ScratchWorktreeSweepTests {
   }
 
   /// The id of a process that has run and been reaped, so nothing owns it any more.
-  private static func deadProcessID() throws -> Int32 {
-    let process = Process()
-    process.executableURL = URL(filePath: "/usr/bin/true")
-    try process.run()
-    process.waitUntilExit()
-    return process.processIdentifier
+  private static func deadProcessID() async throws -> Int32 {
+    try await OffPool.run {
+      let process = Process()
+      process.executableURL = URL(filePath: "/usr/bin/true")
+      try process.run()
+      process.waitUntilExit()
+      return process.processIdentifier
+    }
   }
 
   @Test(
@@ -52,7 +55,7 @@ struct ScratchWorktreeSweepTests {
     _ = try await Self.git("add", "-A", in: root)
     _ = try await Self.git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "base", in: root)
 
-    let dead = try Self.deadProcessID()
+    let dead = try await Self.deadProcessID()
     let orphans = [
       base.appending(path: ".app-swiftgate-prove-\(dead)-1a2b"),
       // Made from a linked worktree of the same repository that has since been removed.

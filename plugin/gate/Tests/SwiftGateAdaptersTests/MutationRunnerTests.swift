@@ -19,7 +19,7 @@ struct MutationRunnerTests {
     let root: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-mutate-seed-\(UUID().uuidString)", directoryHint: .isDirectory)
       let file = root.appending(path: MutationRunnerTests.file)
       try FileManager.default.createDirectory(
@@ -27,7 +27,7 @@ struct MutationRunnerTests {
       try Data(MutationRunnerTests.original.utf8).write(to: file)
     }
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
   }
 
   /// `count` distinct mutants of the file (boundary, negation, default), cycled.
@@ -62,7 +62,7 @@ struct MutationRunnerTests {
     await MutationRunner(scratch: scratch, toolchain: toolchain, workers: workers, timeout: timeout)
       .run(
         jobs, tree: Self.tree, projectPrefix: "",
-        reportDirectory: FileManager.default.temporaryDirectory.appending(path: "mutate-reports"))
+        reportDirectory: TestTemporaryDirectory.root.appending(path: "mutate-reports"))
   }
 
   @Test(
@@ -161,6 +161,13 @@ struct MutationRunnerTests {
     #expect(toolchain.tests.count == 1)
   }
 
+  /// Holds a fake build until `gate` opens or `seconds` pass, on the thread of its own the fake
+  /// toolchain runs each build on.
+  private static func hold(_ gate: DispatchSemaphore, seconds: Int) {
+    let by = DispatchTime.now() + .seconds(seconds)
+    _ = gate.wait(timeout: by)  // swiftgate:allow safety.blocking-in-async — builds run off-pool
+  }
+
   @Test(
     "the unmutated tests run once per package however many workers build it, only once no build is running, and every worker's timeouts scale from that run — catches each worker running the whole suite at once, or beside the other workers' compiles, and failing it for want of headroom"
   )
@@ -187,8 +194,8 @@ struct MutationRunnerTests {
         if started == workers {
           for _ in 0..<workers { allBuilding.signal() }
         }
-        if started <= workers { _ = allBuilding.wait(timeout: .now() + 60) }
-        if (2...workers).contains(started) { _ = baselineStarted.wait(timeout: .now() + 2) }
+        if started <= workers { Self.hold(allBuilding, seconds: 60) }
+        if (2...workers).contains(started) { Self.hold(baselineStarted, seconds: 2) }
         return .built
       },
       test: { root, _ in

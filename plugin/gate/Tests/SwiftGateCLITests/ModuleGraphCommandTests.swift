@@ -37,7 +37,7 @@ struct ModuleGraphCommandTests {
   /// A copy, so `swift package describe`, the manifest cache and coverage output write nothing
   /// into the checkout.
   private static func copyOfFixture() throws -> URL {
-    let root = FileManager.default.temporaryDirectory
+    let root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-module-graph-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     try FileManager.default.copyItem(at: fixture, to: root)

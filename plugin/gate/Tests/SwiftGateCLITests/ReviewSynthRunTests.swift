@@ -17,7 +17,7 @@ struct ReviewSynthRunTests {
     let directory: URL
     let files: [URL]
 
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() { TestTemporaryDirectory.remove(root) }
 
     func json(_ name: String) throws -> [String: Any] {
       let data = try Data(contentsOf: directory.appending(path: name))
@@ -59,7 +59,7 @@ struct ReviewSynthRunTests {
     _ findings: [[String: Any]], patch: String?,
     runID: String = RunID.make(startedAt: Date(), suffix: 0x15a6_5d14)
   ) throws -> Run {
-    let root = FileManager.default.temporaryDirectory.appending(
+    let root = TestTemporaryDirectory.root.appending(
       path: "swiftgate-synth-run-\(UUID().uuidString)", directoryHint: .isDirectory)
     let directory = root.appending(path: runID, directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

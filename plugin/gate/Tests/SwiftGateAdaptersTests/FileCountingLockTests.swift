@@ -2,6 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("FileCountingLock")
@@ -9,7 +10,7 @@ struct FileCountingLockTests {
   /// Above macOS's highest PID (99998), so it can never name a live process.
   static let deadPID = 999_999
 
-  let directory = FileManager.default.temporaryDirectory
+  let directory = TestTemporaryDirectory.root
     .appending(path: "swiftgate-lock-\(UUID().uuidString)", directoryHint: .isDirectory)
 
   func lock(capacity: Int) -> FileCountingLock {
@@ -65,6 +66,29 @@ struct FileCountingLockTests {
       _ = try await lock.acquire(timeout: .milliseconds(50))
     }
     held.release()
+  }
+
+  @Test(
+    "while another process holds the guard, acquiring polls until its timeout instead of blocking its thread on the guard — catches a scan that waits in flock on a pool thread"
+  )
+  func heldGuardIsPolled() async throws {
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let guardFD = open(directory.appending(path: "sim.guard").path, O_RDWR | O_CREAT, 0o644)
+    try #require(guardFD >= 0)
+    defer { close(guardFD) }
+    try #require(flock(guardFD, LOCK_EX | LOCK_NB) == 0)
+    // A blocked acquirer could only return once something lets go of the guard.
+    let released = DispatchSemaphore(value: 0)
+    Thread {
+      _ = released.wait(timeout: .now() + 30)
+      flock(guardFD, LOCK_UN)
+    }.start()
+
+    await #expect(throws: FileLockError.timedOut(waited: .milliseconds(100), capacity: 1)) {
+      _ = try await lock(capacity: 1).acquire(timeout: .milliseconds(100))
+    }
+    released.signal()
   }
 
   @Test("dropping a lease frees its slot — catches leaked slots on early return")

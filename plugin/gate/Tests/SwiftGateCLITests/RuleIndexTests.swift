@@ -228,7 +228,7 @@ extension RuleIndexTests {
 
   /// A temp directory holding a copy of `PlanLintGraph.swift` with `line` appended.
   static func plantedSources(_ line: String) throws -> URL {
-    let directory = FileManager.default.temporaryDirectory
+    let directory = TestTemporaryDirectory.root
       .appending(path: "swiftgate-rule-scan-\(UUID().uuidString)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let original = try String(

@@ -74,7 +74,7 @@ struct PlanBranchScenario {
   let taskWorktree: String
 
   init() async throws {
-    base = FileManager.default.temporaryDirectory
+    base = TestTemporaryDirectory.root
       .appending(path: "build-plan-branch-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
     user = base.appending(path: "clone", directoryHint: .isDirectory)
@@ -133,7 +133,7 @@ struct PlanBranchScenario {
       suffix: 1)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: base) }
+  func remove() { TestTemporaryDirectory.remove(base) }
 
   @discardableResult
   static func git(_ arguments: [String], in directory: String, runner: LiveProcessRunner)

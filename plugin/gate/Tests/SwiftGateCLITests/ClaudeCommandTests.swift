@@ -14,7 +14,7 @@ struct ClaudeCommandTests {
     let record: URL
 
     init() throws {
-      root = FileManager.default.temporaryDirectory
+      root = TestTemporaryDirectory.root
         .appending(path: "swiftgate-claude-\(UUID().uuidString)", directoryHint: .isDirectory)
       bin = root.appending(path: "bin", directoryHint: .isDirectory)
       record = root.appending(path: "received.txt")
@@ -44,22 +44,17 @@ struct ClaudeCommandTests {
       if settings { try Data("{\"hooks\":{}}".utf8).write(to: layout.settings) }
     }
 
-    func run(_ arguments: [String], cwd: URL) throws -> (status: Int32, stderr: String) {
-      let process = Process()
-      process.executableURL = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate")
-      process.arguments = arguments
-      process.currentDirectoryURL = cwd
+    func run(_ arguments: [String], cwd: URL) async throws -> (
+      status: SwiftGateAdapters.ExitStatus, stderr: String
+    ) {
       var environment = ProcessInfo.processInfo.environment
       environment["PATH"] = bin.path + ":/usr/bin:/bin"
       environment["LLVM_PROFILE_FILE"] = root.appending(path: "%p.profraw").path
-      process.environment = environment
-      let errors = Pipe()
-      process.standardError = errors
-      process.standardOutput = FileHandle.nullDevice
-      try process.run()
-      let data = errors.fileHandleForReading.readDataToEndOfFile()
-      process.waitUntilExit()
-      return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+      let output = try await LiveProcessRunner(baseEnvironment: environment).run(
+        ProcessInvocation(
+          executable: Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path,
+          arguments: arguments, workingDirectory: cwd.path, timeout: .seconds(120)))
+      return (output.status, output.stderr.text)
     }
 
     var received: [String]? {
@@ -72,17 +67,17 @@ struct ClaudeCommandTests {
   @Test(
     "claude receives --settings with the clone's settings file, then the passed args in order — catches args dropped or reordered"
   )
-  func passesSettingsThenArguments() throws {
+  func passesSettingsThenArguments() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.root) }
     try clone.writeState(settings: true)
     let subdirectory = clone.worktree.appending(path: "src", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
 
-    let result = try clone.run(
+    let result = try await clone.run(
       ["claude", "--resume", "-p", "hello world", "--", "x"], cwd: subdirectory)
 
-    #expect(result.status == 0, "\(result.stderr)")
+    #expect(result.status == .exited(0), "\(result.stderr)")
     let received = try #require(clone.received)
     #expect(received.count == 7)
     #expect(received.first == "--settings")
@@ -95,14 +90,14 @@ struct ClaudeCommandTests {
   @Test(
     "with no settings file claude never starts and the error names the file — catches a session started without the hooks"
   )
-  func missingSettingsBlocks() throws {
+  func missingSettingsBlocks() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.root) }
     try clone.writeState(settings: false)
 
-    let result = try clone.run(["claude", "-p", "hello"], cwd: clone.worktree)
+    let result = try await clone.run(["claude", "-p", "hello"], cwd: clone.worktree)
 
-    #expect(result.status == 2)
+    #expect(result.status == .exited(2))
     #expect(result.stderr.contains("swift-harness/settings.json"))
     #expect(result.stderr.contains("discover --apply"))
     #expect(clone.received == nil)

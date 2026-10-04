@@ -1,10 +1,11 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 private func temporaryDirectory(_ label: String) throws -> URL {
-  let url = FileManager.default.temporaryDirectory
+  let url = TestTemporaryDirectory.root
     .appending(path: "swiftgate-\(label)-\(UUID().uuidString)", directoryHint: .isDirectory)
     .resolvingSymlinksInPath()
   try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
