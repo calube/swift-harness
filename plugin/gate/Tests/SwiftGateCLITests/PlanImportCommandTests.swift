@@ -94,6 +94,13 @@ private struct ImportClone {
     root.appending(path: ".git/swift-harness/plans/\(Self.slug)", directoryHint: .isDirectory)
   }
 
+  /// `nil` when nothing readable is at `path` under the root.
+  func text(atRoot path: String) -> String? {
+    FileManager.default.contents(atPath: root.appending(path: path).path).map {
+      String(decoding: $0, as: UTF8.self)
+    }
+  }
+
   var exclude: URL { root.appending(path: ".git/info/exclude") }
 
   func run() async -> PlanImportReport {
@@ -140,12 +147,14 @@ struct PlanImportCommandTests {
     let plan = try planData.map(PlanFileJSON.decode)
     #expect(plan?.slug == ImportClone.slug)
     #expect(plan?.livePlanSource?.briefs["filter-model"]?.designRef == "§4.2")
-    let link = try? FileManager.default.destinationOfSymbolicLink(
-      atPath: clone.root.appending(path: "PLAN.md").path)
+    var link: String?
+    #expect(throws: Never.self) {
+      link = try FileManager.default.destinationOfSymbolicLink(
+        atPath: clone.root.appending(path: "PLAN.md").path)
+    }
     #expect(link?.hasSuffix(".git/swift-harness/plans/\(ImportClone.slug)/PLAN.md") == true)
     #expect(
-      (try? String(contentsOf: clone.root.appending(path: "PLAN.md"), encoding: .utf8))
-        == ImportClone.plan)
+      clone.text(atRoot: "PLAN.md") == ImportClone.plan)
   }
 
   @Test("git status shows nothing after an import — catches the PLAN.md link left unexcluded")
@@ -170,7 +179,8 @@ struct PlanImportCommandTests {
     #expect(first.excludeAdded == true, "\(first.message)")
     #expect(second.status == .imported, "\(second.message)")
     #expect(second.excludeAdded == false)
-    let text = String(decoding: (try? Data(contentsOf: clone.exclude)) ?? Data(), as: UTF8.self)
+    let text = String(
+      decoding: FileManager.default.contents(atPath: clone.exclude.path) ?? Data(), as: UTF8.self)
     #expect(text.components(separatedBy: "\n").filter { $0 == "/PLAN.md" }.count == 1)
   }
 
@@ -223,7 +233,7 @@ struct PlanImportCommandTests {
     #expect(report.status == .blocked)
     #expect(report.message.contains("PLAN.md"))
     #expect(
-      (try? String(contentsOf: clone.root.appending(path: "PLAN.md"), encoding: .utf8)) == "mine\n")
+      clone.text(atRoot: "PLAN.md") == "mine\n")
     #expect(
       !FileManager.default.fileExists(
         atPath: clone.planDirectory.appending(path: "ledger.json").path))

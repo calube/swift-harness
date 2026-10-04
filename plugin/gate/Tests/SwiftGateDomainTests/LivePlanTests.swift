@@ -118,7 +118,9 @@ struct LivePlanTests {
   func planFileRoundTrip() throws {
     let plan = try LivePlanParser.parse(threeTaskPlan)
     let file = plan.planFile(slug: "search-filters", resume: "planned", existing: nil)
-    let read = try? PlanFileJSON.decode(try PlanFileJSON.encode(file))
+    let encoded = try PlanFileJSON.encode(file)
+    var read: PlanFile?
+    #expect(throws: Never.self) { read = try PlanFileJSON.decode(encoded) }
 
     #expect(read == file)
     let source = try #require(read?.livePlanSource)
