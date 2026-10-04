@@ -122,6 +122,15 @@ public enum RunLaunch {
     return nil
   }
 
+  /// The option that loads a plugin from a directory for one session.
+  public static let pluginDirectoryOption = "--plugin-dir"
+
+  /// The directories `extra` loads plugins from, as `--plugin-dir <path>` or
+  /// `--plugin-dir=<path>`, in order. Arguments after `--` are positional, so none of them counts.
+  public static func pluginDirectories(in extra: [String]) -> [String] {
+    []
+  }
+
   /// `claude`'s argv: the clone's hook settings, the pinned model, the session id the plan's lock
   /// holds, the prompt, then `extra` unchanged. The prompt comes before `extra` so a variadic
   /// option there can't swallow it.

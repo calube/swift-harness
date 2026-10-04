@@ -37,6 +37,14 @@ protocol ClaudeLaunching: Sendable {
   func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError)
 }
 
+/// Builds the swiftgate binary of each plugin the session loads with `--plugin-dir`, before the
+/// session starts, so none of that plugin's hooks runs an older binary while its own builds.
+protocol PluginWarming: Sendable {
+  /// Builds `directory`'s gate, or each child plugin's when `directory` is a folder of plugins.
+  /// Returns the shims it ran; a directory with no swiftgate shim is another plugin and is skipped.
+  func warm(directory: URL) async throws(RunStartError) -> [String]
+}
+
 /// What `run` prepared before launching the orchestrator.
 struct RunPrepared: Sendable, Equatable, Encodable {
   let slug: String
@@ -60,6 +68,7 @@ extension RunCommand {
     var runner: any ProcessRunner = LiveProcessRunner()
     var discover = DiscoverCommand.Dependencies()
     var warmup: any WarmupSpawning = LiveWarmupSpawner()
+    var plugins: any PluginWarming = LivePluginWarmer()
     var now: @Sendable () -> Date = { Date() }
     /// The orchestrator's session id, a UUID as `claude --session-id` requires.
     var newSession: @Sendable () -> String = { UUID().uuidString.lowercased() }
@@ -364,6 +373,17 @@ struct LiveWarmupSpawner: WarmupSpawning {
     } else {
       kill(pid, SIGTERM)
     }
+  }
+}
+
+/// Runs each plugin's `bin/swiftgate --version`, which builds that gate into the cache the shim
+/// picks with no plugin data directory: the cache a plugin hook's shim reuses an exact-hash binary
+/// from.
+struct LivePluginWarmer: PluginWarming {
+  var runner: any ProcessRunner = LiveProcessRunner()
+
+  func warm(directory: URL) async throws(RunStartError) -> [String] {
+    []
   }
 }
 
