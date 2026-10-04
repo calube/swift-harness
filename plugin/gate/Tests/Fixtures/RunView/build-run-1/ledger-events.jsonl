@@ -1,0 +1,15 @@
+{"at":"2026-10-04T04:55:47Z","from":"pending","kind":"transition","task":"counter-core-reset-and-decrement-floor","to":"in-progress"}
+{"at":"2026-10-04T04:59:01Z","kind":"merge","postCommit":"04614996239ec1b5835037a9ae5a990b432f7b2f","preCommit":"5f49d8d7e6b040dab1a1971e8bcb5546c0431171","task":"counter-core-reset-and-decrement-floor"}
+{"at":"2026-10-04T05:00:29Z","gate":"merge","kind":"gate","runId":"20261004T045901Z-e384a82a","task":"counter-core-reset-and-decrement-floor","tier":"push","verdict":"GREEN"}
+{"at":"2026-10-04T05:00:29Z","from":"in-progress","kind":"transition","task":"counter-core-reset-and-decrement-floor","to":"done"}
+{"at":"2026-10-04T05:01:05Z","from":"pending","kind":"transition","task":"counter-ui-reset-button","to":"in-progress"}
+{"at":"2026-10-04T05:03:10Z","kind":"merge","postCommit":"ab2b20eb2524d3920cb1ad8eca96734fb02e72bf","preCommit":"04614996239ec1b5835037a9ae5a990b432f7b2f","task":"counter-ui-reset-button"}
+{"at":"2026-10-04T05:05:27Z","gate":"merge","kind":"gate","runId":"20261004T050310Z-ed998508","task":"counter-ui-reset-button","tier":"push","verdict":"RED"}
+{"at":"2026-10-04T05:05:28Z","fromCommit":"ab2b20eb2524d3920cb1ad8eca96734fb02e72bf","kind":"undo","task":"counter-ui-reset-button","toCommit":"04614996239ec1b5835037a9ae5a990b432f7b2f"}
+{"at":"2026-10-04T05:10:53Z","kind":"merge","postCommit":"9706eacf64b4c227ee7ff2291e0feb355365a1ea","preCommit":"04614996239ec1b5835037a9ae5a990b432f7b2f","task":"counter-ui-reset-button"}
+{"at":"2026-10-04T05:11:47Z","gate":"merge","kind":"gate","runId":"20261004T051053Z-7447d956","task":"counter-ui-reset-button","tier":"push","verdict":"GREEN"}
+{"at":"2026-10-04T05:11:47Z","from":"in-progress","kind":"transition","task":"counter-ui-reset-button","to":"done"}
+{"at":"2026-10-04T05:12:32Z","from":"pending","kind":"transition","task":"counter-ui-reset-button-snapshot","to":"in-progress"}
+{"at":"2026-10-04T05:14:05Z","from":"in-progress","kind":"transition","task":"counter-ui-reset-button-snapshot","to":"blocked"}
+{"at":"2026-10-04T05:15:43Z","from":"blocked","kind":"transition","task":"counter-ui-reset-button-snapshot","to":"abandoned"}
+{"at":"2026-10-04T05:19:30Z","gate":"final","kind":"gate","runId":"20261004T051601Z-46b2b09c","tier":"ready","verdict":"GREEN"}

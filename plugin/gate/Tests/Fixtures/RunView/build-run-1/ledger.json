@@ -1,0 +1,84 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 3 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "branch" : "2026-10-03-counter-reset-and-floor/counter-core-reset-and-decrement-floor",
+      "covers" : [
+        "slice-1-reset-after-increments-shows-zero",
+        "slice-2-decrement-at-zero-stays-zero"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 70,
+      "gate" : "fast",
+      "id" : "counter-core-reset-and-decrement-floor",
+      "model" : "sonnet",
+      "status" : "done",
+      "tests" : [
+        "slice-1-reset-after-increments-shows-zero",
+        "slice-2-decrement-at-zero-stays-zero"
+      ],
+      "worktree" : "../app-2026-10-03-counter-reset-and-floor-counter-core-reset-and-decrement-floor",
+      "writeSet" : [
+        "Packages/CounterFeature/Sources/CounterCore/",
+        "Packages/CounterFeature/Tests/CounterCoreTests/"
+      ]
+    },
+    {
+      "branch" : "2026-10-03-counter-reset-and-floor/counter-ui-reset-button",
+      "covers" : [
+        "slice-1-reset-after-increments-shows-zero"
+      ],
+      "deps" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "estLines" : 15,
+      "gate" : "fast",
+      "id" : "counter-ui-reset-button",
+      "model" : "sonnet",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../app-2026-10-03-counter-reset-and-floor-counter-ui-reset-button",
+      "writeSet" : [
+        "Packages/CounterFeature/Sources/CounterUI/"
+      ]
+    },
+    {
+      "branch" : "2026-10-03-counter-reset-and-floor/counter-ui-reset-button-snapshot",
+      "covers" : [
+        "slice-1-reset-after-increments-shows-zero"
+      ],
+      "deps" : [
+        "counter-ui-reset-button"
+      ],
+      "estLines" : 25,
+      "gate" : "push",
+      "id" : "counter-ui-reset-button-snapshot",
+      "model" : "sonnet",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../app-2026-10-03-counter-reset-and-floor-counter-ui-reset-button-snapshot",
+      "writeSet" : [
+        "Packages/CounterFeature/Tests/CounterUISnapshotTests/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "counter-core-reset-and-decrement-floor"
+    ],
+    [
+      "counter-ui-reset-button"
+    ],
+    [
+      "counter-ui-reset-button-snapshot"
+    ]
+  ]
+}

@@ -1,0 +1,54 @@
+Build run: 20261004T045528Z-58d28c78
+Plan: 2026-10-03-counter-reset-and-floor (spec page plan, preset "capture")
+Captured: 2026-10-04, Claude Code 2.1.288, main session claude-opus-5-5, workers claude-sonnet-5-5
+Wall time: ship session 04:51:57Z to 05:14:14Z (halted), resume 05:19:51Z end; build run 04:55:28Z start
+
+Scratch repository, from the swift-harness repository root (<harness> below):
+
+  S=$(mktemp -d)
+  /bin/cp -R examples/SampleApp/. $S/app
+  cd $S/app && git init -q -b main && git add -A && git commit -qm SampleApp
+  HOME=$S/home <harness>/plugin/bin/swiftgate bootstrap --apply
+  # lefthook-local.yml (git-ignored) points the git hooks at <harness>/plugin/bin/swiftgate
+  # .swiftgate.toml gains [harness] profile = "capture", [build.presets.capture] and
+  # [docs] managed_files = ["docs/index.md", "AGENTS.md"]
+  git init -q --bare $S/origin.git && git remote add origin $S/origin.git && git push -u origin main
+  for p in Packages/*; do swift build --build-tests --package-path $p; done
+  # docs/specs/counter-reset-and-floor.md (spec.md here) committed, routed from docs/index.md
+  /bin/rm -rf .harness/events
+
+[build.presets.capture]:
+  design_tier = "none", max_parallel = 2, review = "gate", task_gate = "fast", merge_gate = "push",
+  worker_model = "sonnet", time_budget_min = 0, stop_starts_before_min = 0,
+  on_design_conflict = "block", task_proof = "final"
+
+Run, from $S/app:
+
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p \
+    '/swift-harness:ship docs/specs/counter-reset-and-floor.md --preset capture' \
+    --plugin-dir <harness>/plugin --model opus --setting-sources project,local \
+    --permission-mode bypassPermissions --max-budget-usd 40 --output-format json
+
+  It halted on counter-ui-reset-button-snapshot (build-return.no-commits). Resumed with:
+
+  CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p \
+    'Orchestrator-answered capture rehearsal, not the user: 1. Abandon it. Then finish the build as the skill says. Before the final gate, re-run the events ingest command for each task that already completed (same flags as before), since the session record now exists; report each exit.' \
+    --resume 306d86af-8556-4a2c-8300-5029ecae68b2 --plugin-dir <harness>/plugin --model opus --setting-sources project,local \
+    --permission-mode bypassPermissions --max-budget-usd 20 --output-format json
+
+Copied unedited, from $S/app, with P=.git/swift-harness/plans/2026-10-03-counter-reset-and-floor
+and R=$P/build/20261004T045528Z-58d28c78:
+
+  .harness/events/*.jsonl, store.json   -> events/
+  .harness/events/imported/<store>/*    -> events/imported/<store>/
+  $P/ledger.json                         -> ledger.json
+  $R/events.jsonl                        -> ledger-events.jsonl
+  $R/run.json                            -> run.json
+  $R/returns/*.json                      -> returns/
+  $P/plan.json                           -> plan.json
+  $P/spec-page.md                        -> plan.md
+  docs/specs/counter-reset-and-floor.md  -> spec.md
+
+events ingest exited 2 for every task and for the session: Claude Code 2.1.288 writes one
+assistant message as several lines with growing usage.output_tokens, and ingest refuses
+"repeats an earlier message id with different usage". So no usage stream is here.

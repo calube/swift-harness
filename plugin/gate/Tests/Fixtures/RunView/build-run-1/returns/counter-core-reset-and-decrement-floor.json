@@ -1,0 +1,23 @@
+{
+  "task": "counter-core-reset-and-decrement-floor",
+  "outcome": "ready-to-merge",
+  "commits": [
+    "8585efeb190d62a60a0de1150f12ae07f2fcdccd"
+  ],
+  "gate": {
+    "tier": "fast",
+    "verdict": "GREEN",
+    "runId": "20261004T045606Z-8c4ecbc1"
+  },
+  "review": {
+    "mode": "gate",
+    "findings": []
+  },
+  "testsAdded": [
+    "slice-1-reset-after-increments-shows-zero",
+    "slice-2-decrement-at-zero-stays-zero"
+  ],
+  "notes": "CounterFeature: `.resetButtonTapped` sets count = 0 and fact = nil. `.decrementButtonTapped` is a no-op (state untouched, fact kept) when count == 0; otherwise decrements and clears fact. Tests: resetAfterIncrementsShowsZero, decrementAtZeroStaysZero in CounterFeatureTests. I did not see the new tests fail before implementing; the final proof mode defers prove and mutate to the ready gate.",
+  "designConflict": null,
+  "surfaceCommit": null
+}

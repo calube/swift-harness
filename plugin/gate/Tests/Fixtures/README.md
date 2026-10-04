@@ -949,6 +949,47 @@ line each, cost 0.1193102 for 6 input, 124 output, 22096 cache-write and 31631 c
 The 3 envelopes solve, with no remainder, to $4 input, $5 5-minute cache write and $0.20 cache read
 per 1M tokens, assuming output at 5 times input ($20).
 
+### Tool calls (`39933227-…`)
+
+A third throwaway session, for the tool summary ingest writes as `agent.tools`. It ran with Claude
+Code 2.1.288 on model `claude-sonnet-5-5`, in a fresh git repository made by `mktemp -d` holding
+`Sources/Greeting.swift` and `NOTES.md`, never in a real working session:
+
+```sh
+T=$(mktemp -d) && cd "$T" && git init -q -b main && mkdir Sources
+printf 'struct Greeting {\n  let text = "hello"\n}\n' > Sources/Greeting.swift
+printf '# Notes\n\nA throwaway repository.\n' > NOTES.md
+git add -A && git commit -qm seed
+claude -p 'Do exactly these steps, one tool call each, in this order, then reply with the single word done. 1. Use the Read tool on Sources/Greeting.swift. 2. Use the Edit tool to change "hello" to "hi" in Sources/Greeting.swift. 3. Use the Write tool to create Sources/Farewell.swift containing the single line: struct Farewell {}. 4. Use the Grep tool to search for the pattern struct in Sources. 5. Use the Bash tool to run: ls. 6. Use the Read tool on /etc/hosts. 7. Use the Agent tool exactly once to launch 1 subagent whose only task is to use the Read tool on NOTES.md and reply with its first line.' \
+  --model sonnet --setting-sources project,local --permission-mode bypassPermissions \
+  --output-format json > tools.json
+```
+
+This Claude Code build offers no `Grep` or `Glob` tool, so step 4 became a `ToolSearch` call that
+found nothing, and the session said so. The main transcript's `tool_use` names, in order, are
+`Read`, `Edit`, `Write`, `ToolSearch`, `Bash`, `Read` (`/etc/hosts`) and `Agent`; the subagent's is
+1 `Read` of `NOTES.md`. `Bash ls` returned `(Bash completed with no output)`. `--output-format json`
+printed an array of stream messages in this version, so the envelope is its last element,
+`jq '.[-1]'`. It cost `total_cost_usd` 0.0763847.
+
+The filter keeps `cwd`, which ingest needs to make paths repo-relative, and every content block,
+`tool_use` and `tool_result` included. With `ROOT=$(cd "$T" && pwd -P)`:
+
+```sh
+F='select(.type=="assistant" or .type=="user") | {type, timestamp, isSidechain, cwd, message: (.message | {id, model, usage, content} | with_entries(select(.value != null)))}'
+jq -c "$F" <session transcript> | sed "s#$ROOT#/REPO#g" > Transcripts/<session>.jsonl
+jq -c "$F" <subagent transcript> | sed "s#$ROOT#/REPO#g" > Transcripts/<session>/subagents/agent-<agentId>.jsonl
+jq '.[-1]' tools.json | sed "s#$ROOT#/REPO#g" > Transcripts/<session>.envelope.json
+```
+
+The `/etc/hosts` result is the stock macOS file. After the copy, the grep above matched nothing in
+these 3 files.
+
+Here a message's repeated lines carry the same usage. The run view build's worker transcripts,
+from Workflow agents in the same Claude Code version and not kept, did not: their first message's
+2 lines read `usage.output_tokens` 16, then 350, and `events ingest` refused each with `repeats an
+earlier message id with different usage`.
+
 ## Events
 
 `Events/judge.jsonl` is a judge audit log as the writer at `bbf0c62` wrote it, before the store
@@ -1066,6 +1107,49 @@ $G build halt --run $R --reason budget
 `Events/judge.jsonl` repeats its event ids across its 2 captured runs, because the fake judges
 number their events from 1 in each run. A test that decodes the file reads all 24 lines; `events
 summary`, which deduplicates by event id, keeps the first 12.
+
+## Run view
+
+`RunView/build-run-1/` is 1 real headless build, for the run view builder, reader and report.
+`SOURCE` in that directory holds every command, the Claude Code version, the date and the build
+run id, `20261004T045528Z-58d28c78`. In short: a `mktemp -d` copy of `examples/SampleApp`,
+bootstrapped with `HOME` in scratch, with a `capture` preset (`design_tier = "none"`, Sonnet
+workers, `task_proof = "final"`) and a 2-requirement spec (`spec.md`), ran
+`/swift-harness:ship <spec> --preset capture` in `claude -p` with
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. Ship wrote and confirmed the spec page (`plan.md`)
+without asking, landed the surface commit, planned and built.
+
+The decomposer split the 2 requirements into 3 tasks in 3 waves. Each file is a copy of the
+state the run left, unedited:
+
+| Task | Ledger status | What happened |
+|---|---|---|
+| `counter-core-reset-and-decrement-floor` | `done` | merged, merge gate GREEN |
+| `counter-ui-reset-button` | `done` | its merge turned the push gate RED (a stale snapshot), `build merge --undo`, the fixer re-recorded the snapshot, the fix merge GREEN |
+| `counter-ui-reset-button-snapshot` | `abandoned` | returned no commits, `build-return.no-commits` halted it; the resumed session answered `abandon`, an orchestrator-answered rehearsal, never the user |
+
+The final `ready` gate, run `20261004T051601Z-46b2b09c`, was GREEN. The plan stays `building`
+because 1 task was abandoned.
+
+| File | Holds |
+|---|---|
+| `events/<stream>.jsonl` | the main store's `build` (1 halt, 1 resume), `gate` (17 `gate.run`, 88 `gate.step`), `test` (203), `hook` (70) and `cache` (175) streams, whole, preflight gates included |
+| `events/imported/<store>/` | the 3 task worktree stores `worktree remove` imported, with their `store.json` |
+| `ledger.json`, `ledger-events.jsonl` | the plan's ledger and its build run's `events.jsonl`: 7 transitions, 3 merges, 1 undo, 4 gates |
+| `returns/<task>.json` | the 2 checked returns; the abandoned task's was refused, so none was written |
+| `run.json`, `plan.json`, `plan.md`, `spec.md` | the build run record, the plan state, the spec page and the spec |
+
+There is no `usage` stream: `events ingest` exited 2 after every task, first with `no session
+record` and, after the resume wrote one, with `repeats an earlier message id with different usage`
+(see Transcripts). The first failure came from the SessionStart hook running the shim's last good
+binary while the plugin data cache rebuilt; that older binary refused a `plugin.json` with no
+`version`. Spans, `prove.result` and `agent.tools` aren't recorded yet; a later capture repeats this
+run once they are.
+
+The sources held no machine path, so no `sed` ran. Ledger worktrees are relative
+(`../app-<plan>-<task>`). `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView`
+and `grep -rniE 'sk-ant|api[_-]?key|ANTHROPIC|bearer|password|secret|token=' RunView` matched
+nothing. `store.json` holds each store's random hashing salt, as written.
 
 ## GateRun
 
