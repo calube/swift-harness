@@ -1,0 +1,11 @@
+{
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait role=button label=\"Settings\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : false
+    }
+  ]
+}

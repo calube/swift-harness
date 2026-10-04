@@ -1,0 +1,54 @@
+final: GREEN (gate run 20261004T223202Z-ba27a3d3)
+validation: 1 of 3 rows verified (qa run 20261004T223404Z-be50ef8e, RED)
+
+# Run report: spec
+
+## Unfinished tasks
+
+- none
+
+## Time box
+
+- 45 min, from [build.presets.brownfield]: launched 2026-10-04T22:05:23Z, starts stop 2026-10-04T22:37:23Z, cutoff 2026-10-04T22:45:23Z, ends 2026-10-04T22:50:23Z
+- the cutoff never came
+
+## Assumptions
+
+- Single touched area, so no explorers ran; the plan comes from the orchestrator's own reading of the code.
+- The stored key is `Downloads.confirmLargeDownloads`, following the `Downloads.compress` / `Downloads.parallel` naming in `DownloadsSettings`.
+- The accessibility identifier is `settings.downloads.confirmLargeDownloads`, declared as `LargeDownloadConfirmation.toggleAccessibilityIdentifier`, since the repository has no typed accessibility-id module; `SettingView` applies it to this toggle only so no other setting changes.
+- The entry point is `LargeDownloadConfirmation.isRequired(chapterCount:defaults:)` in `Aidoku/Core/Downloads/`, reading the key straight from the `UserDefaults` it is handed rather than through `SettingsKey.get()`, which reads `UserDefaults.standard`.
+- "A download from a manga's chapter list" means the 2 download actions in `MangaView`: the multi-select Download button and the per-chapter context menu. The library's "Download All" menu in `LibraryViewController` is not a chapter list and stays unchanged. The count is the number of chapters actually queued after the already-downloaded/queued filter.
+- The prompt reuses the repository's `confirmationDialogOrAlert` helper and its `CANCEL` / `DOWNLOAD` strings; the title is a new `DOWNLOAD_N_CHAPTERS_CONFIRM` = "Download %i chapters?" string, added in English only, like recent string additions.
+- The Wi-Fi-only check still runs before the confirmation; a confirmed download then queues exactly as an unconfirmed one does.
+- req-prompt has no flow row: driving it needs an installed source with a manga of more than 50 chapters, which a fresh simulator doesn't have. req-check's acceptance test proves the decision, and review checks the `MangaView` wiring.
+- The req-check acceptance row first named the test file, which `qa run` can't execute (exit 126 after download-check merged), and the command guard refuses a raw test command as a check. It is now a reason-only row: the merge gate's full test run and prove stand in for it. The merge was kept, since that gate was GREEN.
+- Halt: `qa run --after download-setting` read RED. Every functional step of the toggle flow passed (found by its identifier, title shown, off by default); the RED came only from `sim.a11y-identifier` / `sim.a11y-label` audit findings on existing tab-bar buttons, cells and switches, plus 1 on the new switch, which hides its label like every existing settings toggle. Fixing them means changing other screens, which the spec puts out of scope, so the merge was kept and those findings were treated as baseline, not undone and sent to a fixer. The req-stored flow stopped on an agent-device error (`covered_by_interactive_descendants`), so it and its state row read unverified.
+- The final `qa run` read RED on the same pre-existing accessibility audit findings. No fix task was added: clearing them means adding identifiers and labels to other screens, which the spec puts out of scope, and a fix task wouldn't fit the time box before the cutoff. The `final` gate itself was GREEN.
+
+## Baseline failures
+
+- none
+
+## Build-only areas
+
+- Aidoku (warm test 75 s cold, build-only: over the 30 s slice budget, so its tests and their proof run at `merge`; lint dropped because swiftlint isn't installed)
+
+## Dropped steps
+
+- Aidoku lint: its command's tool isn't installed (exit 127 at the base tree), so it checked nothing
+- Aidoku lint: swiftlint is not installed on this machine (exit 127)
+
+## Review depth
+
+- download-check (merged): low, as swiftgate judge diff-risk rated it
+- download-prompt (merged): medium, as swiftgate judge diff-risk rated it
+- download-setting (merged): low, as swiftgate judge diff-risk rated it
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at f7e10b00b4d7bf7336441a9943809b255724bc08 holds every commit of the run; merging it is your call

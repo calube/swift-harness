@@ -1,0 +1,8 @@
+$ AidokuTests/LargeDownloadConfirmationTests.swift
+QA_PORT=54951
+exit: 126
+--- stdout ---
+
+--- stderr ---
+/bin/sh: AidokuTests/LargeDownloadConfirmationTests.swift: Permission denied
+

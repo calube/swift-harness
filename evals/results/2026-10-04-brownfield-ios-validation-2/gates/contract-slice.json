@@ -1,0 +1,35 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 58455,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Aidoku: no warm-up on the first-parent history of the merge base 3091ef26e593d303e34afed70bc8c5997c105f80 measured its tests, so slice only builds it; its changed tests and their prove run at merge",
+      "rule" : "area.build-only",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "/Users/caleb/Developer/trials/aidoku-ios-validation-2/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
+      "line" : null,
+      "message" : "Aidoku lint: its command's tool isn't installed (exit 127 at the head and the merge base), so the step checked nothing; put the tool on PATH or drop the step",
+      "rule" : "area.step-dropped",
+      "severity" : "minor"
+    }
+  ],
+  "runID" : "20261004T220725Z-92bf2bf0",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 58286,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

@@ -1,0 +1,5 @@
+{"elapsedMs":1395,"label":"after step 1: wait role=button label=\"Settings\"","n":1,"screenshot":"steps\/001.png","settled":true,"tree":"steps\/001.tree.json"}
+{"elapsedMs":3603,"label":"after step 5: wait label=\"Compress Downloads\"","n":2,"screenshot":"steps\/002.png","settled":true,"tree":"steps\/002.tree.json"}
+{"elapsedMs":1718,"label":"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"","n":3,"screenshot":"steps\/003.png","settled":true,"tree":"steps\/003.tree.json"}
+{"elapsedMs":8823,"label":"after step 7: wait label=\"Confirm Large Downloads\"","n":4,"screenshot":"steps\/004.png","settled":true,"tree":"steps\/004.tree.json"}
+{"elapsedMs":1330,"label":"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"","n":5,"screenshot":"steps\/005.png","settled":true,"tree":"steps\/005.tree.json"}

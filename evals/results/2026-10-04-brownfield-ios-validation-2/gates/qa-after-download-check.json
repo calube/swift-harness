@@ -1,0 +1,21 @@
+{
+  "after" : "download-check",
+  "atBase" : false,
+  "commit" : "b71d51391eda8cbfc66396e57c9fb4b36b042ae9",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "no validation row to run",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+
+  ],
+  "runID" : "20261004T221536Z-736acf17",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}
+

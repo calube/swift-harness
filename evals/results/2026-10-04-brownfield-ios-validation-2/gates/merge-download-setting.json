@@ -1,0 +1,51 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 116786,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Aidoku has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Aidoku test failed at the head and not at the merge base (`xcodebuild test -project Aidoku.xcodeproj -scheme Aidoku -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation`), exit 65:\nSwiftCompile normal arm64 Compiling\\ LargeDownloadConfirmationTests.swift /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/LargeDownloadConfirmationTests.swift (in target 'AidokuTests' from project 'Aidoku')\n\nSwiftCompile normal arm64 /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/LargeDownloadConfirmationTests.swift (in target 'AidokuTests' from project 'Aidoku')\n    cd /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec\n    \n\nSwiftCompile normal arm64 Compiling\\ TestableSource.swift /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/Support/TestableSource.swift (in target 'AidokuTests' from project 'Aidoku')\n\nSwiftCompile normal arm64 /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/Support/TestableSource.swift (in target 'AidokuTests' from project 'Aidoku')\n    cd /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec\n    \n\nSwiftCompile normal arm64 Compiling\\ TextPaginatorTests.swift /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/TextPaginatorTests.swift (in target 'AidokuTests' from project 'Aidoku')\n\nSwiftCompile normal arm64 /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/TextPaginatorTests.swift (in target 'AidokuTests' from project 'Aidoku')\n    cd /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec\n    \n\nProcessInfoPlistFile /Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Build/Products/Debug-iphonesimulator/Aidoku.app/PlugIns/AidokuTests.xctest/Info.plist /Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Build/Intermediates.noindex/Aidoku.build/Debug-iphonesimulator/AidokuTests.build/empty-AidokuTests.plist (in target 'AidokuTests' from project 'Aidoku')\n    cd /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec\n    builtin-infoPlistUtility /Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Build/Intermediates.noindex/Aidoku.build/Debug-iphonesimulator/AidokuTests.build/empty-AidokuTests.plist -producttype com.apple.product-type.bundle.unit-test -expandbuildsettings -format binary -platform iphonesimulator -scanforprivacyfile /Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Build/Products/Debug-iphonesimulator/Aidoku.app/PlugIns/AidokuTests.xctest/ZIPFoundation_ZIPFoundation.bundle -o /Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Build/Products/Debug-iphonesimulator/Aidoku.app/PlugIns/AidokuTests.xctest/Info.plist\n\nnote: Run script build phase 'Run Script' will be run during every build because the option to run the script phase \"Based on dependency analysis\" is unchecked. (in target 'Aidoku' from project 'Aidoku')\n\nTest session results, code coverage, and logs:\n\t/Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-fjayzrihflwsiofowxlzznclogxc/Logs/Test/Test-Aidoku-2026.10.04_17-20-13--0500.xcresult\n\nTesting failed:\n\tMember 'toggle' expects argument of type 'ToggleSetting'\n\tProperty 'key' is not available due to missing import of defining module 'AidokuRunner'\n\tTesting cancelled because the build failed.\n\n** TEST FAILED **\n\n\nThe following build commands failed:\n\tSwiftCompile normal arm64 /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/ConfirmLargeDownloadsSettingTests.swift (in target 'AidokuTests' from project 'Aidoku')\n\tSwiftCompile normal arm64 Compiling\\ ConfirmLargeDownloadsSettingTests.swift /Users/caleb/Developer/trials/aidoku-ios-validation-2-spec/AidokuTests/ConfirmLargeDownloadsSettingTests.swift (in target 'AidokuTests' from project 'Aidoku')\n\tTesting project Aidoku with scheme Aidoku\n(3 failures)",
+      "rule" : "area.test-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove ran Aidoku's whole test command: it has no test_files that selects its changed tests, so a failure there can't name the test that caught the change",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: 2 of 2 changed tests fail with the change's source reverted",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "runID" : "20261004T221928Z-4ecfb04f",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 116608,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}

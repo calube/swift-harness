@@ -1,0 +1,10 @@
+{
+  "agentDeviceVersion" : "0.21.18",
+  "bundleID" : "app.aidoku.Aidoku",
+  "deviceType" : "iPhone 17",
+  "headCommit" : "f7e10b00b4d7bf7336441a9943809b255724bc08",
+  "runtime" : "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+  "schemaVersion" : 1,
+  "startedAt" : "2026-10-04T22:28:11Z",
+  "udid" : "8E29D388-95D4-4EE8-B763-C7760933142B"
+}
