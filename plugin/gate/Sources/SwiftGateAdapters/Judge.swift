@@ -351,9 +351,9 @@ public struct JevJudge: Judge {
       } catch {
         switch error {
         case .timedOut:
-          throw .backend("Jev did not answer within the \(Self.seconds(timeout)) timeout")
+          throw .transport("Jev did not answer within the \(Self.seconds(timeout)) timeout")
         case .unreachable(let reason):
-          throw .backend("Jev is unreachable: \(reason)")
+          throw .transport("Jev is unreachable: \(reason)")
         }
       }
       attempts += 1
@@ -406,7 +406,7 @@ extension JudgeError {
     case .backend(let message): .backend(scrub(message))
     case .malformedReply(let message): .malformedReply(scrub(message))
     case .stateTooLarge, .process: self
-    case .transport: .transport("")
+    case .transport(let message): .transport(scrub(message))
     }
   }
 }

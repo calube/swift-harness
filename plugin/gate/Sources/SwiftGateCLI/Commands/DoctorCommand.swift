@@ -25,7 +25,11 @@ enum DoctorRun {
       }
       return Doctor.evaluate(
         await facts(
-          root: root, config: config, sessionID: sessionID, swiftPM: swiftPM, runner: runner))
+          root: root, config: config, sessionID: sessionID, swiftPM: swiftPM, runner: runner,
+          judgeKeysSet: Set(
+            JudgeBackend.allCases.compactMap(\.keyVariable).filter {
+              environment[$0]?.isEmpty == false
+            })))
     }
     let tier = try TierResult(
       tier: .t0, verdict: result.verdict, durationMilliseconds: milliseconds, testCounts: nil)
@@ -34,7 +38,7 @@ enum DoctorRun {
 
   private static func facts(
     root: URL, config: Config, sessionID: String?, swiftPM: any SwiftPM,
-    runner: any ProcessRunner
+    runner: any ProcessRunner, judgeKeysSet: Set<String>
   ) async -> DoctorFacts {
     async let xcode = try? LiveXcodebuild(runner: runner).version()
     async let swift = output(runner, ["swift", "--version"])
@@ -54,7 +58,7 @@ enum DoctorRun {
         root: root, packageDirectories: packages.map(\.path)),
       architectureFindings: architecture,
       mermaidCLIInstalled: HarnessFiles.isOnPath("mmdc", path: environment["PATH"] ?? ""),
-      pluginSession: pluginSession(root: root, sessionID: sessionID))
+      pluginSession: pluginSession(root: root, sessionID: sessionID), judgeKeysSet: judgeKeysSet)
   }
 
   /// `sessionID`'s record, or else the newest, and the tree at its `pluginRoot` now. With an id,

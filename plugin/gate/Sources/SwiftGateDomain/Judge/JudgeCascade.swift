@@ -199,14 +199,17 @@ public enum JudgeCascade {
   static func describe(_ escalation: Escalation) -> String {
     switch escalation {
     case .uncertain: "uncertain"
-    case .jevFailed: ""
+    case .jevFailed: "jev gave no answer"
     }
   }
 
   /// The plan when Jev gave no answer: every blocking question goes to Claude, and every advisory
   /// question stays unasked.
   public static func jevFailedPlan(questions: JudgeQuestionSet) -> Plan {
-    Plan(entries: [])
+    Plan(
+      entries: questions.questions.map {
+        Plan.Entry(question: $0.id, step: $0.mayBlock ? .escalate(.jevFailed) : .keep)
+      })
   }
 
   /// The findings when Jev gave no answer (`jevError` says why): Claude's on the blocking
@@ -215,7 +218,41 @@ public enum JudgeCascade {
     subject: JudgeSubject, jevError: String, claude: ClaudeOutcome, questions: JudgeQuestionSet,
     claudeIdentity: JudgeIdentity, thresholds: JudgeThresholds
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    let blocking = questions.questions.filter(\.mayBlock).map(\.id)
+    func blocked(_ ids: [String], claudeError: String) throws(ReportContractViolation) -> Finding {
+      try Finding(
+        ruleID: blockedRuleID, severity: .minor, file: subject.file, line: subject.line,
+        message:
+          "neither judge answered \(subject.id) on \(ids.joined(separator: ", ")): jev: "
+          + "\(jevError); claude: \(claudeError). Ready stays BLOCKED until 1 of them can answer",
+        failureScenario: nil)
+    }
+    guard !blocking.isEmpty else { return [] }
+    switch claude {
+    case .failed(let why):
+      return [try blocked(blocking, claudeError: why)]
+    case .answered(let answers):
+      let answered = answers.filter { blocking.contains($0.question) }
+      let missing = blocking.filter { id in !answered.contains { $0.question == id } }
+      let found = try JudgePolicy.findings(
+        subject: subject, answers: answered, questions: questions, thresholds: thresholds,
+        identity: claudeIdentity, atReadyTier: true
+      ).map { finding throws(ReportContractViolation) in
+        try Finding(
+          ruleID: finding.ruleID, severity: finding.severity, file: finding.file,
+          line: finding.line,
+          message: finding.message + "; escalated to claude because jev gave no answer: "
+            + jevError,
+          failureScenario: finding.failureScenario)
+      }
+      guard !missing.isEmpty else { return found }
+      return found
+        + [
+          try blocked(
+            missing,
+            claudeError: "claude gave no answer for \(missing.joined(separator: ", "))")
+        ]
+    }
   }
 
   /// What 1 subject's cascade asked and what it cost, so the benchmark can report the escalation

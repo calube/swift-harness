@@ -167,13 +167,15 @@ struct JudgeEventsTests {
   }
 
   @Test(
-    "a Jev that fails records an error decision for every question with the error's kind, beside the unchanged not-run note — catches a judge outage leaving no trace in the log"
+    "a Jev that fails with no Claude to escalate to records an error decision for every question with the error's kind, beside the not-run note and 1 judge.blocked per test — catches a judge outage leaving no trace in the log"
   )
   func failedJevIsErrorDecisions() async throws {
     let judged = try await Self.judged(
       judge: FakeJudge(identity: Steps.jev) { _, _ throws(JudgeError) in throw .backend("500") })
 
-    #expect(judged.findings.map(\.ruleID) == [TestJudgeCheck.notRunRuleID])
+    #expect(
+      Set(judged.findings.map(\.ruleID))
+        == [TestJudgeCheck.notRunRuleID, JudgeCascade.blockedRuleID])
     let decisions = judged.log.decisions
     #expect(!decisions.isEmpty)
     #expect(decisions.count % JudgeQuestionSet.testsJev.questions.count == 0)

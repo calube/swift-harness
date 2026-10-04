@@ -74,6 +74,16 @@ public struct CascadingJudge: Judge {
       () throws(JudgeError) -> JudgeReply in
       try await jev.measuredAnswer(subject, questions: questions)
     }
+    return await escalating(
+      subject, questions: questions, jevReply: jevReply, scope: scope,
+      parentID: jevCalls.calls.last?.eventID)
+  }
+
+  /// Claude's turn once Jev answered: once for every question Jev's answer can't settle.
+  private func escalating(
+    _ subject: JudgeSubject, questions: JudgeQuestionSet, jevReply: JudgeReply,
+    scope: JudgeEventScope?, parentID: String?
+  ) async -> Reply {
     let plan = JudgeCascade.plan(
       subject: subject, jev: jevReply.answers, questions: questions,
       bands: JudgeCascade.bands(for: questions.versionedID), thresholds: policy.thresholds,
@@ -83,18 +93,28 @@ public struct CascadingJudge: Judge {
         plan: plan, jev: jevReply, claude: claude, claudeReply: claudeReply,
         jevIdentity: jev.identity, claudeIdentity: claudeIdentity)
     }
-    guard !plan.escalated.isEmpty else { return reply(.answered([]), nil) }
-    guard let claude else { return reply(.failed(Self.noClaude), nil) }
+    let (outcome, claudeReply) = await askClaude(
+      subject, plan: plan, scope: scope, parentID: parentID)
+    return reply(outcome, claudeReply)
+  }
+
+  /// Claude's answers to `plan`'s escalated questions, asked once under the escalation role with
+  /// `parentID`, the Jev call that caused it.
+  private func askClaude(
+    _ subject: JudgeSubject, plan: JudgeCascade.Plan, scope: JudgeEventScope?, parentID: String?
+  ) async -> (JudgeCascade.ClaudeOutcome, JudgeReply?) {
+    guard !plan.escalated.isEmpty else { return (.answered([]), nil) }
+    guard let claude else { return (.failed(Self.noClaude), nil) }
     do throws(JudgeError) {
       let asked = Self.claudeQuestions(plan.escalated, base: base)
       let answered = try await JudgeEventScope.bind(
-        scope?.calling(.escalation, parentID: jevCalls.calls.last?.eventID)
+        scope?.calling(.escalation, parentID: parentID)
       ) { () throws(JudgeError) -> JudgeReply in
         try await claude.measuredAnswer(subject, questions: asked)
       }
-      return reply(.answered(answered.answers), answered)
+      return (.answered(answered.answers), answered)
     } catch {
-      return reply(.failed(error.explanation(by: claude.identity)), nil)
+      return (.failed(error.explanation(by: claude.identity)), nil)
     }
   }
 
@@ -142,7 +162,43 @@ public struct CascadingJudge: Judge {
   public func readyCascade(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> ReadyReply
   {
-    throw .notConfigured("")
+    let scope = JudgeEventScope.current
+    let jevCalls = JudgeCallRecorder()
+    var attempts = 0
+    while true {
+      attempts += 1
+      do throws(JudgeError) {
+        let jevReply = try await JudgeEventScope.bind(scope?.recording(into: jevCalls)) {
+          () throws(JudgeError) -> JudgeReply in
+          try await jev.measuredAnswer(subject, questions: questions)
+        }
+        return .cascaded(
+          await escalating(
+            subject, questions: questions, jevReply: jevReply, scope: scope,
+            parentID: jevCalls.calls.last?.eventID))
+      } catch {
+        if attempts < Self.readyAttempts, Self.worthAskingAgain(error) { continue }
+        let plan = JudgeCascade.jevFailedPlan(questions: questions)
+        let (outcome, claudeReply) = await askClaude(
+          subject, plan: plan, scope: scope, parentID: jevCalls.calls.last?.eventID)
+        return .jevFailed(
+          JevFailure(
+            error: error, attempts: attempts, plan: plan, claude: outcome,
+            claudeReply: claudeReply, jevIdentity: jev.identity, claudeIdentity: claudeIdentity))
+      }
+    }
+  }
+
+  /// Jev calls per subject at `ready`: 1, and 1 more after a transport or parse error.
+  static let readyAttempts = 2
+
+  /// A dropped connection or a garbled reply can pass; a missing or refused key, an invalid
+  /// request or an oversize subject fails the same way again.
+  static func worthAskingAgain(_ error: JudgeError) -> Bool {
+    switch error {
+    case .transport, .malformedReply: true
+    case .notConfigured, .backend, .stateTooLarge, .process: false
+    }
   }
 
   /// `ids` from `base` as written: `base` itself when every question escalated, else a set of

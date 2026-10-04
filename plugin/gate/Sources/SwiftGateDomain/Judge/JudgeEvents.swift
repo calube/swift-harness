@@ -431,6 +431,9 @@ public enum JudgeDecisions {
     if escalated, let cascade {
       let claudeCall = escalationCalls.last?.call
       let backend = JudgeBackend(rawValue: cascade.claudeIdentity.backend) ?? .claude
+      let cause: JudgeCascade.Escalation? =
+        if case .escalate(let why) = cascade.plan.step(for: question.id) { why } else { nil }
+      let jevError = clean(cascade.jevError)
       switch cascade.claude {
       case .answered(let claudeAnswers):
         if let replaced = claudeAnswers.first(where: { $0.question == question.id }) {
@@ -440,20 +443,26 @@ public enum JudgeDecisions {
             backend: backend, model: cascade.claudeIdentity.model,
             servedModel: claudeCall?.servedModel, distribution: replaced.distribution,
             p: JudgePolicy.flaggedProbability(question, answer: replaced, subject: subject),
-            rationale: clean(replaced.rationale), error: nil)
+            rationale: clean(replaced.rationale), error: nil, cause: cause, jevError: jevError)
         } else {
           escalation = JudgeEscalationEvent(
             backend: backend, model: cascade.claudeIdentity.model,
             servedModel: claudeCall?.servedModel, distribution: nil, p: nil, rationale: nil,
             error: JudgeEventError(
-              kind: .noAnswer, message: "claude gave no answer for \(question.id)"))
+              kind: .noAnswer, message: "claude gave no answer for \(question.id)"),
+            cause: cause, jevError: jevError)
         }
       case .failed(let why):
         escalation = JudgeEscalationEvent(
           backend: backend, model: cascade.claudeIdentity.model, servedModel: nil,
           distribution: nil, p: nil, rationale: nil,
-          error: clean(claudeCall?.error ?? JudgeEventError(kind: .noJudge, message: why)))
+          error: clean(claudeCall?.error ?? JudgeEventError(kind: .noJudge, message: why)),
+          cause: cause, jevError: jevError)
       }
+    }
+    // Jev gave no answer, and no Claude answer stands in for it: nothing was decided.
+    if error == nil, decidingAnswer == nil, let jevError = cascade?.jevError {
+      error = jevError
     }
     let finding = inputs.findings.first {
       $0.ruleID == JudgePolicy.ruleIDPrefix + question.id && $0.file == subject.file

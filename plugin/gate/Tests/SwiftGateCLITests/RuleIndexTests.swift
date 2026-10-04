@@ -53,7 +53,10 @@ struct RuleIndexTests {
     let judge =
       (JudgeQuestionSet.tests.questions + JudgeQuestionSet.comments.questions).map {
         JudgePolicy.ruleIDPrefix + $0.id
-      } + [TestJudgeCheck.notRunRuleID, TestJudgeCheck.eventsUnwrittenRuleID]
+      } + [
+        TestJudgeCheck.notRunRuleID, TestJudgeCheck.eventsUnwrittenRuleID,
+        JudgeCascade.blockedRuleID,
+      ]
     let harness = [
       FormatCheck.parseRuleID, RuleEngine.allowMissingReasonRuleID, BudgetCheck.ruleID,
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,
@@ -78,7 +81,7 @@ struct RuleIndexTests {
       Doctor.shimRuleID, Doctor.swiftLintRuleID, Doctor.mermaidCLIRuleID,
       Doctor.issueReportingRuleID,
       Doctor.upgradeHazardRuleID, Doctor.profileRuleID, Doctor.pluginChangedRuleID,
-      Doctor.sessionRecordRuleID, BashGuard.rawXcodebuildRuleID,
+      Doctor.sessionRecordRuleID, Doctor.judgeKeyRuleID, BashGuard.rawXcodebuildRuleID,
       BashGuard.simctlAllRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,

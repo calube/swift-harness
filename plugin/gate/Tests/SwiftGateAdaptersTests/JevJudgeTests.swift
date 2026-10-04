@@ -313,16 +313,16 @@ struct JevJudgeTests {
   }
 
   @Test(
-    "a transport timeout or failed connection is a backend error naming it — catches a hung or refused call reported as a bad reply"
+    "a transport timeout or failed connection is a transport error naming it — catches a hung or refused call reported as a bad reply or as the backend's own error"
   )
-  func transportTimeoutIsBackend() async throws {
+  func transportTimeoutIsTransport() async throws {
     let (judge, _) = Self.judge([.failure(.timedOut)])
     let subject = try Self.caseSubject("counter-increment")
     let error = await Self.error { () async throws(JudgeError) in
       _ = try await judge.answer(subject, questions: .tests)
     }
-    guard case .backend(let message) = error else {
-      Issue.record("expected backend, got \(String(describing: error))")
+    guard case .transport(let message) = error else {
+      Issue.record("expected transport, got \(String(describing: error))")
       return
     }
     #expect(message.contains("30 s"))
@@ -331,7 +331,7 @@ struct JevJudgeTests {
     let refused = await Self.error { () async throws(JudgeError) in
       _ = try await unreachable.answer(subject, questions: .tests)
     }
-    #expect(refused == .backend("Jev is unreachable: connection refused"))
+    #expect(refused == .transport("Jev is unreachable: connection refused"))
   }
 
   // MARK: - Retries

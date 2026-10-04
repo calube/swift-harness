@@ -320,6 +320,18 @@ public enum Doctor {
       check.findings += pluginSessionFindings(session)
     }
 
+    if let set = facts.judgeKeysSet, case .enabled(let backend, _, _) = facts.config.judge,
+      let variable = backend.keyVariable, !set.contains(variable)
+    {
+      check.fail(
+        judgeKeyRuleID, configFile,
+        "[judge] backend = \"\(backend.rawValue)\" needs \(variable), which isn't set here, so "
+          + "the judge can't ask \(backend.rawValue): at ready its blocking questions go to claude "
+          + "and the advisory ones go unasked. Claude Code runs the gate in a non-interactive "
+          + "shell, so export \(variable) where one reads it (~/.zshenv, not ~/.zshrc), or set it "
+          + "under \"env\" in Claude Code's settings.json, then start a fresh session")
+    }
+
     if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
       let defined = facts.config.buildPresets.keys.sorted()
       check.fail(
