@@ -6,6 +6,10 @@ import Foundation
 /// no includes or no settings file. Maven: every `pom.xml` that isn't an aggregator, run from the
 /// top of its parent chain with `-pl`. A tracked `gradlew` or `mvnw` is used when present; without
 /// one the command names the bare tool, its confidence is `guessed`, and its source says so.
+///
+/// Every command runs from the module's directory, the area root: a wrapper above it is reached
+/// with `../`, Gradle finds its settings file by searching up, and Maven is pointed at the top
+/// `pom.xml` with `-f`.
 public struct JVMReader: EcosystemReader {
   public init() {}
 
@@ -61,11 +65,12 @@ public struct JVMReader: EcosystemReader {
     context: JVMContext, builds: [String: String]
   ) -> ProposedArea {
     let wrapper = context.listed.contains(BuildFilePaths.join(build, "gradlew"))
-    let tool = wrapper ? "./gradlew" : "gradle"
+    let tool =
+      wrapper ? Self.fromRoot(root, to: BuildFilePaths.join(build, "gradlew")) : "gradle"
     let text = BuildFilePaths.text(context.tree, buildFile) ?? ""
     let flavor = GradleFlavor(text)
     let command = { (task: String) in
-      CICommandMining.inDirectory(build, "\(tool) \(module.map { "\($0):" } ?? "")\(task)")
+      "\(tool) \(module.map { "\($0):" } ?? "")\(task)"
     }
     let value = { (command: String, source: String, confidence: Confidence) in
       wrapper
@@ -147,12 +152,13 @@ public struct JVMReader: EcosystemReader {
         top = CICommandMining.dirname(top)
       }
       let wrapper = context.listed.contains(BuildFilePaths.join(top, "mvnw"))
-      let tool = wrapper ? "./mvnw" : "mvn"
+      let tool = wrapper ? Self.fromRoot(directory, to: BuildFilePaths.join(top, "mvnw")) : "mvn"
       let select =
         top == directory
-        ? "" : " -pl \(CICommandMining.quote(BuildFilePaths.relative(directory, to: top)))"
-      let command = { (goal: String) in CICommandMining.inDirectory(top, "\(tool)\(select) \(goal)")
-      }
+        ? ""
+        : " -f \(CICommandMining.quote(BuildFilePaths.relativeFrom(directory, to: poms[top] ?? "pom.xml")))"
+          + " -pl \(CICommandMining.quote(BuildFilePaths.relative(directory, to: top)))"
+      let command = { (goal: String) in "\(tool)\(select) \(goal)" }
       let value = { (command: String, source: String) in
         wrapper
           ? Sourced(value: command, source: source, confidence: .found)
@@ -210,6 +216,13 @@ public struct JVMReader: EcosystemReader {
       if let (file, _) = texts.first(where: { $0.1.contains(marker) }) { return (task, file) }
     }
     return nil
+  }
+
+  /// A wrapper script at repository-relative `script`, as run from `root`: `./gradlew` beside
+  /// it, `../gradlew` from a module below it.
+  private static func fromRoot(_ root: String, to script: String) -> String {
+    let path = BuildFilePaths.relativeFrom(root, to: script)
+    return CICommandMining.quote(path.hasPrefix("../") ? path : "./" + path)
   }
 
   private static func byDirectory(_ paths: [String], names: [String]) -> [String: String] {

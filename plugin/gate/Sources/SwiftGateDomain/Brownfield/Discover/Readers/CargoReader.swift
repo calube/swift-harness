@@ -2,8 +2,8 @@ import Foundation
 
 /// Reads `Cargo.toml`: an area per workspace member, `cargo test` with a name filter, Clippy.
 ///
-/// A member runs from its workspace's directory with `-p <package>`, as cargo resolves it; a
-/// crate no workspace lists runs from its own directory. Clippy ships with every rustup
+/// Every command runs from the crate's directory, the area root. A member names itself with
+/// `-p <package>`, which cargo resolves against the workspace it finds above. Clippy ships with every rustup
 /// toolchain, so it is always proposed, and `found` only when a `clippy.toml` configures it.
 public struct CargoReader: EcosystemReader {
   public init() {}
@@ -31,9 +31,8 @@ public struct CargoReader: EcosystemReader {
           $0.contains(BuildFilePaths.relative(root, to: directory)) ? directory : nil
         }
       }
-      let run = { (command: String) -> String in
-        if let member { return CICommandMining.inDirectory(member, "cargo \(command) -p \(name)") }
-        return CICommandMining.inDirectory(root, "cargo \(command)")
+      let run = { (command: String) in
+        member == nil ? "cargo \(command)" : "cargo \(command) -p \(name)"
       }
       let found = { (command: String) in Sourced(value: command, source: path, confidence: .found) }
       let clippy = BuildFilePaths.ancestors(of: root).lazy.flatMap { directory in
