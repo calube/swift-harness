@@ -22,7 +22,10 @@ extension ShellSyntax {
   /// A relative path is relative to the shell's starting directory; after a literal `cd`, it is
   /// also named under that directory. A path the shell would expand (`$VAR`, `$(…)`, backticks),
   /// code an interpreter runs, and heredoc text name nothing: a static reading can't know them.
-  public static func writeTargets(in line: String) -> [ShellWriteTarget] {
+  /// - Parameter directoryExists: whether an absolute path is a directory now.
+  public static func writeTargets(
+    in line: String, directoryExists: (String) -> Bool = { _ in false }
+  ) -> [ShellWriteTarget] {
     let commands = parse(line).filter { !$0.isHeredocBody }.map(\.command)
     let directories = commands.compactMap(changedDirectory)
     var targets: [ShellWriteTarget] = []
