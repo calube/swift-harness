@@ -48,15 +48,16 @@ public protocol GitWorkspace: Sendable {
 
 /// Where a build task's worktree and branch live, and the checkout and branch it merges into.
 ///
-/// In an owned repository (spec §4) the worktree is the sibling `<repo>-<plan>-<task>` of the main
-/// checkout, cut from `main`, and merges land in the main checkout. In a brownfield clone nothing
-/// touches the user's checkout or branch: the worktree is `<plan-dir>/worktrees/<task>` under the
-/// git common dir, cut from the plan branch, and merges land in the plan branch's own checkout
-/// `<plan-dir>/checkout`. The task branch is `<plan>/<task>` in both.
+/// The worktree is the sibling `<repo>-<plan>-<task>` of the main checkout in both profiles, and
+/// the task branch is `<plan>/<task>`. In an owned repository (spec §4) it is cut from `main`, and
+/// merges land in the main checkout. In a brownfield clone nothing touches the user's checkout or
+/// branch: it is cut from the plan branch, and merges land in that branch's own checkout, the
+/// sibling `<repo>-<plan>`. Neither sits under the git dir: the plan-state guard owns every file in
+/// a plan's directory, and dev servers such as Vite refuse to serve files under `.git`.
 public struct TaskWorktree: Sendable, Equatable {
   public static let base = "main"
 
-  /// The checkout merges land in: the main checkout, or a brownfield plan's `checkout`.
+  /// The checkout merges land in: the main checkout, or a brownfield plan's checkout.
   public let mainCheckout: String
   public let path: String
   public let branch: String
@@ -65,37 +66,50 @@ public struct TaskWorktree: Sendable, Equatable {
   /// The git common dir the names were derived from.
   public let commonDirectory: String
 
-  /// - Throws: ``GitWorkspaceError/git(_:)`` when `commonDirectory` isn't a checkout's `.git`.
+  /// - Throws: ``GitWorkspaceError/git(_:)`` when `commonDirectory` isn't a checkout's `.git`, or
+  ///   in a brownfield clone when `plan` isn't 1 path component.
   public init(
     commonDirectory: String, plan: String, task: String, profile: RepositoryProfile = .owned
   ) throws(GitWorkspaceError) {
     branch = "\(plan)/\(task)"
     self.commonDirectory = commonDirectory
+    path = try Self.sibling(commonDirectory: commonDirectory, named: "\(plan)-\(task)")
     switch profile {
     case .owned:
-      let main = URL(
-        filePath: try Self.mainCheckout(commonDirectory: commonDirectory),
-        directoryHint: .isDirectory)
-      mainCheckout = main.path
-      path =
-        main.deletingLastPathComponent()
-        .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
+      mainCheckout = try Self.mainCheckout(commonDirectory: commonDirectory)
       baseBranch = Self.base
     case .brownfield:
-      let directory: String
-      do throws(PlanStateLayoutError) {
-        directory = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan).directory
-      } catch {
-        throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
-      }
-      mainCheckout = directory + "/" + Self.planCheckoutName
-      path = directory + "/worktrees/" + task
+      mainCheckout = try Self.planCheckout(commonDirectory: commonDirectory, plan: plan)
       baseBranch = BrownfieldRunReport.planBranch(slug: plan)
     }
   }
 
-  /// A brownfield plan's checkout of its plan branch, inside the plan's directory.
-  public static let planCheckoutName = "checkout"
+  /// A brownfield plan's checkout of its plan branch: the sibling `<repo>-<plan>` of the user's
+  /// checkout, where the orchestrator commits the contract, `build merge` lands each task and the
+  /// `merge` and `final` gates run. Every caller that creates, finds or removes that checkout
+  /// names it through this function.
+  /// - Throws: ``GitWorkspaceError/git(_:)`` for a plan name that isn't 1 path component, or a
+  ///   `commonDirectory` that isn't an absolute checkout's `.git`.
+  public static func planCheckout(commonDirectory: String, plan: String)
+    throws(GitWorkspaceError) -> String
+  {
+    do throws(PlanStateLayoutError) {
+      _ = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan)
+    } catch {
+      throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
+    }
+    return try sibling(commonDirectory: commonDirectory, named: plan)
+  }
+
+  /// `<repo>-<suffix>` beside the main checkout `<repo>`.
+  private static func sibling(commonDirectory: String, named suffix: String)
+    throws(GitWorkspaceError) -> String
+  {
+    let main = URL(
+      filePath: try mainCheckout(commonDirectory: commonDirectory), directoryHint: .isDirectory)
+    return main.deletingLastPathComponent()
+      .appending(path: "\(main.lastPathComponent)-\(suffix)").path
+  }
 
   /// The checkout whose `.git` is `commonDirectory`, the same from every linked worktree.
   /// - Throws: ``GitWorkspaceError/git(_:)`` for a bare repository, which has no main checkout to
