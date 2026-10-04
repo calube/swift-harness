@@ -78,8 +78,8 @@ See also [validation rows](run-viewer-validation.md).
 
 ## Live mode
 
-`view` answers `GET /`, `/view.json` and `/changes?after=<cursor>`, the rows changed since that cursor and a
-new one, and 404 for anything else. A changed row comes whole, its failure or block reason
+`view` answers `GET /`, `/view.json`, `/changes?after=<cursor>` (rows changed since it, a new
+cursor), and each flow's linked `/runs/` file; else 404. A changed row comes whole, its failure or block reason
 included. An unknown cursor gets the whole view. A request whose `Host` isn't
 `127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere can't reach it through a rebound name.
 

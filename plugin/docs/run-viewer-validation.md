@@ -6,10 +6,11 @@ command wrote: nothing here runs a check.
 
 ## What it reads
 
-The reader keeps a `qa.check` event when it names the build run's plan and its `qa run` started at or
-after the build run and before the plan's next build run. For each such `qa run` it reads
-`.harness/runs/<run id>/qa/report.json` from the main checkout or a live task worktree, and the saved
-output of each red row's evidence file, at most its last 16 KB.
+The reader keeps a `qa.check` event, and a qa.flow event with a row, when it names the build run's
+plan and its `qa run` started at or after the build run and before the plan's next build run. It
+keeps a qa.flow with no row, a kept XCUITest flow, when its gate run is the build run's. For each kept
+`qa run` it reads `.harness/runs/<run id>/qa/report.json` from the main checkout or a live task
+worktree, and each red row's `.txt` evidence as saved output, at most its last 16 KB.
 
 Each row shows its newest result. A `qa run --at-base` is expected to fail every row, so it neither sets
 a row's result nor draws a timeline bar.
@@ -25,14 +26,25 @@ a row's result nor draws a timeline bar.
   evidence paths and the last 12 lines of its saved output.
 - **Why unverified.** An unverified row's button names the check that didn't run and why, such as a red
   row in an earlier layer, or a flow row before the flow runner exists.
-- **Flow rows.** A flow row shows its result alone for now.
+- **Why unverified** also opens on a passing flow row whose final pass left no video or no contact
+  sheet, naming which and why, such as a recorder busy past the 5-minute bound.
+- **Flow rows.** A flow row lists its steps with a pass or fail mark. Each step links to the video at
+  its offset, `video.mp4#t=<seconds>`, and the row links the video and the contact sheet. A red flow's
+  Why popover names its failing step.
+- **Kept flows.** Each kept XCUITest flow's newest record lists under "Kept flows", by `[[flows]]`
+  entry, then test, with its gate run, task and steps linked the same way.
+- **Task details.** A task's popover lists the rows that run after it, each with its Why button.
 - **Timeline.** Each check that answered, pass or red, is a `qa.check` bar ending when its `qa run`
-  recorded it; a red bar's failure reason names the row, layer and exit status.
+  recorded it; a red bar's failure reason names the row, layer and exit status. A flow's bar carries 1
+  tick per step, linked to the video at that offset.
 
 ## Evidence and privacy
 
-Evidence is named by its path relative to the `qa run`'s run directory, never embedded: the page holds
-no image or video. Every string passes the payload guard. A check, reason or evidence path the guard
-rejects drops out as a footer line naming the `qa run` and row. Output lines lose machine paths and stay
+Evidence is named by its path relative to its run's directory, never embedded: the page holds no
+image or video. A link reads `../runs/<run id>/<path>`, which resolves from a report in its default
+`reports/` folder, and from a live page, whose server answers each video and contact sheet a flow
+links and 404s any other file. Every string passes the payload guard. A check, reason, step label,
+test name or path the guard rejects, or a path that leaves its run directory, drops out as a footer
+line naming the `qa run` and row, or the gate run and kept flow. Output lines lose machine paths and stay
 1 line each. A missing or undecodable report, and an evidence path that leaves its run directory, are
 footer lines too; the reader never follows such a path.
