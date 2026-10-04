@@ -158,7 +158,7 @@ const REQUIRED_RESEARCH_ARGS = ['design:', 'commit:', 'pin:']
 // A research launch names the registered workflow, or a copy of its script.
 const isResearchCall = call => call.includes('swift-harness-design-research') || call.includes('design-research.js')
 // build-task.js throws unless each of these is present (`reviewers` is optional).
-const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:', 'planSurface:', 'buildRun:']
+const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:', 'planSurface:', 'buildRun:', 'pluginRoot:']
 // The PreToolUse guard denies these without the caller's own literal `--session`.
 const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'worktree create']
 
@@ -1013,6 +1013,7 @@ const tests = {
     const [launch] = [...all.matchAll(/Workflow\(\{[\s\S]*?\n\}\)/g)].filter(m => m[0].includes('build-task.js')).map(m => m[0])
     assert.match(launch ?? '', /planSurface: "<plan\.json's surfaceCommit, or null>"/)
     assert.match(launch ?? '', /buildRun: "<run>"/, 'the build skill never hands its build run id to build-task.js')
+    assert.match(launch ?? '', /pluginRoot: "\$\{CLAUDE_PLUGIN_ROOT\}"/, 'the build skill never hands the plugin under test to build-task.js')
     const skill = files['skills/build/SKILL.md']
     assert.match(skill, /`surfaceCommit`/, 'the build skill never reads the plan surface from plan.json')
     assert.match(skill, /"source": "specPage"/, 'the build skill never tells a spec page plan from a design plan')
@@ -1036,6 +1037,7 @@ const tests = {
       'x.md:2: context-pack --role worker needs exactly one of --design, --spec-page',
       'x.md:3: context-pack --role worker needs exactly one of --design, --spec-page',
       'x.md:7: build-task Workflow call lacks planSurface',
+      'x.md:7: build-task Workflow call lacks pluginRoot',
     ])
   },
 

@@ -44,6 +44,12 @@ const CLASSIFIER_LABEL = /^diff-risk:/
 // The only agents a task may spawn: the stages, each of which runs its own span calls.
 const STAGE_AGENTS = [WORKER, VERIFIER, ...Object.keys(REVIEWERS)]
 const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
+// The plugin under test, which every launch names, and the shim inside it every stage runs.
+const PLUGIN_ROOT = '/plugins/swift-harness'
+const SG = `${PLUGIN_ROOT}/bin/swiftgate`
+// A `swiftgate <subcommand>` not reached through a path: the shell resolves it through PATH, which
+// may hold an older installed plugin whose gate code and run store aren't the ones under test.
+const BARE_SWIFTGATE = /(?<![\w/.-])swiftgate\s+[a-z][a-z-]*/g
 
 const baseArgs = (extra = {}) => ({
   task: 'catalog-list-reducer',
@@ -59,6 +65,7 @@ const baseArgs = (extra = {}) => ({
   taskProof: 'per-task',
   planSurface: null,
   buildRun: BUILD_RUN,
+  pluginRoot: PLUGIN_ROOT,
   ...extra,
 })
 
@@ -81,6 +88,7 @@ const brownfieldArgs = (extra = {}) => {
     stateRoot: '/work/repo/.git/worktrees/search-task/swift-harness',
     base: 'search/plan',
     buildRun: BUILD_RUN,
+    pluginRoot: PLUGIN_ROOT,
     ...extra,
   }
   for (const key of Object.keys(args)) if (args[key] === undefined) delete args[key]
@@ -342,6 +350,47 @@ const tests = {
     assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
   },
 
+  async 'no worker, review, verify, fix or diff-risk prompt names a bare swiftgate command, in either profile, with or without a plan surface — catches a stage running the swiftgate on PATH instead of the plugin under test'() {
+    // The pattern itself: a bare command matches, the shim and a swiftgate:allow comment don't.
+    assert.deepEqual(
+      'run `swiftgate check --tier fast`, then swiftgate surface-check x; /p/bin/swiftgate check; // swiftgate:allow rule'.match(BARE_SWIFTGATE),
+      ['swiftgate check', 'swiftgate surface-check'],
+    )
+    const blocking = { architecture: [{ findings: [finding()] }] }
+    const runs = [
+      await run(baseArgs(), { workers: [red(), workerReturn({ commits: ['77aa001'] })] }),
+      await run(baseArgs({ planSurface: '1a2b3c4d' }), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: blocking }),
+      await run(baseArgs({ taskProof: 'final' }), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: blocking }),
+      await run(brownfieldArgs(), {
+        workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()],
+        diffRisk: { level: 'high', reason: null, exitStatus: 0 },
+        reviews: { architecture: [{ findings: [finding({ file: 'Core/src/search.rs' })] }] },
+      }),
+    ]
+    const labels = new Set()
+    const bare = []
+    for (const { calls } of runs) {
+      for (const { prompt, opts } of calls) {
+        labels.add(opts.label.replace(/:.*/, ''))
+        for (const command of prompt.match(BARE_SWIFTGATE) ?? []) bare.push(`${opts.label}: ${command}`)
+      }
+    }
+    assert.deepEqual([...labels].sort(), ['build', 'diff-risk', 'fix', 'review', 'verify'])
+    assert.deepEqual(bare, [])
+  },
+
+  async 'a launch without pluginRoot throws naming it before any agent runs, in either profile — catches stages falling back to the swiftgate on PATH'() {
+    for (const make of [baseArgs, brownfieldArgs]) {
+      const { pluginRoot, ...args } = make()
+      const calls = []
+      await assert.rejects(
+        script(args, async (p, o) => calls.push(o), () => {}),
+        /build-task: pluginRoot is required/,
+      )
+      assert.equal(calls.length, 0)
+    }
+  },
+
   async 'every worker, review, verify and fix prompt opens its own span first and closes it last — catches a stage prompt missing its span start or end'() {
     const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
@@ -457,7 +506,7 @@ const tests = {
     assert.equal(opts.agentType, WORKER)
     assert.equal(opts.model, 'opus')
     const a = baseArgs()
-    const gate = 'swiftgate check --tier fast --base main --prove --mutate'
+    const gate = `${SG} check --tier fast --base main --prove --mutate`
     for (const needle of [a.task, a.plan, a.worktree, a.branch, a.contextPack, ...a.writeSet, ...a.tests, gate]) {
       assert.ok(prompt.includes(needle), `worker prompt lacks ${needle}`)
     }
@@ -471,13 +520,13 @@ const tests = {
       for (const { prompt } of final.workerCalls) {
         assert.ok(!prompt.includes('--prove'), `a final worker prompt asks for --prove:\n${prompt}`)
         assert.ok(!prompt.includes('--mutate'), `a final worker prompt asks for --mutate:\n${prompt}`)
-        assert.ok(prompt.includes('swiftgate check --tier fast --base main'), 'a final worker prompt lacks its task gate')
+        assert.ok(prompt.includes(`${SG} check --tier fast --base main`), 'a final worker prompt lacks its task gate')
         assert.ok(prompt.includes('Task proof: final'), 'a final worker prompt does not name its proof mode')
       }
       const perTask = await run(baseArgs({ review: 'gate', taskProof: 'per-task' }), behave)
       assert.equal(perTask.workerCalls.length, behave.workers.length)
       for (const { prompt } of perTask.workerCalls) {
-        assert.ok(prompt.includes('swiftgate check --tier fast --base main --prove --mutate'), 'a per-task worker prompt skips proof')
+        assert.ok(prompt.includes(`${SG} check --tier fast --base main --prove --mutate`), 'a per-task worker prompt skips proof')
         assert.ok(prompt.includes('Task proof: per-task'), 'a per-task worker prompt does not name its proof mode')
       }
     }
@@ -486,8 +535,8 @@ const tests = {
   async 'every worker prompt\'s task gate turns on impact, coverage and the app build under both task proofs — catches a task gate that passes what the merge gate then fails'() {
     const behave = { workers: [red(), workerReturn()] }
     for (const [taskProof, gate] of [
-      ['per-task', 'swiftgate check --tier fast --base main --prove --mutate --impact --coverage --app-build'],
-      ['final', 'swiftgate check --tier fast --base main --impact --coverage --app-build'],
+      ['per-task', `${SG} check --tier fast --base main --prove --mutate --impact --coverage --app-build`],
+      ['final', `${SG} check --tier fast --base main --impact --coverage --app-build`],
     ]) {
       const { workerCalls } = await run(baseArgs({ review: 'gate', taskProof }), behave)
       assert.equal(workerCalls.length, 2)
@@ -852,7 +901,7 @@ const tests = {
         assert.ok(prompt.includes(gate), `a ${taskProof} worker prompt lacks ${gate}:\n${prompt}`)
         assert.ok(prompt.includes(`Plan surface: ${sha}`), `a ${taskProof} worker prompt does not name the plan surface`)
         assert.ok(prompt.includes('write no surface commit of your own'), 'the prompt does not forbid a new surface')
-        assert.ok(prompt.includes('swiftgate surface-check <stub sha>'), 'the prompt does not check a stub with surface-check')
+        assert.ok(prompt.includes(`${SG} surface-check <stub sha>`), 'the prompt does not check a stub with surface-check')
         assert.ok(prompt.includes('return its sha as surfaceCommit'), 'the prompt does not return the stub as surfaceCommit')
         assert.ok(!prompt.includes('<surface commit> when the task adds API'), 'the prompt still asks for a surface of its own')
       }
@@ -865,17 +914,20 @@ const tests = {
       'Task: catalog-list-reducer (plan catalog).\n' +
       'Worktree: /work/app-catalog-catalog-list-reducer, branch catalog/catalog-list-reducer, already checked out.\n' +
       'Write set: Sources/CatalogCore/CatalogList.swift, Tests/CatalogCoreTests/CatalogListTests.swift.\n'
+    const shim =
+      `Swiftgate: ${SG}, the plugin under test. Run every gate command through that path, never a bare \`swiftgate\`: ` +
+      "the one on PATH may be another install, whose gate code and run store aren't this build's.\n"
     const tail =
       'Tests to turn green: test-catalog-list-loads-first-page.\n' +
       'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n\nRun-viewer span: '
     const expected = {
       'per-task':
-        head + 'Task proof: per-task.\n' +
-        'Task gate: swiftgate check --tier fast --base main --prove --mutate --impact --coverage --app-build, ' +
+        head + 'Task proof: per-task.\n' + shim +
+        `Task gate: ${SG} check --tier fast --base main --prove --mutate --impact --coverage --app-build, ` +
         'plus --proof-base <surface commit> when the task adds API.\n' + tail,
       final:
-        head + 'Task proof: final.\n' +
-        'Task gate: swiftgate check --tier fast --base main --impact --coverage --app-build, ' +
+        head + 'Task proof: final.\n' + shim +
+        `Task gate: ${SG} check --tier fast --base main --impact --coverage --app-build, ` +
         "plus --proof-base <surface commit> when the task adds API. The build's final ready gate proves and mutates every task at once.\n" +
         tail,
     }
@@ -932,7 +984,7 @@ const tests = {
     const { workerCalls } = await run(brownfieldArgs(), behave)
     assert.equal(workerCalls.length, 2)
     for (const { prompt } of workerCalls) {
-      assert.ok(prompt.includes('swiftgate check --tier slice --base search/plan --prove'), `no prove gate:\n${prompt}`)
+      assert.ok(prompt.includes(`${SG} check --tier slice --base search/plan --prove`), `no prove gate:\n${prompt}`)
       assert.ok(!prompt.includes('--mutate'), `a prove worker prompt asks for --mutate:\n${prompt}`)
       assert.ok(!prompt.includes('--base main'), `a brownfield prompt gates against main:\n${prompt}`)
       assert.ok(prompt.includes('Task proof: prove'), 'the prompt does not name its proof mode')
@@ -983,12 +1035,8 @@ const tests = {
 
     const call = high.classifierCalls[0]
     assert.equal(high.classifierCalls.length, 1)
-    assert.ok(call.prompt.includes('cd /work/search-task && swiftgate judge diff-risk --base search/plan --json'), call.prompt)
+    assert.ok(call.prompt.includes(`cd /work/search-task && ${SG} judge diff-risk --base search/plan --json`), call.prompt)
     assert.equal(call.opts.model, 'claude-sonnet-5-5')
-    const rooted = await run(brownfieldArgs({ pluginRoot: '/plugins/swift-harness' }), {
-      workers: [brownfieldReturn()], diffRisk: { level: 'low', reason: null, exitStatus: 0 },
-    })
-    assert.ok(rooted.classifierCalls[0].prompt.includes('/plugins/swift-harness/bin/swiftgate judge diff-risk'))
   },
 
   async 'a diff-risk agent that fails or answers outside the levels falls back to medium and logs why — catches a broken classifier skipping review or crashing the task'() {
