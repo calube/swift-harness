@@ -136,6 +136,7 @@ public enum AppBuild {
         "-derivedDataPath", derivedDataPath,
         "-resultBundlePath", resultBundlePath,
         "-skipMacroValidation",
+        "-skipPackagePluginValidation",
         "-onlyUsePackageVersionsFromResolvedFile",
       ]
     }

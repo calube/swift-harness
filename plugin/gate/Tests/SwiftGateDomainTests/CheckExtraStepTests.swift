@@ -51,7 +51,8 @@ struct AppBuildTests {
         "-destination", "generic/platform=iOS Simulator",
         "-derivedDataPath", "/r/.harness/derived-data/app-build",
         "-resultBundlePath", "/o/App.xcresult",
-        "-skipMacroValidation", "-onlyUsePackageVersionsFromResolvedFile",
+        "-skipMacroValidation", "-skipPackagePluginValidation",
+        "-onlyUsePackageVersionsFromResolvedFile",
       ])
     #expect(project.arguments.starts(with: ["build", "-quiet", "-project", "/r/App.xcodeproj"]))
   }
