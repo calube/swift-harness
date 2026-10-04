@@ -165,7 +165,7 @@ struct QARunPlanTests {
     let plan = QARunPlan.make(table: Self.table, merged: nil, after: nil)
     let recorder = Recorder([
       "swift test --filter ListTests": .red, "curl -fsS http://127.0.0.1:$QA_PORT/drafts": .red,
-      "qa/save.flow.json": .unverified,
+      "qa/save.flow.json": .red,
     ])
 
     let rows = await plan.execute(atBase: true) { recorder.check($0) }

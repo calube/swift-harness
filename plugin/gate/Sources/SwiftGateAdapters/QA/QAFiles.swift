@@ -84,6 +84,24 @@ public enum QAFiles {
   }
 }
 
+extension QAFiles {
+  /// The newest `qa/report.json` under `runsDirectory` for `plan` over every row: neither at the
+  /// merge base nor `--after` a task. A report that doesn't decode can't name its plan, so it is
+  /// passed over.
+  public static func newestWholeRun(plan: String, runsDirectory: URL) -> RunReportInput<QAReport>
+  {
+    let runs = (try? FileManager.default.contentsOfDirectory(atPath: runsDirectory.path)) ?? []
+    for runID in runs.filter(RunID.isValid).sorted(by: >) {
+      let file = runsDirectory.appending(path: "\(runID)/\(QAReport.directory)/\(QAReport.fileName)")
+      guard let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data),
+        report.plan == plan, !report.atBase, report.after == nil
+      else { continue }
+      return .read(report)
+    }
+    return .missing(path: runsDirectory.path)
+  }
+}
+
 /// The checkouts `git worktree list` names for a repository, canonical.
 public struct QACheckouts: Sendable {
   private let runner: any ProcessRunner

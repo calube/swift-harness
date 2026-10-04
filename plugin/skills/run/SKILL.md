@@ -240,7 +240,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
-        return gets the same treatment for the row that needed the name.
+        return gets the same treatment for the row that needed the name. A row that reads
+        `unverified` there has no red run behind it, whatever the worker returned: 1 report line,
+        `<requirement> <layer> <check>: no red run, <message>`.
 
      An acceptance test in the area's framework is never the validation task's: its row's
      `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's
@@ -336,7 +338,9 @@ baseline failures, the build-only areas, the dropped steps, each task's review d
 fallbacks, the time box with each task that didn't fit it, and the plan branch to merge. Its first
 line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
-line, covers only what merged. Print it as your last message as written, then 1 line per row of
+line, covers only what merged. A plan with a validation table adds `validation: <n> of <m> rows
+verified` after it, from the newest `qa run` over every row: GREEN over 0 verified means no check
+ran. Print it as your last message as written, then 1 line per row of
 step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 

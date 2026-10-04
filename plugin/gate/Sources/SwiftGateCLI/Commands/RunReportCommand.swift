@@ -31,7 +31,8 @@ enum BrownfieldRunReportRun {
   static let command = "run report"
 
   /// Reads the plan dir and its ledger, the baseline at the plan branch's base tree, the last
-  /// discover record and the plan's newest build run, then writes `<plan-dir>/REPORT.md`. A source that can't be
+  /// discover record, the plan's newest build run and, for a plan with a validation table, its
+  /// newest `qa run` over every row, then writes `<plan-dir>/REPORT.md`. A source that can't be
   /// read is a line in its section; only a clone with no brownfield config or no such plan
   /// writes nothing.
   static func write(
@@ -84,7 +85,12 @@ enum BrownfieldRunReportRun {
           layout: layout, base: base, branchExists: head != nil, branch: branch,
           git: git, runner: runner, root: root),
         discover: discover(layout: layout), build: await build(slug: slug, git: git),
-        ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) }))
+        ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) },
+        validation: files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName)
+          ? QAFiles.newestWholeRun(
+            plan: slug,
+            runsDirectory: RunStore(worktreeRoot: root).state.url(
+              RunLayout.runsDirectory, directoryHint: .isDirectory)) : nil))
 
     let path = plan.directory + "/" + BrownfieldRunReport.fileName
     do {

@@ -79,7 +79,8 @@ public struct QARunPlan: Sendable, Equatable {
   /// order.
   /// - Parameter atBase: `false` stops at the first layer with a red row, leaving every row of a
   ///   later layer `unverified`, and runs a state row only once every flow row for its requirement in
-  ///   this plan passed. `true` runs every ready row, since each is expected to fail there.
+  ///   this plan passed. `true` runs every ready row, since each is expected to fail there, except a
+  ///   state row whose flow row didn't run: with no device, its red would prove nothing.
   public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
     var rows: [QARow] = []
     var redLayer: ValidationLayer?
@@ -96,8 +97,10 @@ public struct QARunPlan: Sendable, Equatable {
         row = Self.row(
           entry, result: .unverified,
           message: "not run: the \(redLayer.rawValue) layer has a red row")
-      } else if !atBase, validation.layer == .state,
-        let flow = flows[validation.requirement]?.first(where: { $0.result != .pass })
+      } else if validation.layer == .state,
+        let flow = flows[validation.requirement]?.first(where: {
+          atBase ? $0.result == .unverified || $0.result == .waiting : $0.result != .pass
+        })
       {
         row = Self.row(
           entry, result: .unverified,
