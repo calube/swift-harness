@@ -5,8 +5,9 @@
 // Regressions caught: an approval step or a question to the user creeping into a run that must
 // take 0 human input; a commit that skips the repository's git hooks; an explorer on a model alias
 // instead of a pinned id, or without its deadline and word cap; a run that never fixes a failing
-// guess, never imports its plan, never runs `final` or never reports; and a plan shape whose
-// example `plan import` rejects. Its phase spans are checked with the other skills' telemetry
+// guess, never imports its plan, never runs `final` or never reports; a plan shape whose
+// example `plan import` rejects; and a plan checkout made or removed with raw `git worktree`,
+// which drops its gate reports. Its phase spans are checked with the other skills' telemetry
 // calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -47,6 +48,18 @@ export function oneShotProblems(files) {
         const match = pattern.exec(line)
         if (match) problems.push(`${where}: asks the user (\`${match[0]}\`)`)
       }
+    }
+  }
+  return problems
+}
+
+/** Every line of `files` that runs `git … worktree`, as `file:line`. The plan checkout's gate
+ * reports outlive it only when `swiftgate run checkout` makes and removes it. */
+export function rawWorktreeCalls(files) {
+  const problems = []
+  for (const [file, text] of Object.entries(files)) {
+    for (const [index, line] of text.split('\n').entries()) {
+      if (/\bgit\b(?:\s+-\S+(?:\s+[^\s`-]\S*)?)*\s+worktree\b/.test(line)) problems.push(`${file}:${index + 1}`)
     }
   }
   return problems
@@ -136,6 +149,20 @@ const tests = {
     assert.match(skill, /4-minute hard/, 'the explorers have no hard deadline')
     assert.match(skill, /## Assumptions/, 'the run skill never records its readings in PLAN.md\'s Assumptions')
     assert.match(skill, /<plan-branch>/, 'the run skill never names the plan branch its commits land on')
+  },
+
+  'the run skill makes and removes the plan checkout through swiftgate, never raw git worktree — catches a checkout whose gate reports die with it'() {
+    assert.deepEqual(rawWorktreeCalls(runSkillFiles()), [])
+    const named = calls(runSkillFiles())
+    for (const prefix of ['run checkout create <slug> --session <session>', 'run checkout remove <slug> --session <session>']) {
+      assert.ok(named.some(call => call.startsWith(prefix)), `the run skill never runs \`swiftgate ${prefix}\``)
+    }
+  },
+
+  'the raw worktree check names a git worktree call in any form — catches a checker that passes anything'() {
+    assert.deepEqual(rawWorktreeCalls({
+      'x.md': ['1. `git worktree add <checkout> <plan-branch>` from the user\'s checkout.', 'Then `git -C <common> worktree remove <checkout>`.', 'Read `git worktree list` to see it.'].join('\n'),
+    }), ['x.md:1', 'x.md:2', 'x.md:3'])
   },
 
   'the explorer pins its model by id, stays read-only and returns 300 words or fewer once — catches an alias that drifts with the default model'() {

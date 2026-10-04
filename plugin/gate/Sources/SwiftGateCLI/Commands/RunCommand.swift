@@ -9,7 +9,7 @@ struct RunCommand: ParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
     abstract: "Plan and build a spec in a brownfield clone with no approval step.",
-    subcommands: [RunStartCommand.self, RunReportCommand.self],
+    subcommands: [RunStartCommand.self, RunReportCommand.self, RunCheckoutCommand.self],
     defaultSubcommand: RunStartCommand.self)
 }
 

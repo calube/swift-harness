@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
-/// Reads ``RunLayout`` paths under the state root of the worktree at `root`. An error names the
+/// Reads ``RunLayout`` paths under the event store of the worktree at `root`. An error names the
 /// path as ``StateRoot/displayPath(_:)`` does.
 public struct LiveEventStoreFiles: EventStoreFileReading {
   public let root: URL
@@ -10,7 +10,7 @@ public struct LiveEventStoreFiles: EventStoreFileReading {
 
   public init(root: URL) {
     self.root = root
-    self.state = StateRootResolver.resolve(worktree: root)
+    self.state = StateRootResolver.eventStore(worktree: root)
   }
 
   public func displayPath(_ path: String) -> String { state.displayPath(path) }

@@ -15,12 +15,23 @@ public struct EventSegmentStore: Sendable {
   public let state: StateRoot
   public let rotationBytes: @Sendable (HarnessEventStream) -> Int
 
+  /// The store `root`'s events go to, ``StateRootResolver/eventStore(worktree:)``.
   public init(
     root: URL,
     rotationBytes: @escaping @Sendable (HarnessEventStream) -> Int = { $0.rotationBytes }
   ) {
+    self.init(
+      root: root, state: StateRootResolver.eventStore(worktree: root), rotationBytes: rotationBytes)
+  }
+
+  /// The store under `state`, which may be a worktree's own state root rather than the one its
+  /// events go to now.
+  public init(
+    root: URL, state: StateRoot,
+    rotationBytes: @escaping @Sendable (HarnessEventStream) -> Int = { $0.rotationBytes }
+  ) {
     self.root = root
-    self.state = StateRootResolver.resolve(worktree: root)
+    self.state = state
     self.rotationBytes = rotationBytes
   }
 

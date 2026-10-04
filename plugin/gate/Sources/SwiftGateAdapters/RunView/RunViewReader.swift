@@ -55,7 +55,11 @@ public struct RunViewReader: RunViewReading {
     let mainOwn = Set(
       EventStoreReader(files: StateRootEventFiles(state: stateRoot, includeCopies: false))
         .read(EventQuery()).events.map(\.event.eventID))
-    var workerEvents = main.events.map(\.event).filter { !mainOwn.contains($0.eventID) }
+    // Every worktree of a brownfield clone writes to the main store, so a worker's gate runs are
+    // among its own events there.
+    var workerEvents = main.events.map(\.event).filter {
+      profile == .brownfield || !mainOwn.contains($0.eventID)
+    }
     if let join, let ledger {
       for worktree in liveWorktrees(plan: join.plan, ledger: ledger, damage: &damage) {
         let read = EventStoreReader(
