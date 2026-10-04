@@ -13,6 +13,7 @@ into a committed file.
 | Reading what a reviewer or verifier returned, or why a finding was dropped | [`review-contract.md`](review-contract.md) |
 | Working out why a Claude Code hook denied, blocked or added context | [`hooks.md`](hooks.md) |
 | Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |
+| Checking flow files with `swiftgate qa lint`, or running a plan's validation rows with `qa run` and `qa adopt` | [`simulator-qa.md`](simulator-qa.md) |
 | Seeing a build run as 1 page (`swiftgate report --html`, `swiftgate view`), or emitting a span with `swiftgate events span` | [`run-viewer.md`](run-viewer.md) |
 
 Your repository's `docs/index.md` routes its own docs (designs, plans, ADRs); this page doesn't.
