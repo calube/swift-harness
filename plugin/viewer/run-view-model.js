@@ -104,6 +104,8 @@
       if (!g || !g.steps || !g.steps.length) return;
       const minutes = g.ms / 60000;
       const factor = minutes > 0 ? (gs.end - gs.start) / minutes : 0;
+      // A GREEN run's red steps are the ones its baseline excused.
+      const excused = spans.some((x) => x.phase === "step" && x.gateRun === g.runId && x.baseline);
       const tiers = [];
       g.steps.forEach((st) => { if (tiers.indexOf(st.tier) < 0) tiers.push(st.tier); });
       tiers.forEach((tier) => {
@@ -116,7 +118,8 @@
           return {
             id: gs.id + ":" + tier + ":" + st.step, parent: gs.id, phase: "step", label: st.step,
             start: gs.start + (startMs / 60000) * factor, end: gs.start + ((startMs + st.ms) / 60000) * factor,
-            outcome: st.verdict === "RED" ? "red" : "ok", gateRun: g.runId, task: gs.task, ms: st.ms, tier, approximate
+            outcome: st.verdict === "RED" ? "red" : "ok", gateRun: g.runId, task: gs.task, ms: st.ms, tier, approximate,
+            baseline: excused && st.verdict === "RED"
           };
         });
         rows.push({ depth, label: tier + " · " + (g.verdict === "RED" ? "RED run" : "run") + " " + shortRun(g.runId), spans: steps });
@@ -254,6 +257,24 @@
     return { gate, block, halts, gateOf: (id) => gates[id] || null };
   }
 
+  const NEVER_ENDED = "Never ended; no end event recorded.";
+  const NO_REASON = "No reason recorded.";
+
+  // A span's one-line failure reason: the builder's, its gate run's for a step row the page
+  // derives, or "never ended" for a span still open in a report. Null for a span that is ok or
+  // still running live.
+  function failureReason(view, s, live) {
+    if (s.failureReason) return s.failureReason;
+    const open = s.open != null ? s.open : s.end == null;
+    if (open) return live ? null : NEVER_ENDED;
+    if (s.outcome == null || s.outcome === "ok") return null;
+    const spans = view.spans || [];
+    // A red step row the page derives takes the reason of the builder's red step of that run.
+    const step = s.gateRun ? spans.find((x) => (x.phase === "step" || x.phase === "tier") && x.gateRun === s.gateRun && x.outcome === "red" && x.failureReason) : null;
+    const gate = s.gateRun ? spans.find((x) => x.phase === "gate" && x.gateRun === s.gateRun && x.failureReason) : null;
+    return step ? step.failureReason : gate ? gate.failureReason : NO_REASON;
+  }
+
   // `file:line`, `file`, or null for a finding or test no file locates.
   const location = (file, line) => (file == null ? null : line == null ? file : file + ":" + line);
 
@@ -350,7 +371,8 @@
     const halts = openHalts(view);
     const haltedTask = new Set(halts.filter((h) => h.task != null).map((h) => h.task));
     // Tier and step spans repeat their gate's outcome, so a RED gate counts once.
-    const failed = spans.filter((s) => (s.outcome === "red" || s.outcome === "halted") && s.phase !== "tier" && s.phase !== "step").length;
+    // A warm-up step the baseline recorded failed as expected, so it isn't counted.
+    const failed = spans.filter((s) => (s.outcome === "red" || s.outcome === "halted") && !s.baseline && s.phase !== "tier" && s.phase !== "step").length;
     const stalled = live && typeof o.stallMin === "number" ? stalls(view, o.now, o.stallMin).length : 0;
     const unended = live ? 0 : spans.filter((s) => s.end == null).length;
     const blocked = tasks.filter((t) => BLOCKED_STATUS.indexOf(t.status) >= 0 || haltedTask.has(t.id)).length;
@@ -378,7 +400,7 @@
   }
 
   root.RunViewModel = {
-    apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
+    apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

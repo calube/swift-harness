@@ -59,6 +59,11 @@ private struct BlockedClone {
     for (name, target) in copies {
       try files.copyItem(at: captured.appending(path: name), to: target)
     }
+    // The warm-up's times and baseline files, where the capture kept them.
+    for name in ["warmup", "baseline"]
+    where files.fileExists(atPath: captured.appending(path: name).path) {
+      try files.copyItem(at: captured.appending(path: name), to: harness.appending(path: name))
+    }
     let worktrees = captured.appending(path: "worktrees", directoryHint: .isDirectory)
     for name in try files.contentsOfDirectory(atPath: worktrees.path) where !name.hasPrefix(".") {
       let checkout = parent.appending(path: name, directoryHint: .isDirectory)
@@ -134,6 +139,36 @@ struct RunViewReaderBlockedTests {
       #expect(span.end == block.at, "\(task)")
     }
     #expect(view.tasks.filter { $0.status != .blocked }.allSatisfy { $0.blocked == nil })
+  }
+
+  @Test(
+    "the captured warm-up's red steps say what the baseline recorded, read from the clone's warm-up and baseline files, and each blocked task says why — catches a red warm-up or blocked task with no failure reason"
+  )
+  func failureReasons() throws {
+    let clone = try BlockedClone()
+    defer { clone.remove() }
+    let view = try clone.view()
+    let warmups = Dictionary(
+      view.spans.filter { $0.phase == .warmup && $0.outcome == .red }.map {
+        (String($0.id.split(separator: ":")[1]), $0)
+      }, uniquingKeysWith: { first, _ in first })
+    #expect(
+      warmups["memos"]?.failureReason
+        == "Base commit's tests already fail; 1 recorded as baseline.")
+    #expect(
+      warmups["web"]?.failureReason
+        == "Base commit's tests fail, no test names read; whole step recorded as baseline.")
+    #expect(warmups.count == 2 && warmups.values.allSatisfy { $0.baseline })
+    for task in [BlockedClone.web, BlockedClone.store] {
+      let row = try #require(view.tasks.first { $0.id == task })
+      #expect(row.failureReason == "No return came back from the worker.", "\(task)")
+      let span = try #require(view.spans.first { $0.phase == .task && $0.task == task })
+      #expect(span.failureReason == row.failureReason, "\(task)")
+    }
+    let lint = try #require(view.spans.first { $0.gateRun == "20261004T124744Z-9d7ec113" })
+    #expect(lint.failureReason?.hasPrefix("neutral.lint: ") == true)
+    #expect(
+      view.damage.allSatisfy { !$0.source.contains("baseline") && !$0.source.contains("warmup") })
   }
 }
 

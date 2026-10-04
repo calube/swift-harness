@@ -48,6 +48,8 @@ function seededClone({ dir: fixture, buildRun, plan, clone }) {
   writeFileSync(join(harness, 'config.toml'), '')
   const copies = [
     ['events', join(harness, 'events')],
+    // The warm-up's times and baseline files, where the capture kept them.
+    ...['warmup', 'baseline'].filter((name) => existsSync(join(captured, name))).map((name) => [name, join(harness, name)]),
     ['ledger.json', join(harness, 'plans', plan, 'ledger.json')],
     ['plan.json', join(harness, 'plans', plan, 'plan.json')],
     ['clock.json', join(harness, 'plans', plan, 'clock.json')],
@@ -189,8 +191,22 @@ function expectedBadges(view) {
     spec: n('uncovered', view.spec.filter((q) => q.tasks.length === 0).length),
     gates: n('red', view.gates.filter((g) => g.verdict === 'RED').length),
     tokens: n('pending', view.tasks.filter((t) => t.tokens == null).length),
-    timeline: n('failed', view.spans.filter((x) => ['red', 'halted'].includes(x.outcome) && !['tier', 'step'].includes(x.phase)).length),
+    timeline: n('failed', view.spans.filter((x) => ['red', 'halted'].includes(x.outcome) && !x.baseline && !['tier', 'step'].includes(x.phase)).length),
   }
+}
+
+// Hovers the pointer over the bar with `id` on the timeline and reads each label and value of the
+// popover it previews, with the bar's colour.
+async function hoverBar(page, id) {
+  await page.evaluate(`document.querySelector('[role=tab][data-tab="timeline"]').click()`)
+  const box = await page.evaluate(`(() => { const b = document.querySelector('#tl .bar[data-id="${id}"]'); b.scrollIntoView({ block: 'center', inline: 'center' });
+    const r = b.getBoundingClientRect(); return { x: r.left + Math.min(4, r.width / 2), y: r.top + r.height / 2 } })()`)
+  await page.hover(box.x, box.y)
+  const read = await page.evaluate(`(() => { const p = document.getElementById('pop');
+    const rows = [...p.querySelectorAll('dt')].map((dt) => [dt.innerText, dt.nextElementSibling.innerText]);
+    return { hidden: p.hidden, rows, colour: document.querySelector('#tl .bar[data-id="${id}"]').style.backgroundColor } })()`)
+  await page.press('Escape')
+  return read
 }
 
 // Clicks a task's board card and reads the task popover it opens.
@@ -283,6 +299,9 @@ const tests = {
     assert.match(card.text, /why it failed/i, 'the task popover carries no failure context')
     assert.match(card.text, /no return of it was stored/)
     assert.match(card.text, /neutral\.lint/)
+    assert.match(card.text, /FAILURE REASON\s+No return came back from the worker\./i, 'the task popover has no failure reason')
+    assert.match(blocked.drawer, /failure reason\s+No return came back from the worker\./i, 'the drawer has no failure reason')
+    assert.match(blocked.popover.text, /FAILURE REASON\s+No return came back from the worker\./i, 'the task span has no failure reason')
     assert.doesNotMatch(card.text, /null|undefined/, 'a brownfield task with no model reads null')
     assert.doesNotMatch(card.cardText, /null/, 'the board card of a task with no model reads null')
     assert.equal(blocked.popover.hidden, false)
@@ -294,6 +313,28 @@ const tests = {
     assert.match(gate.popover.text, /store\/test\/memo_share_test\.go:212/)
     assert.match(gate.popover.text, /slice tier · worker's gate/)
     assert.match(gate.drawer, /20261004T124744Z-9d7ec113/)
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'hovering a red warm-up step shows FAILURE REASON right after OUTCOME, with the count the baseline recorded, and its bar reads as an excused baseline — catches a red warm-up with no explanation'() {
+    const memos = 'warmup:memos:test:45BCDA7C-6BA0-44B8-B894-13B851158D52'
+    const web = 'warmup:web:test:AE9DDF06-4CE9-4DDA-BA76-C63837D85CEA'
+    const rendered = await renderReport(RUNS.blocked, async (page) => ({ memos: await hoverBar(page, memos), web: await hoverBar(page, web) }))
+    assertRendered(rendered, RUNS.blocked, ['meta', 'stats', 'bars', 'gates'])
+    for (const [read, reason] of [
+      [rendered.acted.memos, "Base commit's tests already fail; 1 recorded as baseline."],
+      [rendered.acted.web, "Base commit's tests fail, no test names read; whole step recorded as baseline."],
+    ]) {
+      assert.equal(read.hidden, false, 'hovering the warm-up bar previews no popover')
+      const labels = read.rows.map(([label]) => label)
+      const at = labels.indexOf('FAILURE REASON')
+      assert.ok(at > 0, `no FAILURE REASON row: ${JSON.stringify(labels)}`)
+      assert.equal(labels[at - 1], 'OUTCOME')
+      assert.equal(at, labels.length - 1, 'FAILURE REASON is not the last field before TOOLS')
+      assert.equal(read.rows[at][1], reason)
+      assert.equal(read.rows[at - 1][1], 'baseline')
+      assert.ok(reason.split(/\s+/).length <= 15)
+    }
+    assert.match(rendered.acted.memos.colour, /bar-baseline/, 'an excused warm-up step reads red')
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
   async 'a task whose return check-return rejected reads the rule and its message on its task span and drawer — catches a rejected-return task that reads only "no return stored"'() {
