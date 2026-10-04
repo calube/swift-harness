@@ -136,7 +136,8 @@ async function renderReport(run, act) {
     const text = await page.evaluate('document.body.innerText')
     const barIDs = await page.evaluate("[...new Set([...document.querySelectorAll('#tl .bar')].map(bar => bar.dataset.id))]")
     const acted = act ? await act(page) : null
-    return { regions, view, text, barIDs, html, acted, errors: [...page.errors] }
+    const tabs = await walkTabs(page)
+    return { regions, view, text, barIDs, html, acted, tabs, errors: [...page.errors] }
   } finally {
     await close()
   }
@@ -201,7 +202,24 @@ async function cardPopover(page, task) {
   return read
 }
 
-function assertRendered({ regions, view, text, errors }, run, keys) {
+// Every tab draws its panel alone with no error, and its badges carry the view's counts.
+function assertTabs({ tabs: { shown, badges }, view }) {
+  for (const id of TABS) {
+    assert.ok(shown[id], `the ${id} tab is missing`)
+    assert.deepEqual(shown[id].panels, [id], `the ${id} tab shows ${JSON.stringify(shown[id].panels)}`)
+    assert.ok(shown[id].height > 0 && shown[id].text > 0, `the ${id} tab is blank`)
+    assert.equal(shown[id].selected, 'true')
+    assert.equal(shown[id].errors, '0', `the ${id} tab throws`)
+  }
+  for (const [tab, counts] of Object.entries(expectedBadges(view))) {
+    const shownCounts = Object.fromEntries(Object.entries(badges[tab]).filter(([key]) => CHECKED[tab].includes(key)))
+    assert.deepEqual(shownCounts, counts, `the ${tab} tab's badges`)
+  }
+}
+
+function assertRendered(rendered, run, keys) {
+  const { regions, view, text, errors } = rendered
+  assertTabs(rendered)
   for (const key of keys) {
     assert.ok(regions[key] > 0, `region ${key} is empty: ${JSON.stringify(regions)}`)
   }
@@ -217,26 +235,7 @@ function assertRendered({ regions, view, text, errors }, run, keys) {
 const REGION_KEYS = ['meta', 'stats', 'bars', 'spec', 'tokens', 'roles', 'gates']
 
 const tests = {
-  async 'every tab of each captured run\'s report draws its panel alone with 0 console errors, and its badges carry the view\'s counts — catches a tab left blank or a badge that drifts from the data'() {
-    for (const [name, run] of Object.entries(RUNS)) {
-      const rendered = await renderReport(run, walkTabs)
-      const { shown, badges } = rendered.acted
-      for (const id of TABS) {
-        assert.ok(shown[id], `${name}: the ${id} tab is missing`)
-        assert.deepEqual(shown[id].panels, [id], `${name}: the ${id} tab shows ${JSON.stringify(shown[id].panels)}`)
-        assert.ok(shown[id].height > 0 && shown[id].text > 0, `${name}: the ${id} tab is blank`)
-        assert.equal(shown[id].selected, 'true')
-        assert.equal(shown[id].errors, '0', `${name}: the ${id} tab throws`)
-      }
-      for (const [tab, counts] of Object.entries(expectedBadges(rendered.view))) {
-        const shownCounts = Object.fromEntries(Object.entries(badges[tab]).filter(([key]) => CHECKED[tab].includes(key)))
-        assert.deepEqual(shownCounts, counts, `${name}: the ${tab} tab's badges`)
-      }
-      assert.deepEqual(rendered.errors, [], `${name}: console errors`)
-    }
-  },
-
-  async 'the report of the captured run is 1 file that draws a row for each item in every region with 0 console errors — catches key drift between the encoder and the page'() {
+  async 'the report of the captured run is 1 file that draws a row for each item in every region and every tab, whose badges carry the view\'s counts, with 0 console errors — catches key drift between the encoder and the page, a blank tab or a drifting badge'() {
     // The first captured run predates proof recording, so its proof table is checked against the data.
     assertRendered(await renderReport(RUNS.first), RUNS.first, REGION_KEYS)
   },
