@@ -1,4 +1,5 @@
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 
 /// `check --tier slice|merge|final`: the brownfield profile's tiers, routed away from the owned
@@ -25,6 +26,15 @@ enum BrownfieldCheck {
       return try notRun(
         tier, because: "it belongs to the owned profile; run it through check's owned tiers")
     }
+  }
+
+  /// The toplevel of the git worktree holding `directory`: area roots are toplevel-relative, so a
+  /// tier started in a subdirectory still reads them from the toplevel.
+  static func repositoryRoot(from directory: URL, git: any Git) async throws(GitError) -> URL {
+    let depth = try await git.workingDirectoryPrefix().split(separator: "/").count
+    var root = directory.standardizedFileURL
+    for _ in 0..<depth { root = root.deletingLastPathComponent() }
+    return root
   }
 
   /// A BLOCKED run naming `tier`: a tier that ran nothing must never read as GREEN.
