@@ -104,6 +104,39 @@ extension RunView {
   }
 }
 
+extension RunView {
+  /// What a blocked task's structured record says stopped it. Nothing records a rejected
+  /// return's findings, so a task whose return wasn't stored names that and its last gate run.
+  public enum BlockCause: String, Sendable, Equatable, Encodable, CaseIterable {
+    /// The task's newest gate run was RED.
+    case gateRed = "gate-red"
+    /// No return of the task was stored: `build check-return` rejected it, or none came back.
+    case returnNotStored = "return-not-stored"
+    /// A halt of the task stopped it, with neither of the above.
+    case halt
+  }
+
+  /// Why a task that ended `blocked` or `needs-replan` stopped.
+  public struct TaskBlock: Sendable, Equatable, Encodable {
+    /// The ledger transition into the status.
+    public var at: Date
+    public var cause: BlockCause?
+    /// The reason of the halt raised with it; `nil` when none was.
+    public var halt: BuildHaltReason?
+    /// The task's newest gate run before `at`; `nil` when it ran none.
+    public var gateRun: String?
+
+    public init(
+      at: Date, cause: BlockCause? = nil, halt: BuildHaltReason? = nil, gateRun: String? = nil
+    ) {
+      self.at = at
+      self.cause = cause
+      self.halt = halt
+      self.gateRun = gateRun
+    }
+  }
+}
+
 /// 1 gate run's `report.json`, as the reader found it.
 public struct RunViewGateReport: Sendable, Equatable {
   public var report: RunReport

@@ -219,8 +219,11 @@ public struct RunViewReader: RunViewReading {
   /// A fix window, from a task's `build merge --undo` until its next merge or its task's window
   /// ends, wins over those: the task's fixer runs then, while every task still in progress beside
   /// it holds the run too. A run inside more than 1 fix window stays out.
+  ///
+  /// `holders` names the task whose worktree's run store holds a run, by run id.
   static func workerGateRuns(
-    _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>
+    _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>,
+    holders: [String: String] = [:]
   ) -> [String: String] {
     typealias Window = (task: String, start: Date, end: Date?)
     var windows: [Window] = []

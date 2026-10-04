@@ -108,12 +108,15 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var brief: Brief?
     /// `nil` while the task's worker runs: its usage is ingested when it finishes.
     public var tokens: Tokens?
+    /// Why the task stopped; `nil` unless it ended `blocked` or `needs-replan`.
+    public var blocked: TaskBlock?
 
     public init(
       id: String, status: TaskStatus, model: TaskModel? = nil, deps: [String] = [],
       writes: [String] = [], gate: CheckTier, covers: [String] = [], commits: [String] = [],
       gateRun: String? = nil, mergeGateRun: String? = nil, createdAt: Date? = nil,
-      mergedAt: Date? = nil, brief: Brief? = nil, tokens: Tokens? = nil
+      mergedAt: Date? = nil, brief: Brief? = nil, tokens: Tokens? = nil,
+      blocked: TaskBlock? = nil
     ) {
       self.id = id
       self.status = status
@@ -129,6 +132,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.mergedAt = mergedAt
       self.brief = brief
       self.tokens = tokens
+      self.blocked = blocked
     }
   }
 
