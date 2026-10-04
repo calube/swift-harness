@@ -10,11 +10,14 @@ public enum Discover {
 
   /// `[build.presets.brownfield]` for a clone discovered for the first time (design §13). A
   /// design conflict answers `amend`: the run widens the task's write set in `PLAN.md` and
-  /// retries it, where `block` would stop a run no one is watching.
+  /// retries it, where `block` would stop a run no one is watching. The budget is the run's
+  /// time box; ``TimeBoxLimits`` says where its minutes come from.
   public static let brownfieldPreset = BuildPreset(
     designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
-    mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 0, stopStartsBeforeMin: 0,
-    onDesignConflict: .amend, taskProof: .prove, stallMin: 2)
+    mergeGate: .merge, workerModel: .claudeSonnet55,
+    timeBudgetMin: TimeBoxLimits.defaultBudgetMin,
+    stopStartsBeforeMin: TimeBoxLimits.defaultStopStartsBeforeMin, onDesignConflict: .amend,
+    taskProof: .prove, stallMin: 2)
 
   /// `[judge]` for a clone discovered for the first time: the owned profile's default backend and
   /// thresholds, so `judge diff-risk` can rate a slice (design §11.5) without a hand edit. Claude
@@ -115,7 +118,8 @@ public enum Discover {
 
   /// The config an applied `proposal` writes. Settings, `[[allow]]` entries, presets and `[judge]`
   /// come from `existing` when there is one, so a rediscovery keeps them; areas always come from
-  /// the proposal.
+  /// the proposal. A config with no brownfield preset gets the default one beside its others, so
+  /// `build start --preset brownfield` always has a time box to read.
   public static func config(from proposal: DiscoverProposal, keeping existing: BrownfieldConfig?)
     -> BrownfieldConfig
   {
@@ -126,7 +130,8 @@ public enum Discover {
         sliceBudgetSeconds: settings?.sliceBudgetSeconds ?? defaultSliceBudgetSeconds,
         timeBudgetMinutes: settings?.timeBudgetMinutes ?? 0, sensitive: settings?.sensitive ?? []),
       areas: proposal.areas.map(BrownfieldArea.init(proposed:)), allow: existing?.allow ?? [],
-      buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset],
+      buildPresets: (existing?.buildPresets ?? [:]).merging(
+        ["brownfield": brownfieldPreset], uniquingKeysWith: { kept, _ in kept }),
       judge: existing?.judge ?? defaultJudge)
   }
 }

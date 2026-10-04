@@ -1,0 +1,9 @@
+{"at":"2026-10-04T17:39:31Z","from":"pending","kind":"transition","task":"summary-logic","to":"in-progress"}
+{"at":"2026-10-04T17:39:33Z","from":"pending","kind":"transition","task":"summary-row","to":"in-progress"}
+{"at":"2026-10-04T17:42:38Z","kind":"merge","postCommit":"162450e1cfdfb1c089ae0ec415fda733a34a25b3","preCommit":"781be0b36692c18ff71724879847559da36272a5","task":"summary-logic"}
+{"at":"2026-10-04T17:45:19Z","gate":"merge","kind":"gate","runId":"20261004T174242Z-c6897717","task":"summary-logic","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-04T17:45:19Z","from":"in-progress","kind":"transition","task":"summary-logic","to":"done"}
+{"at":"2026-10-04T17:45:29Z","kind":"merge","postCommit":"835ba9da2a201af49ca40dc1fc43fa5e8844b31c","preCommit":"162450e1cfdfb1c089ae0ec415fda733a34a25b3","task":"summary-row"}
+{"at":"2026-10-04T17:50:06Z","gate":"merge","kind":"gate","runId":"20261004T174531Z-4a491e54","task":"summary-row","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-04T17:50:06Z","from":"in-progress","kind":"transition","task":"summary-row","to":"done"}
+{"at":"2026-10-04T17:54:32Z","gate":"final","kind":"gate","runId":"20261004T175029Z-80ecc488","tier":"final","verdict":"GREEN"}

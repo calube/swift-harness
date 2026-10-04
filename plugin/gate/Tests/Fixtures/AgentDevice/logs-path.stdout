@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "path": "/HOME/.agent-device/sessions/swiftgate-capture/app.log",
+    "active": false,
+    "state": "inactive",
+    "backend": "ios-simulator",
+    "sizeBytes": 0,
+    "hint": "Grep the file for token-efficient debugging, e.g. grep -n \"Error\\|Exception\" <path>"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "success": true,
+  "data": {
+    "path": "/HOME/.agent-device/sessions/swiftgate-capture/app.log",
+    "exists": false,
+    "scannedLines": 0,
+    "matchedLines": 0,
+    "entries": [],
+    "unnamedRequests": 0,
+    "include": "headers",
+    "limits": {
+      "maxEntries": 25,
+      "maxPayloadChars": 2048,
+      "maxScanLines": 4000
+    },
+    "active": false,
+    "state": "inactive",
+    "backend": "ios-simulator",
+    "notes": [
+      "Recovered 13 recent iOS simulator app log lines from simctl log show, but none looked like HTTP traffic. This app may not emit request URLs, status, or timing into Unified Logging for this repro window.",
+      "Capture uses the session app log file. For fresh traffic, run logs clear --restart before reproducing requests.",
+      "No HTTP(s) entries were found in recent iOS simulator app logs. If the app only emits non-HTTP diagnostics, inspect logs path or add app-side URLSession/network logging for per-request timing and payload details."
+    ]
+  }
+}

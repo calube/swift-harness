@@ -51,10 +51,14 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   /// was measured from. Absent in records written before it existed, for a command with no
   /// `--base`, or when the ref named no commit.
   public let base: String?
+  /// Whether the run started on a tree with uncommitted changes outside the harness's own state.
+  /// Absent in records written before it existed, or when git couldn't say.
+  public let dirty: Bool?
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
-    proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil
+    proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
+    dirty: Bool? = nil
   ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
@@ -68,6 +72,7 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.proofBases = proofBases
     self.headCommit = headCommit
     self.base = base
+    self.dirty = dirty
   }
 }
 

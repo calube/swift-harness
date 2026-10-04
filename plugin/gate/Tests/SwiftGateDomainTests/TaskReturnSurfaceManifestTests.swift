@@ -15,7 +15,8 @@ struct TaskReturnSurfaceManifestTests {
   static func evidence(_ manifests: [SliceManifest]?) -> TaskReturnEvidence {
     TaskReturnEvidence(
       branch: "p/t", branchExists: true, commits: ["abc1": .onBranch],
-      gateRun: .init(tier: .push, verdict: .green, steps: ["impact", "coverage", "app-build"]),
+      gateRun: .init(
+        tier: .push, verdict: .green, steps: ["impact", "coverage", "app-build"], dirty: false),
       taskGate: .push, taskStatus: nil, taskGateStepsRequired: true,
       planSurface: manifests.map { PlanSurfaceManifests(surface: surface, manifests: $0) })
   }

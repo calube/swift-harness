@@ -266,11 +266,85 @@ struct RunCommandTests {
       clock
         == RunClock(
           started: started, spec: copy.path(percentEncoded: false), origin: spec.path,
-          specSource: .copied, planBranch: "swift-harness/add-sharing", base: head))
+          specSource: .copied, planBranch: "swift-harness/add-sharing", base: head,
+          timeBox: TimeBoxLimits(
+            budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config)))
     #expect(prepared.clock == clock)
     #expect(FileManager.default.fileExists(atPath: clone.layout.config.path))
     #expect(prepared.settings == clone.layout.settings.path(percentEncoded: false))
     #expect(FileManager.default.fileExists(atPath: prepared.settings))
+  }
+
+  @Test(
+    "run writes the brownfield preset's 45-minute box into clock.json, and --time-box replaces it for that run alone — catches a brownfield run with no budget"
+  )
+  func clockCarriesTheBox() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let warmup = FakeWarmup(steps: Steps(), config: clone.layout.config)
+
+    let configured = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(warmup: warmup))
+    let flagged = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil, timeBox: 30,
+      dependencies: clone.dependencies(warmup: warmup))
+
+    func written(_ prepared: RunPrepared) throws -> TimeBoxLimits? {
+      try RunClock.decode(
+        Data(contentsOf: clone.layout.plan(slug: prepared.slug).appending(path: RunClock.fileName))
+      ).timeBox
+    }
+    #expect(
+      try written(configured)
+        == TimeBoxLimits(
+          budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
+    #expect(
+      try written(flagged)
+        == TimeBoxLimits(budgetMin: 30, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .flag))
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      String(contentsOf: clone.layout.config, encoding: .utf8))
+    #expect(config.buildPresets["brownfield"]?.timeBudgetMin == 45)
+  }
+
+  @Test(
+    "run clock reads the launch clock and reports the phase, every deadline and the seconds to the next one — catches a run skill with no clock to hold its early phases to"
+  )
+  func clockReportsDeadlines() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let launch = Date(timeIntervalSince1970: 1_800_000_000)
+    let prepared = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(
+        warmup: FakeWarmup(steps: Steps(), config: clone.layout.config), now: { launch }))
+
+    let outcome = await RunClockRun.run(
+      slug: prepared.slug, root: clone.root, runner: clone.runner,
+      now: launch.addingTimeInterval(6 * 60))
+    let missing = await RunClockRun.run(
+      slug: "no-such-plan", root: clone.root, runner: clone.runner, now: launch)
+
+    guard case .report(let report) = outcome else {
+      Issue.record("run clock refused: \(outcome)")
+      return
+    }
+    #expect(report.phase == .normal)
+    #expect(report.elapsedSeconds == 360)
+    #expect(report.budgetMin == 45)
+    #expect(report.deadlines.planBy == launch.addingTimeInterval(8 * 60))
+    #expect(report.deadlines.endsAt == launch.addingTimeInterval(45 * 60))
+    #expect(report.next == RunClockReport.Next(deadline: "planBy", secondsLeft: 120))
+    guard case .refused(let message, let status) = missing else {
+      Issue.record("a plan with no clock got a report")
+      return
+    }
+    #expect(status == 2)
+    #expect(message.contains("no-such-plan"), "\(message)")
   }
 
   @Test("a tracked spec is read in place and not copied — catches the run reading a stale copy")

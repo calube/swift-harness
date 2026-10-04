@@ -120,12 +120,14 @@ public enum BuildScheduler {
   ///   call reconsiders it. In `.noNewStarts` phase only `required` tasks start, under the same
   ///   slot and overlap rules, so the budget never skips a task the app target needs to compile.
   ///   In `.cutoff` phase nothing starts.
+  /// - A `timeBox` sets the phase in place of the preset's budget, measured from its own start.
   public static func next(
     ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
-    required: RequiredTasks
+    required: RequiredTasks, timeBox: RunTimeBox? = nil
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
-    let phase = budgetPhase(preset: preset, startedAt: startedAt, now: now)
+    let phase =
+      timeBox?.phase(at: now) ?? budgetPhase(preset: preset, startedAt: startedAt, now: now)
 
     let doneIDs = Set(ledger.tasks.filter { $0.status == .done }.map(\.id))
     let readyTasks =

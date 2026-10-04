@@ -1,0 +1,36 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 236734,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove ran Aidoku's whole test command: it has no test_files that selects its changed tests, so a failure there can't name the test that caught the change",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: 1 of 1 changed tests fail with the change's source reverted",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "835ba9da2a201af49ca40dc1fc43fa5e8844b31c",
+  "runID" : "20261004T175029Z-80ecc488",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 236306,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

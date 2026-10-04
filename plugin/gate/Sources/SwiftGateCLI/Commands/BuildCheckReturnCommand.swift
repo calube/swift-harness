@@ -16,6 +16,9 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   /// Sources read with a degradation the verdict doesn't show, such as unreadable history lines.
   let warnings: [String]
   let message: String
+  /// The full sha of the return's last commit, the branch tip `build merge` requires; `nil` when
+  /// the check couldn't resolve one.
+  var commit: String? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
@@ -63,7 +66,8 @@ enum BuildCheckReturnRun {
         verdict: findings.isEmpty ? .green : .red, findings: findings, warnings: warnings,
         message: findings.isEmpty
           ? "task `\(taskReturn.task)`: the return matches git and the run store"
-          : "task `\(taskReturn.task)`: \(findings.count) claim(s) the evidence doesn't support")
+          : "task `\(taskReturn.task)`: \(findings.count) claim(s) the evidence doesn't support",
+        commit: evidence.lastCommit)
     } catch {
       return blocked(taskReturn.task, error.message)
     }
@@ -91,9 +95,10 @@ enum BuildCheckReturnRun {
         report, fix: fix, git: git, profile: profile, directory: directory))
   }
 
-  /// Writes `report` as `build.return-checked` under the plan's newest build run. Returns why
-  /// nothing was written, unless telemetry is off: a verdict on no task or no build run has
-  /// nothing to name, and a failed write never changes the verdict.
+  /// Appends `report` to the plan's newest build run as a `return-check` event, which `build
+  /// merge` reads, then writes it as `build.return-checked` under the same id when telemetry is
+  /// on. Returns why either went unwritten, except telemetry being off: a verdict on no task or no
+  /// build run has nothing to name, and a failed write never changes the verdict.
   private static func record(
     _ report: BuildCheckReturnReport, fix: Bool, git: any Git, profile: RepositoryProfile,
     directory: String
@@ -103,14 +108,33 @@ enum BuildCheckReturnRun {
       return ["\(notRecorded): the check names no task and plan"]
     }
     guard RunID.isValid(task) else { return ["\(notRecorded): task `\(task)` isn't an id"] }
-    let buildRun: String
+    let store: BuildRunStore
     do {
-      guard let store = try await BuildRunStore.latest(plan: plan, git: git) else {
+      guard let latest = try await BuildRunStore.latest(plan: plan, git: git) else {
         return ["\(notRecorded): plan `\(plan)` has no build run"]
       }
-      buildRun = store.runID
+      store = latest
     } catch {
       return ["\(notRecorded): listing plan `\(plan)`'s build runs: \(error)"]
+    }
+    let buildRun = store.runID
+    let eventID = UUID().uuidString  // swiftgate:allow det.uuid-init — an id need only be unique
+    let now = Date()  // swiftgate:allow det.date-init — stamps the check
+    var rules: [TaskReturnFinding.Rule] = []
+    for finding in report.findings where !rules.contains(finding.rule) {
+      rules.append(finding.rule)
+    }
+    do throws(BuildRunStoreError) {
+      try await store.append(
+        .returnCheck(
+          .init(
+            task: task, fix: fix, verdict: report.verdict, commit: report.commit,
+            checkID: eventID, rules: rules, at: now)))
+    } catch {
+      return [
+        "\(notRecorded) in build run \(buildRun), so `build merge` will refuse this return: "
+          + "\(error)"
+      ]
     }
     let root: URL
     switch await BuildHaltRun.store(command: command, directory: directory) {
@@ -127,10 +151,8 @@ enum BuildCheckReturnRun {
       roots.append(URL(filePath: worktree.path).resolvingSymlinksInPath().path)
     }
     roots.append(URL(filePath: directory).resolvingSymlinksInPath().path)
-    let eventID = UUID().uuidString  // swiftgate:allow det.uuid-init — an id need only be unique
     let event = HarnessEvent(
-      eventID: eventID,
-      time: Date(),  // swiftgate:allow det.date-init — stamps the event
+      eventID: eventID, time: now,
       source: HarnessEventSource(route: nil),
       payload: .buildReturnChecked(
         .scrubbed(
@@ -192,10 +214,18 @@ enum BuildCheckReturnRun {
     var surface: TaskReturnEvidence.CommitState?
     var manifests: PlanSurfaceManifests?
     var testBuild: ProofBaseTestBuild?
+    var lastCommit: String?
     let planSurface = try planSurfaceCommit(store, warnings: &warnings)
     if let branchTip {
       for commit in taskReturn.commits {
         commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
+      }
+      if let last = taskReturn.commits.last, commits[last] == .onBranch {
+        do {
+          lastCommit = try await git.revision(last)
+        } catch {
+          throw Blocked("reading commit \(last): \(error)")
+        }
       }
       if let surfaceCommit = taskReturn.surfaceCommit {
         surface = try await state(of: surfaceCommit, onBranchAt: branchTip, git: git)
@@ -224,7 +254,7 @@ enum BuildCheckReturnRun {
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
       explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
       surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
-      planSurface: manifests, testBuild: testBuild)
+      planSurface: manifests, testBuild: testBuild, lastCommit: lastCommit)
   }
 
   /// Builds the host tests the task branch adds or changes, in scratch trees of its tip, with the
@@ -515,8 +545,11 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
       + "adds or changes with its production source reverted to each proof base (the plan "
       + "surface, merged tasks' stubs, the return's surfaceCommit) in scratch worktrees it "
       + "removes: a test file that compiles at none is build-return.test-needs-stub. Re-runs no "
-      + "gate. Records the verdict as build.return-checked in the main checkout's store, under "
-      + "the plan's newest build run: the task, the verdict, the rule ids and each finding's "
+      + "gate. A ready-to-merge or review-blocked return's gate run must have started at the "
+      + "return's last commit on a clean tree (build-return.stale-gate). Records the verdict in "
+      + "the plan's newest build run as a return-check event naming the return's last commit, "
+      + "which build merge requires GREEN at the branch tip it merges, and as build.return-checked "
+      + "in the main checkout's store: the task, the verdict, the rule ids and each finding's "
       + "message on 1 line, cut and with machine paths taken out; a failed write prints 1 line "
       + "and changes nothing. Exits 0 when every claim holds, 1 for any finding, and 2 when the return or plan "
       + "state can't be read.")

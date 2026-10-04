@@ -10,11 +10,12 @@ line and never changes a verdict, an exit code or a report.
 |---|---|---|
 | `gate.run` | each recorded gate run | command, verdict, ms, the clean tree's hash or `dirty`, per-tier ms, rule counts, finding paths, allowance counts, test counts |
 | `gate.step` | each timed step of a gate run | tier, step, ms, verdict, warm or cold DerivedData, and the step's start offset from its gate run when known |
+| `warmup.run` | `swiftgate warmup`, 1 per area and step; in a brownfield clone, `worktree create` and `run checkout create`, 1 per node install, under the first area it serves | area, step (`generate`, `build`, `test`, or `install` for a node install), ms, `cold` or `warm` cache (an install is `warm` when the directory its manager names as its cache or store held anything), outcome |
 | `test.result` | every test case of every recorded gate run | test id, target, tier, outcome, ms |
 | `prove.result` | each changed test `prove` ran, under its `gate.run` | test id, target, outcome (`proven`, `passes-reverted`, `compile-only`, `crashed` or `skipped`), the proof base, and where the reverted run first failed: a repository-relative file, a line and the assertion form, never its text |
 | `hook.decision` | each hook call | hook event, tool name, decision, rule ids, ms, session id, a salted hash of the tool input |
 | `cache.lookup` | the manifest and evidence caches | cache, outcome, key hash, answer hash, tombstone reason |
-| `build.halt`, `build.resume` | `swiftgate build halt` and `resume` | build run, task, reason or answer, wait |
+| `build.halt`, `build.resume` | `swiftgate build halt` and `resume`, and `build cutoff`, which records a brownfield run's cutoff as `budget` halts it answers at once | build run, task, reason or answer, wait |
 | `build.return-checked` | `swiftgate build check-return` | build run, task, verdict, rule ids, and the first 10 findings' messages and the summary, scrubbed |
 | `span.start`, `span.end` | `swiftgate events span start` and `end` | a 16-hex span id, its parent span, phase, build run, task and role; the end holds the outcome (`ok`, `red`, `halted` or `abandoned`) and ms |
 | `agent.usage` | `swiftgate events ingest` | session, agent, role, task, build run, model, message id and time, token counts, cost |

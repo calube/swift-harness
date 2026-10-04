@@ -161,7 +161,7 @@ const isResearchCall = call => call.includes('swift-harness-design-research') ||
 // build-task.js throws unless each of these is present (`reviewers` is optional).
 const REQUIRED_BUILD_TASK_ARGS = ['task:', 'plan:', 'worktree:', 'branch:', 'writeSet:', 'taskGate:', 'tests:', 'contextPack:', 'model:', 'review:', 'taskProof:', 'planSurface:', 'buildRun:', 'pluginRoot:']
 // The PreToolUse guard denies these without the caller's own literal `--session`.
-const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'worktree create']
+const SESSION_COMMANDS = ['plan claim', 'plan release', 'plan set', 'index set', 'ledger set', 'build start', 'build finish', 'build merge', 'build cutoff', 'worktree create']
 
 /**
  * Problems with the calls written in `files` ({relative path: markdown}): a fenced `context-pack`
@@ -601,7 +601,8 @@ function shipSpecPageWalk(calls) {
       '[simulator]', 'device = "iPhone 17"', 'os = "26.2"', '',
       '[build.presets.nodesign]', 'design_tier = "none"', 'max_parallel = 3', 'review = "gate"',
       'task_gate = "fast"', 'merge_gate = "push"', 'worker_model = "tagged"', 'time_budget_min = 0',
-      'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"', '',
+      'stop_starts_before_min = 0', 'on_design_conflict = "block"', 'task_proof = "final"',
+      'sim_qa = "off"', '',
     ].join('\n'))
     run(gitPath, ['init', '-q', '-b', 'main'])
     run(gitPath, ['add', '-A'])

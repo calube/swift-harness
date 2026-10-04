@@ -9,8 +9,10 @@
 // build that skips `final` and `build finish`; a design conflict answered with stop where widening
 // the task's write set would do; a contract import that leaves it pending; a plan shape whose
 // example `plan import` rejects; and a plan checkout made or removed with raw `git worktree`,
-// which drops its gate reports. Its phase spans are checked with the other skills' telemetry
-// calls.
+// which drops its gate reports; an area command prefixed with a package install, which costs
+// every slice the install that worktree creation already ran; a run with no clock for its early
+// steps, a cutoff that halts and asks or skips `final`, and an owned build that loses its halt at
+// the cutoff. Its phase spans are checked with the other skills' telemetry calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -23,6 +25,8 @@ import { extractInvocations, markdownFiles, swiftgateBinary } from './skill_comm
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const read = path => readFileSync(join(root, path), 'utf8')
+const buildSkillFiles = () =>
+  Object.fromEntries(markdownFiles(join(root, 'skills/build')).map(path => [relative(root, path), readFileSync(path, 'utf8')]))
 const runSkillFiles = () =>
   Object.fromEntries((existsSync(join(root, 'skills/run')) ? markdownFiles(join(root, 'skills/run')) : [])
     .map(path => [relative(root, path), readFileSync(path, 'utf8')]))
@@ -120,6 +124,39 @@ export function designConflictProblems(text) {
   return problems
 }
 
+/** The bullet of the run skill `text` that answers the time box's cutoff: from `**The time box`
+ * to the next bullet at its indent. */
+function cutoffBullet(text) {
+  const start = text.indexOf('**The time box')
+  if (start < 0) return null
+  const lineStart = text.lastIndexOf('\n', start) + 1
+  const indent = /^\s*/.exec(text.slice(lineStart))[0]
+  const rest = text.slice(start)
+  const next = rest.search(new RegExp(`\\n${indent}- `))
+  return next < 0 ? rest : rest.slice(0, next)
+}
+
+/** Every way the run skill `text` lets a run outgrow its time box: no clock for its early steps, a
+ * cutoff that halts and asks or records its own halt, or one that skips `final`. */
+export function timeBoxProblems(text) {
+  const problems = []
+  const named = extractInvocations(text).map(inv => inv.words.join(' '))
+  if (!named.some(call => call.startsWith('run clock <slug>'))) problems.push('the run never reads `swiftgate run clock`')
+  for (const deadline of ['exploreBy', 'planBy', 'contractBy']) {
+    if (!text.includes(`\`${deadline}\``)) problems.push(`no step is held to \`${deadline}\``)
+  }
+  const bullet = cutoffBullet(text)
+  if (!bullet) return [...problems, 'no `**The time box` bullet answers the cutoff']
+  const calls = extractInvocations(bullet).map(inv => inv.words.join(' '))
+  if (!calls.some(call => call.startsWith('build cutoff <slug> --session <session>'))) {
+    problems.push('the cutoff never runs `swiftgate build cutoff`')
+  }
+  if (calls.some(call => call.startsWith('build halt'))) problems.push('the cutoff records a halt itself')
+  if (/\(Recommended\)/.test(bullet) || /\bask/i.test(bullet)) problems.push('the cutoff offers a choice')
+  if (!/\bstep 8\b/.test(bullet)) problems.push('the cutoff never goes on to step 8')
+  return problems
+}
+
 /** Every `swiftgate` call in `files` as `path flags…` strings, for presence checks. */
 function calls(files) {
   return Object.values(files).flatMap(text => extractInvocations(text).map(inv => inv.words.join(' ')))
@@ -164,7 +201,38 @@ function importPlan(planText) {
   })
 }
 
+// A package install chained before another command: what worktree creation makes unnecessary.
+const INSTALL_PREFIX = /\b(?:pnpm|npm|yarn|bun) (?:install|ci|i)\b[^\n`]*(?:&&|;)/
+
+/** Each line of `files` (path to text) that chains a package install before another command. */
+function installPrefixes(files) {
+  return Object.entries(files).flatMap(([path, text]) =>
+    text.split('\n').filter(line => INSTALL_PREFIX.test(line)).map(line => `${path}: ${line.trim()}`))
+}
+
 const tests = {
+  'worktree creation installs node dependencies, so the run skill says never to prefix an area command with an install, and no skill, agent or workflow chains one — catches orchestrators and workers paying an install on every slice'() {
+    const prose = read('skills/run/SKILL.md').split(/\s+/).join(' ')
+    assert.ok(prose.includes('install each node area\'s dependencies once'), 'the run skill doesn\'t say worktree creation installs')
+    assert.ok(prose.includes('Never prefix an area command with an install'), 'the run skill doesn\'t forbid install prefixes')
+    const files = Object.fromEntries(['skills', 'agents', 'workflows']
+      .filter(directory => existsSync(join(root, directory)))
+      .flatMap(directory => markdownFiles(join(root, directory)))
+      .map(path => [relative(root, path), readFileSync(path, 'utf8')]))
+    assert.deepEqual(installPrefixes(files), [])
+  },
+  'the install-prefix check names a pnpm, npm ci and yarn install chained before a command — catches a checker that passes anything'() {
+    const planted = {
+      'a.md': 'Run `pnpm install --frozen-lockfile --prefer-offline && pnpm run build` in web.',
+      'b.md': 'npm ci; npm test',
+      'c.md': 'yarn install && yarn lint\nRun `pnpm run build` alone.',
+    }
+    assert.deepEqual(installPrefixes(planted), [
+      'a.md: Run `pnpm install --frozen-lockfile --prefer-offline && pnpm run build` in web.',
+      'b.md: npm ci; npm test',
+      'c.md: yarn install && yarn lint',
+    ])
+  },
   'the run skill, its references, the explorer and the bootstrap skill never ask the user and never skip git hooks — catches an approval step in a one-shot run'() {
     const files = { ...runSkillFiles(), [EXPLORER]: read(EXPLORER) }
     assert.ok(Object.keys(files).includes('skills/run/SKILL.md'), 'no skills/run/SKILL.md')
@@ -225,6 +293,41 @@ const tests = {
       '`## 8. Final` doesn\'t name a stopped build',
       '`## 8. Final` doesn\'t name blocked or abandoned tasks',
     ])
+  },
+
+  'the run holds its early steps to the clock and decides the cutoff by rule, then runs final — catches the cutoff asking for input in a brownfield run, and final skipped after a cutoff'() {
+    const skill = read('skills/run/SKILL.md')
+    assert.deepEqual(timeBoxProblems(skill), [])
+    assert.deepEqual(finalSkips(skill), [])
+    assert.match(section(skill, '8. Final'), /\bcutoff\b/, '`## 8. Final` doesn\'t name a run its cutoff ended')
+  },
+
+  'the time-box check names a cutoff that halts and asks, records its own halt and skips final — catches a checker that passes anything'() {
+    const asking = [
+      '## 7. Import and build', '',
+      '   - **The time box.** At the cutoff, halt and ask: **stop them now** (Recommended) or let them finish.',
+      '     Record it with `"$SG" build halt --run <run> --reason budget`, then go to step 9.',
+      '   - Stop at its step 4.',
+    ].join('\n')
+    assert.deepEqual(timeBoxProblems(asking), [
+      'the run never reads `swiftgate run clock`',
+      'no step is held to `exploreBy`',
+      'no step is held to `planBy`',
+      'no step is held to `contractBy`',
+      'the cutoff never runs `swiftgate build cutoff`',
+      'the cutoff records a halt itself',
+      'the cutoff offers a choice',
+      'the cutoff never goes on to step 8',
+    ])
+  },
+
+  'the build skill\'s owned cutoff still halts and asks, with stop them now recommended — catches the owned cutoff behaviour changing'() {
+    const loop = read('skills/build/references/event-loop.md')
+    const budget = loop.slice(loop.indexOf('## Time budget'), loop.indexOf('## Final gate'))
+    assert.match(budget, /Tasks running: halt\. Options: \*\*stop them now\*\* \(Recommended\), or \*\*let them finish\*\*/)
+    assert.match(read('skills/build/SKILL.md'), /a time-budget cutoff/)
+    const calls = Object.values(buildSkillFiles()).flatMap(text => extractInvocations(text).map(inv => inv.words.join(' ')))
+    assert.deepEqual(calls.filter(call => call.startsWith('build cutoff')), [], 'the owned build decides its cutoff by the brownfield rule')
   },
 
   'a brownfield design conflict recommends a retry with a widened write set, not stop — catches a brownfield write-set conflict recommending stop'() {

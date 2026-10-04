@@ -73,7 +73,10 @@ struct PlanBranchScenario {
   let checkout: String
   let taskWorktree: String
 
-  init() async throws {
+  /// `config` is the clone's `config.toml`; `files` are the base commit's, by repository path.
+  init(
+    config: String = Self.config, files: [String: Data] = ["app.py": Data("print('hi')\n".utf8)]
+  ) async throws {
     base = TestTemporaryDirectory.root
       .appending(path: "build-plan-branch-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
@@ -92,14 +95,19 @@ struct PlanBranchScenario {
     }
     _ = try await run("init", "-q", "-b", "main")
     _ = try await run("config", "commit.gpgsign", "false")
-    try Data("print('hi')\n".utf8).write(to: user.appending(path: "app.py"))
+    for (path, data) in files {
+      let file = user.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try data.write(to: file)
+    }
     _ = try await run("add", "-A")
     _ = try await run("commit", "-q", "-m", "base")
     userTip = try await run("rev-parse", "HEAD")
     common = try await LiveGit(runner: runner, repositoryRoot: user.path).commonDirectory()
     let state = URL(filePath: common, directoryHint: .isDirectory).appending(path: "swift-harness")
     try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-    try Data(Self.config.utf8).write(to: state.appending(path: "config.toml"))
+    try Data(config.utf8).write(to: state.appending(path: "config.toml"))
 
     plan = try PlanStateLayout(commonDirectory: common).plan(Self.slug)
     try FileManager.default.createDirectory(
@@ -151,10 +159,10 @@ struct PlanBranchScenario {
     try await Self.git(arguments, in: directory ?? user.path, runner: runner)
   }
 
-  func create() async -> WorktreeReport {
+  func create(install: WorktreeNodeInstall.Dependencies = .live()) async -> WorktreeReport {
     await WorktreeRun.create(
       slug: Self.slug, task: Self.task, session: Self.session, git: git, workspace: workspace,
-      profile: BuildPresetCatalog.profile(root: user))
+      profile: BuildPresetCatalog.profile(root: user), install: install)
   }
 
   /// Commits a change in the task worktree; returns the commit.
@@ -278,6 +286,13 @@ struct BuildPlanBranchTests {
     try #require(created.status == .created, "\(created.message)")
     let tip = try await scenario.commitTask()
     let profile = BuildPresetCatalog.profile(root: scenario.user)
+    let run = try #require(
+      try await BuildRunStore.latest(plan: PlanBranchScenario.slug, git: scenario.git))
+    try await run.append(
+      .returnCheck(
+        .init(
+          task: PlanBranchScenario.task, fix: false, verdict: .green, commit: tip,
+          checkID: "green-check", rules: [], at: PinnedClock().now())))
 
     let report = await BuildMergeRun.run(
       slug: PlanBranchScenario.slug, task: PlanBranchScenario.task, undo: false,

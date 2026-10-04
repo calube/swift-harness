@@ -1,0 +1,84 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 3 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-plain-value-type"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 40,
+      "gate" : "slice",
+      "id" : "summary-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-1-spec-summary-contract",
+      "writeSet" : [
+        "Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift"
+      ]
+    },
+    {
+      "branch" : "spec/summary-logic",
+      "covers" : [
+        "req-summary-values",
+        "req-summary-safe-fraction",
+        "req-plain-value-type",
+        "req-unit-tests"
+      ],
+      "deps" : [
+        "summary-contract"
+      ],
+      "estLines" : 110,
+      "gate" : "slice",
+      "id" : "summary-logic",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-1-spec-summary-logic",
+      "writeSet" : [
+        "Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift",
+        "AidokuTests/DownloadQueueSummaryTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/summary-row",
+      "covers" : [
+        "req-summary-row",
+        "req-summary-a11y-id",
+        "req-chapter-safe-fraction",
+        "req-localized-strings",
+        "req-display-only"
+      ],
+      "deps" : [
+        "summary-contract"
+      ],
+      "estLines" : 60,
+      "gate" : "slice",
+      "id" : "summary-row",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-1-spec-summary-row",
+      "writeSet" : [
+        "Aidoku/Features/Library/DownloadQueueView.swift",
+        "Aidoku/App/Resources/Localization/en.lproj/Localizable.strings"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "summary-contract"
+    ],
+    [
+      "summary-logic",
+      "summary-row"
+    ]
+  ]
+}

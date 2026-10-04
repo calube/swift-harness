@@ -9,7 +9,7 @@ plan's ledger and the task returns, and never writes.
 
 - `swiftgate report --html <build run id> [--out <path>]` writes 1 self-contained page, with its styles,
   scripts and data inlined, to `reports/<build run id>.html` under the run's state root unless `--out` names a
-  path. It loads nothing from the network, so it works offline and you can publish it as is.
+  path. It loads nothing from the network.
 - `swiftgate report --json <build run id> [--out <path>]` prints the run view, or writes it to `--out`.
 - `swiftgate view [--build-run <id>] [--port <n>]` serves the page live on `127.0.0.1`, for the newest build
   run and on a free port unless told otherwise, and runs until interrupted.
@@ -61,7 +61,8 @@ default is Overview. Each tab's label carries badges counted from the view.
 | Gates | every gate run, and a row per changed test `prove` ran | RED runs, a task's runs after its first RED, unproven tests |
 | Tokens | tokens per task and role, "pending" for a running worker until its ingest | pending tasks |
 
-The footer, under every tab, names what the reader couldn't read.
+The footer, under every tab, names what the reader couldn't read. A `swiftgate run`'s header names its time
+box; its cutoff shows as `budget` halts.
 
 A red span, a blocked task and a `gate-red` halt say why, in the popover and in more detail in the
 task drawer: see [why a run failed](run-viewer-failures.md).

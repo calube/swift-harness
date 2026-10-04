@@ -188,10 +188,9 @@ private struct PackageManager {
     }
   }
 
-  static let lockfiles: [(String, String)] = [
-    ("pnpm-lock.yaml", "pnpm"), ("yarn.lock", "yarn"), ("bun.lock", "bun"), ("bun.lockb", "bun"),
-    ("package-lock.json", "npm"), ("npm-shrinkwrap.json", "npm"),
-  ]
+  static let lockfiles: [(String, String)] = NodePackageManager.lockfiles.map {
+    ($0.file, $0.manager.rawValue)
+  }
 
   static func detect(
     directory: String, package: [String: Any], workspace: String?,

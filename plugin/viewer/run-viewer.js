@@ -49,7 +49,8 @@
     const state = $("state");
     state.textContent = r.state;
     state.className = "chip " + ({ done: "ok", running: "info", halted: "bad" }[r.state] || "plain");
-    $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].map((x) => `<span>${x}</span>`).join("");
+    const box = M.timeBoxText(r);
+    $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].concat(box ? [esc(box)] : []).map((x) => `<span>${x}</span>`).join("");
     const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
     const taskTok = view.tasks.filter((t) => t.tokens).reduce((a, t) => a + sum(t.tokens), 0);
     const pending = view.tasks.filter((t) => t.tokens == null).length;

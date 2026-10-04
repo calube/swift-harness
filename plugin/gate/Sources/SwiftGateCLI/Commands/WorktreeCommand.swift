@@ -52,6 +52,25 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   /// `remove`: why the worktree's events couldn't be copied, and where they were moved instead,
   /// or why that failed too and they were lost.
   var unkeptEvents: UnkeptEvents? = nil
+  /// `create` in a brownfield clone: each node install it ran. Absent when it ran none.
+  var installs: [Install]? = nil
+  /// `create` in a brownfield clone: node areas left without an install, and why.
+  var installNotes: [String]? = nil
+
+  /// 1 node dependency install `create` ran in the new worktree. A failed one leaves the
+  /// worktree created; its area's commands then run as they would without it.
+  struct Install: Sendable, Equatable, Encodable {
+    /// Worktree-relative directory holding the lockfile.
+    let directory: String
+    let manager: NodePackageManager
+    let command: String
+    let areas: [String]
+    let ms: Int
+    let cache: WarmupCache
+    let outcome: WarmupOutcome
+    /// The end of the output when it failed, or why it didn't run.
+    let detail: String?
+  }
 
   struct UnkeptRun: Sendable, Equatable, Encodable {
     let runId: String
@@ -81,7 +100,8 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
 enum WorktreeRun {
   static func create(
     slug: String, task: String, session: String?, git: any Git, workspace: any GitWorkspace,
-    profile: RepositoryProfile = .owned
+    profile: RepositoryProfile = .owned,
+    install: WorktreeNodeInstall.Dependencies = .live()
   ) async -> WorktreeReport {
     let command = "worktree create"
     let context: HeldTask
@@ -142,12 +162,20 @@ enum WorktreeRun {
     let missing =
       survey.missingPackageBuilds.isEmpty
       ? "" : "; no warm build for \(survey.missingPackageBuilds.joined(separator: ", "))"
-    return WorktreeReport(
+    // Installed once here so no area command has to; a failed install never undoes the worktree.
+    let installed: WorktreeNodeInstall.Outcome? =
+      profile == .brownfield
+      ? await WorktreeNodeInstall.run(worktree: names.path, dependencies: install) : nil
+    var created = WorktreeReport(
       command: command, plan: slug, task: task, status: .created, verdict: .green, holder: nil,
       worktree: names.path, branch: names.branch, cloned: cloned,
       missing: survey.missingPackageBuilds,
       message: "created \(names.path) on \(names.branch), cloned "
-        + (cloned.isEmpty ? "nothing" : cloned.joined(separator: ", ")) + missing)
+        + (cloned.isEmpty ? "nothing" : cloned.joined(separator: ", ")) + missing
+        + (installed?.message ?? ""))
+    created.installs = installed.flatMap { $0.installs.isEmpty ? nil : $0.installs }
+    created.installNotes = installed.flatMap { $0.notes.isEmpty ? nil : $0.notes }
+    return created
   }
 
   static func warmCheck(git: any Git) async -> WorktreeReport {
@@ -521,8 +549,10 @@ struct WorktreeCreateCommand: AsyncParsableCommand {
       + "APFS-clones every configured package's .build and the DerivedData under .harness/, "
       + "deletes each cloned module cache, and sets the task's branch in the ledger. In a "
       + "brownfield clone it adds the same ../<repo>-<plan>-<task>, outside the git dir and the "
-      + "user's tree, on <plan>/<task> from the plan branch swift-harness/<plan>, and clones "
-      + "nothing. "
+      + "user's tree, on <plan>/<task> from the plan branch swift-harness/<plan>, clones "
+      + "nothing, and installs each node area's dependencies once, frozen to its lockfile, "
+      + "listing each in `installs` and recording it as a warmup.run step `install`; a failed "
+      + "install is a report line and leaves the worktree created. "
       + "Exits 0 when "
       + "created; 1 when this session doesn't hold the plan's lock, the task isn't in the ledger, "
       + "or the worktree path or branch exists; 2 for a missing flag, an unreadable ledger or "

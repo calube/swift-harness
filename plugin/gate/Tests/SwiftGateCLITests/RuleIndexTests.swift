@@ -74,7 +74,8 @@ struct RuleIndexTests {
       PushDocGates.blockedRuleID, PushDocGates.summaryRuleID, CalibrationFreshness.staleRuleID,
       CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
       CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
-      "plugin-validate.summary", PlanLintGraph.writeSetUnresolvedRuleID,
+      "plugin-validate.summary", "plugin-validate.accepted-warning",
+      PlanLintGraph.writeSetUnresolvedRuleID,
       PluginVersionRule.pinnedRuleID, PluginVersionRule.malformedRuleID,
       PluginVersionRule.summaryRuleID,
     ]
@@ -150,7 +151,9 @@ extension RuleIndexTests {
       PlanLintCoverage.unknownTestRuleID, PlanLintCoverage.missingModelRuleID,
       PlanLintCoverage.estLinesHighRuleID, PlanLintCoverage.estLinesLowRuleID,
       PlanLintCoverage.tooManyModulesRuleID, PlanLintCoverage.tooManyTestsRuleID,
-      PlanLintCoverage.packOverBudgetRuleID,
+      PlanLintCoverage.packOverBudgetRuleID, PlanLintValidation.uncoveredRuleID,
+      PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
+      PlanLintValidation.flowWithoutIOSRuleID,
     ]
     let build = [
       "build-next.unmerged-dependency", "build-next.missing-model", "build-next.write-set-overlap",

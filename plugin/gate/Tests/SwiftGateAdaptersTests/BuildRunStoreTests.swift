@@ -65,6 +65,40 @@ struct BuildRunStoreTests {
   }
 
   @Test(
+    "a time box written into run.json reads back and cuts the run off 40 minutes after its launch, not its build start — catches a run.json that loses the box a brownfield run must end inside"
+  )
+  func timeBoxRoundTripsAndCutsOff() async throws {
+    let repo = try await Self.repository()
+    defer { repo.remove() }
+    let launch = Self.startedAt.addingTimeInterval(-10 * 60)
+    let box = RunTimeBox(
+      startedAt: launch,
+      limits: TimeBoxLimits(
+        budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .flag))
+    let store = try await BuildRunStore.create(
+      plan: "search", presetName: "default", preset: Self.preset, startedAt: Self.startedAt,
+      git: repo.adapter, suffix: 0xabc, timeBox: box)
+
+    let record = try await BuildRunStore.open(
+      plan: "search", runID: store.runID, git: repo.adapter
+    ).record()
+    let ledger = Ledger(
+      schemaVersion: 1, resume: "r", maxParallel: 3,
+      tasks: [
+        LedgerTask(
+          id: "a", deps: [], writeSet: ["a/"], gate: .push, tests: [], covers: [], estLines: 1,
+          status: .pending, worktree: "../a", model: .sonnet)
+      ], waves: [["a"]])
+    let next = BuildScheduler.next(
+      ledger: ledger, running: [], preset: record.preset, startedAt: record.startedAt,
+      now: launch.addingTimeInterval(40 * 60), required: .empty, timeBox: record.timeBox)
+
+    #expect(record.timeBox == box)
+    #expect(next.phase == .cutoff)
+    #expect(next.toStart.isEmpty)
+  }
+
+  @Test(
     "run.json round-trips the run id, plan, start time, preset name and every preset value — catches a preset field dropped on write"
   )
   func runRecordRoundTrips() async throws {

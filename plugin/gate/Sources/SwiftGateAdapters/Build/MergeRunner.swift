@@ -174,6 +174,12 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case branchMissing = "branch-missing"
     /// The branch is already merged into `main`.
     case alreadyMerged = "already-merged"
+    /// No `build check-return` of this return is recorded in the build run.
+    case returnUnchecked = "return-unchecked"
+    /// The newest `build check-return` of this return wasn't GREEN.
+    case returnNotGreen = "return-not-green"
+    /// The newest GREEN `build check-return` covered another commit than the branch tip.
+    case returnStale = "return-stale"
   }
 
   /// Whether `main` was checked against the run's last merge.
@@ -297,6 +303,7 @@ public struct BuildMerge: Sendable {
           "\(branch) is already merged into \(context.names.baseBranch)",
           reason: .alreadyMerged)
       }
+      try await checkReturn(command, context)
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
         let subject = try await merger.subject(of: "refs/heads/\(branch)", in: main)
@@ -359,7 +366,7 @@ public struct BuildMerge: Sendable {
       let newest = log.events.last {
         switch $0 {
         case .merge, .undo: true
-        case .transition, .gate: false
+        case .transition, .gate, .returnCheck: false
         }
       }
       let lastMerge: BuildEvent.Merge
@@ -376,7 +383,7 @@ public struct BuildMerge: Sendable {
           command, context, .refused,
           "the run's newest merge, task `\(undo.task)`'s, is already undone",
           reason: .undoRefused)
-      case .transition, .gate, nil:
+      case .transition, .gate, .returnCheck, nil:
         throw stop(
           command, context, .refused, "build run \(context.run.runID) has no merge to undo",
           reason: .undoRefused)
@@ -486,6 +493,57 @@ public struct BuildMerge: Sendable {
         reason: .mainMoved)
     }
     return head
+  }
+
+  /// Refuses unless the build run's newest `build check-return` of this return, the task's or
+  /// with `--fix` its fixer's, is GREEN for the commit the branch is at now: a check of the
+  /// other return, of an earlier tip, or that found anything vouches for nothing this merge takes.
+  private func checkReturn(_ command: String, _ context: Context) async throws(Stop) {
+    let log: BuildEventLog
+    do throws(BuildRunStoreError) {
+      log = try context.run.events()
+    } catch {
+      throw stop(command, context, .blocked, "reading \(context.run.layout.eventsFile): \(error)")
+    }
+    let whose = fix ? "the fixer's return for task `\(task)`" : "task `\(task)`'s return"
+    let flag = fix ? " --fix" : ""
+    let branch = context.branch
+    guard log.damage.isEmpty else {
+      throw stop(
+        command, context, .blocked,
+        "\(context.run.layout.eventsFile) is damaged (\(log.damage)); the lost line could be "
+          + "\(whose)'s newest check, so there's no trustworthy check to merge on")
+    }
+    guard let check = log.latestReturnCheck(task: task, fix: fix) else {
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.returnUnchecked.rawValue): build run "
+          + "\(context.run.runID) records no `build check-return\(flag)` of \(whose); check it, "
+          + "and merge only when it exits 0", reason: .returnUnchecked)
+    }
+    guard check.verdict == .green else {
+      let rules =
+        check.rules.isEmpty ? "" : " (\(check.rules.map(\.rawValue).joined(separator: ", ")))"
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.returnNotGreen.rawValue): the newest `build "
+          + "check-return\(flag)` of \(whose), check \(check.checkID), is "
+          + "\(check.verdict.rawValue)\(rules); merge only a return that checks GREEN",
+        reason: .returnNotGreen)
+    }
+    let main = context.names.mainCheckout
+    let tip = try await step(command, context, "reading \(branch)") {
+      () async throws(GitWorkspaceError) in
+      try await merger.commit(of: "refs/heads/\(branch)", in: main)
+    }
+    guard check.commit == tip else {
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.returnStale.rawValue): check \(check.checkID) of "
+          + "\(whose) was GREEN for commit \(check.commit ?? "none"), but \(branch) is at \(tip); "
+          + "check the return that names \(tip) as its last commit before merging",
+        reason: .returnStale)
+    }
   }
 
   /// Aborts a conflicted merge in the main checkout and proves `main` is back where it was.

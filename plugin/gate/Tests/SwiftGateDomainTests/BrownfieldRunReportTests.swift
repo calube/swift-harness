@@ -504,4 +504,75 @@ import Testing
       ])
     #expect(items.map { $0["status"] ?? "" } == ["blocked", "pending", "blocked"])
   }
+
+  @Test(
+    "a run cut off by its time box leads INCOMPLETE and names its box, each dropped task with why, and the tasks that never started — catches a report that hides the work that didn't fit the box"
+  )
+  func timeBoxSection() {
+    let launch = Date(timeIntervalSince1970: 1_790_000_000)
+    let box = RunTimeBox(
+      startedAt: launch,
+      limits: TimeBoxLimits(
+        budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
+    let base = Self.build(events: [
+      .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "gate-1", at: Self.at))
+    ])
+    let cutoff = CutoffRecord(
+      at: launch.addingTimeInterval(40 * 60), timeBox: box,
+      decisions: [
+        CutoffDecision(task: "api", action: .finishMerge, reason: "its merge fits"),
+        CutoffDecision(task: "web", action: .abandon, reason: "still working at the cutoff"),
+        CutoffDecision(task: "docs", action: .notStarted, reason: "never started"),
+      ])
+    let record = base.record
+    let build = RunReportBuild(
+      record: BuildRunRecord(
+        runID: record.runID, plan: record.plan, startedAt: record.startedAt,
+        presetName: record.presetName, preset: record.preset, timeBox: box),
+      log: base.log, cutoff: .read(cutoff))
+    let ledger = Ledger(
+      schemaVersion: 1, resume: "r", maxParallel: 3,
+      tasks: [("api", TaskStatus.done), ("web", .abandoned), ("docs", .pending)].map {
+        LedgerTask(
+          id: $0.0, deps: [], writeSet: ["\($0.0)/"], gate: .slice, tests: [], covers: [],
+          estLines: 1, status: $0.1, worktree: "../\($0.0)")
+      }, waves: [["api", "web", "docs"]])
+
+    let text = BrownfieldRunReport.make(Self.inputs(ledger: .read(ledger), build: .read(build)))
+      .text
+
+    #expect(text.hasPrefix("run: INCOMPLETE"), "\(text)")
+    let lines = lines("Time box", in: text)
+    #expect(lines.first?.contains("45 min") == true, "\(lines)")
+    #expect(lines.contains("web didn't fit the box: abandoned, still working at the cutoff"))
+    #expect(lines.contains("docs didn't fit the box: never started"))
+    #expect(!lines.contains { $0.hasPrefix("api") })
+  }
+
+  @Test(
+    "a run inside its box says it ended inside it, and an owned run has no time box section — catches a time box line on a run that never had one"
+  )
+  func timeBoxAbsentOrMet() {
+    let launch = Date(timeIntervalSince1970: 1_790_000_000)
+    let box = RunTimeBox(
+      startedAt: launch,
+      limits: TimeBoxLimits(
+        budgetMin: 30, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .flag))
+    let base = Self.build(events: [
+      .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "gate-1", at: Self.at))
+    ])
+    let record = base.record
+    let boxed = RunReportBuild(
+      record: BuildRunRecord(
+        runID: record.runID, plan: record.plan, startedAt: record.startedAt,
+        presetName: record.presetName, preset: record.preset, timeBox: box),
+      log: base.log, cutoff: .missing(path: "cutoff.json"))
+
+    let met = BrownfieldRunReport.make(Self.inputs(build: .read(boxed))).text
+    let none = BrownfieldRunReport.make(Self.inputs(build: .read(base))).text
+
+    #expect(lines("Time box", in: met).first?.contains("30 min, from --time-box") == true, "\(met)")
+    #expect(lines("Time box", in: met).contains("the cutoff never came"), "\(met)")
+    #expect(!none.contains("## Time box"))
+  }
 }

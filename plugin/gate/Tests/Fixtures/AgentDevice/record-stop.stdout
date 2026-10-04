@@ -1,0 +1,33 @@
+{
+  "success": true,
+  "data": {
+    "recording": "stopped",
+    "outPath": "/SCRATCH/flow.mp4",
+    "telemetryPath": "/SCRATCH/flow.gesture-telemetry.json",
+    "artifacts": [
+      {
+        "field": "outPath",
+        "artifactType": "screen-recording",
+        "path": "/SCRATCH/flow.mp4",
+        "fileName": "flow.mp4"
+      },
+      {
+        "field": "telemetryPath",
+        "artifactType": "screen-recording-telemetry",
+        "path": "/SCRATCH/flow.gesture-telemetry.json",
+        "fileName": "flow.gesture-telemetry.json"
+      }
+    ],
+    "recordingBackend": "simctl recordVideo",
+    "recordingScope": "app",
+    "recordOnlySession": false,
+    "activeSessionApp": {
+      "bundleId": "com.example.SampleApp",
+      "name": "com.example.SampleApp"
+    },
+    "durationMs": 16299,
+    "recorder": "confirmed",
+    "nativePathDisposition": "retired",
+    "showTouches": true
+  }
+}

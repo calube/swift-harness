@@ -1,0 +1,38 @@
+final: GREEN (gate run 20261004T175029Z-80ecc488)
+
+# Run report: spec
+
+## Unfinished tasks
+
+- none
+
+## Assumptions
+
+- The summary lives in `Aidoku/Core/Downloads/Models/DownloadQueueSummary.swift` beside the other download models, so the app target and `AidokuTests` (which imports `@testable Aidoku`) both reach it.
+- The summary's initializer is generic over a `Hashable` chapter key and takes the same `(progress, total)` tuple dictionary the queue screen keeps, so a test builds it from strings and ints without `ChapterIdentifier` or `Download`.
+- "More than 1 source" in the tests means chapters whose keys come from 2 sources, flattened in queue order; the summary itself doesn't group by source, because the row shows only totals.
+- A chapter whose reported progress is negative counts as 0 pages; the spec is silent, and a negative page count can't be shown.
+- The chapter count reuses the existing `%i_CHAPTERS` key ("%i Chapters"); "X of Y pages" gets a new key `%i_OF_%i_PAGES` = "%i of %i pages", since the existing `%i_OF_%i` lacks the word "pages". Other locales fall back to English.
+- The per-chapter "X of Y" caption under each chapter's bar is left as it is; only its bar's fraction changes.
+- The warm-up's `build` and `test` failed with "Plugin SwiftLintBuildToolPlugin must be enabled"; both commands now pass `-skipPackagePluginValidation` (as the nightly CI workflow does) and `CODE_SIGNING_ALLOWED=NO`.
+
+## Baseline failures
+
+- Aidoku build: the whole step
+- Aidoku test: the whole step
+
+## Build-only areas
+
+- Aidoku (warm test 107 s, build-only)
+
+## Dropped steps
+
+- none
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at 835ba9da2a201af49ca40dc1fc43fa5e8844b31c holds every commit of the run; merging it is your call
