@@ -33,11 +33,13 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
   /// `discover/last.json`.
   public let discover: RunReportInput<DiscoverRecord>
   public let build: RunReportInput<RunReportBuild>
+  /// The plan's `ledger.json`, whose task states say whether the run built everything.
+  public let ledger: RunReportInput<Ledger>
 
   public init(
     slug: String, planBranch: String, planBranchHead: String?, plan: RunReportInput<String>,
     baseline: RunReportInput<BaselineFile>, discover: RunReportInput<DiscoverRecord>,
-    build: RunReportInput<RunReportBuild>
+    build: RunReportInput<RunReportBuild>, ledger: RunReportInput<Ledger>
   ) {
     self.slug = slug
     self.planBranch = planBranch
@@ -46,6 +48,7 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
     self.baseline = baseline
     self.discover = discover
     self.build = build
+    self.ledger = ledger
   }
 }
 
@@ -94,6 +97,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     }
   }
 
+  /// A ledger task the run left short of `done`.
+  public struct UnfinishedTask: Sendable, Equatable, Encodable {
+    public let id: String
+    public let status: TaskStatus
+
+    public init(id: String, status: TaskStatus) {
+      self.id = id
+      self.status = status
+    }
+  }
+
   public struct DroppedStep: Sendable, Equatable, Encodable {
     public let area: String
     public let step: AreaStep
@@ -119,12 +133,15 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   public let buildOnlyAreas: Section<String>
   public let droppedSteps: Section<DroppedStep>
   public let reviewFallbacks: Section<String>
+  /// Every ledger task not `done`, in ledger order. Its note says why the ledger couldn't be read,
+  /// so whether the run finished is unknown.
+  public let unfinishedTasks: Section<UnfinishedTask>
 
   public init(
     plan: String, planBranch: String, planBranchHead: String?, final: Final?, finalNote: String?,
     assumptions: Section<String>, baselineFailures: Section<BaselineFailureLine>,
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
-    reviewFallbacks: Section<String>
+    reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>
   ) {
     self.plan = plan
     self.planBranch = planBranch
@@ -136,6 +153,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.buildOnlyAreas = buildOnlyAreas
     self.droppedSteps = droppedSteps
     self.reviewFallbacks = reviewFallbacks
+    self.unfinishedTasks = unfinishedTasks
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -170,7 +188,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       final: final, finalNote: finalNote, assumptions: assumptions,
       baselineFailures: Self.baselineFailures(inputs.baseline), buildOnlyAreas: buildOnly,
       droppedSteps: Self.droppedSteps(inputs.discover),
-      reviewFallbacks: Self.reviewFallbacks(inputs.build))
+      reviewFallbacks: Self.reviewFallbacks(inputs.build),
+      unfinishedTasks: Section(items: [], note: nil))
   }
 
   private static func describe<V>(_ input: RunReportInput<V>, what: String) -> String? {
