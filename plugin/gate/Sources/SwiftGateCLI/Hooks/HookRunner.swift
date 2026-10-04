@@ -58,9 +58,9 @@ struct HookTelemetry: Sendable {
   /// `nil` for a root with no loadable `.swiftgate.toml`, or with `[telemetry] enabled = false`,
   /// so neither writes anything, the store's identity included.
   static func live(root: URL) -> HookTelemetry? {
-    guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root) else { return nil }
-    let events = EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
-    guard !(events is DisabledEventWriter) else { return nil }
+    guard let events = TelemetryOptIn.writer(root: root), !(events is DisabledEventWriter) else {
+      return nil
+    }
     return HookTelemetry(
       events: events,
       identity: { () throws(HarnessEventWriteError) in

@@ -156,14 +156,17 @@ public struct BrownfieldConfig: Sendable, Equatable {
   public let areas: [BrownfieldArea]
   public let allow: [BrownfieldAllow]
   public let buildPresets: [String: BuildPreset]
+  /// `[judge]`, as the owned profile spells it; `.disabled` without the table.
+  public let judge: JudgeConfig
 
   public init(
     brownfield: BrownfieldSettings, areas: [BrownfieldArea], allow: [BrownfieldAllow],
-    buildPresets: [String: BuildPreset]
+    buildPresets: [String: BuildPreset], judge: JudgeConfig = .disabled
   ) {
     self.brownfield = brownfield
     self.areas = areas
     self.allow = allow
     self.buildPresets = buildPresets
+    self.judge = judge
   }
 }

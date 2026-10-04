@@ -60,12 +60,15 @@ public enum AssertionGap: String, Sendable, Equatable, CaseIterable {
 public struct AssertionCandidate: Sendable, Equatable {
   public let path: String
   public let line: Int
+  /// The test's last line, so a judge reads the whole body.
+  public let endLine: Int
   public let testName: String
   public let gap: AssertionGap
 
-  public init(path: String, line: Int, testName: String, gap: AssertionGap) {
+  public init(path: String, line: Int, endLine: Int, testName: String, gap: AssertionGap) {
     self.path = path
     self.line = line
+    self.endLine = endLine
     self.testName = testName
     self.gap = gap
   }
@@ -212,7 +215,8 @@ public enum NeutralRules {
           let declaration = byNumber[block.declarationLine]
         else { continue }
         let candidate = AssertionCandidate(
-          path: source.path, line: block.declarationLine, testName: block.name, gap: gap)
+          path: source.path, line: block.declarationLine, endLine: block.endLine,
+          testName: block.name, gap: gap)
         if let allowance = waiver(.noAssertion, declaration) {
           allowances.append(allowance)
         } else if candidate.needsJudge {

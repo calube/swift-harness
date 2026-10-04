@@ -101,10 +101,8 @@ enum GateRun {
     let writer: (any HarnessEventWriting)?
     if let events {
       writer = events
-    } else if case .success(let config?) = StaticCheckInputs.loadConfig(root: root) {
-      writer = EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
     } else {
-      writer = nil
+      writer = TelemetryOptIn.writer(root: root)
     }
     guard let writer, !(writer is DisabledEventWriter) else { return (writer, nil) }
     let reader = workingTree ?? LiveWorkingTree(runner: LiveProcessRunner(), root: root)
