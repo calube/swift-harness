@@ -115,6 +115,18 @@ private let cases: [FixtureCase] = [
       node("ui", "ui", .javascript, [.build: found("npm run build")], missing: [.test, .lint])
     ]),
   FixtureCase(
+    fixture: "usememos-memos", reader: { NodeReader() },
+    areas: [
+      node(
+        "web", "web", .typescript,
+        [
+          .test: found("pnpm run test", from: "web/package.json"),
+          .testFiles: guessed("pnpm run test {files}"),
+          .lint: found("pnpm run lint", from: "web/package.json"),
+          .build: found("pnpm run build", from: "web/package.json"),
+        ])
+    ]),
+  FixtureCase(
     fixture: "jhipster-jhipster-sample-app", reader: { NodeReader() },
     areas: [
       node(
@@ -258,6 +270,20 @@ struct DiscoverNodePythonRubyTests {
       }
       #expect(Set(area.missing.keys) == expected.missing, "\(expected.root)")
     }
+  }
+
+  @Test(
+    "a pnpm-workspace.yaml holding only settings, with no packages list, leaves its package an area — catches the settings-only workspace file hiding the area"
+  )
+  func settingsOnlyPnpmWorkspaceIsNoWorkspace() throws {
+    let tree = try fixtureTree("usememos-memos")
+    let settings = try #require(tree.read("web/pnpm-workspace.yaml"))
+    #expect(!String(decoding: settings, as: UTF8.self).contains("packages:"))
+
+    let areas = NodeReader().areas(in: tree)
+
+    #expect(areas.map(\.root) == ["web"])
+    #expect(areas.first?.source == "web/package.json")
   }
 
   @Test(
