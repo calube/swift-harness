@@ -306,16 +306,16 @@ enum EventsIngestRun {
         files += try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
           .map { ($0, options.role, options.task) }
       }
+      let session = try reader.session(at: URL(filePath: transcriptPath))
       if let agentID = options.agentID {
-        files.append(
-          (
-            try reader.subagent(agentID, ofSessionAt: URL(filePath: transcriptPath)),
-            options.role, options.task
-          ))
-      } else {
-        files += try reader.session(at: URL(filePath: transcriptPath)).map {
-          ($0, sessionTags.role, sessionTags.task)
+        guard
+          let subagent = session.first(where: { $0.agent == .subagent && $0.agentID == agentID })
+        else {
+          return refused("--agent-id \(agentID) names no subagent transcript of this session")
         }
+        files.append((subagent, options.role, options.task))
+      } else {
+        files += session.map { ($0, sessionTags.role, sessionTags.task) }
       }
       for (file, role, task) in files {
         do throws(TranscriptUsageError) {
