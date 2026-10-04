@@ -77,12 +77,15 @@ struct AllowCommandTests {
     return try TOMLConfigDecoder().decodeBrownfield(text)
   }
 
-  static func allow(_ root: URL, _ rule: String, _ location: String, _ reason: String) -> Result<
-    BrownfieldAllow, AllowCommandError
-  > {
+  static func allow(
+    _ root: URL, _ rule: String, _ location: String, _ reason: String,
+    lockTimeout: Duration = .seconds(30)
+  ) async -> Result<BrownfieldAllow, AllowCommandError> {
     do throws(AllowCommandError) {
       return .success(
-        try AllowCommand.allow(worktree: root, rule: rule, location: location, reason: reason))
+        try await AllowCommand.allow(
+          worktree: root, rule: rule, location: location, reason: reason,
+          lockTimeout: lockTimeout))
     } catch {
       return .failure(error)
     }
@@ -91,12 +94,12 @@ struct AllowCommandTests {
   @Test(
     "allow adds 1 entry keyed by the line's hash and keeps every other key — catches a writer that rewrites the areas"
   )
-  func addsOneEntry() throws {
+  func addsOneEntry() async throws {
     let root = try Self.makeClone(config: Self.config)
     defer { try? FileManager.default.removeItem(at: root) }
     let before = try Self.readConfig(root)
 
-    let result = Self.allow(
+    let result = await Self.allow(
       root, "neutral.unsafe-shortcut", "api/handlers.py:2", "the stub package has no types")
 
     let expected = BrownfieldAllow(
@@ -114,24 +117,25 @@ struct AllowCommandTests {
   @Test(
     "allow refuses a rule that isn't waivable by line, a missing line and an empty reason, and writes nothing — catches a bad entry written to the config"
   )
-  func refusesBadInput() throws {
+  func refusesBadInput() async throws {
     let root = try Self.makeClone(config: Self.config)
     defer { try? FileManager.default.removeItem(at: root) }
     let configURL = root.appending(path: ".git/swift-harness/config.toml")
     let original = try Data(contentsOf: configURL)
 
     #expect(
-      Self.allow(root, "area.test-failed", "api/handlers.py:2", "r")
+      await Self.allow(root, "area.test-failed", "api/handlers.py:2", "r")
         == .failure(.rule("area.test-failed")))
-    #expect(Self.allow(root, "nope.rule", "api/handlers.py:2", "r") == .failure(.rule("nope.rule")))
     #expect(
-      Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py", "r")
+      await Self.allow(root, "nope.rule", "api/handlers.py:2", "r") == .failure(.rule("nope.rule")))
+    #expect(
+      await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py", "r")
         == .failure(.location("api/handlers.py")))
     #expect(
-      Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:9", "r")
+      await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:9", "r")
         == .failure(.lineOutOfRange(path: "api/handlers.py", line: 9)))
     #expect(
-      Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "  ")
+      await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "  ")
         == .failure(.emptyReason))
     #expect(try Data(contentsOf: configURL) == original)
   }
@@ -139,10 +143,10 @@ struct AllowCommandTests {
   @Test(
     "allow outside a brownfield clone fails naming the directory — catches a config created where none was"
   )
-  func needsBrownfieldClone() throws {
+  func needsBrownfieldClone() async throws {
     let root = try Self.makeClone(config: nil)
     defer { try? FileManager.default.removeItem(at: root) }
-    let result = Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "r")
+    let result = await Self.allow(root, "neutral.unsafe-shortcut", "api/handlers.py:2", "r")
     #expect(result == .failure(.config(.notBrownfield(path: root.path))))
     #expect(
       !FileManager.default.fileExists(
