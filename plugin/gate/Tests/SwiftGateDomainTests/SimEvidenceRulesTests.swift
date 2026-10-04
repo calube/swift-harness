@@ -126,7 +126,8 @@ struct SimEvidenceRulesTests {
     #expect(SimEvidence.isInsideRun("steps/001.tree.json"))
   }
 
-  @Test("an assert text absent from the captured tree is sim.assert-absent, and a present one passes")
+  @Test(
+    "an assert text absent from the captured tree is sim.assert-absent, and a present one passes")
   func assertText() throws {
     let evidence = try Self.evidence([
       Self.step(1, assert: "Increment"), Self.step(2, assert: "Counter: 42"),
