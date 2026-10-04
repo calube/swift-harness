@@ -249,6 +249,26 @@ struct RunViewReaderTests {
   }
 
   @Test(
+    "a live plan reads its ledger with no spec rows and no damage — catches a brownfield plan's state read as broken"
+  )
+  func readsLivePlanWithoutRequirements() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let brief = TaskBrief(
+      title: "Reset the counter", why: nil, designRef: nil, scope: [], acceptance: [],
+      outOfScope: [])
+    let file = PlanFile(
+      schemaVersion: 1, slug: Self.plan,
+      source: .livePlan(PlanFile.LivePlanSource(briefs: [Self.task: brief])),
+      surfaceCommit: nil, resume: "planned")
+    try PlanFileJSON.encode(file).write(to: repository.planDirectory.appending(path: "plan.json"))
+    let input = try repository.read()
+    #expect(input.ledger?.tasks.map(\.id).contains(Self.task) == true)
+    #expect(input.requirements.isEmpty)
+    #expect(input.damage.isEmpty, "\(input.damage)")
+  }
+
+  @Test(
     "a common dir with no main checkout is damage naming the task worktrees and the design it can't read — catches a silent skip"
   )
   func bareCommonDirectoryIsDamage() throws {
