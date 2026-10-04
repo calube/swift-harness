@@ -491,6 +491,10 @@ extension RunViewValidation {
   /// Each video and contact sheet a flow links, as `<run id>/<run-relative path>`: the only files
   /// a live page may fetch from a run directory.
   public var linkedFiles: Set<String> {
-    []
+    let flows = rows.compactMap(\.flow) + keptFlows.map(\.flow)
+    return Set(
+      flows.flatMap { flow in
+        [flow.video, flow.sheet].compactMap { $0.map { "\(flow.run)/\($0)" } }
+      })
   }
 }

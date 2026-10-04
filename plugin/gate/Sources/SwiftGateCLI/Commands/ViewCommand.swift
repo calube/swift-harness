@@ -76,8 +76,9 @@ struct ViewCommand: AsyncParsableCommand {
   }
 }
 
-/// What `view` answers: the page with no data embedded, the whole run view, and what changed
-/// after a cursor. Every answer that carries view data passes ``RunViewGuard`` first.
+/// What `view` answers: the page with no data embedded, the whole run view, what changed after a
+/// cursor, and each video and contact sheet the view's flows link. Every answer that carries
+/// view data passes ``RunViewGuard`` first.
 final class ViewRun: Sendable {
   let buildRun: String
   let reader: RunViewReader
@@ -108,6 +109,9 @@ final class ViewRun: Sendable {
         return LocalHTTPResponse(status: 200, contentType: "text/html; charset=utf-8", body: page)
       }
       after = request.path == Self.changesPath ? request.query["after"] : nil
+    case let path where path.hasPrefix(Self.runsPrefix):
+      guard request.method == "GET" else { return .text(405, "view: only GET is served") }
+      return runFile(path.dropFirst(Self.runsPrefix.count))
     default:
       return .text(404, "view: no such page")
     }
@@ -126,6 +130,26 @@ final class ViewRun: Sendable {
     } catch {
       return .text(500, "view: \(Verdict.blocked.rawValue) \(error)")
     }
+  }
+
+  static let runsPrefix = "/runs/"
+
+  /// A video or contact sheet the view's flows link, from this checkout's run directories; any
+  /// other path is 404, so the page can't reach a file no flow names.
+  private func runFile(_ encoded: Substring) -> LocalHTTPResponse {
+    let missing = LocalHTTPResponse.text(404, "view: no such file")
+    guard let relative = String(encoded).removingPercentEncoding,
+      let view = try? build(), view.validation?.linkedFiles.contains(relative) == true,
+      let body = try? Data(
+        contentsOf: reader.stateRoot.url("\(RunLayout.runsDirectory)/\(relative)"))
+    else { return missing }
+    let type =
+      switch (relative as NSString).pathExtension {
+      case "mp4": "video/mp4"
+      case "png": "image/png"
+      default: "application/octet-stream"
+      }
+    return LocalHTTPResponse(status: 200, contentType: type, body: body)
   }
 
   /// Reads and folds the run, then guards every string in it.
