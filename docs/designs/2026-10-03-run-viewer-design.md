@@ -1,7 +1,8 @@
 # swift-harness: the run viewer
 
 <!-- RESUME
-Status: DRAFT 2026-10-03: the user's 5 decisions in §3; open questions in §10.
+Status: APPROVED 2026-10-03: the user's 14 decisions in §3 (5 at drafting, 4 answers to the open questions, 5 from
+the mock review). §10 records the answered questions.
 Why: a build run spreads across skills, workflows, worktrees and shell commands. Nobody can see it as 1 thing,
 either while it runs or after. Telemetry records most of it, but only as JSON lines and a text summary.
 Builds on: the telemetry store and its guard, `EventStoreReader`, `BuildJoinReader`, the ledger, and the brownfield
@@ -52,6 +53,15 @@ them how the harness works.
 | 5 | Cross-run comparison? | A later, separate page for prep and evals; out of scope | user, 2026-10-03 |
 | 6 | Which spans get emitted? | Only phases no event records; the reader derives task, merge and gate spans from the ledger and `gate.run` | this design |
 | 7 | How does the page get data? | 1 JSON shape, `RunView`, embedded or streamed; the page has 1 `apply` function for both | this design |
+| 8 | Show the assertion's source in the proof table? | No. `file:line` and its kind only, never a source line; a published report carries no source | user, 2026-10-03 |
+| 9 | How does live mode get new events? | The page polls `GET /changes?after=<cursor>` every second. No server-sent events | user, 2026-10-03 |
+| 10 | Do tokens arrive during a run? | Per worker, at its ingest on completion. A running worker's tokens show "pending" | user, 2026-10-03 |
+| 11 | Build the page on HeroUI? | No, not now. Plain HTML and CSS whose tokens (radius, spacing, palette, type) follow HeroUI's look. A HeroUI port stays a later option | user, 2026-10-03 |
+| 12 | How does a span's detail open? | A popover anchored to the clicked bar replaces the detail strip under the timeline. At phone width it is a bottom sheet. Escape or a click outside closes it. Bars are buttons, so it works from the keyboard | user, 2026-10-03 |
+| 13 | How does a reader see short spans? | A 1x, 2x and 4x horizontal zoom on the timeline track, inside its scroller. A bar too narrow for its text shows none; its tooltip and popover carry the label | user, 2026-10-03 |
+| 14 | What does a span say about its work? | A tool summary: counts by tool name, total tool time and the repo-relative files touched, from the transcripts `events ingest` already reads. No prose summary of a transcript | user, 2026-10-03 |
+| 15 | Does live mode show the plan's progress at a glance? | A kanban board: 1 card per task in the columns queued, building, gating, review and merged, plus a blocked or halted lane, derived from the ledger and events. A card shows the task id, its worker, elapsed time, the last gate verdict and the spec ids it covers. Cards move on the same 1 s poll. The report shows the final state. A trailing addition: it never blocks the report or the live view | user, 2026-10-03 |
+| 16 | How does the page show the plan's shape? | A dependency graph of the tasks, drawn as inline SVG with a layered layout, waves left to right, nodes coloured by state and edges for deps. Hovering or clicking a node opens the timeline's popover with the task's write set, spec ids and gate. No graph library. A trailing addition, like decision 15 | user, 2026-10-03 |
 
 ## 4. Spans and proof: the data gap
 
@@ -109,6 +119,27 @@ ended" in the report, cut at the run's last event.
 | `proofBase?` | the commit prove reverted to |
 | `assertion?` | `{file, line, kind}`: the first failure location of the reverted run, repo-relative; `kind` is `expect`, `require`, `xct-assert` or `other` |
 
+### 4.4 `agent.tools`
+
+1 event per agent per 60 s window that holds at least 1 tool call, written by `swiftgate events ingest` from the
+same transcripts and at the same time as `agent.usage`, in the `usage` stream. A window, not a span, because ingest
+knows agents and times but not spans; the reader attributes each window to the innermost span of that agent's task
+open at the window's time. Extending `agent.usage` would not fit: it is 1 event per API message, and a tool's time
+runs from its `tool_use` to its `tool_result`, across messages.
+
+| Field | Value |
+|---|---|
+| `sessionID`, `agent`, `agentID?`, `role?`, `task?`, `buildRun?` | as `agent.usage` |
+| `windowStart`, `windowEnd` | the window's bounds |
+| `tools` | `[{tool, count, ms}]`; `tool` is a closed `ToolKind`: the built-in tool names, and `mcp` for every `mcp__…` tool, whose server and tool names are not kept. A name outside the enum counts in `otherCount`, never as a string |
+| `otherCount` | tool calls whose name `ToolKind` doesn't hold |
+| `files` | repo-relative paths from the `file_path`, `path` or `notebook_path` input of a file tool (Read, Edit, Write, MultiEdit, NotebookEdit, Grep, Glob), deduplicated, at most 50 |
+| `droppedPaths` | paths left out: absolute paths outside the agent's worktree, `~` paths, `..` escapes, and paths the guard rejects |
+
+A path inside the agent's worktree, the git top level of the transcript line's `cwd`, becomes repo-relative before
+the guard sees it. Ingest reads no other tool input: no command, pattern, query, prompt or content. A tool's `ms` is its
+`tool_use` message time to its `tool_result` time; a call with no result counts with no time.
+
 ## 5. Spec mapping
 
 Design plans keep today's `covers` with the design's `req-…` ids. A `PLAN.md` adds the same thing in 2 lines:
@@ -135,11 +166,14 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
   "schemaVersion": 1, "cursor": "<opaque>",
   "run": {"id": "", "plan": "", "preset": "", "startedAt": "", "endedAt": null, "state": "running|done|halted"},
   "spec": [{"id": "req-…", "title": "", "tasks": ["save-queue"]}],
-  "tasks": [{"id": "", "status": "", "model": "", "commits": ["sha"], "gateRun": "", "mergeGateRun": "",
+  "tasks": [{"id": "", "status": "", "model": "", "deps": ["task id"], "writes": ["Sources/…"], "gate": "push",
+             "covers": ["req-…"], "commits": ["sha"], "gateRun": "", "mergeGateRun": "",
              "tokens": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}}],
   "roles": [{"role": "build-worker", "tokens": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}}],
   "spans": [{"id": "", "parent": null, "phase": "", "task": null, "gateRun": null,
-             "start": "", "end": null, "outcome": null, "approximate": false}],
+             "start": "", "end": null, "outcome": null, "approximate": false,
+             "tools": {"calls": [{"tool": "Edit", "count": 0, "ms": 0}], "otherCount": 0, "ms": 0,
+                       "files": ["Sources/…"], "droppedPaths": 0}}],
   "gates": [{"runId": "", "task": null, "command": "", "verdict": "", "ms": 0, "tests": {"passed": 0, "failed": 0, "skipped": 0},
              "ruleCounts": {}, "steps": [{"tier": "", "step": "", "startMs": 0, "ms": 0, "verdict": ""}]}],
   "proofs": [{"gateRun": "", "task": "", "test": "", "outcome": "", "proofBase": "", "assertion": null}],
@@ -155,6 +189,8 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
 - **Streamed.** `view` serves `GET /` (the page), `GET /view.json` (a full `RunView`) and `GET /changes?after=
   <cursor>`, which returns a partial `RunView` and a new cursor. The page merges each array by id. The cursor is
   the byte offset of each active stream file plus the ledger log's length.
+- **Task shape.** `deps`, `writes` (the ledger's write set, repo-relative) and `gate` come from the ledger for the
+  board and the graph; `covers` repeats the task side of `spec` so a card needs no join.
 - **Damage.** An unreadable file shows in `damage` and in the page footer, never as a silent gap.
 
 ## 7. Layout
@@ -184,21 +220,36 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
 |---|---|
 | header | run id, plan, preset, state, wall time, total tokens, task, proof and halt counts |
 | now strip | live mode: 1 card per worker slot with task, open phase, elapsed and last event age; stall and halt badges |
-| timeline | spans nested by time; colour by outcome; click for a detail panel with ids and ms |
+| timeline | spans nested by time; colour by outcome; a 1x, 2x and 4x zoom inside the track's scroller; a bar too narrow for its text shows none. Clicking a bar, or Enter on it, opens a popover anchored to it with ids, ms and the span's tool summary; at phone width the popover is a bottom sheet; Escape or a click outside closes it and returns focus to the bar |
 | spec | each requirement, its tasks, merged commits and the merge gate verdict; uncovered ones flagged |
 | proof | each changed test: outcome ("failed with the change reverted"), assertion location, proof base, gate run id |
 | tokens and time | per task and per role, input, output and cache tokens, wall time |
 | gates | each gate run with tiers, steps, tests and rule counts |
+| board | live mode: 1 card per task in queued, building, gating, review, merged, and a blocked or halted lane; the report shows the final state |
+| plan graph | the tasks as an SVG dependency graph in waves left to right, coloured by state; a node opens the timeline's popover |
+
+Queued is a `pending` task with no open span. Building is an open `worker` or `fix` span, or `in-progress` with no
+stage span. Gating is an open `verify` span, review an open `review` span, merged a `done` task with its merge.
+The blocked or halted lane holds `blocked`, `needs-replan` and `abandoned` tasks and any task with an open halt.
+The board and the graph are optional modules: the page loads each one only when its file is present, so neither
+can block the core regions.
+
+The page's tokens (radius, spacing, palette, type scale) follow HeroUI's look in plain CSS custom properties, light
+and dark. No React, Tailwind or bundle.
 
 A stall is an open task span with no event of that task for the preset's `stall_min`. A halt shows from
-`build.halt` until its `build.resume`. Tokens in live mode lag until the worker's ingest.
+`build.halt` until its `build.resume`. Tokens in live mode arrive per worker at its ingest; until then the
+worker's tokens read "pending", never 0.
 
 ## 8. Privacy
 
-Every `RunView` string comes from a guarded event, a ledger id, a commit sha or a requirement title. The builder
+Every `RunView` string comes from a guarded event, a ledger id or write set, a commit sha or a requirement title.
+`agent.tools` is a narrow exception to telemetry's "no tool inputs": it keeps the repo-relative file paths of file
+tools, and only those that pass the guard. It drops absolute, out-of-repository and `~` paths and counts them in
+`droppedPaths`. It keeps no other input, no output and no tool name outside `ToolKind`. The builder
 drops `LedgerTask.worktree`, the 1 absolute path the ledger holds. Before rendering, `report` and `view` run
 `EventPayloadGuard` over every string in the `RunView`. A reject fails the command and names the field. No commit
-subject, finding message, prompt, test source or assertion text enters it. `view` binds `127.0.0.1` only.
+subject, finding message, prompt, test source, assertion text or tool output enters it. `view` binds `127.0.0.1` only.
 
 ## 9. Testing
 
@@ -206,9 +257,11 @@ subject, finding message, prompt, test source or assertion text enters it. `view
 test loads the report in a headless browser through the existing walk harness, and checks each region renders and
 the console stays empty.
 
-## 10. Open questions
+## 10. Answered questions
 
-| # | Question | Recommendation |
+The user answered each on 2026-10-03, as recommended; §3 rows 8 to 11 record the answers.
+
+| # | Question | Recommendation, accepted |
 |---|---|---|
 | 1 | Show the assertion's source line in the proof table? | No. Show `file:line` and its kind; a published report must carry no source |
 | 2 | `view` transport: server-sent events or polling `/changes` each second? | Polling: 1 short request, no long-lived connection in a Foundation server, same cursor contract |
@@ -217,13 +270,16 @@ the console stays empty.
 
 ## 11. Tasks for a later plan
 
-1. `span.start`, `span.end`, `prove.result` and `gate.step.startMs`, with the guard and the stream.
+1. `span.start`, `span.end`, `prove.result`, `agent.tools` and `gate.step.startMs`, with the guard and the stream.
 2. `swiftgate events span start|end`.
 3. `RunView`, `RunViewBuilder` and `RunViewReader`, with captured fixtures.
-4. `plugin/viewer/` page: report regions, starting from the report mock.
+4. `plugin/viewer/` page: report regions, the popover and the zoom, starting from the report mock.
 5. `swiftgate report --html`, the guard pass and the page smoke test.
 6. Span calls in the build skill, `build-task.js` and the ship skill; `Covers:` in `plan import`.
 7. `swiftgate view`, `/changes` and the now strip.
+8. `agent.tools` from `events ingest`, and its attribution to spans in the reader.
+9. The kanban board, as an optional page module.
+10. The plan graph, as an optional page module.
 
 Tasks 1 to 4 run in parallel after a contract commit holding the types; 5 needs 3 and 4; 6 needs 2; 7 follows 5.
 The report ships after 5 and 6.
