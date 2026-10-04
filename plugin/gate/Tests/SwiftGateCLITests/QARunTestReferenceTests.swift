@@ -44,7 +44,8 @@ struct QARunTestReferenceTests {
     try repo.plan([Self.row], tasks: ["download-check": .done])
     let checks = RecordingChecks()
 
-    let report = await repo.run(QARunRun.Options(), checks: checks)
+    let report = await repo.run(
+      QARunRun.Options(), checks: checks, xcresults: FakeXcresultReader(scenario: "one-test"))
 
     #expect(report.rows.map(\.result) == [.pass], "\(report.rows.map(\.message))")
     let request = try #require(checks.recorded.first)
@@ -52,8 +53,14 @@ struct QARunTestReferenceTests {
     let configured = try #require(
       config.split(separator: "\n").first { $0.hasPrefix("test = ") }
         .map { String($0.dropFirst("test = \"".count).dropLast()) })
+    // A brownfield checkout keeps its runs under the git common dir.
+    let bundle = repo.root.appending(
+      path:
+        ".git/swift-harness/runs/\(try #require(report.runID))/qa/01-req-check.acceptance.xcresult"
+    ).path
     #expect(
-      request.program == .command("\(configured) -only-testing:'\(Self.id)'"),
+      request.program
+        == .command("\(configured) -only-testing:'\(Self.id)' -resultBundlePath '\(bundle)'"),
       "\(request.program)")
     #expect(request.workingDirectory == repo.root.path)
     let evidence = try #require(report.rows.first?.evidence.first)
