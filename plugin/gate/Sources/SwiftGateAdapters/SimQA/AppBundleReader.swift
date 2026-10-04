@@ -22,7 +22,13 @@ public enum AppBundleReadError: Error, Sendable, Equatable {
   case unreadable(path: String, reason: String)
 
   public var message: String {
-    ""
+    switch self {
+    case .noApp(let directory): "no .app in \(directory) after the build"
+    case .ambiguous(let directory, let apps):
+      "several apps in \(directory) (\(apps.joined(separator: ", "))); the app scheme must "
+        + "build exactly one"
+    case .unreadable(let path, let reason): "\(path): \(reason)"
+    }
   }
 }
 
@@ -37,10 +43,29 @@ public struct AppBundleReader: AppBundleReading {
 
   /// Where a Debug simulator build of any scheme puts its products.
   public static func productsDirectory(derivedDataPath: String) -> String {
-    ""
+    URL(filePath: derivedDataPath, directoryHint: .isDirectory)
+      .appending(path: "Build/Products/Debug-iphonesimulator").path
   }
 
+  /// `-Runner.app` bundles are XCTest's UI test hosts, which a test build leaves beside the app.
   public func builtApp(productsDirectory: String) throws(AppBundleReadError) -> BuiltApp {
-    throw .noApp(directory: productsDirectory)
+    let entries = (try? FileManager.default.contentsOfDirectory(atPath: productsDirectory)) ?? []
+    let apps = entries.filter { $0.hasSuffix(".app") && !$0.hasSuffix("-Runner.app") }.sorted()
+    guard let app = apps.first else { throw .noApp(directory: productsDirectory) }
+    guard apps.count == 1 else { throw .ambiguous(directory: productsDirectory, apps: apps) }
+    let bundle = URL(filePath: productsDirectory, directoryHint: .isDirectory)
+      .appending(path: app, directoryHint: .isDirectory)
+    let plist = bundle.appending(path: "Info.plist")
+    let data: Data
+    do {
+      data = try Data(contentsOf: plist)
+    } catch {
+      throw .unreadable(path: plist.path, reason: "no readable Info.plist")
+    }
+    let info = try? PropertyListSerialization.propertyList(from: data, format: nil)
+    guard let bundleID = (info as? [String: Any])?["CFBundleIdentifier"] as? String,
+      !bundleID.isEmpty
+    else { throw .unreadable(path: plist.path, reason: "no CFBundleIdentifier") }
+    return BuiltApp(path: bundle.path, bundleID: bundleID)
   }
 }

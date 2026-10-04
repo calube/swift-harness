@@ -18,7 +18,10 @@ public enum SimUpRule: String, Sendable, Equatable, CaseIterable {
   case environment = "swiftgate.environment"
 
   public var verdict: Verdict {
-    .blocked
+    switch self {
+    case .scenarioUnknown, .appBuildFailed: .red
+    case .agentDevicePin, .noSlot, .appInstallFailed, .driverFailed, .environment: .blocked
+    }
   }
 }
 
@@ -41,20 +44,36 @@ public struct SimUpFailure: Error, Sendable, Equatable {
   public static func agentDevicePin(found: String?, pin: String, installCommand: String)
     -> SimUpFailure
   {
-    SimUpFailure(rule: .agentDevicePin, message: "")
+    let problem =
+      found.map { "agent-device is \($0), not the pinned \(pin)" }
+      ?? "agent-device \(pin) is not installed"
+    return SimUpFailure(rule: .agentDevicePin, message: "\(problem); run: \(installCommand)")
   }
 
   /// `nil` when `scenario` is unset or names a `[[scenarios]]` entry.
   public static func scenarioCheck(_ scenario: String?, declared: [Scenario]) -> SimUpFailure? {
-    nil
+    guard let scenario, !declared.contains(where: { $0.name == scenario }) else { return nil }
+    let names = declared.map(\.name)
+    let known =
+      names.isEmpty
+      ? "\(Config.fileName) declares no [[scenarios]]"
+      : "declared: \(names.joined(separator: ", "))"
+    return SimUpFailure(
+      rule: .scenarioUnknown,
+      message: "scenario \"\(scenario)\" is not a [[scenarios]] entry (\(known))")
   }
 
   /// `{schemaVersion, verdict, ruleID, message, runID}`, `runID` `null` before a run exists.
   public func json() -> Data {
-    Data()
+    let object: [String: Any] = [
+      "schemaVersion": SimSession.schemaVersion, "verdict": verdict.rawValue,
+      "ruleID": rule.rawValue, "message": message, "runID": runID ?? NSNull(),
+    ]
+    // Strings, an integer and null always encode.
+    return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
   }
 
   public var text: String {
-    ""
+    "sim up \(verdict.rawValue) \(rule.rawValue): \(message)"
   }
 }
