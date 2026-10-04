@@ -93,7 +93,8 @@ struct QARunXcodeTestCountTests {
     #expect(after.rows.map(\.result) == [.unverified], "\(after.rows.map(\.message))")
     // A brownfield checkout keeps its runs under the git common dir.
     let bundle = repo.root.appending(
-      path: ".git/swift-harness/runs/\(try #require(atBase.runID))/qa/01-req-reset.acceptance.xcresult"
+      path:
+        ".git/swift-harness/runs/\(try #require(atBase.runID))/qa/01-req-reset.acceptance.xcresult"
     ).path
     #expect(
       base.recorded.first?.program

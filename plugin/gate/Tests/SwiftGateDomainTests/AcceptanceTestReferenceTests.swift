@@ -53,7 +53,8 @@ struct AcceptanceTestReferenceTests {
     "given a result bundle path, an xcode area's command writes its bundle there and names it, and a swiftpm area's doesn't — catches an xcodebuild row left with nothing to show a test ran"
   )
   func xcodeResultBundle() throws {
-    let reference = AcceptanceTestReference(area: nil, id: "AidokuTests/LargeDownloadConfirmationTests")
+    let reference = AcceptanceTestReference(
+      area: nil, id: "AidokuTests/LargeDownloadConfirmationTests")
     let bundle = "/run/qa/01-req-download.acceptance.xcresult"
     let resolved = try reference.resolve(
       in: [aidoku], junitPath: "/run/qa/01-req-download.acceptance.junit.xml",
