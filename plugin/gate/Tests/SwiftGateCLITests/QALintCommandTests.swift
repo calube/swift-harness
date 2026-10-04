@@ -43,22 +43,17 @@ struct QALintCommandTests {
   }
 
   @Test(
-    "a typo'd id fails qa.flow-unknown-id naming it in under 1 s — catches the typo the compiler missed, before any device boots"
+    "a typo'd id fails qa.flow-unknown-id naming it — catches the typo the compiler missed"
   )
-  func typoFailsFast() throws {
-    let clock = ContinuousClock()
-    var report: FlowLintReport?
+  func typoFails() {
+    // `QALintRun.run` takes no process runner, so it can't reach a device; that `qa run` lints a
+    // flow before `sim up` is `QARunFlowTests`' recorded-calls case.
+    let lint = QALintRun.run(
+      files: [Self.flow("typo-id.flow.json")], root: Self.sampleApp, pluginRoot: Self.pluginRoot)
 
-    let elapsed = clock.measure {
-      report = QALintRun.run(
-        files: [Self.flow("typo-id.flow.json")], root: Self.sampleApp, pluginRoot: Self.pluginRoot)
-    }
-
-    let lint = try #require(report)
     #expect(lint.verdict == .red)
     #expect(lint.findings.map(\.ruleID) == [FlowRules.unknownIDRuleID])
     #expect(lint.findings.first?.message.contains("counter.incremnet") == true)
-    #expect(elapsed < .seconds(1))
   }
 
   @Test(
