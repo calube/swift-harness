@@ -507,6 +507,42 @@ Observed behavior the `@2-jev` rendering relies on:
 - `usage.output_tokens` is 203 for both `@2-jev` requests and 99 for both `@1` requests, so it
   tracks the question count, not the answers.
 
+### `diff-risk@1` and `finding-severity@1`
+
+Captured 2026-10-04 03:47 UTC with the same `curl`, key and command as above (design §11.5).
+Each request is the body `JevJudge` sent a `FakeHTTPTransport` for `DiffRisk.subject` or
+`FindingSeverity.subject`, written with sorted keys. `JevClassifyingCaptureTests` rebuilds each subject and checks the
+adapter still sends that body.
+
+The diff-risk subjects are commits of this repository, as `LiveGit.unifiedDiff` renders them,
+with the touched paths from `git diff --name-only --find-renames <sha>~1 <sha>`:
+
+```sh
+git diff --unified=3 --no-color --no-ext-diff --no-textconv --find-renames \
+  --src-prefix=a/ --dst-prefix=b/ <sha>~1 <sha>
+```
+
+| Request | Subject | Reply level |
+|---|---|---|
+| `jev-request-diff-risk-docs.json` | `3510eed9` (docs only) | `low` (0.96) |
+| `jev-request-diff-risk-thresholds.json` | `b26bd062` (judge threshold defaults) | `medium` (0.88) |
+| `jev-request-diff-risk-path-leak.json` | `d9c59620` (a missing command no longer prints `PATH`) | `medium` (0.70) |
+| `jev-request-diff-risk-egress.json` | `16c7d9b8` (the Jev judge requires `send_to`); built from `jev-request-diff-risk-docs.json` with `state.subject` and `state.context` replaced by a script, and checked equal to the adapter's body by the test | `high` (0.95) |
+| `jev-request-finding-severity-cancel.json` | `Review/dismiss-race/concurrency.json` finding 0 (rule, file, line, title, failure scenario; its `severity` is never sent), with `Review/dismiss-without-cancel.patch` as context | `major` (0.71) |
+| `jev-request-finding-severity-loading.json` | `Review/dismiss-race/test-quality.json` finding 1, the same way | `minor` (0.46, `major` 0.45) |
+
+Each reply is `jev-<name>.reply.json` with `jev-<name>.status`, `<name>` the request's stem; every
+status is 200 and the served `model` is `jev-1.13.0`. No reply carries the key; `grep -F` for the
+key over this directory finds nothing.
+
+Observed behavior the classifying sets rely on:
+
+- A single Score question with described levels answers under its own key (`risk`, `severity`),
+  `legend` echoing each described level and `probabilities` keyed `"0"` (the worst level) up.
+- `usage.output_tokens` is 17 for every request, 1 Score question each.
+- The 1-line `PATH` leak fix rates `medium`, not `high`: a sensitive path list, not Jev, is what
+  makes a change `high` for sure.
+
 ## Review
 
 | File | Capture |

@@ -1,0 +1,20 @@
+{
+  "model" : "jev-1.13.0",
+  "questions" : {
+    "severity" : {
+      "criteria" : [
+        "blocking: the change must not merge as it is (a defect users hit in ordinary use, data loss, a security hole, a broken build or test)",
+        "major: a real defect or design problem to fix before merging, with a narrow trigger",
+        "minor: worth fixing, but safe to merge",
+        "nit: style, naming or preference"
+      ],
+      "instructions" : "How severe is this review finding? blocking: the change must not merge as it is (a defect users hit in ordinary use, data loss, a security hole, a broken build or test); major: a real defect or design problem to fix before merging, with a narrow trigger; minor: worth fixing, but safe to merge; nit: style, naming or preference.",
+      "type" : "score"
+    }
+  },
+  "state" : {
+    "context" : "diff --git a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\nindex 90cf038..633e6a3 100644\n--- a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\n+++ b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\n@@ -23,6 +23,7 @@ public struct CounterFeature {\n     case factButtonTapped\n     case factResponse(String)\n     case factFailed\n+    case factDismissButtonTapped\n   }\n \n   @Dependency(\\.apiClient) var apiClient\n@@ -62,6 +63,11 @@ public struct CounterFeature {\n       case .factFailed:\n         state.isLoadingFact = false\n         return .none\n+\n+      case .factDismissButtonTapped:\n+        state.fact = nil\n+        state.isLoadingFact = false\n+        return .none\n       }\n     }\n   }\ndiff --git a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\nindex 5f0db4c..bac69e6 100644\n--- a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\n+++ b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\n@@ -68,4 +68,11 @@ struct CounterFeatureTests {\n       ]\n     )\n   }\n+\n+  @Test(\"dismissing a shown fact hides it — catches the fact staying on screen\")\n+  func dismissHidesFact() async {\n+    let store = TestStore(initialState: CounterFeature.State(fact: \"shown\")) { CounterFeature() }\n+\n+    await store.send(.factDismissButtonTapped) { $0.fact = nil }\n+  }\n }\n",
+    "subject" : "P2 at Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift:74: dismissHidesFact starts with isLoadingFact false, so it doesn't check that dismiss resets loading\n\nFailure scenario: Surviving mutation: delete `state.isLoadingFact = false` at CounterFeature.swift:69. dismissHidesFact still passes, because State(fact: \"shown\") already has isLoadingFact == false (the init default, line 13), so the exhaustive assertion `{ $0.fact = nil }` sees no difference. No other test sends .factDismissButtonTapped.",
+    "subject_kind" : "1 code review finding about a change, with the diff it was raised on"
+  }
+}

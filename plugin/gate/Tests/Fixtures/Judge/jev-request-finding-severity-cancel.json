@@ -1,0 +1,20 @@
+{
+  "model" : "jev-1.13.0",
+  "questions" : {
+    "severity" : {
+      "criteria" : [
+        "blocking: the change must not merge as it is (a defect users hit in ordinary use, data loss, a security hole, a broken build or test)",
+        "major: a real defect or design problem to fix before merging, with a narrow trigger",
+        "minor: worth fixing, but safe to merge",
+        "nit: style, naming or preference"
+      ],
+      "instructions" : "How severe is this review finding? blocking: the change must not merge as it is (a defect users hit in ordinary use, data loss, a security hole, a broken build or test); major: a real defect or design problem to fix before merging, with a narrow trigger; minor: worth fixing, but safe to merge; nit: style, naming or preference.",
+      "type" : "score"
+    }
+  },
+  "state" : {
+    "context" : "diff --git a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\nindex 90cf038..633e6a3 100644\n--- a/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\n+++ b/Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift\n@@ -23,6 +23,7 @@ public struct CounterFeature {\n     case factButtonTapped\n     case factResponse(String)\n     case factFailed\n+    case factDismissButtonTapped\n   }\n \n   @Dependency(\\.apiClient) var apiClient\n@@ -62,6 +63,11 @@ public struct CounterFeature {\n       case .factFailed:\n         state.isLoadingFact = false\n         return .none\n+\n+      case .factDismissButtonTapped:\n+        state.fact = nil\n+        state.isLoadingFact = false\n+        return .none\n       }\n     }\n   }\ndiff --git a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\nindex 5f0db4c..bac69e6 100644\n--- a/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\n+++ b/Packages/CounterFeature/Tests/CounterCoreTests/CounterFeatureTests.swift\n@@ -68,4 +68,11 @@ struct CounterFeatureTests {\n       ]\n     )\n   }\n+\n+  @Test(\"dismissing a shown fact hides it — catches the fact staying on screen\")\n+  func dismissHidesFact() async {\n+    let store = TestStore(initialState: CounterFeature.State(fact: \"shown\")) { CounterFeature() }\n+\n+    await store.send(.factDismissButtonTapped) { $0.fact = nil }\n+  }\n }\n",
+    "subject" : "C3 at Packages/CounterFeature/Sources/CounterCore/CounterFeature.swift:70: Dismiss does not cancel the in-flight fact request, so the fact reappears after dismissal\n\nFailure scenario: State has isLoadingFact = true after .factButtonTapped, and the .run effect at line 49 is waiting on apiClient.randomFact(). .factDismissButtonTapped arrives: lines 68-70 set fact = nil and isLoadingFact = false and return .none, so nothing cancels the effect. When the request finishes, the effect sends .factResponse(text), and lines 58-61 set state.fact = text with no check. The dismissed fact comes back. Because dismiss also sets isLoadingFact = false, the 'Cat fact' button (CounterView.swift:31, .disabled(store.isLoadingFact)) is enabled again, so a second request can start while the first is still running, and the two responses can arrive in either order. If the request fails, .factFailed logs an error for a request the user abandoned.",
+    "subject_kind" : "1 code review finding about a change, with the diff it was raised on"
+  }
+}
