@@ -24,6 +24,9 @@ enum PreToolUseHook {
     switch payload.toolName {
     case "Bash"?:
       guard let command = payload.command else { break }
+      if let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType) {
+        return deny(violation)
+      }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
       if let brownfield {
         switch DirtyFileRead.read(brownfield.discoverDirty) {
@@ -175,7 +178,7 @@ enum PreToolUseHook {
   }
 
   /// A cache fault's note rides along after the reason; it never changes the decision.
-  private static func deny(_ violation: GuardViolation, note: String? = nil) -> String {
+  static func deny(_ violation: GuardViolation, note: String? = nil) -> String {
     let reason = "swiftgate \(violation.ruleID): \(violation.reason)"
     return HookOutput.deny(note.map { reason + "\n\n" + $0 } ?? reason)
   }

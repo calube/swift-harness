@@ -157,7 +157,8 @@ struct DisabledCommitCommentJudge: CommitCommentJudging {
 
 /// Entry point for `swiftgate hook <event>`: decodes the payload, finds the project, and hands off
 /// to the event's hook. Outside a project with `.swiftgate.toml` or a brownfield clone every hook
-/// is a silent no-op that never builds its dependencies.
+/// is a silent no-op that never builds its dependencies, except the review agents' Bash limit:
+/// it belongs to the agent, so it holds wherever the agent runs.
 enum HookRunner {
   static func run(
     _ event: HookEvent, input: Data, dependencies: (URL) -> HookDependencies
@@ -180,7 +181,7 @@ enum HookRunner {
     guard
       let project = ProjectRoot.locateProfile(
         from: URL(filePath: payload.cwd, directoryHint: .isDirectory))
-    else { return .silent }
+    else { return outsideProject(event, payload) }
     let root = project.root
     if case .brownfield = project, !brownfieldEvents.contains(event) { return .silent }
     let dependencies = dependencies(root)
@@ -198,6 +199,13 @@ enum HookRunner {
       result.stderr = ([result.stderr].compactMap { $0 } + [warning]).joined(separator: "\n")
     }
     return result
+  }
+
+  private static func outsideProject(_ event: HookEvent, _ payload: HookPayload) -> HookResult {
+    guard event == .preToolUse, payload.toolName == "Bash", let command = payload.command,
+      let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType)
+    else { return .silent }
+    return .output(PreToolUseHook.deny(violation))
   }
 
   /// The events a brownfield clone answers. PostToolUse formats Swift to this harness's style
