@@ -68,11 +68,14 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     /// backend's: pass below the advisory threshold, block at or above the block threshold,
     /// advisory between.
     public let escalationsAgreed: Int
+    /// The escalated decisions, by why they went to Claude.
+    public let escalationCauses: [Count<JudgeCascade.Escalation>]
 
     public init(
       question: String, backend: JudgeBackend, judgements: Int, block: Int, advisory: Int,
       pass: Int, error: Int, escalated: Int, blockReasons: [Count<JudgeReasonSource>],
-      escalationsCompared: Int, escalationsAgreed: Int
+      escalationsCompared: Int, escalationsAgreed: Int,
+      escalationCauses: [Count<JudgeCascade.Escalation>] = []
     ) {
       self.question = question
       self.backend = backend
@@ -85,6 +88,7 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       self.blockReasons = blockReasons
       self.escalationsCompared = escalationsCompared
       self.escalationsAgreed = escalationsAgreed
+      self.escalationCauses = escalationCauses
     }
   }
 
@@ -95,12 +99,19 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     public let line: Int
     public let question: String
     public let decidedBy: String
+    /// The model that served the deciding answer, as its backend reported it; `nil` when the
+    /// backend named none.
+    public let servedModel: String?
+    /// Why the question went to Claude; `nil` when it didn't.
+    public let escalationCause: JudgeCascade.Escalation?
     public let reasonSource: JudgeReasonSource
     public let reason: String?
 
     public init(
       eventID: String, runID: String?, file: String, line: Int, question: String,
-      decidedBy: String, reasonSource: JudgeReasonSource, reason: String?
+      decidedBy: String, servedModel: String? = nil,
+      escalationCause: JudgeCascade.Escalation? = nil, reasonSource: JudgeReasonSource,
+      reason: String?
     ) {
       self.eventID = eventID
       self.runID = runID
@@ -108,6 +119,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
       self.line = line
       self.question = question
       self.decidedBy = decidedBy
+      self.servedModel = servedModel
+      self.escalationCause = escalationCause
       self.reasonSource = reasonSource
       self.reason = reason
     }
@@ -144,6 +157,20 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     }
   }
 
+  /// Decisions whose deciding answer came from 1 backend and served model.
+  public struct ServedModelRow: Sendable, Equatable, Codable {
+    public let backend: JudgeBackend
+    /// `nil` when the backend named no served model.
+    public let servedModel: String?
+    public let decisions: Int
+
+    public init(backend: JudgeBackend, servedModel: String?, decisions: Int) {
+      self.backend = backend
+      self.servedModel = servedModel
+      self.decisions = decisions
+    }
+  }
+
   public struct Count<Key: Sendable & Equatable & Codable>: Sendable, Equatable, Codable {
     public let key: Key
     public let count: Int
@@ -166,6 +193,10 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
   /// Escalated decisions with both probabilities, and those that agreed (see ``QuestionRow``).
   public let escalationsCompared: Int
   public let escalationsAgreed: Int
+  /// The escalated decisions, by why they went to Claude.
+  public let escalationCauses: [Count<JudgeCascade.Escalation>]
+  /// Every decision with an answer, by the backend and served model of that answer.
+  public let servedModels: [ServedModelRow]
   public let blocks: [Block]
   public let decisionErrors: [Count<JudgeEventError.Kind>]
   public let callErrors: [Count<JudgeEventError.Kind>]
@@ -178,7 +209,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     decisions: [Count<JudgeDecision>], escalated: Int, jevDecisions: Int,
     escalationsCompared: Int, escalationsAgreed: Int, blocks: [Block],
     decisionErrors: [Count<JudgeEventError.Kind>], callErrors: [Count<JudgeEventError.Kind>],
-    backends: [BackendRow], costUSD: Double, tornLastLine: Bool
+    backends: [BackendRow], costUSD: Double, tornLastLine: Bool,
+    escalationCauses: [Count<JudgeCascade.Escalation>] = [], servedModels: [ServedModelRow] = []
   ) {
     self.events = events
     self.unattributed = unattributed
@@ -189,6 +221,8 @@ public struct JudgeEventSummary: Sendable, Equatable, Codable {
     self.jevDecisions = jevDecisions
     self.escalationsCompared = escalationsCompared
     self.escalationsAgreed = escalationsAgreed
+    self.escalationCauses = escalationCauses
+    self.servedModels = servedModels
     self.blocks = blocks
     self.decisionErrors = decisionErrors
     self.callErrors = callErrors

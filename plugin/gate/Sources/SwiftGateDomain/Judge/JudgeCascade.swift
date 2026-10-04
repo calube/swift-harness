@@ -32,7 +32,7 @@ public enum JudgeCascade {
     bands[versionedID] ?? [:]
   }
 
-  public enum Escalation: String, Sendable, Equatable, Codable {
+  public enum Escalation: String, Sendable, Equatable, Codable, CaseIterable {
     /// Jev's flagged probability lies inside the question's band.
     case uncertain
     /// Jev gave no answer at all: no key, no reply, or a reply that couldn't be read.

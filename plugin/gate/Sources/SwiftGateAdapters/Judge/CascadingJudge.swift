@@ -46,12 +46,18 @@ public struct CascadingJudge: Judge {
   /// The set Claude is asked from: the one the Jev set is based on, with its own text.
   public let base: JudgeQuestionSet
   public let policy: Policy
+  /// What the `ready` cascade waits on before it asks Jev again.
+  public let clock: any RetryClock
 
-  public init(jev: any Judge, claude: (any Judge)?, base: JudgeQuestionSet, policy: Policy) {
+  public init(
+    jev: any Judge, claude: (any Judge)?, base: JudgeQuestionSet, policy: Policy,
+    clock: any RetryClock = LiveRetryClock()
+  ) {
     self.jev = jev
     self.claude = claude
     self.base = base
     self.policy = policy
+    self.clock = clock
   }
 
   public var identity: JudgeIdentity { jev.identity }
@@ -191,6 +197,9 @@ public struct CascadingJudge: Judge {
 
   /// Jev calls per subject at `ready`: 1, and 1 more after a transport or parse error.
   static let readyAttempts = 2
+
+  /// The wait before that 1 more call.
+  public static let retryDelay: Duration = .milliseconds(750)
 
   /// A dropped connection or a garbled reply can pass; a missing or refused key, an invalid
   /// request or an oversize subject fails the same way again.
