@@ -23,18 +23,25 @@ struct RunStartError: Error, Sendable, Equatable {
 protocol WarmupSpawning: Sendable {
   /// Starts the warm-up in `directory`, appending its output to `log`. Returns its pid when known.
   func spawn(directory: URL, log: URL) async throws(RunStartError) -> Int32?
+  /// Stops the warm-up `spawn` started, when the run it was started for never launched.
+  func stop(pid: Int32)
 }
 
 /// Starts the orchestrator's `claude` session.
 protocol ClaudeLaunching: Sendable {
-  /// Runs `claude` with `arguments` in `directory`. The live launcher replaces this process and
-  /// so returns only on failure.
-  func launch(arguments: [String], directory: URL) throws(RunStartError)
+  /// The `claude` executable ``launch(executable:arguments:directory:)`` runs, found before the
+  /// run prepares anything.
+  func resolve() throws(RunStartError) -> String
+  /// Runs `executable` with `arguments` in `directory`. The live launcher replaces this process
+  /// and so returns only on failure.
+  func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError)
 }
 
 /// What `run` prepared before launching the orchestrator.
 struct RunPrepared: Sendable, Equatable, Encodable {
   let slug: String
+  /// The session id `claude` starts under, which `run` wrote into the plan's lock.
+  let session: String
   /// The worktree root `run` was started in.
   let root: String
   let planDirectory: String
@@ -54,6 +61,21 @@ extension RunCommand {
     var discover = DiscoverCommand.Dependencies()
     var warmup: any WarmupSpawning = LiveWarmupSpawner()
     var now: @Sendable () -> Date = { Date() }
+    /// The orchestrator's session id, a UUID as `claude --session-id` requires.
+    var newSession: @Sendable () -> String = { UUID().uuidString.lowercased() }
+  }
+
+  /// Prepares the clone and launches the orchestrator in it. `announce` sees what was prepared
+  /// before the launch, which replaces this process.
+  static func start(
+    spec: String, directory: URL, slug: String?, extra: [String], dependencies: Dependencies,
+    claude: any ClaudeLaunching, announce: (RunPrepared) -> Void = { _ in }
+  ) async throws(RunStartError) -> RunPrepared {
+    let prepared = try await prepare(
+      spec: spec, directory: directory, slug: slug, dependencies: dependencies)
+    announce(prepared)
+    try launch(prepared, extra: extra, claude: claude)
+    return prepared
   }
 
   /// Starts the clock, copies an untracked spec into the plan dir, applies discovery, starts the
@@ -138,7 +160,8 @@ extension RunCommand {
       throw RunStartError(message: "git branch \(planBranch) \(base) failed")
     }
     return RunPrepared(
-      slug: slug, root: rootPath, planDirectory: planDirectory.path(percentEncoded: false),
+      slug: slug, session: dependencies.newSession(), root: rootPath,
+      planDirectory: planDirectory.path(percentEncoded: false),
       clock: clock, settings: layout.settings.path(percentEncoded: false),
       warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID,
       notes: discovered.notes)
@@ -151,7 +174,9 @@ extension RunCommand {
     let prompt = RunLaunch.prompt(
       slug: prepared.slug, spec: prepared.clock.spec, planBranch: prepared.clock.planBranch)
     try claude.launch(
-      arguments: RunLaunch.arguments(settings: prepared.settings, prompt: prompt, extra: extra),
+      executable: "claude",
+      arguments: RunLaunch.arguments(
+        settings: prepared.settings, session: prepared.session, prompt: prompt, extra: extra),
       directory: URL(filePath: prepared.root, directoryHint: .isDirectory))
   }
 
@@ -262,18 +287,25 @@ struct LiveWarmupSpawner: WarmupSpawning {
     }
     return Int32(output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines))
   }
+
+  func stop(pid: Int32) {}
 }
 
 /// Replaces this process with `claude`, leaving it the terminal's foreground process.
 struct ExecClaudeLauncher: ClaudeLaunching {
-  func launch(arguments: [String], directory: URL) throws(RunStartError) {
+  /// The `PATH` searched for `claude`.
+  var searchPath: String? = ProcessInfo.processInfo.environment["PATH"]
+
+  func resolve() throws(RunStartError) -> String { "claude" }
+
+  func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError) {
     guard FileManager.default.changeCurrentDirectoryPath(directory.path(percentEncoded: false))
     else {
       throw RunStartError(message: "can't enter \(directory.path(percentEncoded: false))")
     }
     let argv = ["claude"] + arguments
     var pointers = argv.map { strdup($0) } + [nil]
-    execvp("claude", &pointers)
+    execvp(executable, &pointers)
     throw RunStartError(
       message: "claude could not start: \(String(cString: strerror(errno))); is it on PATH?")
   }
@@ -301,26 +333,30 @@ struct RunStartCommand: AsyncParsableCommand {
     let directory = URL(
       filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     do throws(RunStartError) {
-      let prepared = try await RunCommand.prepare(
-        spec: spec, directory: directory, slug: slug, dependencies: .init())
-      for note in prepared.notes { report(note) }
-      let pid = prepared.warmupPID.map { "pid \($0)" } ?? "pid unknown"
-      report(
-        "run: plan \(prepared.slug) in \(prepared.planDirectory); spec \(prepared.clock.spec) "
-          + "(\(prepared.clock.specSource.rawValue)); plan branch \(prepared.clock.planBranch) at "
-          + "\(prepared.clock.base); warm-up \(pid) logging to \(prepared.warmupLog)")
-      if json {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .iso8601
-        Console.write(String(decoding: (try? encoder.encode(prepared)) ?? Data(), as: UTF8.self))
-      }
-      fflush(stdout)
-      try RunCommand.launch(prepared, extra: claudeArguments, claude: ExecClaudeLauncher())
+      _ = try await RunCommand.start(
+        spec: spec, directory: directory, slug: slug, extra: claudeArguments,
+        dependencies: .init(), claude: ExecClaudeLauncher(), announce: announce)
     } catch {
       report("run: \(error.message)")
       throw ExitCode(Verdict.blocked.exitCode)
     }
+  }
+
+  private func announce(_ prepared: RunPrepared) {
+    for note in prepared.notes { report(note) }
+    let pid = prepared.warmupPID.map { "pid \($0)" } ?? "pid unknown"
+    report(
+      "run: plan \(prepared.slug) in \(prepared.planDirectory); spec \(prepared.clock.spec) "
+        + "(\(prepared.clock.specSource.rawValue)); plan branch \(prepared.clock.planBranch) at "
+        + "\(prepared.clock.base); warm-up \(pid) logging to \(prepared.warmupLog); session "
+        + prepared.session)
+    if json {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+      encoder.dateEncodingStrategy = .iso8601
+      Console.write(String(decoding: (try? encoder.encode(prepared)) ?? Data(), as: UTF8.self))
+    }
+    fflush(stdout)
   }
 
   private func report(_ line: String) {

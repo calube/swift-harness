@@ -130,6 +130,8 @@ private final class FakeWarmup: WarmupSpawning {
     steps.append("warmup")
     return 4242
   }
+
+  func stop(pid: Int32) {}
 }
 
 private final class FakeClaude: ClaudeLaunching {
@@ -139,7 +141,9 @@ private final class FakeClaude: ClaudeLaunching {
 
   init(steps: Steps) { self.steps = steps }
 
-  func launch(arguments: [String], directory: URL) throws(RunStartError) {
+  func resolve() throws(RunStartError) -> String { "/fake/claude" }
+
+  func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError) {
     calls.withLock { $0.append((arguments, directory)) }
     steps.append("claude")
   }

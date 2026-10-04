@@ -80,7 +80,7 @@ import Testing
         + "Spec: /repo/spec.md. Plan branch: swift-harness/export.")
     #expect(
       RunLaunch.arguments(
-        settings: "/repo/.claude/settings.json", prompt: prompt,
+        settings: "/repo/.claude/settings.json", session: "", prompt: prompt,
         extra: ["--add-dir", "/a", "/b"])
         == [
           "--settings", "/repo/.claude/settings.json", "--model", "claude-opus-5-5", prompt,

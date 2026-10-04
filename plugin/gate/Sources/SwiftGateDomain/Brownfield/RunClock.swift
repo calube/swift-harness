@@ -105,9 +105,20 @@ public enum RunLaunch {
       + "Plan branch: \(planBranch)."
   }
 
+  /// Options that would start `claude` under a session id other than the one `run` minted, so
+  /// the session would no longer hold the plan's lock.
+  public static let sessionOptions: Set<String> = []
+
+  /// The first of `extra`'s options that ``sessionOptions`` names, in either spelling.
+  public static func conflictingOption(in extra: [String]) -> String? {
+    nil
+  }
+
   /// `claude`'s argv: the clone's hook settings, the pinned model, the prompt, then `extra`
   /// unchanged. The prompt comes before `extra` so a variadic option there can't swallow it.
-  public static func arguments(settings: String, prompt: String, extra: [String]) -> [String] {
+  public static func arguments(
+    settings: String, session: String, prompt: String, extra: [String]
+  ) -> [String] {
     ["--settings", settings, "--model", model, prompt] + extra
   }
 }
