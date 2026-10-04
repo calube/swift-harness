@@ -1,0 +1,1 @@
+{"base":"0d989707f82c33f74bb852edd8965ec88fcf041b","command":"check slice","durationMilliseconds":25332,"findingCount":0,"finishedAt":"2026-10-04T09:24:41Z","headCommit":"0d989707f82c33f74bb852edd8965ec88fcf041b","runID":"20261004T092416Z-a6af67a8","schemaVersion":1,"tiers":[{"durationMilliseconds":25282,"testCounts":null,"tier":"T1","verdict":"GREEN"}],"verdict":"GREEN"}
