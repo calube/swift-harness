@@ -30,6 +30,7 @@ The long form of every step, the halt options and the resume rules are in
 | `<returns>` | `<plans>/<slug>/build/<run>/returns/` |
 | `<transcripts>` | per task, the transcript directory the Workflow tool printed when it launched the task |
 | `<surfaceCommit>` | `plan.json`'s `surfaceCommit`: the plan surface, when the plan has one (step 1) |
+| `<span>` | the span id `events span start` printed for the phase open now |
 
 ## Halt and ask
 
@@ -46,6 +47,15 @@ acting on it, `"$SG" build resume --run <run> [--task <task>] --answer <answer>`
 does. Never pass question or answer text. Neither command's exit changes what happens next: a
 failure prints 1 line, so name it in the report. The reference maps each halt to its
 [reason and answers](references/event-loop.md#recording-halts).
+
+## Phase spans
+
+The build times its `final` phase as a span the run viewer draws. Opening it with
+`events span start` prints the new span id alone on stdout: keep it as `<span>`, and close it
+with `events span end` on every way out of the phase. Empty output means telemetry is off and
+there is no span: skip its end. Span calls never stop the build: any other non-zero exit of
+either prints 1 line for the report, and the step goes on without that span. The run skill times
+the phases before `build start`; this skill has no build run id until then.
 
 ## 1. Start
 
@@ -144,21 +154,24 @@ Go back to step 2.
 
 When `build next` reports nothing to start and nothing running, or at the cutoff:
 
-1. Wait for the machine's other `ready` runs, then run `"$SG" build proof-bases <slug>` and
+1. Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
+   Wait for the machine's other `ready` runs, then run `"$SG" build proof-bases <slug>` and
    `"$SG" check --tier ready` (with a plan surface, `"$SG" check --tier ready --base <surfaceCommit>`)
    with the `--proof-base` arguments it prints
    ([final gate](references/event-loop.md#final-gate)). Record it with
    `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`
-   and republish the ledger page. Not GREEN: halt. This gate takes no baseline: the step 1
-   baseline, asked for or not, covers only the merge gates.
+   and republish the ledger page. Not GREEN: `"$SG" events span end <span> --outcome halted`,
+   then halt; after the answer, open a new `final` span before going on. This gate takes no
+   baseline: the step 1 baseline, asked for or not, covers only the merge gates.
 2. The `validate` stage: print `validate: not configured` and go on.
-3. `"$SG" build finish <slug> --session <session> --json`.
+3. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+   `"$SG" events span end <span> --outcome ok`.
 4. `"$SG" stats --build <run> --plan <slug>` for the wall time.
 
 ## Report
 
 The ledger page link, then: tasks done, and the unfinished ones with their status from `build finish`;
-each halt and the user's answer; each failed `events ingest` line; the green-main baseline taken without asking, as
+each halt and the user's answer; each failed `events ingest` or `events span` line; the green-main baseline taken without asking, as
 `rule: file` per finding; the `ready` verdict and run id; wall time against the budget;
 `resume` when the index stays `building`. The claim stays with this session.
 

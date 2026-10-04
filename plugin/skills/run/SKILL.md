@@ -26,22 +26,39 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<checkout>` | `<plan-dir>/checkout`: a worktree on `<plan-branch>`, under the git dir, where you commit and run gates |
 | `<config>` | `<common>/swift-harness/config.toml`, written only by `discover --apply` and `allow` |
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
+| `<run>` | the `runId` that `build start` prints in step 7 |
+| `<span>` | the span id `events span start` printed for the phase open now |
 
 The user's checked-out branch never moves and their tree never changes: no commit, no stash, no
 checkout there. Read the code there if you like; write only in `<checkout>` and the task worktrees.
 
+## Phase spans
+
+Each phase below opens and closes a span the run viewer draws. Opening one with
+`events span start` prints the new span id alone on stdout: keep it as `<span>` for its
+`events span end`. Empty output means telemetry is off and there is no span: skip its end. Span
+calls never stop the run: any other non-zero exit of either prints 1 line for the report, and the
+step goes on without that span.
+
+No build run exists before `build start` in step 7, so the phases before it (spec-read, discover,
+explore, plan and contract) name the plan slug as their `--build-run`: the 1 id the run has from
+launch. `final` runs inside the build run and names `<run>`.
+
 ## 1. Read the spec
 
-<!-- span: start spec-read -->
+Open the phase: `"$SG" events span start --phase spec-read --build-run <slug>`, kept as `<span>`.
+
 Read `<spec>` whole. List what it asks for as numbered requirements, each a sentence a test could
 check, and every open question it leaves. Answer each open question yourself now, and keep the
 answer for `## Assumptions`. A requirement you can't test still gets a task; its acceptance names
 the check that stands in for a test.
-<!-- span: end spec-read -->
+
+Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 2. Pick the areas
 
-<!-- span: start discover -->
+Open the phase: `"$SG" events span start --phase discover --build-run <slug>`, kept as `<span>`.
+
 `swiftgate run` already applied discovery. Read the proposal it applied with `"$SG" discover --json`
 and the areas in `<config>`: each `[[areas]]` entry has a `name`, a `root`, a `kind`, its
 commands (`test`, `test_files`, `lint`, `build`, `e2e`) and the source of each (`found`, `guessed`,
@@ -49,11 +66,13 @@ commands (`test`, `test_files`, `lint`, `build`, `e2e`) and the source of each (
 changes a file under its `root`, or a type another touched area reads. Name the touched areas in
 `PLAN.md`'s `## Areas`. Files listed in `<common>/swift-harness/discover/dirty.json` were modified
 before the run started; no task writes them and nothing stages them.
-<!-- span: end discover -->
+
+Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 3. Explore and draft at once
 
-<!-- span: start explore -->
+Open the phase: `"$SG" events span start --phase explore --build-run <slug>`, kept as `<span>`.
+
 With 1 touched area, or a repository small enough to read in a few minutes, read the code yourself
 and skip the explorers. Otherwise launch 1 `swift-harness:brownfield-explorer` per touched area with
 the Agent tool, all in 1 message and in the background. Each prompt names the area, its `root`,
@@ -68,7 +87,8 @@ planned it from your own reading.
 While they run, draft the plan skeleton: the contract task, 1 task per requirement or per area a
 requirement crosses, their dependencies, and the goal line of each. Fill in write sets, tests and
 acceptance as reports arrive.
-<!-- span: end explore -->
+
+Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 4. Fix the commands before planning ends
 
@@ -95,7 +115,8 @@ Never edit `<config>` by hand.
 
 ## 5. Write `PLAN.md`
 
-<!-- span: start plan -->
+Open the phase: `"$SG" events span start --phase plan --build-run <slug>`, kept as `<span>`.
+
 Write `<plan-dir>/PLAN.md` in the shape [`references/plan-shape.md`](references/plan-shape.md)
 fixes: `## Areas`, `## Assumptions` with 1 bullet per reading you made, then 1 `### <task-id>`
 section per task. Read that reference now. It holds the field list, an example, how to derive
@@ -108,11 +129,13 @@ write sets from each kind's target graph, and the rules a task's write set obeys
 - 2 tasks in the same wave never share a write path. A task that changes a target's types owns
   every target that reads them, unless the contract commit landed those types. Each removal has 1
   owning task.
-<!-- span: end plan -->
+
+Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 6. Land the contract commit
 
-<!-- span: start contract -->
+Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, kept as `<span>`.
+
 1. `git worktree add <checkout> <plan-branch>` from the user's checkout. Work only there.
 2. Write the contract: the new types, signatures and stubs every task compiles against, with
    behaviour unchanged. It builds in every touched area: run each touched area's `build` command
@@ -122,7 +145,8 @@ write sets from each kind's target graph, and the rules a task's write set obeys
    `"$SG" allow <rule> <path>:<line> --reason "<why>"`.
 4. Commit on `<plan-branch>` with a message in the repository's own style. The repository's git
    hooks run on every commit of the run; a failing hook is a finding to fix, never one to bypass.
-<!-- span: end contract -->
+
+Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 7. Import and build
 
@@ -145,18 +169,20 @@ write sets from each kind's target graph, and the rules a task's write set obeys
 
 ## 8. Final
 
-<!-- span: start final -->
-When `build next` reports nothing to start and nothing running:
+When `build next` reports nothing to start and nothing running, open the phase:
+`"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
    `lint` and `build` against the baseline, plus each area's `e2e`.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
-3. Not GREEN: add 1 fix task to `PLAN.md` that owns the failing files, import again, run the build
-   loop until it merges, and run `final` once more. A second red `final` ends the run RED; the
-   report quotes its findings as `rule: message`.
-4. `"$SG" build finish <slug> --session <session> --json`.
+3. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
+   to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
+   open a new `final` span as above and run `final` once more. A second red `final` closes its
+   span with `"$SG" events span end <span> --outcome red` and ends the run RED; the report quotes
+   its findings as `rule: message`.
+4. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+   `"$SG" events span end <span> --outcome ok`.
 5. `git worktree remove <checkout>`. `<plan-branch>` holds everything.
-<!-- span: end final -->
 
 ## 9. Report
 
