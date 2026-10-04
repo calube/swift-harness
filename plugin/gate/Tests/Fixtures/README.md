@@ -348,6 +348,50 @@ Observed behavior the runner relies on:
   `details.step` and `details.command`, and the steps before it under
   `details.partialResults`, each with its `data`.
 
+### AgentDevice/record
+
+What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
+Xcode 26.2 on a clone `swiftgate sim up` made from the configured iPhone 17 (iOS 26.2), against
+`examples/SampleApp` as committed. From the repository root, with the worktree's
+`swift build --product swiftgate`:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/record/capture.sh plugin/gate/.build/debug/swiftgate
+```
+
+The script runs `sim up --json` in `examples/SampleApp`, makes every call with `--udid` and
+`--session` from its output, and runs `sim down` on exit. `recorded-pass.steps.json` and
+`recorded-fail.steps.json` are inputs: `AgentDevice/batch/pass.steps.json` and `fail.steps.json`
+with `{"command":"record","input":{"action":"start","path":"/SCRATCH/video.mp4"}}` put first. In
+each output the scratch path is replaced with `/SCRATCH`, `$HOME` with `/HOME`, the clone's UDID
+with `UDID` and the session with `SESSION`.
+
+| Files | Call |
+|---|---|
+| `logs-start`, `logs-stop`, `logs-path` | `logs start` before the batches, then `logs stop` and `logs path` after them |
+| `recorded-pass`, `record-stop`, `contact-sheet` | the recorded counter flow on a fresh launch, `record stop`, then `record contact-sheet /SCRATCH/video.mp4 --out /SCRATCH/sheet.png --json` |
+| `recorded-fail`, `record-stop-after-fail` | the recorded flow run next, expecting `5`: step 7, the `is`, fails; then `record stop` |
+| `record-start-beside-outside` | `record start` while `xcrun simctl io <udid> recordVideo` runs on the same device |
+| `network-dump` | `network dump 25 --include headers` |
+| `app-container` | `xcrun simctl get_app_container <udid> com.example.SampleApp data` |
+| `log-show` | `xcrun simctl spawn <udid> log show --style compact --info --debug --predicate 'subsystem == "com.example.SampleApp"' --start <time before sim up>` |
+
+Observed behavior the final pass relies on:
+
+- A batch whose first step is `record start` reports that step's `durationMs`; the steps after it
+  sum to `totalDurationMs` less it. The passing video's sheet spans 4833 ms, the 4476 ms of steps
+  after `record start` plus the `record stop` call, so the video starts when `record start` ends.
+- A recording started inside a batch outlives the batch, failed or passed: `record stop` after it
+  returns the video.
+- `network dump` parses the session app log, so the stream runs for the whole flow.
+- SampleApp logs only on a failed fact request, so its subsystem's `log show` is a header line.
+- `apple_simulator_recording_busy` didn't occur: `record start` succeeded beside an outside
+  `simctl recordVideo` on the same device, and 2 recordings on 2 clones also both started. The
+  reason comes from the installed package's
+  `dist/src/platform-runtime-screen-recording-apple-simulator-host.js`, which maps
+  `simctl recordVideo`'s exit 16 to `DEVICE_IN_USE` with that reason. Tests build that failure as a
+  value; no fixture holds it.
+
 ### AgentDevice/crash
 
 A real `sim up` run against `examples/SampleApp` on 2026-10-04, with `agent-device` 0.21.18 on a

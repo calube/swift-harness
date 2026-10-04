@@ -58,6 +58,9 @@ final class ScreenAgentDevice: AgentDevice {
   func logs(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> String {
     try await fake.logs(on: target)
   }
+  func logStream(_ action: AgentDeviceLogsAction, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
+  { try await fake.logStream(action, on: target) }
   func networkDump(limit: Int, on target: AgentDeviceTarget) async throws(AgentDeviceError)
     -> Data
   { try await fake.networkDump(limit: limit, on: target) }

@@ -1,0 +1,12 @@
+{
+  "success": true,
+  "data": {
+    "path": "/HOME/.agent-device/sessions/SESSION/app.log",
+    "active": false,
+    "state": "inactive",
+    "backend": "ios-simulator",
+    "sizeBytes": 268378,
+    "modifiedAt": "2026-10-04T21:09:18.291Z",
+    "hint": "Grep the file for token-efficient debugging, e.g. grep -n \"Error\\|Exception\" <path>"
+  }
+}

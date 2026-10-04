@@ -27,7 +27,7 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 
 ## qa run
 
-`swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--json]` runs the rows of a plan's
+`swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
 validation.json; with none it is GREEN with a note, and with several it exits 2 naming them. A row
 runs once every `Runs after` task is `done` in the ledger, the `--after` task counting as merged;
@@ -47,6 +47,9 @@ passes it. A state row runs only once every flow row for its requirement passed.
 `--at-base` runs every row, whatever its tasks, at the merge base of `HEAD` and `main` (a brownfield
 clone's plan branch) in a scratch worktree, with no layer stop, and records each failure's exit
 status.
+
+`--final` runs every ready row and records each flow, with its logs (see
+[the final pass](simulator-qa-flows.md#the-final-pass)). It takes neither `--at-base` nor `--after`.
 
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
 stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row.

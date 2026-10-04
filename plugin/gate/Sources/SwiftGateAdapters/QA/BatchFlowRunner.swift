@@ -37,6 +37,8 @@ public struct BatchFlowOutcome: Sendable, Equatable {
     case flowFile(String)
     /// `agent-device` or the machine failed, so the batch says nothing about the app.
     case driver(String)
+    /// The `record start` a final pass puts first failed, so no step of the flow ran.
+    case recordStart(AgentDeviceFailure)
   }
 
   /// `nil` when every step passed.
@@ -44,11 +46,15 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   public var record: QAFlowRecord
   /// Absolute paths of the files the batch left, beside the `sim/` steps.
   public var files: [URL]
+  /// How long the batch's `record start` took: when the video's first frame came, on the
+  /// batch's clock. `nil` when the batch recorded nothing.
+  public var videoStartMs: Int?
 
-  public init(stop: Stop?, record: QAFlowRecord, files: [URL]) {
+  public init(stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil) {
     self.stop = stop
     self.record = record
     self.files = files
+    self.videoStartMs = videoStartMs
   }
 }
 
@@ -70,8 +76,10 @@ public struct BatchFlowRunner: Sendable {
   ///   - stepsFile: the flow file as written.
   ///   - store: the run's `sim/` folder, whose `session.json` `sim up` wrote.
   ///   - flowDirectory: where the driven steps file and the batch output go.
+  ///   - recordTo: set on a final pass: the batch starts with a `record start` to this path.
   public func run(
-    stepsFile: URL, on target: AgentDeviceTarget, store: SimRunStore, flowDirectory: URL
+    stepsFile: URL, on target: AgentDeviceTarget, store: SimRunStore, flowDirectory: URL,
+    recordTo: String? = nil
   ) async -> BatchFlowOutcome {
     let empty = QAFlowRecord(source: .batch, steps: [])
     let steps: [FlowStep]
@@ -87,7 +95,8 @@ public struct BatchFlowRunner: Sendable {
     } catch {
       return BatchFlowOutcome(stop: .driver(error.message), record: empty, files: [])
     }
-    let plan = BatchFlowPlan.make(steps: steps, screenshots: stagings.map(\.screenshot.path))
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: stagings.map(\.screenshot.path), recordTo: recordTo)
     let driven = flowDirectory.appending(path: Self.stepsFileName)
     let output = flowDirectory.appending(path: Self.outputFileName)
     do {
@@ -116,9 +125,10 @@ public struct BatchFlowRunner: Sendable {
     }
     let results = printed.map(Self.results) ?? []
     commitEvidence(plan, stagings: stagings, results: results, store: store)
+    let recordStep = recordTo == nil ? nil : results.first { $0.outcome.index == 1 }?.outcome
     return BatchFlowOutcome(
       stop: stop, record: plan.record(results: results.map(\.outcome), failedAt: failedAt),
-      files: files)
+      files: files, videoStartMs: recordStep.flatMap { $0.ok ? $0.durationMs : nil })
   }
 
   /// A failing step is evidence about the app; a refused steps file is the flow's fault; any
@@ -129,7 +139,14 @@ public struct BatchFlowRunner: Sendable {
     guard case .failed(_, let failure) = error else {
       return (nil, .driver(error.message), nil)
     }
+    // A busy recorder refuses the record start, whichever step the refusal names.
+    if plan.recordTo != nil, failure.reason == .appleSimulatorRecordingBusy {
+      return (failure.output, .recordStart(failure), 1)
+    }
     if let step = failure.failedStep {
+      if plan.stop(atDrivenIndex: step.index, command: step.command) == .recordStart {
+        return (failure.output, .recordStart(failure), step.index)
+      }
       return (
         failure.output,
         .flow(
@@ -256,14 +273,21 @@ public actor QAFlowRunner {
   public static let simDirectoryVariable = "QA_SIM_DIR"
 
   private let simulator: any QAFlowSimulating
+  private let finalPass: QAFinalPass?
   private var flowRecords: [Int: QAFlowRecord] = [:]
+  private var evidenceGaps: [QAEvidenceGap] = []
 
-  public init(simulator: any QAFlowSimulating) {
+  /// - Parameter finalPass: set for `qa run --final`, which records each batch and saves its logs.
+  public init(simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil) {
     self.simulator = simulator
+    self.finalPass = finalPass
   }
 
   /// The flow records of the rows that reached a batch, by row.
   public var records: [Int: QAFlowRecord] { flowRecords }
+
+  /// The final-pass evidence each flow row didn't leave, in row order.
+  public var gaps: [QAEvidenceGap] { evidenceGaps }
 
   /// - Parameter state: runs the requirement's state rows with the device's variables, while the
   ///   device is still up. It is called after a batch that passed, or at the merge base after any
@@ -308,21 +332,35 @@ public actor QAFlowRunner {
       started = up
     }
 
-    let batch = await BatchFlowRunner(agentDevice: simulator.agentDevice).run(
-      stepsFile: row.stepsFile,
-      on: AgentDeviceTarget(udid: started.udid, session: started.session),
-      store: SimRunStore(simDirectory: simDirectory), flowDirectory: row.directory)
+    let target = AgentDeviceTarget(udid: started.udid, session: started.session)
+    let store = SimRunStore(simDirectory: simDirectory)
+    let runner = BatchFlowRunner(agentDevice: simulator.agentDevice)
+    let batch: BatchFlowOutcome
+    var record: QAFlowRecord
+    var finalFiles: [String] = []
+    if let finalPass {
+      let recorded = await self.recorded(
+        row, finalPass: finalPass, target: target, store: store, runner: runner)
+      batch = recorded.outcome
+      record = recorded.record
+      finalFiles = recorded.files
+    } else {
+      batch = await runner.run(
+        stepsFile: row.stepsFile, on: target, store: store, flowDirectory: row.directory)
+      record = batch.record
+    }
     evidence += batch.files.map { "\(row.relativeDirectory)/\($0.lastPathComponent)" }
-    if !batch.record.steps.isEmpty {
-      flowRecords[row.row] = batch.record
+    if !record.steps.isEmpty {
+      flowRecords[row.row] = record
       let recordFile = row.directory.appending(path: QAFlowRecord.fileName)
-      let written = (try? batch.record.encoded()).map { data in
+      let written = (try? record.encoded()).map { data in
         (try? QAFiles.write(data, to: recordFile)) != nil
       }
       if written == true {
         evidence.append("\(row.relativeDirectory)/\(QAFlowRecord.fileName)")
       }
     }
+    evidence += finalFiles
     evidence.append("\(row.relativeDirectory)/sim/\(SimStep.logFileName)")
 
     if batch.stop == nil || row.atBase {
@@ -345,10 +383,70 @@ public actor QAFlowRunner {
       (result, message) = (.red, "the flow file doesn't run: \(why)")
     case .driver(let why)?:
       (result, message) = (.unverified, "not run: \(why)")
+    case .recordStart(let failure)?:
+      (result, message) = (.unverified, "not run: record start failed: \(failure.message)")
+    case .flow(.recordStart, let why)?:
+      (result, message) = (.unverified, "not run: record start failed: \(why)")
     case nil:
       (result, message) = (verdict.result, verdict.message)
     }
     return outcome(result, message + Self.suffix(notes))
+  }
+
+  /// The row's batch inside a recording and its logs: the outcome, the record with its video and
+  /// sheet, and the files the final pass left. Each gap is kept for the report.
+  private func recorded(
+    _ row: QAFlowRow, finalPass: QAFinalPass, target: AgentDeviceTarget, store: SimRunStore,
+    runner: BatchFlowRunner
+  ) async -> (outcome: BatchFlowOutcome, record: QAFlowRecord, files: [String]) {
+    let name = row.directory.lastPathComponent.replacing(/\.flow$/, with: "")
+    let logs = row.directory.deletingLastPathComponent()
+      .appending(path: "\(EvidenceCollector.directory)/\(name)", directoryHint: .isDirectory)
+    let relativeLogs =
+      (row.relativeDirectory.split(separator: "/").dropLast() + [
+        Substring(EvidenceCollector.directory), Substring(name),
+      ]).joined(separator: "/")
+    let stepsFile = row.stepsFile
+    let directory = row.directory
+    let relativeDirectory = row.relativeDirectory
+    @Sendable func record() async -> (outcome: BatchFlowOutcome, recording: QAFlowRecording) {
+      await finalPass.recorder.record(
+        on: target, directory: directory, relativeDirectory: relativeDirectory
+      ) { recordTo in
+        await runner.run(
+          stepsFile: stepsFile, on: target, store: store, flowDirectory: directory,
+          recordTo: recordTo)
+      }
+    }
+
+    let session: SimSession
+    do {
+      session = try store.session()
+    } catch {
+      let (outcome, recording) = await record()
+      let reason =
+        "the run's \(SimSession.fileName) doesn't read, so no log names the app: \(error)"
+      evidenceGaps +=
+        recording.gaps(row: row.row)
+        + EvidenceCollector.logKinds.map { QAEvidenceGap(row: row.row, kind: $0, reason: reason) }
+      return (outcome, outcome.record.recorded(recording), Self.paths(recording))
+    }
+    let device = QAEvidenceDevice(
+      target: target, bundleID: session.bundleID, since: session.startedAt)
+    let ((outcome, recording), collection) = await finalPass.evidence.collect(
+      on: device, directory: logs, relativeDirectory: relativeLogs, record)
+    evidenceGaps +=
+      recording.gaps(row: row.row)
+      + EvidenceCollector.logKinds.compactMap { kind in
+        collection.gaps[kind].map { QAEvidenceGap(row: row.row, kind: kind, reason: $0) }
+      }
+    return (
+      outcome, outcome.record.recorded(recording), Self.paths(recording) + collection.files
+    )
+  }
+
+  private static func paths(_ recording: QAFlowRecording) -> [String] {
+    [recording.video, recording.sheet].compactMap { $0 }
   }
 
   private static func environment(_ started: SimUpStarted, simDirectory: URL) -> [String: String] {

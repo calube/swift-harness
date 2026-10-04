@@ -15,6 +15,8 @@ enum QARunRun {
     var plan: String?
     var after: String?
     var atBase = false
+    /// Every ready row, with each flow recorded and its logs saved.
+    var final = false
   }
 
   struct Dependencies: Sendable {
@@ -32,6 +34,8 @@ enum QARunRun {
     var flows: (any QAFlowSimulating)?
     /// The plugin root `qa lint` reads the pinned step schemas from.
     var pluginRoot: URL?
+    /// What `--final` adds around each flow.
+    var finalPass: QAFinalPass?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -41,7 +45,15 @@ enum QARunRun {
     -> QAReport
   {
     func blocked(_ message: String, plan: String? = options.plan) -> QAReport {
-      .blocked(message, plan: plan, after: options.after, atBase: options.atBase)
+      .blocked(
+        message, plan: plan, after: options.after, atBase: options.atBase, final: options.final)
+    }
+    if options.final, options.atBase || options.after != nil {
+      return blocked(
+        "--final runs every ready row on the checkout, so it takes neither --at-base nor --after")
+    }
+    if options.final, dependencies.flows != nil, dependencies.finalPass == nil {
+      return blocked("--final has no recorder to record its flows with")
     }
     let common: String
     let layout: PlanStateLayout
@@ -69,7 +81,7 @@ enum QARunRun {
       case 0:
         return .nothingToRun(
           "no plan under \(layout.root) holds a \(ValidationTable.fileName), so no row runs",
-          plan: nil, after: options.after, atBase: options.atBase)
+          plan: nil, after: options.after, atBase: options.atBase, final: options.final)
       case 1:
         slug = candidates[0]
       default:
@@ -91,7 +103,7 @@ enum QARunRun {
     guard let tableData = files.contents(atPath: tablePath) else {
       return .nothingToRun(
         "\(tablePath) is missing: the plan has no validation table, so no row runs", plan: slug,
-        after: options.after, atBase: options.atBase)
+        after: options.after, atBase: options.atBase, final: options.final)
     }
     let table: ValidationTable
     do throws(ValidationTableJSONError) {
@@ -130,7 +142,10 @@ enum QARunRun {
     let checks = Checks(
       planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies,
       runID: runID, plan: runPlan, atBase: options.atBase,
-      flows: dependencies.flows.map { QAFlowRunner(simulator: $0) })
+      flows: dependencies.flows.map { simulator in
+        QAFlowRunner(
+          simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
+      })
 
     var notes: [String] = []
     let rows: [QARow]
@@ -171,6 +186,7 @@ enum QARunRun {
       rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
     }
     let flowRecords = await checks.flowRecords()
+    let gaps = await checks.gaps()
 
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
     if let events {
@@ -202,8 +218,8 @@ enum QARunRun {
     }
 
     let report = QAReport(
-      runID: runID, plan: slug, after: options.after, atBase: options.atBase, commit: commit,
-      rows: rows, notes: notes)
+      runID: runID, plan: slug, after: options.after, atBase: options.atBase,
+      final: options.final, commit: commit, rows: rows, gaps: gaps, notes: notes)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data
@@ -246,6 +262,10 @@ enum QARunRun {
 
     func flowRecords() async -> [Int: QAFlowRecord] {
       await flows?.records ?? [:]
+    }
+
+    func gaps() async -> [QAEvidenceGap] {
+      await flows?.gaps ?? []
     }
 
     func run(_ entry: QARunPlan.Entry, in workingDirectory: String) async -> QACheckOutcome {
@@ -394,7 +414,7 @@ enum QARunRun {
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--json]`.
+/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -409,14 +429,18 @@ struct QARunCommand: AsyncParsableCommand {
   @Flag(help: "Run every row at the merge base in a scratch worktree and record why each fails.")
   var atBase = false
 
+  @Flag(help: "Run every ready row, recording each flow and saving its logs: the final pass.")
+  var final = false
+
   @Flag(help: "Print JSON.")
   var json = false
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
+    let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(plan: plan, after: after, atBase: atBase),
+      root: root, options: QARunRun.Options(plan: plan, after: after, atBase: atBase, final: final),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,
@@ -426,10 +450,17 @@ struct QARunCommand: AsyncParsableCommand {
         },
         newEventID: {
           UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
-        }, flows: LiveQAFlowSimulator(runner: runner),
+        }, flows: LiveQAFlowSimulator(runner: runner, agentDevice: agentDevice),
         pluginRoot: ProcessInfo.processInfo.environment[QALintRun.harnessRootVariable].map {
           URL(filePath: $0, directoryHint: .isDirectory)
-        }))
+        },
+        finalPass: QAFinalPass(
+          recorder: FinalPassRecorder(
+            dependencies: FinalPassRecorder.Dependencies(
+              agentDevice: agentDevice,
+              lock: FileCountingLock(name: FinalPassRecorder.lockName, capacity: 1),
+              clock: .continuous())),
+          evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner))))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
@@ -441,9 +472,9 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
   let runner: any ProcessRunner
   let agentDevice: any AgentDevice
 
-  init(runner: any ProcessRunner) {
+  init(runner: any ProcessRunner, agentDevice: (any AgentDevice)? = nil) {
     self.runner = runner
-    self.agentDevice = LiveAgentDevice(runner: runner)
+    self.agentDevice = agentDevice ?? LiveAgentDevice(runner: runner)
   }
 
   /// `qa run` starts each holder itself and outlives it, so a holder that exited stays a zombie

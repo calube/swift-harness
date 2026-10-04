@@ -43,7 +43,27 @@ Each flow row writes `qa/<NN>-<requirement>.flow/` in the run directory:
 - `sim/`, the session, the step log and each step's PNG and tree, plus `sim verify`'s report;
 - `lint.txt`, when the lint stopped the row.
 
-The record is also 1 qa.flow event: `{plan, row, requirement, atBase, source, steps, video, sheet}`.
-`source` is `batch`, and each step that ran is `{n, label, offsetMs, ok}`, with `n` in the flow
-file's numbering and `offsetMs` from the batch's start. The failing step is the last one, with
-`ok` false. `video` and `sheet` stay absent until a final pass records them.
+The record is also 1 qa.flow event: `{plan, row, requirement, atBase, source, steps, video, sheet,
+videoUnverified, sheetUnverified}`. `source` is `batch`, and each step that ran is
+`{n, label, offsetMs, ok}`, with `n` in the flow file's numbering. `offsetMs` counts from the
+video's first frame when `video` is set, else from the batch's start. The failing step is the last
+one, with `ok` false. The last 4 keys appear only after a final pass.
+
+## The final pass
+
+`qa run --final` records each flow, 1 at a time under the 1-slot `sim-record` lock:
+
+1. It starts the app log stream and an `agent-device` trace.
+2. It runs the batch with `record start` as its first step, so the video and the steps share the
+   batch's clock. Each offset drops that step's time.
+3. It runs `record stop` on every path, then `record contact-sheet`, leaving `video.mp4` and
+   `sheet.png` in the flow's folder.
+4. Under `qa/logs/<NN>-<requirement>/` it saves `app.log`, `network.json` (`network dump 25`),
+   `trace.log`, `os.log` (`log show` for the subsystem named after the bundle id) and `container/`,
+   the app's data container.
+
+A `record start` refused as `apple_simulator_recording_busy` is retried every 15 s for up to 5
+minutes. Past that, after any other refusal, or with the lock held 10 minutes, the flow runs
+unrecorded. `videoUnverified` then names `recorderBusy`, `recordLockTimedOut` or `recordFailed`, and
+a failed sheet names `sheetFailed`. Each missing video is a `qa.video-unverified` nit, and each
+missing log a `qa.evidence-unsaved` nit. The row still passes or fails on its assertions.
