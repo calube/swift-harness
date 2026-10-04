@@ -13,6 +13,7 @@ struct ModuleGraphTests {
     #expect(
       roles == [
         "APIClient": .client, "APIClientLive": .clientLive, "APIClientLiveTests": .tests(.t1),
+        "AccessibilityIDs": .core, "AccessibilityIDsTests": .tests(.t1),
         "CounterCore": .core, "CounterUI": .ui, "CounterCoreTests": .tests(.t1),
         "CounterUISnapshotTests": .tests(.t2),
         "GameEngine": .core, "GameEngineTests": .tests(.t1),

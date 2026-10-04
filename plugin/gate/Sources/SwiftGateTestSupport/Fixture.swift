@@ -27,7 +27,7 @@ public enum Fixture {
   }
 
   public static let samplePackages = [
-    "APIClient", "CounterFeature", "GameEngine", "HTTPClient", "LogClient",
+    "APIClient", "AccessibilityIDs", "CounterFeature", "GameEngine", "HTTPClient", "LogClient",
   ]
 
   public static func describe(_ package: String) throws -> Data {
