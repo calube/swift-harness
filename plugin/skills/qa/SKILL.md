@@ -33,6 +33,17 @@ A plan built from a design or a brownfield `PLAN.md` may carry a validation tabl
 A `red` row is a finding like any other: it goes to step 4 with the run's verdict. Then explore
 beyond the rows in steps 2 and 3, since a table covers only what the plan foresaw.
 
+A build's `validate` stage runs the final pass itself before it calls this skill:
+
+```bash
+"$SG" qa run --plan <slug> --final --json
+```
+
+It also records each flow with a video and a contact sheet, and saves its logs under
+`.harness/runs/<runID>/qa/logs/`. Called from a validate stage, take that run's `runID` and rows
+and run no `qa run` of your own. Run `--final` yourself only when the user wants that recorded
+evidence.
+
 ## 2. Pick the flows
 
 1. The screens the change touched: `git diff --name-only <base>...HEAD` plus uncommitted changes,
@@ -102,7 +113,7 @@ BLOCKED into a pass because the screen looked right.
 - `GREEN` for every flow and every row `pass` or `waiting`: QA passed.
 - Any `RED`, or a `red` row: list each finding as `rule step path — message`, plus the typed reason
   of any failed `wait`, and hand off to `/swift-harness:tdd` to name the regression in a failing
-  test and fix it.
+  test and fix it. Called from a validate stage, list them and hand off nothing: the caller decides.
 - Any `BLOCKED`: run `"$SG" doctor` and report what the machine needs, such as the
   `agent-device` install line or the PIDs holding the simulator slots.
 

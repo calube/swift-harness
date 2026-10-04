@@ -27,6 +27,7 @@ may ask for an answer, and a headless session can't give one.
 | `<n>` | the number of slices on the page |
 | `<surface>` | the surface commit's full sha, `git rev-parse HEAD` just after committing it |
 | `<run id>` | a gate run's id (see [Gate run ids](#gate-run-ids)) |
+| `<preset>` | the `profile` key of `[harness]` in `.swiftgate.toml`, else `default` |
 
 ## Drive the machine
 
@@ -156,6 +157,12 @@ Then `sprint status --json`: the next slice, or `finish`.
    it again. Keep its `<run id>`.
 2. `"$SG" sprint finish --gate <run id> --json`. It fast-forwards `main` to the branch.
 3. `git switch main`.
+4. The `validate` stage, on `main`. Read `sim_qa` in `[build.presets.<preset>]` of
+   `.swiftgate.toml`; a preset without it reads `off`. At `off`, print `validate: sim_qa off`.
+   At `changed`, run `/swift-harness:qa` as a validate stage: it drives the screens the sprint
+   changed and hands nothing to `/swift-harness:tdd`. A sprint has no validation table, so it
+   runs no `qa run --final`. A RED goes in the report with its findings, and its fix is a new
+   sprint.
 
 A change request after this is a new sprint: back to step 1, with its own page, branch, surface
 and slices.
@@ -174,8 +181,8 @@ Run `"$SG" sprint status --json` and `git switch` to its `sprint.branch`. Read t
 ## Report
 
 From `sprint status --json`: the spec page path, the branch, `<surface>`, each slice's gate run,
-and the final `ready` run id and verdict. Then `main`'s new HEAD, and each refusal met with its
-fix. When the sprint stopped before `finish`, name the step `next` gives and the command that
+and the final `ready` run id and verdict. Then `main`'s new HEAD, the QA skill's report or
+`validate: sim_qa off`, and each refusal met with its fix. When the sprint stopped before `finish`, name the step `next` gives and the command that
 resumes it.
 
 ## Rules
