@@ -132,7 +132,8 @@ public struct BatchFlowRunner: Sendable {
     if let step = failure.failedStep {
       return (
         failure.output,
-        .flow(plan.stop(atDrivenIndex: step.index, command: step.command), message: failure.message),
+        .flow(
+          plan.stop(atDrivenIndex: step.index, command: step.command), message: failure.message),
         step.index
       )
     }
@@ -280,9 +281,10 @@ public actor QAFlowRunner {
     }
     if lint.verdict != .green {
       let file = row.directory.appending(path: "lint.txt")
-      let text =
-        (["qa lint: \(lint.verdict.rawValue) \(lint.message)"]
-          + lint.findings.map { "  \($0.ruleID): \($0.message)" }).joined(separator: "\n") + "\n"
+      let lines =
+        ["qa lint: \(lint.verdict.rawValue) \(lint.message)"]
+        + lint.findings.map { "  \($0.ruleID): \($0.message)" }
+      let text = lines.joined(separator: "\n") + "\n"
       if (try? QAFiles.write(Data(text.utf8), to: file)) != nil {
         evidence.append("\(row.relativeDirectory)/lint.txt")
       }
@@ -314,8 +316,10 @@ public actor QAFlowRunner {
     if !batch.record.steps.isEmpty {
       flowRecords[row.row] = batch.record
       let recordFile = row.directory.appending(path: QAFlowRecord.fileName)
-      if let data = try? batch.record.encoded(), (try? QAFiles.write(data, to: recordFile)) != nil
-      {
+      let written = (try? batch.record.encoded()).map { data in
+        (try? QAFiles.write(data, to: recordFile)) != nil
+      }
+      if written == true {
         evidence.append("\(row.relativeDirectory)/\(QAFlowRecord.fileName)")
       }
     }
@@ -325,7 +329,8 @@ public actor QAFlowRunner {
       await state(Self.environment(started, simDirectory: simDirectory))
     }
     let notes = await down(request)
-    let verdict = await judge(request, relativeDirectory: row.relativeDirectory, evidence: &evidence)
+    let verdict = await judge(
+      request, relativeDirectory: row.relativeDirectory, evidence: &evidence)
 
     let (result, message): (QAResult, String)
     switch batch.stop {

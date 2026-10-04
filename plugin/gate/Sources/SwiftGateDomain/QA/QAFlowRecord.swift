@@ -181,7 +181,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
   public func record(results: [BatchStepOutcome], failedAt: Int?) -> QAFlowRecord {
     var steps: [QAFlowStep] = []
     var offset = 0
-    let byIndex = Dictionary(results.map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
+    let byIndex = Dictionary(
+      results.map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
     let last = failedAt ?? (results.map(\.index).max() ?? 0)
     for index in 1...max(1, last) where index <= origin.count {
       let outcome = byIndex[index]
