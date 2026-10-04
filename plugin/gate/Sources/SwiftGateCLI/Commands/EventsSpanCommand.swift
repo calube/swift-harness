@@ -1,4 +1,39 @@
 import ArgumentParser
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+
+/// `events span start` and `events span end` against 1 checkout's store, with the config
+/// already read.
+enum SpanRun {
+  typealias Output = BuildHaltRun.Output
+
+  /// - Parameters:
+  ///   - enabled: `.swiftgate.toml`'s `[telemetry] enabled`; `false` records nothing.
+  static func start(
+    log: SpanLog, enabled: Bool, phase: String, buildRun: String, task: String?, role: String?,
+    parent: String?
+  ) -> Output {
+    Output(stdout: "", stderr: "", status: 0)
+  }
+
+  static func end(log: SpanLog, enabled: Bool, spanID: String, outcome: String) -> Output {
+    Output(stdout: "", stderr: "", status: 0)
+  }
+
+  /// `start` against the main checkout of the repository `directory` is in.
+  static func start(
+    in directory: String, phase: String, buildRun: String, task: String?, role: String?,
+    parent: String?
+  ) async -> Output {
+    Output(stdout: "", stderr: "", status: 0)
+  }
+
+  /// `end` against the main checkout of the repository `directory` is in.
+  static func end(in directory: String, spanID: String, outcome: String) async -> Output {
+    Output(stdout: "", stderr: "", status: 0)
+  }
+}
 
 /// `swiftgate events span start|end`: records a run phase no other event times.
 struct EventsSpanCommand: ParsableCommand {
