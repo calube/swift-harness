@@ -22,4 +22,20 @@ final class CounterFlowUITests: XCTestCase {
     app.buttons["counter.decrement"].tap()
     XCTAssertEqual(value.label, "1")
   }
+
+  /// Regression: the app ignores `-harness-scenario` and fetches a live fact instead of the scenario's.
+  @MainActor
+  func testFixedFactScenarioShowsItsFactWithoutNetwork() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-harness-scenario", "fixed-fact"]
+    app.launch()
+
+    let factButton = app.buttons["counter.fact"]
+    XCTAssertTrue(factButton.waitForExistence(timeout: 10))
+    factButton.tap()
+
+    let factText = app.staticTexts["counter.factText"]
+    XCTAssertTrue(factText.waitForExistence(timeout: 10))
+    XCTAssertEqual(factText.label, "A group of cats is called a clowder.")
+  }
 }
