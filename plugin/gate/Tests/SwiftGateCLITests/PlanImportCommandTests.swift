@@ -157,6 +157,29 @@ struct PlanImportCommandTests {
       clone.text(atRoot: "PLAN.md") == ImportClone.plan)
   }
 
+  @Test(
+    "the ledger names each task's worktree where worktree create makes it, beside the clone and outside the git dir — catches a ledger that sends workers into the plan dir, where every write is plan state"
+  )
+  func ledgerNamesWorktreesBesideTheClone() async throws {
+    let clone = try await ImportClone()
+    defer { clone.remove() }
+
+    let report = await clone.run()
+
+    #expect(report.status == .imported, "\(report.message)")
+    let ledger = try #require(
+      try FileManager.default.contents(
+        atPath: clone.planDirectory.appending(path: "ledger.json").path
+      ).map(LedgerJSON.decode))
+    #expect(ledger.tasks.count == 3)
+    for task in ledger.tasks {
+      #expect(
+        task.worktree.hasSuffix("/\(clone.root.lastPathComponent)-\(ImportClone.slug)-\(task.id)"),
+        "\(task.worktree)")
+      #expect(!task.worktree.contains("/.git/"), "\(task.worktree)")
+    }
+  }
+
   @Test("git status shows nothing after an import — catches the PLAN.md link left unexcluded")
   func statusClean() async throws {
     let clone = try await ImportClone()

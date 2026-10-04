@@ -155,7 +155,7 @@ struct WorktreeSeedingTests {
   }
 
   @Test(
-    "a brownfield task worktree sits in its plan's directory under the git common dir, cut from and merged into the plan branch in the plan's checkout, while the owned layout keeps main — catches a brownfield run that writes beside the user's checkout or merges into their branch"
+    "a brownfield task worktree and the plan's checkout sit beside the clone as <repo>-<plan>-<task> and <repo>-<plan>, outside the git dir and the user's tree, cut from and merged into the plan branch, while the owned layout keeps main — catches a task worktree or plan checkout under the git dir, where the plan-state guard denies every worker write and Vite serves nothing, or a merge into the user's branch"
   )
   func brownfieldTaskWorktreeNaming() throws {
     let common = "/work/clone/.git"
@@ -163,8 +163,15 @@ struct WorktreeSeedingTests {
       commonDirectory: common, plan: "2026-10-04-search", task: "cli", profile: .brownfield)
     let owned = try TaskWorktree(commonDirectory: common, plan: "2026-10-04-search", task: "cli")
 
-    #expect(names.path == "/work/clone/.git/swift-harness/plans/2026-10-04-search/worktrees/cli")
-    #expect(names.mainCheckout == "/work/clone/.git/swift-harness/plans/2026-10-04-search/checkout")
+    #expect(names.path == "/work/clone-2026-10-04-search-cli")
+    #expect(names.mainCheckout == "/work/clone-2026-10-04-search")
+    #expect(
+      try TaskWorktree.planCheckout(commonDirectory: common, plan: "2026-10-04-search")
+        == names.mainCheckout)
+    for path in [names.path, names.mainCheckout] {
+      #expect(!path.hasPrefix(common + "/"), "\(path) is under the git dir")
+      #expect(!path.hasPrefix("/work/clone/"), "\(path) is in the user's tree")
+    }
     #expect(names.baseBranch == "swift-harness/2026-10-04-search")
     #expect(names.branch == "2026-10-04-search/cli")
     #expect(names.commonDirectory == common)
