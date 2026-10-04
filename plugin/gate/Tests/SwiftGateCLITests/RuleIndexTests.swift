@@ -84,7 +84,8 @@ struct RuleIndexTests {
       Doctor.shimRuleID, Doctor.swiftLintRuleID, Doctor.mermaidCLIRuleID,
       Doctor.issueReportingRuleID,
       Doctor.upgradeHazardRuleID, Doctor.profileRuleID, Doctor.pluginChangedRuleID,
-      Doctor.sessionRecordRuleID, Doctor.judgeKeyRuleID, BashGuard.rawXcodebuildRuleID,
+      Doctor.sessionRecordRuleID, Doctor.judgeKeyRuleID, Doctor.agentDeviceRuleID,
+      BashGuard.rawXcodebuildRuleID,
       BashGuard.simctlAllRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
@@ -163,6 +164,8 @@ extension RuleIndexTests {
     ]
     let other = [
       CalibrationFreshness.wrongModelRuleID, EvidenceCacheContents.corruptLineRuleID,
+      QAReport.checkFailedRuleID, QAReport.checkUnverifiedRuleID,
+      QAReport.checkPassesAtBaseRuleID,
     ]
     return DesignLintRule.allCases.map(\.rawValue) + docsLint + planLint + build + other
       + enumeratedFamilies.values.flatMap { $0 }

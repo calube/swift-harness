@@ -224,8 +224,8 @@ public enum ConfigInference {
 
 /// `.swiftgate.toml` `packages` glob matching, segment by segment as `PackageDirectories` expands
 /// them: `*` and `?` stay within one segment and `.` segments are ignored.
-enum PackageGlob {
-  static func matches(_ glob: String, _ directory: String) -> Bool {
+public enum PackageGlob {
+  public static func matches(_ glob: String, _ directory: String) -> Bool {
     let pattern = glob.split(separator: "/").map(String.init).filter { $0 != "." }
     let path = directory.split(separator: "/").map(String.init)
     guard pattern.count == path.count else { return false }

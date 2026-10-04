@@ -445,7 +445,7 @@ public struct RunViewReader: RunViewReading {
     case .proveResult:
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
     case .discoverRun, .warmupRun: return prebuild.holds(event.time)
-    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
+    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup, .qaCheck:
       return false
     }
   }
