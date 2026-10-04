@@ -65,6 +65,7 @@ With no lease left, `sim down` does nothing and exits 0, so a second call is har
 unreadable lease, a session listing that failed or a crash report it couldn't copy, and never fails
 the call.
 
-`swiftgate gc`, and the orphan sweep each `sim hold` runs before taking a device, run the same
-`device release --stale --udid` on every orphaned device they delete. An `agent-device` that can't
-be launched is skipped; any other failure is a `gc` error.
+`swiftgate gc`, and the orphan sweep each `sim hold` runs before taking a device, first give
+`sim down`'s release to every lease whose holder died, in any worktree: a killed holder's session
+and claim outlive it. Then they run `device release --stale --udid` on every orphaned device they
+delete. An `agent-device` that can't be launched is skipped; any other failure is a `gc` error.
