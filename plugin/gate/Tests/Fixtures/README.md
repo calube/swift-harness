@@ -1704,7 +1704,7 @@ module, so a baseline can hold 1 failing test while the head fails another, and 
 to build beside failing tests. Each directory has `command`, `exit`, `stdout` and `stderr`; there is
 no `change.diff`, since an environment variable or a build tag changes the run, not an edit.
 Captured 2026-10-04 on macOS 26 (arm64) with go 1.27.0 (mise), `GOTOOLCHAIN=local`, `GOFLAGS=` and
-`GOCACHE` under the scratch directory. The output names no machine path, so nothing was scrubbed.
+`GOCACHE` under the scratch directory. The output names no machine path, so the capture ran no scrub.
 
 The module, `example.com/gobase`:
 

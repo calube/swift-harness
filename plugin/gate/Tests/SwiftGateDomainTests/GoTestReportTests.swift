@@ -118,7 +118,7 @@ struct GoTestReportTests {
     let files = directory.appending(path: "tree", directoryHint: .isDirectory)
     let tree = TrackedTreeSnapshot(
       paths: listing.split(separator: "\n").map(String.init),
-      read: { try? Data(contentsOf: files.appending(path: $0)) })
+      read: { FileManager.default.contents(atPath: files.appending(path: $0).path) })
 
     let proposal = Discover.propose(tree: tree, head: "abc", dirty: [], readers: [GoReader()])
 
