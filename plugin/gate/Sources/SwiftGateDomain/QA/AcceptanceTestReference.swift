@@ -42,10 +42,13 @@ public struct AcceptanceTestReference: Sendable, Equatable {
 
   /// The command that runs only this test, from the area it names or the 1 area that runs tests.
   ///
-  /// - Parameter junitPath: what `{junit}` expands to when the area's command takes it.
-  public func resolve(in areas: [BrownfieldArea], junitPath: String?)
-    -> Result<AcceptanceTestCommand, AcceptanceTestUnresolved>
-  {
+  /// - Parameters:
+  ///   - junitPath: what `{junit}` expands to when the area's command takes it.
+  ///   - resultBundlePath: where an `xcode` area's `-only-testing:` command writes its result
+  ///     bundle, since `xcodebuild` writes no JUnit report.
+  public func resolve(
+    in areas: [BrownfieldArea], junitPath: String?, resultBundlePath: String? = nil
+  ) -> Result<AcceptanceTestCommand, AcceptanceTestUnresolved> {
     func unresolved(_ reason: String) -> Result<AcceptanceTestCommand, AcceptanceTestUnresolved> {
       .failure(AcceptanceTestUnresolved(reason: reason))
     }
@@ -114,11 +117,15 @@ public struct AcceptanceTestCommand: Sendable, Equatable {
   /// The area's root, repository-relative; the command runs there.
   public let root: String
   public let command: String
+  /// The result bundle the command writes, whose test tree shows whether a test ran; `nil` when
+  /// it writes none.
+  public let resultBundlePath: String?
 
-  public init(area: String, root: String, command: String) {
+  public init(area: String, root: String, command: String, resultBundlePath: String? = nil) {
     self.area = area
     self.root = root
     self.command = command
+    self.resultBundlePath = resultBundlePath
   }
 }
 

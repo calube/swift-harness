@@ -138,9 +138,9 @@ Xcode 26.2 (17C48), `xcresulttool` version 24514, schema 0.1.0. The subcommands 
 also exists but its failures carry no `file:line`, so the gate does not read it.
 
 `Xcresult/<scenario>.{tests.json,build-results.json,status}` are captured by
-`gate/Fixtures/xcresult/capture.sh` (run from the repository root). It clones the pinned
+`plugin/gate/Fixtures/xcresult/capture.sh` (run from the repository root). It clones the pinned
 simulator (iPhone 17, iOS 26.2), copies `examples/SampleApp/Packages` to a scratch directory, adds
-`gate/Fixtures/xcresult/XcresultProbeTests.swift` to the copy's `CounterUISnapshotTests` target,
+`plugin/gate/Fixtures/xcresult/XcresultProbeTests.swift` to the copy's `CounterUISnapshotTests` target,
 and runs `xcodebuild test -scheme CounterFeature-Package -skipMacroValidation
 -only-testing:CounterUISnapshotTests/<suite>…` per scenario with `-derivedDataPath` under
 `.harness/DerivedData/`. `status` is `xcodebuild`'s exit status. The script replaces the scratch
@@ -154,6 +154,8 @@ machine's device list from the "no destination" error; the rest is verbatim.
 | `skip` | `ProbeSkipXCTests`, `ProbeSkipSwiftTests` | exit 0; skip reasons for both frameworks |
 | `crash` | `ProbeCrashXCTests`, `ProbeCrashSwiftTests`, `ProbePassXCTests` | exit 65; the runner restarts after each crash and runs the rest |
 | `zero` | `NoSuchSuite` | exit 0; a `Test Plan` node with no children |
+| `missing-test` | `ProbePassXCTests/testNoSuchTest` (`capture.sh missing-test`) | exit 0; a method missing from a real class runs nothing, the same childless `Test Plan` node |
+| `one-test` | `ProbePassXCTests/testAdds` (`capture.sh one-test`) | exit 0; 1 passed `Test Case` |
 | `no-destination` | an all-zero device id | exit 70; empty device, no test nodes, an `Uncategorized` build error |
 | `build-error` | `ProbePassXCTests`, with the probe broken to not compile | exit 65; no test nodes; a `Swift Compiler Error` with a `sourceURL` |
 | `record` | `CounterViewSnapshotTests`, `ProbeFailXCTests`, with `RECORD=all` (`TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all`) | exit 65; the snapshot case fails with `Issue recorded: Record mode is on. Automatically recorded snapshot: …` beside a real assertion failure |

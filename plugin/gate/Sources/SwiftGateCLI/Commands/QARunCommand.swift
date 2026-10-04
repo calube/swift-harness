@@ -36,6 +36,8 @@ enum QARunRun {
     var pluginRoot: URL?
     /// What `--final` adds around each flow.
     var finalPass: QAFinalPass?
+    /// Reads the result bundle an `xcode` area's `test:` row writes.
+    var xcresults: any XcresultReader = LiveXcresultReader(runner: LiveProcessRunner())
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the

@@ -31,6 +31,8 @@ public struct QACheckJudgement: Sendable, Equatable {
     public var stderr: String
     /// Every report the check wrote, combined; `nil` when it wrote none.
     public var report: Data?
+    /// The result bundle an `xcode` area's `test:` row writes in place of a report.
+    public var resultBundle: ResultBundle?
     /// What the row runs, named in a message when no test ran: a `test:` row's id or the check.
     public var reference: String
     public var atBase: Bool
@@ -39,17 +41,26 @@ public struct QACheckJudgement: Sendable, Equatable {
     public var roots: [String]
 
     public init(
-      end: End, stdout: String, stderr: String, report: Data?, reference: String, atBase: Bool,
-      roots: [String]
+      end: End, stdout: String, stderr: String, report: Data?, resultBundle: ResultBundle? = nil,
+      reference: String, atBase: Bool, roots: [String]
     ) {
       self.end = end
       self.stdout = stdout
       self.stderr = stderr
       self.report = report
+      self.resultBundle = resultBundle
       self.reference = reference
       self.atBase = atBase
       self.roots = roots
     }
+  }
+
+  /// What a check's result bundle yielded.
+  public enum ResultBundle: Sendable, Equatable {
+    /// `xcresulttool get test-results tests`.
+    case tests(Data)
+    /// Why the bundle couldn't be read, such as `xcodebuild` never writing it.
+    case unread(String)
   }
 
   /// Exit 0 passes unless the check wrote a report showing no test ran, which is the expected red
