@@ -111,9 +111,15 @@ public enum WarmBuild {
         && isDirectory.boolValue
     }
     let builds = packageDirectories.map(buildDirectory(ofPackage:)).sorted()
+    // Only a state root inside the tree sits at the same relative path in every worktree.
+    let derivedData: String? =
+      switch StateRootResolver.resolve(worktree: root) {
+      case .tree: RunLayout.treePath(RunLayout.derivedDataDirectory)
+      case .gitDir: nil
+      }
     return Survey(
       packageBuilds: builds.filter(exists), missingPackageBuilds: builds.filter { !exists($0) },
-      derivedData: exists(HarnessGC.derivedDataDirectory) ? HarnessGC.derivedDataDirectory : nil)
+      derivedData: derivedData.flatMap { exists($0) ? $0 : nil })
   }
 }
 

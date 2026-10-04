@@ -103,7 +103,7 @@ enum TestJudgeCheck {
         makeJudge: {
           JudgeFactory.make(
             $0, runner: LiveProcessRunner(),
-            cacheDirectory: root.appending(path: FileJudgeCache.directoryName))
+            cacheDirectory: FileJudgeCache(worktree: root).directory)
         },
         diff: git,
         reasonJudge: JudgeBlockReason.liveJudge(root: root),
@@ -455,7 +455,7 @@ struct ConfiguredCommitCommentJudge: CommitCommentJudging {
           clock: clock, timeout: timeout)
       }
     return CachingJudge(
-      judge, cache: FileJudgeCache(directory: root.appending(path: FileJudgeCache.directoryName)))
+      judge, cache: FileJudgeCache(worktree: root))
   }
 
   /// Comments asked at once. Each Jev request is 1 HTTP call well under TypeSafe's rate limit, so

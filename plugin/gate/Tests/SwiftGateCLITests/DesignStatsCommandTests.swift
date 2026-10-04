@@ -111,7 +111,7 @@ struct DesignStatsCommandTests {
     phasesData.append(UInt8(ascii: "\n"))
     try repo.write(
       String(decoding: phasesData, as: UTF8.self),
-      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+      at: RunLayout.treePath(RunLayout.runDirectory(for: "design-\(slug)")) + "phases.jsonl")
 
     let probe = ProbeVerdictRecord(
       claimId: "ev-cancel-effect-works", verdict: .fail, diagnostics: [], pins: [:],
@@ -301,7 +301,7 @@ struct DesignStatsCommandTests {
     }
     try repo.write(
       String(decoding: phases, as: UTF8.self),
-      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+      at: RunLayout.treePath(RunLayout.runDirectory(for: "design-\(slug)")) + "phases.jsonl")
 
     let report = await DesignStatsRun.run(
       options: .init(design: Self.design, plan: "queue-plan", cacheHome: try repo.freshCacheHome()),
@@ -340,7 +340,7 @@ struct DesignStatsCommandTests {
     ]
     try repo.write(
       lines.joined(separator: "\n") + "\n",
-      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+      at: RunLayout.treePath(RunLayout.runDirectory(for: "design-\(slug)")) + "phases.jsonl")
 
     let report = await DesignStatsRun.run(
       options: .init(design: Self.design, plan: nil, cacheHome: try repo.freshCacheHome()),
@@ -373,7 +373,7 @@ struct DesignStatsCommandTests {
     let path = try repo.write(
       #"{"schemaVersion":1,"runId":"design-20260925T180000Z","phase":"draft","agentRole":"drafter","tokens":10,"costUSD":null,"wallMilliseconds":5,"model":"opus"}"#
         + "\n",
-      at: RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl")
+      at: RunLayout.treePath(RunLayout.runDirectory(for: "design-\(slug)")) + "phases.jsonl")
     let report = await DesignStatsRun.run(
       options: .init(design: Self.design, plan: nil, cacheHome: try repo.freshCacheHome()),
       root: repo.root, runner: LiveProcessRunner())

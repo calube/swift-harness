@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-/// Where a stream's sealed segments live, relative to the worktree root, and what each file of a
+/// Where a stream's sealed segments live, relative to the state root, and what each file of a
 /// segment is called. Segment `seq` of a stream is `<seq>.jsonl` while it waits to be sealed, then
 /// `<seq>.jsonl.lzfse` beside `<seq>.index.json`.
 public enum EventSegmentLayout {

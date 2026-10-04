@@ -259,15 +259,17 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
   public let runID: String
   public let directory: URL
   public let mode: Mode
+  private let state: StateRoot
 
   public init(root: URL, runID: String, mode: Mode) {
     self.runID = runID
     self.mode = mode
-    self.directory = root.appending(
-      path: RunLayout.runDirectory(for: runID) + Self.directoryName, directoryHint: .isDirectory)
+    self.state = StateRootResolver.resolve(worktree: root)
+    self.directory = state.url(
+      RunLayout.runDirectory(for: runID) + Self.directoryName, directoryHint: .isDirectory)
   }
 
-  /// A reply's path relative to the worktree root, as messages name it.
+  /// A reply's path as messages name it.
   public func replyPath(agent: String, seed: String) -> String {
     path(agent: agent, seed: seed, "txt")
   }
@@ -277,7 +279,8 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
   }
 
   private func path(agent: String, seed: String, _ suffix: String) -> String {
-    "\(RunLayout.runDirectory(for: runID))\(Self.directoryName)/\(agent)/\(seed).\(suffix)"
+    state.displayPath(
+      "\(RunLayout.runDirectory(for: runID))\(Self.directoryName)/\(agent)/\(seed).\(suffix)")
   }
 
   private func file(agent: String, seed: String, _ suffix: String) -> URL {
@@ -324,22 +327,23 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
   /// What every kept run under `root` says each requested model resolved to. No call is made:
   /// these are the served ids the CLI reported when the replies were kept.
   public static func observations(root: URL) -> Observations {
-    let runs = root.appending(path: RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let state = StateRootResolver.resolve(worktree: root)
+    let runs = state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
     let manager = FileManager.default
     var observations: [ServedModelObservation] = []
     var unreadable: [String] = []
     let runIDs = (try? manager.contentsOfDirectory(atPath: runs.path)) ?? []
     for runID in runIDs.sorted() where RunID.isValid(runID) {
       let kept = "\(RunLayout.runDirectory(for: runID))\(directoryName)"
-      let agents = (try? manager.contentsOfDirectory(atPath: root.appending(path: kept).path)) ?? []
+      let agents = (try? manager.contentsOfDirectory(atPath: state.url(kept).path)) ?? []
       for agent in agents.sorted() where !agent.hasPrefix(".") {
         let names =
-          (try? manager.contentsOfDirectory(atPath: root.appending(path: "\(kept)/\(agent)").path))
+          (try? manager.contentsOfDirectory(atPath: state.url("\(kept)/\(agent)").path))
           ?? []
         for name in names.sorted() where name.hasSuffix(".json") {
-          let path = "\(kept)/\(agent)/\(name)"
+          let path = state.displayPath("\(kept)/\(agent)/\(name)")
           guard
-            let data = try? Data(contentsOf: root.appending(path: path)),
+            let data = try? Data(contentsOf: state.url("\(kept)/\(agent)/\(name)")),
             let metadata = try? JSONDecoder().decode(Metadata.self, from: data),
             metadata.schemaVersion == Metadata.currentSchemaVersion
           else {

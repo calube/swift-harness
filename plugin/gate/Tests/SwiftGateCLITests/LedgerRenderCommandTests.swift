@@ -124,7 +124,7 @@ private struct LedgerRenderRepo {
   }
 
   var outputURL: URL {
-    root.appending(path: LedgerRenderRun.outputPath(for: Self.slug))
+    StateRoot.tree(root).url(LedgerRenderRun.outputPath(for: Self.slug))
   }
 
   func renderLedger() async -> LedgerRenderRun.Outcome {

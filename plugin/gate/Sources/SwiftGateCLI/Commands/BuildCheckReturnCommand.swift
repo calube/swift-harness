@@ -24,7 +24,6 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
 /// bases in scratch trees it removes. The judgement itself is ``TaskReturnCheck``.
 enum BuildCheckReturnRun {
   static let command = "build check-return"
-  static let taskStatusFile = ".harness/task-status.json"
 
   private struct Blocked: Error {
     let message: String
@@ -381,7 +380,7 @@ enum BuildCheckReturnRun {
   }
 
   private static func taskStatus(in worktree: URL) throws(Blocked) -> TaskStatusReport? {
-    let file = worktree.appending(path: taskStatusFile)
+    let file = StateRootResolver.resolve(worktree: worktree).url(RunLayout.taskStatusFile)
     let data: Data
     do {
       data = try Data(contentsOf: file)

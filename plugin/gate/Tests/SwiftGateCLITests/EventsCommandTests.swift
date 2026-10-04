@@ -36,7 +36,8 @@ struct EventsCommandTests {
     try HarnessEventFiles(root: root).append(contentsOf: [
       call("newer", at: 50), call("older", at: 10),
     ])
-    let handle = try FileHandle(forWritingTo: root.appending(path: RunLayout.eventsFile(.judge)))
+    let handle = try FileHandle(
+      forWritingTo: StateRoot.tree(root).url(RunLayout.eventsFile(.judge)))
     try handle.seekToEnd()
     try handle.write(contentsOf: Data("{\"eventID\"".utf8))
     try handle.close()

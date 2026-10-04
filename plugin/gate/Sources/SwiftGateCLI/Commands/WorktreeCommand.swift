@@ -261,19 +261,21 @@ enum WorktreeRun {
     case .nothing:
       return KeptEvents()
     case .copied(let storeID, let bytes):
-      let path = "\(EventCopyUp.importedDirectory)/\(storeID)"
+      let path = StateRootResolver.resolve(worktree: copyUp.destination)
+        .displayPath("\(EventCopyUp.importedDirectory)/\(storeID)")
       return KeptEvents(
         copied: .init(storeID: storeID, path: path, bytes: bytes, copied: true),
         message: "; copied its events (\(bytes) bytes) to \(path)")
     case .kept(let storeID, let bytes):
-      let path = "\(EventCopyUp.importedDirectory)/\(storeID)"
+      let path = StateRootResolver.resolve(worktree: copyUp.destination)
+        .displayPath("\(EventCopyUp.importedDirectory)/\(storeID)")
       return KeptEvents(
         copied: .init(storeID: storeID, path: path, bytes: bytes, copied: false),
         message: "; kept the earlier copy of its events in \(path)")
     }
   }
 
-  /// What `remove` copied out of a worktree's `.harness/runs/` before deleting it.
+  /// What `remove` copied out of a worktree's runs before deleting it.
   private struct KeptRuns {
     var kept: [String] = []
     var unkept: [WorktreeReport.UnkeptRun] = []
@@ -286,7 +288,7 @@ enum WorktreeRun {
   private static func keepRuns(of names: TaskWorktree) -> KeptRuns {
     let main = RunStore(
       worktreeRoot: URL(filePath: names.mainCheckout, directoryHint: .isDirectory))
-    let into = main.worktreeRoot.appending(path: RunLayout.runsDirectory).path
+    let into = main.state.url(RunLayout.runsDirectory).path
     let outcome: RunKeepOutcome
     do throws(RunStoreError) {
       outcome = try RunStore(worktreeRoot: URL(filePath: names.path, directoryHint: .isDirectory))
@@ -554,10 +556,10 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
     commandName: "remove",
     abstract: "Remove a merged task's worktree and branch, or with --fix its fix worktree.",
     discussion:
-      "Before removing, copies each gate run under the worktree's .harness/runs/ into the main "
-      + "checkout's, and its .harness/events/ to the main checkout's "
-      + ".harness/events/imported/<storeID>/; when that copy fails, moves them to "
-      + ".harness/events/unkept/<storeID>/ (or the git common dir's "
+      "Before removing, copies each gate run under the worktree's state root's runs/ (.harness/ "
+      + "in the tree, or swift-harness/ under its git dir) into the main checkout's, and its "
+      + "events/ to the main checkout's events/imported/<storeID>/; when that copy fails, moves "
+      + "them to events/unkept/<storeID>/ (or the git common dir's "
       + "swift-harness/unkept-events/<storeID>/), naming any it couldn't keep. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
       + "the ledger, or its branch is missing or not merged into main; 2 for a missing flag or a "
       + "failed git step, such as a worktree with uncommitted changes.")

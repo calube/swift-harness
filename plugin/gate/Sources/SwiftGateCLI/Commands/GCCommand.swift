@@ -13,7 +13,7 @@ struct GCSummary: Sendable, Equatable, Encodable {
 }
 
 /// `gc`: prunes this worktree's stale DerivedData and run directories and deletes simulator
-/// clones whose owning process died (spec §4.4). Only paths under `.harness/` are ever removed.
+/// clones whose owning process died (spec §4.4). Only paths under the state root are ever removed.
 enum GCRun {
   /// - Parameter eventsOlderThanDays: `nil` leaves every event file; a count removes each sealed
   ///   segment whose index's last time is older.
@@ -22,17 +22,18 @@ enum GCRun {
     sweepOrphans: () async throws -> [String]
   ) async -> GCSummary {
     var summary = GCSummary()
+    let state = StateRootResolver.resolve(worktree: root)
     let entries =
-      HarnessFiles.agedEntries(root: root, directory: HarnessGC.derivedDataDirectory)
+      HarnessFiles.agedEntries(root: state.directory, directory: RunLayout.derivedDataDirectory)
       + HarnessFiles.agedEntries(
-        root: root, directory: RunLayout.runsDirectory,
+        root: state.directory, directory: RunLayout.runsDirectory,
         excluding: [URL(filePath: RunLayout.historyFile).lastPathComponent])
     for path in HarnessGC.expired(entries, now: now, maxAgeDays: maxAgeDays) {
       do {
-        try FileManager.default.removeItem(at: root.appending(path: path))
-        summary.removed.append(path)
+        try FileManager.default.removeItem(at: state.url(path))
+        summary.removed.append(state.displayPath(path))
       } catch {
-        summary.errors.append("\(path): \(error.localizedDescription)")
+        summary.errors.append("\(state.displayPath(path)): \(error.localizedDescription)")
       }
     }
     if let days = eventsOlderThanDays {
@@ -48,13 +49,14 @@ enum GCRun {
   }
 
   /// Removes each sealed segment, with its index and rollup, whose index's last time is before
-  /// `cutoff`, in `.harness/events/` and every imported or unkept store below it. Never an active file, and never
+  /// `cutoff`, in the state root's `events/` and every imported or unkept store below it. Never an active file, and never
   /// a segment without an index, whose age isn't known. The index goes last, so a gc stopped
   /// halfway leaves it for the next to finish.
   private static func removeSealedEvents(
     root: URL, before cutoff: Date, into summary: inout GCSummary
   ) {
     let files = LiveEventStoreFiles(root: root)
+    let state = files.state
     func listed(_ directory: String) -> [String] {
       do throws(EventStoreFileError) {
         return try files.list(directory).filter { !$0.hasPrefix(".") }
@@ -79,7 +81,7 @@ enum GCRun {
             guard let data = try files.read(indexPath) else { continue }
             index = try EventSegmentIndex.decode(data)
           } catch {
-            summary.errors.append("\(indexPath): \(error)")
+            summary.errors.append("\(state.displayPath(indexPath)): \(error)")
             continue
           }
           guard index.lastTime < cutoff else { continue }
@@ -88,12 +90,12 @@ enum GCRun {
             "\(sequence).rollup.json", name,
           ].map({ "\(directory)/\($0)" }) {
             do {
-              try FileManager.default.removeItem(at: root.appending(path: path))
-              summary.removedEvents.append(path)
+              try FileManager.default.removeItem(at: state.url(path))
+              summary.removedEvents.append(state.displayPath(path))
             } catch CocoaError.fileNoSuchFile {
               continue
             } catch {
-              summary.errors.append("\(path): \(error.localizedDescription)")
+              summary.errors.append("\(state.displayPath(path)): \(error.localizedDescription)")
             }
           }
         }

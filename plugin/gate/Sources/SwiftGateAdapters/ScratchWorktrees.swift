@@ -56,7 +56,9 @@ public protocol ScratchWorktrees: Sendable {
 
 /// ``ScratchWorktrees`` over `git worktree`. Trees are hidden siblings of the repository's
 /// toplevel, `.<repo>-swiftgate-prove-<pid>-<token>`, so a tree whose process died (a killed run
-/// skips its cleanup) is recognisable and swept by the next run.
+/// skips its cleanup) is recognisable and swept by the next run. When the toplevel's state root is
+/// under its git dir, they go in that root's `scratch/` instead, so a clone the harness doesn't
+/// own gains no sibling directory.
 ///
 /// Beside the repository rather than in the system temporary directory so a scratch build shares
 /// the repository's volume and its orphans are found by name next to it.
@@ -70,7 +72,8 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
 
   /// - Parameters:
   ///   - repositoryRoot: any directory inside the repository.
-  ///   - directory: where scratch trees are made; `nil` for beside the repository's toplevel.
+  ///   - directory: where scratch trees are made; `nil` for beside the repository's toplevel, or
+  ///     the state root's `scratch/` when that root is under the git dir.
   public init(
     runner: any ProcessRunner, repositoryRoot: String, directory: URL? = nil,
     timeout: Duration = .seconds(300)
@@ -91,7 +94,12 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       filePath: try await git(["rev-parse", "--show-toplevel"], in: repositoryRoot)
         .trimmingCharacters(in: .whitespacesAndNewlines),
       directoryHint: .isDirectory)
-    let parent = directory ?? toplevel.deletingLastPathComponent()
+    let parent: URL
+    if let directory {
+      parent = directory
+    } else {
+      parent = try Self.defaultParent(of: toplevel)
+    }
     let prefix = ".\(toplevel.lastPathComponent)\(Self.nameMarker)"
     await sweepOrphans(in: parent, prefix: prefix, toplevel: toplevel)
     _ = try? await sweepRegisteredOrphans()
@@ -118,6 +126,18 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     let result = await body(scratch)
     await remove(scratch, toplevel: toplevel)
     return result
+  }
+
+  private static func defaultParent(of toplevel: URL) throws(ScratchWorktreeError) -> URL {
+    let state = StateRootResolver.resolve(worktree: toplevel)
+    guard case .gitDir = state else { return toplevel.deletingLastPathComponent() }
+    let parent = state.url(RunLayout.scratchDirectory, directoryHint: .isDirectory)
+    do {
+      try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    } catch {
+      throw .fileSystem("creating \(parent.path): \(error)")
+    }
+    return parent
   }
 
   private func populate(_ scratch: URL, from toplevel: URL, _ request: ScratchTreeRequest)

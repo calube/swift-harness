@@ -110,7 +110,8 @@ struct WorktreeRemoveEventsTests {
     try HarnessEventFiles(root: scenario.fixWorktree).append(Self.decision)
     let storeID = try JSONDecoder().decode(
       EventStoreIdentity.self,
-      from: Data(contentsOf: scenario.taskWorktree.appending(path: EventSegmentLayout.storeFile))
+      from: Data(
+        contentsOf: StateRoot.tree(scenario.taskWorktree).url(EventSegmentLayout.storeFile))
     ).storeID
 
     let removed = await scenario.remove(workspace: workspace)
@@ -119,7 +120,8 @@ struct WorktreeRemoveEventsTests {
     #expect(removed.verdict == .green)
     #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree.path))
     #expect(removed.events?.storeID == storeID)
-    #expect(removed.events?.path == "\(EventCopyUp.importedDirectory)/\(storeID)")
+    #expect(
+      removed.events?.path == RunLayout.treePath("\(EventCopyUp.importedDirectory)/\(storeID)"))
     #expect(removed.events?.copied == true)
     #expect(removed.unkeptEvents == nil)
     #expect(removed.message.contains(storeID), "\(removed.message)")
@@ -142,7 +144,7 @@ struct WorktreeRemoveEventsTests {
     let branch = "\(RemoveScenario.plan)/cli"
     let fake = FakeGitWorkspace(branches: [branch], merged: [branch])
     try HarnessEventFiles(root: scenario.taskWorktree).append(Self.decision)
-    let imported = scenario.main.appending(path: EventCopyUp.importedDirectory)
+    let imported = StateRoot.tree(scenario.main).url(EventCopyUp.importedDirectory)
     try FileManager.default.createDirectory(
       at: imported.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data("in the way".utf8).write(to: imported)
@@ -177,10 +179,11 @@ struct WorktreeRemoveEventsTests {
     try HarnessEventFiles(root: scenario.taskWorktree).append(Self.decision)
     let storeID = try JSONDecoder().decode(
       EventStoreIdentity.self,
-      from: Data(contentsOf: scenario.taskWorktree.appending(path: EventSegmentLayout.storeFile))
+      from: Data(
+        contentsOf: StateRoot.tree(scenario.taskWorktree).url(EventSegmentLayout.storeFile))
     ).storeID
     // A read-only imports directory fails the copy and still lists.
-    let imported = scenario.main.appending(path: EventCopyUp.importedDirectory)
+    let imported = StateRoot.tree(scenario.main).url(EventCopyUp.importedDirectory)
     try FileManager.default.createDirectory(at: imported, withIntermediateDirectories: true)
     #expect(chmod(imported.path, 0o555) == 0)
     defer { chmod(imported.path, 0o755) }
@@ -191,7 +194,7 @@ struct WorktreeRemoveEventsTests {
     #expect(removed.verdict == .green)
     #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree.path))
     let unkept = try #require(removed.unkeptEvents)
-    let target = scenario.main.appending(path: "\(EventCopyUp.unkeptDirectory)/\(storeID)")
+    let target = StateRoot.tree(scenario.main).url("\(EventCopyUp.unkeptDirectory)/\(storeID)")
     #expect(unkept.movedTo == target.path)
     #expect(unkept.moveError == nil)
     #expect(removed.message.contains(target.path), "\(removed.message)")
@@ -207,8 +210,8 @@ struct WorktreeRemoveEventsTests {
     let branch = "\(RemoveScenario.plan)/cli"
     let fake = FakeGitWorkspace(branches: [branch], merged: [branch])
     try HarnessEventFiles(root: scenario.taskWorktree).append(Self.decision)
-    try Self.block(scenario.main.appending(path: EventCopyUp.importedDirectory))
-    try Self.block(scenario.main.appending(path: EventCopyUp.unkeptDirectory))
+    try Self.block(StateRoot.tree(scenario.main).url(EventCopyUp.importedDirectory))
+    try Self.block(StateRoot.tree(scenario.main).url(EventCopyUp.unkeptDirectory))
     try Self.block(
       URL(filePath: scenario.commonDirectory).appending(path: EventCopyUp.commonUnkeptDirectory))
 

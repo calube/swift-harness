@@ -49,7 +49,7 @@ enum ImpactCheck {
     } catch {
       switch error.verdict {
       case .red:
-        return .invalid(reason: error.description, file: ImpactExemptions.fileName)
+        return .invalid(reason: error.description, file: ImpactExemptions.displayPath)
       case .blocked, .green:
         return .blocked(reason: error.description)
       }

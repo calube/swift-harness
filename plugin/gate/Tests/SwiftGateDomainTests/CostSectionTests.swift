@@ -165,7 +165,7 @@ struct CostSectionTests {
     ]
     var phasesFile = try Self.phases(records)
     phasesFile += Data("{\"schemaVersion\":1}\n".utf8)
-    let files = MemoryFiles(files: [".harness/runs/design-x/phases.jsonl": phasesFile])
+    let files = MemoryFiles(files: ["runs/design-x/phases.jsonl": phasesFile])
     func at(_ seconds: Double) -> Double { runStart.timeIntervalSince(Self.start) + seconds }
     let events = [
       Self.usage("a", at: at(59.999), cost: 1),
@@ -181,7 +181,7 @@ struct CostSectionTests {
     #expect(draft.n == 1)
     #expect(Self.metric(report, "outside-phase-windows", ["phase"])?.value == 1)
     #expect(
-      report.lines.contains { $0.contains(".harness/runs/design-x/phases.jsonl line 3") },
+      report.lines.contains { $0.contains("runs/design-x/phases.jsonl line 3") },
       "\(report.lines)")
   }
 

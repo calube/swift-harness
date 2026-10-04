@@ -73,7 +73,7 @@ enum JudgeAsk {
   static func caching(_ judge: any Judge, root: URL, noCache: Bool) -> any Judge {
     guard !noCache else { return judge }
     return CachingJudge(
-      judge, cache: FileJudgeCache(directory: root.appending(path: FileJudgeCache.directoryName)))
+      judge, cache: FileJudgeCache(worktree: root))
   }
 
   /// Every subject's answers as ``JudgeAskOutput`` JSON, or why the input or backend refused.

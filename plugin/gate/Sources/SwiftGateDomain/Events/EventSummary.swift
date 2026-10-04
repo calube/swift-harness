@@ -9,6 +9,12 @@ public protocol EventStoreFileReading: Sendable {
   func list(_ directory: String) throws(EventStoreFileError) -> [String]
   /// The file's size in bytes; `nil` when it doesn't exist.
   func size(_ path: String) throws(EventStoreFileError) -> Int?
+  /// `path` as damage and errors name it.
+  func displayPath(_ path: String) -> String
+}
+
+extension EventStoreFileReading {
+  public func displayPath(_ path: String) -> String { path }
 }
 
 public struct EventStoreFileError: Error, Sendable, Equatable, CustomStringConvertible {

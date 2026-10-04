@@ -50,7 +50,7 @@ public struct PlanLockCache: Sendable {
   }
 
   public var file: URL {
-    worktreeRoot.appending(path: HookStateStore.directory, directoryHint: .isDirectory)
+    HookStateStore(worktreeRoot: worktreeRoot).directoryURL
       .appending(path: Self.fileNamePrefix + sessionID + ".json")
   }
 

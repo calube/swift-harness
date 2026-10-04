@@ -15,11 +15,11 @@ struct EventCopyUpTests {
     let worktree = Store.temporaryRoot()
 
     var copyUp: EventCopyUp { EventCopyUp(source: worktree, destination: main) }
-    var imported: URL { main.appending(path: EventCopyUp.importedDirectory) }
+    var imported: URL { StateRoot.tree(main).url(EventCopyUp.importedDirectory) }
 
     func storeID(_ root: URL? = nil) throws -> String {
       let data = try Data(
-        contentsOf: (root ?? worktree).appending(path: EventSegmentLayout.storeFile))
+        contentsOf: StateRoot.tree(root ?? worktree).url(EventSegmentLayout.storeFile))
       return try JSONDecoder().decode(EventStoreIdentity.self, from: data).storeID
     }
 
@@ -55,7 +55,7 @@ struct EventCopyUpTests {
     let checkouts = Checkouts()
     defer { checkouts.remove() }
     try HarnessEventFiles(root: checkouts.main).append(Store.decision("main-own", second: 0))
-    let mainActive = checkouts.main.appending(path: RunLayout.eventsFile(.judge))
+    let mainActive = StateRoot.tree(checkouts.main).url(RunLayout.eventsFile(.judge))
     let mainBefore = try Data(contentsOf: mainActive)
     // Every write past 1 byte rotates, so the first batch is sealed and the last stays active.
     let sealing = HarnessEventFiles(root: checkouts.worktree, rotationBytes: { _ in 1 })
@@ -71,8 +71,10 @@ struct EventCopyUpTests {
               step: .appBuild, tier: nil, milliseconds: 7, verdict: .green, derivedData: .warm)))
       ),
     ])
-    let source = try Self.contents(checkouts.worktree.appending(path: RunLayout.eventsDirectory))
-      .filter { $0.key != "store.lock" }
+    let source = try Self.contents(
+      StateRoot.tree(checkouts.worktree).url(RunLayout.eventsDirectory)
+    )
+    .filter { $0.key != "store.lock" }
     #expect(source.keys.contains { $0.hasSuffix(".jsonl.lzfse") })
     #expect(source.keys.contains(HarnessEventStream.gate.fileName))
 
@@ -104,7 +106,7 @@ struct EventCopyUpTests {
     #expect(!FileManager.default.fileExists(atPath: checkouts.imported.path))
 
     let line = try HarnessEventJSON.encodeLine(Store.decision("before-identity"))
-    let active = checkouts.worktree.appending(path: RunLayout.eventsFile(.judge))
+    let active = StateRoot.tree(checkouts.worktree).url(RunLayout.eventsFile(.judge))
     try FileManager.default.createDirectory(
       at: active.deletingLastPathComponent(), withIntermediateDirectories: true)
     try line.write(to: active)
@@ -156,7 +158,7 @@ struct EventCopyUpTests {
         !$0.hasSuffix(".lock")
       } == [storeID])
 
-    let active = checkouts.worktree.appending(path: RunLayout.eventsFile(.judge))
+    let active = StateRoot.tree(checkouts.worktree).url(RunLayout.eventsFile(.judge))
     try Data().write(to: active)
     let inodeBeforeShrunk = Self.inode(target)
     guard case .kept = try checkouts.copyUp.run() else {
@@ -179,7 +181,7 @@ struct EventCopyUpTests {
     let target = checkouts.imported.appending(path: storeID)
     let earlier = try Self.contents(target)
     try writer.append(Store.decision("second", second: 1))
-    let active = checkouts.worktree.appending(path: RunLayout.eventsFile(.judge))
+    let active = StateRoot.tree(checkouts.worktree).url(RunLayout.eventsFile(.judge))
     #expect(chmod(active.path, 0) == 0)
     defer { chmod(active.path, 0o644) }
 
@@ -229,7 +231,7 @@ struct EventCopyUpTests {
     #expect(read.events.map(\.event.eventID) == ["from-first", "from-second"])
     #expect(read.damage.isEmpty)
     let imported = try FileManager.default.contentsOfDirectory(
-      atPath: main.appending(path: EventCopyUp.importedDirectory).path)
+      atPath: StateRoot.tree(main).url(EventCopyUp.importedDirectory).path)
     #expect(imported.filter { $0.hasPrefix(".") && !$0.hasSuffix(".lock") }.isEmpty)
   }
   @Test(
@@ -243,13 +245,13 @@ struct EventCopyUpTests {
       try? FileManager.default.removeItem(at: common)
     }
     try HarnessEventFiles(root: checkouts.worktree).append(Store.decision("moved", second: 0))
-    let events = checkouts.worktree.appending(path: RunLayout.eventsDirectory)
+    let events = StateRoot.tree(checkouts.worktree).url(RunLayout.eventsDirectory)
     let storeID = try checkouts.storeID()
     let activeInode = Self.inode(events.appending(path: HarnessEventStream.judge.fileName))
 
     let moved = try checkouts.copyUp.moveAside(commonDirectory: common)
 
-    let target = checkouts.main.appending(path: "\(EventCopyUp.unkeptDirectory)/\(storeID)")
+    let target = StateRoot.tree(checkouts.main).url("\(EventCopyUp.unkeptDirectory)/\(storeID)")
     #expect(moved == target.path)
     #expect(!FileManager.default.fileExists(atPath: events.path))
     #expect(Self.inode(target.appending(path: HarnessEventStream.judge.fileName)) == activeInode)
@@ -263,7 +265,7 @@ struct EventCopyUpTests {
     let otherID = try checkouts.storeID(other)
     let blocked = Store.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: blocked) }
-    let unkept = blocked.appending(path: EventCopyUp.unkeptDirectory)
+    let unkept = StateRoot.tree(blocked).url(EventCopyUp.unkeptDirectory)
     try FileManager.default.createDirectory(
       at: unkept.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data("in the way".utf8).write(to: unkept)
@@ -274,7 +276,8 @@ struct EventCopyUpTests {
     #expect(
       fellBack == common.appending(path: "\(EventCopyUp.commonUnkeptDirectory)/\(otherID)").path)
     #expect(
-      !FileManager.default.fileExists(atPath: other.appending(path: RunLayout.eventsDirectory).path)
+      !FileManager.default.fileExists(
+        atPath: StateRoot.tree(other).url(RunLayout.eventsDirectory).path)
     )
   }
 }

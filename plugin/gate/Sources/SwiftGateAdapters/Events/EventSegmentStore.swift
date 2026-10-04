@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
-/// The shared streams under `.harness/events/`: each stream's active file, which rotates into
+/// The shared streams under the state root's `events/`: each stream's active file, which rotates into
 /// numbered segments that are sealed with LZFSE beside an index, plus the store's identity and the
 /// guard's drop counts.
 ///
@@ -12,6 +12,7 @@ import SwiftGateDomain
 public struct EventSegmentStore: Sendable {
   /// The worktree root.
   public let root: URL
+  public let state: StateRoot
   public let rotationBytes: @Sendable (HarnessEventStream) -> Int
 
   public init(
@@ -19,15 +20,16 @@ public struct EventSegmentStore: Sendable {
     rotationBytes: @escaping @Sendable (HarnessEventStream) -> Int = { $0.rotationBytes }
   ) {
     self.root = root
+    self.state = StateRootResolver.resolve(worktree: root)
     self.rotationBytes = rotationBytes
   }
 
   public func activePath(_ stream: HarnessEventStream) -> String {
-    root.appending(path: RunLayout.eventsFile(stream)).path
+    state.url(RunLayout.eventsFile(stream)).path
   }
 
   public func sealedDirectory(_ stream: HarnessEventStream) -> URL {
-    root.appending(path: EventSegmentLayout.sealedDirectory(stream), directoryHint: .isDirectory)
+    state.url(EventSegmentLayout.sealedDirectory(stream), directoryHint: .isDirectory)
   }
 
   /// Appends `lines`, whole lines, in 1 write; then, when the active file has reached its
@@ -239,7 +241,7 @@ public struct EventSegmentStore: Sendable {
 
   /// The store's identity, created with a random id and salt by the first caller.
   public func identity() throws(HarnessEventWriteError) -> EventStoreIdentity {
-    let file = root.appending(path: EventSegmentLayout.storeFile)
+    let file = state.url(EventSegmentLayout.storeFile)
     if let existing = try Self.readIdentity(file) { return existing }
     return try withStoreLock { () throws(HarnessEventWriteError) -> EventStoreIdentity in
       if let existing = try Self.readIdentity(file) { return existing }
@@ -262,7 +264,7 @@ public struct EventSegmentStore: Sendable {
   public func countDropped(_ kind: HarnessEventKind, _ reason: EventPayloadGuard.Reason)
     throws(HarnessEventWriteError)
   {
-    let file = root.appending(path: EventSegmentLayout.droppedFile)
+    let file = state.url(EventSegmentLayout.droppedFile)
     try withStoreLock { () throws(HarnessEventWriteError) in
       var counts: EventDropCounts
       do throws(HarnessEventReadError) {
@@ -281,7 +283,7 @@ public struct EventSegmentStore: Sendable {
 
   /// What `dropped.json` holds; empty when nothing was dropped.
   public func dropped() throws(HarnessEventReadError) -> EventDropCounts {
-    let file = root.appending(path: EventSegmentLayout.droppedFile)
+    let file = state.url(EventSegmentLayout.droppedFile)
     do {
       return try JSONDecoder().decode(EventDropCounts.self, from: try Data(contentsOf: file))
     } catch CocoaError.fileReadNoSuchFile {
@@ -313,7 +315,7 @@ public struct EventSegmentStore: Sendable {
   private func withStoreLock<T>(_ body: () throws(HarnessEventWriteError) -> T)
     throws(HarnessEventWriteError) -> T
   {
-    let path = root.appending(path: EventSegmentLayout.lockFile).path
+    let path = state.url(EventSegmentLayout.lockFile).path
     let fd: Int32
     do throws(AppendOnlyFile.Failure) {
       try Self.makeDirectory(URL(filePath: path).deletingLastPathComponent())

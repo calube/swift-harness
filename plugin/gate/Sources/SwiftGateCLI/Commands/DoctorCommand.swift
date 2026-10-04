@@ -73,7 +73,7 @@ enum DoctorRun {
       } catch {
         record = nil
         let path =
-          (try? store.file(sessionID: sessionID).path) ?? SessionRecordStore.directory
+          (try? store.file(sessionID: sessionID).path) ?? store.displayDirectory
         unreadable.append(UnreadableSessionRecord(path: path, reason: error.description))
       }
     } else {
@@ -83,7 +83,7 @@ enum DoctorRun {
     }
     return PluginSessionFacts(
       sessionID: sessionID, recorded: record.map { recorded($0) }, unreadable: unreadable,
-      directory: SessionRecordStore.directory)
+      directory: store.displayDirectory)
   }
 
   private static func recorded(_ record: SessionRecord) -> RecordedPluginSession {

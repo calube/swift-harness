@@ -282,7 +282,7 @@ struct TestRollupTests {
       Self.result("Flaky/flips", .failed, run: "b", ms: 20, at: 11),
     ]
     let rollup = TestRollup(results: results)
-    let sealed = ".harness/events/sealed/test"
+    let sealed = EventSegmentLayout.sealedDirectory(.test)
     let files = MemoryFiles([
       "\(sealed)/1.jsonl.lzfse": Data("not read".utf8),
       "\(sealed)/1.rollup.json": try rollup.encoded(),

@@ -731,14 +731,19 @@ public protocol JudgeCache: Sendable {
   func store(_ answers: [JudgeAnswer], forKey key: String)
 }
 
-/// One JSON file per key under `.harness/judge-cache/`. A cache failure only costs a re-ask, so
+/// One JSON file per key under the state root's `judge-cache/`. A cache failure only costs a re-ask, so
 /// reads and writes never throw.
 public struct FileJudgeCache: JudgeCache {
-  public static let directoryName = ".harness/judge-cache"
   public let directory: URL
 
   public init(directory: URL) {
     self.directory = directory
+  }
+
+  /// The cache of the worktree at `worktree`.
+  public init(worktree: URL) {
+    self.directory = StateRootResolver.resolve(worktree: worktree)
+      .url(RunLayout.judgeCacheDirectory, directoryHint: .isDirectory)
   }
 
   public func answers(forKey key: String) -> [JudgeAnswer]? {

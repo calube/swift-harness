@@ -42,6 +42,8 @@ struct EventsSummaryRollupTests {
     func size(_ path: String) throws(EventStoreFileError) -> Int? {
       try inner.size(path)
     }
+
+    func displayPath(_ path: String) -> String { inner.displayPath(path) }
   }
 
   /// The captured push run's `test.result` lines and its `gate.run` line as copy `copy`, every
@@ -100,7 +102,7 @@ struct EventsSummaryRollupTests {
   }
 
   static func indexes(root: URL) throws -> [EventSegmentIndex] {
-    let directory = root.appending(path: sealed)
+    let directory = StateRoot.tree(root).url(sealed)
     return try FileManager.default.contentsOfDirectory(atPath: directory.path)
       .filter { $0.hasSuffix(".index.json") }
       .map { try EventSegmentIndex.decode(try Data(contentsOf: directory.appending(path: $0))) }
@@ -153,7 +155,7 @@ struct EventsSummaryRollupTests {
     let report = try Self.summary(files: CountingFiles(root: root))
 
     let indexes = try Self.indexes(root: root)
-    let activeFile = root.appending(path: RunLayout.eventsFile(.test))
+    let activeFile = StateRoot.tree(root).url(RunLayout.eventsFile(.test))
     let activeBytes = try Data(contentsOf: activeFile).count
     let store = try #require(Self.section(report, .store))
     let bytes = try #require(
@@ -173,7 +175,7 @@ struct EventsSummaryRollupTests {
     let root = try Self.store()
     defer { try? FileManager.default.removeItem(at: root) }
     let rollup = "\(Self.sealed)/\(EventSegmentLayout.rollupName(2))"
-    try FileManager.default.removeItem(at: root.appending(path: rollup))
+    try FileManager.default.removeItem(at: StateRoot.tree(root).url(rollup))
     let files = CountingFiles(root: root)
 
     let report = try Self.summary(files: files)
@@ -182,7 +184,10 @@ struct EventsSummaryRollupTests {
       Set(files.sealedTestSegments) == ["\(Self.sealed)/\(EventSegmentLayout.compressedName(2))"])
     let tests = try #require(Self.section(report, .tests))
     #expect(tests == Self.section(Self.fullDecode(root: root), .tests))
-    #expect(tests.lines.contains { $0.hasPrefix("damage: \(rollup)") && $0.contains("missing") })
+    #expect(
+      tests.lines.contains {
+        $0.hasPrefix("damage: \(RunLayout.treePath(rollup))") && $0.contains("missing")
+      })
     let bytes = try #require(
       Self.section(report, .store)?.metrics.first {
         $0.name == "bytes" && $0.group == ["test.result"]

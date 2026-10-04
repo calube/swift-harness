@@ -308,7 +308,7 @@ struct CalibrateDesignCommandTests {
       try Self.recordedModels(repository) == [
         "design-challenger/refuted-api haiku", "design-claim-checker/overstated-claim haiku",
       ])
-    let runs = repository.root.appending(path: RunLayout.runsDirectory)
+    let runs = StateRoot.tree(repository.root).url(RunLayout.runsDirectory)
     let reported = try FileManager.default.contentsOfDirectory(atPath: runs.path).filter {
       FileManager.default.fileExists(
         atPath: runs.appending(path: "\($0)/\(RunLayout.reportFileName)").path)
@@ -317,7 +317,8 @@ struct CalibrateDesignCommandTests {
     let kept = try #require(
       reported.first.map {
         repository.data(
-          "\(RunLayout.runDirectory(for: $0))calibrate-design/design-challenger/refuted-api.txt")
+          "\(RunLayout.treePath(RunLayout.runDirectory(for: $0)))calibrate-design/design-challenger/refuted-api.txt"
+        )
       })
     #expect(kept == Data(reply.utf8))
   }
@@ -547,7 +548,7 @@ struct CalibrateDesignCommandTests {
   }
 
   static func keptPath(agent: String, seed: String, _ suffix: String) -> String {
-    "\(RunLayout.runDirectory(for: keptRunID))calibrate-design/\(agent)/\(seed).\(suffix)"
+    "\(RunLayout.treePath(RunLayout.runDirectory(for: keptRunID)))calibrate-design/\(agent)/\(seed).\(suffix)"
   }
 
   static func agentRuns(_ runner: FakeProcessRunner) -> [ProcessInvocation] {

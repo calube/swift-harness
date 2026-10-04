@@ -765,7 +765,8 @@ enum AppBuildCheck {
   static let directory = "app-build"
 
   static func derivedDataDirectory(root: URL) -> URL {
-    root.appending(path: HarnessGC.derivedDataDirectory, directoryHint: .isDirectory)
+    StateRootResolver.resolve(worktree: root)
+      .url(RunLayout.derivedDataDirectory, directoryHint: .isDirectory)
       .appending(path: directory, directoryHint: .isDirectory)
   }
 

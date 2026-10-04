@@ -678,13 +678,13 @@ public enum TaskReturnCheck {
           rule: .designConflictUnrecorded,
           message:
             "the return reports a design conflict, but the task worktree's "
-            + ".harness/task-status.json holds no design-conflict report"))
+            + "\(RunLayout.taskStatusFile) holds no design-conflict report"))
     case (nil, .some):
       findings.append(
         .init(
           rule: .designConflictUnreturned,
           message:
-            "the task worktree's .harness/task-status.json reports a design conflict the return leaves out"
+            "the task worktree's \(RunLayout.taskStatusFile) reports a design conflict the return leaves out"
         ))
     case (.some(let returned), .some(let status)):
       if returned != status.report || status.task != taskReturn.task {
@@ -692,7 +692,7 @@ public enum TaskReturnCheck {
           .init(
             rule: .designConflictMismatch,
             message:
-              "the return's designConflict differs from the task worktree's .harness/task-status.json"
+              "the return's designConflict differs from the task worktree's \(RunLayout.taskStatusFile)"
           ))
       }
     }

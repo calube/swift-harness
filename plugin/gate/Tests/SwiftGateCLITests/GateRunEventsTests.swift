@@ -165,7 +165,8 @@ struct GateRunEventsTests {
     #expect(
       FileManager.default.fileExists(atPath: runDirectory.appending(path: "report.json").path))
     let events = { (root: URL) in
-      FileManager.default.fileExists(atPath: root.appending(path: RunLayout.eventsDirectory).path)
+      FileManager.default.fileExists(
+        atPath: StateRoot.tree(root).url(RunLayout.eventsDirectory).path)
     }
     #expect(!events(off.root))
     #expect(events(on.root))

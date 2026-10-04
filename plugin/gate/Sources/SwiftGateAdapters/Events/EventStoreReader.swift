@@ -2,41 +2,48 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
-/// Files under a worktree root, read from disk.
+/// Reads ``RunLayout`` paths under the state root of the worktree at `root`. An error names the
+/// path as ``StateRoot/displayPath(_:)`` does.
 public struct LiveEventStoreFiles: EventStoreFileReading {
   public let root: URL
+  public let state: StateRoot
 
   public init(root: URL) {
     self.root = root
+    self.state = StateRootResolver.resolve(worktree: root)
   }
+
+  public func displayPath(_ path: String) -> String { state.displayPath(path) }
 
   public func read(_ path: String) throws(EventStoreFileError) -> Data? {
     do {
-      return try Data(contentsOf: root.appending(path: path))
+      return try Data(contentsOf: state.url(path))
     } catch CocoaError.fileReadNoSuchFile {
       return nil
     } catch {
-      throw EventStoreFileError(path: path, reason: error.localizedDescription)
+      throw EventStoreFileError(path: state.displayPath(path), reason: error.localizedDescription)
     }
   }
 
   public func list(_ directory: String) throws(EventStoreFileError) -> [String] {
     do {
       return try FileManager.default.contentsOfDirectory(
-        atPath: root.appending(path: directory).path
+        atPath: state.url(directory).path
       ).sorted()
     } catch CocoaError.fileReadNoSuchFile {
       return []
     } catch {
-      throw EventStoreFileError(path: directory, reason: error.localizedDescription)
+      throw EventStoreFileError(
+        path: state.displayPath(directory), reason: error.localizedDescription)
     }
   }
 
   public func size(_ path: String) throws(EventStoreFileError) -> Int? {
     var info = stat()
-    guard stat(root.appending(path: path).path, &info) == 0 else {
+    guard stat(state.url(path).path, &info) == 0 else {
       if errno == ENOENT { return nil }
-      throw EventStoreFileError(path: path, reason: String(cString: strerror(errno)))
+      throw EventStoreFileError(
+        path: state.displayPath(path), reason: String(cString: strerror(errno)))
     }
     return Int(info.st_size)
   }
@@ -56,7 +63,7 @@ public struct EventStoreRead: Sendable, Equatable {
   }
 }
 
-/// Reads `.harness/events/` and every `imported/<storeID>/` and `unkept/<storeID>/` below it: each stream's sealed
+/// Reads the state root's `events/` and every `imported/<storeID>/` and `unkept/<storeID>/` below it: each stream's sealed
 /// segments, then its active file. A segment whose index rules it out of the query is never
 /// opened. Takes no lock: writers only append and rename.
 public struct EventStoreReader: Sendable {
@@ -181,7 +188,7 @@ public struct EventStoreReader: Sendable {
             do {
               index = try EventSegmentIndex.decode(data)
             } catch {
-              throw EventStoreFileError(path: indexPath, reason: "\(error)")
+              throw EventStoreFileError(path: files.displayPath(indexPath), reason: "\(error)")
             }
           }
           if let index, !query.mayMatch(index) { continue }
@@ -208,7 +215,7 @@ public struct EventStoreReader: Sendable {
         else {
           continue
         }
-        let lines = EventLines.decode(data, file: path)
+        let lines = EventLines.decode(data, file: files.displayPath(path))
         result.events += lines.events
         result.damage += lines.damage
       } catch {
@@ -219,7 +226,7 @@ public struct EventStoreReader: Sendable {
     do throws(EventStoreFileError) {
       activeBytes = try files.size(active) ?? 0
       if wanted, let data = try files.read(active) {
-        let lines = EventLines.decode(data, file: active)
+        let lines = EventLines.decode(data, file: files.displayPath(active))
         result.events += lines.events
         result.damage += lines.damage
       }
@@ -243,7 +250,8 @@ public struct EventStoreReader: Sendable {
     do {
       return (compressed, try (packed as NSData).decompressed(using: .lzfse) as Data)
     } catch {
-      throw EventStoreFileError(path: compressed, reason: "decompress: \(error)")
+      throw EventStoreFileError(
+        path: files.displayPath(compressed), reason: "decompress: \(error)")
     }
   }
 
@@ -253,7 +261,7 @@ public struct EventStoreReader: Sendable {
     do {
       return try JSONDecoder().decode(EventDropCounts.self, from: data)
     } catch {
-      throw EventStoreFileError(path: path, reason: "\(error)")
+      throw EventStoreFileError(path: files.displayPath(path), reason: "\(error)")
     }
   }
 }

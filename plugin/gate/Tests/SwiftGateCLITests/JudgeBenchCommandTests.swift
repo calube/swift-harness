@@ -170,7 +170,7 @@ struct JudgeBenchCommandTests {
     #expect(liveJev.identity == JudgeIdentity(backend: "jev", model: "jev-1.13.0"))
     #expect(
       !FileManager.default.fileExists(
-        atPath: root.appending(path: FileJudgeCache.directoryName).path))
+        atPath: FileJudgeCache(worktree: root).directory.path))
   }
 
   @Test(

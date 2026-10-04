@@ -3,8 +3,6 @@ import Foundation
 /// What `swiftgate gc` prunes: per-worktree DerivedData and run directories untouched for longer
 /// than the cutoff (spec §4.4, disk is what breaks first at 10×).
 public enum HarnessGC {
-  public static let derivedDataDirectory = ".harness/derived-data"
-
   public struct Entry: Sendable, Equatable {
     public let path: String
     /// The newest modification time of the entry or its immediate children; a build writing into

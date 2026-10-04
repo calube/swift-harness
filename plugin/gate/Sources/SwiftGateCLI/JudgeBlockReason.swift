@@ -13,7 +13,7 @@ enum JudgeBlockReason {
   static func liveJudge(root: URL, runner: any ProcessRunner = LiveProcessRunner()) -> any Judge {
     CachingJudge(
       ClaudeCLIJudge(runner: KeylessProcessRunner(inner: runner), model: JudgeFactory.defaultModel),
-      cache: FileJudgeCache(directory: root.appending(path: FileJudgeCache.directoryName)))
+      cache: FileJudgeCache(worktree: root))
   }
 
   /// `findings` with Claude's reason on each major finding `identity` decided, when `identity`'s

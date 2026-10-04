@@ -239,9 +239,10 @@ enum ContextPackRun {
       return .violation(message: "\(error)")
     }
 
-    let relativePath = outputPath(role: role, key: key)
+    let state = StateRootResolver.resolve(worktree: root)
+    let relativePath = state.displayPath(outputPath(role: role, key: key))
     do {
-      try write(render(pack: pack, notes: notes), to: root.appending(path: relativePath))
+      try write(render(pack: pack, notes: notes), to: state.url(outputPath(role: role, key: key)))
     } catch {
       return .invalid(message: "can't write `\(relativePath)`: \(error.localizedDescription)")
     }
@@ -1050,7 +1051,7 @@ enum ContextPackRun {
 
   private static func outputPath(role: ContextPackRole, key: ContextPackKey?) -> String {
     let suffix = key.map { "-\($0.value)" } ?? ""
-    return ".harness/context-pack/\(role.rawValue)\(suffix).md"
+    return "\(RunLayout.contextPackDirectory)/\(role.rawValue)\(suffix).md"
   }
 
   private static func render(pack: ContextPack, notes: [String]) -> String {
@@ -1148,7 +1149,7 @@ struct ContextPackCommand: AsyncParsableCommand {
       "Slice verbatim, anchor-selected inputs for one agent role (spec §5.10). Never summarises.",
     discussion:
       "Gathers one role's inputs from disk (paths are repo-relative) and writes "
-      + ".harness/context-pack/<role>[-<key>].md, printing the token estimate (UTF-8 bytes / 4). "
+      + "context-pack/<role>[-<key>].md under the harness state directory, printing the token estimate (UTF-8 bytes / 4). "
       + "Every role honours --key, which must be one file-name component. "
       + "Exit 0 once the pack is written. Exit 2 for a bad --role, a missing or unreadable "
       + "required input, an unsafe --key, an unknown --module-kind, a research-lane --key that "

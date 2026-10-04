@@ -54,14 +54,14 @@ struct HookAdaptersTests {
     #expect(store.stopState(session: "other") == StopState())
     #expect(store.lastGreen() == "abc")
     let ignore = try String(
-      contentsOf: root.appending(path: "\(HookStateStore.directory)/.gitignore"), encoding: .utf8)
+      contentsOf: store.directoryURL.appending(path: ".gitignore"), encoding: .utf8)
     #expect(ignore == "*\n")
     let files = try FileManager.default.contentsOfDirectory(
-      atPath: root.appending(path: HookStateStore.directory).path)
+      atPath: store.directoryURL.path)
     #expect(files.allSatisfy { !$0.contains("/") && !$0.hasPrefix("..") })
 
     try Data("{not json".utf8).write(
-      to: root.appending(path: HookStateStore.directory).appending(
+      to: store.directoryURL.appending(
         path: files.first { $0.hasPrefix("stop-") } ?? "x"))
     #expect(store.stopState(session: "session/../a") == StopState())
   }

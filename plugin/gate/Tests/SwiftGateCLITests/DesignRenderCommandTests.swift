@@ -40,7 +40,7 @@ struct DesignRenderCommandTests {
       try Data(text.utf8).write(to: url)
     }
 
-    var outputURL: URL { root.appending(path: DesignRenderRun.outputPath(for: docPath)) }
+    var outputURL: URL { StateRoot.tree(root).url(DesignRenderRun.outputPath(for: docPath)) }
 
     func run() async -> DesignRenderRun.Outcome {
       await DesignRenderRun.run(

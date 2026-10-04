@@ -77,7 +77,9 @@ enum GateRun {
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
         testResults: context.tests.cases)
     }
-    Console.write(try ReportRenderer.render(report, format: format))
+    Console.write(
+      try ReportRenderer.render(
+        report, format: format, state: StateRootResolver.resolve(worktree: root)))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
   }

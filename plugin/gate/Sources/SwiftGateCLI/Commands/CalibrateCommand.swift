@@ -25,7 +25,7 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
       + "judge's backend, model and served ids, and the content hash of "
       + "\(DesignCalibrationLayout.agentsDirectory)/design-*.md and "
       + "\(DesignCalibrationLayout.workflowsDirectory)/design-*.js. Each agent's reply is kept "
-      + "unmodified at \(RunLayout.runsDirectory)/<run id>/\(DesignCalibrationReplies.directoryName)/"
+      + "unmodified at \(RunLayout.treePath(RunLayout.runsDirectory))/<run id>/\(DesignCalibrationReplies.directoryName)/"
       + "<agent>/<case>.txt, with the requested and served models in <case>.json. `--replay <run "
       + "id>` judges those replies instead of running the agents, and never writes the record. "
       + "`--judge-backend jev` judges through Jev with TYPESAFE_API_KEY, which sends each "
@@ -101,7 +101,8 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
   func validate() throws {
     guard let replay else { return }
     guard RunID.isValid(replay) else {
-      throw ValidationError("--replay takes a run id under \(RunLayout.runsDirectory)/")
+      throw ValidationError(
+        "--replay takes a run id under \(RunLayout.treePath(RunLayout.runsDirectory))/")
     }
     guard model == nil else {
       throw ValidationError("--replay judges replies already made; it can't take --model")

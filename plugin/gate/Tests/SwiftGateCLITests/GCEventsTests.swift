@@ -24,7 +24,7 @@ struct GCEventsTests {
 
   /// Every regular file under `root`'s `.harness/events/`, relative to `root`.
   static func eventFiles(_ root: URL) throws -> Set<String> {
-    let events = root.appending(path: RunLayout.eventsDirectory)
+    let events = StateRoot.tree(root).url(RunLayout.eventsDirectory)
     var found: Set<String> = []
     for path in try FileManager.default.subpathsOfDirectory(atPath: events.path) {
       var isDirectory: ObjCBool = false
@@ -45,12 +45,12 @@ struct GCEventsTests {
     try sealing.append(event("forty-days", daysAgo: 40))
     try sealing.append(event("ten-days", daysAgo: 10))
     try HarnessEventFiles(root: root).append(event("active", daysAgo: 50))
-    let sealed = root.appending(path: EventSegmentLayout.sealedDirectory(.judge))
+    let sealed = StateRoot.tree(root).url(EventSegmentLayout.sealedDirectory(.judge))
     try Data("{}".utf8).write(to: sealed.appending(path: "1.rollup.json"))
     for name in try FileManager.default.contentsOfDirectory(atPath: sealed.path) {
       try setModified(sealed.appending(path: name), daysAgo: name.hasPrefix("1.") ? 1 : 60)
     }
-    try setModified(root.appending(path: RunLayout.eventsFile(.judge)), daysAgo: 60)
+    try setModified(StateRoot.tree(root).url(RunLayout.eventsFile(.judge)), daysAgo: 60)
   }
 
   @Test(
@@ -63,11 +63,11 @@ struct GCEventsTests {
     try Self.makeStore(root)
     let worker = root.appending(path: "worker", directoryHint: .isDirectory)
     try Self.makeStore(worker)
-    let imported = root.appending(path: "\(EventCopyUp.importedDirectory)/store-1")
+    let imported = StateRoot.tree(root).url("\(EventCopyUp.importedDirectory)/store-1")
     try FileManager.default.createDirectory(
       at: imported.deletingLastPathComponent(), withIntermediateDirectories: true)
     try FileManager.default.moveItem(
-      at: worker.appending(path: RunLayout.eventsDirectory), to: imported)
+      at: StateRoot.tree(worker).url(RunLayout.eventsDirectory), to: imported)
     let before = try Self.eventFiles(root)
 
     let plain = await GCRun.run(root: root, maxAgeDays: 7, now: Self.now) { [String]() }
@@ -86,7 +86,7 @@ struct GCEventsTests {
         ["1.jsonl.lzfse", "1.index.json", "1.rollup.json"].map { "\(directory)/\($0)" }
       })
     #expect(summary.errors.isEmpty, "\(summary.errors)")
-    #expect(Set(summary.removedEvents) == gone)
+    #expect(Set(summary.removedEvents) == Set(gone.map(RunLayout.treePath)))
     #expect(try Self.eventFiles(root) == before.subtracting(gone))
     #expect(before.contains(RunLayout.eventsFile(.judge)))
     #expect(before.contains("\(sealed)/2.jsonl.lzfse"))
