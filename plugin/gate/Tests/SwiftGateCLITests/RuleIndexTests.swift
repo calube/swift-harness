@@ -169,6 +169,7 @@ extension RuleIndexTests {
       QAReport.checkPassesAtBaseRuleID, FlowRules.unparsedRuleID, FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
       FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
+      QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,
     ]
     return DesignLintRule.allCases.map(\.rawValue) + docsLint + planLint + build + other
       + enumeratedFamilies.values.flatMap { $0 }
