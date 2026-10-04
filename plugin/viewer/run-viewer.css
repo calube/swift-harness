@@ -220,6 +220,7 @@ html.drawer-open { overflow: hidden; }
 .props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
 .props dd.block { display: block; }
 .muted { color: var(--muted); }
+.nowrap { white-space: nowrap; }
 .drawer .sub { color: var(--muted); font-size: 12px; margin: 0; }
 .label-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
 .label-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }

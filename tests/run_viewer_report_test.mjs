@@ -197,7 +197,7 @@ function expectedBadges(view) {
 async function cardPopover(page, task) {
   await page.evaluate(`document.querySelector('[role=tab][data-tab="board"]').click()`)
   await page.evaluate(`document.querySelector('.card[data-task="${task}"]').click()`)
-  const read = await page.evaluate("({ hidden: document.getElementById('pop').hidden, title: document.getElementById('pop-title').textContent, text: document.getElementById('pop').innerText })")
+  const read = await page.evaluate(`({ hidden: document.getElementById('pop').hidden, title: document.getElementById('pop-title').textContent, text: document.getElementById('pop').innerText, cardText: document.querySelector('.card[data-task="${task}"]').innerText })`)
   await page.press('Escape')
   return read
 }
@@ -284,6 +284,7 @@ const tests = {
     assert.match(card.text, /no return of it was stored/)
     assert.match(card.text, /neutral\.lint/)
     assert.doesNotMatch(card.text, /null|undefined/, 'a brownfield task with no model reads null')
+    assert.doesNotMatch(card.cardText, /null/, 'the board card of a task with no model reads null')
     assert.equal(blocked.popover.hidden, false)
     assert.match(blocked.popover.text, /why it stopped/i)
     assert.match(blocked.popover.text, /stopped\s+at \d\d:\d\d UTC: no return of it was stored/)

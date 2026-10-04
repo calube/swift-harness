@@ -541,7 +541,7 @@
           <td>${esc(lanes[t.id] || "queued")}</td>
           <td>${g ? verdictChip(g.verdict) : `<span class="sub">none</span>`}</td>
           <td><div class="tags">${commits || `<span class="sub">none</span>`}</div></td>
-          <td class="num">${ts ? esc(M.durationText(ts)) : `<span class="sub">waiting</span>`}</td></tr>`;
+          <td class="num nowrap">${ts ? esc(M.durationText(ts)) : `<span class="sub">${t.status === "pending" ? "waiting" : "no task span"}</span>`}</td></tr>`;
       }).join("") + `</tbody>`;
     // An unchanged table keeps its rows, so a poll leaves a focused row and the drawer's opener in place.
     if (html === taskTableHtml) return;
@@ -577,7 +577,7 @@
     const rows = (t.brief ? [["goal", t.brief.title]] : []).concat([
       ["status", t.status, `<span class="chip ${statusChip[t.status] || "plain"}">${esc(t.status)}</span>`],
       ["column", laneMap()[id] || "queued"],
-      ["worker", [t.model, ts ? M.durationText(ts) : "waiting"].filter(Boolean).join(" · ")],
+      ["worker", [t.model, ts ? M.durationText(ts) : t.status === "pending" ? "waiting" : "no task span"].filter(Boolean).join(" · ")],
       ["deps", "none", tags(deps)],
       ["latest gate", "none", g ? `${verdictChip(g.verdict)} <span class="mono">${esc(g.runId)}</span>` : null],
       ["commits", "none yet", tags(commits)],
