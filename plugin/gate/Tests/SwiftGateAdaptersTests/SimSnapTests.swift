@@ -167,13 +167,14 @@ struct SimSnapTests {
     #expect(steps.map(\.assert) == [nil, "Counter"])
     let target = AgentDeviceTarget(
       udid: "MADE-1", session: SimSession.agentDeviceSessionName(runID: Self.runID))
-    #expect(device.fake.calls.count == 6)
-    #expect(device.fake.calls.allSatisfy { call in
+    let targets = device.fake.calls.compactMap { call -> AgentDeviceTarget? in
       switch call {
-      case .snapshot(let used), .screenshot(_, let used): used == target
-      default: false
+      case .snapshot(let used), .screenshot(_, let used): used
+      default: nil
       }
-    })
+    }
+    #expect(device.fake.calls.count == 6)
+    #expect(targets == Array(repeating: target, count: 6))
   }
 
   @Test(
@@ -201,7 +202,9 @@ struct SimSnapTests {
     let changed = Data(
       captured.replacingOccurrences(of: "\"label\": \"SampleApp\"", with: "\"label\": \"Next\"")
         .utf8)
-    let snapped = try await snap(try device(snapshots: [.success(Data(captured.utf8)), .success(changed)])).get()
+    let snapped = try await snap(
+      try device(snapshots: [.success(Data(captured.utf8)), .success(changed)])
+    ).get()
     #expect(snapped.step.settled == false)
     #expect(
       try Data(contentsOf: simDirectory(Self.runID).appending(path: "steps/001.tree.json"))

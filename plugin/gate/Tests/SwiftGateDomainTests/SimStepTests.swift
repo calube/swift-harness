@@ -49,7 +49,9 @@ struct SimStepTests {
     "a step line decodes back to the same step, and an unknown key, a missing key or an empty label fails naming it — catches a step log sim verify half-reads"
   )
   func roundTripAndStrict() throws {
-    for step in [Self.step(1), Self.step(7, assert: "Saved", settled: false), Self.step(2, settled: nil)] {
+    for step in [
+      Self.step(1), Self.step(7, assert: "Saved", settled: false), Self.step(2, settled: nil),
+    ] {
       #expect(try SimStep.decode(line: step.line()) == step)
     }
     var object = try Self.object(Self.step(1).line())
