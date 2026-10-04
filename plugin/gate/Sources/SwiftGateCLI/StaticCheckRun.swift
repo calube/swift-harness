@@ -36,7 +36,9 @@ enum StaticCheckRun {
         report, finishedAt: Date(), command: command, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty)
     }
-    Console.write(try ReportRenderer.render(report, format: format))
+    Console.write(
+      try ReportRenderer.render(
+        report, format: format, state: StateRootResolver.resolve(worktree: root)))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
   }

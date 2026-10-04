@@ -122,7 +122,7 @@ struct JudgeEventRecord: Sendable {
     return
       (try? Finding(
         ruleID: TestJudgeCheck.eventsUnwrittenRuleID, severity: .nit,
-        file: RunLayout.eventsFile(.judge), line: nil,
+        file: RunLayout.treePath(RunLayout.eventsFile(.judge)), line: nil,
         message:
           "\(failures.count) judge events not written to \(paths.joined(separator: ", ")): "
           + "\(first.reason); the verdict stands",

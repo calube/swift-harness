@@ -11,8 +11,8 @@ struct EventStoreReaderRolledUpTests {
   static func index(_ root: URL, _ sequence: Int) throws -> EventSegmentIndex {
     try EventSegmentIndex.decode(
       Data(
-        contentsOf: root.appending(
-          path: "\(Captured.sealed)/\(EventSegmentLayout.indexName(sequence))")))
+        contentsOf: StateRoot.tree(root).url(
+          "\(Captured.sealed)/\(EventSegmentLayout.indexName(sequence))")))
   }
 
   @Test(
@@ -47,7 +47,7 @@ struct EventStoreReaderRolledUpTests {
     let root = try Captured.capturedStore(runs: 2, rotationBytes: 1 << 20)
     defer { try? FileManager.default.removeItem(at: root) }
     try FileManager.default.removeItem(
-      at: root.appending(path: "\(Captured.sealed)/\(EventSegmentLayout.indexName(1))"))
+      at: StateRoot.tree(root).url("\(Captured.sealed)/\(EventSegmentLayout.indexName(1))"))
     let files = Counting(root: root)
 
     let read = EventStoreReader(files: files).read(

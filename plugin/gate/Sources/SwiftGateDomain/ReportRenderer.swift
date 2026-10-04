@@ -12,9 +12,12 @@ public enum OutputFormat: Sendable, Equatable {
 public enum ReportRenderer {
   public static let maxHumanLines = 30
 
-  public static func render(_ report: RunReport, format: OutputFormat) throws -> String {
+  /// - Parameter state: where the run's details live; `nil` names them inside the tree.
+  public static func render(
+    _ report: RunReport, format: OutputFormat, state: StateRoot? = nil
+  ) throws -> String {
     switch format {
-    case .human: human(report)
+    case .human: human(report, state: state)
     case .json: String(decoding: try RunReportJSON.encode(report), as: UTF8.self)
     }
   }
@@ -22,7 +25,7 @@ public enum ReportRenderer {
   /// Longest rendered finding message; the rest is in the full report.
   public static let maxMessageCharacters = 160
 
-  public static func human(_ report: RunReport) -> String {
+  public static func human(_ report: RunReport, state: StateRoot? = nil) -> String {
     var header = [
       "swiftgate \(report.verdict.rawValue) · run \(report.runID) · "
         + duration(report.durationMilliseconds)
@@ -39,7 +42,10 @@ public enum ReportRenderer {
       let perRule = report.allowances.map { "\($0.ruleID) \($0.count)" }.joined(separator: ", ")
       header.append("allowed: \(report.allowanceTotal) (\(oneLine(perRule)))")
     }
-    let footer = "details: \(RunLayout.runDirectory(for: report.runID))"
+    let footer =
+      "details: "
+      + (state?.displayPath(RunLayout.runDirectory(for: report.runID))
+        ?? RunLayout.treePath(RunLayout.runDirectory(for: report.runID)))
 
     guard !report.findings.isEmpty else { return (header + [footer]).joined(separator: "\n") }
 

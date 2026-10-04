@@ -418,13 +418,14 @@ public enum ProbeWrapper {
   }
 }
 
-/// Where one worktree's scratch package and its DerivedData live: `.harness/probe/`, never the
+/// Where one worktree's scratch package and its DerivedData live: the state root's `probe/`, never the
 /// shared global DerivedData (Foundation §4.4).
 public struct ProbeScratchLayout: Sendable, Equatable {
   public let root: URL
 
   public init(worktreeRoot: URL) {
-    root = worktreeRoot.appending(path: ".harness/probe", directoryHint: .isDirectory)
+    root = StateRootResolver.resolve(worktree: worktreeRoot)
+      .url(RunLayout.probeDirectory, directoryHint: .isDirectory)
   }
 
   public var package: URL {

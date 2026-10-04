@@ -114,7 +114,7 @@ struct EventPayloadGuardTests {
     ] {
       #expect(EventSegmentLayout.file(named: name) == nil, "\(name)")
     }
-    #expect(EventSegmentLayout.sealedDirectory(.judge) == ".harness/events/sealed/judge")
+    #expect(EventSegmentLayout.sealedDirectory(.judge) == "events/sealed/judge")
   }
 
   @Test(

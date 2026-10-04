@@ -23,7 +23,7 @@ struct BuildHaltLogTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     _ = try Self.log(root, at: 0, id: "halt-1").halt(buildRun: "run-1", task: nil, reason: .budget)
-    let file = root.appending(path: RunLayout.eventsFile(.build))
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.build))
     let handle = try FileHandle(forWritingTo: file)
     try handle.seekToEnd()
     try handle.write(contentsOf: Data(#"{"eventID":"cut"#.utf8))
@@ -47,7 +47,7 @@ struct BuildHaltLogTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     _ = try Self.log(root, at: 0, id: "halt-1").halt(buildRun: "run-1", task: nil, reason: .stall)
-    let file = root.appending(path: RunLayout.eventsFile(.build))
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.build))
     let handle = try FileHandle(forWritingTo: file)
     try handle.seekToEnd()
     try handle.write(contentsOf: Data("not an event\n".utf8))
@@ -73,7 +73,7 @@ struct BuildHaltLogTests {
   func unwritableStreamThrows() throws {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let file = root.appending(path: RunLayout.eventsFile(.build))
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.build))
     // A directory where the build stream's file belongs.
     try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
 

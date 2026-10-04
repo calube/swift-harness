@@ -47,7 +47,8 @@ public struct SimulatorTestRunner: Sendable {
 
   /// Per-worktree DerivedData for a job (spec §4.4).
   public static func derivedDataPath(root: URL, job: SimulatorJob) -> URL {
-    root.appending(path: HarnessGC.derivedDataDirectory, directoryHint: .isDirectory)
+    StateRootResolver.resolve(worktree: root)
+      .url(RunLayout.derivedDataDirectory, directoryHint: .isDirectory)
       .appending(path: job.name, directoryHint: .isDirectory)
   }
 

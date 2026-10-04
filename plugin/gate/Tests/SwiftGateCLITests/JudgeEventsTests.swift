@@ -266,14 +266,14 @@ struct JudgeEventsTests {
       reasonJudge: Steps.reasonJudge(
         flagged: 0.1, rationale: "never compared", asked: Steps.Asked()))
     for event in judged.log.events { try files.append(event) }
-    let imported = root.appending(path: "\(EventCopyUp.importedDirectory)/worktree-store")
+    let imported = StateRoot.tree(root).url("\(EventCopyUp.importedDirectory)/worktree-store")
     try HarnessEventFiles(root: imported.deletingLastPathComponent()).append(
       HarnessEvent(
         eventID: "worktree-only", time: Date(timeIntervalSince1970: 1_790_000_000),
         source: HarnessEventSource(route: .judgeTests),
         payload: .judgeDecision(HarnessEventTestsSupport.decision())))
     try FileManager.default.moveItem(
-      at: imported.deletingLastPathComponent().appending(path: RunLayout.eventsDirectory),
+      at: StateRoot.tree(imported.deletingLastPathComponent()).url(RunLayout.eventsDirectory),
       to: imported)
 
     let shared = JudgeEventsReport.make(
@@ -305,9 +305,9 @@ struct JudgeEventsTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let files = HarnessEventFiles(root: root)
-    let directory = root.appending(path: RunLayout.eventsDirectory)
+    let directory = StateRoot.tree(root).url(RunLayout.eventsDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let file = root.appending(path: RunLayout.eventsFile(.judge))
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.judge))
     let line = try HarnessEventJSON.encodeLine(
       HarnessEvent(
         eventID: "d-1", time: Date(timeIntervalSince1970: 1_790_000_000),
@@ -332,8 +332,8 @@ struct JudgeEventsTests {
     #expect(unknown.stderr.contains(file.lastPathComponent))
 
     try line.write(to: file)
-    let importedFile = root.appending(
-      path: "\(EventCopyUp.importedDirectory)/worktree-store/\(HarnessEventStream.judge.fileName)")
+    let importedFile = StateRoot.tree(root).url(
+      "\(EventCopyUp.importedDirectory)/worktree-store/\(HarnessEventStream.judge.fileName)")
     try FileManager.default.createDirectory(
       at: importedFile.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data(String(decoding: line, as: UTF8.self).replacing("{", with: "{\"mystery\":0,").utf8)
@@ -352,7 +352,7 @@ struct JudgeEventsTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let legacy = try Fixture.data("Events/judge.jsonl")
-    let file = root.appending(path: RunLayout.eventsFile(.judge))
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.judge))
     try FileManager.default.createDirectory(
       at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
     try legacy.write(to: file)

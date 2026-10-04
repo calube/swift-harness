@@ -72,7 +72,8 @@ struct TestRollupStoreTests {
     let sequences = try store.segments(.test)
     #expect(sequences == [1, 2, 3])
     for sequence in sequences {
-      let file = root.appending(path: "\(Self.sealed)/\(EventSegmentLayout.rollupName(sequence))")
+      let file = StateRoot.tree(root).url(
+        "\(Self.sealed)/\(EventSegmentLayout.rollupName(sequence))")
       let bytes = try Data(contentsOf: file)
       let written = try TestRollup.decode(bytes)
       let rebuilt = try TestRollup.make(segment: try store.segment(.test, sequence: sequence))
@@ -81,7 +82,7 @@ struct TestRollupStoreTests {
       #expect(written.runs.first?.results.count == 2_677)
       #expect(written.runs.first?.skipped.count == 4)
     }
-    let gateSealed = root.appending(path: EventSegmentLayout.sealedDirectory(.gate))
+    let gateSealed = StateRoot.tree(root).url(EventSegmentLayout.sealedDirectory(.gate))
     #expect(Store.names(in: gateSealed).allSatisfy { !$0.hasSuffix(".rollup.json") })
   }
 
@@ -114,7 +115,7 @@ struct TestRollupStoreTests {
     let whole = try #require(
       TestsSection().summarize(Self.input(root: root, files: LiveEventStoreFiles(root: root))))
     let rollup = "\(Self.sealed)/\(EventSegmentLayout.rollupName(2))"
-    try FileManager.default.removeItem(at: root.appending(path: rollup))
+    try FileManager.default.removeItem(at: StateRoot.tree(root).url(rollup))
     let files = Counting(root: root)
 
     let report = try #require(TestsSection().summarize(Self.input(root: root, files: files)))

@@ -33,11 +33,12 @@ public struct RunKeepOutcome: Sendable, Equatable {
   }
 }
 
-/// Persists runs under a worktree's `.harness/runs/`: one directory per run holding its logs and
+/// Persists runs under a worktree's state root's `runs/`: one directory per run holding its logs and
 /// `report.json`, plus the shared `history.jsonl`. With an event writer, each record also writes
 /// the run's `gate.run`, its `gate.step`s and its `test.result`s.
 public struct RunStore: Sendable {
   public let worktreeRoot: URL
+  public let state: StateRoot
   /// `nil` records no events.
   public let events: (any HarnessEventWriting)?
   private let newEventID: @Sendable () -> String
@@ -49,19 +50,19 @@ public struct RunStore: Sendable {
     }
   ) {
     self.worktreeRoot = worktreeRoot
+    self.state = StateRootResolver.resolve(worktree: worktreeRoot)
     self.events = events
     self.newEventID = newEventID
   }
 
   public var historyFile: URL {
-    worktreeRoot.appending(path: RunLayout.historyFile, directoryHint: .notDirectory)
+    state.url(RunLayout.historyFile, directoryHint: .notDirectory)
   }
 
   /// Creates (if needed) and returns the directory for `runID`, where a run writes its artifacts.
   public func runDirectory(for runID: String) throws(RunStoreError) -> URL {
     guard RunID.isValid(runID) else { throw .invalidRunID(runID) }
-    let url = worktreeRoot.appending(
-      path: RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+    let url = state.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
     do {
       try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     } catch {
@@ -140,7 +141,7 @@ public struct RunStore: Sendable {
       payload = try GateRunEvent(report: report, command: command, treeHash: treeHash, dirty: dirty)
     } catch {
       throw HarnessEventWriteError(
-        path: RunLayout.eventsFile(.gate), reason: "gate.run: \(error)")
+        path: state.displayPath(RunLayout.eventsFile(.gate)), reason: "gate.run: \(error)")
     }
     let source = HarnessEventSource(route: .check, tier: checkTier)
     let run = HarnessEvent(
@@ -175,7 +176,7 @@ public struct RunStore: Sendable {
   /// - Throws: when this store's runs directory exists but can't be listed.
   public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
     let files = FileManager.default
-    let source = worktreeRoot.appending(path: RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let source = state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
     let names: [String]
     do {
       names = try files.contentsOfDirectory(atPath: source.path)
@@ -191,8 +192,8 @@ public struct RunStore: Sendable {
       var isDirectory: ObjCBool = false
       guard files.fileExists(atPath: from.path, isDirectory: &isDirectory), isDirectory.boolValue
       else { continue }
-      let to = destination.worktreeRoot.appending(
-        path: RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+      let to = destination.state.url(
+        RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
       var destinationIsDirectory: ObjCBool = false
       if files.fileExists(atPath: to.path, isDirectory: &destinationIsDirectory),
         destinationIsDirectory.boolValue
@@ -231,7 +232,7 @@ public protocol WorkingTreeReading: Sendable {
 public struct LiveWorkingTree: WorkingTreeReading {
   /// The harness's own state is never source and can't change a build, so anything under a
   /// `.harness/` directory, at any depth, leaves the tree clean.
-  static let harnessStateExcluded = ":(exclude,glob)**/.harness/**"
+  static let harnessStateExcluded = ":(exclude,glob)**/\(RunLayout.treeDirectory)/**"
 
   private let runner: any ProcessRunner
   private let root: URL

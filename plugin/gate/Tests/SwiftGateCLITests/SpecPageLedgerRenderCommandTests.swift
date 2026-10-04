@@ -65,7 +65,7 @@ private struct SpecPagePlanRepo {
     try LedgerJSON.encode(ledger).write(to: URL(filePath: store.plan.ledgerFile))
   }
 
-  var outputURL: URL { root.appending(path: LedgerRenderRun.outputPath(for: Self.slug)) }
+  var outputURL: URL { StateRoot.tree(root).url(LedgerRenderRun.outputPath(for: Self.slug)) }
 
   func render() async -> LedgerRenderRun.Outcome {
     await LedgerRenderRun.run(slug: Self.slug, root: root, git: git)

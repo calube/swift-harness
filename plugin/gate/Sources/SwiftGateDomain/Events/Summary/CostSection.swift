@@ -330,7 +330,7 @@ enum PhaseWindows {
       var cursor: [String: Date] = [:]
       let lines = data.split(separator: UInt8(ascii: "\n"), omittingEmptySubsequences: false)
       for (index, line) in lines.enumerated() where !line.isEmpty {
-        let location = "\(path) line \(index + 1)"
+        let location = "\(files.displayPath(path)) line \(index + 1)"
         guard let record = try? JSONDecoder().decode(PhaseRecord.self, from: Data(line)) else {
           damage.append("\(location): not a phases record")
           continue

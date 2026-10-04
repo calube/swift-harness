@@ -48,7 +48,7 @@ public protocol HarnessEventReading: Sendable {
   func read(_ stream: HarnessEventStream, runID: String?) throws(HarnessEventReadError) -> Data?
 }
 
-/// `.harness/events/<stream>.jsonl` under a worktree, plus a copy of each run's events in its run
+/// `events/<stream>.jsonl` under a worktree's state root, plus a copy of each run's events in its run
 /// directory. Each event is 1 `O_APPEND` write under an exclusive `flock`, so concurrent writers
 /// never tear or interleave a line.
 public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
@@ -73,8 +73,8 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
   }
 
   public func path(_ stream: HarnessEventStream, runID: String?) -> String {
-    root.appending(
-      path: runID.map { RunLayout.runEventsFile(stream, runID: $0) } ?? RunLayout.eventsFile(stream)
+    StateRootResolver.resolve(worktree: root).url(
+      runID.map { RunLayout.runEventsFile(stream, runID: $0) } ?? RunLayout.eventsFile(stream)
     ).path
   }
 

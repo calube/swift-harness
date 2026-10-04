@@ -32,7 +32,7 @@ struct ImpactCommandTests {
   )
   func diffsFromMergeBase() async throws {
     let root = try makeRepository([
-      ImpactExemptions.fileName: """
+      ImpactExemptions.displayPath: """
       {"schema": 1, "exemptions": [{"module": "CartCore", "reason": "rename only"}]}
       """
     ])
@@ -52,7 +52,7 @@ struct ImpactCommandTests {
   )
   func setupFailures() async throws {
     let root = try makeRepository([
-      ImpactExemptions.fileName: #"{"schema": 1, "exemptions": [{"module": "CartCore"}]}"#
+      ImpactExemptions.displayPath: #"{"schema": 1, "exemptions": [{"module": "CartCore"}]}"#
     ])
     defer { try? FileManager.default.removeItem(at: root) }
     let invalid = try StaticCheckReport.make(
@@ -61,7 +61,7 @@ struct ImpactCommandTests {
         root: root, git: FakeGit(changed: Self.changed, mergeBase: "abc"), base: "origin/main",
         scopes: PathConventionModuleScopes()))
     #expect(invalid.verdict == .red)
-    #expect(invalid.findings.first?.file == ImpactExemptions.fileName)
+    #expect(invalid.findings.first?.file == ImpactExemptions.displayPath)
 
     let empty = try makeRepository()
     defer { try? FileManager.default.removeItem(at: empty) }

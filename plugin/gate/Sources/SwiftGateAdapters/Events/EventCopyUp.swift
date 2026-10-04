@@ -24,17 +24,17 @@ public struct EventCopyUpError: Error, Sendable, Equatable, CustomStringConverti
   public var description: String { "\(path): \(reason)" }
 }
 
-/// Copies a worktree's whole `.harness/events/` to the main checkout's
-/// `.harness/events/imported/<storeID>/`, so the events outlive the worktree and every reader of
+/// Copies a worktree's whole `events/` to the main checkout's `events/imported/<storeID>/`, each
+/// under its own state root, so the events outlive the worktree and every reader of
 /// the main checkout's stores finds them.
 public struct EventCopyUp: Sendable {
-  /// Relative to a checkout root.
+  /// Relative to a checkout's state root.
   public static let importedDirectory = "\(RunLayout.eventsDirectory)/imported"
-  /// Relative to a checkout root: stores moved whole when their copy failed.
+  /// Relative to a checkout's state root: stores moved whole when their copy failed.
   public static let unkeptDirectory = "\(RunLayout.eventsDirectory)/unkept"
   /// Relative to the git common dir: where a store moves when the main checkout is on another
   /// volume.
-  public static let commonUnkeptDirectory = "swift-harness/unkept-events"
+  public static let commonUnkeptDirectory = "\(RunLayout.gitDirDirectory)/unkept-events"
 
   /// The worktree's root.
   public let source: URL
@@ -46,17 +46,23 @@ public struct EventCopyUp: Sendable {
     self.destination = destination
   }
 
+  private var sourceEvents: URL {
+    StateRootResolver.resolve(worktree: source)
+      .url(RunLayout.eventsDirectory, directoryHint: .isDirectory)
+  }
+
+  private var destinationState: StateRoot { StateRootResolver.resolve(worktree: destination) }
+
   /// Copies the store into a temporary directory beside the import, reads each file back to
   /// check it, then moves it into place with 1 rename, swapping out an earlier import. Copies of 1
   /// store serialize on a lock beside it; copies of different stores don't contend. A failure
   /// leaves any earlier import as it was and removes the temporary directory.
   public func run() throws(EventCopyUpError) -> EventCopyUpOutcome {
-    let events = source.appending(path: RunLayout.eventsDirectory, directoryHint: .isDirectory)
+    let events = sourceEvents
     let files = try Self.storeFiles(under: events)
     guard !files.isEmpty else { return .nothing }
     let storeID = try identity()
-    let imported = destination.appending(
-      path: Self.importedDirectory, directoryHint: .isDirectory)
+    let imported = destinationState.url(Self.importedDirectory, directoryHint: .isDirectory)
     try Self.makeDirectory(imported)
     let target = imported.appending(path: storeID, directoryHint: .isDirectory)
     return try Self.locked(imported.appending(path: ".\(storeID).lock")) {
@@ -92,12 +98,12 @@ public struct EventCopyUp: Sendable {
     }
   }
 
-  /// Moves the worktree's whole `.harness/events/` with 1 rename, for when ``run()`` failed: to
+  /// Moves the worktree's whole `events/` with 1 rename, for when ``run()`` failed: to
   /// the main checkout's ``unkeptDirectory``, or under `commonDirectory` when that's on another
   /// volume.
   /// - Returns: the absolute path it now has; `nil` when there was nothing to move.
   public func moveAside(commonDirectory: URL) throws(EventCopyUpError) -> String? {
-    let events = source.appending(path: RunLayout.eventsDirectory, directoryHint: .isDirectory)
+    let events = sourceEvents
     guard FileManager.default.fileExists(atPath: events.path) else { return nil }
     // A store whose identity won't read is still moved, under a name of its own.
     let unique = UUID().uuidString.lowercased()  // swiftgate:allow det.uuid-init — a fallback name
@@ -109,7 +115,7 @@ public struct EventCopyUp: Sendable {
     }
     var failures: [String] = []
     for parent in [
-      destination.appending(path: Self.unkeptDirectory, directoryHint: .isDirectory),
+      destinationState.url(Self.unkeptDirectory, directoryHint: .isDirectory),
       commonDirectory.appending(path: Self.commonUnkeptDirectory, directoryHint: .isDirectory),
     ] {
       do throws(EventCopyUpError) {

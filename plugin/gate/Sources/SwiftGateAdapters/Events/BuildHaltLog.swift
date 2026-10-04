@@ -23,7 +23,7 @@ public enum BuildHaltLogError: Error, Sendable, Equatable, CustomStringConvertib
 /// The `build.halt` and `build.resume` events of a checkout's store. Halt and resume each run
 /// holding the lock in ``lockFile``, so 2 resumes can't both answer 1 halt.
 public struct BuildHaltLog: Sendable {
-  /// Beside the store's other locks, and apart from the build stream's own, which every append
+  /// Relative to the state root. Beside the store's other locks, and apart from the build stream's own, which every append
   /// takes and releases inside the read-then-write this lock spans.
   public static let lockFile = "\(RunLayout.eventsDirectory)/build-halts.lock"
 
@@ -31,7 +31,7 @@ public struct BuildHaltLog: Sendable {
   private let now: @Sendable () -> Date
   private let newEventID: @Sendable () -> String
 
-  /// - Parameter root: the checkout whose `.harness/events/` holds the build stream.
+  /// - Parameter root: the checkout whose state root's `events/` holds the build stream.
   public init(
     root: URL,
     now: @escaping @Sendable () -> Date = {
@@ -114,7 +114,7 @@ public struct BuildHaltLog: Sendable {
   private func locked<T>(_ body: () throws(BuildHaltLogError) -> T) throws(BuildHaltLogError)
     -> T
   {
-    let lock = root.appending(path: Self.lockFile)
+    let lock = StateRootResolver.resolve(worktree: root).url(Self.lockFile)
     do {
       try FileManager.default.createDirectory(
         at: lock.deletingLastPathComponent(), withIntermediateDirectories: true)

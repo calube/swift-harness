@@ -1,9 +1,10 @@
 import Foundation
 
-/// Filed exemptions from the impact rule, read from ``fileName``. Each names one module or one
+/// Filed exemptions from the impact rule, read from ``RunLayout/impactExemptionsFile``. Each names one module or one
 /// file and must say why the change needs no test change.
 public struct ImpactExemptions: Sendable, Equatable {
-  public static let fileName = ".harness/impact-exemptions.json"
+  /// How messages name the file.
+  public static let displayPath = RunLayout.treePath(RunLayout.impactExemptionsFile)
   public static let supportedSchema = 1
   public static let none = ImpactExemptions(entries: [])
 
@@ -67,7 +68,7 @@ public enum ImpactExemptionsError: Error, Sendable, Equatable, CustomStringConve
   case missingReason(index: Int)
 
   public var description: String {
-    let file = ImpactExemptions.fileName
+    let file = ImpactExemptions.displayPath
     switch self {
     case .malformed(let detail): return "\(file) is not valid JSON of the expected shape: \(detail)"
     case .unsupportedSchema(let schema):
@@ -164,7 +165,7 @@ public enum ImpactAnalysis {
           ruleID: ruleID, severity: .major, file: first, line: nil,
           message:
             "\(module) changed (\(files)) with no change under \(module)Tests; add or update a "
-            + "test, or file an exemption with a reason in \(ImpactExemptions.fileName)",
+            + "test, or file an exemption with a reason in \(ImpactExemptions.displayPath)",
           failureScenario: "the changed behavior ships with no test that would catch it breaking"))
     }
     findings.sort { $0.file < $1.file }

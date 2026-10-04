@@ -31,20 +31,21 @@ public enum HookStateError: Error, Sendable, Equatable {
   public var verdict: Verdict { .blocked }
 }
 
-/// Per-worktree hook memory under `.harness/hook-state/`, which ignores itself in git. Reads never
+/// Per-worktree hook memory under the state root's `hook-state/`, which ignores itself in git. Reads never
 /// fail: missing or unreadable state is the empty state, since it only saves work.
 public struct HookStateStore: Sendable {
-  public static let directory = ".harness/hook-state"
   static let lastGreenFile = "last-green"
 
   public let worktreeRoot: URL
+  public let state: StateRoot
 
   public init(worktreeRoot: URL) {
     self.worktreeRoot = worktreeRoot
+    self.state = StateRootResolver.resolve(worktree: worktreeRoot)
   }
 
-  private var directoryURL: URL {
-    worktreeRoot.appending(path: Self.directory, directoryHint: .isDirectory)
+  public var directoryURL: URL {
+    state.url(RunLayout.hookStateDirectory, directoryHint: .isDirectory)
   }
 
   public func stopState(session: String) -> StopState {

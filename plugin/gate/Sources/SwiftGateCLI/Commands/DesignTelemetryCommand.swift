@@ -148,7 +148,7 @@ enum DesignTelemetryRun {
       guard let record = try store.record(sessionID: id) else {
         return .unreadable(
           sessionId: id,
-          reason: "no session record at \(SessionRecordStore.directory)/\(id).json")
+          reason: "no session record at \(store.displayDirectory)/\(id).json")
       }
       return .recorded(sessionId: id, transcriptPath: record.transcriptPath)
     } catch {

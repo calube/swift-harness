@@ -206,6 +206,7 @@ public struct TestRollupRead: Sendable, Equatable {
       return TestRollupRead(rollups: [], damage: [])
     }
     var damage: [EventDamage] = []
+    /// - Parameter path: as ``EventStoreFileReading/displayPath(_:)`` names it.
     func unreadable(_ path: String, _ detail: String) {
       damage.append(EventDamage(file: path, line: nil, kind: .unreadableFile, detail: detail))
     }
@@ -260,9 +261,10 @@ public struct TestRollupRead: Sendable, Equatable {
             files: files, plain: names.contains(plain) ? "\(directory)/\(plain)" : nil,
             compressed: "\(directory)/\(compressed)")
           rollups.append(try TestRollup.make(segment: segment))
-          unreadable(rollupPath, "\(why); rebuilt from its segment")
+          unreadable(files.displayPath(rollupPath), "\(why); rebuilt from its segment")
         } catch {
-          unreadable(rollupPath, "\(why), and its segment didn't read: \(error)")
+          unreadable(
+            files.displayPath(rollupPath), "\(why), and its segment didn't read: \(error)")
         }
       }
     }
@@ -275,7 +277,7 @@ public struct TestRollupRead: Sendable, Equatable {
   ) throws -> Data {
     if let plain, let data = try files.read(plain) { return data }
     guard let packed = try files.read(compressed) else {
-      throw EventStoreFileError(path: compressed, reason: "gone")
+      throw EventStoreFileError(path: files.displayPath(compressed), reason: "gone")
     }
     return try (packed as NSData).decompressed(using: .lzfse) as Data
   }

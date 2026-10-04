@@ -168,7 +168,7 @@ struct RunStoreEventsTests {
       let reportFile = try store.runDirectory(for: report.runID).appending(path: "report.json")
       #expect(FileManager.default.fileExists(atPath: reportFile.path))
       #expect(try store.readHistory().records.map(\.runID) == [report.runID])
-      let eventsDirectory = root.appending(path: RunLayout.eventsDirectory).path
+      let eventsDirectory = StateRoot.tree(root).url(RunLayout.eventsDirectory).path
       let runEvents = HarnessEventFiles(root: root).path(.gate, runID: report.runID)
       #expect(FileManager.default.fileExists(atPath: eventsDirectory) == enabled)
       #expect(FileManager.default.fileExists(atPath: runEvents) == enabled)

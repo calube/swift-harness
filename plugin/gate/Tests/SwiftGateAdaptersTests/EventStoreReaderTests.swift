@@ -31,6 +31,8 @@ struct EventStoreReaderTests {
     func size(_ path: String) throws(EventStoreFileError) -> Int? {
       try inner.size(path)
     }
+
+    func displayPath(_ path: String) -> String { inner.displayPath(path) }
   }
 
   static func run(_ hour: Int) -> String {
@@ -46,7 +48,7 @@ struct EventStoreReaderTests {
     try HarnessEventFiles(root: root).append(contentsOf: [
       Store.decision("a", second: 0), Store.decision("b", second: 1),
     ])
-    let active = root.appending(path: RunLayout.eventsFile(.judge))
+    let active = StateRoot.tree(root).url(RunLayout.eventsFile(.judge))
     let handle = try FileHandle(forWritingTo: active)
     try handle.seekToEnd()
     try handle.write(contentsOf: Data("{\"schemaVersion\":1,\"eventID\":\"c".utf8))
@@ -75,11 +77,11 @@ struct EventStoreReaderTests {
     try HarnessEventFiles(root: worker).append(contentsOf: [
       Store.decision("shared", second: 1), Store.decision("worker-only", second: 0),
     ])
-    let imported = root.appending(path: "\(RunLayout.eventsDirectory)/imported/store-1")
+    let imported = StateRoot.tree(root).url("\(RunLayout.eventsDirectory)/imported/store-1")
     try FileManager.default.createDirectory(
       at: imported.deletingLastPathComponent(), withIntermediateDirectories: true)
     try FileManager.default.copyItem(
-      at: worker.appending(path: RunLayout.eventsDirectory), to: imported)
+      at: StateRoot.tree(worker).url(RunLayout.eventsDirectory), to: imported)
 
     let read = EventStoreReader(files: LiveEventStoreFiles(root: root)).read(EventQuery())
     #expect(read.events.map(\.event.eventID) == ["worker-only", "shared"])
@@ -103,7 +105,8 @@ struct EventStoreReaderTests {
     }
     let sealed = EventSegmentLayout.sealedDirectory(.judge)
     #expect(
-      Store.names(in: root.appending(path: sealed)).filter { $0.hasSuffix(".lzfse") }.count == 4)
+      Store.names(in: StateRoot.tree(root).url(sealed)).filter { $0.hasSuffix(".lzfse") }.count == 4
+    )
 
     let files = CountingFiles(root: root)
     let read = EventStoreReader(files: files).read(EventQuery(runID: Self.run(12)))
@@ -125,7 +128,7 @@ struct EventStoreReaderTests {
   func damagedSegmentKeepsItsGoodLines() throws {
     let root = Store.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
-    let sealed = root.appending(path: EventSegmentLayout.sealedDirectory(.judge))
+    let sealed = StateRoot.tree(root).url(EventSegmentLayout.sealedDirectory(.judge))
     try FileManager.default.createDirectory(at: sealed, withIntermediateDirectories: true)
     var lines = try Store.lines([Store.decision("a", runID: Self.run(10))])
     lines.append(Data("not json\n".utf8))
@@ -136,7 +139,7 @@ struct EventStoreReaderTests {
     let read = EventStoreReader(files: LiveEventStoreFiles(root: root)).read(
       EventQuery(runID: Self.run(10)))
     #expect(read.events.map(\.event.eventID) == ["a", "b"])
-    let file = "\(EventSegmentLayout.sealedDirectory(.judge))/1.jsonl"
+    let file = RunLayout.treePath("\(EventSegmentLayout.sealedDirectory(.judge))/1.jsonl")
     #expect(read.damage.map(\.kind) == [.unreadableIndex, .undecodableLine])
     #expect(read.damage.last?.file == file)
     #expect(read.damage.last?.line == 2)
@@ -152,15 +155,15 @@ struct EventStoreReaderTests {
     var dropped = EventDropCounts()
     dropped.count(.judgeCall, .newline)
     let encoded = try JSONEncoder().encode(dropped)
-    try encoded.write(to: root.appending(path: EventSegmentLayout.droppedFile))
-    let imported = root.appending(path: "\(RunLayout.eventsDirectory)/imported/store-1")
+    try encoded.write(to: StateRoot.tree(root).url(EventSegmentLayout.droppedFile))
+    let imported = StateRoot.tree(root).url("\(RunLayout.eventsDirectory)/imported/store-1")
     try FileManager.default.createDirectory(at: imported, withIntermediateDirectories: true)
     try encoded.write(to: imported.appending(path: "dropped.json"))
 
     let read = EventStoreReader(files: LiveEventStoreFiles(root: root)).read(EventQuery())
     let size =
       try FileManager.default.attributesOfItem(
-        atPath: root.appending(path: RunLayout.eventsFile(.judge)).path)[.size] as? Int
+        atPath: StateRoot.tree(root).url(RunLayout.eventsFile(.judge)).path)[.size] as? Int
     #expect(read.facts.streams.first?.activeBytes == size)
     #expect(read.facts.dropped.dropped[.judgeCall]?[.newline] == 2)
     #expect(read.events.first?.bytes == size)

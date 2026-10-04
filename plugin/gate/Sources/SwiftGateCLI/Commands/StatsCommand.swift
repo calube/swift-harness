@@ -194,9 +194,11 @@ enum DesignStatsRun {
     if let note = reviewLogLoaded.note { notes.append(note) }
 
     let slug = URL(filePath: options.design).deletingPathExtension().lastPathComponent
-    let phasesPath = RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl"
+    let state = StateRootResolver.resolve(worktree: root)
+    let phasesFile = RunLayout.runDirectory(for: "design-\(slug)") + "phases.jsonl"
+    let phasesPath = state.displayPath(phasesFile)
     let phasesLoaded = loadJSONL(
-      PhaseRecord.self, root: root, path: phasesPath,
+      PhaseRecord.self, root: state.directory, path: phasesFile, displayPath: phasesPath,
       missingNote:
         "no phases file at \(phasesPath); token/cost/wall and non-draft wall share excluded")
     if let malformed = phasesLoaded.malformed { return blocked(options: options, malformed) }
@@ -359,8 +361,9 @@ enum DesignStatsRun {
     }
   }
 
+  /// - Parameter displayPath: how a malformed line names the file; `nil` for `path`.
   private static func loadJSONL<T: Decodable>(
-    _ type: T.Type, root: URL, path: String,
+    _ type: T.Type, root: URL, path: String, displayPath: String? = nil,
     dateDecoding: JSONDecoder.DateDecodingStrategy = .deferredToDate, missingNote: String
   ) -> (records: [T], note: String?, malformed: String?) {
     guard let data = FileManager.default.contents(atPath: root.appending(path: path).path) else {
@@ -368,7 +371,8 @@ enum DesignStatsRun {
     }
     do {
       return (
-        try StrictJSONL.decode(type, data: data, path: path, dateDecoding: dateDecoding), nil, nil
+        try StrictJSONL.decode(
+          type, data: data, path: displayPath ?? path, dateDecoding: dateDecoding), nil, nil
       )
     } catch {
       return ([], nil, "\(error.path):\(error.line): not a valid record")
@@ -653,7 +657,8 @@ enum BuildStatsRun {
 enum StatsRenderer {
   static func human(_ rows: [TierStats], invalidLines: Int) -> String {
     guard !rows.isEmpty else {
-      return "no runs recorded in \(RunLayout.historyFile)" + unreadable(invalidLines)
+      return "no runs recorded in \(RunLayout.treePath(RunLayout.historyFile))"
+        + unreadable(invalidLines)
     }
     let header = ["command", "tier", "runs", "p50", "p95", "budget", "verdicts"]
     let body = rows.map { row -> [String] in

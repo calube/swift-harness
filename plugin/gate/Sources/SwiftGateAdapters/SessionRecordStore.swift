@@ -1,10 +1,9 @@
 import Foundation
 import SwiftGateDomain
 
-/// Session records under `.harness/hook-state/sessions/`, one `<session id>.json` each, inside
+/// Session records under the state root's `hook-state/sessions/`, one `<session id>.json` each, inside
 /// the hook state's own `.gitignore`, so a record never dirties `git status`.
 public struct SessionRecordStore: Sendable {
-  public static let directory = ".harness/hook-state/sessions"
   /// Records kept after a write; older ones are pruned.
   public static let retained = 20
 
@@ -35,14 +34,19 @@ public struct SessionRecordStore: Sendable {
   }
 
   public let worktreeRoot: URL
+  public let state: StateRoot
 
   public init(worktreeRoot: URL) {
     self.worktreeRoot = worktreeRoot
+    self.state = StateRootResolver.resolve(worktree: worktreeRoot)
   }
 
   public var directoryURL: URL {
-    worktreeRoot.appending(path: Self.directory, directoryHint: .isDirectory)
+    state.url(RunLayout.sessionsDirectory, directoryHint: .isDirectory)
   }
+
+  /// ``directoryURL`` as messages name it.
+  public var displayDirectory: String { state.displayPath(RunLayout.sessionsDirectory) }
 
   private var hookStateURL: URL { directoryURL.deletingLastPathComponent() }
 

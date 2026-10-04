@@ -371,7 +371,7 @@ struct CalibrationFreshnessTests {
   static func keep(_ repository: ProbeRepository, runID: String) throws -> [String] {
     let data = try Fixture.data(keptSonnet)
     try repository.write(
-      "\(RunLayout.runDirectory(for: runID))calibrate-design/design-challenger/case.json",
+      "\(RunLayout.treePath(RunLayout.runDirectory(for: runID)))calibrate-design/design-challenger/case.json",
       String(decoding: data, as: UTF8.self))
     let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     #expect(object["requestedModel"] as? String == "sonnet")
@@ -411,7 +411,7 @@ struct CalibrationFreshnessTests {
     defer { repository.remove() }
     let served = try Self.keep(repository, runID: "20260930T160000Z-0000beef")
     try repository.write(
-      "\(RunLayout.runDirectory(for: "20260930T170000Z-0000cafe"))calibrate-design/"
+      "\(RunLayout.treePath(RunLayout.runDirectory(for: "20260930T170000Z-0000cafe")))calibrate-design/"
         + "design-challenger/case.json", "{\"schemaVersion\": 1}")
     try Self.recordPass(
       repository, served: served,

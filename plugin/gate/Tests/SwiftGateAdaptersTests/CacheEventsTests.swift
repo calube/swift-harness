@@ -89,7 +89,7 @@ struct CacheEventsTests {
     var eventsText: String {
       String(
         decoding: FileManager.default.contents(
-          atPath: root.appending(path: RunLayout.eventsFile(.cache)).path) ?? Data(),
+          atPath: StateRoot.tree(root).url(RunLayout.eventsFile(.cache)).path) ?? Data(),
         as: UTF8.self)
     }
 

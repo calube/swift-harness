@@ -13,17 +13,18 @@ enum DesignRenderRun {
   }
 
   enum Outcome: Sendable, Equatable {
-    /// `path` is repo-relative; `capabilities` is the Artifact tool's `capabilities` value.
+    /// `path` is repo-relative inside the tree, else absolute; `capabilities` is the Artifact tool's `capabilities` value.
     case written(path: String, designSha: String, capabilities: String, notes: [String])
     /// design-lint's gating findings; no HTML was written.
     case lintFailed([Finding])
     case blocked(String)
   }
 
+  /// Relative to the state root.
   static func outputPath(for design: String) -> String {
     let file = design.split(separator: "/").last.map(String.init) ?? design
     let slug = file.hasSuffix(".md") ? String(file.dropLast(3)) : file
-    return ".harness/design-render/\(slug).html"
+    return "\(RunLayout.designRenderDirectory)/\(slug).html"
   }
 
   static func run(options: Options, root: URL, git: any Git, runner: any ProcessRunner) async
@@ -69,8 +70,9 @@ enum DesignRenderRun {
 
     let page = DesignRender.page(
       .init(rawText: rawText, claims: claims, checkResults: results))
-    let path = outputPath(for: options.design)
-    let outputURL = root.appending(path: path, directoryHint: .notDirectory)
+    let state = StateRootResolver.resolve(worktree: root)
+    let path = state.displayPath(outputPath(for: options.design))
+    let outputURL = state.url(outputPath(for: options.design), directoryHint: .notDirectory)
     do {
       try FileManager.default.createDirectory(
         at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -161,12 +163,12 @@ struct DesignRenderCommand: AsyncParsableCommand {
       + "plan's ledger page with --ledger.",
     discussion:
       "With a design doc: runs design-lint and evidence check over it, then writes "
-      + ".harness/design-render/<slug>.html for the design skill to publish with the printed "
+      + "design-render/<slug>.html under the harness state directory for the design skill to publish with the printed "
       + "capabilities. Exit 0 written, 1 when design-lint finds a gating problem (nothing is "
       + "written), 2 when the doc, its claims or the output can't be read or written.\n"
       + "With --ledger <plan>: reads the plan's shared state and the design at its designSha, "
       + "or a spec-page plan's page at its confirmed pageSha, then writes "
-      + ".harness/design-render/<plan>-ledger.html: the task DAG, the wave timeline, the "
+      + "design-render/<plan>-ledger.html under the harness state directory: the task DAG, the wave timeline, the "
       + "requirement (or slice) × task coverage matrix and the predicted overhead share. Exit 0 "
       + "written, 2 when the plan state, its designSha or the design at that revision can't be "
       + "read, or when a spec page is unconfirmed, unreadable, malformed or changed since its "
@@ -220,15 +222,16 @@ struct DesignRenderCommand: AsyncParsableCommand {
 /// ``LedgerRender``.
 enum LedgerRenderRun {
   enum Outcome: Sendable, Equatable {
-    /// `path` is repo-relative; `capabilities` is the Artifact tool's `capabilities` value.
+    /// `path` is repo-relative inside the tree, else absolute; `capabilities` is the Artifact tool's `capabilities` value.
     case written(path: String, designSha: String, capabilities: String, notes: [String])
     /// A spec-page plan's page, rendered from the page whose bytes hash to `pageSha`.
     case writtenFromSpecPage(path: String, pageSha: String, capabilities: String, notes: [String])
     case blocked(String)
   }
 
+  /// Relative to the state root.
   static func outputPath(for slug: String) -> String {
-    ".harness/design-render/\(slug)-ledger.html"
+    "\(RunLayout.designRenderDirectory)/\(slug)-ledger.html"
   }
 
   static func run(slug: String, root: URL, git: any Git) async -> Outcome {
@@ -263,8 +266,9 @@ enum LedgerRenderRun {
       .init(
         slug: slug, ledger: ledger, source: source, buildMetrics: build?.metrics,
         build: build?.view))
-    let path = outputPath(for: slug)
-    let outputURL = root.appending(path: path, directoryHint: .notDirectory)
+    let state = StateRootResolver.resolve(worktree: root)
+    let path = state.displayPath(outputPath(for: slug))
+    let outputURL = state.url(outputPath(for: slug), directoryHint: .notDirectory)
     do {
       try FileManager.default.createDirectory(
         at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)

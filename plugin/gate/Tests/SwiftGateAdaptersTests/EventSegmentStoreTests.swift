@@ -108,7 +108,7 @@ struct EventSegmentStoreTests {
         == [.judgeDecision: [.absolutePath: 2, .homePath: 1, .newline: 1, .tooLong: 1]])
     #expect(
       FileManager.default.fileExists(
-        atPath: root.appending(path: EventSegmentLayout.droppedFile).path))
+        atPath: StateRoot.tree(root).url(EventSegmentLayout.droppedFile).path))
   }
 
   @Test(
@@ -278,7 +278,7 @@ struct EventSegmentStoreTests {
     #expect(identity.salt.count == 64)
     let stored = try JSONDecoder().decode(
       EventStoreIdentity.self,
-      from: try Data(contentsOf: root.appending(path: EventSegmentLayout.storeFile)))
+      from: try Data(contentsOf: StateRoot.tree(root).url(EventSegmentLayout.storeFile)))
     #expect(stored == identity)
     let other = try EventSegmentStore(root: Self.temporaryRoot()).identity()
     #expect(other.storeID != identity.storeID)
@@ -289,7 +289,7 @@ struct EventSegmentStoreTests {
     try HarnessEventFiles(root: written).append(Self.decision("first"))
     #expect(
       FileManager.default.fileExists(
-        atPath: written.appending(path: EventSegmentLayout.storeFile).path))
+        atPath: StateRoot.tree(written).url(EventSegmentLayout.storeFile).path))
   }
 
   @Test(
@@ -317,7 +317,7 @@ struct EventSegmentStoreTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let legacy = try Fixture.data("Events/judge.jsonl")
-    let active = root.appending(path: RunLayout.eventsFile(.judge))
+    let active = StateRoot.tree(root).url(RunLayout.eventsFile(.judge))
     try FileManager.default.createDirectory(
       at: active.deletingLastPathComponent(), withIntermediateDirectories: true)
     try legacy.write(to: active)
@@ -375,10 +375,10 @@ struct EventSegmentStoreTests {
     let root = Self.temporaryRoot()
     defer { try? FileManager.default.removeItem(at: root) }
     let store = EventSegmentStore(root: root)
-    let events = root.appending(path: RunLayout.eventsDirectory)
+    let events = StateRoot.tree(root).url(RunLayout.eventsDirectory)
     try FileManager.default.createDirectory(at: events, withIntermediateDirectories: true)
-    let identity = root.appending(path: EventSegmentLayout.storeFile)
-    let dropped = root.appending(path: EventSegmentLayout.droppedFile)
+    let identity = StateRoot.tree(root).url(EventSegmentLayout.storeFile)
+    let dropped = StateRoot.tree(root).url(EventSegmentLayout.droppedFile)
     try Data("{\"storeID\":".utf8).write(to: identity)
     try Data("[]".utf8).write(to: dropped)
     let sealed = store.sealedDirectory(.judge)

@@ -34,7 +34,7 @@ struct HookRunnerEventsTests {
   }
 
   private static func eventsFile(_ root: URL) -> URL {
-    root.appending(path: RunLayout.eventsFile(.hook))
+    StateRoot.tree(root).url(RunLayout.eventsFile(.hook))
   }
 
   /// The hook stream's text; empty when nothing wrote it.
@@ -204,11 +204,11 @@ struct HookRunnerEventsTests {
     #expect(writer.events.isEmpty)
     #expect(
       !FileManager.default.fileExists(
-        atPath: outside.appending(path: RunLayout.eventsDirectory).path))
+        atPath: StateRoot.tree(outside).url(RunLayout.eventsDirectory).path))
     #expect(optedOutResult == liveResult)
     #expect(
       !FileManager.default.fileExists(
-        atPath: optedOut.root.appending(path: RunLayout.eventsDirectory).path))
+        atPath: StateRoot.tree(optedOut.root).url(RunLayout.eventsDirectory).path))
     #expect(try Self.events(harness.root).count == 1)
   }
 
