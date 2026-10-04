@@ -103,7 +103,8 @@ root.
 **Plan, executor and report.**
 - `plan import <slug>` goes through `LivePlanParser`; `plan.json` gains a `livePlan` source with task briefs.
 - In a brownfield clone, `build worktree create` and `build merge` use the plan branch `swift-harness/<slug>`:
-  worktrees in `<plan-dir>/worktrees/<task>` and merges in `<plan-dir>/checkout`.
+  worktrees at `<repo>-<slug>-<task>` and merges in the plan checkout `<repo>-<slug>`, both beside the clone
+  and outside the git dir. `TaskWorktree.planCheckout(commonDirectory:plan:)` names the plan checkout.
 - `swiftgate run report <slug>` writes `REPORT.md`.
 - The run skill is `plugin/skills/run/SKILL.md`, with a `brownfield-explorer` agent on `claude-sonnet-5-5`.
 

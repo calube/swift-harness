@@ -11,7 +11,7 @@ private struct PinnedClock: BuildClock {
 }
 
 /// A throwaway brownfield clone with its own git dir: the user's checkout on `main`, the config
-/// under the common dir, a plan branch with a contract commit checked out at `<plan-dir>/checkout`,
+/// under the common dir, a plan branch with a contract commit checked out in the plan's checkout,
 /// a claimed plan whose ledger holds task `t1`, and a brownfield build run.
 struct PlanBranchScenario {
   static let slug = "2026-10-04-search"
@@ -70,8 +70,8 @@ struct PlanBranchScenario {
   var git: LiveGit { LiveGit(runner: runner, repositoryRoot: user.path) }
   var workspace: LiveGitWorkspace { LiveGitWorkspace(runner: runner, repositoryRoot: user.path) }
   var planBranch: String { BrownfieldRunReport.planBranch(slug: Self.slug) }
-  var checkout: String { plan.directory + "/checkout" }
-  var taskWorktree: String { plan.directory + "/worktrees/\(Self.task)" }
+  let checkout: String
+  let taskWorktree: String
 
   init() async throws {
     base = FileManager.default.temporaryDirectory
@@ -102,7 +102,13 @@ struct PlanBranchScenario {
     try Data(Self.config.utf8).write(to: state.appending(path: "config.toml"))
 
     plan = try PlanStateLayout(commonDirectory: common).plan(Self.slug)
-    let checkout = plan.directory + "/checkout"
+    try FileManager.default.createDirectory(
+      atPath: plan.directory, withIntermediateDirectories: true)
+    let names = try TaskWorktree(
+      commonDirectory: common, plan: Self.slug, task: Self.task, profile: .brownfield)
+    checkout = names.mainCheckout
+    taskWorktree = names.path
+    let checkout = self.checkout
     _ = try await run("branch", "--no-track", BrownfieldRunReport.planBranch(slug: Self.slug))
     _ = try await run(
       "worktree", "add", "-q", checkout, BrownfieldRunReport.planBranch(slug: Self.slug))
@@ -116,7 +122,7 @@ struct PlanBranchScenario {
       tasks: [
         LedgerTask(
           id: Self.task, deps: [], writeSet: ["Core/"], gate: .slice, tests: [], covers: [],
-          estLines: 20, status: .inProgress, worktree: plan.directory + "/worktrees/\(Self.task)")
+          estLines: 20, status: .inProgress, worktree: taskWorktree)
       ],
       waves: [[Self.task]])
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
@@ -159,6 +165,54 @@ struct PlanBranchScenario {
     return try await git("rev-parse", "HEAD", in: taskWorktree)
   }
 
+  /// Whether `path` is outside both the git dir and the user's tree, where a build worker's write
+  /// meets no plan-state guard and a dev server serves files.
+  func isBesideTheClone(_ path: String) -> Bool {
+    !path.hasPrefix(common + "/") && !path.hasPrefix(userTree + "/")
+  }
+
+  /// The user's checkout as git spells it, symlinks resolved.
+  var userTree: String { URL(filePath: common).deletingLastPathComponent().path }
+
+  /// The PreToolUse hook's decision on a build worker's Write of `path`, made from `cwd`, from the
+  /// recorded live subagent payload: `allow`, or `deny <rule>`.
+  func workerWriteDecision(_ path: String, cwd: String) async throws -> String? {
+    var text = try Fixture.text("Hooks/pre-tool-use-write-ledger-subagent.json")
+    text = text.replacingOccurrences(
+      of: "\"/REPO/.harness/plans/2026-09-24-counter/ledger.json\"", with: "\"\(path)\"")
+    text = text.replacingOccurrences(of: "\"cwd\": \"/REPO\"", with: "\"cwd\": \"\(cwd)\"")
+    text = text.replacingOccurrences(
+      of: "\"session_id\": \"8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f\"",
+      with: "\"session_id\": \"\(Self.session)\"")
+    text = text.replacingOccurrences(
+      of: "\"agent_type\": \"general-purpose\"",
+      with: "\"agent_type\": \"swift-harness:build-worker\"")
+    let payload = try HookPayload.decode(Data(text.utf8))
+    #expect(payload.filePath == path)
+    #expect(payload.cwd == cwd)
+    #expect(payload.agentType == "swift-harness:build-worker")
+    let root = URL(filePath: cwd, directoryHint: .isDirectory)
+    let commonURL = URL(filePath: common, directoryHint: .isDirectory)
+    let dependencies = HookDependencies(
+      git: LiveGit(runner: runner, repositoryRoot: cwd),
+      swiftPM: try ProbeRepository.swiftPM(replaying: "pass"), formatter: FakeSwiftFormatter(),
+      xcode: FixedXcode(version: "26.2"), sweep: PendingOrphanCloneSweep(),
+      commitJudge: DisabledCommitCommentJudge(), environment: ["HOME": base.path])
+    guard
+      let stdout = await PreToolUseHook.run(
+        payload, root: root, dependencies: dependencies,
+        brownfield: BrownfieldStateLayout(commonDir: commonURL, gitDir: commonURL))
+    else { return nil }
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: Data(stdout.utf8)) as? [String: Any])
+    let output = json["hookSpecificOutput"] as? [String: Any]
+    let decision = output?["permissionDecision"] as? String
+    guard decision == "deny" else { return decision }
+    let reason = output?["permissionDecisionReason"] as? String ?? ""
+    let rule = reason.split(separator: ":").first.map(String.init) ?? reason
+    return "deny " + rule
+  }
+
   /// The user's checkout is still on `main` at its pre-run commit, with a clean tree.
   func expectUserUntouched() async throws {
     #expect(try await git("symbolic-ref", "--short", "HEAD") == "main")
@@ -170,7 +224,7 @@ struct PlanBranchScenario {
 @Suite("build worktrees and merges on a brownfield plan branch")
 struct BuildPlanBranchTests {
   @Test(
-    "the profile is brownfield in a clone whose common dir holds config.toml, from the user's checkout and the plan's checkout, and owned where .swiftgate.toml is committed — catches a brownfield run that cuts worktrees beside the user's checkout"
+    "the profile is brownfield in a clone whose common dir holds config.toml, from the user's checkout and from the plan's checkout beside it, and owned where .swiftgate.toml is committed — catches a plan checkout outside the git dir that loses the clone's config and runs as an owned repository"
   )
   func profileFollowsTheConfigFile() async throws {
     let scenario = try await PlanBranchScenario()
@@ -179,6 +233,7 @@ struct BuildPlanBranchTests {
     try FileManager.default.createDirectory(at: owned, withIntermediateDirectories: true)
     try Data("schema = 1\n".utf8).write(to: owned.appending(path: ConfigLoader.fileName))
 
+    #expect(scenario.isBesideTheClone(scenario.checkout), "\(scenario.checkout)")
     #expect(BuildPresetCatalog.profile(root: scenario.user) == .brownfield)
     #expect(
       BuildPresetCatalog.profile(
@@ -188,9 +243,9 @@ struct BuildPlanBranchTests {
   }
 
   @Test(
-    "a brownfield worktree create lands under the git dir, on the task branch cut from the plan branch's tip, and leaves the user's branch and tree alone — catches task worktrees cut from main beside the user's checkout"
+    "a brownfield worktree create lands beside the clone, outside the git dir and the user's tree, on the task branch cut from the plan branch's tip, and leaves the user's branch and tree alone — catches a task worktree created under the git dir, or cut from main"
   )
-  func createLandsUnderTheGitDirOnThePlanBranch() async throws {
+  func createLandsBesideTheCloneOnThePlanBranch() async throws {
     let scenario = try await PlanBranchScenario()
     defer { scenario.remove() }
 
@@ -198,6 +253,12 @@ struct BuildPlanBranchTests {
 
     #expect(report.status == .created, "\(report.message)")
     #expect(report.worktree == scenario.taskWorktree)
+    #expect(scenario.isBesideTheClone(scenario.taskWorktree), "\(scenario.taskWorktree)")
+    #expect(scenario.isBesideTheClone(scenario.checkout), "\(scenario.checkout)")
+    #expect(
+      try await scenario.git(
+        "rev-parse", "--path-format=absolute", "--git-common-dir",
+        in: scenario.taskWorktree) == scenario.common)
     #expect(report.branch == "\(PlanBranchScenario.slug)/\(PlanBranchScenario.task)")
     #expect(FileManager.default.fileExists(atPath: scenario.taskWorktree + "/contract.py"))
     #expect(
@@ -240,18 +301,43 @@ struct BuildPlanBranchTests {
       profile: profile)
 
     #expect(removed.status == .removed, "\(removed.message)")
+    #expect(removed.worktree == scenario.taskWorktree)
+    #expect(scenario.isBesideTheClone(scenario.taskWorktree), "\(scenario.taskWorktree)")
     #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree))
+    let listed = try await scenario.git("worktree", "list", "--porcelain")
+    #expect(!listed.contains("worktree \(scenario.taskWorktree)\n"))
+    #expect(!listed.hasSuffix("worktree \(scenario.taskWorktree)"))
     try await scenario.expectUserUntouched()
   }
 
   @Test(
-    "check-return reads a brownfield task's worktree under the git dir — catches a return blocked because it looked for the worktree beside the user's checkout"
+    "a build worker's Write in its brownfield task worktree passes the PreToolUse hook from the clone and from the worktree, while its Write to the plan's PLAN.md is still denied as plan state — catches every worker write denied guard.plan-state because the worktree sits in the plan dir"
+  )
+  func workerWritesInItsTaskWorktree() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    let source = scenario.taskWorktree + "/Core/value.py"
+    let plan = scenario.plan.directory + "/PLAN.md"
+
+    for cwd in [scenario.userTree, scenario.taskWorktree] {
+      #expect(try await scenario.workerWriteDecision(source, cwd: cwd) == "allow", "cwd \(cwd)")
+      #expect(
+        try await scenario.workerWriteDecision(plan, cwd: cwd)
+          == "deny swiftgate \(EditGuard.planStateRuleID)", "cwd \(cwd)")
+    }
+  }
+
+  @Test(
+    "check-return reads a brownfield task's worktree beside the clone, where worktree create made it — catches a return blocked because it looked for the worktree under the git dir"
   )
   func checkReturnFindsTheBrownfieldWorktree() async throws {
     let scenario = try await PlanBranchScenario()
     defer { scenario.remove() }
     let created = await scenario.create()
     try #require(created.status == .created, "\(created.message)")
+    #expect(created.worktree.map(scenario.isBesideTheClone) == true, "\(created.message)")
     let commit = try await scenario.commitTask()
     let taskReturn = TaskReturn(
       task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
