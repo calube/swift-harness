@@ -128,7 +128,21 @@ public enum RunLaunch {
   /// The directories `extra` loads plugins from, as `--plugin-dir <path>` or
   /// `--plugin-dir=<path>`, in order. Arguments after `--` are positional, so none of them counts.
   public static func pluginDirectories(in extra: [String]) -> [String] {
-    []
+    var directories: [String] = []
+    var index = extra.startIndex
+    while index < extra.endIndex {
+      let argument = extra[index]
+      if argument == "--" { break }
+      if argument == pluginDirectoryOption {
+        let value = extra.index(after: index)
+        if value < extra.endIndex { directories.append(extra[value]) }
+        index = value
+      } else if argument.hasPrefix(pluginDirectoryOption + "=") {
+        directories.append(String(argument.dropFirst(pluginDirectoryOption.count + 1)))
+      }
+      if index < extra.endIndex { index = extra.index(after: index) }
+    }
+    return directories
   }
 
   /// `claude`'s argv: the clone's hook settings, the pinned model, the session id the plan's lock
