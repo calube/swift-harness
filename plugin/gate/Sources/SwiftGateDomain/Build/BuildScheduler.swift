@@ -10,6 +10,9 @@ public enum BuildScheduler {
     /// The task has no `model` and the preset's `worker_model` is `tagged`, so there's no model to
     /// run it with.
     case missingModel
+    /// The preset belongs to the brownfield profile, which runs only pinned model ids, and leaves
+    /// the model to the task's tag, which only names an alias.
+    case unpinnedModel
   }
 
   /// A ready task that didn't start, and why.
@@ -207,4 +210,9 @@ public enum BuildScheduler {
     for id in byID.keys { _ = weight(of: id) }
     return memo
   }
+}
+
+extension BuildPreset {
+  /// The profile whose config defined the preset: its merge gate's tier belongs to exactly 1.
+  public var profile: RepositoryProfile { .owned }
 }

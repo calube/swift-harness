@@ -164,7 +164,33 @@ struct BuildStartReport: Sendable, Equatable, Encodable {
   let indexStatus: PlanStatus
 }
 
+/// The presets a repository defines, and the profile whose config they came from.
+struct BuildPresetCatalog: Sendable, Equatable {
+  /// The only preset a brownfield clone runs, and a name an owned repository can't use.
+  static let brownfieldPresetName = "brownfield"
+
+  let profile: RepositoryProfile
+  let presets: [String: BuildPreset]
+  /// The config file the presets came from, as a refusal names it.
+  let file: String
+
+  /// An owned repository's `.swiftgate.toml`, or a brownfield clone's `config.toml` under the git
+  /// common dir, chosen as ``StateRootResolver`` chooses the state root.
+  static func load(root: URL, git: any Git) async throws(BuildLoopError) -> Self {
+    throw BuildLoopError("")
+  }
+}
+
 enum BuildStartRun {
+  static func run(
+    slug: String, presetName: String, session: String?, catalog: BuildPresetCatalog,
+    git: any Git, clock: any BuildClock, suffix: UInt32
+  ) async -> BuildLoopResult<BuildStartReport> {
+    await run(
+      slug: slug, presetName: presetName, session: session, presets: catalog.presets, git: git,
+      clock: clock, suffix: suffix)
+  }
+
   static func run(
     slug: String, presetName: String, session: String?, presets: [String: BuildPreset],
     git: any Git, clock: any BuildClock, suffix: UInt32

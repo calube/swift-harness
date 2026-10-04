@@ -16,6 +16,9 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   let refused: [Refused]
   /// Every not-done task the app target needs, which the no-new-starts phase still starts.
   let required: [Required]
+  /// Minutes the stall watch lets a worker's transcripts sit unchanged: the preset's `stall_min`,
+  /// or `nil` when the preset doesn't say.
+  var stallMin: Int? = nil
 
   struct Required: Sendable, Equatable, Encodable {
     let task: String
@@ -139,6 +142,7 @@ enum BuildNextRun {
   private static func reason(_ reason: BuildScheduler.RefusalReason) -> String {
     switch reason {
     case .missingModel: "missing-model"
+    case .unpinnedModel: ""
     }
   }
 
