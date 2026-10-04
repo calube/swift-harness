@@ -153,6 +153,26 @@ struct StateRootResolverTests {
   }
 
   @Test(
+    "a linked worktree of a configured clone writes its events to the shared store under the common dir, leaving copy-up nothing — catches events that die with the worktree's own git dir"
+  )
+  func linkedWorktreeWritesTheSharedStore() async throws {
+    let repository = try await Self.clone(configured: true)
+    defer { repository.remove() }
+    let linked = repository.root.deletingLastPathComponent()
+      .appending(path: "\(repository.root.lastPathComponent)-shared", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: linked) }
+    try await repository.git("worktree", "add", "-q", "-b", "shared", linked.path)
+
+    try HarnessEventFiles(root: linked).append(EventSegmentStoreTests.decision("linked-shared"))
+
+    let common = try await Self.gitDirectory(repository)
+    let shared = try String(
+      contentsOfFile: "\(common)/swift-harness/events/judge.jsonl", encoding: .utf8)
+    #expect(shared.contains("linked-shared"))
+    #expect(try EventCopyUp(source: linked, destination: repository.root).run() == .nothing)
+  }
+
+  @Test(
     "a scratch tree of a configured clone sits under <git-dir>/swift-harness/scratch/ and is gone afterwards, while an owned clone's stays beside the repository — catches prove's trees left beside a clone the harness doesn't own"
   )
   func scratchTreeSitsUnderTheGitDir() async throws {
@@ -187,7 +207,7 @@ struct StateRootResolverTests {
   }
 
   @Test(
-    "copying a linked worktree's events up in a configured clone lands them in <common>/swift-harness/events/imported/<storeID>/ and leaves both trees clean — catches a removed worktree's events lost or copied into the tree"
+    "copying a linked worktree's own events up in a configured clone lands them in <common>/swift-harness/events/imported/<storeID>/ and leaves both trees clean — catches a removed worktree's events lost or copied into the tree"
   )
   func eventsCopyUpUnderTheCommonDir() async throws {
     let repository = try await Self.clone(configured: true)
@@ -196,7 +216,11 @@ struct StateRootResolverTests {
       .appending(path: "\(repository.root.lastPathComponent)-copied", directoryHint: .isDirectory)
     defer { try? FileManager.default.removeItem(at: linked) }
     try await repository.git("worktree", "add", "-q", "-b", "copied", linked.path)
-    try HarnessEventFiles(root: linked).append(EventSegmentStoreTests.decision("linked-only"))
+    // A store a linked worktree kept under its own git dir, as builds did before every worktree
+    // of a configured clone wrote to the shared one.
+    let own = EventSegmentStore(root: linked, state: StateRootResolver.resolve(worktree: linked))
+    try own.append(
+      try HarnessEventJSON.encodeLine(EventSegmentStoreTests.decision("linked-only")), to: .judge)
 
     let outcome = try EventCopyUp(source: linked, destination: repository.root).run()
 

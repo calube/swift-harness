@@ -52,9 +52,9 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
   }
 }
 
-/// The report a brownfield run ends with (design §11.6): the final verdict, the assumptions, the
-/// baseline failures, the build-only areas, the dropped steps, the review fallbacks and the plan
-/// branch to merge.
+/// The report a brownfield run ends with (design §11.6): whether every task got done, the final
+/// verdict, the unfinished tasks, the assumptions, the baseline failures, the build-only areas,
+/// the dropped steps, the review fallbacks and the plan branch to merge.
 public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   /// The report's file in the plan dir.
   public static let fileName = "REPORT.md"
@@ -158,7 +158,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case plan, planBranch, planBranchHead, final, finalNote, assumptions, baselineFailures
-    case buildOnlyAreas, droppedSteps, reviewFallbacks
+    case buildOnlyAreas, droppedSteps, reviewFallbacks, unfinishedTasks
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -174,6 +174,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     try c.encode(buildOnlyAreas, forKey: .buildOnlyAreas)
     try c.encode(droppedSteps, forKey: .droppedSteps)
     try c.encode(reviewFallbacks, forKey: .reviewFallbacks)
+    try c.encode(unfinishedTasks, forKey: .unfinishedTasks)
   }
 
   /// The steps `merge` and `final` run for every area: one with no command is worth a line even
@@ -189,7 +190,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       baselineFailures: Self.baselineFailures(inputs.baseline), buildOnlyAreas: buildOnly,
       droppedSteps: Self.droppedSteps(inputs.discover),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
-      unfinishedTasks: Section(items: [], note: nil))
+      unfinishedTasks: Self.unfinishedTasks(inputs.ledger))
+  }
+
+  private static func unfinishedTasks(_ ledger: RunReportInput<Ledger>) -> Section<UnfinishedTask> {
+    guard case .read(let ledger) = ledger else {
+      return Section(items: [], note: describe(ledger, what: "ledger"))
+    }
+    return Section(
+      items: ledger.tasks.filter { $0.status != .done }.map {
+        UnfinishedTask(id: $0.id, status: $0.status)
+      }, note: nil)
   }
 
   private static func describe<V>(_ input: RunReportInput<V>, what: String) -> String? {
@@ -334,11 +345,23 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       ], note: nil)
   }
 
-  /// The report as Markdown, the final verdict on its first line.
+  /// The report as Markdown. A run that left a task short of `done`, or whose ledger couldn't be
+  /// read, says so on its first line, since `final` gates only what merged; the final verdict
+  /// follows.
   public var text: String {
     var out: [String] = []
+    var scope = ""
+    if let note = unfinishedTasks.note {
+      out.append("run: completeness unknown; \(note)")
+      scope = ", gating only what merged"
+    } else if !unfinishedTasks.items.isEmpty {
+      let tasks = unfinishedTasks.items.map { "\($0.id) (\($0.status.rawValue))" }
+      out.append(
+        "run: INCOMPLETE, \(tasks.count) task(s) not done: " + tasks.joined(separator: ", "))
+      scope = ", gating only what merged"
+    }
     if let final {
-      out.append("final: \(final.verdict.rawValue) (gate run \(final.runID))")
+      out.append("final: \(final.verdict.rawValue) (gate run \(final.runID))\(scope)")
     } else {
       out.append("final: not recorded; \(finalNote ?? "no final gate")")
     }
@@ -347,6 +370,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     if let final, let finalNote {
       out += ["", "Note: \(finalNote) (final \(final.verdict.rawValue))"]
     }
+    out += render("Unfinished tasks", unfinishedTasks) { "\($0.id): \($0.status.rawValue)" }
     out += render("Assumptions", assumptions) { $0 }
     out += render("Baseline failures", baselineFailures) {
       "\($0.area) \($0.step.rawValue): " + ($0.test ?? "the whole step")

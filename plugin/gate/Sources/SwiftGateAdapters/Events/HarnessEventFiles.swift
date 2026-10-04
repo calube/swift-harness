@@ -72,10 +72,14 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
     EventSegmentStore(root: root, rotationBytes: rotationBytes)
   }
 
+  /// A run's copy stays with its run directory in the worktree; the shared log is wherever
+  /// ``StateRootResolver/eventStore(worktree:)`` puts it.
   public func path(_ stream: HarnessEventStream, runID: String?) -> String {
-    StateRootResolver.resolve(worktree: root).url(
-      runID.map { RunLayout.runEventsFile(stream, runID: $0) } ?? RunLayout.eventsFile(stream)
-    ).path
+    if let runID {
+      return StateRootResolver.resolve(worktree: root)
+        .url(RunLayout.runEventsFile(stream, runID: runID)).path
+    }
+    return StateRootResolver.eventStore(worktree: root).url(RunLayout.eventsFile(stream)).path
   }
 
   public func append(_ event: HarnessEvent) throws(HarnessEventWriteError) {
