@@ -81,6 +81,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "xml", "yaml", "yml",
     // Build file extensions discovery reads: `build.gradle.kts`, `mix.exs`, `go.mod`, `build.zig`.
     "gradle", "kts", "exs", "mod", "zig",
+    // Node, Python and Ruby files discovery reads: `eslint.config.mjs`, `setup.cfg`, `tox.ini`.
+    "cfg", "cjs", "cts", "ini", "js", "jsonc", "lockb", "mjs", "mts", "ts",
   ]
 
   /// The ids and families one Swift source file spells out.
