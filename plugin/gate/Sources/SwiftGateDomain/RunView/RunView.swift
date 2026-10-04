@@ -385,7 +385,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
 extension RunView.Run {
   private enum CodingKeys: String, CodingKey {
-    case id, plan, preset, startedAt, endedAt, state
+    case id, plan, preset, startedAt, endedAt, state, stallMin
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -396,6 +396,7 @@ extension RunView.Run {
     try c.encode(startedAt, forKey: .startedAt)
     try c.encode(endedAt, forKey: .endedAt)
     try c.encode(state, forKey: .state)
+    try c.encode(stallMin, forKey: .stallMin)
   }
 }
 
