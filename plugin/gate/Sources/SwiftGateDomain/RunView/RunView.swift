@@ -357,13 +357,172 @@ public struct RunView: Sendable, Equatable, Encodable {
     self.damage = damage
   }
 
-  public func encode(to encoder: any Encoder) throws {}
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, damage
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(schemaVersion, forKey: .schemaVersion)
+    try c.encode(cursor, forKey: .cursor)
+    try c.encode(run, forKey: .run)
+    try c.encode(spec, forKey: .spec)
+    try c.encode(tasks, forKey: .tasks)
+    try c.encode(roles, forKey: .roles)
+    try c.encode(spans, forKey: .spans)
+    try c.encode(gates, forKey: .gates)
+    try c.encode(proofs, forKey: .proofs)
+    try c.encode(halts, forKey: .halts)
+    try c.encode(damage, forKey: .damage)
+  }
+}
+
+// Each type with an optional field spells its encoding out: the synthesized one leaves an absent
+// value's key out, and the page reads `null` as the 1 spelling of "not known".
+
+extension RunView.Run {
+  private enum CodingKeys: String, CodingKey {
+    case id, plan, preset, startedAt, endedAt, state
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(plan, forKey: .plan)
+    try c.encode(preset, forKey: .preset)
+    try c.encode(startedAt, forKey: .startedAt)
+    try c.encode(endedAt, forKey: .endedAt)
+    try c.encode(state, forKey: .state)
+  }
+}
+
+extension RunView.Brief {
+  private enum CodingKeys: String, CodingKey {
+    case title, why, designRef, scope, acceptance, outOfScope
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(title, forKey: .title)
+    try c.encode(why, forKey: .why)
+    try c.encode(designRef, forKey: .designRef)
+    try c.encode(scope, forKey: .scope)
+    try c.encode(acceptance, forKey: .acceptance)
+    try c.encode(outOfScope, forKey: .outOfScope)
+  }
+}
+
+extension RunView.Task {
+  private enum CodingKeys: String, CodingKey {
+    case id, status, model, deps, writes, gate, covers, commits, gateRun, mergeGateRun
+    case createdAt, mergedAt, brief, tokens
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(status, forKey: .status)
+    try c.encode(model, forKey: .model)
+    try c.encode(deps, forKey: .deps)
+    try c.encode(writes, forKey: .writes)
+    try c.encode(gate, forKey: .gate)
+    try c.encode(covers, forKey: .covers)
+    try c.encode(commits, forKey: .commits)
+    try c.encode(gateRun, forKey: .gateRun)
+    try c.encode(mergeGateRun, forKey: .mergeGateRun)
+    try c.encode(createdAt, forKey: .createdAt)
+    try c.encode(mergedAt, forKey: .mergedAt)
+    try c.encode(brief, forKey: .brief)
+    try c.encode(tokens, forKey: .tokens)
+  }
+}
+
+extension RunView.Span {
+  private enum CodingKeys: String, CodingKey {
+    case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(id, forKey: .id)
+    try c.encode(parent, forKey: .parent)
+    try c.encode(phase, forKey: .phase)
+    try c.encode(task, forKey: .task)
+    try c.encode(gateRun, forKey: .gateRun)
+    try c.encode(start, forKey: .start)
+    try c.encode(end, forKey: .end)
+    try c.encode(outcome, forKey: .outcome)
+    try c.encode(approximate, forKey: .approximate)
+    try c.encode(tools, forKey: .tools)
+  }
+}
+
+extension RunView.GateStepRow {
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(tier, forKey: .tier)
+    try c.encode(step, forKey: .step)
+    try c.encode(startMs, forKey: .startMs)
+    try c.encode(milliseconds, forKey: .milliseconds)
+    try c.encode(verdict, forKey: .verdict)
+  }
+}
+
+extension RunView.Gate {
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(runID, forKey: .runID)
+    try c.encode(task, forKey: .task)
+    try c.encode(command, forKey: .command)
+    try c.encode(verdict, forKey: .verdict)
+    try c.encode(milliseconds, forKey: .milliseconds)
+    try c.encode(tests, forKey: .tests)
+    try c.encode(ruleCounts, forKey: .ruleCounts)
+    try c.encode(steps, forKey: .steps)
+  }
+}
+
+extension RunView.Proof {
+  private enum CodingKeys: String, CodingKey {
+    case gateRun, task, test, outcome, proofBase, assertion
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(gateRun, forKey: .gateRun)
+    try c.encode(task, forKey: .task)
+    try c.encode(test, forKey: .test)
+    try c.encode(outcome, forKey: .outcome)
+    try c.encode(proofBase, forKey: .proofBase)
+    try c.encode(assertion, forKey: .assertion)
+  }
+}
+
+extension RunView.Halt {
+  private enum CodingKeys: String, CodingKey {
+    case task, reason, at, answer, waitMs
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(task, forKey: .task)
+    try c.encode(reason, forKey: .reason)
+    try c.encode(at, forKey: .at)
+    try c.encode(answer, forKey: .answer)
+    try c.encode(waitMs, forKey: .waitMs)
+  }
 }
 
 /// `RunView` as JSON: sorted keys, ISO 8601 times with milliseconds, and `null` for every absent
 /// value, so the page reads 1 spelling of "not known".
 public enum RunViewJSON {
   public static func encode(_ view: RunView) throws -> Data {
-    Data()
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .custom { date, encoder in
+      var container = encoder.singleValueContainer()
+      try container.encode(date.formatted(HarnessEventJSON.timeFormat))
+    }
+    return try encoder.encode(view)
   }
 }

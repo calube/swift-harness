@@ -156,7 +156,10 @@ struct EventsCommand: ParsableCommand {
     commandName: "events",
     abstract:
       "Read the harness's events from every store under .harness/events/, and ingest agent usage.",
-    subcommands: [EventsListCommand.self, EventsSummaryCommand.self, EventsIngestCommand.self])
+    subcommands: [
+      EventsListCommand.self, EventsSummaryCommand.self, EventsIngestCommand.self,
+      EventsSpanCommand.self,
+    ])
 }
 
 struct EventsListCommand: ParsableCommand {

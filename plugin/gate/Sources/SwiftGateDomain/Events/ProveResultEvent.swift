@@ -54,4 +54,29 @@ public struct ProveResultEvent: Sendable, Equatable, Codable {
     self.proofBase = proofBase
     self.assertion = assertion
   }
+
+  private enum CodingKeys: String, CodingKey {
+    case test, testHashed, target, outcome, proofBase, assertion
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    test = try c.decode(String.self, forKey: .test)
+    testHashed = try c.decodeIfPresent(Bool.self, forKey: .testHashed) ?? false
+    target = try c.decode(String.self, forKey: .target)
+    outcome = try c.decode(ProveResultOutcome.self, forKey: .outcome)
+    proofBase = try c.decodeIfPresent(String.self, forKey: .proofBase)
+    assertion = try c.decodeIfPresent(ProveAssertion.self, forKey: .assertion)
+  }
+
+  /// `testHashed` is written only when true, as `test.result` writes it.
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(test, forKey: .test)
+    if testHashed { try c.encode(true, forKey: .testHashed) }
+    try c.encode(target, forKey: .target)
+    try c.encode(outcome, forKey: .outcome)
+    try c.encodeIfPresent(proofBase, forKey: .proofBase)
+    try c.encodeIfPresent(assertion, forKey: .assertion)
+  }
 }

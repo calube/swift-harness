@@ -48,7 +48,35 @@ public struct SpanStartEvent: Sendable, Equatable, Codable {
 
   /// Whether `id` is a span id: exactly 16 lowercase hex characters.
   public static func isValidID(_ id: String) -> Bool {
-    false
+    id.utf8.count == 16
+      && id.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case spanID, parentSpan, phase, buildRun, task, role
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    spanID = try SpanStartEvent.decodeID(c, .spanID)
+    parentSpan =
+      try c.contains(.parentSpan) && !c.decodeNil(forKey: .parentSpan)
+      ? SpanStartEvent.decodeID(c, .parentSpan) : nil
+    phase = try c.decode(SpanPhase.self, forKey: .phase)
+    buildRun = try c.decode(String.self, forKey: .buildRun)
+    task = try c.decodeIfPresent(String.self, forKey: .task)
+    role = try c.decodeIfPresent(AgentRole.self, forKey: .role)
+  }
+
+  static func decodeID<Key: CodingKey>(_ c: KeyedDecodingContainer<Key>, _ key: Key) throws
+    -> String
+  {
+    let id = try c.decode(String.self, forKey: key)
+    guard isValidID(id) else {
+      throw DecodingError.dataCorruptedError(
+        forKey: key, in: c, debugDescription: "`\(id)` isn't 16 lowercase hex characters")
+    }
+    return id
   }
 }
 
@@ -67,5 +95,12 @@ public struct SpanEndEvent: Sendable, Equatable, Codable {
   private enum CodingKeys: String, CodingKey {
     case spanID, outcome
     case milliseconds = "ms"
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    spanID = try SpanStartEvent.decodeID(c, .spanID)
+    outcome = try c.decode(SpanOutcome.self, forKey: .outcome)
+    milliseconds = try c.decode(Int.self, forKey: .milliseconds)
   }
 }

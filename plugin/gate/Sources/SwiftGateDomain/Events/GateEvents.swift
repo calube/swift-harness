@@ -218,7 +218,7 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
     self.verdict = timing.verdict
     self.derivedData = timing.derivedData
     self.area = timing.area
-    self.startMs = nil
+    self.startMs = timing.startMs
   }
 
   private enum CodingKeys: String, CodingKey {

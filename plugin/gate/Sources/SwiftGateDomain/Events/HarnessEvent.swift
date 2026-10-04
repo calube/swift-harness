@@ -391,9 +391,14 @@ extension HarnessEvent: Codable {
       payload = .discoverRun(try c.decode(DiscoverRunEvent.self, forKey: .payload))
     case .warmupRun:
       payload = .warmupRun(try c.decode(WarmupRunEvent.self, forKey: .payload))
-    case .spanStart, .spanEnd, .proveResult, .agentTools:
-      throw DecodingError.dataCorruptedError(
-        forKey: .kind, in: c, debugDescription: "run view events aren't read yet")
+    case .spanStart:
+      payload = .spanStart(try c.decode(SpanStartEvent.self, forKey: .payload))
+    case .spanEnd:
+      payload = .spanEnd(try c.decode(SpanEndEvent.self, forKey: .payload))
+    case .proveResult:
+      payload = .proveResult(try c.decode(ProveResultEvent.self, forKey: .payload))
+    case .agentTools:
+      payload = .agentTools(try c.decode(AgentToolsEvent.self, forKey: .payload))
     }
   }
 
@@ -421,7 +426,10 @@ extension HarnessEvent: Codable {
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
     case .discoverRun(let run): try c.encode(run, forKey: .payload)
     case .warmupRun(let run): try c.encode(run, forKey: .payload)
-    case .spanStart, .spanEnd, .proveResult, .agentTools: return
+    case .spanStart(let start): try c.encode(start, forKey: .payload)
+    case .spanEnd(let end): try c.encode(end, forKey: .payload)
+    case .proveResult(let result): try c.encode(result, forKey: .payload)
+    case .agentTools(let tools): try c.encode(tools, forKey: .payload)
     }
   }
 }
