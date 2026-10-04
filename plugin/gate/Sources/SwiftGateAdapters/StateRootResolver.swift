@@ -26,6 +26,16 @@ public enum StateRootResolver {
     return .gitDir(gitDir)
   }
 
+  /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no
+  /// git checkout or its common dir holds no `config.toml`.
+  public static func brownfieldLayout(worktree: URL) -> BrownfieldStateLayout? {
+    guard let gitDir = gitDirectory(enclosing: worktree) else { return nil }
+    let common = commonDirectory(of: gitDir).standardizedFileURL
+    guard FileManager.default.fileExists(atPath: common.appending(path: commonConfigFile).path)
+    else { return nil }
+    return BrownfieldStateLayout(commonDir: common, gitDir: gitDir)
+  }
+
   /// The git dir of the worktree at or above `directory`: its `.git` directory, or where its
   /// `.git` file points.
   static func gitDirectory(enclosing directory: URL) -> URL? {

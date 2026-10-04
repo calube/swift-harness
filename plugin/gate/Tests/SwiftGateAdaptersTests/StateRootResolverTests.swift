@@ -213,4 +213,31 @@ struct StateRootResolverTests {
         .isEmpty)
     #expect(!FileManager.default.fileExists(atPath: linked.appending(path: ".harness").path))
   }
+
+  @Test(
+    "a linked worktree's brownfield layout sits under the common dir, and a clone with no config has none — catches a writer that creates a second config per worktree"
+  )
+  func brownfieldLayoutOfLinkedWorktree() throws {
+    let root = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-layout-\(UUID().uuidString)", directoryHint: .isDirectory)
+      .resolvingSymlinksInPath()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let common = root.appending(path: "clone/.git", directoryHint: .isDirectory)
+    let gitDir = common.appending(path: "worktrees/task", directoryHint: .isDirectory)
+    let worktree = root.appending(path: "task", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: gitDir, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: worktree, withIntermediateDirectories: true)
+    try Data("../..\n".utf8).write(to: gitDir.appending(path: "commondir"))
+    try Data("gitdir: \(gitDir.path)\n".utf8).write(to: worktree.appending(path: ".git"))
+    #expect(StateRootResolver.brownfieldLayout(worktree: worktree) == nil)
+
+    try FileManager.default.createDirectory(
+      at: common.appending(path: "swift-harness"), withIntermediateDirectories: true)
+    try Data("schema = 1\n".utf8).write(to: common.appending(path: "swift-harness/config.toml"))
+    let layout = try #require(StateRootResolver.brownfieldLayout(worktree: worktree))
+    #expect(
+      layout.config.standardizedFileURL.path
+        == common.appending(path: "swift-harness/config.toml").standardizedFileURL.path)
+    #expect(layout.gitDir.standardizedFileURL.path == gitDir.standardizedFileURL.path)
+  }
 }

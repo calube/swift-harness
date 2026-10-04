@@ -9,7 +9,8 @@ enum AllowCommandError: Error, Equatable, CustomStringConvertible {
   case emptyReason
   case unreadableSource(path: String)
   case lineOutOfRange(path: String, line: Int)
-  case config(BrownfieldConfigFileError)
+  case notBrownfield(path: String)
+  case write(BrownfieldConfigWriteError)
 
   var description: String {
     switch self {
@@ -20,7 +21,8 @@ enum AllowCommandError: Error, Equatable, CustomStringConvertible {
     case .emptyReason: "--reason must say why the finding is acceptable"
     case .unreadableSource(let path): "\(path) doesn't read as text"
     case .lineOutOfRange(let path, let line): "\(path) has no line \(line)"
-    case .config(let error): error.description
+    case .notBrownfield(let path): "\(path) is not in a brownfield clone (no config.toml)"
+    case .write(let error): error.message
     }
   }
 }
@@ -47,10 +49,12 @@ struct AllowCommand: AsyncParsableCommand {
   @Flag(help: "Print JSON.")
   var json = false
 
-  /// Adds the entry for `location` to the config of the clone holding `worktree` and returns it.
+  /// Adds the entry for `location` to the config of the clone holding `worktree` and returns it,
+  /// waiting up to `lockTimeout` for the config lock.
   static func allow(
-    worktree: URL, rule: String, location: String, reason: String
-  ) throws(AllowCommandError) -> BrownfieldAllow {
+    worktree: URL, rule: String, location: String, reason: String,
+    lockTimeout: Duration = .seconds(30)
+  ) async throws(AllowCommandError) -> BrownfieldAllow {
     guard let ruleID = BrownfieldRuleID(rawValue: rule), waivableRules.contains(ruleID) else {
       throw .rule(rule)
     }
@@ -61,11 +65,8 @@ struct AllowCommand: AsyncParsableCommand {
     let path = String(location[..<colon])
     let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !why.isEmpty else { throw .emptyReason }
-    let file: BrownfieldConfigFile
-    do {
-      file = try BrownfieldConfigFile.locate(worktree: worktree)
-    } catch {
-      throw .config(error)
+    guard let layout = StateRootResolver.brownfieldLayout(worktree: worktree) else {
+      throw .notBrownfield(path: worktree.path)
     }
     guard let data = FileManager.default.contents(atPath: worktree.appending(path: path).path),
       let text = String(data: data, encoding: .utf8)
@@ -78,14 +79,16 @@ struct AllowCommand: AsyncParsableCommand {
       rule: ruleID.rawValue, path: path, lineSHA: AllowMatching.lineSHA(String(lines[line - 1])),
       reason: why)
     do {
-      try file.update { config in
-        BrownfieldConfig(
+      try await BrownfieldConfigWriter(layout: layout, timeout: lockTimeout).updateConfig {
+        config throws(BrownfieldConfigWriteError) in
+        guard let config else { throw .rejected("\(layout.config.path) is missing") }
+        return BrownfieldConfig(
           brownfield: config.brownfield, areas: config.areas,
           allow: config.allow.contains(entry) ? config.allow : config.allow + [entry],
           buildPresets: config.buildPresets)
       }
     } catch {
-      throw .config(error)
+      throw .write(error)
     }
     return entry
   }
@@ -101,7 +104,7 @@ struct AllowCommand: AsyncParsableCommand {
     let outcome: Result<BrownfieldAllow, AllowCommandError>
     do throws(AllowCommandError) {
       outcome = .success(
-        try Self.allow(worktree: worktree, rule: rule, location: location, reason: reason))
+        try await Self.allow(worktree: worktree, rule: rule, location: location, reason: reason))
     } catch {
       outcome = .failure(error)
     }
@@ -113,7 +116,7 @@ struct AllowCommand: AsyncParsableCommand {
     case .failure(let error):
       try emit(["status": "error", "message": error.description], text: "allow: \(error)")
       switch error {
-      case .config(.lock), .config(.unreadable), .config(.write):
+      case .write(.lock), .write(.io):
         throw ExitCode(Verdict.blocked.exitCode)
       default:
         throw ExitCode(Verdict.red.exitCode)
