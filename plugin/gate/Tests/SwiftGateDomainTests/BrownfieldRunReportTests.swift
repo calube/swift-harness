@@ -202,18 +202,6 @@ import Testing
     #expect(first.contains("no final gate"))
   }
 
-  @Test("classified review names the tasks it reviewed at medium — catches a silent review depth")
-  func reviewFallback() {
-    let report = BrownfieldRunReport.make(Self.inputs())
-    #expect(report.reviewFallbacks.items.count == 1)
-    #expect(report.reviewFallbacks.items.first?.contains("report-export-api") == true)
-    #expect(report.reviewFallbacks.items.first?.contains("medium") == true)
-
-    let full = BrownfieldRunReport.make(
-      Self.inputs(build: .read(Self.build(review: .full, events: []))))
-    #expect(full.reviewFallbacks == .init(items: [], note: nil))
-  }
-
   @Test(
     "a test 2 baseline records both fail, under 2 commands for 1 step, is 1 line — catches a duplicated baseline line"
   )
@@ -243,33 +231,101 @@ import Testing
     #expect(lines("Baseline failures", in: report.text).filter { $0.hasSuffix(test) }.count == 1)
   }
 
+  /// A return the fourth `usememos/memos` trial's `build-task` workflow handed back.
+  private static func memos4Return(_ task: String) throws -> TaskReturn {
+    try TaskReturnJSON.decode(Fixture.data("BuildReturn/memos-4/\(task).json"))
+  }
+
+  /// `taskReturn` with `notes` in place of its own.
+  private static func noting(_ notes: String, _ taskReturn: TaskReturn, task: String)
+    -> TaskReturn
+  {
+    TaskReturn(
+      task: task, outcome: taskReturn.outcome, commits: taskReturn.commits,
+      gate: taskReturn.gate, review: taskReturn.review, testsAdded: taskReturn.testsAdded,
+      notes: notes, designConflict: taskReturn.designConflict,
+      surfaceCommit: taskReturn.surfaceCommit)
+  }
+
+  private static func started(_ task: String) -> BuildEvent {
+    .transition(.init(task: task, from: .pending, to: .inProgress, at: at))
+  }
+
   @Test(
-    "classified review's fallback names a reviewed task the run blocked as well as a merged one, and leaves out a task landed with no review — catches fallbacks counted over merged tasks only"
+    "classified review's fallbacks give each reviewed task's depth and why from its return, and leave out a task diff-risk rated, a design conflict and a task landed with no review — catches none, or a stale reason, when reviews fell back"
   )
-  func reviewFallbackCountsUnmergedTasks() throws {
-    let started = { (task: String) in
-      BuildEvent.transition(.init(task: task, from: .pending, to: .inProgress, at: Self.at))
-    }
-    let report = BrownfieldRunReport.make(
-      Self.inputs(
-        build: .read(
-          Self.build(events: [
-            started("contract"),
-            .transition(.init(task: "contract", from: .inProgress, to: .done, at: Self.at)),
-            started("store"), started("web"), started("api"),
-            .transition(.init(task: "web", from: .inProgress, to: .blocked, at: Self.at)),
-            .merge(.init(task: "api", preCommit: "a", postCommit: "b", at: Self.at)),
-            .transition(.init(task: "api", from: .inProgress, to: .done, at: Self.at)),
-            .transition(.init(task: "store", from: .inProgress, to: .blocked, at: Self.at)),
-          ]))))
-    let line = try #require(report.reviewFallbacks.items.first)
-    #expect(report.reviewFallbacks.items.count == 1)
-    #expect(line.contains("3 task(s)"), "\(line)")
-    #expect(line.contains("web (blocked)"), "\(line)")
-    #expect(line.contains("api (merged)"), "\(line)")
-    #expect(line.contains("store (blocked)"), "\(line)")
-    #expect(!line.contains("contract"), "\(line)")
-    #expect(lines("Review fallbacks", in: report.text) == [line])
+  func reviewFallbacksPerTask() throws {
+    let web = try Self.memos4Return("share-view-limit-web")
+    let store = try Self.memos4Return("share-view-limit-store")
+    let rated = Self.noting(
+      "Both tests pass.\nreview: classified at low by swiftgate judge diff-risk", web, task: "docs")
+    var build = Self.build(events: [
+      Self.started("contract"),
+      .transition(.init(task: "contract", from: .inProgress, to: .done, at: Self.at)),
+      Self.started("share-view-limit-store"), Self.started("share-view-limit-web"),
+      Self.started("api"), Self.started("docs"),
+      .transition(
+        .init(task: "share-view-limit-web", from: .inProgress, to: .blocked, at: Self.at)),
+      .merge(.init(task: "api", preCommit: "a", postCommit: "b", at: Self.at)),
+      .merge(.init(task: "docs", preCommit: "b", postCommit: "c", at: Self.at)),
+      .transition(
+        .init(task: "share-view-limit-store", from: .inProgress, to: .blocked, at: Self.at)),
+    ])
+    build = RunReportBuild(
+      record: build.record, log: build.log,
+      returns: [
+        "share-view-limit-web": .read(web), "share-view-limit-store": .read(store),
+        "docs": .read(rated),
+      ])
+
+    let report = BrownfieldRunReport.make(Self.inputs(build: .read(build)))
+
+    #expect(
+      report.reviewFallbacks.items == [
+        "share-view-limit-web (blocked): classified review ran at medium, because diff-risk gave "
+          + "no level: the clone's config has no [judge] section",
+        "api (merged): review depth unknown: the build run stored no checked return for it",
+      ])
+    #expect(report.reviewFallbacks.note == nil)
+    #expect(lines("Review fallbacks", in: report.text) == report.reviewFallbacks.items)
+  }
+
+  @Test(
+    "a classified run whose every review diff-risk rated reports no fallback, and an unreadable return says why — catches a fallback counted for a rated review"
+  )
+  func reviewFallbacksNoneWhenRated() throws {
+    let web = try Self.memos4Return("share-view-limit-web")
+    let base = Self.build(events: [
+      Self.started("report-export-api"),
+      .merge(.init(task: "report-export-api", preCommit: "a", postCommit: "b", at: Self.at)),
+    ])
+    let rated = RunReportBuild(
+      record: base.record, log: base.log,
+      returns: [
+        "report-export-api": .read(
+          Self.noting(
+            "review: classified at high by swiftgate judge diff-risk", web,
+            task: "report-export-api"))
+      ])
+    let report = BrownfieldRunReport.make(Self.inputs(build: .read(rated)))
+    #expect(report.reviewFallbacks == .init(items: [], note: nil))
+    #expect(lines("Review fallbacks", in: report.text) == ["none"])
+
+    let damaged = RunReportBuild(
+      record: base.record, log: base.log,
+      returns: [
+        "report-export-api": .unreadable(
+          source: "returns/report-export-api.json", reason: "notes is not a string")
+      ])
+    #expect(
+      BrownfieldRunReport.make(Self.inputs(build: .read(damaged))).reviewFallbacks.items == [
+        "report-export-api (merged): review depth unknown: returns/report-export-api.json didn't "
+          + "read: notes is not a string"
+      ])
+
+    let full = BrownfieldRunReport.make(
+      Self.inputs(build: .read(Self.build(review: .full, events: base.log.events))))
+    #expect(full.reviewFallbacks == .init(items: [], note: nil))
   }
 
   @Test("the plan branch to merge is named with its head, or as missing — catches a dangling name")

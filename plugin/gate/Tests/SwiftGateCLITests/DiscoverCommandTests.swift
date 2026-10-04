@@ -9,7 +9,7 @@ import Testing
 
 /// A throwaway clone with its own git dir, so nothing a test writes reaches this checkout's
 /// shared common dir.
-private struct TemporaryClone {
+struct TemporaryClone {
   static let environment: [String: String] = [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
     "HOME": FileManager.default.temporaryDirectory.path,
@@ -38,6 +38,24 @@ private struct TemporaryClone {
     try write(files)
     try await git("add", "-A")
     try await git("commit", "-q", "-m", "base")
+  }
+
+  /// A clone holding the signal files a captured `F/Discover/<name>/` repository's readers read.
+  init(fixture name: String) async throws {
+    let tree = Fixture.directory.appending(
+      path: "Discover/\(name)/tree", directoryHint: .isDirectory)
+    var files: [String: String] = [:]
+    let walker = FileManager.default.enumerator(
+      at: tree, includingPropertiesForKeys: [.isRegularFileKey])
+    while let url = walker?.nextObject() as? URL {
+      guard (try url.resourceValues(forKeys: [.isRegularFileKey])).isRegularFile == true else {
+        continue
+      }
+      let path = String(
+        url.resolvingSymlinksInPath().path.dropFirst(tree.resolvingSymlinksInPath().path.count + 1))
+      files[path] = try String(contentsOf: url, encoding: .utf8)
+    }
+    try await self.init(files: files)
   }
 
   func write(_ files: [String: String]) throws {
@@ -310,5 +328,85 @@ struct DiscoverCommandTests {
 
     #expect(reader.count == 2)
     #expect(miss.proposal.areas.map(\.name).sorted() == ["api", "web"])
+  }
+
+  // MARK: - [judge]
+
+  /// The clone's `[judge]` as `judge diff-risk` reads it.
+  private func judge(in clone: TemporaryClone) throws -> JudgeConfig {
+    switch JudgeDiffRiskRun.settings(root: clone.root) {
+    case .success(let settings): return settings.judge
+    case .failure(let failure):
+      struct Unread: Error { let reason: String }
+      throw Unread(reason: failure.reason)
+    }
+  }
+
+  /// Rewrites `config.toml` as a user's hand edit would.
+  private func edit(_ clone: TemporaryClone, _ change: (String) -> String) throws {
+    let text = try String(contentsOf: clone.layout.config, encoding: .utf8)
+    let changed = change(text)
+    #expect(changed != text, "the edit changed nothing in config.toml")
+    try Data(changed.utf8).write(to: clone.layout.config)
+  }
+
+  @Test(
+    "a fresh clone's first --apply writes [judge] with the owned profile's defaults, and a rediscovery keeps a user's [judge] edit, backend none included — catches a fresh discover with no [judge] or a rediscovery dropping a user's edit"
+  )
+  func firstApplyWritesJudgeAndRediscoveryKeepsEdits() async throws {
+    let clone = try await TemporaryClone(fixture: "usememos-memos")
+    defer { clone.remove() }
+    let dependencies = clone.dependencies(readers: EcosystemReaders.all)
+
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [], dependencies: dependencies)
+    let written = try String(contentsOf: clone.layout.config, encoding: .utf8)
+    #expect(written.contains("[judge]\nbackend = \"claude\"\n"), "\(written)")
+    #expect(try judge(in: clone) == .enabled(backend: .claude, thresholds: .defaults, model: nil))
+
+    try edit(clone) {
+      $0.replacingOccurrences(of: "advisory_threshold = 0.6", with: "advisory_threshold = 0.7")
+        .replacingOccurrences(of: "block_threshold = 0.9", with: "block_threshold = 0.95")
+    }
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [], dependencies: dependencies)
+    #expect(
+      try judge(in: clone)
+        == .enabled(
+          backend: .claude, thresholds: JudgeThresholds(advisory: 0.7, block: 0.95), model: nil))
+
+    try edit(clone) {
+      $0.replacingOccurrences(of: "backend = \"claude\"", with: "backend = \"none\"")
+    }
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [], dependencies: dependencies)
+    #expect(try judge(in: clone) == .disabled)
+  }
+
+  @Test(
+    "in a fresh clone discover --apply configured, judge diff-risk asks the judge and answers with a level — catches diff-risk never answering in a fresh clone"
+  )
+  func diffRiskAnswersInFreshClone() async throws {
+    let clone = try await TemporaryClone(fixture: "usememos-memos")
+    defer { clone.remove() }
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [],
+      dependencies: clone.dependencies(readers: EcosystemReaders.all))
+    try await clone.git("checkout", "-q", "-b", "task")
+    try clone.write(["store/share.go": "package store\n"])
+    try await clone.git("add", "-A")
+    try await clone.git("commit", "-q", "-m", "share")
+
+    let configured = try judge(in: clone)
+    let scripted = BrownfieldJudgeTests.riskJudge("low")
+    let live = BrownfieldJudge.live(configured, root: clone.root).map {
+      BrownfieldJudge(thresholds: $0.thresholds, testQuality: $0.testQuality, ask: scripted.ask)
+    }
+    let git = LiveGit(runner: clone.runner, repositoryRoot: clone.root.path)
+    let outcome = await JudgeDiffRiskRun.run(
+      base: "main", git: git, diff: git, sensitive: [], judge: live)
+
+    #expect(outcome == .rated(.judged(.low)))
+    #expect(JudgeDiffRiskRun.render(outcome, json: true).status == 0)
   }
 }
