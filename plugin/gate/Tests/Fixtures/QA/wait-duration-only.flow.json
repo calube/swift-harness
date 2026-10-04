@@ -1,0 +1,2 @@
+[{"command":"press","input":{"target":{"kind":"selector","selector":"id=\"counter.increment\""}}},
+ {"command":"wait","input":{"kind":"duration","durationMs":1000}}]
