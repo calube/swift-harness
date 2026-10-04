@@ -20,7 +20,7 @@ public struct TargetMembership: Sendable {
   public init(project: PBXProject, projectPath: String) {
     self.project = project
     self.projectPath = projectPath
-    let resolver = PathResolver(project: project, projectPath: projectPath)
+    let resolver = PBXPathResolver(project: project, projectPath: projectPath)
     let groups = project.synchronizedRootGroups
     entries = project.nativeTargets.map { target in
       var compiled: Set<String> = []
@@ -43,7 +43,7 @@ public struct TargetMembership: Sendable {
         } else {
           // A set naming a target that doesn't own the folder lists the files that target takes in.
           for set in sets {
-            adopted.formUnion(set.membershipExceptions.compactMap { join(root, $0) })
+            adopted.formUnion(set.membershipExceptions.compactMap { pbxJoin(root, $0) })
           }
         }
       }
@@ -77,7 +77,7 @@ public struct TargetMembership: Sendable {
   public var sourceRoots: [String] {
     var roots: Set<String> = []
     for entry in entries {
-      roots.formUnion(entry.compiled.map(directory(of:)))
+      roots.formUnion(entry.compiled.map(pbxDirectory(of:)))
       roots.formUnion(entry.folders.map(\.root))
     }
     return roots.sorted()
@@ -162,14 +162,14 @@ private struct SynchronizedFolder: Sendable {
 
 /// Resolves each object's path through its parent groups' `path` and `sourceTree`, relative to
 /// the repository root.
-private struct PathResolver {
+struct PBXPathResolver {
   let project: PBXProject
   let projectDirectory: String?
   let parents: [String: String]
 
   init(project: PBXProject, projectPath: String) {
     self.project = project
-    projectDirectory = join(directory(of: projectPath), project.projectDirPath)
+    projectDirectory = pbxJoin(pbxDirectory(of: projectPath), project.projectDirPath)
     var parents: [String: String] = [:]
     for object in project.objects.values {
       for child in object.strings("children") { parents[child] = object.id }
@@ -187,7 +187,7 @@ private struct PathResolver {
     }
     guard let base else { return nil }
     guard let own = object.string("path") else { return base }
-    return join(base, own)
+    return pbxJoin(base, own)
   }
 
   /// A build file's reference: a file, or a variant or version group standing for its children.
@@ -203,7 +203,7 @@ private struct PathResolver {
 }
 
 /// `base/relative` with `.` and `..` folded; nil when it climbs above the repository root.
-private func join(_ base: String, _ relative: String) -> String? {
+func pbxJoin(_ base: String, _ relative: String) -> String? {
   var parts: [Substring] = []
   for part in (base + "/" + relative).split(separator: "/") {
     switch part {
@@ -217,17 +217,17 @@ private func join(_ base: String, _ relative: String) -> String? {
   return parts.joined(separator: "/")
 }
 
-private func directory(of path: String) -> String {
+func pbxDirectory(of path: String) -> String {
   guard let slash = path.lastIndex(of: "/") else { return "" }
   return String(path[..<slash])
 }
 
 private func ancestors(of path: String) -> [String] {
   var result: [String] = []
-  var current = directory(of: path)
+  var current = pbxDirectory(of: path)
   while !current.isEmpty {
     result.append(current)
-    current = directory(of: current)
+    current = pbxDirectory(of: current)
   }
   return result
 }

@@ -275,6 +275,7 @@ struct NewSubcommandRegistrationTests {
     "report --html", "report --json --out", "view", "view --build-run --port",
     "events span start", "events span end",
     "warmup",
+    "xcode add-file",
   ]
 
   @Test(
