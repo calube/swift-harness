@@ -2340,6 +2340,33 @@ grep '"runID":"20261004T124744Z-9d7ec113"' $S/memos-3/gate-history-task-worktree
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/*` matched nothing.
 
+## Claude Code plugin validation
+
+`PluginValidate/` holds `claude plugin validate --strict --json plugin` reports from Claude Code
+2.1.288, each with its exit status in a `.status` file. `unversioned-manifest` is this
+repository's own plugin, whose manifest carries no `version` because `plugin-version.pinned`
+forbids one. `unknown-field` is a temp copy of that manifest with a `"colour"` field added, so the
+validator reports a second warning beside the version one. From the repository root:
+
+```sh
+ROOT=$(pwd -P) F=plugin/gate/Tests/Fixtures/PluginValidate
+mkdir -p $F
+{ claude plugin validate --strict --json plugin; echo $? > $F/unversioned-manifest.status; } \
+  | sed "s#$ROOT#/REPO#g" > $F/unversioned-manifest.json
+T=$(cd "$(mktemp -d)" && pwd -P)
+mkdir -p $T/plugin && cp -R plugin/.claude-plugin $T/plugin/
+sed -i '' 's#^  "license": "UNLICENSED"$#  "license": "UNLICENSED",\n  "colour": "blue"#' \
+  $T/plugin/.claude-plugin/plugin.json
+{ (cd $T && claude plugin validate --strict --json plugin); echo $? > $F/unknown-field.status; } \
+  | sed "s#$T#/REPO#g" > $F/unknown-field.json
+```
+
+Observed behavior the check relies on: the version warning is the manifest entry's warning with
+`path` `"version"`; `--strict` turns it into `"success": false` and exit status 1, and without
+`--strict` the same warning is printed with `"success": true`. A manifest with a schema error
+(such as `"keywords": "swift"`) reports the error and drops the version warning.
+`grep -niE '/Users|/private|/var/folders|caleb' PluginValidate/*` matched nothing.
+
 ## Brownfield trial: a plan with a validation table
 
 `BrownfieldTrial/memos-4-validation-PLAN.md` is `memos-4-PLAN.md` with a `## Validation` section

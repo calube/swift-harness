@@ -7,10 +7,19 @@ import SwiftGateDomain
 /// runtime tolerates (a `CLAUDE.md` that never loads, an unknown manifest field) are exactly what
 /// ships unnoticed. When `claude` isn't on `PATH` or can't run, the step is a note, never
 /// BLOCKED: a machine without Claude Code can still run every other gate.
+///
+/// One warning is accepted: the validator's request for a manifest `version`, while
+/// `plugin-version.pinned` is what keeps the version out. It is matched on its field and exact
+/// wording, so a reworded or new warning gates until someone reviews it.
 enum PluginValidateCheck {
   static let failedRuleID = "plugin-validate.failed"
   static let notRunRuleID = "plugin-validate.not-run"
   static let summaryRuleID = "plugin-validate.summary"
+  static let acceptedWarningRuleID = "plugin-validate.accepted-warning"
+
+  static let unversionedPath = "version"
+  static let unversionedMessage =
+    "No version specified. Consider adding a version following semver (e.g., \"1.0.0\")"
 
   static let pluginDirectory = "plugin"
   static let manifestPath = "\(pluginDirectory)/.claude-plugin/plugin.json"
@@ -64,12 +73,28 @@ enum PluginValidateCheck {
             + "report: \(printed.isEmpty ? "(nothing)" : String(printed.prefix(400)))")
       ]
     }
+    let versionUnpinned =
+      try PluginVersionCheck.run(root: root).map(\.ruleID) == [
+        PluginVersionRule.summaryRuleID
+      ]
     var findings: [Finding] = []
+    var accepted: [Finding] = []
     for entry in [report.manifest] + report.contents {
       let file = relative(entry.file, root: root)
       for (kind, issues) in [("error", entry.errors), ("warning", entry.warnings)] {
         for issue in issues {
           let location = issue.path.map { "\($0): " } ?? ""
+          if versionUnpinned, kind == "warning", file == manifestPath,
+            issue.path == unversionedPath, issue.message == unversionedMessage
+          {
+            accepted.append(
+              try finding(
+                acceptedWarningRuleID, .nit, file: file,
+                "claude plugin validate --strict warning accepted: \(location)\(issue.message) "
+                  + "The manifest pins no version because \(PluginVersionRule.pinnedRuleID) "
+                  + "keeps installs on the marketplace commit."))
+            continue
+          }
           findings.append(
             try finding(
               failedRuleID, .major, file: file,
@@ -77,18 +102,20 @@ enum PluginValidateCheck {
         }
       }
     }
-    if findings.isEmpty, !report.success || !output.status.isSuccess {
+    if findings.isEmpty, accepted.isEmpty, !report.success || !output.status.isSuccess {
       findings.append(
         try finding(
           failedRuleID, .major, file: manifestPath,
           "claude plugin validate reported failure (exit \(describe(output.status))) without "
             + "naming an error or warning."))
     }
-    guard findings.isEmpty else { return findings }
-    return [
+    guard findings.isEmpty else { return accepted + findings }
+    let others = accepted.isEmpty ? "" : " other than the accepted one"
+    return accepted + [
       try finding(
         summaryRuleID, .nit, file: manifestPath,
-        "claude plugin validate --strict: \(pluginDirectory)/ passed with no errors or warnings.")
+        "claude plugin validate --strict: \(pluginDirectory)/ passed with no errors or "
+          + "warnings\(others).")
     ]
   }
 
