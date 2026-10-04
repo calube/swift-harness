@@ -82,7 +82,8 @@ struct ScenarioDriftRuleTests {
     "an enum inside a packages glob is not the app's — catches a package type standing in for the app's enum"
   )
   func packageEnumIgnored() throws {
-    let inPackage = SourceInput(path: "Packages/Feed/Sources/Feed/Scenario.swift", text: liveAndFixed.text)
+    let inPackage = SourceInput(
+      path: "Packages/Feed/Sources/Feed/Scenario.swift", text: liveAndFixed.text)
     let found = try findings(["live", "fixed-fact"], [inPackage])
     #expect(found.map(\.ruleID) == [ScenarioDriftRule.id])
     #expect(found.first?.file == ".swiftgate.toml")

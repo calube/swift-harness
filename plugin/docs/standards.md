@@ -637,6 +637,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `arch.live-dependency`, `arch.live-depends-on-feature`, `arch.vendor-dependency` | D2, D3 |
 | `arch.dependency-client-test-value` | D4 |
 | `arch.engine-replay-test` | G1, playbook P10 |
+| `sim.scenario-drift` | simulator QA design §6 (the app's `Scenario` enum mirrors `[[scenarios]]`) |
 | `comments.restates-code`, `comments.long-block`, `comments.test-body`, `comments.trivial-private-doc`, `comments.ai-prose` | K1 |
 | `comments.commented-out-code`, `comments.diff-narration`, `comments.line-reference`, `comments.todo-without-link`, `comments.private-reference` | K2 |
 | `comments.unjustified-suppression` | [Escape hatches](#escape-hatches), C2, E2 |
