@@ -32,3 +32,38 @@ struct GitTopLevelTests {
     #expect(GitTopLevel().of("Sources") == nil)
   }
 }
+
+@Suite("git worktree roots without git")
+struct GitWorktreeRootsTests {
+  @Test(
+    "a top level under /private keeps that spelling — catches the transcript's realpath cwd losing every path"
+  )
+  func privatePrefixKept() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("Sources/App/A.swift", "a\n")
+    let real = CanonicalPath.of(repo.root)
+    #expect(GitTopLevel().of(real) == real)
+    #expect(GitTopLevel().of("\(real)/Sources/App") == real)
+  }
+
+  @Test(
+    "the main checkout and a linked worktree list each other — catches a worker's worktree missing from the roots"
+  )
+  func linkedWorktreesListed() async throws {
+    let repo = try await TemporaryGitRepository()
+    defer { repo.remove() }
+    try repo.write("A.swift", "a\n")
+    _ = try await repo.commitAll("base")
+    let linked = repo.root.deletingLastPathComponent()
+      .appending(path: "\(repo.root.lastPathComponent)-linked", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: linked) }
+    try await repo.git("worktree", "add", "-q", "-b", "task", linked.path)
+    let main = CanonicalPath.of(repo.root)
+    let task = CanonicalPath.of(linked)
+
+    #expect(GitTopLevel().worktrees(of: main) == [main, task])
+    #expect(GitTopLevel().worktrees(of: "\(task)/Sources") == [main, task])
+    #expect(GitTopLevel().worktrees(of: repo.root.deletingLastPathComponent().path) == [])
+  }
+}
