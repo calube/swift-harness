@@ -46,6 +46,44 @@ struct SimulatorSelectionTests {
   }
 
   @Test(
+    "2 devices with the base's name and os still yield the lowest UDID, plus a non-gating note naming both and no other device — catches a silent pick between duplicate bases"
+  )
+  func duplicateBaseIsNoted() throws {
+    let devices = [
+      device("D2", "iPhone 17"),
+      device("A1", "iPhone 17", runtime: Self.ios264),
+      device("B0", "iPhone 17", available: false),
+      device("C1", "iPhone 17"),
+    ]
+    let config = SimulatorConfig(device: "iPhone 17", os: "26.2")
+
+    let base = try SimulatorSelection.baseDevice(in: devices, config: config)
+    let note = try #require(SimulatorSelection.baseAmbiguityNote(in: devices, config: config))
+
+    #expect(base.udid == "C1")
+    #expect(note.ruleID == "sim.base-ambiguous")
+    #expect(!note.severity.failsGate)
+    #expect(note.message.contains("C1") && note.message.contains("D2"))
+    #expect(!note.message.contains("A1") && !note.message.contains("B0"))
+  }
+
+  @Test(
+    "1 device with the base's name and os yields no note — catches a note on every run that would bury a real duplicate"
+  )
+  func singleBaseHasNoNote() {
+    let devices = [
+      device("C1", "iPhone 17"),
+      device("A1", "iPhone 17", runtime: Self.ios264),
+      device("B0", "iPhone 17", available: false),
+      device("Z9", "swift-harness-1-x"),
+    ]
+
+    #expect(
+      SimulatorSelection.baseAmbiguityNote(
+        in: devices, config: SimulatorConfig(device: "iPhone 17", os: "26.2")) == nil)
+  }
+
+  @Test(
     "a missing pinned device is BLOCKED and names the installed runtimes — catches a silent fallback to another OS"
   )
   func baseDeviceMissing() {

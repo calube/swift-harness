@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
@@ -340,6 +341,41 @@ struct SimulatorClonesBootedBaseTests {
     _ = try await Self.clones(shutDown, lock: lock, config: config).withClone { $0 }
     #expect(shutDown.calls.contains(.clone(udid: "BASE", name: "swift-harness-4242-tok")))
     #expect(!shutDown.calls.contains { if case .create = $0 { true } else { false } })
+  }
+
+  @Test(
+    "with 2 shut-down devices sharing the base's name and os the run clones the lowest UDID and hands the note naming both to its sink — catches a silent pick between duplicate bases"
+  )
+  func duplicateBaseNoted() async throws {
+    let (lock, directory) = Self.lock()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let config = SimulatorConfig(device: "iPhone 17", os: "26.2")
+    func shutDown(_ udid: String) -> SimulatorDevice {
+      SimulatorDevice(
+        udid: udid, name: "iPhone 17", runtimeIdentifier: Self.ios262, state: "Shutdown",
+        isAvailable: true, deviceTypeIdentifier: Self.iPhone17)
+    }
+    let fake = FakeSimctl(devices: [shutDown("BASE-2"), shutDown("BASE-1")])
+    let notes = Mutex<[Finding]>([])
+
+    _ = try await SimulatorClones(
+      simctl: fake, lock: lock, config: config, ownerPID: 4242, isAlive: { _ in true },
+      makeToken: { "tok" }, lockTimeout: .seconds(5),
+      notes: { note in notes.withLock { $0.append(note) } }
+    ).withClone { $0 }
+
+    #expect(fake.calls.contains(.clone(udid: "BASE-1", name: "swift-harness-4242-tok")))
+    let seen = notes.withLock { $0 }
+    #expect(seen.map(\.ruleID) == ["sim.base-ambiguous"])
+    #expect(seen.first.map { $0.message.contains("BASE-1") && $0.message.contains("BASE-2") } == true)
+
+    let single = FakeSimctl(devices: [shutDown("BASE-1")])
+    _ = try await SimulatorClones(
+      simctl: single, lock: lock, config: config, ownerPID: 4242, isAlive: { _ in true },
+      makeToken: { "tok" }, lockTimeout: .seconds(5),
+      notes: { note in notes.withLock { $0.append(note) } }
+    ).withClone { $0 }
+    #expect(notes.withLock { $0.count } == 1)
   }
 
   @Test(
