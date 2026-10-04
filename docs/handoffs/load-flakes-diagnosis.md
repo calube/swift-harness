@@ -142,7 +142,8 @@ The rm fails when a file lands between its `readdir` and its `rmdir`. The cold-s
 Fix: `kill_background_build` matches the whole plugin copy, `$work/repo/plugin/`, which covers the
 shim and the build. After each kill, the test also checks that no `$work/repo/plugin/bin/swiftgate`
 process is left. Before the fix, that check fails on the shim that is still hashing. After it,
-the check holds.
+the check holds. Killing the shim also kills what removes the build lock, so
+`wait_for_background_build` stops waiting once no process of the copy is left.
 
 ## 3. `HookCommandTests.gitCommitJevFailureIsAdvisory`: the 250 ms limit
 
@@ -206,6 +207,27 @@ same worktree whose change misses `SwiftGateDomain`. Cost: about 150 s of extra 
 about 180 s of extra CPU for the first gate in each worktree, about 650 MB per live worktree
 (6.5 GB for 10), and a pruning step. Pruning makes the change more than a one-liner, so the
 orchestrator decides.
+
+## Verification after the fixes
+
+- **Descriptor test.** It passed alone (0.56 s), 3 of 3 times under 16 × `yes` (0.17-0.27 s), and
+  in 5 of 5 full parallel suites. With the scratch leak patch, it failed: the child exited with
+  failure.
+- **Shim test.**
+  - With the no-shim-left check and the old pattern, it failed at load 21: the
+    `hook session-start` subshell and 3 `bin/swiftgate --version` processes were still running.
+  - With the wider pattern it passed alone 3 times (51-136 s, load 16-67). It also passed in 3 full
+    suites traced at load 34-50. Their 21 kills were all clean, and each kill after a cold
+    `session-start` found only the 2 shim processes, before any `swift build` had started.
+  - Two earlier untraced full suites hit the test's 540 s deadline. The traced suites did not
+    reproduce it.
+  - One gap the wider kill opened is closed: the shim it kills is the one that removes the build
+    lock. `wait_for_background_build` now stops waiting once no process of the plugin copy is left,
+    instead of waiting on an orphaned lock until the deadline.
+- **Hook CPU readings.** In the test, the old `threadCPUMilliseconds` read 350 ms for a body that
+  spun 50 ms, while its caller's thread spun 300 ms for someone else. In 2 full suites (502
+  readings each), the new readings were p50 1.0-1.3 ms, p95 5.0-6.1 ms and max 50 ms. Before the
+  fix they ranged from -2 971 to +4 720 ms.
 
 ## Issue #8's node walk tests
 
