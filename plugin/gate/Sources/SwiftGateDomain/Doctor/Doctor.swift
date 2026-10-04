@@ -361,6 +361,11 @@ public enum Doctor {
           + "under \"env\" in Claude Code's settings.json, then start a fresh session")
     }
 
+    if let pin = facts.agentDevicePin {
+      check.agentDevice(
+        installed: facts.agentDeviceVersion, pin: pin, required: runsSimulatorQA(facts.config))
+    }
+
     if let profile = facts.config.profile, facts.config.buildPresets[profile] == nil {
       let defined = facts.config.buildPresets.keys.sorted()
       check.fail(
@@ -451,6 +456,11 @@ public enum Doctor {
     return check.findings
   }
 
+  /// A preset that drives changed screens, or a declared scenario, means `sim up` will run here.
+  static func runsSimulatorQA(_ config: Config) -> Bool {
+    !config.scenarios.isEmpty || config.buildPresets.values.contains { $0.simQA == .changed }
+  }
+
   fileprivate static func gibibytes(_ bytes: Int64) -> String {
     String(bytes / (1024 * 1024 * 1024))
   }
@@ -480,6 +490,27 @@ private struct DoctorJudgement {
         "\(Doctor.gibibytes(free)) GiB free, below the \(Doctor.gibibytes(Doctor.minimumFreeBytes)) "
           + "GiB a simulator run needs; run `swiftgate gc` or free space")
     default: break
+    }
+  }
+
+  /// `required` makes a missing or unpinned CLI BLOCKED; otherwise it is a nit.
+  mutating func agentDevice(installed: String?, pin: ToolPin, required: Bool) {
+    let found = installed?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if found == pin.version { return }
+    let problem =
+      switch found {
+      case nil, "": "agent-device could not be run (is it installed and on PATH?)"
+      case let version?: "agent-device \(version) is installed but the harness pins \(pin.version)"
+      }
+    let fix = "install the pin with `\(pin.installCommand)`"
+    if required {
+      block(
+        Doctor.agentDeviceRuleID, Config.fileName,
+        "\(problem); simulator QA drives it, so `sim up` would stop here. \(fix)")
+    } else {
+      warn(
+        Doctor.agentDeviceRuleID, .nit,
+        "\(problem); nothing here runs simulator QA yet, but it will need it: \(fix)")
     }
   }
 
