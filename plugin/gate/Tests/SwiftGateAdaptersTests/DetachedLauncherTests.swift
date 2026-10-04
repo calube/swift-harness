@@ -10,16 +10,19 @@ struct DetachedLauncherTests {
     path: "detached-\(UUID().uuidString)", directoryHint: .isDirectory)
 
   /// Reaps a child this test started, so its PID can't be reused while the test still names it.
-  static func reap(_ pid: Int32) -> Int32 {
-    var status: Int32 = 0
-    while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
-    return status
+  /// The wait blocks until the child exits, so it runs on a thread of its own.
+  static func reap(_ pid: Int32) async -> Int32 {
+    await OffPool.run {
+      var status: Int32 = 0
+      while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+      return status
+    }
   }
 
   @Test(
     "a detached process runs in the given directory with stdin empty and stdout and stderr appended to the log — catches a holder whose output is lost or that blocks on the caller's terminal"
   )
-  func outputAndDirectory() throws {
+  func outputAndDirectory() async throws {
     defer { try? FileManager.default.removeItem(at: directory) }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let log = directory.appending(path: "agent-device.log")
@@ -30,7 +33,7 @@ struct DetachedLauncherTests {
         executable: "/bin/sh",
         arguments: ["-c", "pwd -P; echo to-stderr >&2; read line; echo \"stdin:$line\""],
         workingDirectory: directory.path, logPath: log.path))
-    _ = Self.reap(pid)
+    _ = await Self.reap(pid)
 
     let text = try String(contentsOf: log, encoding: .utf8)
     #expect(text == "earlier\n\(CanonicalPath.of(directory))\nto-stderr\nstdin:\n")
@@ -39,7 +42,7 @@ struct DetachedLauncherTests {
   @Test(
     "a detached process leads a session of its own — catches a holder killed along with the tool call that started it"
   )
-  func ownSession() throws {
+  func ownSession() async throws {
     defer { try? FileManager.default.removeItem(at: directory) }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
@@ -47,13 +50,11 @@ struct DetachedLauncherTests {
       DetachedLaunch(
         executable: "/bin/sleep", arguments: ["30"], workingDirectory: directory.path,
         logPath: directory.appending(path: "log").path))
-    defer {
-      kill(pid, SIGKILL)
-      _ = Self.reap(pid)
-    }
 
     #expect(getsid(pid) == pid)
     #expect(getsid(pid) != getsid(0))
+    kill(pid, SIGKILL)
+    _ = await Self.reap(pid)
   }
 
   @Test(
