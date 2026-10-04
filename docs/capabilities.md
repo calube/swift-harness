@@ -16,8 +16,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   deleting the global DerivedData, raw `xcodebuild`, and edits to `Package.resolved`, `.xcresult`
   bundles or snapshot references.
 - **The Stop hook has a strike policy.** A RED fast tier blocks the stop, and the hook skips content
-  that already passed. After 3 blocks in a row the hook lets the turn end and stamps it RED. A
-  broken environment reports `blocked` and never counts as a strike.
+  that already passed. After 3 blocks in a row it lets the turn end, stamped RED. A
+  broken environment reports `blocked`, never a strike.
 - **Verdicts come from test reports.** `swiftgate test` reads xcresult bundles and test reports,
   not exit codes. It flags missing evidence, skips with no reason, and runs with no tests. A
   configured test retry is its own finding, because retries hide flakes.
@@ -31,8 +31,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **Ids don't leak.** `swiftgate comments --commit-msg` rejects plan, ledger and design ids in commit
   messages, and a testlint rule does the same for test names. The pre-commit comment check also
   catches restated code, diff narration and TODOs with no link.
-- **Written-out scripts need a deadline.** A testlint rule flags a script or source that a test
-  writes out and that waits forever.
+- **Written-out scripts need a deadline.** A testlint rule flags a script or source a test writes
+  out that waits forever.
 
 ## Tests have to earn their place
 
@@ -62,13 +62,13 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   `examples/SampleApp`. `--judge` scores each backend's recording per question against its floors.
 - **A test guards the rule index.** A test checks the rule id table in `standards.md` against the rule
   registries, so a rule can't ship undocumented or linger after removal.
-- **Prompt edits need recalibration.** The push tier hashes the design agents and workflows and the
-  build worker and fixer prompts, and compares the hash with the last passing `swiftgate calibrate` record. Any edit, or
-  a record from a different model, blocks the push until calibration passes again.
+- **Prompt edits need recalibration.** The push tier hashes the design agents, workflows, and build
+  worker and fixer prompts against the last passing `swiftgate calibrate` record. Any edit, or a
+  different model, blocks the push until calibration passes again.
 - **`calibrate design|build`** runs each design agent, the build worker and the fixer against
   labelled seed cases and reports pass or fail per agent.
 - **Hook latency has a tested budget.** The fastest of several PreToolUse runs stays under 50ms of
-  CPU on a loaded machine.
+  CPU.
 - **The ready tier validates the plugin.** `claude plugin validate --strict` runs on `plugin/`,
   and every warning gates.
 - **Fixtures come from real runs,** and the fixtures README records each capture command.
@@ -110,8 +110,8 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **`design-scope` and `design-lint`.** Scope picks a depth (quick, standard or deep) from the
   frame answers. Lint checks sections, evidence tags, id forms, word budgets and Mermaid syntax.
 - **The verifier works blind.** It gets a reviewer's findings but never its
-  reasoning, and reproduces each one. Standard designs get a challenger that asks whether the design
-  is the best one, not only a complete one. Deep designs add a pre-mortem.
+  reasoning, and reproduces each one. Standard designs add a challenger that asks whether the design is
+  the best one; deep designs add a pre-mortem.
 
 ## Evidence you can paste into a PR
 
@@ -132,6 +132,9 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
   `events summary` reports cost, gate time, wrong verdicts, flaky tests, halts and the judge.
   `[telemetry] enabled = false` opts out, except the judge's audit log
   ([`telemetry.md`](../plugin/docs/telemetry.md)).
+- **The run viewer.** `report --html` writes 1 offline page per build run: span timeline, spec
+  coverage, proofs, tokens and gates. `view` serves it live with a now strip, task board and plan
+  graph ([`run-viewer.md`](../plugin/docs/run-viewer.md)).
 - **`stats`** reports per-command, per-tier p50 and p95 against budgets from run history.
   `--design` adds refute rate, reviewer precision, agent cost, probe failures and cache hits;
   `--build` adds wall time per task.
@@ -142,8 +145,7 @@ Rule ids live in [`plugin/docs/standards.md`](../plugin/docs/standards.md), and 
 - **SessionStart context** gives each session the module map and kinds, the Xcode pin, and every
   active plan's resume line.
 - **`/swift-harness:status`** lists active plans across the machine's bootstrapped repositories.
-- **`bootstrap`** is a dry run by default, and a no-op with nothing to change. It infers
-  `.swiftgate.toml` and names what it can't infer.
+- **`bootstrap`** infers `.swiftgate.toml`, names what it can't infer, and is a dry run by default.
 - **`docs-lint` and `prose`** check links, router reachability, dangling ids, word budgets and
   plain-English rules. Both run in the push tier.
 
