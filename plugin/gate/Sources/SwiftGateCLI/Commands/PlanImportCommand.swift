@@ -142,10 +142,23 @@ enum PlanImportRun {
       return report
     }
 
+    var worktrees: [String: String] = [:]
+    do throws(GitWorkspaceError) {
+      for task in livePlan.tasks {
+        worktrees[task.id] =
+          try TaskWorktree(
+            commonDirectory: common, plan: slug, task: task.id, profile: .brownfield
+          ).path
+      }
+    } catch {
+      report.message = "naming the task worktrees: \(error)"
+      return report
+    }
     let ledger: Ledger
     do throws(LivePlanError) {
+      // `ledger` asks only for the ids of `livePlan.tasks`, each named above.
       ledger = try livePlan.ledger(maxParallel: preset.maxParallel, existing: existingLedger) {
-        plan.directory + "/worktrees/" + $0
+        worktrees[$0] ?? ""
       }
     } catch {
       return invalid(report, error, livePath)
