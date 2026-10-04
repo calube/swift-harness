@@ -26,6 +26,11 @@ public enum StateRootResolver {
     return .gitDir(gitDir)
   }
 
+  /// Where `worktree`'s shared event streams live.
+  public static func eventStore(worktree: URL) -> StateRoot {
+    resolve(worktree: worktree)
+  }
+
   /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no
   /// git checkout or its common dir holds no `config.toml`.
   public static func brownfieldLayout(worktree: URL) -> BrownfieldStateLayout? {

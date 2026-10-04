@@ -97,6 +97,16 @@ public struct TaskWorktree: Sendable, Equatable {
   /// A brownfield plan's checkout of its plan branch, inside the plan's directory.
   public static let planCheckoutName = "checkout"
 
+  /// Where a brownfield plan's checkout of its plan branch lives. Read off a task's names, so it
+  /// moves wherever they put the checkout merges land in.
+  public static func planCheckout(commonDirectory: String, plan: String)
+    throws(GitWorkspaceError) -> String
+  {
+    try TaskWorktree(
+      commonDirectory: commonDirectory, plan: plan, task: planCheckoutName, profile: .brownfield
+    ).mainCheckout
+  }
+
   /// The checkout whose `.git` is `commonDirectory`, the same from every linked worktree.
   /// - Throws: ``GitWorkspaceError/git(_:)`` for a bare repository, which has no main checkout to
   ///   name worktrees after or clone builds from.

@@ -68,7 +68,17 @@ import Testing
 
   private static let at = Date(timeIntervalSince1970: 100)
 
+  /// A ledger whose every task is done, as a run that built its whole plan leaves it.
+  private static let finishedLedger = Ledger(
+    schemaVersion: 1, resume: "done", maxParallel: 3,
+    tasks: ["report-export-contract", "report-export-api"].map {
+      LedgerTask(
+        id: $0, deps: [], writeSet: ["api/"], gate: .slice, tests: [], covers: [], estLines: 40,
+        status: .done, worktree: "/CLONE/.git/swift-harness/plans/csv/worktrees/\($0)")
+    }, waves: [["report-export-contract"], ["report-export-api"]])
+
   private static func inputs(
+    ledger: RunReportInput<Ledger> = .read(finishedLedger),
     planBranchHead: String? = "f00dbeef",
     plan: RunReportInput<String> = .read(planText),
     baseline: RunReportInput<BaselineFile> = .read(baseline),
@@ -81,7 +91,7 @@ import Testing
   ) -> BrownfieldRunReportInputs {
     BrownfieldRunReportInputs(
       slug: "csv", planBranch: "swift-harness/csv", planBranchHead: planBranchHead, plan: plan,
-      baseline: baseline, discover: discover, build: build)
+      baseline: baseline, discover: discover, build: build, ledger: ledger)
   }
 
   /// The bullets under `## <title>` in the report's text.

@@ -48,6 +48,12 @@ public struct LiveGitWorkspace: GitWorkspace {
     try await succeed(["worktree", "add", "--quiet", "-b", branch, "--", path, base])
   }
 
+  /// Adds a worktree at `path` on `branch`, which must already exist.
+  public func checkOutWorktree(at path: String, branch: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(branch)
+    try await succeed(["worktree", "add", "--quiet", "--", path, branch])
+  }
+
   public func removeWorktree(at path: String, force: Bool) async throws(GitWorkspaceError) {
     try await succeed(
       ["worktree", "remove"] + (force ? ["--force", "--force"] : []) + ["--", path])
