@@ -72,9 +72,10 @@ struct RunViewContractTests {
     #expect(
       keys(task) == [
         "id", "status", "model", "deps", "writes", "gate", "covers", "commits", "gateRun",
-        "mergeGateRun", "createdAt", "mergedAt", "brief", "tokens", "blocked",
+        "mergeGateRun", "createdAt", "mergedAt", "brief", "tokens", "blocked", "failureReason",
       ])
     #expect(task["blocked"] is NSNull)
+    #expect(task["failureReason"] is NSNull)
     #expect(task["tokens"] is NSNull)
     #expect(task["mergedAt"] is NSNull)
     #expect(task["status"] as? String == "in-progress")
@@ -87,9 +88,11 @@ struct RunViewContractTests {
     let spans = try #require(object["spans"] as? [[String: Any]])
     let spanKeys: Set<String> = [
       "id", "parent", "phase", "task", "gateRun", "start", "end", "outcome", "approximate", "tools",
-      "causeGateRun",
+      "causeGateRun", "failureReason", "baseline",
     ]
     #expect(spans.map(keys) == [spanKeys, spanKeys])
+    #expect(spans[0]["failureReason"] is NSNull)
+    #expect(spans[0]["baseline"] as? Bool == false)
     #expect(spans[0]["end"] is NSNull)
     #expect(spans[0]["tools"] is NSNull)
     #expect(spans[0]["causeGateRun"] is NSNull)
