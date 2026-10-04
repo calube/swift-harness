@@ -42,6 +42,6 @@ public enum AreaCommandOutcome: Sendable, Equatable {
 extension AreaCommandOutcome {
   /// `/bin/sh` exits 127 when it can't find the command's tool.
   public var toolNotInstalled: Bool {
-    false
+    if case .failed(127, _, _) = self { true } else { false }
   }
 }

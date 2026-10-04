@@ -148,9 +148,11 @@ public struct BaselineStore: Sendable {
     }
 
     let verdict = Baseline.compare(head: head, base: known)
-    if let summary = verdict.summary(file: layout.baseline(tree: base.tree).path) {
+    let file = layout.baseline(tree: base.tree).path
+    if let summary = verdict.summary(file: file) {
       notes.append(summary)
     }
+    notes += verdict.notInstalledFindings(file: file)
     return BaselineLookup(verdict: verdict, notes: notes, reran: fresh.map(\.key))
   }
 

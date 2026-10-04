@@ -209,7 +209,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       plan: inputs.slug, planBranch: inputs.planBranch, planBranchHead: inputs.planBranchHead,
       final: final, finalNote: finalNote, assumptions: assumptions,
       baselineFailures: Self.baselineFailures(inputs.baseline), buildOnlyAreas: buildOnly,
-      droppedSteps: Self.droppedSteps(inputs.discover),
+      droppedSteps: Self.droppedSteps(inputs.discover, baseline: inputs.baseline),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
       reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build))
@@ -367,13 +367,29 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       }, note: nil)
   }
 
-  private static func droppedSteps(_ discover: RunReportInput<DiscoverRecord>)
-    -> Section<DroppedStep>
-  {
-    guard case .read(let record) = discover else {
-      return Section(items: [], note: describe(discover, what: "discover record"))
-    }
+  /// The steps discovery or the orchestrator dropped, then each step the baseline found not
+  /// installed, which checked nothing.
+  private static func droppedSteps(
+    _ discover: RunReportInput<DiscoverRecord>, baseline: RunReportInput<BaselineFile>
+  ) -> Section<DroppedStep> {
     var dropped: [DroppedStep] = []
+    if case .read(let file) = baseline {
+      var seen: Set<String> = []
+      for record in file.records where record.result == .notInstalled {
+        guard seen.insert("\(record.key.area).\(record.key.step.rawValue)").inserted else {
+          continue
+        }
+        dropped.append(
+          DroppedStep(
+            area: record.key.area, step: record.key.step,
+            reason:
+              "its command's tool isn't installed (exit 127 at the base tree), so it checked "
+              + "nothing"))
+      }
+    }
+    guard case .read(let record) = discover else {
+      return Section(items: dropped, note: describe(discover, what: "discover record"))
+    }
     var byEdit: Set<String> = []
     for edit in record.edits {
       guard case .drop(let reason) = edit.change else { continue }

@@ -53,7 +53,8 @@ enum BrownfieldSliceCheck {
           root: root, layout: merge.layout, runner: merge.runner, deadline: liveDeadline),
         trackedTree: merge.trackedTree, tree: merge.tree,
         warmTestMilliseconds: { [layout = merge.layout] area, tree in
-          WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?.testMilliseconds
+          WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?
+            .warmTestMilliseconds
         },
         history: { commit in try await firstParentHistory(of: commit, root: root) },
         changedBetween: { [git = merge.git] from, to in
@@ -136,10 +137,11 @@ enum BrownfieldSliceCheck {
     /// Lint output the parser placed on no line: it goes to the baseline like a test failure.
     let lintUnread: Bool
 
+    /// A lint whose tool isn't installed goes to the baseline too, which reports it.
     var failing: Bool {
       switch outcome {
       case .passed: false
-      default: step != .lint || lintUnread
+      default: step != .lint || lintUnread || outcome.toolNotInstalled
       }
     }
   }
@@ -299,7 +301,8 @@ enum BrownfieldSliceCheck {
   /// 1 touched area: the neutral rules, Xcode membership and lint on its changed files, then its
   /// changed tests and their prove when a warm test run fits the budget, else its build. An area
   /// changed since the warm-up that measured it builds first, so its tests never run on caches
-  /// the warm-up left behind its code.
+  /// the warm-up left behind its code. A change that selects no test builds instead, so its code
+  /// still compiles.
   private static func run(
     _ area: BrownfieldArea, warm: WarmTestTime, change: Change, root: URL, base: String,
     context: GateRun.Context, dependencies: Dependencies
@@ -344,10 +347,16 @@ enum BrownfieldSliceCheck {
     let why: String
     switch warm {
     case .current(let milliseconds, _) where milliseconds <= budget:
-      result.add(
-        await tests(
-          area, change: change, root: root, base: base, context: context,
-          dependencies: dependencies))
+      let tested = await tests(
+        area, change: change, root: root, base: base, context: context,
+        dependencies: dependencies)
+      result.add(tested)
+      guard tested.runs.isEmpty else { return result }
+      if let build = await build(area, root: root, context: context, dependencies: dependencies) {
+        result.runs.append(build.run)
+      } else {
+        result.findings += stepDropped(area)
+      }
       return result
     case .stale(let milliseconds, let at, _) where milliseconds <= budget:
       guard let build = await build(area, root: root, context: context, dependencies: dependencies)

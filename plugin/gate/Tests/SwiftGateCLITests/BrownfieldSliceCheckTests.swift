@@ -260,8 +260,10 @@ struct BrownfieldSliceCheckTests {
   func noSelectedTestStillBuilds() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.base) }
+    let scratch = clone.scratch.path(percentEncoded: false)
     let runner = FakeAreaCommandRunner { request in
-      request.step == .build ? .failed(exit: 65, tail: "** BUILD FAILED **", junit: nil) : .passed
+      request.step == .build && !request.workingDirectory.hasPrefix(scratch)
+        ? .failed(exit: 65, tail: "** BUILD FAILED **", junit: nil) : .passed
     }
     let context = GateRun.Context(runID: "run", directory: clone.base)
 

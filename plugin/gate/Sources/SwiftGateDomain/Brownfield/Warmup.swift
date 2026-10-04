@@ -45,7 +45,8 @@ public enum WarmupGeneration: Sendable, Equatable {
 public struct WarmupAreaRecord: Sendable, Equatable {
   /// The first warm-up's steps together at this tree: the area's cost on empty caches.
   public let coldMilliseconds: Int
-  /// The latest test run's time, its build already warm; `nil` when no test has run.
+  /// The latest test run's time, its build already warm, whatever it came to; `nil` when no test
+  /// has run. A gate budgets with ``warmTestMilliseconds``.
   public let testMilliseconds: Int?
   /// The latest outcome of each step the warm-up ran or dropped.
   public let steps: [WarmupStep: WarmupOutcome]
@@ -58,7 +59,7 @@ public struct WarmupAreaRecord: Sendable, Equatable {
 
   /// The warm test time a gate may budget with: only a test step that passed measured one.
   public var warmTestMilliseconds: Int? {
-    testMilliseconds
+    steps[.test] == .passed ? testMilliseconds : nil
   }
 }
 
@@ -163,7 +164,7 @@ public struct WarmupTimesFile: Sendable, Equatable {
   /// `true` when `area`'s warm test time doesn't fit `budgetSeconds`, or no warm-up measured it:
   /// `slice` then only builds the area, and its tests and their prove move to `merge`.
   public func buildsOnly(_ area: String, budgetSeconds: Int) -> Bool {
-    guard let test = areas[area]?.testMilliseconds else { return true }
+    guard let test = areas[area]?.warmTestMilliseconds else { return true }
     return test > budgetSeconds * 1_000
   }
 
@@ -320,7 +321,8 @@ public enum Warmup {
       steps.append(
         WarmupStepResult(
           step: step, milliseconds: milliseconds, cache: cache,
-          outcome: outcome == .passed ? .passed : .failed, detail: detail(outcome)))
+          outcome: outcome == .passed ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
+          detail: detail(outcome)))
       baseline.append(
         BaselineRecord(
           key: BaselineStepKey(area: area.name, step: areaStep, command: template),

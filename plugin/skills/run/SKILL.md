@@ -124,8 +124,8 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
   several steps in 1 call.
 - **No command works.** Drop the step: `"$SG" discover --apply --drop <area>.<step> --reason "<why>"`.
   The area keeps its other steps, and the report carries the reason.
-- **A tool isn't installed** (`not-installed`). Drop the step with that reason; installing
-  toolchains is outside a run.
+- **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
+  step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
   `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`.
   Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still

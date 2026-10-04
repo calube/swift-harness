@@ -9,6 +9,10 @@ import Foundation
 public struct XcodeReader: EcosystemReader {
   public init() {}
 
+  /// A headless `xcodebuild` can't answer Xcode's trust prompts, so it skips them: macro targets
+  /// and package build-tool plugins, such as SwiftLint's, otherwise fail before compiling.
+  static let headlessFlags = " -skipMacroValidation -skipPackagePluginValidation"
+
   public func areas(in tree: TrackedTreeSnapshot) -> [ProposedArea] {
     Self.units(in: tree).map { $0.proposed(tree) }
   }
@@ -270,7 +274,7 @@ extension XcodeReader.Unit {
       commands[.build] = Sourced(
         value:
           "xcodebuild build \(container) -scheme \(SwiftDiscoverText.shellWord(buildScheme))"
-          + " -destination \(destination(buildScheme, generic: true)) -skipMacroValidation",
+          + " -destination \(destination(buildScheme, generic: true))" + XcodeReader.headlessFlags,
         source: schemeSource, confidence: .found)
     } else {
       missing[.build] = "no shared scheme in tracked files"
@@ -283,7 +287,7 @@ extension XcodeReader.Unit {
       commands[.test] = Sourced(
         value:
           "xcodebuild test \(container) -scheme \(SwiftDiscoverText.shellWord(testScheme))"
-          + " -destination \(destination(testScheme, generic: false)) -skipMacroValidation",
+          + " -destination \(destination(testScheme, generic: false))" + XcodeReader.headlessFlags,
         source: scheme.path, confidence: .guessed)
     } else {
       missing[.test] = "no shared scheme with a test target in tracked files"
