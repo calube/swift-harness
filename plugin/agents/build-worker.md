@@ -172,8 +172,8 @@ file, or a file your return leaves out.
 
 ## Output contract
 
-Return 1 JSON object with every `TaskReturn` key and nothing else, plus `"redReason"` on a `gate-red`
-return only. `build check-return` rejects a missing or extra key; the workflow moves `"redReason"`
+Return 1 JSON object with every `TaskReturn` key and nothing else, plus `"span"`, and
+`"redReason"` on a `gate-red` return only. `build check-return` rejects a missing or extra key; the workflow moves `"redReason"`
 into `"notes"` before it does, and treats a `gate-red` return with no `"redReason"`, or one outside
 the 3 values above, as unusable.
 
@@ -219,6 +219,8 @@ the 3 values above, as unusable.
 - `"designConflict"`: `null`, or the report object for a `design-conflict` outcome.
 - `"redReason"`: on a `gate-red` return only, and required there: `outside-write-set`,
   `no-progress` or `environment`. Leave the key out of every other return.
+- `"span"`: the span id your prompt's span start printed, or `null` when it printed nothing or
+  failed. The workflow drops it before `build check-return` reads the return.
 - `"surfaceCommit"`: the sha of your surface commit, which your gate named as `--proof-base`, or
   `null` when the task adds no API. Under a plan surface, it is your stub, never the plan surface.
 
