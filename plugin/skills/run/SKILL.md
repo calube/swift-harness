@@ -236,7 +236,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
         `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, in the foreground like every
-        gate, though a flow row boots a leased device. A row that reads `pass` there fails it with
+        gate, though a flow row boots a leased device. This `--at-base` run is never skipped, and
+        no task that a row's `Runs after` names merges before it has run: such a task that
+        finishes first keeps its checked return and merges once this run is done. A row that reads `pass` there fails it with
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
@@ -247,12 +249,20 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      An acceptance test in the area's framework is never the validation task's: its row's
      `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's
      source reverted. The brownfield tiers refuse `--proof-base`, and that prove stands in for it.
-     At the cutoff, `TaskStop` a validation task still running and set it `abandoned`; its rows
-     have no checks, so `qa run` reads them red and the report quotes them.
+     At the cutoff, `TaskStop` a validation task still running and set it `abandoned`, which
+     frees the merges waiting on item 3; its rows have no checks, so `qa run` reads them red and
+     the report quotes them.
    - **Validate each merge**, as [the build loop's after-merge step](../build/references/event-loop.md#after-each-merge)
      says: once a merge gate is GREEN and recorded, `"$SG" qa run --plan <slug> --after <task> --json`
      in `<checkout>` runs the rows that merge unblocks, acceptance, then flow, then state. A RED
-     verdict counts as a red merge gate, wherever the loop or the cutoff handles one.
+     verdict is a red merge gate: `"$SG" build halt --run <run> --task <task> --reason gate-red`,
+     `"$SG" build merge <slug> <task> --undo --session <session> --json`, then
+     `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer, as the loop
+     does for a red merge gate; at the cutoff, undo and abandon as its item 2 says. Never keep the
+     merge on your own judgement, whatever you think caused the red. The 1 exception is a
+     pre-existing issue, shown by the newest `--at-base` report: that row is `red` there too, and
+     every finding the red row names appears in it. Then keep the merge and add 1 assumption
+     naming the row and both run ids. No `--at-base` run, no exception.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks

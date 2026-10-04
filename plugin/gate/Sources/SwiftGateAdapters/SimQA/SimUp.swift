@@ -181,36 +181,7 @@ public struct SimUp: Sendable {
     headCommit: String, startedAt: Date, log: URL
   ) async throws(SimUpFailure) -> SimUpStarted {
     let runID = request.runID
-    let buildLog = request.simDirectory.appending(path: "build.log")
-    let resultBundle = request.simDirectory.appending(path: "build").appendingPathExtension(
-      "xcresult")
-    // `xcodebuild` refuses to overwrite a result bundle.
-    try? FileManager.default.removeItem(at: resultBundle)
-    let build = AppBuild.Request(
-      container: container, scheme: request.target.scheme,
-      derivedDataPath: request.derivedDataPath, resultBundlePath: resultBundle.path)
-    let status: ExitStatus
-    do {
-      status = try await dependencies.xcodebuild.build(build, logPath: buildLog.path)
-    } catch {
-      throw environment(error.message, runID)
-    }
-    guard status.isSuccess else {
-      throw SimUpFailure(
-        rule: .appBuildFailed,
-        message:
-          "app scheme \(request.target.scheme) failed to build (\(status)); read \(buildLog.path)",
-        runID: runID)
-    }
-
-    let app: BuiltApp
-    do {
-      app = try dependencies.bundles.builtApp(
-        productsDirectory: AppBundleReader.productsDirectory(
-          derivedDataPath: request.derivedDataPath))
-    } catch {
-      throw SimUpFailure(rule: .appInstallFailed, message: error.message, runID: runID)
-    }
+    let app = try await builtApp(request, container: container, headCommit: headCommit, log: log)
     do {
       try await dependencies.simctl.install(lease.udid, appPath: app.path)
     } catch {
@@ -252,6 +223,101 @@ public struct SimUp: Sendable {
     }
     return SimUpStarted(
       runID: runID, udid: lease.udid, session: session, scenario: request.scenario)
+  }
+
+  /// The app to install: the products of the last good build in this worktree's DerivedData when
+  /// its stamp matches the commit and the uncommitted changes, else a new build, stamped once it
+  /// succeeds.
+  private func builtApp(
+    _ request: Request, container: XcodebuildContainer, headCommit: String, log: URL
+  ) async throws(SimUpFailure) -> BuiltApp {
+    let runID = request.runID
+    let buildLog = request.simDirectory.appending(path: "build.log")
+    let products = AppBundleReader.productsDirectory(derivedDataPath: request.derivedDataPath)
+    let stampFile = URL(filePath: request.derivedDataPath, directoryHint: .isDirectory)
+      .appending(path: SimBuildStamp.fileName)
+    let stamp = await buildStamp(
+      request, container: container, headCommit: headCommit, log: log)
+    if let stamp, let data = try? Data(contentsOf: stampFile),
+      SimBuildStamp.decode(data) == stamp,
+      let app = try? dependencies.bundles.builtApp(productsDirectory: products)
+    {
+      Self.append(
+        "sim up: reused the build of \(headCommit) in \(request.derivedDataPath): the commit and "
+          + "the uncommitted changes match its stamp", to: buildLog)
+      return app
+    }
+    // A build that fails or stops part way leaves products no stamp may vouch for.
+    try? FileManager.default.removeItem(at: stampFile)
+
+    let resultBundle = request.simDirectory.appending(path: "build").appendingPathExtension(
+      "xcresult")
+    // `xcodebuild` refuses to overwrite a result bundle.
+    try? FileManager.default.removeItem(at: resultBundle)
+    let build = AppBuild.Request(
+      container: container, scheme: request.target.scheme,
+      derivedDataPath: request.derivedDataPath, resultBundlePath: resultBundle.path)
+    let status: ExitStatus
+    do {
+      status = try await dependencies.xcodebuild.build(build, logPath: buildLog.path)
+    } catch {
+      throw environment(error.message, runID)
+    }
+    guard status.isSuccess else {
+      throw SimUpFailure(
+        rule: .appBuildFailed,
+        message:
+          "app scheme \(request.target.scheme) failed to build (\(status)); read \(buildLog.path)",
+        runID: runID)
+    }
+    let app: BuiltApp
+    do {
+      app = try dependencies.bundles.builtApp(productsDirectory: products)
+    } catch {
+      throw SimUpFailure(rule: .appInstallFailed, message: error.message, runID: runID)
+    }
+    if let stamp {
+      do {
+        try FileManager.default.createDirectory(
+          at: stampFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try stamp.encoded().write(to: stampFile, options: .atomic)
+      } catch {
+        Self.append(
+          "sim up: the next sim up builds again: could not write \(stampFile.path): "
+            + error.localizedDescription, to: log)
+      }
+    }
+    return app
+  }
+
+  /// What the build about to run is built from; `nil`, with a log line, when git can't say, so
+  /// the build runs and no stamp is written.
+  private func buildStamp(
+    _ request: Request, container: XcodebuildContainer, headCommit: String, log: URL
+  ) async -> SimBuildStamp? {
+    do throws(GitError) {
+      let git = dependencies.git
+      let inputs = SimBuildStamp.buildInputs(try await git.changedFiles(since: "HEAD"))
+      // Changed paths are toplevel-relative; hashing reads them from the worktree root.
+      let prefix = try await git.workingDirectoryPrefix()
+      let up = String(repeating: "../", count: prefix.split(separator: "/").count)
+      let local = inputs.map { path in
+        path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : up + path
+      }
+      let hashes = try await git.contentHashes(of: local)
+      var changes: [String: String] = [:]
+      for (path, localPath) in zip(inputs, local) {
+        changes[path] = hashes[localPath] ?? SimBuildStamp.deleted
+      }
+      return SimBuildStamp(
+        head: headCommit, scheme: request.target.scheme,
+        container: SimBuildStamp.containerKey(container), changes: changes)
+    } catch {
+      Self.append(
+        "sim up: building without reuse: the worktree's uncommitted changes didn't read: \(error)",
+        to: log)
+      return nil
+    }
   }
 
   private static func container(_ named: SimTarget.Container, in worktree: URL)
