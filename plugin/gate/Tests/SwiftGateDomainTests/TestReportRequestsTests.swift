@@ -69,14 +69,48 @@ struct TestReportRequestsTests {
   }
 
   @Test(
-    "a pnpm area passes the report flags without npm's separator, as the captured pnpm runs did — catches a separator the script receives as a test name",
+    "a pnpm area passes the report flags without npm's separator, and the captured pnpm run's report names both failing tests — catches a separator the script receives as a test name, or a report never written",
     arguments: [
-      ("vitest", packageJSON(script: "vitest run")),
-      ("jest", packageJSON(script: "jest", jestJUnit: true)),
+      (
+        "vitest", packageJSON(script: "vitest run"), "test/alpha.test.js.alpha > flaky",
+        "test/beta.test.js.new"
+      ),
+      ("jest", packageJSON(script: "jest", jestJUnit: true), "alpha flaky", " new"),
     ])
-  func pnpmCommandsMatchCapturedRuns(runner: String, manifest: String) throws {
+  func pnpmCommandsMatchCapturedRuns(runner: String, manifest: String, flaky: String, fresh: String)
+    throws
+  {
     let area = try #require(propose(["package.json": manifest, "pnpm-lock.yaml": ""]).first)
     #expect(area.commands[.test]?.value == (try capturedCommand("\(runner)/pnpm-head")))
+    #expect(
+      BaselineStepResult.of(try capturedRun(runner, "pnpm-head")) == .failedTests([flaky, fresh]))
+  }
+
+  @Test(
+    "the command discover proposes for vitest and jest reports a suite that didn't load, and vitest an error after a test ended, each under its own id — catches either failure absorbed with the base's failing test",
+    arguments: [
+      (
+        "vitest", packageJSON(script: "vitest run"), "build-fail",
+        ["test/alpha.test.js.alpha > flaky", "test/beta.test.js.new", "test/broken.test.js"]
+      ),
+      (
+        "vitest", packageJSON(script: "vitest run"), "unhandled",
+        [
+          "test/alpha.test.js.alpha > flaky",
+          "vitest unhandled errors.Uncaught Exception: thrown after the test ended",
+        ]
+      ),
+      (
+        "jest", packageJSON(script: "jest", jestJUnit: true), "build-fail",
+        ["alpha flaky", " new", "Test suite failed to run.test/broken.test.js"]
+      ),
+    ])
+  func failuresOutsideTestsGetIDs(
+    runner: String, manifest: String, caseName: String, failing: [String]
+  ) throws {
+    let area = try #require(propose(["package.json": manifest, "package-lock.json": "{}"]).first)
+    #expect(area.commands[.test]?.value == (try capturedCommand("\(runner)/\(caseName)")))
+    #expect(BaselineStepResult.of(try capturedRun(runner, caseName)) == .failedTests(Set(failing)))
   }
 
   @Test(
@@ -102,34 +136,59 @@ struct TestReportRequestsTests {
   }
 
   @Test(
-    "a runner that can't write a report without a package the repository lacks keeps its command — catches a jest or RSpec run broken by a reporter that isn't installed",
+    "a runner asks for a report only when the repository has the reporter and a manager a run proved — catches a jest or RSpec run broken by a reporter that isn't installed, or a yarn script handed npm's flags",
     arguments: [
-      ["package.json": packageJSON(script: "jest"), "package-lock.json": "{}"],
-      ["package.json": packageJSON(script: "vitest run"), "yarn.lock": ""],
-      ["Gemfile": "gem \"rspec\"\n", "spec/alpha_spec.rb": ""],
+      (
+        ["package.json": packageJSON(script: "jest"), "package-lock.json": "{}"],
+        ["package.json": packageJSON(script: "jest", jestJUnit: true), "package-lock.json": "{}"],
+        "jest"
+      ),
+      (
+        ["package.json": packageJSON(script: "vitest run"), "yarn.lock": ""],
+        ["package.json": packageJSON(script: "vitest run"), "package-lock.json": "{}"], "vitest"
+      ),
+      (
+        ["Gemfile": "gem \"rspec\"\n", "spec/alpha_spec.rb": ""],
+        ["Gemfile": gemfile, "spec/alpha_spec.rb": ""], "ruby"
+      ),
     ])
-  func unprovenRunnersKeepTheirCommand(files: [String: String]) throws {
-    let area = try #require(propose(files).first)
-    let command = try #require(area.commands[.test]?.value)
-    #expect(!command.contains(AreaCommandExpansion.junitPlaceholder))
-    #expect(["npm run test", "yarn run test", "bundle exec rspec"].contains(command))
+  func asksOnlyWithAProvenReporter(
+    without: [String: String], with: [String: String], runner: String
+  ) throws {
+    let plain = try #require(propose(without).first?.commands[.test]?.value)
+    #expect(["npm run test", "yarn run test", "bundle exec rspec"].contains(plain))
+    #expect(
+      propose(with).first?.commands[.test]?.value
+        == (try capturedCommand("\(runner)/baseline-head")))
   }
 
   @Test(
-    "a command already naming its report, or chaining several, is left as the repository wrote it — catches a second report flag or a report collected from the wrong command",
+    "a command already naming its report, or chaining several, is left as the repository wrote it, while its plain form asks — catches a second report flag or a report collected from the wrong command",
     arguments: [
-      "pytest --junitxml=out.xml", "swift test --xunit-output out.xml",
-      "make build && pytest", "cd core && mvn test",
+      ("pytest --junitxml=out.xml", "pytest", "pytest --junitxml={junit}"),
+      (
+        "swift test --xunit-output out.xml", "swift test",
+        "swift test --parallel --xunit-output {junit}"
+      ),
+      ("make build && pytest", "pytest", "pytest --junitxml={junit}"),
+      (
+        "cd core && mvn test", "mvn test",
+        "mkdir -p {junit} && mvn test; status=$?; find . -path '*/target/surefire-reports/*'"
+          + " -name 'TEST-*.xml' -newer {junit} -exec cp {} {junit} ';'; exit $status"
+      ),
     ])
-  func ownCommandsStay(command: String) throws {
-    let reader = OneArea(command: command)
-    let area = try #require(
-      Discover.propose(
-        tree: TrackedTreeSnapshot(files: [:]), head: "abc", dirty: [], readers: [reader]
-      )
-      .areas.first)
-    #expect(area.commands[.test]?.value == command)
+  func ownCommandsStay(own: String, plain: String, asking: String) throws {
+    #expect(proposeOne(own) == own)
+    #expect(proposeOne(plain) == asking)
   }
+}
+
+/// The test command discover proposes for 1 area whose reader found `command`.
+private func proposeOne(_ command: String) -> String? {
+  Discover.propose(
+    tree: TrackedTreeSnapshot(files: [:]), head: "abc", dirty: [],
+    readers: [OneArea(command: command)]
+  ).areas.first?.commands[.test]?.value
 }
 
 /// 1 area whose test step runs `command`.

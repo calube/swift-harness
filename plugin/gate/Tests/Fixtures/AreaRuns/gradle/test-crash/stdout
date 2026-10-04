@@ -1,43 +1,30 @@
 Parallel Configuration Cache is an incubating feature.
-Calculating task graph as no cached configuration is available for tasks: :okhttp-sse:test --tests okhttp3.sse.internal.ServerSentEventIteratorTest
-Type-safe project accessors is an incubating feature.
-> Task :build-logic:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :build-logic:generateExternalPluginSpecBuilders UP-TO-DATE
-> Task :build-logic:extractPrecompiledScriptPluginPlugins UP-TO-DATE
-> Task :build-logic:compilePluginsBlocks UP-TO-DATE
-> Task :build-logic:generatePrecompiledScriptPluginAccessors UP-TO-DATE
-> Task :build-logic:generateScriptPluginAdapters UP-TO-DATE
-> Task :build-logic:compileKotlin UP-TO-DATE
-> Task :build-logic:compileJava NO-SOURCE
-> Task :build-logic:pluginDescriptors UP-TO-DATE
-> Task :build-logic:processResources UP-TO-DATE
-> Task :build-logic:classes UP-TO-DATE
-> Task :build-logic:jar UP-TO-DATE
-> Task :mockwebserver3:checkKotlinGradlePluginConfigurationErrors SKIPPED
+Reusing configuration cache.
 > Task :okhttp-sse:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :okhttp-idna-mapping-table:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :mockwebserver3-junit5:processResources NO-SOURCE
-> Task :okhttp-sse:processResources NO-SOURCE
-> Task :mockwebserver3:processResources NO-SOURCE
-> Task :okhttp-idna-mapping-table:processResources UP-TO-DATE
-> Task :okhttp:kmpPartiallyResolvedDependenciesChecker
-> Task :mockwebserver3-junit5:processJava9Resources NO-SOURCE
 > Task :mockwebserver3-junit5:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :mockwebserver3:processJava9Resources NO-SOURCE
-> Task :okhttp-sse:processJava9Resources NO-SOURCE
+> Task :okhttp-idna-mapping-table:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :okhttp-sse:processResources NO-SOURCE
+> Task :okhttp:kmpPartiallyResolvedDependenciesChecker
 > Task :okhttp-dnsoverhttps:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :okhttp:copyKotlinTemplates UP-TO-DATE
-> Task :okhttp-dnsoverhttps:processResources NO-SOURCE
+> Task :okhttp:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :mockwebserver3:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :okhttp-sse:processJava9Resources NO-SOURCE
+> Task :mockwebserver3:processJava9Resources NO-SOURCE
 > Task :okhttp:jvmProcessResources UP-TO-DATE
-> Task :okhttp-dnsoverhttps:processJava9Resources NO-SOURCE
+> Task :mockwebserver3:processResources NO-SOURCE
 > Task :okhttp-tls:checkKotlinGradlePluginConfigurationErrors SKIPPED
 > Task :okhttp-testing-support:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :okhttp-tls:processJava9Resources NO-SOURCE
-> Task :okhttp:checkKotlinGradlePluginConfigurationErrors SKIPPED
-> Task :okhttp-sse:processTestResources NO-SOURCE
-> Task :okhttp-testing-support:processResources UP-TO-DATE
+> Task :mockwebserver3-junit5:processJava9Resources NO-SOURCE
 > Task :okhttp:processJvmMainResources SKIPPED
+> Task :mockwebserver3-junit5:processResources NO-SOURCE
+> Task :okhttp-dnsoverhttps:processJava9Resources NO-SOURCE
+> Task :okhttp-dnsoverhttps:processResources NO-SOURCE
+> Task :okhttp-tls:processJava9Resources NO-SOURCE
 > Task :okhttp-tls:processResources NO-SOURCE
+> Task :okhttp-testing-support:processResources UP-TO-DATE
+> Task :okhttp-sse:processTestResources NO-SOURCE
+> Task :okhttp:copyKotlinTemplates UP-TO-DATE
+> Task :okhttp-idna-mapping-table:processResources UP-TO-DATE
 > Task :okhttp-idna-mapping-table:compileKotlin UP-TO-DATE
 > Task :okhttp-idna-mapping-table:compileJava NO-SOURCE
 > Task :okhttp-idna-mapping-table:classes UP-TO-DATE
@@ -48,56 +35,48 @@ Type-safe project accessors is an incubating feature.
 > Task :okhttp:jvmMainClasses UP-TO-DATE
 > Task :okhttp:compileJavaModuleInfo UP-TO-DATE
 > Task :okhttp:jvmJar UP-TO-DATE
-> Task :okhttp-sse:compileKotlin UP-TO-DATE
-> Task :mockwebserver3:compileKotlin UP-TO-DATE
-> Task :okhttp-tls:compileKotlin UP-TO-DATE
 > Task :okhttp-dnsoverhttps:compileKotlin UP-TO-DATE
-> Task :okhttp-sse:compileJava NO-SOURCE
-> Task :okhttp-tls:compileJava NO-SOURCE
-> Task :okhttp-tls:classes UP-TO-DATE
+> Task :okhttp-tls:compileKotlin UP-TO-DATE
+> Task :mockwebserver3:compileKotlin UP-TO-DATE
 > Task :okhttp-dnsoverhttps:compileJava NO-SOURCE
-> Task :mockwebserver3:compileJava NO-SOURCE
-> Task :okhttp-sse:classes UP-TO-DATE
+> Task :okhttp-sse:compileKotlin UP-TO-DATE
 > Task :okhttp-dnsoverhttps:classes UP-TO-DATE
+> Task :okhttp-tls:compileJava NO-SOURCE
+> Task :mockwebserver3:compileJava NO-SOURCE
+> Task :okhttp-tls:classes UP-TO-DATE
 > Task :mockwebserver3:classes UP-TO-DATE
+> Task :okhttp-sse:compileJava NO-SOURCE
+> Task :okhttp-dnsoverhttps:compileJava9Kotlin NO-SOURCE
+> Task :okhttp-sse:classes UP-TO-DATE
+> Task :mockwebserver3:compileJava9Kotlin NO-SOURCE
 > Task :okhttp-tls:compileJava9Kotlin NO-SOURCE
 > Task :okhttp-sse:compileJava9Kotlin NO-SOURCE
-> Task :mockwebserver3:compileJava9Kotlin NO-SOURCE
-> Task :okhttp-dnsoverhttps:compileJava9Kotlin NO-SOURCE
-> Task :okhttp-sse:compileJava9Java UP-TO-DATE
-> Task :okhttp-tls:compileJava9Java UP-TO-DATE
 > Task :okhttp-dnsoverhttps:compileJava9Java UP-TO-DATE
-> Task :okhttp-sse:java9Classes UP-TO-DATE
 > Task :okhttp-dnsoverhttps:java9Classes UP-TO-DATE
+> Task :okhttp-tls:compileJava9Java UP-TO-DATE
+> Task :okhttp-tls:java9Classes UP-TO-DATE
+> Task :okhttp-sse:compileJava9Java UP-TO-DATE
 > Task :mockwebserver3:compileJava9Java UP-TO-DATE
 > Task :mockwebserver3:java9Classes UP-TO-DATE
-> Task :okhttp-tls:java9Classes UP-TO-DATE
-> Task :mockwebserver3:jar UP-TO-DATE
-> Task :okhttp-dnsoverhttps:jar UP-TO-DATE
-> Task :okhttp-sse:jar UP-TO-DATE
+> Task :okhttp-sse:java9Classes UP-TO-DATE
 > Task :okhttp-tls:jar UP-TO-DATE
+> Task :okhttp-dnsoverhttps:jar UP-TO-DATE
+> Task :mockwebserver3:jar UP-TO-DATE
+> Task :okhttp-sse:jar UP-TO-DATE
 > Task :mockwebserver3-junit5:compileKotlin UP-TO-DATE
 > Task :mockwebserver3-junit5:compileJava NO-SOURCE
+> Task :okhttp-testing-support:compileKotlin UP-TO-DATE
 > Task :mockwebserver3-junit5:classes UP-TO-DATE
 > Task :mockwebserver3-junit5:compileJava9Kotlin NO-SOURCE
-> Task :okhttp-testing-support:compileKotlin UP-TO-DATE
-> Task :okhttp-testing-support:compileJava NO-SOURCE
-> Task :okhttp-testing-support:classes UP-TO-DATE
 > Task :mockwebserver3-junit5:compileJava9Java UP-TO-DATE
 > Task :mockwebserver3-junit5:java9Classes UP-TO-DATE
-> Task :okhttp-testing-support:jar UP-TO-DATE
+> Task :okhttp-testing-support:compileJava NO-SOURCE
+> Task :okhttp-testing-support:classes UP-TO-DATE
 > Task :mockwebserver3-junit5:jar UP-TO-DATE
-> Task :okhttp-sse:compileTestKotlin
+> Task :okhttp-testing-support:jar UP-TO-DATE
+> Task :okhttp-sse:compileTestKotlin UP-TO-DATE
 > Task :okhttp-sse:compileTestJava NO-SOURCE
 > Task :okhttp-sse:testClasses UP-TO-DATE
 > Task :okhttp-sse:test FAILED
-
-[Incubating] Problems report is available at: file://<repo>/build/reports/problems/problems-report.html
-
-Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
-
-You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
-
-For more on this, please refer to https://docs.gradle.org/9.6.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
-39 actionable tasks: 3 executed, 36 up-to-date
-Configuration cache entry stored.
+30 actionable tasks: 2 executed, 28 up-to-date
+Configuration cache entry reused.

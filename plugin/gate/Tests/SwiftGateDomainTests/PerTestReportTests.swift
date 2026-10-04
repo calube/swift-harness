@@ -5,7 +5,7 @@ import Testing
 
 /// A captured `F/AreaRuns/<runner>/<case>/` run, read the way the live runner reads it: stdout
 /// with stderr folded in, and every report the run wrote, combined.
-private func capturedRun(_ runner: String, _ caseName: String) throws -> AreaCommandOutcome {
+func capturedRun(_ runner: String, _ caseName: String) throws -> AreaCommandOutcome {
   let directory = Fixture.directory.appending(
     path: "AreaRuns/\(runner)/\(caseName)", directoryHint: .isDirectory)
   let read = { (name: String) in
@@ -119,45 +119,6 @@ struct PerTestReportTests {
     }
     #expect(junit == nil)
     #expect(BaselineStepResult.of(outcome) == .failed)
-  }
-
-  @Test(
-    "a suite that fails to load names itself, so the base's failing test can't absorb it — catches a jest or vitest suite error left out of the report",
-    arguments: [
-      ("vitest", "test/broken.test.js"),
-      ("jest", "Test suite failed to run.test/broken.test.js"),
-    ])
-  func suiteLoadFailureGates(directory: String, suite: String) throws {
-    let runner = try #require(runners.first { $0.directory == directory })
-    let head = BaselineStepResult.of(try capturedRun(directory, "build-fail"))
-    let base = BaselineStepResult.of(try capturedRun(directory, "baseline-base"))
-
-    let verdict = Baseline.compare(head: [key(runner): head], base: [key(runner): base])
-
-    #expect(verdict.remaining.map(\.test).contains(suite))
-    #expect(verdict.absorbed == [BaselineFailure(key: key(runner), test: runner.flaky)])
-  }
-
-  @Test(
-    "an error vitest catches after a test ended gates on its own — catches an unhandled error absorbed with the base's failing test"
-  )
-  func vitestUnhandledErrorGates() throws {
-    #expect(
-      BaselineStepResult.of(try capturedRun("vitest", "unhandled"))
-        == .failedTests([
-          "test/alpha.test.js.alpha > flaky",
-          "vitest unhandled errors.Uncaught Exception: thrown after the test ended",
-        ]))
-  }
-
-  @Test(
-    "pnpm hands the report flags to the script as npm does after its separator — catches a pnpm area whose report is never written",
-    arguments: ["vitest", "jest"])
-  func pnpmRunsWriteReports(directory: String) throws {
-    let runner = try #require(runners.first { $0.directory == directory })
-    #expect(
-      BaselineStepResult.of(try capturedRun(directory, "pnpm-head"))
-        == .failedTests([runner.flaky, runner.fresh]))
   }
 
   @Test(

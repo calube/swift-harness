@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="okhttp3.sse.internal.ServerSentEventIteratorTest" tests="2" skipped="1" failures="0" errors="0" timestamp="2026-10-04T12:52:14.541Z" hostname="&lt;host&gt;" time="0.416">
+<testsuite name="okhttp3.sse.internal.ServerSentEventIteratorTest" tests="2" skipped="1" failures="0" errors="0" timestamp="2026-10-04T13:56:57.941Z" hostname="&lt;host&gt;" time="0.452">
   <properties/>
-  <testcase name="retryInvalidFormatIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.016"/>
-  <testcase name="multilineCrLf()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.395">
+  <testcase name="retryInvalidFormatIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.017"/>
+  <testcase name="multilineCrLf()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.43">
     <skipped/>
   </testcase>
   <system-out><![CDATA[]]></system-out>

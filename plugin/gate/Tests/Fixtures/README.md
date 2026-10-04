@@ -1499,8 +1499,8 @@ if [ -n "$j" ] && [ -f "$j" ]; then mv "$j" "$d/junit.xml"; fi
 `$SCRATCH/scrub.sh` replaces machine paths, the host name and the user name. After the last capture
 it ran once more over every `stdout`, `stderr` and `junit.xml` (from inside a clone; it is
 idempotent), because the user-name and `$TMPDIR` rules came last. This first version wrote `<repo>`
-into `junit.xml` too, which left those reports ill-formed XML; the reports were recaptured with the
-version under "Recaptured reports" below:
+into `junit.xml` too, which left those reports ill-formed XML, so a later capture replaced them with
+the version under "Recaptured reports" below:
 
 ```sh
 #!/bin/sh
@@ -1519,14 +1519,13 @@ names. `grep -rIl -i -e caleb -e /Users/ -e /private/ -e /var/folders AreaRuns` 
 
 ### Recaptured reports
 
-Every case with a `junit.xml` from the Gradle, Maven, node and Python captures above
-(`gradle/test-{pass,fail,crash}`, `maven/test-{pass,fail}`, `node/test-{pass,fail}`,
-`python/test-{pass,fail}`) was captured again on 2026-10-04 with the same commands, clones at the
-same commits, and the same tool versions, so each report is well-formed XML. Each case's
-`stdout`, `stderr` and `exit` come from the same run as its report. The clones were fetched at their
-commits (`git init; git fetch --depth 1 origin <sha>; git checkout FETCH_HEAD`), and tools went into
-a new scratch directory the same way. The scrub now escapes each placeholder inside a report, so
-`<repo>` reads back from the XML as text:
+On 2026-10-04 the same commands ran again for every case that has a `junit.xml`. Those are
+`gradle/test-{pass,fail,crash}`, `maven/test-{pass,fail}`, `node/test-{pass,fail}` and
+`python/test-{pass,fail}`. The clones sat at the same commits and the tools at the same versions,
+so each report is now well-formed XML. Each case's `stdout`, `stderr` and `exit` come from the same
+run as its report. `git init; git fetch --depth 1 origin <sha>; git checkout FETCH_HEAD` made each
+clone, and the tools went into a new scratch directory the same way. The scrub now escapes each
+placeholder inside a report, so `<repo>` reads back from the XML as text:
 
 ```sh
 #!/bin/sh
@@ -1542,12 +1541,12 @@ done
 ```
 
 `cap.sh` also removes a `junit.xml` left in the case directory before it moves the new one in. The
-Gradle and Maven capture commands now run `rm -rf okhttp-sse/build/test-results` or
-`rm -rf target/surefire-reports` before each test run, as the original note says, and the Gradle
-`test-pass` run came after a warm-up so its output holds no distribution download. The okhttp
-`test-crash` report now holds 2 cases, not 12: `retryInvalidFormatIgnored()` passed and
-`multilineCrLf()` is marked skipped, while `exits()` is absent. JUnit ran the class's methods in
-another order, and the executor's exit ended the run there.
+Gradle and Maven captures ran `rm -rf okhttp-sse/build/test-results` or `rm -rf
+target/surefire-reports` before each test run, as the original note says. The Gradle `test-pass`
+run came after a warm-up, so its output holds no distribution download. The Gradle `test-crash`
+command ran 8 times. 1 run reported 12 cases, as the original did, but with 2 failures; the
+other 7 reported 2. The fixture keeps the fourth run: `retryInvalidFormatIgnored()` passed and the
+report marks `multilineCrLf()` skipped. JUnit's method order there is not stable between runs.
 
 ### Captures
 
@@ -1707,7 +1706,7 @@ $CAP $F/swift/lint "swiftlint lint --quiet $L"
 | `cargo/test-crash` | 101 | — | stderr `process didn't exit successfully: ... (signal: 6, SIGABRT: process abort signal)`; stdout stops after `running 9 tests` |
 | `gradle/test-pass` | 0 | 1 / 0 | `BUILD SUCCESSFUL` |
 | `gradle/test-fail` | 1 | 1 / 1 | `ServerSentEventIteratorTest > multiline() FAILED` |
-| `gradle/test-crash` | 1 | 2 / 0, 1 skipped | stderr `Process 'Gradle Test Executor 4' finished with non-zero exit value 3`; the JUnit file marks 1 case `<skipped/>` (`multilineCrLf()` in this run) and leaves `exits()` out, so JUnit alone reads as a pass |
+| `gradle/test-crash` | 1 | 2 / 0, 1 skipped | stderr `Process 'Gradle Test Executor 4' finished with non-zero exit value 3`; the JUnit file marks the case running at the exit `<skipped/>` (`multilineCrLf()` in this run) and leaves `exits()` out, so JUnit alone reads as a pass |
 | `maven/test-pass` | 0 | 1 / 0 | `Tests run: 1, Failures: 0` |
 | `maven/test-fail` | 1 | 1 / 1 | `Tests run: 1, Failures: 1` |
 | `maven/test-crash` | 1 | none written | `The forked VM terminated without properly saying goodbye. VM crash or System.exit called?` |
@@ -1770,22 +1769,25 @@ $CAP $F/go/build-fail "go test -json -tags broken ./..."
 `AreaRuns/<runner>/{baseline-base,baseline-head,build-fail}/` for `python` (pytest), `vitest`, `jest`,
 `gradle`, `maven`, `ruby` (RSpec), `swift` and `cargo` are runs of 1 throwaway project per runner,
 with the test command discover now proposes, so each proves its report flag. In each project
-`flaky` fails at both runs, a second test fails only when an environment variable is set
-(`baseline-head`), and `build-fail` adds a failure no test result holds. `vitest/unhandled`,
+`flaky` fails at both runs, and a second test fails only under an environment variable the
+`baseline-head` run sets. `build-fail` adds a failure no test result holds. `vitest/unhandled`,
 `vitest/pnpm-head`, `jest/pnpm-head`, `maven/multi-module-build-fail` and `ruby/suite-hook-fail` are extra
 runs.
 
-Captured 2026-10-04 on macOS 26 (arm64). Tools went into scratch only (`MISE_DATA_DIR` and every
-cache under `$SCRATCH`, mise 2025.12.7): Python 3.12.12 with pytest 9.1.1 (uv venv); node 22.23.3
-with npm 10.9.9, and node 24.21.0 with pnpm 12.0.0 for the pnpm runs; vitest 5.0.3; jest 30.5.2 and
-jest-junit 17.0.0; Temurin JDK 21.0.12 with Gradle 9.8.0 and Maven 3.10.0, JUnit Jupiter 5.13.4 and
-Surefire 3.5.4; Ruby 3.4.11 (compiled by mise) with Bundler 2.6.9, rspec-core 3.13.6 and
-rspec_junit_formatter 0.6.0; Apple Swift 6.2 (swiftlang-6.2.3.3.20); rustup with cargo 1.90.0.
+Captured 2026-10-04 on macOS 26 (arm64). Tools went into scratch only, with `MISE_DATA_DIR` and
+every cache under `$SCRATCH` (mise 2025.12.7):
+
+- Python 3.12.12 with pytest 9.1.1 in a uv venv.
+- node 22.23.3 with npm 10.9.9; node 24.21.0 with pnpm 12.0.0 for the pnpm runs; vitest 5.0.3,
+  jest 30.5.2 and jest-junit 17.0.0.
+- Temurin JDK 21.0.12, Gradle 9.8.0, Maven 3.10.0, JUnit Jupiter 5.13.4 and Surefire 3.5.4.
+- Ruby 3.4.11 (mise compiled it), Bundler 2.6.9, rspec-core 3.13.6, rspec_junit_formatter 0.6.0.
+- Apple Swift 6.2 (swiftlang-6.2.3.3.20), and rustup with cargo 1.90.0.
 
 `$CAP2`, `$SCRATCH/cap2.sh`, runs a command as the area runner does: through `/bin/sh -c` with stderr folded
-into stdout (so `stderr` is empty), and `{junit}` expanded, quoted, to a fresh path. It keeps the
-report as `junit.xml`, a Swift Testing report beside it as `junit-swift-testing.xml`, or a
-directory of reports as `junit/`, then scrubs with `scrub2.sh`, which is `scrub.sh` above with
+into stdout (so `stderr` is empty), and `{junit}` expanded, quoted, to a fresh path. A report file
+becomes `junit.xml`, and a Swift Testing report beside it `junit-swift-testing.xml`. A directory of
+reports becomes `junit/`. The script then scrubs with `scrub2.sh`, which is `scrub.sh` above with
 `R` the project directory (`pwd -P`, and `pwd` for `R_L`) and run over every file of the case:
 
 ```sh
@@ -1826,9 +1828,9 @@ The projects, each a directory of its own:
   for the packages whose install scripts pnpm 12 otherwise refuses.
 - `gradle`: `settings.gradle` includes `alpha` and `beta`; the root `build.gradle` applies `java`
   with JUnit Jupiter to both. `alpha/.../AlphaTest.java` has `passes()` and `flaky()`;
-  `beta/.../BetaTest.java` has `fresh()`, failing when `GRADLEBASE_FAIL_NEW` is set.
+  `beta/.../BetaTest.java` has `fresh()`, failing under `GRADLEBASE_FAIL_NEW`.
 - `maven`: 1 `pom.xml` (`mavenbase`, release 21, JUnit Jupiter, Surefire 3.5.4); `AlphaTest` with
-  `passes()` and `flaky()`, `BetaTest.fresh()` failing when `MAVENBASE_FAIL_NEW` is set.
+  `passes()` and `flaky()`, and `BetaTest.fresh()` failing under `MAVENBASE_FAIL_NEW`.
   `maven-multi` is a parent `pom.xml` with modules `alpha` (`AlphaTest.flaky()`) and `beta`, whose
   `BetaTest` calls an undefined `undefinedHelper()`.
 - `ruby`: a `Gemfile` with `rspec ~> 3.13` and `rspec_junit_formatter ~> 0.6`, `BUNDLE_PATH` under
@@ -1841,7 +1843,7 @@ The projects, each a directory of its own:
   `@Test func fresh()` expecting `SWIFTBASE_FAIL_NEW` unset; `swift build --build-tests` first.
 - `cargo`: crate `cargobase` (edition 2021) with a doc test on `sum`, unit tests `tests::passes`
   and `tests::flaky` in `src/lib.rs`, and `tests/beta.rs` whose `mod tests` has its own `flaky`,
-  failing when `CARGOBASE_FAIL_NEW` is set; `PATH=$CARGO_HOME/bin:$PATH RUSTUP_TOOLCHAIN=1.90.0`.
+  failing under `CARGOBASE_FAIL_NEW`; `PATH=$CARGO_HOME/bin:$PATH RUSTUP_TOOLCHAIN=1.90.0`.
 
 Each `build-fail` that isn't a variable adds 1 line and removes it after the run: Gradle and Maven
 add `undefinedHelper();` as `fresh()`'s first line (`perl -pi -e 's/(void fresh\(\) \{)/$1\n
