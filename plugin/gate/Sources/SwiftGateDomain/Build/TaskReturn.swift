@@ -416,9 +416,14 @@ public enum TaskReturnCheck {
   /// flags are named.
   public static let taskGateSteps: [CheckExtraStep] = [.impact, .coverage, .appBuild]
 
-  /// The steps a worker's gate at `tier` must show it ran.
+  /// The steps a worker's gate at `tier` must show it ran: an owned tier's are the workflow's
+  /// flags, and a brownfield tier's are the steps the tier itself runs, since it takes no flag
+  /// that adds one.
   public static func requiredSteps(at tier: CheckTier) -> [CheckExtraStep] {
-    taskGateSteps
+    switch tier.profile {
+    case .owned: taskGateSteps
+    case .brownfield: CheckExtraStep.allCases.filter { $0.isRun(by: tier) }
+    }
   }
 
   /// `fast` < `push` < `ready`, and `slice` < `merge` < `final`: each tier runs everything the

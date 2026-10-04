@@ -887,7 +887,8 @@ struct CheckCommand: AsyncParsableCommand {
 
   /// The options asked for that only an owned tier runs, by their command-line names.
   var ownedOnlyOptions: [String] {
-    []
+    guard tier.profile == .brownfield else { return [] }
+    return extraSteps.map { "--\($0.rawValue)" } + (proofBases.isEmpty ? [] : ["--proof-base"])
   }
 
   func run() async throws {

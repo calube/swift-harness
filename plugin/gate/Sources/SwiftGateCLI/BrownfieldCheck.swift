@@ -8,6 +8,13 @@ enum BrownfieldCheck {
   static func run(
     root: URL, tier: CheckTier, base: String, refusing: [String] = [], context: GateRun.Context
   ) async throws -> GateRunParts {
+    if !refusing.isEmpty {
+      return try notRun(
+        tier,
+        because: refusing.joined(separator: ", ")
+          + (refusing.count == 1 ? " belongs" : " belong")
+          + " to the owned profile; a brownfield tier takes only the steps it runs")
+    }
     switch tier {
     case .slice:
       return try await BrownfieldSliceCheck.run(root: root, base: base, context: context)
