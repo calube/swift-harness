@@ -39,7 +39,7 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # cases and sessions are prompts too, and the corpora are deliberately bad inputs.
 prose_exclude = [
   "docs/plans/**", "docs/handoffs/**", "plugin/agents/**", "plugin/skills/**", "evals/cases/**",
-  "evals/sessions/**", "evals/corpora/**",
+  "evals/sessions/**", "evals/corpora/**", "plugin/gate/Tests/Fixtures/RunView/**",
 ]
 
 [[docs.banned_phrases]]

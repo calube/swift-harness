@@ -1,0 +1,2 @@
+{"eventID":"5F0836DD-38FC-465D-8B06-ED54F3D05CB0","kind":"build.halt","payload":{"buildRun":"20261004T045528Z-58d28c78","reason":"question","task":"counter-ui-reset-button-snapshot"},"schemaVersion":1,"source":{},"time":"2026-10-04T05:14:05.299Z"}
+{"eventID":"BC1BA087-233E-4FCC-8F9B-69F70960C376","kind":"build.resume","parentID":"5F0836DD-38FC-465D-8B06-ED54F3D05CB0","payload":{"answer":"abandon","buildRun":"20261004T045528Z-58d28c78","task":"counter-ui-reset-button-snapshot","waitMs":98046},"schemaVersion":1,"source":{},"time":"2026-10-04T05:15:43.344Z"}
