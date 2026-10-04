@@ -63,17 +63,26 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case discoverRun = "discover.run"
   /// 1 area's 1 step of a brownfield warm-up.
   case warmupRun = "warmup.run"
+  /// A run phase began.
+  case spanStart = "span.start"
+  /// A run phase ended.
+  case spanEnd = "span.end"
+  /// 1 changed test `prove` ran.
+  case proveResult = "prove.result"
+  /// 1 agent's tool calls in 1 window, read from a Claude Code transcript.
+  case agentTools = "agent.tools"
 
   public var stream: HarnessEventStream {
     switch self {
     case .judgeDecision, .judgeCall: .judge
     case .gateRun, .gateStep: .gate
     case .hookDecision: .hook
-    case .testResult: .test
+    case .testResult, .proveResult: .test
     case .cacheLookup: .cache
-    case .agentUsage: .usage
+    case .agentUsage, .agentTools: .usage
     case .buildHalt, .buildResume: .build
     case .discoverRun, .warmupRun: .brownfield
+    case .spanStart, .spanEnd: .span
     }
   }
 }
@@ -88,6 +97,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case usage
   case build
   case brownfield
+  case span
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -144,6 +154,10 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case buildResume(BuildResumeEvent)
   case discoverRun(DiscoverRunEvent)
   case warmupRun(WarmupRunEvent)
+  case spanStart(SpanStartEvent)
+  case spanEnd(SpanEndEvent)
+  case proveResult(ProveResultEvent)
+  case agentTools(AgentToolsEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -159,6 +173,10 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .buildResume: .buildResume
     case .discoverRun: .discoverRun
     case .warmupRun: .warmupRun
+    case .spanStart: .spanStart
+    case .spanEnd: .spanEnd
+    case .proveResult: .proveResult
+    case .agentTools: .agentTools
     }
   }
 }
@@ -373,6 +391,9 @@ extension HarnessEvent: Codable {
       payload = .discoverRun(try c.decode(DiscoverRunEvent.self, forKey: .payload))
     case .warmupRun:
       payload = .warmupRun(try c.decode(WarmupRunEvent.self, forKey: .payload))
+    case .spanStart, .spanEnd, .proveResult, .agentTools:
+      throw DecodingError.dataCorruptedError(
+        forKey: .kind, in: c, debugDescription: "run view events aren't read yet")
     }
   }
 
@@ -400,6 +421,7 @@ extension HarnessEvent: Codable {
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
     case .discoverRun(let run): try c.encode(run, forKey: .payload)
     case .warmupRun(let run): try c.encode(run, forKey: .payload)
+    case .spanStart, .spanEnd, .proveResult, .agentTools: return
     }
   }
 }

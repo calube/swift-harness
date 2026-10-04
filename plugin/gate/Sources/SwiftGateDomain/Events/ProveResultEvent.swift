@@ -1,0 +1,57 @@
+import Foundation
+
+/// What `prove` found for 1 changed test.
+public enum ProveResultOutcome: String, Sendable, Codable, CaseIterable {
+  /// It failed with the source change reverted.
+  case proven
+  case passesReverted = "passes-reverted"
+  case compileOnly = "compile-only"
+  case crashed
+  case skipped
+}
+
+/// Which assertion form failed first in the reverted run.
+public enum ProveAssertionKind: String, Sendable, Codable, CaseIterable {
+  case expect
+  case require
+  case xctAssert = "xct-assert"
+  case other
+}
+
+/// Where the reverted run first failed: a location and a form, never its source text.
+public struct ProveAssertion: Sendable, Equatable, Codable {
+  /// Repo-relative.
+  public let file: String
+  public let line: Int
+  public let kind: ProveAssertionKind
+
+  public init(file: String, line: Int, kind: ProveAssertionKind) {
+    self.file = file
+    self.line = line
+    self.kind = kind
+  }
+}
+
+/// `prove.result`: 1 changed test `prove` ran; its `parentID` is the run's `gate.run`.
+public struct ProveResultEvent: Sendable, Equatable, Codable {
+  /// The test id, or `sha256:<hex>` of it, as `test.result` spells it.
+  public let test: String
+  public let testHashed: Bool
+  public let target: String
+  public let outcome: ProveResultOutcome
+  /// The commit `prove` reverted the source to.
+  public let proofBase: String?
+  public let assertion: ProveAssertion?
+
+  public init(
+    test: String, testHashed: Bool, target: String, outcome: ProveResultOutcome,
+    proofBase: String?, assertion: ProveAssertion?
+  ) {
+    self.test = test
+    self.testHashed = testHashed
+    self.target = target
+    self.outcome = outcome
+    self.proofBase = proofBase
+    self.assertion = assertion
+  }
+}

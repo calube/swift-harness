@@ -23,6 +23,7 @@ public struct HaltsSection: EventSummarySection {
       case .judgeDecision, .judgeCall, .gateRun, .gateStep: false
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: false
       case .discoverRun, .warmupRun: false
+      case .spanStart, .spanEnd, .proveResult, .agentTools: false
       }
     }
     let runs = (builds?.runs ?? []).filter { run in
