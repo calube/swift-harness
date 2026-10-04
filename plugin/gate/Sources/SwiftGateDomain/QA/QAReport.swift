@@ -36,7 +36,8 @@ public struct QAReport: Sendable, Equatable {
     runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
     commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [], notes: [String] = []
   ) {
-    let findings = Self.findings(rows: rows, atBase: atBase)
+    let findings =
+      Self.findings(rows: rows, atBase: atBase) + Self.findings(gaps: gaps, rows: rows)
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
@@ -118,6 +119,23 @@ public struct QAReport: Sendable, Equatable {
       return try? Finding(
         ruleID: rule.id, severity: rule.severity, file: ValidationTable.fileName, line: nil,
         message: rule.message, failureScenario: nil)
+    }
+  }
+}
+
+extension QAReport {
+  /// 1 nit per piece of final-pass evidence a flow row didn't leave.
+  public static func findings(gaps: [QAEvidenceGap], rows: [QARow]) -> [Finding] {
+    gaps.compactMap { gap in
+      let row = rows.first { $0.row == gap.row }
+      let named =
+        row.map { "row \($0.row) (\($0.requirement), \($0.layer.rawValue)) `\($0.check)`" }
+        ?? "row \(gap.row)"
+      let what = gap.kind == .video ? "video unverified" : "\(gap.kind.rawValue) not saved"
+      // Every argument is non-empty, so the contract can't refuse it.
+      return try? Finding(
+        ruleID: gap.ruleID, severity: .nit, file: ValidationTable.fileName, line: nil,
+        message: "\(named): \(what): \(gap.reason)", failureScenario: nil)
     }
   }
 }

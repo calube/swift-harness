@@ -47,7 +47,9 @@ public final class BusyRecorderDevice: AgentDevice {
   public func snapshotJSON(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> Data {
     try await device.snapshotJSON(on: target)
   }
-  public func screenshot(to path: String, on target: AgentDeviceTarget) async throws(AgentDeviceError) {
+  public func screenshot(to path: String, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
+  {
     try await device.screenshot(to: path, on: target)
   }
   public func appState(on target: AgentDeviceTarget) async throws(AgentDeviceError)
@@ -59,13 +61,16 @@ public final class BusyRecorderDevice: AgentDevice {
   public func waitForText(_ text: String, timeoutMilliseconds: Int, on target: AgentDeviceTarget)
     async throws(AgentDeviceError)
   { try await device.waitForText(text, timeoutMilliseconds: timeoutMilliseconds, on: target) }
-  public func recordStart(to path: String, on target: AgentDeviceTarget) async throws(AgentDeviceError) {
+  public func recordStart(to path: String, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
+  {
     try await device.recordStart(to: path, on: target)
   }
   public func recordStop(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> String {
     try await device.recordStop(on: target)
   }
-  public func contactSheet(video: String, to sheet: String) async throws(AgentDeviceError) -> String {
+  public func contactSheet(video: String, to sheet: String) async throws(AgentDeviceError) -> String
+  {
     try await device.contactSheet(video: video, to: sheet)
   }
   public func logs(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> String {

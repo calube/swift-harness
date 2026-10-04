@@ -16,6 +16,9 @@ public enum AgentDeviceFailureReason: String, Sendable, Equatable, CaseIterable 
   case waitDeadlineExceeded = "wait_deadline_exceeded"
   /// An `is` step whose predicate didn't hold.
   case predicateFailed = "predicate_failed"
+  /// `record start` while the Mac's simulator host holds another recording: `simctl
+  /// recordVideo`'s exit 16, as the pinned package's source maps it. Not seen in a capture.
+  case appleSimulatorRecordingBusy = "apple_simulator_recording_busy"
 }
 
 /// The batch step that stopped a batch: its 1-based index and its command.

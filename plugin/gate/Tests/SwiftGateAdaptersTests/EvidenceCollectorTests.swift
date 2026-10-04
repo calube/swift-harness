@@ -49,11 +49,12 @@ struct EvidenceCollectorTests {
     #expect(before.value == ["logs start", "trace start"])
     #expect(collection.gaps.isEmpty, "\(collection.gaps)")
     #expect(
-      collection.files == [
-        EvidenceCollector.appLogFileName, EvidenceCollector.networkFileName,
-        EvidenceCollector.traceFileName, EvidenceCollector.osLogFileName,
-        EvidenceCollector.containerDirectory,
-      ].map { "\(Self.relative)/\($0)" })
+      collection.files
+        == [
+          EvidenceCollector.appLogFileName, EvidenceCollector.networkFileName,
+          EvidenceCollector.traceFileName, EvidenceCollector.osLogFileName,
+          EvidenceCollector.containerDirectory,
+        ].map { "\(Self.relative)/\($0)" })
     let logs = root.appending(path: Self.relative, directoryHint: .isDirectory)
     let appLog = try String(
       contentsOf: logs.appending(path: EvidenceCollector.appLogFileName), encoding: .utf8)

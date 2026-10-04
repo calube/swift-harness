@@ -12,9 +12,10 @@ public enum RecordingRetry {
     case giveUp
   }
 
-  /// What to do after a busy `record start`, `elapsed` after the first one.
+  /// What to do after a busy `record start`, `elapsed` after the first one. The last try lands
+  /// on the bound itself.
   public static func decision(elapsed: Duration) -> Decision {
-    .giveUp
+    elapsed >= bound ? .giveUp : .retry(after: min(interval, bound - elapsed))
   }
 }
 
@@ -100,7 +101,9 @@ public struct QAFlowRecording: Sendable, Equatable {
 
   /// The report's gaps for row `row`.
   public func gaps(row: Int) -> [QAEvidenceGap] {
-    []
+    [(QAEvidenceKind.video, videoGap), (.sheet, sheetGap)].compactMap { kind, gap in
+      gap.map { QAEvidenceGap(row: row, kind: kind, reason: $0.detail) }
+    }
   }
 }
 
@@ -108,6 +111,14 @@ extension QAFlowRecord {
   /// This record with the recording's video, sheet and gap reasons, and, when there is a video,
   /// each step's `offsetMs` moved from the batch's start onto the video's clock.
   public func recorded(_ recording: QAFlowRecording) -> QAFlowRecord {
-    self
+    let shift = recording.video == nil ? 0 : recording.videoStartMs ?? 0
+    return QAFlowRecord(
+      source: source,
+      steps: steps.map { step in
+        QAFlowStep(
+          n: step.n, label: step.label, offsetMs: max(0, step.offsetMs - shift), ok: step.ok)
+      },
+      video: recording.video, sheet: recording.sheet,
+      videoUnverified: recording.videoGap?.reason, sheetUnverified: recording.sheetGap?.reason)
   }
 }

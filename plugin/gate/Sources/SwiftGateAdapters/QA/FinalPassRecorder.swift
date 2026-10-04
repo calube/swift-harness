@@ -60,6 +60,93 @@ public struct FinalPassRecorder: Sendable {
     on target: AgentDeviceTarget, directory: URL, relativeDirectory: String,
     _ batch: @Sendable (_ recordTo: String?) async -> BatchFlowOutcome
   ) async -> (outcome: BatchFlowOutcome, recording: QAFlowRecording) {
-    (await batch(nil), QAFlowRecording())
+    let device = dependencies.agentDevice
+    let clock = dependencies.clock
+    func unrecorded(_ reason: QARecordingGapReason, _ detail: String) async -> (
+      outcome: BatchFlowOutcome, recording: QAFlowRecording
+    ) {
+      (
+        await batch(nil),
+        QAFlowRecording(videoGap: QARecordingGap(reason: reason, detail: detail))
+      )
+    }
+
+    let lease: LockLease
+    do {
+      lease = try await dependencies.lock.acquire(timeout: dependencies.lockWait)
+    } catch {
+      let detail =
+        switch error {
+        case .timedOut(let waited, _):
+          "another final pass held the \(Self.lockName) slot past \(waited)"
+        case .cancelled, .io: "the \(Self.lockName) slot couldn't be taken: \(error)"
+        }
+      return await unrecorded(.recordLockTimedOut, detail)
+    }
+    // Released as soon as the recording stops; this covers every other way out.
+    defer { lease.release() }
+
+    let video = directory.appending(path: Self.videoFileName)
+    let first = clock.now()
+    var outcome: BatchFlowOutcome
+    while true {
+      outcome = await batch(video.path)
+      guard case .recordStart(let failure) = outcome.stop else { break }
+      guard failure.reason == .appleSimulatorRecordingBusy else {
+        lease.release()
+        return await unrecorded(.recordFailed, "record start failed: \(failure.message)")
+      }
+      switch RecordingRetry.decision(elapsed: clock.now() - first) {
+      case .retry(let wait):
+        do {
+          try await clock.sleep(wait)
+        } catch {
+          lease.release()
+          return await unrecorded(.recorderBusy, "waiting for the Mac's recorder was cancelled")
+        }
+      case .giveUp:
+        lease.release()
+        return await unrecorded(
+          .recorderBusy,
+          "a recording outside the harness held the Mac for 5 minutes: \(failure.message)")
+      }
+    }
+
+    // The recording outlives a batch that stopped at a step, so it is stopped on every path.
+    do {
+      _ = try await device.recordStop(on: target)
+    } catch {
+      return (
+        outcome,
+        QAFlowRecording(
+          videoGap: QARecordingGap(reason: .recordFailed, detail: "record stop: \(error.message)"))
+      )
+    }
+    lease.release()
+    guard FileManager.default.fileExists(atPath: video.path) else {
+      return (
+        outcome,
+        QAFlowRecording(
+          videoGap: QARecordingGap(
+            reason: .recordFailed,
+            detail: "record stop left no video at \(relativeDirectory)/\(Self.videoFileName)"))
+      )
+    }
+
+    var recording = QAFlowRecording(
+      video: "\(relativeDirectory)/\(Self.videoFileName)", videoStartMs: outcome.videoStartMs ?? 0)
+    let sheet = directory.appending(path: Self.sheetFileName)
+    do {
+      _ = try await device.contactSheet(video: video.path, to: sheet.path)
+      if FileManager.default.fileExists(atPath: sheet.path) {
+        recording.sheet = "\(relativeDirectory)/\(Self.sheetFileName)"
+      } else {
+        recording.sheetGap = QARecordingGap(
+          reason: .sheetFailed, detail: "record contact-sheet wrote no \(Self.sheetFileName)")
+      }
+    } catch {
+      recording.sheetGap = QARecordingGap(reason: .sheetFailed, detail: error.message)
+    }
+    return (outcome, recording)
   }
 }

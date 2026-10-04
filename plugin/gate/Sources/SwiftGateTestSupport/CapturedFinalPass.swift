@@ -85,7 +85,8 @@ public enum CapturedFinalPass {
 
   private static func output(_ path: String, home: URL) throws -> ProcessOutput {
     let status = try Fixture.text("\(path).status").trimmingCharacters(in: .whitespacesAndNewlines)
-    let stdout = try Fixture.text("\(path).stdout").replacingOccurrences(of: "/HOME", with: home.path)
+    let stdout = try Fixture.text("\(path).stdout").replacingOccurrences(
+      of: "/HOME", with: home.path)
     return ProcessOutput(
       status: .exited(Int32(status) ?? 2), stdout: CapturedStream(bytes: Data(stdout.utf8)),
       stderr: CapturedStream(bytes: try Fixture.data("\(path).stderr")), elapsed: .zero)

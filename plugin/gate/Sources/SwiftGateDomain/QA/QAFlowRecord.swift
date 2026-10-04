@@ -163,6 +163,14 @@ public struct BatchFlowPlan: Sendable, Equatable {
     var driven: [FlowJSON] = []
     var origin: [Int?] = []
     var evidence: [Evidence] = []
+    if let recordTo {
+      driven.append(
+        .object([
+          "command": .string("record"),
+          "input": .object(["action": .string("start"), "path": .string(recordTo)]),
+        ]))
+      origin.append(nil)
+    }
     let snapshot = FlowJSON.object(["command": .string("snapshot"), "input": .object([:])])
     for step in steps {
       driven.append(.object(step.fields))
@@ -182,7 +190,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
           assert: expectedText(step), snapshot: first, screenshot: first + 1, settle: first + 2,
           screenshotPath: path))
     }
-    return BatchFlowPlan(steps: steps, evidence: evidence, driven: driven, origin: origin)
+    return BatchFlowPlan(
+      steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo)
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.
@@ -195,6 +204,7 @@ public struct BatchFlowPlan: Sendable, Equatable {
 
   /// Where the batch stopped, from the failing driven step's index.
   public func stop(atDrivenIndex index: Int, command: String) -> Stop {
+    if recordTo != nil, index == 1 { return .recordStart }
     if let n = origin(of: index) { return .step(n: n, command: command) }
     let after = origin.prefix(max(0, index - 1)).compactMap { $0 }.last ?? 0
     return .evidence(after: after, command: command)
