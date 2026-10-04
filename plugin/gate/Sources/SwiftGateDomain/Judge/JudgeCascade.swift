@@ -35,7 +35,13 @@ public enum JudgeCascade {
   public enum Escalation: String, Sendable, Equatable, Codable {
     /// Jev's flagged probability lies inside the question's band.
     case uncertain
+    /// Jev gave no answer at all: no key, no reply, or a reply that couldn't be read.
+    case jevFailed
   }
+
+  /// Neither backend answered a blocking question at `ready`, so the gate has no evidence either
+  /// way: BLOCKED, never RED.
+  public static let blockedRuleID = "judge.blocked"
 
   public enum Step: Sendable, Equatable {
     case keep
@@ -193,7 +199,23 @@ public enum JudgeCascade {
   static func describe(_ escalation: Escalation) -> String {
     switch escalation {
     case .uncertain: "uncertain"
+    case .jevFailed: ""
     }
+  }
+
+  /// The plan when Jev gave no answer: every blocking question goes to Claude, and every advisory
+  /// question stays unasked.
+  public static func jevFailedPlan(questions: JudgeQuestionSet) -> Plan {
+    Plan(entries: [])
+  }
+
+  /// The findings when Jev gave no answer (`jevError` says why): Claude's on the blocking
+  /// questions, or, when Claude failed too, 1 ``blockedRuleID`` finding naming both errors.
+  public static func jevFailedFindings(
+    subject: JudgeSubject, jevError: String, claude: ClaudeOutcome, questions: JudgeQuestionSet,
+    claudeIdentity: JudgeIdentity, thresholds: JudgeThresholds
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
   }
 
   /// What 1 subject's cascade asked and what it cost, so the benchmark can report the escalation

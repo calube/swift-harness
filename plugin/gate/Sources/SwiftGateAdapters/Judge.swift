@@ -6,6 +6,9 @@ public enum JudgeError: Error, Sendable, Equatable {
   case notConfigured(String)
   /// The backend ran and reported an error (API error, bad model, budget).
   case backend(String)
+  /// The request got no reply: the host was unreachable or the call timed out. Unlike the other
+  /// failures, asking again can succeed.
+  case transport(String)
   /// The backend's reply didn't match the question set.
   case malformedReply(String)
   /// The subject's state is over the backend's size limit, by the adapter's estimate or by the
@@ -403,6 +406,7 @@ extension JudgeError {
     case .backend(let message): .backend(scrub(message))
     case .malformedReply(let message): .malformedReply(scrub(message))
     case .stateTooLarge, .process: self
+    case .transport: .transport("")
     }
   }
 }

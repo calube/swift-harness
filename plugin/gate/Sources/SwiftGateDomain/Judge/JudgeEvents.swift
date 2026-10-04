@@ -41,6 +41,8 @@ public struct JudgeEventQuestion: Sendable, Equatable, Codable {
 public struct JudgeEventError: Error, Sendable, Equatable, Codable {
   public enum Kind: String, Sendable, Codable, CaseIterable {
     case notConfigured, backend, malformedReply, stateTooLarge
+    /// The request got no reply: unreachable or timed out.
+    case transport
     case launchFailed, timedOut, cancelled
     /// The backend answered, but not the question asked.
     case noAnswer
@@ -144,10 +146,16 @@ public struct JudgeEscalationEvent: Sendable, Equatable, Codable {
   public let p: Double?
   public let rationale: String?
   public let error: JudgeEventError?
+  /// Why the question went to Claude; `nil` in events written before the cause was recorded,
+  /// which all escalated as uncertain.
+  public let cause: JudgeCascade.Escalation?
+  /// Jev's error, when Jev's failure is the cause.
+  public let jevError: JudgeEventError?
 
   public init(
     backend: JudgeBackend, model: String, servedModel: String?, distribution: [String: Double]?,
-    p: Double?, rationale: String?, error: JudgeEventError?
+    p: Double?, rationale: String?, error: JudgeEventError?,
+    cause: JudgeCascade.Escalation? = nil, jevError: JudgeEventError? = nil
   ) {
     self.backend = backend
     self.model = model
@@ -156,6 +164,8 @@ public struct JudgeEscalationEvent: Sendable, Equatable, Codable {
     self.p = p
     self.rationale = rationale
     self.error = error
+    self.cause = cause
+    self.jevError = jevError
   }
 }
 
@@ -290,15 +300,18 @@ public enum JudgeDecisions {
     public let claude: JudgeCascade.ClaudeOutcome
     public let claudeIdentity: JudgeIdentity
     public let bands: [String: JudgeCascade.Band]
+    /// Why Jev gave no answer, when it gave none and its blocking questions went to Claude.
+    public let jevError: JudgeEventError?
 
     public init(
       plan: JudgeCascade.Plan, claude: JudgeCascade.ClaudeOutcome, claudeIdentity: JudgeIdentity,
-      bands: [String: JudgeCascade.Band]
+      bands: [String: JudgeCascade.Band], jevError: JudgeEventError? = nil
     ) {
       self.plan = plan
       self.claude = claude
       self.claudeIdentity = claudeIdentity
       self.bands = bands
+      self.jevError = jevError
     }
   }
 

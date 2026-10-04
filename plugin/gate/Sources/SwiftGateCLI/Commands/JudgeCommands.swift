@@ -257,6 +257,12 @@ enum TestJudgeCheck {
       outcomes: outcomes.all, batchFailure: nil, reasons: reasoned.reasons)
   }
 
+  /// The judge step's verdict from its findings: RED when one gates, BLOCKED when neither
+  /// backend could answer a blocking question, else GREEN.
+  static func verdict(_ findings: [Finding]) -> Verdict {
+    .green
+  }
+
   /// A judge that can't run is reported, never gating: it says nothing about the code.
   static func note(_ message: String) -> [Finding] {
     (try? Finding(

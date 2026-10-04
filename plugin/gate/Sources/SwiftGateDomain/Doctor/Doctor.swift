@@ -75,13 +75,16 @@ public struct DoctorFacts: Sendable {
   public let mermaidCLIInstalled: Bool
   /// The session's plugin record against the tree on disk; `nil` when not gathered.
   public let pluginSession: PluginSessionFacts?
+  /// The names of the judge backends' key variables set to a non-empty value in doctor's
+  /// environment, never their values; `nil` when not gathered.
+  public let judgeKeysSet: Set<String>?
 
   public init(
     config: Config, xcodeVersionOutput: String?, swiftVersionOutput: String?,
     devices: Result<[SimulatorDevice], ProbeFailure>, freeBytes: Int64?, shim: ShimStatus,
     swiftLintInstalled: Bool, packages: [PackageManifest], resolvedVersions: [String: String],
     architectureFindings: [Finding], mermaidCLIInstalled: Bool,
-    pluginSession: PluginSessionFacts? = nil
+    pluginSession: PluginSessionFacts? = nil, judgeKeysSet: Set<String>? = nil
   ) {
     self.config = config
     self.xcodeVersionOutput = xcodeVersionOutput
@@ -95,6 +98,7 @@ public struct DoctorFacts: Sendable {
     self.architectureFindings = architectureFindings
     self.mermaidCLIInstalled = mermaidCLIInstalled
     self.pluginSession = pluginSession
+    self.judgeKeysSet = judgeKeysSet
   }
 }
 
@@ -183,6 +187,8 @@ public enum Doctor {
   public static let profileRuleID = "doctor.profile"
   public static let pluginChangedRuleID = "doctor.plugin-changed"
   public static let sessionRecordRuleID = "doctor.session-record"
+  /// `[judge] backend` names a backend whose key variable isn't set.
+  public static let judgeKeyRuleID = "doctor.judge-key"
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.

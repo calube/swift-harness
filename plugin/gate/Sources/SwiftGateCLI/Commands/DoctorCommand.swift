@@ -9,8 +9,10 @@ enum DoctorRun {
 
   /// - Parameter sessionID: the session whose plugin record doctor judges; `nil` judges the
   ///   newest record.
+  /// - Parameter environment: where doctor looks for the judge backends' keys.
   static func run(
-    root: URL, sessionID: String?, swiftPM: any SwiftPM, runner: any ProcessRunner
+    root: URL, sessionID: String?, swiftPM: any SwiftPM, runner: any ProcessRunner,
+    environment: [String: String] = ProcessInfo.processInfo.environment
   ) async throws -> GateRunParts {
     let (result, milliseconds) = try await GateRun.timed { () async throws -> DoctorResult in
       let config: Config

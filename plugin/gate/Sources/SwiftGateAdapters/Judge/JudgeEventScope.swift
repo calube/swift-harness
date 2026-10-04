@@ -148,6 +148,7 @@ extension JudgeEventError {
       switch error {
       case .notConfigured: .notConfigured
       case .backend: .backend
+      case .transport: .transport
       case .malformedReply: .malformedReply
       case .stateTooLarge: .stateTooLarge
       case .process(.launchFailed): .launchFailed

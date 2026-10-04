@@ -100,6 +100,51 @@ public struct CascadingJudge: Judge {
 
   static let noClaude = "no Claude judge is available"
 
+  /// Jev gave no answer for 1 subject, so its blocking questions went to Claude.
+  public struct JevFailure: Sendable {
+    /// Jev's last error.
+    public let error: JudgeError
+    /// Jev calls made: 2 when the first failed in a way worth asking again.
+    public let attempts: Int
+    public let plan: JudgeCascade.Plan
+    /// `.answered([])` when no question escalated.
+    public let claude: JudgeCascade.ClaudeOutcome
+    public let claudeReply: JudgeReply?
+    public let jevIdentity: JudgeIdentity
+    public let claudeIdentity: JudgeIdentity
+
+    public init(
+      error: JudgeError, attempts: Int, plan: JudgeCascade.Plan,
+      claude: JudgeCascade.ClaudeOutcome, claudeReply: JudgeReply?, jevIdentity: JudgeIdentity,
+      claudeIdentity: JudgeIdentity
+    ) {
+      self.error = error
+      self.attempts = attempts
+      self.plan = plan
+      self.claude = claude
+      self.claudeReply = claudeReply
+      self.jevIdentity = jevIdentity
+      self.claudeIdentity = claudeIdentity
+    }
+  }
+
+  /// What the `ready` cascade returned for 1 subject.
+  public enum ReadyReply: Sendable {
+    /// Jev answered, and Claude took its uncertain blocking questions.
+    case cascaded(Reply)
+    /// Jev gave no answer, even after 1 more try for a transport or parse error.
+    case jevFailed(JevFailure)
+  }
+
+  /// ``cascade(_:questions:)`` for the `ready` tier, where a judge that can't run must not pass
+  /// quietly: a Jev transport or parse error is asked again once, and when Jev still gives no
+  /// answer, Claude answers the blocking questions.
+  public func readyCascade(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+    async throws(JudgeError) -> ReadyReply
+  {
+    throw .notConfigured("")
+  }
+
   /// `ids` from `base` as written: `base` itself when every question escalated, else a set of
   /// its own id so its cache entries never stand in for the whole set's.
   public static func claudeQuestions(_ ids: [String], base: JudgeQuestionSet) -> JudgeQuestionSet {
@@ -166,6 +211,8 @@ extension JudgeError {
       return "\(executable) was cancelled"
     case .backend(let detail):
       return "\(name) reported an error: \(detail)"
+    case .transport(let detail):
+      return detail
     case .malformedReply(let detail):
       return "\(name)'s reply didn't fit the question: \(detail)"
     case .notConfigured(let detail):
