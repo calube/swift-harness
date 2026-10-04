@@ -169,10 +169,13 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build ends the run at step 9 with the report.
    - Stop at its step 4; this skill's step 8 replaces it.
-   - Review is `classified`: Jev rates each task's diff `low`, `medium` or `high`, and paths in
-     `[brownfield] sensitive` are always `high`. When Jev can't answer, the review runs at
-     `medium` and the report says so; a missing answer is never read as `low`. You decide every
-     finding that would block.
+   - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
+     each task's diff `low`, `medium` or `high`, and paths in `[brownfield] sensitive` are always
+     `high`. The first discovery writes `[judge]` with the Claude backend and the default
+     thresholds; Jev rates only when the config opts in to it. When the judge can't answer, the
+     review runs at `medium`, the return's `notes` say why, and the report names each such task
+     with that reason; a missing answer is never read as `low`. You decide every finding that
+     would block.
 
 ## 8. Final
 
