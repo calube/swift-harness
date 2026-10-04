@@ -46,27 +46,56 @@ public protocol GitWorkspace: Sendable {
     async throws(GitWorkspaceError) -> [String]
 }
 
-/// Where a build task's worktree and branch live (spec §4): the sibling
-/// `<repo>-<plan>-<task>` of the main checkout, on branch `<plan>/<task>` cut from `main`.
+/// Where a build task's worktree and branch live, and the checkout and branch it merges into.
+///
+/// In an owned repository (spec §4) the worktree is the sibling `<repo>-<plan>-<task>` of the main
+/// checkout, cut from `main`, and merges land in the main checkout. In a brownfield clone nothing
+/// touches the user's checkout or branch: the worktree is `<plan-dir>/worktrees/<task>` under the
+/// git common dir, cut from the plan branch, and merges land in the plan branch's own checkout
+/// `<plan-dir>/checkout`. The task branch is `<plan>/<task>` in both.
 public struct TaskWorktree: Sendable, Equatable {
   public static let base = "main"
 
-  /// The checkout holding the git common dir; its directory name is `<repo>`.
+  /// The checkout merges land in: the main checkout, or a brownfield plan's `checkout`.
   public let mainCheckout: String
   public let path: String
   public let branch: String
+  /// The branch task branches are cut from and merged into.
+  public let baseBranch: String
+  /// The git common dir the names were derived from.
+  public let commonDirectory: String
 
   /// - Throws: ``GitWorkspaceError/git(_:)`` when `commonDirectory` isn't a checkout's `.git`.
-  public init(commonDirectory: String, plan: String, task: String) throws(GitWorkspaceError) {
-    let main = URL(
-      filePath: try Self.mainCheckout(commonDirectory: commonDirectory),
-      directoryHint: .isDirectory)
-    mainCheckout = main.path
-    path =
-      main.deletingLastPathComponent()
-      .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
+  public init(
+    commonDirectory: String, plan: String, task: String, profile: RepositoryProfile = .owned
+  ) throws(GitWorkspaceError) {
     branch = "\(plan)/\(task)"
+    self.commonDirectory = commonDirectory
+    switch profile {
+    case .owned:
+      let main = URL(
+        filePath: try Self.mainCheckout(commonDirectory: commonDirectory),
+        directoryHint: .isDirectory)
+      mainCheckout = main.path
+      path =
+        main.deletingLastPathComponent()
+        .appending(path: "\(main.lastPathComponent)-\(plan)-\(task)").path
+      baseBranch = Self.base
+    case .brownfield:
+      let directory: String
+      do throws(PlanStateLayoutError) {
+        directory = try PlanStateLayout(commonDirectory: commonDirectory).plan(plan).directory
+      } catch {
+        throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
+      }
+      mainCheckout = directory + "/" + Self.planCheckoutName
+      path = directory + "/worktrees/" + task
+      baseBranch = BrownfieldRunReport.planBranch(slug: plan)
+    }
   }
+
+  /// A brownfield plan's checkout of its plan branch, inside the plan's directory.
+  public static let planCheckoutName = "checkout"
 
   /// The checkout whose `.git` is `commonDirectory`, the same from every linked worktree.
   /// - Throws: ``GitWorkspaceError/git(_:)`` for a bare repository, which has no main checkout to
@@ -93,6 +122,11 @@ public enum WarmBuild {
     public let missingPackageBuilds: [String]
     /// The DerivedData directory, when it exists.
     public let derivedData: String?
+
+    /// Nothing to clone and nothing missing: what a brownfield worktree gets, since its clone
+    /// configures no packages.
+    public static let nothing = Survey(
+      packageBuilds: [], missingPackageBuilds: [], derivedData: nil)
 
     /// Everything there is to clone.
     public var clonable: [String] { packageBuilds + (derivedData.map { [$0] } ?? []) }

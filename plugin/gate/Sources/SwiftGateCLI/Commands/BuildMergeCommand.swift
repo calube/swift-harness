@@ -8,7 +8,8 @@ enum BuildMergeRun {
   /// commands.
   static func run(
     slug: String, task: String, undo: Bool, fix: Bool = false, session: String?, git: any Git,
-    workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock
+    workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock,
+    profile: RepositoryProfile = .owned
   ) async -> BuildMergeReport {
     let command = undo ? BuildMerge.undoCommand : BuildMerge.mergeCommand
     if let refusal: BuildLoopResult<BuildMergeReport> = await BuildLoop.authorize(
@@ -21,8 +22,9 @@ enum BuildMergeRun {
         holder: refusal.holder, message: refusal.message)
     }
     let flow = BuildMerge(
-      plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger, clock: clock
-    )
+      plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger,
+      clock: clock,
+      profile: profile)
     return undo ? await flow.undo() : await flow.merge()
   }
 
@@ -50,7 +52,10 @@ struct BuildMergeCommand: AsyncParsableCommand {
       + "../<repo>-<plan>-fix-<task> on <plan>/fix-<task> from main with the conflicted merge in "
       + "it. --undo resets main to the task's recorded pre commit, only while main is still at "
       + "its post commit, records an undo event, and cuts the same fix worktree with the task "
-      + "merged in. --fix merges the fixer's branch <plan>/fix-<task> under the same checks and "
+      + "merged in. In a brownfield clone, main is the plan branch swift-harness/<plan> checked "
+      + "out at <git-common-dir>/swift-harness/plans/<plan>/checkout, merges land there, and the "
+      + "fix worktree is that plan's worktrees/fix-<task>; the user's branch never moves. "
+      + "--fix merges the fixer's branch <plan>/fix-<task> under the same checks and "
       + "records it as the task's merge. Exits 0 when "
       + "merged or undone; 1 on a conflict, when --session doesn't hold the plan's lock, or when "
       + "main isn't clean, on main, or where the last merge left it; 2 for a missing --session, "
@@ -84,7 +89,8 @@ struct BuildMergeCommand: AsyncParsableCommand {
       slug: plan, task: task, undo: undo, fix: fix, session: session,
       git: LiveGit(runner: runner, repositoryRoot: root),
       workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root),
-      merger: LiveMergeRunner(runner: runner), clock: LiveBuildClock())
+      merger: LiveMergeRunner(runner: runner), clock: LiveBuildClock(),
+      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)))
     Console.write(BuildMergeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

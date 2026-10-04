@@ -243,11 +243,14 @@ public struct BuildMerge: Sendable {
   let workspace: any GitWorkspace
   let merger: any MergeRunner
   let clock: any BuildClock
+  /// Which ``TaskWorktree`` layout names the checkout and branch merges land in.
+  let profile: RepositoryProfile
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
-    merger: any MergeRunner, clock: any BuildClock
+    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned
   ) {
+    self.profile = profile
     self.plan = plan
     self.task = task
     self.fix = fix
@@ -286,11 +289,12 @@ public struct BuildMerge: Sendable {
       let branch = context.branch
       let merged = try await step(command, context, "reading \(branch)") {
         () async throws(GitWorkspaceError) in
-        try await workspace.isMerged(branch, into: TaskWorktree.base)
+        try await workspace.isMerged(branch, into: context.names.baseBranch)
       }
       if merged {
         throw stop(
-          command, context, .refused, "\(branch) is already merged into \(TaskWorktree.base)",
+          command, context, .refused,
+          "\(branch) is already merged into \(context.names.baseBranch)",
           reason: .alreadyMerged)
       }
       let outcome = try await step(command, context, "merging in \(main)") {
@@ -306,13 +310,13 @@ public struct BuildMerge: Sendable {
         } catch {
           throw stop(
             command, context, .blocked,
-            "merged \(branch) into \(TaskWorktree.base) (\(pre) → \(post)) but "
+            "merged \(branch) into \(context.names.baseBranch) (\(pre) → \(post)) but "
               + "couldn't record the merge event: \(error). `main` is merged; record or reset it "
               + "by hand before the next merge.", pre: pre, post: post)
         }
         return report(
           command, context, .merged, .green, mainCheck: mainCheck, pre: pre, post: post,
-          message: "merged \(branch) into \(TaskWorktree.base): \(pre) → \(post)"
+          message: "merged \(branch) into \(context.names.baseBranch): \(pre) → \(post)"
             + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : ""))
       case .conflicted(let files):
         try await abort(command, context, pre: pre)
@@ -320,7 +324,7 @@ public struct BuildMerge: Sendable {
           return report(
             command, context, .conflicted, .red, reason: .conflicted, mainCheck: mainCheck,
             pre: pre, conflicted: files,
-            message: "\(branch) conflicts with \(TaskWorktree.base) in "
+            message: "\(branch) conflicts with \(context.names.baseBranch) in "
               + files.joined(separator: ", ") + "; main is untouched at \(pre). Resolve it in "
               + "\(context.fix.path) and merge again.")
         }
@@ -328,7 +332,7 @@ public struct BuildMerge: Sendable {
         return report(
           command, context, .conflicted, .red, reason: .conflicted, mainCheck: mainCheck,
           pre: pre, conflicted: fixFiles.isEmpty ? files : fixFiles,
-          message: "\(branch) conflicts with \(TaskWorktree.base) in "
+          message: "\(branch) conflicts with \(context.names.baseBranch) in "
             + files.joined(separator: ", ") + "; main is untouched at \(pre). \(detail)")
       }
     } catch {
@@ -393,7 +397,7 @@ public struct BuildMerge: Sendable {
       } catch {
         throw stop(
           command, context, .blocked,
-          "reset \(TaskWorktree.base) from \(lastMerge.postCommit) to \(lastMerge.preCommit) but "
+          "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to \(lastMerge.preCommit) but "
             + "couldn't record the undo event: \(error). Every later merge will be refused as "
             + "`main` moved until the log says where main is.", pre: lastMerge.preCommit,
           post: lastMerge.postCommit)
@@ -402,7 +406,7 @@ public struct BuildMerge: Sendable {
       return report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
-        message: "reset \(TaskWorktree.base) from \(lastMerge.postCommit) to "
+        message: "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to "
           + "\(lastMerge.preCommit). \(detail)")
     } catch {
       return error.report
@@ -419,8 +423,9 @@ public struct BuildMerge: Sendable {
     let names: TaskWorktree
     let fix: TaskWorktree
     do throws(GitWorkspaceError) {
-      names = try TaskWorktree(commonDirectory: common, plan: plan, task: task)
-      fix = try TaskWorktree(commonDirectory: common, plan: plan, task: "fix-\(task)")
+      names = try TaskWorktree(commonDirectory: common, plan: plan, task: task, profile: profile)
+      fix = try TaskWorktree(
+        commonDirectory: common, plan: plan, task: "fix-\(task)", profile: profile)
     } catch {
       throw bare(command, .blocked, "\(error)")
     }
@@ -453,7 +458,7 @@ public struct BuildMerge: Sendable {
     async throws(Stop) -> String
   {
     let main = context.names.mainCheckout
-    let base = TaskWorktree.base
+    let base = context.names.baseBranch
     let (branch, dirty, head) = try await step(command, context, "reading \(main)") {
       () async throws(GitWorkspaceError) in
       (
@@ -527,7 +532,8 @@ public struct BuildMerge: Sendable {
     let branch = context.names.branch
     let outcome = try await step(command, context, "cutting the fix worktree \(fix.path)") {
       () async throws(GitWorkspaceError) in
-      try await workspace.addWorktree(at: fix.path, branch: fix.branch, from: TaskWorktree.base)
+      try await workspace.addWorktree(
+        at: fix.path, branch: fix.branch, from: context.names.baseBranch)
       let subject = try await merger.subject(of: "refs/heads/\(branch)", in: fix.path)
       return try await merger.merge(branch, message: "Merge: \(subject)", in: fix.path)
     }

@@ -155,6 +155,28 @@ struct WorktreeSeedingTests {
   }
 
   @Test(
+    "a brownfield task worktree sits in its plan's directory under the git common dir, cut from and merged into the plan branch in the plan's checkout, while the owned layout keeps main — catches a brownfield run that writes beside the user's checkout or merges into their branch"
+  )
+  func brownfieldTaskWorktreeNaming() throws {
+    let common = "/work/clone/.git"
+    let names = try TaskWorktree(
+      commonDirectory: common, plan: "2026-10-04-search", task: "cli", profile: .brownfield)
+    let owned = try TaskWorktree(commonDirectory: common, plan: "2026-10-04-search", task: "cli")
+
+    #expect(names.path == "/work/clone/.git/swift-harness/plans/2026-10-04-search/worktrees/cli")
+    #expect(names.mainCheckout == "/work/clone/.git/swift-harness/plans/2026-10-04-search/checkout")
+    #expect(names.baseBranch == "swift-harness/2026-10-04-search")
+    #expect(names.branch == "2026-10-04-search/cli")
+    #expect(names.commonDirectory == common)
+    #expect(owned.path == "/work/clone-2026-10-04-search-cli")
+    #expect(owned.mainCheckout == "/work/clone")
+    #expect(owned.baseBranch == "main")
+    #expect(throws: GitWorkspaceError.self) {
+      try TaskWorktree(commonDirectory: common, plan: "a/b", task: "t", profile: .brownfield)
+    }
+  }
+
+  @Test(
     "the warm-build survey lists present and missing package builds and the DerivedData — catches a survey reporting a build that isn't there"
   )
   func survey() async throws {
