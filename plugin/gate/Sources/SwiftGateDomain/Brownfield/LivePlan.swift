@@ -511,7 +511,8 @@ private enum ValidationSection {
         throw .invalidValidation(
           line: line,
           reason: "layer `\(rawLayer)` is not a validation layer; use acceptance, flow or state, "
-            + "or leave `Layer` empty and give a `Reason` when the requirement's unit tests suffice")
+            + "or leave `Layer` empty and give a `Reason` when the requirement's unit tests suffice"
+        )
       }
       let check = unwrap(cell[.check] ?? "")
       guard !check.isEmpty else {

@@ -79,10 +79,11 @@ struct LivePlanValidationTests {
       ])
     #expect(validation.headingLine == line(of: "## Validation", in: text))
     #expect(
-      validation.rowLines == [
-        line(of: "| `req-draft-list`", in: text), line(of: "| flow |", in: text),
-        line(of: "| state |", in: text),
-      ].compactMap { $0 })
+      validation.rowLines
+        == [
+          line(of: "| `req-draft-list`", in: text), line(of: "| flow |", in: text),
+          line(of: "| state |", in: text),
+        ].compactMap { $0 })
   }
 
   @Test(
@@ -105,7 +106,8 @@ struct LivePlanValidationTests {
     "a row naming an id Requirements doesn't list fails naming the line and the id — catches a misspelled requirement read as a check"
   )
   func unknownRequirementFails() {
-    let text = plan(rows: "| req-draft-lsit | acceptance | `DraftTests` | draft-list | draft-list | |")
+    let text = plan(
+      rows: "| req-draft-lsit | acceptance | `DraftTests` | draft-list | draft-list | |")
     let error = #expect(throws: LivePlanError.self) { try LivePlanParser.parse(text) }
     #expect(
       error
@@ -152,7 +154,8 @@ struct LivePlanValidationTests {
 
     let short = plan(rows: "| req-draft-list | acceptance | `DraftTests` | draft-list |")
     let rowError = #expect(throws: LivePlanError.self) { try LivePlanParser.parse(short) }
-    #expect(rowError?.message.contains("line \(line(of: "| draft-list |", in: short) ?? 0)") == true)
+    #expect(
+      rowError?.message.contains("line \(line(of: "| draft-list |", in: short) ?? 0)") == true)
   }
 
   @Test(

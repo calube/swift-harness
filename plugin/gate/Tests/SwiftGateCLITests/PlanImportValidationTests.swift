@@ -139,7 +139,8 @@ struct PlanImportValidationTests {
     #expect(table.rows.allSatisfy { $0.layer == .acceptance })
     #expect(
       table.rows.first?.check
-        == "DRIVER=sqlite go test ./server/api/v1/test/ -run 'TestCreateMemoShareViewLimitOptional'")
+        == "DRIVER=sqlite go test ./server/api/v1/test/ -run 'TestCreateMemoShareViewLimitOptional'"
+    )
     #expect(table.rows.first?.runsAfter == ["share-view-limit-contract", "share-view-limit-api"])
     #expect(table.rows.last?.writer == "share-view-limit-web")
     #expect(table.rows.map { $0.reason == nil } == [false, false, true, false, true, false, false])

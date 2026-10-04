@@ -63,7 +63,8 @@ struct PlanLintValidationSeedTests {
   func malformedTableBlocks() async throws {
     let root = try Self.stagedRoot(["validation-valid"])
     defer { TestTemporaryDirectory.remove(root) }
-    let file = root.appending(path: "gate/Fixtures/seeds/plan-lint/validation-valid/validation.json")
+    let file = root.appending(
+      path: "gate/Fixtures/seeds/plan-lint/validation-valid/validation.json")
     let text = try String(contentsOf: file, encoding: .utf8)
     try Data(text.replacingOccurrences(of: "\"flow\"", with: "\"unit\"").utf8).write(to: file)
 

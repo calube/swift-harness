@@ -58,7 +58,8 @@ struct PlanLintValidationTests {
       requirement: "req-draft-list", layer: .acceptance, check: "DraftListTests",
       runsAfter: ["draft-list"], writer: "draft-checks")
     let findings = try lint([waits, written, flow, state], rowLines: [20, 21, 22, 23])
-    #expect(findings.map(\.ruleID) == Array(repeating: PlanLintValidation.unknownTaskRuleID, count: 2))
+    #expect(
+      findings.map(\.ruleID) == Array(repeating: PlanLintValidation.unknownTaskRuleID, count: 2))
     #expect(findings.map(\.line) == [20, 21])
     #expect(findings.first?.message.contains("`draft-lsit`") == true)
     #expect(findings.last?.message.contains("`draft-checks`") == true)
