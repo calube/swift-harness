@@ -1,0 +1,15 @@
+diff --git a/examples/SampleApp/Packages/CounterFeature/Sources/CounterUI/CounterView.swift b/examples/SampleApp/Packages/CounterFeature/Sources/CounterUI/CounterView.swift
+index f8d2b3b5..38b814e3 100644
+--- a/examples/SampleApp/Packages/CounterFeature/Sources/CounterUI/CounterView.swift
++++ b/examples/SampleApp/Packages/CounterFeature/Sources/CounterUI/CounterView.swift
+@@ -27,6 +27,10 @@ public struct CounterView: View {
+       .font(.title)
+       .buttonStyle(.bordered)
+ 
++      Toggle("Confirm", isOn: .constant(false))
++        .labelsHidden()
++        .accessibilityIdentifier("counter.confirm")
++
+       Button("Cat fact") { store.send(.factButtonTapped) }
+         .disabled(store.isLoadingFact)
+         .accessibilityIdentifier(AccessibilityID.counterFact.rawValue)

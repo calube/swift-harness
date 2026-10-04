@@ -371,6 +371,30 @@ Observed behavior the runner relies on:
   `details.step` and `details.command`, and the steps before it under
   `details.partialResults`, each with its `data`.
 
+### AgentDevice/covered
+
+A batch that stops on a failure reason the 3 original cases didn't name, captured on 2026-10-04
+with `agent-device` 0.21.18 on a clone `swiftgate sim up` made from the configured iPhone 17
+(iOS 26.2). The iOS validation trial's second attempt on `Aidoku/Aidoku`
+(`evals/results/2026-10-04-brownfield-ios-validation-2/`, finding 4) hit it pressing a SwiftUI
+toggle whose label is hidden, but kept no batch output. The capture repeats that shape on
+`examples/SampleApp` with `change.diff` applied: 1 such toggle, `id="counter.confirm"`. From the
+repository root:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/covered/capture.sh plugin/bin/swiftgate
+```
+
+The script applies `change.diff`, runs `sim up --json` in `examples/SampleApp`, runs the batch
+with `--udid` and `--session` from its output, and on exit runs `sim down` and reverts the diff.
+`press-switch.flow.json` is the flow as a validation worker writes it, and
+`press-switch.steps.json` the batch `qa run` drives from it, its screenshot paths under
+`/SCRATCH`. The outputs are scrubbed as in `AgentDevice/batch`.
+
+| Files | Batch |
+|---|---|
+| `press-switch.{steps.json,stdout,stderr,status}` | wait for the counter, then press the toggle by its id: step 5, the `press`, exits 1 with `COMMAND_FAILED`, `details.reason` `covered_by_interactive_descendants`, `details.step` 5 and the 4 steps before it under `details.partialResults` |
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -2466,6 +2490,22 @@ cp $S/qa-runs/20261004T213311Z-fea5f318/report.json $F/after-report.json
 The `sed` replaces the trial clone's parent folder in each `sim up` message with `/TRIALS/` and
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation`
 matched nothing.
+
+## qa run: a state row behind another requirement's red flow
+
+`QA/aidoku-validation-2/` holds what the iOS validation trial's second attempt on `Aidoku/Aidoku`
+left (`evals/results/2026-10-04-brownfield-ios-validation-2/`, finding 3). `validation.json` is
+the plan's table: a flow row for `req-setting`, then a flow row and a state row for `req-stored`.
+`after-report.json` is `qa run --after download-setting`'s report: row 1 red, row 2 unverified,
+and row 3 unverified behind row 1. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2 F=plugin/gate/Tests/Fixtures/QA/aidoku-validation-2
+mkdir -p $F && cp $S/validation.json $F/validation.json
+cp $S/qa-runs/20261004T222811Z-0be8aeb0/report.json $F/after-report.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-2` matched nothing.
 
 ## Run view: a RED gate's report
 
