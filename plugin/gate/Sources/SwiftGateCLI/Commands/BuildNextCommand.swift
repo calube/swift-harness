@@ -18,7 +18,7 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   let required: [Required]
   /// Minutes the stall watch lets a worker's transcripts sit unchanged: the preset's `stall_min`,
   /// or `nil` when the preset doesn't say.
-  var stallMin: Int? = nil
+  let stallMin: Int?
 
   struct Required: Sendable, Equatable, Encodable {
     let task: String
@@ -112,11 +112,18 @@ enum BuildNextRun {
       }
       let ledger = try BuildLoop.ledger(plan)
       let required: BuildScheduler.RequiredTasks
-      switch AppTargetPackages.required(ledger: ledger, root: root) {
-      case .success(let found): required = found
-      case .failure(let error):
-        return .blocked(
-          command, slug, "can't tell which tasks the app target needs to compile: \(error)")
+      switch record.preset.profile {
+      case .brownfield:
+        // A brownfield plan's contract commit compiles before any task starts, so no task is
+        // what the build waits on to compile, and there are no package globs to read.
+        required = .empty
+      case .owned:
+        switch AppTargetPackages.required(ledger: ledger, root: root) {
+        case .success(let found): required = found
+        case .failure(let error):
+          return .blocked(
+            command, slug, "can't tell which tasks the app target needs to compile: \(error)")
+        }
       }
       let running = Set(ledger.tasks.filter { $0.status == .inProgress }.map(\.id))
       let result = BuildScheduler.next(
@@ -130,7 +137,7 @@ enum BuildNextRun {
         },
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
-        })
+        }, stallMin: record.preset.stallMin)
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
         message: "phase \(result.phase.rawValue)")
@@ -142,7 +149,7 @@ enum BuildNextRun {
   private static func reason(_ reason: BuildScheduler.RefusalReason) -> String {
     switch reason {
     case .missingModel: "missing-model"
-    case .unpinnedModel: ""
+    case .unpinnedModel: "unpinned-model"
     }
   }
 
