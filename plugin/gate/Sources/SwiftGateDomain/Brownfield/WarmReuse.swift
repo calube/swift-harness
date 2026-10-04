@@ -47,7 +47,46 @@ public enum WarmReuse {
     warmTest: (BrownfieldArea, String) async -> Int?,
     changed: (_ from: String, _ to: String) async throws -> [String]
   ) async -> Resolution {
-    Resolution(
-      times: Dictionary(uniqueKeysWithValues: touched.map { ($0.name, .unmeasured) }), notes: [])
+    var times: [String: WarmTestTime] = [:]
+    var notes: [String] = []
+    var listed: [String: [String]] = [:]
+    var unreadable: Set<String> = []
+    var pending = touched
+    for entry in history where !pending.isEmpty {
+      var unfound: [BrownfieldArea] = []
+      for area in pending {
+        guard let milliseconds = await warmTest(area, entry.tree) else {
+          unfound.append(area)
+          continue
+        }
+        if entry.commit == mergeBase {
+          times[area.name] = .current(milliseconds: milliseconds, at: entry)
+          continue
+        }
+        if listed[entry.commit] == nil, !unreadable.contains(entry.commit) {
+          do {
+            listed[entry.commit] = try await changed(entry.commit, mergeBase)
+          } catch {
+            unreadable.insert(entry.commit)
+            notes.append(
+              "can't list the files changed between the warm-up at \(entry.commit) and the merge "
+                + "base \(mergeBase), so no area reuses that warm-up: \(error)")
+          }
+        }
+        guard let paths = listed[entry.commit] else {
+          times[area.name] = .unmeasured
+          continue
+        }
+        // A file no area owns, such as a root manifest, can change how any area builds.
+        let relevant = paths.filter { path in owner(path).map { $0 == area.name } ?? true }
+        times[area.name] =
+          relevant.isEmpty
+          ? .current(milliseconds: milliseconds, at: entry)
+          : .stale(milliseconds: milliseconds, at: entry, changed: relevant)
+      }
+      pending = unfound
+    }
+    for area in pending { times[area.name] = .unmeasured }
+    return Resolution(times: times, notes: notes)
   }
 }
