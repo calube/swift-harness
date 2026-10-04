@@ -6,10 +6,11 @@
 // cannot read.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { removeTempTree } from './temp_tree.mjs'
 
 // The plugin directory: every path this test reads is relative to it.
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
@@ -162,6 +163,8 @@ function resolveSwiftgateBinary(pluginRoot = root) {
   if (existsSync(debug)) return debug
   const shim = join(pluginRoot, 'bin/swiftgate')
   const cacheDir = mkdtempSync(join(tmpdir(), 'swiftgate-shim-'))
+  // The binary built here runs for the rest of the file, so the cache goes when the process does.
+  process.on('exit', () => removeTempTree(cacheDir))
   // SWIFTGATE_BUILD_CONFIG keeps this a debug build (fast); a fresh SWIFTGATE_CACHE_DIR means
   // exactly one hash directory comes out, so the built binary's path needs no hash replication.
   execFileSync(shim, ['--version'], {
@@ -514,7 +517,7 @@ const tests = {
       assert.match(report.notReviewed[0].reason, /died/)
       assert.deepEqual(report.findings.map(m => m.finding.location.anchor), ['decision', 'risks'])
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      removeTempTree(dir)
     }
   },
 
@@ -588,7 +591,7 @@ const tests = {
     try {
       assert.throws(() => resolveSwiftgateBinary(bogusRoot))
     } finally {
-      rmSync(bogusRoot, { recursive: true, force: true })
+      removeTempTree(bogusRoot)
     }
   },
 
