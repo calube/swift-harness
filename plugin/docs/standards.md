@@ -733,6 +733,19 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `qa.check-unverified` | simulator QA amendment §6.2, §9.1; a row whose check didn't run, a nit that never gates: the flow runner isn't built, a red layer stopped the run, a flow row for its requirement didn't pass, no port could be had, or the process couldn't start |
 | `qa.check-passes-at-base` | simulator QA amendment §5.2, decision 7; `qa run --at-base` found a row passing at the merge base, so its check can't tell the change from its absence (major) |
 
+### Simulator QA flows (`qa lint`)
+
+`swiftgate qa lint <flow file>... [--json]` checks `agent-device batch` steps files offline, before any device boots (simulator QA amendment §6.1). A steps file is a JSON list of `{"command": "<name>", "input": {...}}` steps. The rules check each step against the step schemas the pinned `agent-device` reports from its MCP `tools/list`, which ship as `qa/agent-device-schemas-<pin>.json` in the plugin, and each `id="…"` selector against the raw values of the 1 `enum AccessibilityID: String` in the Swift file `[qa] accessibility_ids` names. Strings under `text` and `value`, which hold app content, are never read as selectors or refs. The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) when the plugin root (`SWIFTGATE_HARNESS_ROOT`) is unset, the schema file is missing, doesn't parse, uses a schema keyword the reader doesn't support or records another version than the pin, `.swiftgate.toml` doesn't load, the configured id file doesn't read or holds no single String-backed `AccessibilityID` enum with plain string raw values, or a flow file doesn't read.
+
+| Rule id | Section |
+|---|---|
+| `qa.flow-unparsed` | simulator QA amendment §6.1; the file isn't a JSON list of objects that each hold a string `command` and an object `input` (major). The message names the first step that isn't, and the file earns no other finding |
+| `qa.flow-ref-target` | simulator QA amendment §6.1; a step targets an `@e` snapshot ref (a `kind: ref` target, a `ref` key, or an `@e<n>` string) or a coordinate (a `kind: point` target, or an object with numeric `x` and `y`, except a gesture's `delta`), not a selector (major). Refs change with every snapshot and points with every screen |
+| `qa.flow-no-assert` | simulator QA amendment §6.1, decision 4; no step is an `is` or a `wait` that looks for something: `kind` `text`, `ref`, `selector` or `absent`, or with no `kind` a `text`, `ref`, `selector` or `absent` key (major). `get` reads without a predicate, and a `duration` or `stable` wait only pauses, so neither counts |
+| `qa.flow-schema` | simulator QA amendment §6.1, §11.1; a step breaks the pinned tool's schema (major): the step's own keys or a command a batch can't run, checked against the item schema of `batch`'s `steps`, then its `input` against that command's `inputSchema`. Each message names the step number, the command, the key path and the rule broken, and a misspelt key names the closest key the schema allows |
+| `qa.flow-unknown-id` | simulator QA amendment §6.1, decision 17; an `id="…"` (or bare `id=…`) selector names an identifier the configured `AccessibilityID` enum doesn't declare (major). A case with no raw value declares its name; cases inside `#if` count in every branch |
+| `qa.flow-ids-unknown` | simulator QA amendment §6.1; a nit that never gates: no `.swiftgate.toml`, or no `[qa] accessibility_ids` key, so no identifier was checked. Once per run, naming the key to set |
+
 ### Design, docs and prose (`design-lint`, `design-diff`, `docs-lint`, `prose`)
 
 | Rule id | Section |

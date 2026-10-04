@@ -1,0 +1,3 @@
+[{"command":"wait","input":{"kind":"selector","selecter":"id=\"counter.value\"","timeoutMs":5000}},
+ {"command":"press","input":{"target":{"kind":"selector","selector":"id=\"counter.increment\""}}},
+ {"command":"is","input":{"predicate":"text","selector":"id=\"counter.value\"","value":"1"}}]
