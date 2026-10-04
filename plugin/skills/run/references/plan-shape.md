@@ -100,9 +100,9 @@ Serve the report as CSV.
 |---|---|
 | `Done when` | a `## Requirements` id |
 | `Layer` | `acceptance`, `flow` or `state` |
-| `Check` | the command, test or file the row runs, in backticks |
+| `Check` | the command, test or file the row runs, in backticks; a file the validation task writes is `qa/<name>.<layer>…`, relative to `<plan-dir>` |
 | `Runs after` | the task ids, comma-separated, whose merge the check waits for |
-| `Writer` | the 1 task id that writes the check |
+| `Writer` | the 1 task id that writes the check: the validation task for a `qa/` file, and for an acceptance test the last `Runs after` task, whose merge turns it green |
 | `Reason` | optional: why the requirement needs no other layer |
 
 - **acceptance** checks behaviour at a boundary, such as an API, a CLI or the module that joins
@@ -136,6 +136,33 @@ on these `plan-lint` rules:
 | req-csv-download | acceptance | `pytest api/tests/export/test_download.py` | report-export-api | report-export-api | |
 | req-csv-columns | | | | | the handler test in report-export-api checks the column order |
 ```
+
+## The validation task
+
+A plan with any `flow` or `state` row, or any acceptance script, adds 1 validation task, named
+`<slug>-validation`, that writes those checks while the first wave builds
+([the validation worker brief](../../qa/references/validation-worker.md)). It depends on the contract task alone, covers the
+requirements of its rows, and writes only `.harness/qa/<slug>/`, a folder no commit carries. It
+never merges: the run skill copies its folder into plan state with `qa adopt` and marks it done.
+
+```markdown
+### report-export-validation
+Write the flow and state checks against the contract's names, and record why each fails now.
+- Deps: report-export-contract · Gate: slice · estLines: 80
+- Why: every requirement needs a check that fails before its tasks merge and passes after.
+- Scope:
+  - 1 file under `.harness/qa/report-export/` per `## Validation` row whose `Writer` is this task
+- Acceptance:
+  - `qa lint` is GREEN on each flow; `qa run --at-base` reads each row red
+- Out of scope:
+  - source, tests in the tracked tree, and any commit
+- Covers: req-csv-download
+- Writes: .harness/qa/report-export/
+```
+
+Its rows' `Check` cells then name `qa/<name>.flow.json`, `qa/<name>.state.sh` or
+`qa/<name>.acceptance.sh`. A `flow` row exists only for a requirement a user sees in an `xcode`
+area's app, and names the identifiers and labels its contract task declares.
 
 ## Write sets from the target graph
 

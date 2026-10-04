@@ -152,6 +152,11 @@ write sets from each kind's target graph, and the rules a task's write set obeys
 - 2 tasks in the same wave never share a write path. A task that changes a target's types owns
   every target that reads them, unless the contract commit landed those types. Each removal has 1
   owning task.
+- `## Validation` maps each requirement to the checks that prove it once its tasks merge:
+  `acceptance` at a boundary, `flow` for a journey in the running app, and `state` for what the app
+  stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
+  checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
+  adds the validation task the reference shows, which writes those checks beside the first wave.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
@@ -168,8 +173,12 @@ Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, k
    whose `outcome` isn't `passed` is a report line; its area's commands still run, and a step
    that then fails is handled as any failing command is.
 2. Write the contract: the new types, signatures and stubs every task compiles against, with
-   behaviour unchanged. It builds in every touched area: run each touched area's `build` command
-   from `<config>` in `<checkout>`.
+   behaviour unchanged. It also fixes every name a `## Validation` check targets, so the check can
+   exist before the code. Those names are each element identifier and label a flow drives, each
+   route with its request and response shapes, each storage key and table, and each log line with
+   its subsystem. An identifier goes in the repository's typed accessibility-id module when
+   `[qa] accessibility_ids` names one. It builds in every touched area: run each touched area's
+   `build` command from `<config>` in `<checkout>`.
 3. Commit on `<plan-branch>` with a message in the repository's own style. The repository's git
    hooks run on every commit of the run; a failing hook is a finding to fix, never one to bypass.
 4. With the tree clean, `"$SG" check --tier slice --base <base> --json` in `<checkout>`. Fix any
@@ -202,6 +211,36 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      --task-id <task> --build-run <run> --json`, with no `--design`: the pack holds the task's
      `PLAN.md` section, its areas' commands and the brownfield rules. The task's worktree already
      has its node dependencies, so the worker runs those commands without an install first.
+   - **The validation task commits nothing**, so it never merges and never runs the build-task
+     workflow. When `build next` lists it, run `worktree create` and `ledger set … in-progress` as
+     for any task, then launch 1 Agent tool call in the background with `subagent_type`
+     `general-purpose` and `model` `opus`, the 1 alias the tool takes here. Its prompt names the
+     task's worktree, `<slug>` as its plan, its rows from `## Validation`, the contract commit's sha,
+     and says to work in that worktree and follow
+     `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Its write set names no
+     test file, so it writes `.harness/qa/<slug>/` alone. When it returns:
+     1. From `<checkout>`, `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into
+        `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN adopt is 1 report line.
+     2. `/bin/rm -rf <worktree>/.harness/qa`, then
+        `"$SG" ledger set <slug> <task> done --session <session> --json` and
+        `"$SG" worktree remove <slug> <task> --session <session> --json`.
+     3. Confirm each check fails before its tasks merge (amendment §5.2):
+        `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, with `run_in_background`,
+        since a flow row boots a leased device. A row that reads `pass` there fails it with
+        `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
+        from `## Validation`, giving a requirement left with no row the reason-only row, add 1
+        assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
+        return gets the same treatment for the row that needed the name.
+
+     An acceptance test in the area's framework is never the validation task's: its row's
+     `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's
+     source reverted. The brownfield tiers refuse `--proof-base`, and that prove stands in for it.
+     At the cutoff, `TaskStop` a validation task still running and set it `abandoned`; its rows
+     have no checks, so `qa run` reads them red and the report quotes them.
+   - **Validate each merge**, as [the build loop's after-merge step](../build/references/event-loop.md#after-each-merge)
+     says: once a merge gate is GREEN and recorded, `"$SG" qa run --plan <slug> --after <task> --json`
+     in `<checkout>` runs the rows that merge unblocks, acceptance, then flow, then state. A RED
+     verdict counts as a red merge gate, wherever the loop or the cutoff handles one.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
@@ -265,15 +304,19 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
    `lint` and `build` against the baseline, plus each area's `e2e`.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
-3. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
+3. `"$SG" qa run --plan <slug> --json` in `<checkout>` runs every validation row whose tasks
+   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict counts as a red
+   `final` in item 4, whose fix task owns the files the red rows' checks exercise, and item 4's
+   second `final` runs this item again.
+4. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its
-   span with `"$SG" events span end <span> --outcome red`, goes on to item 4 and ends the run RED;
+   span with `"$SG" events span end <span> --outcome red`, goes on to item 5 and ends the run RED;
    the report quotes its findings as `rule: message`. Past the cutoff a fix task doesn't fit in
-   the box: a red `final` then goes straight to item 4 and ends the run RED.
-4. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+   the box: a red `final` then goes straight to item 5 and ends the run RED.
+5. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
    `"$SG" events span end <span> --outcome ok`.
-5. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
+6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
    reports in the user's checkout, and `<plan-branch>` holds every commit.
 
 ## 9. Report
@@ -283,7 +326,8 @@ baseline failures, the build-only areas, the dropped steps, each task's review d
 fallbacks, the time box with each task that didn't fit it, and the plan branch to merge. Its first
 line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
-line, covers only what merged. Print it as your last message as written. Merging
+line, covers only what merged. Print it as your last message as written, then 1 line per row of
+step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 
 ## Rules
@@ -294,6 +338,7 @@ line, covers only what merged. Print it as your last message as written. Merging
 - Commits land on `<plan-branch>` only, from `<checkout>` or a task worktree beside it.
 - The repository's git hooks run on every commit; our own commit-message check doesn't run here.
 - `<config>` changes only through `"$SG" discover --apply` and `"$SG" allow`.
-- Explorer and worker models are pinned ids, never aliases.
+- Explorer and worker models are pinned ids, never aliases. The validation worker's Agent tool
+  call is the 1 exception: that tool takes only aliases.
 - Every gate is a `swiftgate` command. Never hand-write a check or read a gate's verdict from its
   exit status alone; read its JSON.
