@@ -250,12 +250,15 @@ public struct RunView: Sendable, Equatable, Encodable {
     /// A warm-up step that failed at the base commit and whose failures the baseline recorded,
     /// so later gates excuse them: expected, not a fault of the run.
     public var baseline: Bool
+    /// The flow a `qa.check` span's row drove, whose steps the timeline ticks; `nil` for any
+    /// other span.
+    public var flow: RunViewFlow?
 
     public init(
       id: String, parent: String? = nil, phase: Phase, task: String? = nil,
       gateRun: String? = nil, start: Date, end: Date? = nil, outcome: SpanOutcome? = nil,
       approximate: Bool = false, tools: ToolSummary? = nil, causeGateRun: String? = nil,
-      failureReason: String? = nil, baseline: Bool = false
+      failureReason: String? = nil, baseline: Bool = false, flow: RunViewFlow? = nil
     ) {
       self.id = id
       self.parent = parent
@@ -270,6 +273,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.causeGateRun = causeGateRun
       self.failureReason = failureReason
       self.baseline = baseline
+      self.flow = flow
     }
   }
 

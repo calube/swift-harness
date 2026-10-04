@@ -47,12 +47,15 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var output: [String]
     /// Whether ``output`` leaves earlier lines out.
     public var outputCut: Bool
+    /// The flow the row's newest check drove, from its `qa.flow`; `nil` for a row of another
+    /// layer, or a flow row that never reached its device.
+    public var flow: RunViewFlow?
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
-      at: Date, output: [String] = [], outputCut: Bool = false
+      at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil
     ) {
       self.row = row
       self.requirement = requirement
@@ -69,6 +72,7 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.at = at
       self.output = output
       self.outputCut = outputCut
+      self.flow = flow
     }
   }
 
@@ -76,11 +80,87 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
   public var counts: Counts
   /// In row order.
   public var rows: [Row]
+  /// The newest record of each kept XCUITest flow the run's gate runs recorded, by `[[flows]]`
+  /// entry, then test.
+  public var keptFlows: [RunViewKeptFlow]
 
-  public init(plan: String, counts: Counts = Counts(), rows: [Row] = []) {
+  public init(
+    plan: String, counts: Counts = Counts(), rows: [Row] = [], keptFlows: [RunViewKeptFlow] = []
+  ) {
     self.plan = plan
     self.counts = counts
     self.rows = rows
+    self.keptFlows = keptFlows
+  }
+}
+
+/// 1 flow as a `qa.flow` recorded it, with every string the payload guard passed.
+public struct RunViewFlow: Sendable, Equatable, Encodable {
+  public struct Step: Sendable, Equatable, Encodable {
+    public var n: Int
+    /// `nil` when the payload guard rejected it.
+    public var label: String?
+    /// From the video's first frame when the flow has a video, else from the flow's start.
+    public var offsetMs: Int
+    public var ok: Bool
+
+    public init(n: Int, label: String?, offsetMs: Int, ok: Bool) {
+      self.n = n
+      self.label = label
+      self.offsetMs = offsetMs
+      self.ok = ok
+    }
+  }
+
+  public var source: QAFlowSource
+  /// The run whose directory ``video`` and ``sheet`` are relative to: the `qa run` for a batch
+  /// flow, the gate run for a kept one.
+  public var run: String
+  public var steps: [Step]
+  /// Run-relative; `nil` when none was recorded or the guard rejected the path.
+  public var video: String?
+  /// Run-relative; `nil` when none was made or the guard rejected the path.
+  public var sheet: String?
+  public var videoUnverified: QARecordingGapReason?
+  public var sheetUnverified: QARecordingGapReason?
+
+  public init(
+    source: QAFlowSource, run: String, steps: [Step] = [], video: String? = nil,
+    sheet: String? = nil, videoUnverified: QARecordingGapReason? = nil,
+    sheetUnverified: QARecordingGapReason? = nil
+  ) {
+    self.source = source
+    self.run = run
+    self.steps = steps
+    self.video = video
+    self.sheet = sheet
+    self.videoUnverified = videoUnverified
+    self.sheetUnverified = sheetUnverified
+  }
+}
+
+/// 1 kept XCUITest flow a T3 gate run of the build run recorded.
+public struct RunViewKeptFlow: Sendable, Equatable, Encodable {
+  /// The `[[flows]]` entry; `nil` when the record named none or the guard rejected it.
+  public var name: String?
+  /// `<Class>/<method>()`; `nil` when the record named none or the guard rejected it.
+  public var test: String?
+  public var gateRun: String
+  /// The task the gate run belongs to; `nil` when no task claims it.
+  public var task: String?
+  public var at: Date
+  public var flow: RunViewFlow
+
+  public init(
+    name: String?, test: String?, gateRun: String, task: String? = nil, at: Date,
+    flow: RunViewFlow
+  ) {
+    self.name = name
+    self.test = test
+    self.gateRun = gateRun
+    self.task = task
+    self.at = at
+    self.flow = flow
   }
 }
 
