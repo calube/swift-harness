@@ -122,7 +122,9 @@ public struct JudgeDatasetSummary: Sendable, Equatable, Codable {
 /// A labelled set a judge backend is measured on (spec §10.2).
 public struct JudgeDataset: Sendable, Equatable {
   public static let schemaVersion = 1
-  public static let builtInQuestionSets: [JudgeQuestionSet] = [.tests, .comments]
+  public static let builtInQuestionSets: [JudgeQuestionSet] = [
+    .tests, .comments, .diffRisk, .findingSeverity,
+  ]
 
   public let id: String
   public let questionSet: JudgeDatasetQuestionSet

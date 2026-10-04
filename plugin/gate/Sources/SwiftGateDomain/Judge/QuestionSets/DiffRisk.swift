@@ -29,7 +29,10 @@ public enum DiffRiskVerdict: Sendable, Equatable {
   case judged(DiffRiskLevel)
 
   public var level: DiffRiskLevel {
-    .low
+    switch self {
+    case .sensitive: .high
+    case .judged(let level): level
+    }
   }
 }
 
@@ -72,18 +75,43 @@ public enum DiffRisk {
   /// The first path, in `paths` order, that matches 1 of `globs`, as a `.sensitive` verdict.
   /// A glob matches path segment by segment, and `**` spans any number of directories.
   public static func sensitive(_ paths: [String], globs: [String]) -> DiffRiskVerdict? {
-    nil
+    for path in paths {
+      let segments = path.split(separator: "/").map(String.init)
+      if let glob = globs.first(where: {
+        matches($0.split(separator: "/").map(String.init)[...], segments[...])
+      }) {
+        return .sensitive(path: path, glob: glob)
+      }
+    }
+    return nil
+  }
+
+  private static func matches(_ pattern: ArraySlice<String>, _ path: ArraySlice<String>) -> Bool {
+    guard let head = pattern.first else { return path.isEmpty }
+    if head == "**" {
+      let rest = pattern.dropFirst()
+      return (path.startIndex...path.endIndex).contains { matches(rest, path[$0...]) }
+    }
+    guard let segment = path.first, fnmatch(head, segment, 0) == 0 else { return false }
+    return matches(pattern.dropFirst(), path.dropFirst())
   }
 
   /// What the judge reads: the diff as the subject and the touched paths as its context.
   public static func subject(_ change: DiffRiskChange) -> JudgeSubject {
-    JudgeSubject(id: change.id, file: "", line: 0, source: "", context: "")
+    JudgeSubject(
+      id: change.id, file: change.paths.first ?? change.id, line: 1, source: change.diff,
+      context: (["Paths changed:"] + change.paths).joined(separator: "\n"))
   }
 
   public static func level(from answers: [JudgeAnswer]) throws(JudgeClassificationError)
     -> DiffRiskLevel
   {
-    throw .unreadable("")
+    let question = JudgeQuestionSet.diffRisk.questions[0]
+    let level = try JudgeLevelReading.level(question, in: answers)
+    guard let read = DiffRiskLevel(rawValue: level) else {
+      throw .unreadable("\(question.id) answered \(level), which isn't a risk level")
+    }
+    return read
   }
 
   /// Rates `change`. A path matching `sensitive` rates `high` before `ask` runs, so a sensitive
@@ -92,6 +120,8 @@ public enum DiffRisk {
     _ change: DiffRiskChange, sensitive globs: [String],
     ask: (JudgeSubject, JudgeQuestionSet) async throws -> [JudgeAnswer]
   ) async throws(JudgeClassificationError) -> DiffRiskVerdict {
-    throw .noAnswer("")
+    if let verdict = sensitive(change.paths, globs: globs) { return verdict }
+    let answers = try await JudgeLevelReading.answers(subject(change), .diffRisk, ask: ask)
+    return .judged(try level(from: answers))
   }
 }

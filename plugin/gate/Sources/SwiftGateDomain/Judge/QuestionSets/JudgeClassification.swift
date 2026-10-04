@@ -13,7 +13,11 @@ enum JudgeLevelReading {
     _ subject: JudgeSubject, _ questions: JudgeQuestionSet,
     ask: (JudgeSubject, JudgeQuestionSet) async throws -> [JudgeAnswer]
   ) async throws(JudgeClassificationError) -> [JudgeAnswer] {
-    throw .noAnswer("")
+    do {
+      return try await ask(subject, questions)
+    } catch {
+      throw .noAnswer("\(error)")
+    }
   }
 
   /// The most probable level of `question` in `answers`. Levels are listed worst first, so a tie
@@ -21,6 +25,18 @@ enum JudgeLevelReading {
   static func level(_ question: JudgeQuestion, in answers: [JudgeAnswer])
     throws(JudgeClassificationError) -> String
   {
-    throw .unreadable("")
+    guard let answer = answers.first(where: { $0.question == question.id }) else {
+      throw .unreadable(
+        "no answer for \(question.id); answered \(answers.map(\.question).sorted())")
+    }
+    let unknown = Set(answer.distribution.keys).subtracting(question.options)
+    guard unknown.isEmpty else {
+      throw .unreadable(
+        "\(question.id) answered \(unknown.sorted()), outside its levels \(question.options)")
+    }
+    guard answer.distribution.values.contains(where: { $0 > 0 }),
+      let level = answer.mostLikely(among: question.options)
+    else { throw .unreadable("\(question.id) put no weight on any level") }
+    return level
   }
 }

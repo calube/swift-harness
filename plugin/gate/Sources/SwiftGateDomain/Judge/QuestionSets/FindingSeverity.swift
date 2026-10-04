@@ -36,13 +36,22 @@ public enum FindingSeverity {
   /// diff it was raised on as context. The finding's own severity stays out, so the judge can't
   /// echo it.
   public static func subject(_ finding: Finding, diff: String) -> JudgeSubject {
-    JudgeSubject(id: finding.ruleID, file: "", line: 0, source: "", context: "")
+    let location = finding.line.map { "\(finding.file):\($0)" } ?? finding.file
+    let scenario = finding.failureScenario.map { "\n\nFailure scenario: \($0)" } ?? ""
+    return JudgeSubject(
+      id: "\(location) \(finding.ruleID)", file: finding.file, line: finding.line ?? 1,
+      source: "\(finding.ruleID) at \(location): \(finding.message)\(scenario)", context: diff)
   }
 
   public static func severity(from answers: [JudgeAnswer]) throws(JudgeClassificationError)
     -> Severity
   {
-    throw .unreadable("")
+    let question = JudgeQuestionSet.findingSeverity.questions[0]
+    let level = try JudgeLevelReading.level(question, in: answers)
+    guard let severity = levels.first(where: { $0.option == level })?.severity else {
+      throw .unreadable("\(question.id) answered \(level), which isn't a severity")
+    }
+    return severity
   }
 
   /// Rates `finding`. `ask` is the judge, normally the cascade.
@@ -50,6 +59,8 @@ public enum FindingSeverity {
     _ finding: Finding, diff: String,
     ask: (JudgeSubject, JudgeQuestionSet) async throws -> [JudgeAnswer]
   ) async throws(JudgeClassificationError) -> Severity {
-    throw .noAnswer("")
+    let answers = try await JudgeLevelReading.answers(
+      subject(finding, diff: diff), .findingSeverity, ask: ask)
+    return try severity(from: answers)
   }
 }
