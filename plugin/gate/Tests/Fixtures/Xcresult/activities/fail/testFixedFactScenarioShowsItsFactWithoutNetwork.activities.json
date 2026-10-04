@@ -1,0 +1,179 @@
+{
+  "testIdentifier" : "CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork()",
+  "testIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork",
+  "testName" : "testFixedFactScenarioShowsItsFactWithoutNetwork()",
+  "testRuns" : [
+    {
+      "activities" : [
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Screen Recording 2026-10-04 at 04.45.41 PM.mp4",
+              "payloadId" : "0~SuDtsOSaDQvEjWpt-gZAN7_l4_kbM_iL54Xuheh6WPYUZm3TQAp2RJkepdy1W9OCa7TTjTMJJPLuy7w4NKukJg==",
+              "timestamp" : 1791150341.074,
+              "uuid" : "7CC602BE-E39D-426C-8B05-75B84CF7A901"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150341.074,
+              "title" : "kXCTAttachmentScreenRecording"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150340.991,
+          "title" : "Start Test at 2026-10-04 16:45:40.991"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150341.075,
+          "title" : "Set Up"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150341.708,
+                  "title" : "Setting up automation session"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150342.386,
+                  "title" : "Wait for com.example.SampleApp to idle"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150341.077,
+              "title" : "Launch com.example.SampleApp"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150341.077,
+          "title" : "Open com.example.SampleApp"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150344.585,
+                  "title" : "Checking existence of `\"counter.fact\" Button`"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150344.585,
+              "title" : "Checking `Expect predicate `existsNoRetry == 1` for object \"counter.fact\" Button`"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150343.529,
+          "title" : "Waiting 10.0s for \"counter.fact\" Button to exist"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Synthesized Event 2026-10-04 at 04.45.45 PM",
+              "payloadId" : "0~wpfuG8nseaG03ToRUuP_xU3SxdckuMtXDYcVxUd7uhrcV81GtWWCUfnvpF4nzbleyDImeRjzNh9BIKuIa8LB0Q==",
+              "timestamp" : 1791150345.031,
+              "uuid" : "8A5A1C67-F21A-43F5-AF9D-A13DF3EEA6E2"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150344.612,
+              "title" : "Wait for com.example.SampleApp to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150344.614,
+              "title" : "Find the \"counter.fact\" Button"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150344.619,
+              "title" : "Check for interrupting elements affecting \"counter.fact\" Button"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "keepAlways",
+                  "name" : "Synthesized Event 2026-10-04 at 04.45.45 PM",
+                  "payloadId" : "0~wpfuG8nseaG03ToRUuP_xU3SxdckuMtXDYcVxUd7uhrcV81GtWWCUfnvpF4nzbleyDImeRjzNh9BIKuIa8LB0Q==",
+                  "timestamp" : 1791150345.031,
+                  "uuid" : "8A5A1C67-F21A-43F5-AF9D-A13DF3EEA6E2"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150345.031,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150344.628,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150345.032,
+              "title" : "Wait for com.example.SampleApp to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150344.612,
+          "title" : "Tap \"counter.fact\" Button"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150346.067,
+                  "title" : "Checking existence of `\"counter.factText\" StaticText`"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150346.067,
+              "title" : "Checking `Expect predicate `existsNoRetry == 1` for object \"counter.factText\" StaticText`"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150345.033,
+          "title" : "Waiting 10.0s for \"counter.factText\" StaticText to exist"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150346.076,
+          "title" : "Find the \"counter.factText\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150346.081,
+          "title" : "Tear Down"
+        }
+      ],
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "modelName" : "iPhone 17",
+        "osBuildNumber" : "23C52",
+        "osVersion" : "26.2",
+        "platform" : "iOS Simulator"
+      },
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Configuration 1"
+      }
+    }
+  ]
+}

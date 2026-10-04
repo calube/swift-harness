@@ -62,28 +62,70 @@ public final class FakeXcodebuild: Xcodebuild {
 }
 
 /// Serves recorded `xcresulttool` output from `Fixtures/Xcresult/<scenario>.*` for every bundle.
-/// A scenario with no build-results fixture reads like a bundle `xcodebuild` never wrote.
+/// A scenario with no build-results fixture reads like a bundle `xcodebuild` never wrote. A
+/// kept-flow scenario serves `Fixtures/Xcresult/activities/<scenario>/`: its test tree, each UI
+/// test's activities, and an export that lays out an empty file per manifest entry.
 public struct FakeXcresultReader: XcresultReader {
-  private let scenario: String
+  private let testsPath: String
+  private let buildResultsPath: String
+  private let keptFlows: String?
 
   public init(scenario: String) {
-    self.scenario = scenario
+    testsPath = "Xcresult/\(scenario).tests.json"
+    buildResultsPath = "Xcresult/\(scenario).build-results.json"
+    keptFlows = nil
+  }
+
+  /// A scenario `gate/Fixtures/xcresult/capture-flow-video.sh` captured.
+  public init(keptFlows scenario: String) {
+    testsPath = "Xcresult/activities/\(scenario)/tests.json"
+    buildResultsPath = "Xcresult/ui-pass.build-results.json"
+    keptFlows = "Xcresult/activities/\(scenario)"
   }
 
   public func read(bundlePath: String) async throws(XcresultReadError) -> XcresultContents {
-    guard let tests = try? Fixture.data("Xcresult/\(scenario).tests.json") else {
-      throw .failed(status: .exited(64), stderr: "no fixture \(scenario)")
+    guard let tests = try? Fixture.data(testsPath) else {
+      throw .failed(status: .exited(64), stderr: "no fixture \(testsPath)")
     }
-    return XcresultContents(
-      testResults: tests, buildResults: try? Fixture.data("Xcresult/\(scenario).build-results.json")
-    )
+    return XcresultContents(testResults: tests, buildResults: try? Fixture.data(buildResultsPath))
   }
 
   public func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data {
-    guard let results = try? Fixture.data("Xcresult/\(scenario).build-results.json") else {
-      throw .failed(status: .exited(64), stderr: "no fixture \(scenario)")
+    guard let results = try? Fixture.data(buildResultsPath) else {
+      throw .failed(status: .exited(64), stderr: "no fixture \(buildResultsPath)")
     }
     return results
+  }
+
+  public func activities(bundlePath: String, testID: String) async throws(XcresultReadError)
+    -> Data
+  {
+    let method = testID.split(separator: "/").last.map(String.init) ?? testID
+    let name = method.hasSuffix("()") ? String(method.dropLast(2)) : method
+    guard let keptFlows, let data = try? Fixture.data("\(keptFlows)/\(name).activities.json")
+    else {
+      throw .failed(status: .exited(1), stderr: "no activities for \(testID)")
+    }
+    return data
+  }
+
+  public func exportAttachments(bundlePath: String, testID: String, to directory: String)
+    async throws(XcresultReadError) -> Data
+  {
+    guard let keptFlows, let manifest = try? Fixture.data("\(keptFlows)/manifest.json") else {
+      throw .failed(status: .exited(1), stderr: "no attachments for \(testID)")
+    }
+    let files = FileManager.default
+    try? files.createDirectory(atPath: directory, withIntermediateDirectories: true)
+    let entries = (try? JSONSerialization.jsonObject(with: manifest)) as? [[String: Any]] ?? []
+    for entry in entries where entry["testIdentifier"] as? String == testID {
+      for attachment in entry["attachments"] as? [[String: Any]] ?? [] {
+        if let name = attachment["exportedFileName"] as? String {
+          files.createFile(atPath: "\(directory)/\(name)", contents: Data(name.utf8))
+        }
+      }
+    }
+    return manifest
   }
 }
 

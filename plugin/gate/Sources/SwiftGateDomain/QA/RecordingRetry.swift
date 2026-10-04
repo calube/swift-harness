@@ -28,6 +28,8 @@ public enum QAEvidenceKind: String, Sendable, Equatable, Codable, CaseIterable {
   case trace
   case osLog
   case container
+  /// A kept XCUITest's activities, which its steps come from.
+  case activities
 }
 
 /// Final-pass evidence 1 flow row didn't leave, and why. It never changes the row's result: a
@@ -64,6 +66,8 @@ public enum QARecordingGapReason: String, Sendable, Equatable, Codable, CaseIter
   case recordFailed
   /// `record contact-sheet` failed on the video.
   case sheetFailed
+  /// A kept XCUITest left no screen recording in its result bundle.
+  case noVideoAttachment
 }
 
 /// 1 missing video or sheet: its reason, and the detail the report names.
@@ -119,6 +123,7 @@ extension QAFlowRecord {
           n: step.n, label: step.label, offsetMs: max(0, step.offsetMs - shift), ok: step.ok)
       },
       video: recording.video, sheet: recording.sheet,
-      videoUnverified: recording.videoGap?.reason, sheetUnverified: recording.sheetGap?.reason)
+      videoUnverified: recording.videoGap?.reason, sheetUnverified: recording.sheetGap?.reason,
+      flow: flow, test: test)
   }
 }

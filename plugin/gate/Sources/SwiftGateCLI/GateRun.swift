@@ -28,6 +28,8 @@ enum GateRun {
     var tests = TestResultCollector()
     /// `prove` hands each changed test it ran here, for the run's `prove.result` events.
     var proofs = ProveResultCollector()
+    /// T3 hands each kept flow's record here, for the run's `qa.flow` events.
+    var flows = FlowRecordCollector()
   }
 
   /// - Parameters:
@@ -82,7 +84,7 @@ enum GateRun {
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
         testResults: context.tests.cases, baselineCount: parts.baselineCount,
-        proofs: context.proofs.results)
+        proofs: context.proofs.results, flows: context.flows.flows)
     }
     Console.write(
       try ReportRenderer.render(
@@ -182,6 +184,19 @@ final class TestResultCollector: Sendable {
   }
 
   var cases: [TestCaseResult] { results.withLock { $0 } }
+}
+
+/// The kept flows 1 gate run's T3 recorded, in the order it handed them over.
+final class FlowRecordCollector: Sendable {
+  private let records = Mutex<[QAFlowRecord]>([])
+
+  init() {}
+
+  func record(_ flows: [QAFlowRecord]) {
+    records.withLock { $0.append(contentsOf: flows) }
+  }
+
+  var flows: [QAFlowRecord] { records.withLock { $0 } }
 }
 
 /// The changed tests 1 gate run's `prove` ran, in the order it handed them over.

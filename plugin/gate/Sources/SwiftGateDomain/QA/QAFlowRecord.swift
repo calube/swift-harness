@@ -42,12 +42,19 @@ public struct QAFlowRecord: Sendable, Equatable, Codable {
   public let videoUnverified: QARecordingGapReason?
   /// Why a final pass that made a video left no contact sheet.
   public let sheetUnverified: QARecordingGapReason?
+  /// The `[[flows]]` entry a kept XCUITest flow maps to; `nil` for a batch flow.
+  public let flow: String?
+  /// The kept flow's test, `<Class>/<method>()` as the result bundle names it; `nil` for a batch
+  /// flow.
+  public let test: String?
 
   public init(
     source: QAFlowSource, steps: [QAFlowStep], video: String? = nil, sheet: String? = nil,
     videoUnverified: QARecordingGapReason? = nil,
-    sheetUnverified: QARecordingGapReason? = nil
+    sheetUnverified: QARecordingGapReason? = nil, flow: String? = nil, test: String? = nil
   ) {
+    self.flow = flow
+    self.test = test
     self.source = source
     self.steps = steps
     self.video = video

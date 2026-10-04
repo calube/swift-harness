@@ -1,0 +1,289 @@
+{
+  "testIdentifier" : "CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount()",
+  "testIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount",
+  "testName" : "testIncrementAndDecrementUpdateTheDisplayedCount()",
+  "testRuns" : [
+    {
+      "activities" : [
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Screen Recording 2026-10-04 at 04.44.58 PM.mp4",
+              "payloadId" : "0~TO6vmLkCXrXamLCGDOZOxa6ZWqEyEVNdyqeP_6pDrtTtiz1YWcMSqOcOZigZDgRquStenlKv1aml2ECpDBB9hQ==",
+              "timestamp" : 1791150298.396,
+              "uuid" : "9DBD7FD2-BCE8-449C-BED2-BDB81FEC7921"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150298.396,
+              "title" : "kXCTAttachmentScreenRecording"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150298.375,
+          "title" : "Start Test at 2026-10-04 16:44:58.375"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150298.397,
+          "title" : "Set Up"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150298.399,
+                  "title" : "Terminate com.example.SampleApp:40607"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150299.671,
+                  "title" : "Setting up automation session"
+                },
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150300.239,
+                  "title" : "Wait for com.example.SampleApp to idle"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150298.399,
+              "title" : "Launch com.example.SampleApp"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150298.399,
+          "title" : "Open com.example.SampleApp"
+        },
+        {
+          "childActivities" : [
+            {
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150302.432,
+                  "title" : "Checking existence of `\"counter.value\" StaticText`"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.431,
+              "title" : "Checking `Expect predicate `existsNoRetry == 1` for object \"counter.value\" StaticText`"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150301.376,
+          "title" : "Waiting 10.0s for \"counter.value\" StaticText to exist"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150302.475,
+          "title" : "Find the \"counter.value\" StaticText"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Synthesized Event 2026-10-04 at 04.45.02 PM",
+              "payloadId" : "0~KngJ0PKGiAJGylI1bchTDTx9HqL1oaaKbpgWtTdz0Wfc5HseXsuMfS4OT58X2kp3D86Ttjx8kZ-Lp6RKww-Ycg==",
+              "timestamp" : 1791150302.787,
+              "uuid" : "2E1DEDD6-7213-4CEE-A58A-25EC1D3307E0"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.48,
+              "title" : "Wait for com.example.SampleApp to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.482,
+              "title" : "Find the \"counter.increment\" Button"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.487,
+              "title" : "Check for interrupting elements affecting \"counter.increment\" Button"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "keepAlways",
+                  "name" : "Synthesized Event 2026-10-04 at 04.45.02 PM",
+                  "payloadId" : "0~KngJ0PKGiAJGylI1bchTDTx9HqL1oaaKbpgWtTdz0Wfc5HseXsuMfS4OT58X2kp3D86Ttjx8kZ-Lp6RKww-Ycg==",
+                  "timestamp" : 1791150302.787,
+                  "uuid" : "2E1DEDD6-7213-4CEE-A58A-25EC1D3307E0"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150302.787,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.496,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.787,
+              "title" : "Wait for com.example.SampleApp to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150302.48,
+          "title" : "Tap \"counter.increment\" Button"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+              "payloadId" : "0~KngJ0PKGiAJGylI1bchTDTx9HqL1oaaKbpgWtTdz0Wfc5HseXsuMfS4OT58X2kp3D86Ttjx8kZ-Lp6RKww-Ycg==",
+              "timestamp" : 1791150303.098,
+              "uuid" : "167E7FEC-B63B-400D-A7FB-6569E2860637"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.79,
+              "title" : "Wait for com.example.SampleApp to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.792,
+              "title" : "Find the \"counter.increment\" Button"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.8,
+              "title" : "Check for interrupting elements affecting \"counter.increment\" Button"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "keepAlways",
+                  "name" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+                  "payloadId" : "0~KngJ0PKGiAJGylI1bchTDTx9HqL1oaaKbpgWtTdz0Wfc5HseXsuMfS4OT58X2kp3D86Ttjx8kZ-Lp6RKww-Ycg==",
+                  "timestamp" : 1791150303.098,
+                  "uuid" : "167E7FEC-B63B-400D-A7FB-6569E2860637"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150303.098,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150302.809,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.099,
+              "title" : "Wait for com.example.SampleApp to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150302.79,
+          "title" : "Tap \"counter.increment\" Button"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150303.102,
+          "title" : "Find the \"counter.value\" StaticText"
+        },
+        {
+          "attachments" : [
+            {
+              "lifetime" : "keepAlways",
+              "name" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+              "payloadId" : "0~qCu_5DGlwUDnfPzZhmpffQwsoeUz86I3BqBSHx4Pc8MZ9e1W8xTVBc1-rjgtOtZmj0O_XHUcrvCHumprXOuNbQ==",
+              "timestamp" : 1791150303.412,
+              "uuid" : "B9F7AA4A-1A95-4054-AD9D-C04426C7DFF0"
+            }
+          ],
+          "childActivities" : [
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.108,
+              "title" : "Wait for com.example.SampleApp to idle"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.109,
+              "title" : "Find the \"counter.decrement\" Button"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.115,
+              "title" : "Check for interrupting elements affecting \"counter.decrement\" Button"
+            },
+            {
+              "attachments" : [
+                {
+                  "lifetime" : "keepAlways",
+                  "name" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+                  "payloadId" : "0~qCu_5DGlwUDnfPzZhmpffQwsoeUz86I3BqBSHx4Pc8MZ9e1W8xTVBc1-rjgtOtZmj0O_XHUcrvCHumprXOuNbQ==",
+                  "timestamp" : 1791150303.412,
+                  "uuid" : "B9F7AA4A-1A95-4054-AD9D-C04426C7DFF0"
+                }
+              ],
+              "childActivities" : [
+                {
+                  "isAssociatedWithFailure" : false,
+                  "startTime" : 1791150303.412,
+                  "title" : "kXCTAttachmentLegacySynthesizedEvent"
+                }
+              ],
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.123,
+              "title" : "Synthesize event"
+            },
+            {
+              "isAssociatedWithFailure" : false,
+              "startTime" : 1791150303.412,
+              "title" : "Wait for com.example.SampleApp to idle"
+            }
+          ],
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150303.107,
+          "title" : "Tap \"counter.decrement\" Button"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150303.418,
+          "title" : "Find the \"counter.value\" StaticText"
+        },
+        {
+          "isAssociatedWithFailure" : false,
+          "startTime" : 1791150303.425,
+          "title" : "Tear Down"
+        }
+      ],
+      "device" : {
+        "architecture" : "arm64",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "modelName" : "iPhone 17",
+        "osBuildNumber" : "23C52",
+        "osVersion" : "26.2",
+        "platform" : "iOS Simulator"
+      },
+      "testPlanConfiguration" : {
+        "configurationId" : "1",
+        "configurationName" : "Configuration 1"
+      }
+    }
+  ]
+}

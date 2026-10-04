@@ -38,6 +38,12 @@ public protocol XcresultReader: Sendable {
   /// `xcresulttool get build-results` alone, for a bundle `xcodebuild build` wrote: it holds no
   /// test tree.
   func readBuildResults(bundlePath: String) async throws(XcresultReadError) -> Data
+  /// `xcresulttool get test-results activities` for 1 test, `<Class>/<method>()`.
+  func activities(bundlePath: String, testID: String) async throws(XcresultReadError) -> Data
+  /// `xcresulttool export attachments` for 1 test into `directory`, which it creates; returns the
+  /// `manifest.json` the export wrote there.
+  func exportAttachments(bundlePath: String, testID: String, to directory: String)
+    async throws(XcresultReadError) -> Data
 }
 
 public struct LiveXcresultReader: XcresultReader {
@@ -67,6 +73,35 @@ public struct LiveXcresultReader: XcresultReader {
       throw .failed(status: build.status, stderr: Self.firstLine(build.stderr.text))
     }
     return build.stdout.bytes
+  }
+
+  public func activities(bundlePath: String, testID: String) async throws(XcresultReadError)
+    -> Data
+  {
+    let output = try await xcresulttool([
+      "get", "test-results", "activities", "--test-id", testID, "--path", bundlePath,
+    ])
+    guard output.status.isSuccess else {
+      throw .failed(status: output.status, stderr: Self.firstLine(output.stderr.text))
+    }
+    return output.stdout.bytes
+  }
+
+  public func exportAttachments(bundlePath: String, testID: String, to directory: String)
+    async throws(XcresultReadError) -> Data
+  {
+    let output = try await xcresulttool([
+      "export", "attachments", "--test-id", testID, "--path", bundlePath, "--output-path",
+      directory,
+    ])
+    guard output.status.isSuccess else {
+      throw .failed(status: output.status, stderr: Self.firstLine(output.stderr.text))
+    }
+    let manifest = URL(filePath: directory).appending(path: "manifest.json")
+    guard let data = FileManager.default.contents(atPath: manifest.path) else {
+      throw .failed(status: output.status, stderr: "export attachments wrote no manifest.json")
+    }
+    return data
   }
 
   private func xcresulttool(_ arguments: [String]) async throws(XcresultReadError)
