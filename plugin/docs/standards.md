@@ -711,7 +711,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `xcode.file-not-in-target` | brownfield profile §8; a new Swift file under a source root that no target of the area's Xcode project compiles |
 | `area.test-failed`, `area.build-failed`, `area.lint-failed` | brownfield profile §7; an area's own command failed, and the baseline doesn't hold the failure (major) |
 | `area.step-dropped`, `area.build-only` | brownfield profile §5.3, §9; a step the orchestrator dropped, and an area whose tests don't fit the `slice` budget so `slice` only builds it and its tests run at `merge`. Report lines that never gate |
-| `baseline.summary` | brownfield profile §10; the failures found at both the head and the merge base, which never gate |
+| `baseline.summary` | brownfield profile §10; the failures found at both the head and the merge base, which never gate. A failure is absorbed only when the merge base fails the same step, command and selection with the same test id, or fails the whole step when the head does too. The same nit names a baseline file that doesn't decode (it is rerun and replaced, never read as empty) and a merge-base rerun that couldn't run, whose failures then gate |
 
 ### Design, docs and prose (`design-lint`, `design-diff`, `docs-lint`, `prose`)
 
