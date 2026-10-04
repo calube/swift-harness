@@ -36,6 +36,10 @@ public struct Config: Sendable, Equatable {
   /// violate the rules on purpose.
   public let exclude: [String]
   public let telemetry: TelemetryConfig
+  /// `[[scenarios]]`: the dependency scenarios the app's `Scenario` enum declares, which
+  /// `sim up --scenario` may launch.
+  public private(set) var scenarios: [Scenario] = []
+  public private(set) var qa = QAConfig()
 
   public init(
     xcode: String,
@@ -383,6 +387,30 @@ public struct Flow: Sendable, Equatable {
   public init(name: String, reason: String) {
     self.name = name
     self.reason = reason
+  }
+}
+
+/// A named set of dependency overrides the app applies at launch (simulator QA design §6).
+public struct Scenario: Sendable, Equatable {
+  public let name: String
+  public let reason: String
+
+  public init(name: String, reason: String) {
+    self.name = name
+    self.reason = reason
+  }
+}
+
+/// `[qa]`: how simulator QA sessions run.
+public struct QAConfig: Sendable, Equatable {
+  public static let defaultSessionTimeoutMinutes = 30
+  public static let sessionTimeoutMinutesRange = 1...240
+
+  /// Minutes a `sim hold` keeps its device after `sim up` before it releases it unasked.
+  public let sessionTimeoutMinutes: Int
+
+  public init(sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes) {
+    self.sessionTimeoutMinutes = sessionTimeoutMinutes
   }
 }
 
