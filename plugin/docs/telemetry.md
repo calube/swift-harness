@@ -15,12 +15,17 @@ line and never changes a verdict, an exit code or a report.
 | `cache.lookup` | the manifest and evidence caches | cache, outcome, key hash, answer hash, tombstone reason |
 | `build.halt`, `build.resume` | `swiftgate build halt` and `resume` | build run, task, reason or answer, wait |
 | `agent.usage` | `swiftgate events ingest` | session, agent, role, task, build run, model, message id and time, token counts, cost |
+| `agent.tools` | `swiftgate events ingest` | per agent per 60 s window: session, agent, role, task, build run, window bounds, call counts and summed ms by tool (built-in names; every `mcp__…` tool as `mcp`; any other name only counted), the repository-relative paths file tools named (at most 50), and a count of paths dropped |
 | `judge.decision`, `judge.call` | the judge | see [`judge-audit.md`](judge-audit.md) |
 
 ## What's never recorded
 
 No source text, diffs, finding or failure messages, prompts, transcript text, tool inputs, shell commands,
-environment values or API keys. Paths are repository-relative; nothing records a path outside the repository.
+environment values or API keys. The 1 exception to "no tool inputs": `agent.tools` keeps the `file_path`, `path` or
+`notebook_path` of a file tool (Read, Edit, Write, MultiEdit, NotebookEdit, Grep, Glob), made relative to the git top
+level of the agent's working directory, and nothing else from any tool input or output: no command, pattern, query,
+prompt, content or MCP server or tool name. A `~` path, a path outside that top level, or one the guard rejects is
+dropped and counted. Paths are repository-relative; nothing records a path outside the repository.
 A guard drops any non-judge event holding a string over 512 bytes, a string starting with `/` or `~`, or a
 newline, and counts it in `dropped.json`; the gate hashes a test id the guard rejects. The judge log follows [`judge-audit.md`](judge-audit.md), which
 redacts backend keys. No command sends events anywhere.
@@ -59,7 +64,8 @@ exit 0 with nothing recorded, and `events list` and `summary` still read what ex
 - `swiftgate events ingest --session <id> [--workflow-transcripts <dir>] [--role <role>] [--task <id>]
   [--build-run <id>]` reads token counts offline from the session's transcript, its subagents' transcripts and,
   with `--workflow-transcripts`, every `agent-*.jsonl` in that directory. It keeps message ids, model ids,
-  counts and times, and never the text or a path. Ingesting again adds nothing. Ingest stores a message
+  counts and times, and never the text. It also writes 1 `agent.tools` per agent per 60 s window of tool calls,
+  keeping only repository-relative file-tool paths. Ingesting again adds nothing. Ingest stores a message
   the price table can't price without a cost, and names its model in the output. Roles: `orchestrator`, `design`, `plan`,
   `build-worker`, `review`, `qa`.
 - `swiftgate build halt --run <id> [--task <id>] --reason <reason>` records why a build stopped to ask a

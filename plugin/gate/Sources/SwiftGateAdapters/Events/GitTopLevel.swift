@@ -8,6 +8,21 @@ public struct GitTopLevel: Sendable {
   /// `nil` when no ancestor of `directory`, itself included, holds `.git`, or `directory` is
   /// not absolute.
   public func of(_ directory: String) -> String? {
-    nil
+    guard directory.hasPrefix("/") else { return nil }
+    var current = URL(filePath: directory, directoryHint: .isDirectory).standardizedFileURL
+    while true {
+      if FileManager.default.fileExists(atPath: current.appending(path: ".git").path) {
+        return current.path(percentEncoded: false).trimmingTrailingSlash
+      }
+      let parent = current.deletingLastPathComponent()
+      if parent.path == current.path { return nil }
+      current = parent
+    }
+  }
+}
+
+extension String {
+  fileprivate var trimmingTrailingSlash: String {
+    count > 1 && hasSuffix("/") ? String(dropLast()) : self
   }
 }
