@@ -1,0 +1,36 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 177241,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "/Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
+      "line" : null,
+      "message" : "1 failure(s) also fail at the merge base, so they don't gate: Aidoku lint (the whole step)",
+      "rule" : "baseline.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Aidoku test failed at the head and not at the merge base (`xcodebuild test -project Aidoku.xcodeproj -scheme Aidoku -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation`), exit 65:\nTest case 'ComicInfoTests/testSerialization()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/prefersExactMatch()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ComicInfoTests/testParsing()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/resolvesDotSlashPrefixWithSpace()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/returnsNilWhenAbsent()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/resolvesDotSlashPrefix()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TrackerSyncTests/testApplyChapterOffsetNegative()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/resolvesDifferingCase()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ConfirmLargeDownloadsSettingTests/registersKeyWithDefaultFalse()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ArchiveTests/resolvesPercentEncodedEntry()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ConfirmLargeDownloadsSettingTests/settingKeyMatchesAccessibilityIdentifier()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TrackerSyncTests/testChapterNumbers()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TrackerSyncTests/testChapterNumbersWithHistory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'ConfirmLargeDownloadsSettingTests/downloadSettingsListsToggleAfterParallel()' failed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/ignores5xx()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/recovers403()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/recovers404()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LargeDownloadConfirmationTests/overThresholdEnabled()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LargeDownloadConfirmationTests/zeroEnabled()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LargeDownloadConfirmationTests/largeDisabled()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/ignores401And451()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/recovers410()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LargeDownloadConfirmationTests/atThresholdEnabled()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'CoverRecoveryTests/ignoresNonPipelineErrors()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PartialDownloadTests/reportsQueuedForUnmarkedStagingDirectory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PartialDownloadTests/reportsNoneWithoutAnyDirectory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PartialDownloadTests/reportsFailedForMarkedStagingDirectory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PartialDownloadTests/reportsFinishedForChapterDirectory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PartialDownloadTests/markerLivesInsideTheStagingDirectory()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'LocalFileNameParserTests/testParseMangaSeries(filename:expected:)' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TextPaginatorTests/paginateEmptyMarkdown()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'PageInterceptorProcessorTests/testNukeCaching()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TextPaginatorTests/pageRangesAreContiguous()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)\nTest case 'TextPaginatorTests/paginateEmojiAfterSentenceBreak()' passed on 'Clone 1 of iPhone 17 - Aidoku (1398)' (0.000 seconds)",
+      "rule" : "area.test-failed",
+      "severity" : "major"
+    }
+  ],
+  "headCommit" : "7145a6d02a099377a861955a647a9dbcf7aa56e3",
+  "runID" : "20261004T212120Z-792f77d5",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 177109,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}

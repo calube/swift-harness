@@ -1,0 +1,19 @@
+{
+  "after" : "threshold-rule",
+  "atBase" : false,
+  "commit" : "926a84ae77bd2d8315550248bc3d1bc3b300ba92",
+  "findings" : [
+
+  ],
+  "message" : "no validation row to run",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+
+  ],
+  "runID" : "20261004T212105Z-f0f49ad3",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}

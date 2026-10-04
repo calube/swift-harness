@@ -1,0 +1,42 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/confirm-toggle.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-setting",
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-toggle-on.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-stored",
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-toggle-on.state.sh",
+      "layer" : "state",
+      "requirement" : "req-stored",
+      "runsAfter" : [
+        "settings-toggle"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the unit tests in threshold-rule cover every branch of the pure rule",
+      "requirement" : "req-threshold"
+    },
+    {
+      "reason" : "needs an installed source with a manga over 50 chapters, which a fresh simulator lacks; the threshold tests and the merge build stand in",
+      "requirement" : "req-prompt"
+    }
+  ]
+}

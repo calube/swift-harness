@@ -1,0 +1,1 @@
+{"command":"hook stop","dirty":false,"durationMilliseconds":34,"findingCount":0,"finishedAt":"2026-10-04T21:11:42Z","runID":"20261004T211142Z-8f9e44e0","schemaVersion":1,"tiers":[{"durationMilliseconds":24,"testCounts":null,"tier":"T1","verdict":"GREEN"}],"verdict":"GREEN"}

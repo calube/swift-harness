@@ -1,0 +1,100 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "download-prompt" : {
+        "acceptance" : [
+          "the app builds and slice is GREEN; the threshold tests from threshold-rule pass at this task's base"
+        ],
+        "outOfScope" : [
+          "the download queue, its storage and notifications; the library screen's download menu; the single-chapter context menu"
+        ],
+        "scope" : [
+          "in `MangaView`'s toolbar Download button, compute the chapters to queue as today, then if `LargeDownloadConfirmation.needsConfirmation(chapterCount:isEnabled: AppSettings.downloads.confirmLargeDownloads.get())` holds, store them and present an alert titled `String(format: NSLocalizedString(\"DOWNLOAD_%i_CHAPTERS_CONFIRM\"), n)` with `CANCEL` (cancel role, queues nothing) and `DOWNLOAD` (runs today's Wi-Fi check and queue)",
+          "requests that don't need confirmation run today's code path unchanged",
+          "factor the queueing into 1 helper both branches call, so Download and the no-prompt path share it"
+        ],
+        "title" : "Ask before queueing a large chapter download from the manga's chapter list.",
+        "why" : "requirement 4, \"the app asks 'Download <n> chapters?' with Download and Cancel actions before queueing anything; Cancel queues nothing\"."
+      },
+      "settings-toggle" : {
+        "acceptance" : [
+          "`AidokuTests/ConfirmLargeDownloadsSettingTests.swift` fails before the entry exists, then passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the prompt and any other setting's title or behaviour"
+        ],
+        "scope" : [
+          "a `.toggle` entry in `Settings.downloadSettings` for `AppSettings.downloads.confirmLargeDownloads.key`, titled `NSLocalizedString(\"CONFIRM_LARGE_DOWNLOADS\")`, after Parallel Downloads",
+          "the toggle carries the accessibility identifier `LargeDownloadConfirmation.settingAccessibilityIdentifier`; the least invasive way is `.accessibilityIdentifier(setting.key)` on the row's Toggle in `SettingView`, which gives every settings toggle its key as identifier and changes no behaviour",
+          "a unit test that `Settings.downloadSettings` lists the key as a toggle and that `AppSettings.downloads.keys` registers it with default false"
+        ],
+        "title" : "Show the \"Confirm Large Downloads\" toggle in Settings → Downloads with its accessibility identifier.",
+        "why" : "requirements 1 and 2: the toggle, off by default, beside the other download toggles, writing its defaults key."
+      },
+      "spec-contract" : {
+        "acceptance" : [
+          "the app builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the toggle row, the rule and the prompt"
+        ],
+        "scope" : [
+          "`DownloadsSettings.confirmLargeDownloads` registered in `keys`, default false",
+          "`LargeDownloadConfirmation` with `threshold`, `settingAccessibilityIdentifier` and a stub `needsConfirmation` returning false",
+          "English strings `CONFIRM_LARGE_DOWNLOADS` and `DOWNLOAD_%i_CHAPTERS_CONFIRM`"
+        ],
+        "title" : "Declare the settings key, the threshold function stub, the identifier and the strings every task compiles against.",
+        "why" : "requirements 1 to 4 share the key, the identifier and the function signature."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the flow and state checks for the toggle against the contract's names, and record why each fails now.",
+        "why" : "requirements 1 and 2 need checks in the running app that fail before settings-toggle merges and pass after."
+      },
+      "threshold-rule" : {
+        "acceptance" : [
+          "Swift Testing tests in `AidokuTests/LargeDownloadConfirmationTests.swift` for 51 on (true), 50 on (false), 0 on (false), 500 off (false) fail on the stub, then pass; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "reading the setting and any UI"
+        ],
+        "scope" : [
+          "`LargeDownloadConfirmation.needsConfirmation(chapterCount:isEnabled:)` returns `isEnabled && chapterCount > threshold`"
+        ],
+        "title" : "Implement the pure threshold rule with unit tests.",
+        "why" : "requirement 3, \"with the setting on, more than 50 chapters needs confirmation; 50 or fewer, or the setting off, never does\"."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-setting",
+        "title" : "Settings → Downloads shows a toggle titled \"Confirm Large Downloads\", off by default, among the other download toggles, with the accessibility identifier `Downloads.confirmLargeDownloads`"
+      },
+      {
+        "id" : "req-stored",
+        "title" : "The toggle's value is stored in user defaults under `Downloads.confirmLargeDownloads`, registered with the other download settings, and switching it on writes `true` there"
+      },
+      {
+        "id" : "req-threshold",
+        "title" : "`LargeDownloadConfirmation.needsConfirmation(chapterCount:isEnabled:)` returns true only when the setting is on and more than 50 chapters are requested, with unit tests in AidokuTests"
+      },
+      {
+        "id" : "req-prompt",
+        "title" : "A download from a manga's chapter list that needs confirmation asks \"Download <n> chapters?\" with Download and Cancel before queueing; Cancel queues nothing, and other requests queue as today"
+      }
+    ]
+  },
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}
