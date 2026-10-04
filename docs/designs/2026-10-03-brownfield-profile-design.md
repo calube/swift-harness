@@ -1,0 +1,369 @@
+# swift-harness: the brownfield profile
+
+<!-- RESUME
+Status: DRAFT 2026-10-03. The user's 8 decisions of 2026-10-03 are in §17; the open questions in §15 wait on the user.
+Why: the harness assumes it owns the repository. Bootstrap writes `.swiftgate.toml` and git hooks into the tree,
+the default rules assume TCA, `@Dependency` and module kinds, and every change passes through design, plan and
+build stages. None of that fits a repository someone else owns, with several languages and its own commands.
+Builds on: the config loader, `ScratchWorktrees` and `prove`, the build executor, the judge cascade and the
+telemetry envelope.
+Read first: this header, §3, §5, §8 and §15.
+-->
+
+## 1. Purpose
+
+Let the harness work in a repository it doesn't own. Such a repository can hold a TypeScript server, an Android
+app and an iOS app, with its own architecture, an Xcode project from XcodeGen or kept by hand, and its own
+commands. The harness adds proof that tests are real and a fast parallel workflow, and leaves no trace in the tree.
+
+Input: the code in §2, 36 hitches from timed practice runs (§16), and a fast session without the harness in a
+repository of this class. That session planned, landed a contract commit, and ran 2 workers with disjoint files.
+
+### Goals
+
+- From clone to first gate in under 3 minutes, with 0 findings on code the change didn't touch.
+- A per-slice gate of 30 s or less that still proves each changed test fails with the change reverted.
+- 1 workflow for every language in the repository, driven by the repository's own commands.
+- No file written into the working tree, and no commit the user didn't ask for.
+
+### Non-goals
+
+- Changing the repository's architecture, project structure, lint config or CI.
+- Our standards by default. TCA, `@Dependency` and module kinds become opt-in packs (§6).
+- A design doc, a ledger page or an approval stage beyond the user's "go" on the plan.
+- Mutation testing per task, and simulator QA for areas that aren't iOS.
+
+## 2. What exists today
+
+| Piece | Where | Assumes ownership because |
+|---|---|---|
+| Config | `Config.fileName` (`plugin/gate/Sources/SwiftGateDomain/Config/Config.swift`), read by `ConfigLoader.load` (`plugin/gate/Sources/SwiftGateAdapters/Config/ConfigLoader.swift`) | the only location is `.swiftgate.toml` in the tree; `xcode`, `app_scheme` and `packages` are required |
+| Hook activation | `plugin/hooks/hooks.json`; `HookSupport.swift` finds the nearest `.swiftgate.toml` | no committed config means no hooks |
+| Bootstrap | `BootstrapFiles` (`plugin/gate/Sources/SwiftGateAdapters/Bootstrap.swift`), `plugin/skills/bootstrap/SKILL.md` | writes `AGENTS.md`, `CLAUDE.md`, `.swiftgate.toml`, `.swift-format`, `.swiftlint.yml`, `lefthook.yml`, `.gitignore`, `docs/index.md`, and runs `lefthook install` |
+| Inference | `ConfigInference.swift` reads `xcodebuild -list -json` | Swift and Xcode only |
+| Run state | `RunLayout` (`plugin/gate/Sources/SwiftGateDomain/RunLayout.swift`); 80 `.harness/` literals across 47 source files | state lives in the tree, hidden by the `.gitignore` bootstrap writes (`plugin/templates/gitignore`) |
+| Tiers | `CheckTier` (`plugin/gate/Sources/SwiftGateDomain/Check.swift`); `plugin/docs/testing-playbook.md` §1 | T1 is `swift test`; budgets `t0 = 5s`, `t1 = 60s` in `Budgets` |
+| Rules | `plugin/docs/standards.md` rule id index | `arch.*`, `test.non-exhaustive-store` and the module kinds assume TCA |
+| Doctor | `plugin/gate/Sources/SwiftGateDomain/Doctor/Doctor.swift` | checks the shim, SwiftLint and the Xcode pin of an owned repository |
+| Plan state | `PlanStateLayout` (`plugin/gate/Sources/SwiftGateDomain/Plan/PlanStateLayout.swift`) | already in the git common dir; this design keeps it there |
+| Executor | `BuildPreset` (`plugin/gate/Sources/SwiftGateDomain/Build/BuildPreset.swift`), `plugin/skills/build/SKILL.md`, `plugin/workflows/build-task.js` | needs a ledger from the design path, `fast`/`push`/`ready` gates, and model aliases |
+| Proof | `ChangedTestChecks.prove` (`plugin/gate/Sources/SwiftGateCLI/ChangedTestChecks.swift`), `ScratchWorktrees.swift` | Swift host tests only |
+| Judge | `CascadingJudge.swift` (`plugin/gate/Sources/SwiftGateAdapters/Judge/`); playbook "Jev blocks, Claude settles" | built; this design reuses it |
+| Telemetry | `plugin/docs/telemetry.md`, the telemetry design | events under `.harness/events/` |
+
+## 3. Decision map
+
+| Decision | Choice | Section |
+|---|---|---|
+| Where state lives | `<git-common-dir>/swift-harness/`, per clone, never committed; hooks through `claude --settings` (user, 2026-10-03) | §4 |
+| Default rules | neutral test-quality rules on changed lines, plus the repository's own lint config; our standards as opt-in packs (user, 2026-10-03) | §6 |
+| Other languages | each area's own commands from discovery, plus the neutral checks and telemetry (user, 2026-10-03) | §7 |
+| Shape | a `brownfield` profile inside swiftgate, with `swiftgate discover` (user, 2026-10-03) | §5 |
+| Proof | per task, the task's changed tests only, no mutate (user, 2026-10-03) | §9 |
+| Xcode projects | record how sources join targets; gate new files; never restructure (user, 2026-10-03) | §8 |
+| Pass bar | 3 unfamiliar public repositories with more than 1 language (user, 2026-10-03) | §14 |
+| Workflow | Opus plans, Sonnet 5.5 explores, builds and does QA, Jev classifies; contract commit first; 1 live `PLAN.md` (user, 2026-10-03) | §11 |
+
+## 4. State, config and hooks
+
+Every worktree of the clone shares the common dir, and git never sees it. Per-worktree state goes under that
+worktree's own git dir.
+
+| Path | Holds | Scope |
+|---|---|---|
+| `<common>/swift-harness/config.toml` | the confirmed config (§5.3) | clone |
+| `<common>/swift-harness/settings.json` | the hook wiring, the same 4 events as `plugin/hooks/hooks.json` | clone |
+| `<common>/swift-harness/discover/` | the last proposal and its inputs' hashes | clone |
+| `<common>/swift-harness/baseline/<tree>.json` | known failures at a base tree (§10) | clone |
+| `<common>/swift-harness/plans/<slug>/` | `PLAN.md`, the executor's `ledger.json`, the lock | clone |
+| `<git-dir>/swift-harness/` | what `.harness/` holds today: runs, events, caches, hook state | worktree |
+
+`swiftgate claude` starts `claude --settings <common>/swift-harness/settings.json`. `ConfigLoader` reads a
+committed `.swiftgate.toml` first and the common dir's `config.toml` next; both together fail
+`doctor.config-conflict`. `RunLayout` takes a state root, so the 80 literals resolve through 1 seam. The only
+file the workflow puts in the tree is the `PLAN.md` symlink (§11.4), listed in `.git/info/exclude`.
+
+## 5. Discover
+
+### 5.1 What it reads
+
+`swiftgate discover` reads tracked files only (`git ls-files`), so leftover build output never becomes an area.
+It runs no build and opens no socket. Its budget is 5 s for 10,000 tracked files, and 1 tree gives 1 proposal.
+
+| Signal | Proposes |
+|---|---|
+| `pnpm-workspace.yaml`, `package.json` scripts, `tsconfig*.json`, `vitest.config.*`, `jest.config.*`, `.eslintrc*`, `biome.json` | a node area per workspace package, its `test`, `lint` and `build` scripts, the runner's file filter |
+| `settings.gradle(.kts)`, `build.gradle(.kts)`, `gradlew` | a gradle area per included module, `./gradlew :<m>:test`, `--tests` filter, `lint` or `detekt` or `ktlint` tasks |
+| `Package.swift` | a swiftpm area, `swift test --filter` |
+| `*.xcodeproj/project.pbxproj`, `project.yml`, `Project.swift`, `*.xcworkspace` | an xcode area: targets, schemes, test targets, how sources join targets (§8) |
+| `.swiftlint.yml`, `.swift-format`, `ktlint` and `detekt` configs, `Makefile`, `justfile`, `bin/*` scripts, CI workflow files | the repository's own lint config, and commands CI already runs, which outrank guesses |
+
+Each cached answer's key covers the build file's bytes and the listing of the directories it names.
+
+### 5.2 Output
+
+Discover prints each proposed value with its source and confidence. The user edits or confirms, and
+`discover --apply` writes `config.toml` and `settings.json`.
+
+```text
+swiftgate discover · 3 areas · 1.8s · proposal at <common>/swift-harness/discover/proposal.toml
+area     language    root      value       command or setting                                      source                 confidence
+server   typescript  server    test        pnpm --filter server test                               server/package.json    found
+server   typescript  server    test_files  pnpm --filter server exec vitest run {files}            vitest.config.ts       found
+android  kotlin      android   test        ./gradlew :app:testDebugUnitTest                        android/app/build.gradle.kts  guessed
+ios      swift       ios       test        swift test --package-path ios                           ios/Package.swift      found
+ios      swift       ios       build       xcodebuild build -project ios/App.xcodeproj -scheme App  ios/project.yml        found
+ios      swift       ios       inclusion   xcodegen (spec ios/project.yml; xcodegen not installed)  ios/project.yml        found
+missing: android lint (no lint task found)
+```
+
+### 5.3 Config schema
+
+```toml
+schema = 1
+[harness]
+profile = "brownfield"
+
+[brownfield]
+discovered_at = "<HEAD sha>"
+slice_budget_s = 30
+time_budget_min = 0          # 0: no budget; the clock starts at the brief
+
+[[areas]]
+name = "ios"
+root = "ios"
+language = "swift"           # swift | kotlin | typescript | javascript | other
+kind = "xcode"               # xcode | swiftpm | gradle | node | command
+test = "swift test --package-path ios"
+test_files = "swift test --package-path ios --filter {tests}"
+build = "xcodebuild build -project ios/App.xcodeproj -scheme App -destination 'generic/platform=iOS Simulator'"
+lint = "swiftlint lint --config .swiftlint.yml {files}"
+test_globs = ["ios/Tests/**/*.swift"]
+packs = []                   # opt-in: "tca", "dependencies", "module-kinds"
+
+[areas.xcode]
+project = "ios/App.xcodeproj"
+inclusion = "xcodegen"       # synchronized | xcodegen | tuist | explicit
+spec = "ios/project.yml"
+schemes = ["App"]
+
+[[allow]]                    # §15 question 1
+rule = "neutral.unsafe-shortcut"
+path = "server/src/x.ts"
+line_sha = "<sha256 of the line>"
+reason = "the parser guarantees a value here"
+```
+
+`{files}` and `{tests}` expand to the changed test files or ids. Without `test_files`, prove runs the whole `test`
+command and says so.
+
+## 6. Rules
+
+Every check reads only added lines (`AddedLines.swift`), so untouched code never produces a finding.
+
+| Rule | Checks | How |
+|---|---|---|
+| `neutral.not-proven` | a changed test passes with the change's source reverted | prove (§9) |
+| `neutral.no-assertion` | a changed test with no assertion, or only a tautology | per-language assertion table (`expect`, `assert*`, `#expect`, `XCTAssert*`, `assertThat`), then the judge cascade |
+| `neutral.unsafe-shortcut` | `try!`, `as!`, `fatalError`, `@unchecked Sendable`, `nonisolated(unsafe)`, `!!`, `as any`, `@ts-ignore`, a lint suppression, a skipped or focused test | per-language token table on added lines |
+| `neutral.lint` | the repository's own lint config, on changed files, findings on added lines only | the area's `lint` command |
+| `xcode.file-not-in-target` | a new Swift file under a source root that no target compiles | §8 |
+
+Packs keep today's rule ids and turn on per area. Harness-internal checks, such as calibration freshness and
+`docs-lint`, never run in this profile.
+
+## 7. Areas in other languages
+
+Each area runs its own `test`, `lint` and `build` commands plus the neutral rules; each result is a `gate.step`
+(§12). A failing command is a finding only when the baseline (§10) lacks it. The gate reads JUnit XML when the
+runner writes it, else the exit status and the last 40 lines.
+
+## 8. Xcode projects the harness doesn't own
+
+| Inclusion | New file joins a target by | The helper |
+|---|---|---|
+| synchronized folder (`PBXFileSystemSynchronizedRootGroup`) | sitting under the folder | does nothing |
+| XcodeGen | the spec's source globs, after `xcodegen generate` | runs the pinned `xcodegen generate`; when XcodeGen is absent, adds the file to the project directly and says so |
+| Tuist | `tuist generate` | runs it |
+| explicit list | a file reference, a build file, a group child and a Sources phase entry | `swiftgate xcode add-file <path> --target <t>` adds those 4 entries with stable ids, then checks the project with `plutil -lint` and `xcodebuild -list` |
+
+The helper never moves groups, renames targets or changes build settings. Workers call it instead of editing
+`project.pbxproj`.
+
+## 9. Tiers and proof
+
+| Tier | When | Runs | Budget |
+|---|---|---|---|
+| `slice` | each task's gate, the Stop hook | neutral rules and lint on changed files; each touched area's changed tests at the task head; prove of those tests | 30 s, p95 |
+| `merge` | after each merge, on the plan branch | each touched area's `test`, `lint` and `build`, against the baseline | the area's own time, measured |
+| `final` | on request | `merge` for every area, plus UI and end-to-end commands discovery found | measured |
+
+Prove reverts the task's non-test changes in a scratch worktree and reruns its changed tests through
+`test_files`. After a crash it reruns each test alone, so 1 trap doesn't mark its siblings. `fast`, `push` and
+`ready` stay for owned repositories.
+
+## 10. Baseline
+
+A gate that sees a failing test or command reruns it at the merge base in a scratch worktree and caches the
+answer in `baseline/<tree>.json`. A failure at both trees goes to the report's `baseline` section and never
+gates. Discovery records files already modified in the tree, and workers never stage them.
+
+## 11. Workflow
+
+### 11.1 Roles
+
+| Role | Model | Does |
+|---|---|---|
+| orchestrator, planner | Opus | reads the brief, picks areas, drafts and finishes `PLAN.md`, merges, decides every blocking question |
+| explorer | Sonnet 5.5, pinned by id | 1 per area the brief touches, read-only |
+| worker, QA | Sonnet 5.5, pinned by id | builds 1 task in its worktree; QA drives the app when the risk class asks for it |
+| classifier | Jev | test quality at gates through the built cascade to Claude; each slice's diff risk; pre-sorting review findings by severity |
+
+### 11.2 Research to plan, about 8 minutes
+
+```mermaid
+flowchart LR
+  brief[brief] --> areas[discover areas the brief touches]
+  areas -->|small repo or 1 area| opus[Opus reads directly]
+  areas -->|several areas| ex[1 Sonnet explorer per area, parallel, deadline]
+  areas --> skel[Opus drafts the plan skeleton]
+  ex --> plan[PLAN.md]
+  opus --> plan
+  skel --> plan
+  plan --> go{user says go}
+  go --> contract[contract commit]
+  contract --> workers[workers in worktrees, disjoint write sets]
+```
+
+Each explorer has a 3-minute soft and 4-minute hard deadline, and returns entry points, files to change, nearby
+tests, working commands, risks and unknowns in 300 words or fewer. Opus drops a late report and names the area.
+
+### 11.3 Contract commit and write sets
+
+The first commit holds the new types and signatures, compiles in every touched area, and changes no behavior.
+Write sets come from the target graph: Xcode membership, `swift package describe`, Gradle and workspace
+dependencies. A task that changes a target's types owns every target that reads them, unless the contract commit
+landed them. Each removal has an owning task.
+
+### 11.4 The plan file
+
+The plan is 1 live file, `<common>/swift-harness/plans/<slug>/PLAN.md`. A git-excluded `PLAN.md` symlink at the
+root points to it; workers read it by absolute path. `plan import` derives the executor's `ledger.json`. Opus
+commits a snapshot only when the user asks.
+
+### 11.5 Review depth
+
+Jev rates each slice's diff `low`, `medium` or `high`: the gate only, 1 Sonnet reviewer, or a full review plus QA.
+Paths the config marks sensitive are always `high`. Opus decides every finding that would block.
+
+## 12. Telemetry
+
+Events go to `<git-dir>/swift-harness/events/`; worktree removal copies them up to the common dir.
+
+| Change | Payload |
+|---|---|
+| new kind `discover.run` | `ms`, `areas`, `languages`, `found`, `guessed`, `missing`, `edited` |
+| `gate.step` gains `area?` and steps `area-test`, `area-lint`, `area-build`, `neutral`, `baseline`, `xcode-membership` | as today |
+| `gate.run` gains `baselineCount` | count of failures the baseline absorbed |
+| `judge.decision` question sets `diff-risk` and `finding-severity` | as today |
+| `AgentRole` gains `explorer` and `classifier` | as today |
+
+## 13. Coexistence
+
+A repository with a committed `.swiftgate.toml` keeps today's behavior. The executor keeps `build start`, `next`,
+`merge`, `record-gate` and `worktree`, and gains `[build.presets.brownfield]`.
+
+| Preset key | `brownfield` value | New |
+|---|---|---|
+| `design_tier` | `none` | no |
+| `max_parallel` | 3 | no |
+| `review` | `classified` (§11.5) | yes |
+| `task_gate` | `slice` | yes |
+| `merge_gate` | `merge` | yes |
+| `worker_model` | `claude-sonnet-5-5` | exact ids accepted |
+| `task_proof` | `prove` (prove without mutate) | yes |
+| `stall_min` | 2 | yes |
+
+A `--preset` from another profile fails and names the profile.
+
+## 14. Pass bar
+
+| Measure | Target | From |
+|---|---|---|
+| clone to first gate | under 3 min | clone time to the first `gate.run` |
+| findings on untouched code | 0 | a gate on an empty commit, and on a 1-line change |
+| per-slice gate | 30 s or less, p95 | `gate.run` with `command = slice` |
+| real change | 1 built end to end per repository | the plan's tasks merged, `merge` GREEN |
+
+
+## 15. Open questions
+
+| # | Question | Recommendation |
+|---|---|---|
+| 1 | Where does an escape-hatch allow live, when the team didn't ask for our comments in its code? | In `config.toml` as `[[allow]]`, keyed by rule, path and the line's hash; an inline `swiftgate:allow` still counts |
+| 2 | What does `slice` do for an area whose smallest test run exceeds 30 s, such as app-hosted Xcode tests? | Build-for-testing and run the selected tests when a warm run fits; otherwise build only, and move those tests to `merge` with a report line |
+| 3 | Do worktrees install dependencies (`pnpm install`, Gradle sync) per task? | Share the package stores (pnpm store, Gradle cache, a per-area DerivedData seed) and measure the cold cost per area in `gate.step` |
+| 4 | Do workers run the repository's own git hooks? | Yes, never `--no-verify`; our commit-msg comments check doesn't run in this profile |
+| 5 | Which 3 public repositories form the trial? | The user picks; the orchestrator proposes 5 that match the class, none tied to any practice task |
+
+## 16. Practice feedback
+
+| Entry | Addressed by |
+|---|---|
+| calibration-freshness nit in a consumer repo | §6: harness-internal checks never run |
+| `bootstrap --profile` ignored on an existing config | §4: config lives outside the tree; nothing to merge |
+| doctor finds no session record (both entries) | §4: hooks load from the first prompt through `--settings` |
+| sketch drafter over its word budget; sketch phase took 15 min | §1: no design doc; §11.2: 8 minutes to a plan |
+| ledger page published as an Artifact | §1: no ledger page |
+| Sonnet alias resolved to an older model | §11.1, §13: models pinned by id; `agent.usage` records the resolved model |
+| stale manifest cache gave a false RED (both entries) | §5.1: cache key covers directory listings; TCA rules off by default |
+| stall watch fires after 15 min | §11.2: explorer deadlines; §13: `stall_min = 2` |
+| serial chain; surface first; UI coupled to reducer; 4-task chain | §11.3: contract commit, write sets from the target graph |
+| no way to run UI flows without `ready` | §9: `final` runs them without mutate |
+| validate without proof bases | §9: prove runs per task from its own merge base |
+| session cost, Opus at 81% | §11.1: Sonnet explores, builds and does QA |
+| leftover `.build/` listed as a module | §5.1: tracked files only |
+| context-pack rejects an absolute plans path | §11.4: workers read `PLAN.md` by absolute path |
+| `ready` gate mandatory at the end | §9: no `ready` in this profile |
+| `prove.crashed` on every sibling | §9: a crash reruns each test alone |
+| negative test passed before the change, found at the end | §9: per-task prove |
+| no task removes dead code | §11.3: each removal has an owning task |
+| `--preset default` with no warning | §13 |
+| previous attempt's design run dir left behind | §1: no design run |
+| docs-lint skipped prose on a new router | §6: no docs rules in this profile |
+| budget clock starts at `build start` | §5.3: the clock starts at the brief |
+| AppCore and AppUI split into 2 tasks | §11.3: a task owns every target that reads its types |
+| 230 s merge gate after a new dependency | partly, §15 question 3 |
+| starter script's macro trust | not addressed: a practice script, not the harness |
+| stray `grep`; the Sonnet 5.5 doubt | not addressed: assistant mistakes |
+| session id change mid-run; background-session edit rule | not addressed: Claude Code behavior |
+| guard resolves relative paths against the main checkout | not addressed: a guard bug with its own fix |
+| no live view of workers | not addressed: its own design |
+| aliased `cp` in the design skill | not addressed: this profile runs no design skill |
+
+## 17. Decisions
+
+| # | Question | Decision | By |
+|---|---|---|---|
+| 1 | Where do config and state live? | `.git/swift-harness/` per clone, never committed; hooks load through `claude --settings`; bootstrap writes nothing into the tree | user, 2026-10-03 |
+| 2 | Which rules by default? | Language-neutral test-quality rules on changed lines only, plus the repository's own lint config; TCA, `@Dependency` and module kinds are opt-in packs per area, off by default | user, 2026-10-03 |
+| 3 | What runs in other languages? | Each area's own test, lint and build commands from discovery, plus the neutral checks, with telemetry | user, 2026-10-03 |
+| 4 | How does it ship? | A `brownfield` profile in swiftgate, with a deterministic `swiftgate discover` of a few seconds that the user confirms | user, 2026-10-03 |
+| 5 | How much proof per task? | Each task's own changed tests, no mutate | user, 2026-10-03 |
+| 6 | How are Xcode projects handled? | Discovery records inclusion; the gate checks every new Swift file is in a target; a helper regenerates or adds files; no restructuring | user, 2026-10-03 |
+| 7 | What is the pass bar? | 3 unfamiliar public repositories with more than 1 language: under 3 min to first gate, 0 findings on untouched code, slice gate of 30 s or less, 1 real change each | user, 2026-10-03 |
+| 8 | What is the workflow? | Opus orchestrates and plans; Sonnet 5.5 explores, builds and does QA; Jev classifies; about 8 minutes to a plan; contract commit, then workers with disjoint write sets; 1 live `PLAN.md`; no design doc, ledger page or approval stage beyond "go" | user, 2026-10-03 |
+
+## 18. Tasks for a later plan
+
+1. State root seam: `RunLayout` and the 80 `.harness/` literals resolve through 1 root; `ConfigLoader` reads the
+   common dir; `doctor.config-conflict`.
+2. `swiftgate discover` with fixtures captured from real public repositories, and `discover --apply`.
+3. `settings.json` hook wiring and `swiftgate claude`.
+4. Neutral rules and their rule-index rows, each with a captured fixture per language.
+5. Area command runner and the `slice` and `merge` tiers, with baseline reruns.
+6. Prove over `test_files` for every area kind, with crash isolation.
+7. Xcode inclusion reader, `xcode.file-not-in-target` and `swiftgate xcode add-file`.
+8. `plan import`, the `brownfield` preset keys and pinned model ids in `build-task.js`.
+9. Jev `diff-risk` and `finding-severity` question sets.
+10. Telemetry additions, then the 3-repository trial.
