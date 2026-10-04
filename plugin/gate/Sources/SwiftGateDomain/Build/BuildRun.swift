@@ -84,7 +84,7 @@ extension BuildRunRecord: Codable {
 extension BuildPreset: Codable {
   private enum CodingKeys: String, CodingKey {
     case designTier, maxParallel, review, taskGate, mergeGate, workerModel, timeBudgetMin
-    case stopStartsBeforeMin, onDesignConflict, taskProof
+    case stopStartsBeforeMin, onDesignConflict, taskProof, stallMin
   }
 
   public init(from decoder: any Decoder) throws {
@@ -114,7 +114,8 @@ extension BuildPreset: Codable {
       stopStartsBeforeMin: try container.decode(Int.self, forKey: .stopStartsBeforeMin),
       onDesignConflict: try closed(.onDesignConflict),
       // A run started before the key existed proved every task in its own gate.
-      taskProof: container.contains(.taskProof) ? try closed(.taskProof) : .perTask)
+      taskProof: container.contains(.taskProof) ? try closed(.taskProof) : .perTask,
+      stallMin: try container.decodeIfPresent(Int.self, forKey: .stallMin))
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -134,6 +135,7 @@ extension BuildPreset: Codable {
     try container.encode(stopStartsBeforeMin, forKey: .stopStartsBeforeMin)
     try container.encode(onDesignConflict.rawValue, forKey: .onDesignConflict)
     try container.encode(taskProof.rawValue, forKey: .taskProof)
+    try container.encodeIfPresent(stallMin, forKey: .stallMin)
   }
 }
 

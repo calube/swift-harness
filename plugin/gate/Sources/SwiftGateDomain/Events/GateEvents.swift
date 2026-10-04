@@ -25,6 +25,18 @@ public enum GateStep: String, Sendable, Codable, CaseIterable {
   case pluginValidate = "plugin-validate"
   /// Writing the run's `report.json` and history line.
   case record
+  /// A brownfield area's own `test` command, or its `test_files` narrowed to the changed tests.
+  case areaTest = "area-test"
+  /// A brownfield area's own `lint` command on the changed files.
+  case areaLint = "area-lint"
+  /// A brownfield area's own `build` command.
+  case areaBuild = "area-build"
+  /// The neutral test-quality rules on added lines.
+  case neutral
+  /// Rerunning a failure at the merge base to see whether the baseline holds it.
+  case baseline
+  /// Whether each new Swift file is compiled by a target of the Xcode project.
+  case xcodeMembership = "xcode-membership"
 }
 
 /// Whether a step's build started from a build directory that already existed.
@@ -43,16 +55,19 @@ public struct GateStepTiming: Sendable, Equatable {
   public let milliseconds: Int
   public let verdict: Verdict
   public let derivedData: GateDerivedData
+  /// The brownfield area the step ran for; `nil` for a step that isn't 1 area's.
+  public let area: String?
 
   public init(
     step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
-    derivedData: GateDerivedData
+    derivedData: GateDerivedData, area: String? = nil
   ) {
     self.step = step
     self.tier = tier
     self.milliseconds = milliseconds
     self.verdict = verdict
     self.derivedData = derivedData
+    self.area = area
   }
 }
 
@@ -112,11 +127,15 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
   public let allowanceCounts: [String: Int]
   /// Summed over the tiers that ran tests; `nil` when none did.
   public let testCounts: TestCounts?
+  /// Failures a brownfield gate found at both the head and the merge base, so they didn't gate;
+  /// `nil` for a run with no baseline.
+  public let baselineCount: Int?
 
   public init(
     command: String?, verdict: Verdict, milliseconds: Int, treeHash: String?, dirty: Bool?,
     tiers: [GateRunTier], ruleCounts: [String: Int], findingPaths: [String],
-    findingPathsTruncated: Bool, allowanceCounts: [String: Int], testCounts: TestCounts?
+    findingPathsTruncated: Bool, allowanceCounts: [String: Int], testCounts: TestCounts?,
+    baselineCount: Int? = nil
   ) {
     self.command = command
     self.verdict = verdict
@@ -129,6 +148,7 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
     self.findingPathsTruncated = findingPathsTruncated
     self.allowanceCounts = allowanceCounts
     self.testCounts = testCounts
+    self.baselineCount = baselineCount
   }
 
   /// The event for `report`.
@@ -170,7 +190,7 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
 
   private enum CodingKeys: String, CodingKey {
     case command, verdict, treeHash, dirty, tiers, ruleCounts, findingPaths
-    case findingPathsTruncated, allowanceCounts, testCounts
+    case findingPathsTruncated, allowanceCounts, testCounts, baselineCount
     case milliseconds = "ms"
   }
 }
@@ -182,6 +202,8 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
   public let milliseconds: Int
   public let verdict: Verdict
   public let derivedData: GateDerivedData
+  /// The brownfield area the step ran for.
+  public let area: String?
 
   public init(_ timing: GateStepTiming) {
     self.tier = timing.tier
@@ -189,10 +211,11 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
     self.milliseconds = timing.milliseconds
     self.verdict = timing.verdict
     self.derivedData = timing.derivedData
+    self.area = timing.area
   }
 
   private enum CodingKeys: String, CodingKey {
-    case tier, step, verdict, derivedData
+    case tier, step, verdict, derivedData, area
     case milliseconds = "ms"
   }
 }

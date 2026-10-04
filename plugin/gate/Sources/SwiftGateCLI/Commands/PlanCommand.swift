@@ -8,6 +8,6 @@ struct PlanCommand: ParsableCommand {
       + "confirm a spec page and land its surface on main.",
     subcommands: [
       PlanClaimCommand.self, PlanReleaseCommand.self, PlanSetCommand.self, PlanConfirmCommand.self,
-      PlanSurfaceCommand.self,
+      PlanSurfaceCommand.self, PlanImportCommand.self,
     ])
 }

@@ -1323,6 +1323,10 @@ private enum BuildSeedRunners {
     case .judgeHostUnused: "judge-host-unused"
     case .judgeModelNotPinned: "judge-model-not-pinned"
     case .judgeSecretInConfig: "judge-secret-in-config"
+    case .notInProfile: "not-in-profile"
+    case .xcodeTableMissing: "xcode-table-missing"
+    case .xcodeTableUnexpected: "xcode-table-unexpected"
+    case .exactlyOne: "exactly-one"
     }
   }
 }

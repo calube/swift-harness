@@ -92,10 +92,11 @@ struct RuleIndexTests {
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID,
     ]
     let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
+    let brownfield = BrownfieldRuleID.allCases.map(\.rawValue)
     return Set(
       buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
         + changedTests + coverage + mutation + judge + harness + environment + surface
-        + commandRules + sprint + specPage + planConfirm + planSurface)
+        + commandRules + sprint + specPage + planConfirm + planSurface + brownfield)
   }
 
   /// Every backticked rule id in the index section.

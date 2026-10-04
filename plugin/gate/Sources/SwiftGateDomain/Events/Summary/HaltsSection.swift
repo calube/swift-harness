@@ -22,6 +22,7 @@ public struct HaltsSection: EventSummarySection {
       case .buildResume(let resume): wanted.map { resume.buildRun == $0 } ?? true
       case .judgeDecision, .judgeCall, .gateRun, .gateStep: false
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: false
+      case .discoverRun, .warmupRun: false
       }
     }
     let runs = (builds?.runs ?? []).filter { run in

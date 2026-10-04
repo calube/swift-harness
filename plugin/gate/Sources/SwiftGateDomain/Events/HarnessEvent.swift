@@ -59,6 +59,10 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case buildHalt = "build.halt"
   /// A person answered a build's halt.
   case buildResume = "build.resume"
+  /// 1 `swiftgate discover` in a brownfield clone.
+  case discoverRun = "discover.run"
+  /// 1 area's 1 step of a brownfield warm-up.
+  case warmupRun = "warmup.run"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -69,6 +73,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .cacheLookup: .cache
     case .agentUsage: .usage
     case .buildHalt, .buildResume: .build
+    case .discoverRun, .warmupRun: .brownfield
     }
   }
 }
@@ -82,6 +87,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case cache
   case usage
   case build
+  case brownfield
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -136,6 +142,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case agentUsage(AgentUsageEvent)
   case buildHalt(BuildHaltEvent)
   case buildResume(BuildResumeEvent)
+  case discoverRun(DiscoverRunEvent)
+  case warmupRun(WarmupRunEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -149,6 +157,8 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .agentUsage: .agentUsage
     case .buildHalt: .buildHalt
     case .buildResume: .buildResume
+    case .discoverRun: .discoverRun
+    case .warmupRun: .warmupRun
     }
   }
 }
@@ -359,6 +369,10 @@ extension HarnessEvent: Codable {
       payload = .buildHalt(try c.decode(BuildHaltEvent.self, forKey: .payload))
     case .buildResume:
       payload = .buildResume(try c.decode(BuildResumeEvent.self, forKey: .payload))
+    case .discoverRun:
+      payload = .discoverRun(try c.decode(DiscoverRunEvent.self, forKey: .payload))
+    case .warmupRun:
+      payload = .warmupRun(try c.decode(WarmupRunEvent.self, forKey: .payload))
     }
   }
 
@@ -384,6 +398,8 @@ extension HarnessEvent: Codable {
     case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     case .buildHalt(let halt): try c.encode(halt, forKey: .payload)
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
+    case .discoverRun(let run): try c.encode(run, forKey: .payload)
+    case .warmupRun(let run): try c.encode(run, forKey: .payload)
     }
   }
 }

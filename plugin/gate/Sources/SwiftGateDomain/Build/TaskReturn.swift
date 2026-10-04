@@ -409,10 +409,10 @@ public enum TaskReturnCheck {
   /// flags are named.
   public static let taskGateSteps: [CheckExtraStep] = [.impact, .coverage, .appBuild]
 
-  /// `fast` < `push` < `ready`: each tier runs everything the one before it does.
+  /// `fast` < `push` < `ready`, and `slice` < `merge` < `final`: each tier runs everything the
+  /// one before it does. No tier covers one of the other profile.
   public static func covers(_ tier: CheckTier, _ required: CheckTier) -> Bool {
-    let order = CheckTier.allCases
-    return (order.firstIndex(of: tier) ?? 0) >= (order.firstIndex(of: required) ?? 0)
+    tier.profile == required.profile && tier.strength >= required.strength
   }
 
   public static func findings(_ taskReturn: TaskReturn, evidence: TaskReturnEvidence)

@@ -7,8 +7,29 @@ import Foundation
 /// | `fast` | T0 + T1 on affected packages |
 /// | `push` | T0 + T1 (all) + T2 + impact + coverage + per-module T1 presence |
 /// | `ready` | push + T3 + stress + prove + per-test reach + mutate |
+///
+/// A brownfield clone gates at `slice` (each task), `merge` (after each merge) and `final` (the
+/// end of a run) instead; each tier belongs to exactly 1 ``RepositoryProfile``.
 public enum CheckTier: String, Sendable, CaseIterable {
   case fast, push, ready
+  case slice, merge, final
+
+  public var profile: RepositoryProfile {
+    switch self {
+    case .fast, .push, .ready: .owned
+    case .slice, .merge, .final: .brownfield
+    }
+  }
+
+  /// Position within its profile: each tier runs everything the one before it does. Tiers of
+  /// different profiles are never compared.
+  public var strength: Int {
+    switch self {
+    case .fast, .slice: 0
+    case .push, .merge: 1
+    case .ready, .final: 2
+    }
+  }
 
   /// A step the tier requires that this build cannot run yet. Reported as not run; never green.
   public struct PendingStep: Sendable, Equatable {
@@ -30,6 +51,7 @@ public enum CheckTier: String, Sendable, CaseIterable {
   public var pendingSteps: [PendingStep] {
     switch self {
     case .fast, .push: return []
+    case .slice, .merge, .final: return []
     case .ready:
       return [
         PendingStep(

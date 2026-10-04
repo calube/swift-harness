@@ -298,9 +298,21 @@ public struct Config: Sendable, Equatable {
           allowed: ">= 1"))
     }
 
+    issues += presetIssues(buildPresets)
+    if let profile { requireText(profile, "harness.profile") }
+    return issues
+  }
+
+  /// The numeric rules every `[build.presets.<name>]` table follows, in either profile.
+  static func presetIssues(_ buildPresets: [String: BuildPreset]) -> [ConfigIssue] {
+    var issues: [ConfigIssue] = []
     for name in buildPresets.keys.sorted() {
       let preset = buildPresets[name]!
       let path = "build.presets.\(name)"
+      if let stallMin = preset.stallMin, stallMin < 1 {
+        issues.append(
+          .outOfRange(path: "\(path).stall_min", value: "\(stallMin)", allowed: ">= 1"))
+      }
       if preset.maxParallel < 1 {
         issues.append(
           .outOfRange(
@@ -323,7 +335,6 @@ public struct Config: Sendable, Equatable {
             allowed: "<= \(path).time_budget_min"))
       }
     }
-    if let profile { requireText(profile, "harness.profile") }
     return issues
   }
 }

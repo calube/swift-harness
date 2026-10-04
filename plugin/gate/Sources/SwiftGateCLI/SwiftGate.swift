@@ -32,6 +32,8 @@ struct SwiftGate: AsyncParsableCommand {
       SpecPageCommand.self,
       DesignTelemetryCommand.self,
       EventsCommand.self,
+      DiscoverCommand.self, ClaudeCommand.self, RunCommand.self, WarmupCommand.self,
+      XcodeCommand.self, AllowCommand.self,
     ]
   )
 

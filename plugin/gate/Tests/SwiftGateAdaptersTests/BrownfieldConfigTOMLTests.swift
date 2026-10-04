@@ -1,0 +1,88 @@
+import SwiftGateAdapters
+import SwiftGateDomain
+import Testing
+
+@Suite("brownfield config.toml")
+struct BrownfieldConfigTOMLTests {
+  @Test(
+    "a config with every key round-trips through read and render byte for byte — catches a renderer that drops [[allow]] or [areas.xcode]"
+  )
+  func roundTrips() throws {
+    let config = try TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOMLSample.text)
+    #expect(BrownfieldConfigTOML.render(config) == BrownfieldConfigTOMLSample.text)
+    #expect(config.areas.map(\.xcode?.inclusion) == [nil, .tuist])
+    #expect(config.allow.map(\.reason) == ["the parser guarantees a value here"])
+  }
+
+  @Test("a value TOML must escape survives a round trip — catches unescaped quotes")
+  func escapesRoundTrip() throws {
+    let text = BrownfieldConfigTOMLSample.text.replacingOccurrences(
+      of: "make ui-test", with: "printf 'a\\\\tb\\\\n' \\\"quoted\\\" \\u00E9")
+    let config = try TOMLConfigDecoder().decodeBrownfield(text)
+    try #require(config.areas.count == 2)
+    #expect(config.areas[1].e2e == "printf 'a\\tb\\n' \"quoted\" é")
+    let again = try TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOML.render(config))
+    #expect(again == config)
+  }
+}
+
+enum BrownfieldConfigTOMLSample {
+  static let text = """
+    schema = 1
+
+    [harness]
+    profile = "brownfield"
+
+    [brownfield]
+    discovered_at = "0123abcd"
+    slice_budget_s = 30
+    time_budget_min = 0
+    sensitive = ["api/auth/**"]
+
+    [[areas]]
+    name = "core"
+    root = "Core"
+    language = "swift"
+    kind = "swiftpm"
+    test = "swift test --package-path Core"
+    test_files = "swift test --package-path Core --filter {tests}"
+    test_globs = ["Core/Tests/**/*.swift"]
+    packs = []
+
+    [[areas]]
+    name = "app"
+    root = "App"
+    language = "swift"
+    kind = "xcode"
+    build = "xcodebuild build -workspace App/App.xcworkspace -scheme \\"App\\""
+    e2e = "make ui-test"
+    test_globs = []
+    packs = ["tca"]
+
+    [areas.xcode]
+    workspace = "App/App.xcworkspace"
+    inclusion = "tuist"
+    manifest = "App/Project.swift"
+    schemes = ["App"]
+
+    [[allow]]
+    rule = "neutral.unsafe-shortcut"
+    path = "api/handlers.py"
+    line_sha = "abababababababababababababababababababababababababababababababab"
+    reason = "the parser guarantees a value here"
+
+    [build.presets.brownfield]
+    design_tier = "none"
+    max_parallel = 3
+    review = "classified"
+    task_gate = "slice"
+    merge_gate = "merge"
+    worker_model = "claude-sonnet-5-5"
+    time_budget_min = 0
+    stop_starts_before_min = 0
+    on_design_conflict = "block"
+    task_proof = "prove"
+    stall_min = 2
+
+    """
+}

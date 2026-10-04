@@ -53,6 +53,7 @@ extension HarnessEventStream {
     case .cache: EventSegmentLayout.standardRotationBytes
     case .usage: EventSegmentLayout.standardRotationBytes
     case .build: EventSegmentLayout.standardRotationBytes
+    case .brownfield: EventSegmentLayout.standardRotationBytes
     }
   }
 }
