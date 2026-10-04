@@ -323,6 +323,7 @@ extension CheckTier {
     case .fast: return 0
     case .push: return 1
     case .ready: return 2
+    case .slice, .merge, .final: return 0
     }
   }
 }

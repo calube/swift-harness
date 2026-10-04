@@ -1,0 +1,38 @@
+import Foundation
+
+/// 1 command an area runs, already expanded: no `{files}`, `{tests}` or `{junit}` remains.
+public struct AreaCommandRequest: Sendable, Equatable {
+  public let area: String
+  public let step: AreaStep
+  /// Run through `/bin/sh -c`.
+  public let command: String
+  /// Absolute: the area's root.
+  public let workingDirectory: String
+  public let deadline: Duration
+  /// Added to the inherited environment, such as a shared package cache.
+  public let environment: [String: String]
+  /// Absolute path the command writes JUnit XML to, when `{junit}` was expanded.
+  public let junitPath: String?
+
+  public init(
+    area: String, step: AreaStep, command: String, workingDirectory: String, deadline: Duration,
+    environment: [String: String], junitPath: String?
+  ) {
+    self.area = area
+    self.step = step
+    self.command = command
+    self.workingDirectory = workingDirectory
+    self.deadline = deadline
+    self.environment = environment
+    self.junitPath = junitPath
+  }
+}
+
+/// How an area command ended. `tail` is the last 40 lines of its combined output.
+public enum AreaCommandOutcome: Sendable, Equatable {
+  case passed
+  /// `junit` holds the report's bytes when the request named a path and the command wrote it.
+  case failed(exit: Int32, tail: String, junit: Data?)
+  case crashed(signal: Int32, tail: String)
+  case timedOut(tail: String)
+}

@@ -27,6 +27,15 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
   case judgeModelNotPinned(path: String, value: String, backend: JudgeBackend, pin: String)
   /// A key named like a credential; `.swiftgate.toml` is committed, so a key never goes there.
   case judgeSecretInConfig(path: String)
+  /// A value that belongs to the other ``RepositoryProfile``, such as a `slice` gate in an owned
+  /// repository or a moving model alias in a brownfield clone.
+  case notInProfile(path: String, value: String, profile: RepositoryProfile, allowed: [String])
+  /// A brownfield area of kind `xcode` with no `[areas.xcode]` table.
+  case xcodeTableMissing(path: String, area: String)
+  /// An `[areas.xcode]` table on an area whose kind isn't `xcode`.
+  case xcodeTableUnexpected(path: String, area: String, kind: AreaKind)
+  /// Both or neither of keys only 1 of which may be set.
+  case exactlyOne(path: String, keys: [String])
 
   /// Why a module entry needs a `reason`.
   public enum ReasonRule: Sendable, Equatable {
@@ -47,6 +56,7 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
     case .unsupportedSchema: "schema"
     case .tooManyFlows: "flows"
     case .judgeThresholdsInverted: "judge"
+    case .notInProfile, .xcodeTableMissing, .xcodeTableUnexpected, .exactlyOne: ""
     }
   }
 
@@ -101,6 +111,7 @@ public enum ConfigIssue: Sendable, Equatable, CustomStringConvertible {
         + JudgeBackend.allCases.compactMap { backend in
           backend.keyVariable.map { "\(backend.rawValue): \($0)" }
         }.joined(separator: ", ") + ") and remove it here"
+    case .notInProfile, .xcodeTableMissing, .xcodeTableUnexpected, .exactlyOne: ""
     }
   }
 }

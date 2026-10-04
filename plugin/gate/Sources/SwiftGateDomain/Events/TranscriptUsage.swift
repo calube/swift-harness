@@ -8,6 +8,10 @@ public enum AgentRole: String, Sendable, Codable, CaseIterable {
   case buildWorker = "build-worker"
   case review
   case qa
+  /// A brownfield run's read-only researcher, 1 per area.
+  case explorer
+  /// The judge's diff-risk and finding-severity questions.
+  case classifier
 }
 
 /// Whether a message came from a session's own transcript or from a subagent's.

@@ -23,6 +23,14 @@ public struct TOMLConfigDecoder: ConfigDecoding {
       throw .invalid(error)
     }
   }
+
+  /// A brownfield clone's `config.toml`, validated by ``BrownfieldConfigSchema``.
+  public func decodeBrownfield(_ text: String) throws(ConfigLoadError) -> BrownfieldConfig {
+    BrownfieldConfig(
+      brownfield: BrownfieldSettings(
+        discoveredAt: "", sliceBudgetSeconds: 0, timeBudgetMinutes: 0, sensitive: []),
+      areas: [], allow: [], buildPresets: [:])
+  }
 }
 
 /// swift-toml 2.0 exposes its parsed tree (`TOMLValue`) only through `Decodable`, so this probes

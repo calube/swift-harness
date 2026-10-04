@@ -18,6 +18,9 @@ public struct BuildPreset: Sendable, Equatable {
   /// Where each task's change is proved and mutated: in its own task gate, or once in the
   /// build's final `ready` gate.
   public let taskProof: TaskProof
+  /// Minutes a worker may go without progress before the stall watch acts; `nil` when the
+  /// preset doesn't say.
+  public let stallMin: Int?
 
   /// `taskProof` defaults to the stricter mode for callers built before the key existed; the
   /// config reader still requires it.
@@ -31,7 +34,8 @@ public struct BuildPreset: Sendable, Equatable {
     timeBudgetMin: Int,
     stopStartsBeforeMin: Int,
     onDesignConflict: OnDesignConflict,
-    taskProof: TaskProof = .perTask
+    taskProof: TaskProof = .perTask,
+    stallMin: Int? = nil
   ) {
     self.designTier = designTier
     self.maxParallel = maxParallel
@@ -43,6 +47,7 @@ public struct BuildPreset: Sendable, Equatable {
     self.stopStartsBeforeMin = stopStartsBeforeMin
     self.onDesignConflict = onDesignConflict
     self.taskProof = taskProof
+    self.stallMin = stallMin
   }
 
   /// What ship runs before the plan: a design at one of ``DesignTier``'s tiers, or `none`, where
@@ -80,9 +85,10 @@ public struct BuildPreset: Sendable, Equatable {
   }
 
   /// `full`: architecture and test-quality review per task, each finding checked by the verifier.
-  /// `gate`: the task gate only.
+  /// `gate`: the task gate only. `classified`: review depth follows the diff's risk class, as
+  /// the judge's `diff-risk` question answers it.
   public enum Review: String, Sendable, Equatable, CaseIterable {
-    case full, gate
+    case full, gate, classified
   }
 
   /// `ledger`: each task's planned gate. Otherwise a fixed ``CheckTier`` for every task.
@@ -104,9 +110,12 @@ public struct BuildPreset: Sendable, Equatable {
     }
   }
 
-  /// `tagged`: the decomposer's per-task tag.
+  /// `tagged`: the decomposer's per-task tag. `sonnet` and `opus` are aliases that move with each
+  /// release; the pinned ids don't.
   public enum WorkerModel: String, Sendable, Equatable, CaseIterable {
     case tagged, sonnet, opus
+    case claudeSonnet55 = "claude-sonnet-5-5"
+    case claudeOpus55 = "claude-opus-5-5"
   }
 
   /// `amend`: the full `--amend` flow. `block`: spec §8.4's block behavior.
@@ -116,8 +125,10 @@ public struct BuildPreset: Sendable, Equatable {
 
   /// `per-task`: each task gate runs `--prove --mutate`, and `check-return` requires it of a
   /// worker. `final`: task gates skip both, and the build's final `ready` gate runs them once.
+  /// `prove`: each task gate proves its changed tests and never mutates.
   public enum TaskProof: String, Sendable, Equatable, CaseIterable {
     case perTask = "per-task"
     case final
+    case prove
   }
 }
