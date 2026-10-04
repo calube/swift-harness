@@ -20,6 +20,7 @@ struct BrownfieldPresetTests {
     preset["worker_model"] = .string("sonnet")
     preset["review"] = .string("full")
     preset["task_proof"] = .string("per-task")
+    preset["sim_qa"] = .string("off")
     let root: ConfigValue = .table([
       "schema": .integer(1), "xcode": .string("26.2"), "app_scheme": .string("App"),
       "packages": .array([.string("Packages/*")]),

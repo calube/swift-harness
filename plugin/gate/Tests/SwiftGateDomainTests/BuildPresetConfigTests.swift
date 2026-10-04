@@ -30,12 +30,13 @@ struct BuildPresetConfigTests {
     "stop_starts_before_min": .integer(0),
     "on_design_conflict": .string("amend"),
     "task_proof": .string("per-task"),
+    "sim_qa": .string("changed"),
   ])
 
   private static let defaultPreset = BuildPreset(
     designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger, mergeGate: .push,
     workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend,
-    taskProof: .perTask)
+    taskProof: .perTask, simQA: .changed)
 
   private func root(withDefaultPreset overrides: [String: ConfigValue] = [:]) -> ConfigValue {
     guard case .table(var presetFields) = Self.defaultPresetTable else { fatalError() }
@@ -192,6 +193,46 @@ struct BuildPresetConfigTests {
       ]
     }
   }
+  @Test(
+    "a preset without sim_qa is a config issue naming build.presets.<name>.sim_qa — catches a preset that silently skips or runs simulator QA"
+  )
+  func missingSimQANamesTheKey() {
+    guard case .table(var presetFields) = Self.defaultPresetTable else { fatalError() }
+    presetFields.removeValue(forKey: "sim_qa")
+    let input = minimalRoot(
+      merging: [
+        "build": .table(["presets": .table(["default": .table(presetFields)])])
+      ])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .missingKey(path: "build.presets.default.sim_qa")
+      ]
+    }
+  }
+
+  @Test(
+    "sim_qa = \"sometimes\" is a config issue listing changed|off — catches an unrecognized QA mode passing silently"
+  )
+  func unknownSimQAValueIsAnIssue() {
+    let input = root(withDefaultPreset: ["sim_qa": .string("sometimes")])
+    #expect {
+      _ = try ConfigSchema.config(from: input)
+    } throws: { error in
+      (error as? ConfigValidationError)?.issues == [
+        .unknownEnumValue(
+          path: "build.presets.default.sim_qa", value: "sometimes", allowed: ["changed", "off"])
+      ]
+    }
+  }
+
+  @Test("sim_qa off decodes to off — catches the key read but ignored")
+  func simQAOffDecodes() throws {
+    let config = try ConfigSchema.config(from: root(withDefaultPreset: ["sim_qa": .string("off")]))
+    #expect(config.buildPresets["default"]?.simQA == .off)
+  }
+
   @Test(
     "a preset missing task_proof is a config issue naming the key — catches a preset that silently picks a proof mode"
   )

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A repository's `.swiftgate.toml`, validated. Every instance satisfies the cross-field rules in
-/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:docs:plan:buildPresets:profile:exclude:telemetry:)``;
+/// ``Config/init(xcode:appScheme:packages:simulator:pyramid:flows:mutation:budgets:clients:modules:judge:docs:plan:buildPresets:profile:exclude:telemetry:scenarios:qa:)``;
 /// there is no way to hold a `Config` that silently disables a rule.
 public struct Config: Sendable, Equatable {
   /// Where the config lives, relative to the repository root.
@@ -36,6 +36,10 @@ public struct Config: Sendable, Equatable {
   /// violate the rules on purpose.
   public let exclude: [String]
   public let telemetry: TelemetryConfig
+  /// `[[scenarios]]`: the dependency scenarios the app's `Scenario` enum declares, which
+  /// `sim up --scenario` may launch.
+  public let scenarios: [Scenario]
+  public let qa: QAConfig
 
   public init(
     xcode: String,
@@ -54,13 +58,15 @@ public struct Config: Sendable, Equatable {
     buildPresets: [String: BuildPreset] = [:],
     profile: String? = nil,
     exclude: [String] = [],
-    telemetry: TelemetryConfig = TelemetryConfig()
+    telemetry: TelemetryConfig = TelemetryConfig(),
+    scenarios: [Scenario] = [],
+    qa: QAConfig = QAConfig()
   ) throws(ConfigValidationError) {
     let issues = Self.invariantIssues(
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      profile: profile, exclude: exclude)
+      profile: profile, exclude: exclude, scenarios: scenarios, qa: qa)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     self.xcode = xcode
     self.appScheme = appScheme
@@ -79,6 +85,8 @@ public struct Config: Sendable, Equatable {
     self.profile = profile
     self.exclude = exclude
     self.telemetry = telemetry
+    self.scenarios = scenarios
+    self.qa = qa
   }
 
   /// The preset a repository with no `[harness] profile` builds with.
@@ -103,7 +111,8 @@ public struct Config: Sendable, Equatable {
     xcode: String, appScheme: String, packages: [String], simulator: SimulatorConfig,
     pyramid: PyramidConfig, flows: [Flow], mutation: MutationConfig, budgets: Budgets,
     clients: ClientsConfig, modules: [ModuleOverride], judge: JudgeConfig, docs: DocsConfig,
-    plan: PlanConfig, buildPresets: [String: BuildPreset], profile: String?, exclude: [String]
+    plan: PlanConfig, buildPresets: [String: BuildPreset], profile: String?, exclude: [String],
+    scenarios: [Scenario], qa: QAConfig
   ) -> [ConfigIssue] {
     var issues: [ConfigIssue] = []
     func requireText(_ value: String, _ path: String) {
@@ -298,6 +307,27 @@ public struct Config: Sendable, Equatable {
           allowed: ">= 1"))
     }
 
+    var scenarioNames = Set<String>()
+    for (index, scenario) in scenarios.enumerated() {
+      let path = "scenarios[\(index)]"
+      requireText(scenario.name, "\(path).name")
+      requireText(scenario.reason, "\(path).reason")
+      guard !scenario.name.isBlank else { continue }
+      if !Scenario.isKebabCase(scenario.name) {
+        issues.append(
+          .outOfRange(path: "\(path).name", value: scenario.name, allowed: Scenario.nameShape))
+      } else if !scenarioNames.insert(scenario.name).inserted {
+        issues.append(.duplicateName(path: "\(path).name", name: scenario.name))
+      }
+    }
+    let timeouts = QAConfig.sessionTimeoutMinutesRange
+    if !timeouts.contains(qa.sessionTimeoutMinutes) {
+      issues.append(
+        .outOfRange(
+          path: "qa.session_timeout_minutes", value: "\(qa.sessionTimeoutMinutes)",
+          allowed: "\(timeouts.lowerBound)...\(timeouts.upperBound)"))
+    }
+
     issues += presetIssues(buildPresets)
     if let profile { requireText(profile, "harness.profile") }
     return issues
@@ -383,6 +413,43 @@ public struct Flow: Sendable, Equatable {
   public init(name: String, reason: String) {
     self.name = name
     self.reason = reason
+  }
+}
+
+/// A named set of dependency overrides the app applies at launch (simulator QA design §6).
+public struct Scenario: Sendable, Equatable {
+  /// The spelling a name must have: the launch argument passes it verbatim and the app's enum
+  /// matches it as a raw value, so 1 shape keeps both sides comparable.
+  public static let nameShape =
+    "kebab-case: lowercase letters and digits, words joined by single hyphens"
+
+  public let name: String
+  public let reason: String
+
+  public init(name: String, reason: String) {
+    self.name = name
+    self.reason = reason
+  }
+
+  static func isKebabCase(_ name: String) -> Bool {
+    let words = name.split(separator: "-", omittingEmptySubsequences: false)
+    return words.allSatisfy { word in
+      !word.isEmpty
+        && word.unicodeScalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) }
+    }
+  }
+}
+
+/// `[qa]`: how simulator QA sessions run.
+public struct QAConfig: Sendable, Equatable {
+  public static let defaultSessionTimeoutMinutes = 30
+  public static let sessionTimeoutMinutesRange = 1...240
+
+  /// Minutes a `sim hold` keeps its device after `sim up` before it releases it unasked.
+  public let sessionTimeoutMinutes: Int
+
+  public init(sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes) {
+    self.sessionTimeoutMinutes = sessionTimeoutMinutes
   }
 }
 

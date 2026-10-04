@@ -18,15 +18,15 @@ struct BuildPresetTemplateTests {
   private static let defaultPreset = BuildPreset(
     designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger, mergeGate: .push,
     workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend,
-    taskProof: .perTask)
+    taskProof: .perTask, simQA: .changed)
 
   private static let interviewPreset = BuildPreset(
     designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
     workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block,
-    taskProof: .final)
+    taskProof: .final, simQA: .changed)
 
   @Test(
-    "the stamped default and interview presets parse to exactly the §5.1/§10 values, per-task and final proof included — catches the template drifting from the spec"
+    "the stamped default and interview presets parse to exactly the §5.1/§10 values, per-task and final proof and sim_qa changed included — catches a template that no longer loads or drifts from the spec"
   )
   func stampedPresetsMatchSpec() throws {
     let templateText = try String(contentsOf: Self.templatePath, encoding: .utf8)

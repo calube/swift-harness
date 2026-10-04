@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "requirement": "req-alpha",
+      "layer": "acceptance",
+      "check": "AlphaTests",
+      "runsAfter": [
+        "only-task"
+      ],
+      "writer": "only-task"
+    },
+    {
+      "requirement": "req-alpha",
+      "layer": "flow",
+      "check": "qa/alpha.flow.json",
+      "runsAfter": [
+        "only-task"
+      ],
+      "writer": "only-task"
+    },
+    {
+      "requirement": "req-alpha",
+      "layer": "state",
+      "check": "qa/alpha.state.sh",
+      "runsAfter": [
+        "only-task"
+      ],
+      "writer": "only-task"
+    }
+  ],
+  "unitOnly": [
+    {
+      "requirement": "req-beta",
+      "reason": "the task's unit tests prove beta"
+    }
+  ]
+}

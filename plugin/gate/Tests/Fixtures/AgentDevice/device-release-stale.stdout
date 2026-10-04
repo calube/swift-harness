@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "released": [],
+    "retained": [],
+    "refused": [],
+    "changed": []
+  }
+}

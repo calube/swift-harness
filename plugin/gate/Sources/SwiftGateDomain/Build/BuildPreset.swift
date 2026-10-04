@@ -21,8 +21,11 @@ public struct BuildPreset: Sendable, Equatable {
   /// Minutes a worker may go without progress before the stall watch acts; `nil` when the
   /// preset doesn't say.
   public let stallMin: Int?
+  /// Whether the build's `validate` stage runs simulator QA on the screens a change touched
+  /// (simulator QA design §8.2).
+  public let simQA: SimQA
 
-  /// `taskProof` defaults to the stricter mode for callers built before the key existed; the
+  /// `taskProof` and `simQA` default to the stricter mode for callers built before the key existed; the
   /// config reader still requires it.
   public init(
     designTier: DesignStep,
@@ -35,7 +38,8 @@ public struct BuildPreset: Sendable, Equatable {
     stopStartsBeforeMin: Int,
     onDesignConflict: OnDesignConflict,
     taskProof: TaskProof = .perTask,
-    stallMin: Int? = nil
+    stallMin: Int? = nil,
+    simQA: SimQA = .off
   ) {
     self.designTier = designTier
     self.maxParallel = maxParallel
@@ -48,6 +52,7 @@ public struct BuildPreset: Sendable, Equatable {
     self.onDesignConflict = onDesignConflict
     self.taskProof = taskProof
     self.stallMin = stallMin
+    self.simQA = simQA
   }
 
   /// What ship runs before the plan: a design at one of ``DesignTier``'s tiers, or `none`, where
@@ -134,6 +139,12 @@ public struct BuildPreset: Sendable, Equatable {
     case perTask = "per-task"
     case final
     case prove
+  }
+
+  /// `changed`: after the final `ready` gate, drive the screens the change touched in a simulator
+  /// and judge the evidence with `sim verify`. `off`: skip simulator QA.
+  public enum SimQA: String, Sendable, Equatable, CaseIterable {
+    case changed, off
   }
 }
 

@@ -29,3 +29,11 @@ prove the rule fires on an untagged task.
 `done` task still names the old id and carries no `model`, and a fix task covers the new id. A done
 task is history (spec §5.7, §8.4), so it's judged only on the graph and coverage, and the case is
 green.
+
+A case with a `validation.json` has it copied beside the ledger, where `/swift-harness:plan` writes
+the plan's validation table. `validation-valid` has an acceptance row, a flow row and its state
+row for `req-alpha`, and a unit-only reason for `req-beta`, so it's green. `validation-uncovered`
+drops that reason. `validation-unknown-task` waits on `later-task`, which the ledger doesn't hold.
+`validation-state-without-flow` drops the flow row. A design plan's repository always has an app,
+so `plan-lint.validation-flow-without-ios` has no seed here; `plan import` tests it on a brownfield
+clone with no Xcode area.
