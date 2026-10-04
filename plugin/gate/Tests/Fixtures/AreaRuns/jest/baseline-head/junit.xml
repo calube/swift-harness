@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="4" failures="2" errors="0" time="0.126">
+  <testsuite name="alpha" errors="0" failures="1" skipped="0" timestamp="2026-10-04T12:38:22" time="0.055" tests="2">
+    <testcase classname="alpha passes" name="alpha passes" time="0.001">
+    </testcase>
+    <testcase classname="alpha flaky" name="alpha flaky" time="0.001">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: &quot;fails at the base commit&quot;
+Received: &quot;base&quot;
+    at Object.toBe (&lt;repo&gt;/test/alpha.test.js:7:20)
+    at Promise.finally.completed (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1834:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1774:10)
+    at _callCircusTest (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1167:40)
+    at _runTestInContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1103:3)
+    at runTestWithContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:996:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1008:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1003:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at run (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:789:3)
+    at runAndTransformResultsToJestFormat (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:2300:21)
+    at jestAdapter (&lt;repo&gt;/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (&lt;repo&gt;/node_modules/jest-runner/build/index.js:247:16)
+    at runTest (&lt;repo&gt;/node_modules/jest-runner/build/index.js:315:7)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="undefined" errors="0" failures="1" skipped="0" timestamp="2026-10-04T12:38:22" time="0.008" tests="1">
+    <testcase classname=" new" name=" new" time="0.001">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: false
+Received: true
+    at Object.toBe (&lt;repo&gt;/test/beta.test.js:4:19)
+    at Promise.finally.completed (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1834:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1774:10)
+    at _callCircusTest (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1167:40)
+    at _runTestInContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1103:3)
+    at runTestWithContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:996:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1008:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at run (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:789:3)
+    at runAndTransformResultsToJestFormat (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:2300:21)
+    at jestAdapter (&lt;repo&gt;/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (&lt;repo&gt;/node_modules/jest-runner/build/index.js:247:16)
+    at runTest (&lt;repo&gt;/node_modules/jest-runner/build/index.js:315:7)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="undefined" errors="0" failures="0" skipped="0" timestamp="2026-10-04T12:38:22" time="0.007" tests="1">
+    <testcase classname=" loads" name=" loads" time="0">
+    </testcase>
+  </testsuite>
+</testsuites>

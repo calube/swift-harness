@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5" failures="1" errors="0" time="0.011733917">
+    <testsuite name="test/alpha.test.js" timestamp="2026-10-04T12:37:53.219Z" hostname="&lt;host&gt;" tests="2" failures="1" errors="0" skipped="0" time="0.004892292">
+        <testcase classname="test/alpha.test.js" name="alpha &gt; passes" time="0.0011805">
+        </testcase>
+        <testcase classname="test/alpha.test.js" name="alpha &gt; flaky" time="0.002649333">
+            <failure message="expected &apos;base&apos; to be &apos;fails at the base commit&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;base&apos; to be &apos;fails at the base commit&apos; // Object.is equality
+
+Expected: &quot;fails at the base commit&quot;
+Received: &quot;base&quot;
+
+ ❯ test/alpha.test.js:9:20
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="test/beta.test.js" timestamp="2026-10-04T12:37:53.221Z" hostname="&lt;host&gt;" tests="1" failures="0" errors="0" skipped="0" time="0.001631667">
+        <testcase classname="test/beta.test.js" name="new" time="0.000724583">
+        </testcase>
+    </testsuite>
+    <testsuite name="test/broken.test.js" timestamp="2026-10-04T12:37:53.221Z" hostname="&lt;host&gt;" tests="1" failures="0" errors="0" skipped="0" time="0.002728291">
+        <testcase classname="test/broken.test.js" name="loads" time="0.001555167">
+        </testcase>
+    </testsuite>
+    <testsuite name="test/late.test.js" timestamp="2026-10-04T12:37:53.222Z" hostname="&lt;host&gt;" tests="1" failures="0" errors="0" skipped="0" time="0.002481667">
+        <testcase classname="test/late.test.js" name="schedules" time="0.0013645">
+        </testcase>
+    </testsuite>
+</testsuites>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5" failures="2" errors="0" time="0.016032419">
+    <testsuite name="test/alpha.test.js" timestamp="2026-10-04T12:53:36.464Z" hostname="&lt;host&gt;" tests="2" failures="1" errors="0" skipped="0" time="0.006195667">
+        <testcase classname="test/alpha.test.js" name="alpha &gt; passes" time="0.0012515">
+        </testcase>
+        <testcase classname="test/alpha.test.js" name="alpha &gt; flaky" time="0.004119458">
+            <failure message="expected &apos;base&apos; to be &apos;fails at the base commit&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;base&apos; to be &apos;fails at the base commit&apos; // Object.is equality
+
+Expected: &quot;fails at the base commit&quot;
+Received: &quot;base&quot;
+
+ ❯ test/alpha.test.js:9:20
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="test/beta.test.js" timestamp="2026-10-04T12:53:36.465Z" hostname="&lt;host&gt;" tests="1" failures="1" errors="0" skipped="0" time="0.005979709">
+        <testcase classname="test/beta.test.js" name="new" time="0.005205292">
+            <failure message="expected true to be false // Object.is equality" type="AssertionError">
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/beta.test.js:6:19
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="test/broken.test.js" timestamp="2026-10-04T12:53:36.466Z" hostname="&lt;host&gt;" tests="1" failures="0" errors="0" skipped="0" time="0.001863584">
+        <testcase classname="test/broken.test.js" name="loads" time="0.001174708">
+        </testcase>
+    </testsuite>
+    <testsuite name="test/late.test.js" timestamp="2026-10-04T12:53:36.466Z" hostname="&lt;host&gt;" tests="1" failures="0" errors="0" skipped="0" time="0.001993459">
+        <testcase classname="test/late.test.js" name="schedules" time="0.001120541">
+        </testcase>
+    </testsuite>
+</testsuites>

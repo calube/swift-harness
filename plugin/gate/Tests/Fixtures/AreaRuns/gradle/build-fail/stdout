@@ -1,0 +1,61 @@
+> Task :alpha:compileJava NO-SOURCE
+> Task :alpha:processResources NO-SOURCE
+> Task :alpha:classes UP-TO-DATE
+> Task :alpha:compileTestJava
+> Task :alpha:processTestResources NO-SOURCE
+> Task :alpha:testClasses
+
+> Task :alpha:test FAILED
+
+AlphaTest > flaky() FAILED
+    org.opentest4j.AssertionFailedError at AlphaTest.java:15
+
+2 tests completed, 1 failed
+
+> Task :beta:compileJava NO-SOURCE
+> Task :beta:processResources NO-SOURCE
+> Task :beta:classes UP-TO-DATE
+
+> Task :beta:compileTestJava FAILED
+<repo>/beta/src/test/java/example/beta/BetaTest.java:10: error: cannot find symbol
+        undefinedHelper();
+        ^
+  symbol:   method undefinedHelper()
+  location: class BetaTest
+1 error
+
+> Task :beta:processTestResources NO-SOURCE
+
+[Incubating] Problems report is available at: file://<repo>/build/reports/problems/problems-report.html
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':alpha:test'.
+> There were failing tests. See the report at: file://<repo>/alpha/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':beta:compileTestJava' (registered by plugin class 'org.gradle.api.plugins.JavaBasePlugin').
+> Compilation failed; see the compiler output below.
+  <repo>/beta/src/test/java/example/beta/BetaTest.java:10: error: cannot find symbol
+          undefinedHelper();
+          ^
+    symbol:   method undefinedHelper()
+    location: class BetaTest
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+==============================================================================
+
+BUILD FAILED in 1s
+3 actionable tasks: 3 executed

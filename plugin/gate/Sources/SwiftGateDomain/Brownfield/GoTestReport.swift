@@ -54,14 +54,15 @@ public enum GoTestReport {
     }
     var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n"
     for package in Set(order.map(\.package)).sorted() {
-      xml += "<testsuite name=\"\(escaped(package))\">\n"
+      xml += "<testsuite name=\"\(JUnitReports.escaped(package))\">\n"
       for key in order where key.package == package {
-        let attributes = "classname=\"\(escaped(package))\" name=\"\(escaped(key.test))\""
+        let attributes =
+          "classname=\"\(JUnitReports.escaped(package))\" name=\"\(JUnitReports.escaped(key.test))\""
         switch ended[key] {
         case .failed:
           xml +=
             "<testcase \(attributes)><failure message=\"failed\">"
-            + "\(escaped(outputs[key] ?? ""))</failure></testcase>\n"
+            + "\(JUnitReports.escaped(outputs[key] ?? ""))</failure></testcase>\n"
         case .skipped: xml += "<testcase \(attributes)><skipped/></testcase>\n"
         case .passed, nil: xml += "<testcase \(attributes)/>\n"
         }
@@ -93,23 +94,5 @@ public enum GoTestReport {
       case test = "Test"
       case output = "Output"
     }
-  }
-
-  /// Text safe inside an XML attribute or element. Control characters other than tab and newline
-  /// are not XML at all, so a test that prints one keeps the rest of its output.
-  private static func escaped(_ text: String) -> String {
-    var result = ""
-    for scalar in text.unicodeScalars {
-      switch scalar {
-      case "&": result += "&amp;"
-      case "<": result += "&lt;"
-      case ">": result += "&gt;"
-      case "\"": result += "&quot;"
-      case "\t", "\n": result.unicodeScalars.append(scalar)
-      case _ where scalar.value < 0x20: continue
-      default: result.unicodeScalars.append(scalar)
-      }
-    }
-    return result
   }
 }

@@ -1,0 +1,1 @@
+mkdir -p {junit} && gradle test --continue; status=$?; find . -path '*/build/test-results/*' -name '*.xml' -newer {junit} -exec cp {} {junit} ';'; exit $status

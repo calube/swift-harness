@@ -1,18 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="okhttp3.sse.internal.ServerSentEventIteratorTest" tests="12" skipped="1" failures="0" errors="0" timestamp="2026-10-04T04:00:48.140Z" hostname="<host>" time="0.548">
+<testsuite name="okhttp3.sse.internal.ServerSentEventIteratorTest" tests="2" skipped="1" failures="0" errors="0" timestamp="2026-10-04T13:56:57.941Z" hostname="&lt;host&gt;" time="0.452">
   <properties/>
-  <testcase name="retryInvalidFormatIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.143"/>
-  <testcase name="multilineCrLf()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.004"/>
-  <testcase name="nakedFieldNames()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="multiline()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="nakedRetryIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="namePrefixIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="nakedNameClearsIdAndTypeAppendsData()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="commentsIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.001"/>
-  <testcase name="leadingWhitespace()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="idCleared()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.001"/>
-  <testcase name="eventType()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.0"/>
-  <testcase name="exits()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.374">
+  <testcase name="retryInvalidFormatIgnored()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.017"/>
+  <testcase name="multilineCrLf()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.43">
     <skipped/>
   </testcase>
   <system-out><![CDATA[]]></system-out>

@@ -5,14 +5,9 @@ import Testing
 
 private let ecosystems = ["cargo", "go", "gradle", "maven", "node", "python", "ruby", "swift"]
 
-/// The capture's scrub wrote placeholders such as `<repo>` into attribute values and text, which
-/// no XML parser accepts; the real run held plain paths and names there.
+/// A captured report as the runner wrote it; the capture's placeholders in it are escaped.
 private func junitAsRun(_ relativePath: String) throws -> Data {
-  var text = try Fixture.text(relativePath)
-  for placeholder in ["repo", "scratch", "home", "tmp", "host", "user"] {
-    text = text.replacingOccurrences(of: "<\(placeholder)>", with: "/\(placeholder)")
-  }
-  return Data(text.utf8)
+  Data(try Fixture.text(relativePath).utf8)
 }
 
 /// 1 captured area run, as the live runner hands it to the reader: stdout then stderr.
@@ -125,7 +120,7 @@ struct AreaOutcomeReadingTests {
   @Test(
     "each captured JUnit file decodes to its pass and fail counts — catches counts read from 1 runner's summary attributes",
     arguments: [
-      ("gradle", "test-crash", JUnitCounts(tests: 12, failures: 0, skipped: 1)),
+      ("gradle", "test-crash", JUnitCounts(tests: 2, failures: 0, skipped: 1)),
       ("gradle", "test-fail", JUnitCounts(tests: 1, failures: 1, skipped: 0)),
       ("gradle", "test-pass", JUnitCounts(tests: 1, failures: 0, skipped: 0)),
       ("maven", "test-fail", JUnitCounts(tests: 1, failures: 1, skipped: 0)),

@@ -10,4 +10,4 @@ Execution failed for task ':okhttp-sse:test'.
 * Try:
 > Run with --scan to get full insights from a Build Scan (powered by Develocity).
 
-BUILD FAILED in 2s
+BUILD FAILED in 871ms

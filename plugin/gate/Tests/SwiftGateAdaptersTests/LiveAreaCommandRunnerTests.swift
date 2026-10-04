@@ -113,6 +113,61 @@ struct LiveAreaCommandRunnerTests {
     #expect(outcome == .failed(exit: 1, tail: "", junit: nil))
   }
 
+  /// `/bin/sh` that writes a 1-case report failing `<classname>.<name>` to `path`.
+  private func writing(_ path: String, failing classname: String, _ name: String) -> String {
+    "printf '<testsuite><testcase classname=\"\(classname)\" name=\"\(name)\"><failure/></testcase></testsuite>' > '\(path)'"
+  }
+
+  @Test(
+    "a {junit} the command made a directory of reports reads every report in it — catches a Gradle or Maven module's report left unread"
+  )
+  func readsReportDirectory() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let junit = directory.appending(path: "junit/api.test.xml").path
+    let command =
+      "mkdir -p '\(junit)' && \(writing("\(junit)/TEST-a.xml", failing: "a", "x"))"
+      + " && \(writing("\(junit)/TEST-b.xml", failing: "b", "y")); exit 1"
+    let outcome = await runner.run(request(command, in: directory, junitPath: junit))
+    #expect(BaselineStepResult.of(outcome) == .failedTests(["a.x", "b.y"]))
+  }
+
+  @Test(
+    "Swift Testing's report beside the named one is read, and 1 an earlier run left is not — catches a Swift Testing failure absorbed with the XCTest base, or a stale one read as this run's"
+  )
+  func readsCompanionReport() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let junit = directory.appending(path: "core.test.xml").path
+    let companion = directory.appending(path: "core.test-swift-testing.xml").path
+    let both = await runner.run(
+      request(
+        "\(writing(junit, failing: "Tests.Alpha", "testFlaky")) && \(writing(companion, failing: "Tests", "fresh()")); exit 1",
+        in: directory, junitPath: junit))
+    #expect(
+      BaselineStepResult.of(both) == .failedTests(["Tests.Alpha.testFlaky", "Tests.fresh()"]))
+
+    let xctestOnly = await runner.run(
+      request(
+        "\(writing(junit, failing: "Tests.Alpha", "testFlaky")); exit 1", in: directory,
+        junitPath: junit))
+    #expect(BaselineStepResult.of(xctestOnly) == .failedTests(["Tests.Alpha.testFlaky"]))
+  }
+
+  @Test(
+    "the directory {junit} names is made before the run — catches a runner that writes no report into a missing directory"
+  )
+  func makesTheReportDirectory() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let junit = directory.appending(path: "junit/core.test.xml").path
+    let outcome = await runner.run(
+      request(
+        "[ -d '\(directory.path)/junit' ] && \(writing(junit, failing: "a", "x")); exit 1",
+        in: directory, junitPath: junit))
+    #expect(BaselineStepResult.of(outcome) == .failedTests(["a.x"]))
+  }
+
   @Test("a passing command is passed — catches exit 0 read as a failure")
   func passes() async throws {
     let directory = try temporaryDirectory()

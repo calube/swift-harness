@@ -1,0 +1,15 @@
+
+An error occurred while loading ./spec/broken_spec.rb. - Did you mean?
+                    rspec ./spec/beta_spec.rb
+
+Failure/Error: require_relative "missing_helper" if ENV["RSPECBASE_BROKEN"] == "1"
+
+LoadError:
+  cannot load such file -- <repo>/spec/missing_helper
+# ./spec/broken_spec.rb:1:in 'Kernel#require_relative'
+# ./spec/broken_spec.rb:1:in '<top (required)>'
+
+
+Finished in 0.00002 seconds (files took 0.04282 seconds to load)
+0 examples, 0 failures, 1 error occurred outside of examples
+

@@ -55,7 +55,7 @@ and
 [INFO]  T E S T S
 [INFO] -------------------------------------------------------
 [INFO] Running io.github.jhipster.sample.security.SecurityUtilsUnitTest
-[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.064 s -- in io.github.jhipster.sample.security.SecurityUtilsUnitTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.058 s -- in io.github.jhipster.sample.security.SecurityUtilsUnitTest
 [INFO] 
 [INFO] Results:
 [INFO] 
@@ -68,6 +68,6 @@ and
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time:  3.690 s
-[INFO] Finished at: 2026-10-03T23:05:07-05:00
+[INFO] Total time:  4.427 s
+[INFO] Finished at: 2026-10-04T07:49:53-05:00
 [INFO] ------------------------------------------------------------------------

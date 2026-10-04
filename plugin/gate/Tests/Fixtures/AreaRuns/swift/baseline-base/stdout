@@ -1,0 +1,25 @@
+[0/1] Planning build
+Building for debugging...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.09s)
+[1/2] Testing SwiftBaseTests.AlphaTests/testFlaky
+[2/2] Testing SwiftBaseTests.AlphaTests/testPasses
+Test Suite 'Selected tests' started at 2026-10-04 07:46:24.635.
+Test Suite 'SwiftBasePackageTests.xctest' started at 2026-10-04 07:46:24.636.
+Test Suite 'AlphaTests' started at 2026-10-04 07:46:24.636.
+Test Case '-[SwiftBaseTests.AlphaTests testFlaky]' started.
+<repo>/Tests/SwiftBaseTests/AlphaTests.swift:10: error: -[SwiftBaseTests.AlphaTests testFlaky] : XCTAssertEqual failed: ("base") is not equal to ("fails at the base commit")
+Test Case '-[SwiftBaseTests.AlphaTests testFlaky]' failed (0.123 seconds).
+Test Suite 'AlphaTests' failed at 2026-10-04 07:46:24.759.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.123 (0.123) seconds
+Test Suite 'SwiftBasePackageTests.xctest' failed at 2026-10-04 07:46:24.759.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.123 (0.123) seconds
+Test Suite 'Selected tests' failed at 2026-10-04 07:46:24.759.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.123 (0.124) seconds
+
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test fresh() started.
+✔ Test fresh() passed after 0.001 seconds.
+✔ Test run with 1 test in 0 suites passed after 0.001 seconds.
