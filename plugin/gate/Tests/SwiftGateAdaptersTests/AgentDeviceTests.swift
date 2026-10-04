@@ -136,7 +136,7 @@ struct AgentDeviceTests {
       _ = try await device.open(
         bundleID: "com.example.SampleApp", launchArguments: [], on: Self.target)
     }
-    guard case .unreadableOutput(let command, _, let detail) = error else {
+    guard case .unreadableOutput(let command, _, let detail, _) = error else {
       Issue.record("expected unreadable output, got \(String(describing: error))")
       return
     }
@@ -248,7 +248,7 @@ struct AgentDeviceTests {
       try await device.waitForText(
         "No such text anywhere", timeoutMilliseconds: 2000, on: Self.target)
     }
-    guard case .unreadableOutput(let command, let status, let detail) = error else {
+    guard case .unreadableOutput(let command, let status, let detail, _) = error else {
       Issue.record("expected unreadable output, got \(String(describing: error))")
       return
     }
