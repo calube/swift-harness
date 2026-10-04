@@ -1,0 +1,27 @@
+[0/1] Planning build
+Building for debugging...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.09s)
+[1/2] Testing SwiftBaseTests.AlphaTests/testPasses
+[2/2] Testing SwiftBaseTests.AlphaTests/testFlaky
+Test Suite 'Selected tests' started at 2026-10-04 07:46:25.569.
+Test Suite 'SwiftBasePackageTests.xctest' started at 2026-10-04 07:46:25.576.
+Test Suite 'AlphaTests' started at 2026-10-04 07:46:25.576.
+Test Case '-[SwiftBaseTests.AlphaTests testFlaky]' started.
+<repo>/Tests/SwiftBaseTests/AlphaTests.swift:10: error: -[SwiftBaseTests.AlphaTests testFlaky] : XCTAssertEqual failed: ("base") is not equal to ("fails at the base commit")
+Test Case '-[SwiftBaseTests.AlphaTests testFlaky]' failed (0.018 seconds).
+Test Suite 'AlphaTests' failed at 2026-10-04 07:46:25.594.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.018 (0.018) seconds
+Test Suite 'SwiftBasePackageTests.xctest' failed at 2026-10-04 07:46:25.594.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.018 (0.018) seconds
+Test Suite 'Selected tests' failed at 2026-10-04 07:46:25.594.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.018 (0.025) seconds
+
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Test fresh() started.
+✘ Test fresh() recorded an issue at BetaTests.swift:5:3: Expectation failed: (ProcessInfo.processInfo.environment["SWIFTBASE_FAIL_NEW"] → "1") == nil
+↳ fails only after the change
+✘ Test fresh() failed after 0.001 seconds with 1 issue.
+✘ Test run with 1 test in 0 suites failed after 0.001 seconds with 1 issue.

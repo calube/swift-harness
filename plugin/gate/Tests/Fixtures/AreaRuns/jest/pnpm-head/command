@@ -1,0 +1,1 @@
+JEST_JUNIT_OUTPUT_FILE={junit} JEST_JUNIT_REPORT_TEST_SUITE_ERRORS=true pnpm run test --reporters=default --reporters=jest-junit

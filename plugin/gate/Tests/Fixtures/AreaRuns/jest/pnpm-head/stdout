@@ -1,0 +1,43 @@
+$ jest --reporters=default --reporters=jest-junit
+PASS test/broken.test.js
+FAIL test/beta.test.js
+  ● new
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      2 |
+      3 | it("new", () => {
+    > 4 |   expect(failNew).toBe(false);
+        |                   ^
+      5 | });
+      6 |
+
+      at Object.toBe (test/beta.test.js:4:19)
+
+FAIL test/alpha.test.js
+  ● alpha › flaky
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "fails at the base commit"
+    Received: "base"
+
+       5 |
+       6 |   it("flaky", () => {
+    >  7 |     expect("base").toBe("fails at the base commit");
+         |                    ^
+       8 |   });
+       9 | });
+      10 |
+
+      at Object.toBe (test/alpha.test.js:7:20)
+
+Test Suites: 2 failed, 1 passed, 3 total
+Tests:       2 failed, 2 passed, 4 total
+Snapshots:   0 total
+Time:        0.449 s
+Ran all test suites.
+[ELIFECYCLE] Test failed. See above for more details.

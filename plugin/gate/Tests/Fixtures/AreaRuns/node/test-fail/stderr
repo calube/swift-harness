@@ -22,4 +22,4 @@ FAIL __tests__/convert-case.test.ts
 Test Suites: 1 failed, 1 total
 Tests:       1 failed, 3 passed, 4 total
 Snapshots:   0 total
-Time:        1.119 s
+Time:        0.179 s, estimated 1 s

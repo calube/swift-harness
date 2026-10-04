@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="3" failures="2" errors="1" time="0.139">
+  <testsuite name="alpha" errors="0" failures="1" skipped="0" timestamp="2026-10-04T12:38:23" time="0.06" tests="2">
+    <testcase classname="alpha passes" name="alpha passes" time="0.001">
+    </testcase>
+    <testcase classname="alpha flaky" name="alpha flaky" time="0.001">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: &quot;fails at the base commit&quot;
+Received: &quot;base&quot;
+    at Object.toBe (&lt;repo&gt;/test/alpha.test.js:7:20)
+    at Promise.finally.completed (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1834:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1774:10)
+    at _callCircusTest (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1167:40)
+    at _runTestInContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1103:3)
+    at runTestWithContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:996:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1008:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1003:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at run (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:789:3)
+    at runAndTransformResultsToJestFormat (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:2300:21)
+    at jestAdapter (&lt;repo&gt;/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (&lt;repo&gt;/node_modules/jest-runner/build/index.js:247:16)
+    at runTest (&lt;repo&gt;/node_modules/jest-runner/build/index.js:315:7)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="undefined" errors="0" failures="1" skipped="0" timestamp="2026-10-04T12:38:23" time="0.008" tests="1">
+    <testcase classname=" new" name=" new" time="0">
+      <failure>Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: false
+Received: true
+    at Object.toBe (&lt;repo&gt;/test/beta.test.js:4:19)
+    at Promise.finally.completed (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1834:28)
+    at new Promise (&lt;anonymous&gt;)
+    at callAsyncCircusFn (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1774:10)
+    at _callCircusTest (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1167:40)
+    at _runTestInContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1103:3)
+    at runTestWithContext (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:996:5)
+    at _runTestsForDescribeBlockOnce (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:1008:11)
+    at _runTestsForDescribeBlock (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:824:5)
+    at run (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:789:3)
+    at runAndTransformResultsToJestFormat (&lt;repo&gt;/node_modules/jest-circus/build/jestAdapterInit.js:2300:21)
+    at jestAdapter (&lt;repo&gt;/node_modules/jest-circus/build/runner.js:111:19)
+    at runTestInternal (&lt;repo&gt;/node_modules/jest-runner/build/index.js:247:16)
+    at runTest (&lt;repo&gt;/node_modules/jest-runner/build/index.js:315:7)</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="test/broken.test.js" errors="1" failures="0" skipped="0" timestamp="1970-01-01T00:00:00" time="0" tests="0">
+    <testcase classname="Test suite failed to run" name="test/broken.test.js" time="0">
+      <error>  ● Test suite failed to run
+
+    Cannot find module &apos;./missing-helper&apos; from &apos;test/broken.test.js&apos;
+
+      1 | if (process.env.JESTBASE_BROKEN === &quot;1&quot;) {
+    &gt; 2 |   require(&quot;./missing-helper&quot;);
+        |   ^
+      3 | }
+      4 |
+      5 | it(&quot;loads&quot;, () =&gt; {
+
+      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/index.js:1031:11)
+      at Object.require (test/broken.test.js:2:3)
+</error>
+    </testcase>
+    <testcase classname="Test suite failed to run" name="test/broken.test.js" time="0">
+      <failure>{&quot;code&quot;:&quot;MODULE_NOT_FOUND&quot;,&quot;hint&quot;:&quot;&quot;,&quot;requireStack&quot;:[&quot;&lt;repo&gt;/test/broken.test.js&quot;],&quot;siblingWithSimilarExtensionFound&quot;:false,&quot;moduleName&quot;:&quot;./missing-helper&quot;,&quot;_originalMessage&quot;:&quot;Cannot find module &apos;./missing-helper&apos; from &apos;test/broken.test.js&apos;&quot;}</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

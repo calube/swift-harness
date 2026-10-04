@@ -1,0 +1,28 @@
+.FF.
+
+Failures:
+
+  1) alpha flaky
+     Failure/Error: expect("base").to eq("fails at the base commit")
+
+       expected: "fails at the base commit"
+            got: "base"
+
+       (compared using ==)
+     # ./spec/alpha_spec.rb:7:in 'block (2 levels) in <top (required)>'
+
+  2) beta new
+     Failure/Error: expect(FAIL_NEW).to be(false)
+
+       expected false
+            got true
+     # ./spec/beta_spec.rb:5:in 'block (2 levels) in <top (required)>'
+
+Finished in 0.00234 seconds (files took 0.03598 seconds to load)
+4 examples, 2 failures
+
+Failed examples:
+
+rspec ./spec/alpha_spec.rb:6 # alpha flaky
+rspec ./spec/beta_spec.rb:4 # beta new
+

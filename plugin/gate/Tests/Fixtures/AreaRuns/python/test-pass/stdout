@@ -7,4 +7,4 @@ collected 1 item
 gguf-py/tests/test_metadata.py .                                         [100%]
 
 - generated xml file: <repo>/.area-junit.xml -
-============================== 1 passed in 0.05s ===============================
+============================== 1 passed in 0.62s ===============================

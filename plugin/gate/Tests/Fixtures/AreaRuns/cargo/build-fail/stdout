@@ -1,0 +1,9 @@
+   Compiling cargobase v0.1.0 (<repo>)
+error[E0425]: cannot find function `undefined_helper` in this scope
+ --> tests/beta.rs:4:9
+  |
+4 |         undefined_helper();
+  |         ^^^^^^^^^^^^^^^^ not found in this scope
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `cargobase` (test "beta") due to 1 previous error

@@ -1,0 +1,58 @@
+$ vitest run --reporter=default --reporter=junit --outputFile.junit=<scratch>/report/out.xml
+
+ RUN  v5.0.3 <repo>
+
+ ✓ test/broken.test.js (1 test) 2ms
+ ✓ test/late.test.js (1 test) 2ms
+ ❯ test/alpha.test.js (2 tests | 1 failed) 6ms
+   ❯ alpha (2)
+     ✓ passes 1ms
+     × flaky 4ms
+ ❯ test/beta.test.js (1 test | 1 failed) 6ms
+   × new 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/alpha.test.js > alpha > flaky
+AssertionError: expected 'base' to be 'fails at the base commit' // Object.is equality
+
+Expected: "fails at the base commit"
+Received: "base"
+
+ ❯ test/alpha.test.js:9:20
+      7|
+      8|   it("flaky", () => {
+      9|     expect("base").toBe("fails at the base commit");
+       |                    ^
+     10|   });
+     11| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/beta.test.js > new
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ test/beta.test.js:6:19
+      4|
+      5| it("new", () => {
+      6|   expect(failNew).toBe(false);
+       |                   ^
+      7| });
+      8|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 3 passed (5)
+   Start at  07:53:36
+   Duration  116ms (transform 55%, import 22%, tests 14%, worker 9%)
+
+JUNIT report written to <scratch>/report/out.xml
+[ELIFECYCLE] Test failed. See above for more details.

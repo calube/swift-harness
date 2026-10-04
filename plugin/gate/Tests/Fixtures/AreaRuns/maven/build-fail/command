@@ -1,0 +1,1 @@
+mkdir -p {junit} && mvn test; status=$?; find . -path '*/target/surefire-reports/*' -name 'TEST-*.xml' -newer {junit} -exec cp {} {junit} ';'; exit $status

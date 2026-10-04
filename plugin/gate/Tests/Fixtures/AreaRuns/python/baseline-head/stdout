@@ -1,0 +1,32 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo>
+configfile: pyproject.toml
+testpaths: tests
+collected 4 items
+
+tests/test_alpha.py .F.                                                  [ 75%]
+tests/test_beta.py F                                                     [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_flaky __________________________________
+
+    def test_flaky():
+>       assert False, "fails at the base commit"
+E       AssertionError: fails at the base commit
+E       assert False
+
+tests/test_alpha.py:6: AssertionError
+___________________________________ test_new ___________________________________
+
+    def test_new():
+>       assert not FAIL_NEW, "fails only after the change"
+E       AssertionError: fails only after the change
+E       assert not True
+
+tests/test_beta.py:7: AssertionError
+- generated xml file: <scratch>/report/out.xml -
+=========================== short test summary info ============================
+FAILED tests/test_alpha.py::test_flaky - AssertionError: fails at the base co...
+FAILED tests/test_beta.py::test_new - AssertionError: fails only after the ch...
+========================= 2 failed, 2 passed in 0.01s ==========================

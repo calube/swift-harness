@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="example.beta.BetaTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-04T12:39:28.009Z" hostname="&lt;host&gt;" time="0.01">
+  <properties/>
+  <testcase name="fresh()" classname="example.beta.BetaTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

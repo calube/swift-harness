@@ -1,0 +1,13 @@
+Building for debugging...
+[0/3] Write sources
+[1/3] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Emitting module SwiftBaseTests
+[4/5] Compiling SwiftBaseTests BetaTests.swift
+<repo>/Tests/SwiftBaseTests/BetaTests.swift:5:3: error: cannot find 'undefinedHelper' in scope
+3 | 
+4 | @Test func fresh() {
+5 |   undefinedHelper()
+  |   `- error: cannot find 'undefinedHelper' in scope
+6 |   #expect(ProcessInfo.processInfo.environment["SWIFTBASE_FAIL_NEW"] == nil, "fails only after the change")
+7 | }
+error: fatalError

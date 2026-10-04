@@ -1,0 +1,30 @@
+
+> test
+> jest --reporters=default --reporters=jest-junit
+
+FAIL test/alpha.test.js
+  ● alpha › flaky
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "fails at the base commit"
+    Received: "base"
+
+       5 |
+       6 |   it("flaky", () => {
+    >  7 |     expect("base").toBe("fails at the base commit");
+         |                    ^
+       8 |   });
+       9 | });
+      10 |
+
+      at Object.toBe (test/alpha.test.js:7:20)
+
+PASS test/broken.test.js
+PASS test/beta.test.js
+
+Test Suites: 1 failed, 2 passed, 3 total
+Tests:       1 failed, 3 passed, 4 total
+Snapshots:   0 total
+Time:        0.128 s, estimated 1 s
+Ran all test suites.

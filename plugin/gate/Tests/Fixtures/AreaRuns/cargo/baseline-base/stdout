@@ -1,0 +1,40 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running unittests src/lib.rs (target/debug/deps/cargobase-e274a74b110244e3)
+
+running 2 tests
+test tests::passes ... ok
+test tests::flaky ... FAILED
+
+failures:
+
+---- tests::flaky stdout ----
+
+thread 'tests::flaky' panicked at src/lib.rs:19:9:
+assertion `left == right` failed
+  left: "base"
+ right: "fails at the base commit"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::flaky
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`
+     Running tests/beta.rs (target/debug/deps/beta-aba624a1f108d4de)
+
+running 1 test
+test tests::flaky ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cargobase
+
+running 1 test
+test src/lib.rs - sum (line 3) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+error: 1 target failed:
+    `--lib`

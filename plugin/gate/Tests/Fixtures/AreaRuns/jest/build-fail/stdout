@@ -1,0 +1,59 @@
+
+> test
+> jest --reporters=default --reporters=jest-junit
+
+FAIL test/alpha.test.js
+  ● alpha › flaky
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "fails at the base commit"
+    Received: "base"
+
+       5 |
+       6 |   it("flaky", () => {
+    >  7 |     expect("base").toBe("fails at the base commit");
+         |                    ^
+       8 |   });
+       9 | });
+      10 |
+
+      at Object.toBe (test/alpha.test.js:7:20)
+
+FAIL test/beta.test.js
+  ● new
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      2 |
+      3 | it("new", () => {
+    > 4 |   expect(failNew).toBe(false);
+        |                   ^
+      5 | });
+      6 |
+
+      at Object.toBe (test/beta.test.js:4:19)
+
+FAIL test/broken.test.js
+  ● Test suite failed to run
+
+    Cannot find module './missing-helper' from 'test/broken.test.js'
+
+      1 | if (process.env.JESTBASE_BROKEN === "1") {
+    > 2 |   require("./missing-helper");
+        |   ^
+      3 | }
+      4 |
+      5 | it("loads", () => {
+
+      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/index.js:1031:11)
+      at Object.require (test/broken.test.js:2:3)
+
+Test Suites: 3 failed, 3 total
+Tests:       2 failed, 1 passed, 3 total
+Snapshots:   0 total
+Time:        0.141 s, estimated 1 s
+Ran all test suites.
