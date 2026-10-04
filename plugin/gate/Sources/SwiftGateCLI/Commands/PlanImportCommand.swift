@@ -47,13 +47,184 @@ enum PlanImportRun {
   static let command = "plan import"
 
   /// Reads `<common>/swift-harness/plans/<slug>/PLAN.md`, writes `ledger.json` and `plan.json`
-  /// beside it, links `<root>/PLAN.md` to it and excludes that link once.
+  /// beside it, links `<root>/PLAN.md` to it and excludes that link once. Nothing is written
+  /// unless the clone is brownfield, the plan parses and the link's place is free or already
+  /// the link.
   static func run(slug: String, root: URL, git: any Git) async -> PlanImportReport {
-    PlanImportReport(plan: slug, message: "\(command): not implemented yet")
+    var report = PlanImportReport(plan: slug)
+    let common: String
+    do {
+      common = try await git.commonDirectory()
+    } catch {
+      report.message = "resolving the git common dir: \(error)"
+      return report
+    }
+    let plan: PlanStateLayout.Plan
+    do {
+      plan = try PlanStateLayout(commonDirectory: common).plan(slug)
+    } catch {
+      report.message = "`\(slug)` is not a plan name: \(error)"
+      return report
+    }
+    let files = FileManager.default
+
+    let configPath = URL(filePath: common).appending(path: StateRootResolver.commonConfigFile).path
+    guard let configData = files.contents(atPath: configPath) else {
+      report.message =
+        "\(configPath) is missing, so this is not a brownfield clone; plan import derives a "
+        + "brownfield plan's ledger only. Run `swiftgate discover --apply` first"
+      return report
+    }
+    let config: BrownfieldConfig
+    do {
+      config = try TOMLConfigDecoder().decodeBrownfield(String(decoding: configData, as: UTF8.self))
+    } catch {
+      report.message = "\(configPath) doesn't load: \(error)"
+      return report
+    }
+    let presetName = BrownfieldConfigSchema.profileName
+    guard let preset = config.buildPresets[presetName] else {
+      report.message =
+        "\(configPath) has no [build.presets.\(presetName)], so the ledger's max_parallel is unknown"
+      return report
+    }
+
+    let livePath = plan.directory + "/" + PlanFile.LivePlanSource.fileName
+    guard let liveData = files.contents(atPath: livePath) else {
+      report.message = "\(livePath) is missing; write the plan there before importing it"
+      return report
+    }
+    let livePlan: LivePlan
+    do throws(LivePlanError) {
+      livePlan = try LivePlanParser.parse(String(decoding: liveData, as: UTF8.self))
+    } catch {
+      return invalid(report, error, livePath)
+    }
+
+    let link = root.appending(path: PlanFile.LivePlanSource.fileName).path
+    if let refusal = linkRefusal(at: link, target: livePath) {
+      report.message = refusal
+      return report
+    }
+
+    let store = PlanStateStore(plan: plan)
+    let lease: LockLease
+    do {
+      lease = try await FileCountingLock(
+        directory: URL(filePath: plan.directory, directoryHint: .isDirectory),
+        name: "ledger.lock", capacity: 1, pollInterval: .milliseconds(5)
+      ).acquire(timeout: .seconds(30))
+    } catch {
+      report.message = "taking the ledger lock in \(plan.directory): \(error)"
+      return report
+    }
+    defer { lease.release() }
+
+    let existingLedger: Ledger?
+    let existingPlan: PlanFile?
+    do throws(PlanStateStoreError) {
+      existingLedger = try optional { () throws(PlanStateStoreError) in try store.ledger() }
+      existingPlan = try optional { () throws(PlanStateStoreError) in try store.planFile() }
+    } catch {
+      report.message = "reading the plan's current state: \(error)"
+      return report
+    }
+    if let existingPlan, existingPlan.livePlanSource == nil {
+      report.message =
+        "\(plan.planFile) belongs to a design or spec-page plan; plan import replaces only a "
+        + "live plan's state, so it was left as it is"
+      return report
+    }
+
+    let ledger: Ledger
+    do throws(LivePlanError) {
+      ledger = try livePlan.ledger(maxParallel: preset.maxParallel, existing: existingLedger) {
+        plan.directory + "/worktrees/" + $0
+      }
+    } catch {
+      return invalid(report, error, livePath)
+    }
+    let planFile = livePlan.planFile(slug: slug, resume: ledger.resume, existing: existingPlan)
+    do {
+      // Each file is written beside the old one and renamed over it: a reader sees one whole
+      // file or the other.
+      try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile), options: .atomic)
+      try PlanFileJSON.encode(planFile).write(to: URL(filePath: plan.planFile), options: .atomic)
+    } catch {
+      report.message = "writing the plan's state in \(plan.directory): \(error)"
+      return report
+    }
+
+    do {
+      if (try? files.destinationOfSymbolicLink(atPath: link)) == nil {
+        try files.createSymbolicLink(atPath: link, withDestinationPath: livePath)
+      }
+    } catch {
+      report.message = "linking \(link) to \(livePath): \(error)"
+      return report
+    }
+    let exclude = URL(filePath: common).appending(path: "info/exclude")
+    do {
+      let current = files.contents(atPath: exclude.path).map { String(decoding: $0, as: UTF8.self) }
+      if let updated = LivePlanExclude.adding(to: current) {
+        try files.createDirectory(
+          at: exclude.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(updated.utf8).write(to: exclude, options: .atomic)
+        report.excludeAdded = true
+      } else {
+        report.excludeAdded = false
+      }
+    } catch {
+      report.message = "adding \(LivePlanExclude.line) to \(exclude.path): \(error)"
+      return report
+    }
+
+    report.status = .imported
+    report.verdict = .green
+    report.tasks = ledger.tasks.count
+    report.waves = ledger.waves.count
+    report.assumptions = livePlan.assumptions
+    report.message =
+      "\(ledger.tasks.count) tasks in \(ledger.waves.count) waves; \(plan.ledgerFile) and "
+      + "\(plan.planFile) written"
+    return report
+  }
+
+  /// Why `link` can't become the plan's link: something other than that link already sits there.
+  private static func linkRefusal(at link: String, target: String) -> String? {
+    if let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: link) {
+      return destination == target
+        ? nil : "\(link) is a link to \(destination), not to \(target); move it and import again"
+    }
+    guard FileManager.default.fileExists(atPath: link) else { return nil }
+    return "\(link) already exists and is not the plan's link; move it and import again"
+  }
+
+  private static func optional<T>(_ read: () throws(PlanStateStoreError) -> T)
+    throws(PlanStateStoreError) -> T?
+  {
+    do {
+      return try read()
+    } catch .missing {
+      return nil
+    }
+  }
+
+  private static func invalid(_ report: PlanImportReport, _ error: LivePlanError, _ path: String)
+    -> PlanImportReport
+  {
+    var report = report
+    report.status = .invalid
+    report.verdict = .red
+    report.message = "\(path): \(error.message); nothing was written"
+    return report
   }
 
   static func render(_ report: PlanImportReport, json: Bool) -> String {
-    report.message
+    guard json else { return "\(command): \(report.verdict.rawValue) \(report.message)" }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    return String(decoding: (try? encoder.encode(report)) ?? Data(), as: UTF8.self)
   }
 }
 
@@ -71,6 +242,10 @@ struct PlanImportCommand: AsyncParsableCommand {
   var json = false
 
   func run() async throws {
-    try StubCommand.notImplemented("plan import", json: json)
+    let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    let report = await PlanImportRun.run(
+      slug: slug, root: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path))
+    Console.write(PlanImportRun.render(report, json: json))
+    if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
 }

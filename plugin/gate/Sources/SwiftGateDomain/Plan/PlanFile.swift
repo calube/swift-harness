@@ -197,6 +197,10 @@ extension PlanFile: Codable {
     case path, pageSha
   }
 
+  private enum LivePlanKeys: String, CodingKey {
+    case path, briefs
+  }
+
   /// A key that belongs to one source kind only; a file of the other kind that carries it fails.
   private static let designOnlyKeys: [CodingKeys] = [.design, .designSha, .clarifyChain, .tier]
 
@@ -250,8 +254,27 @@ extension PlanFile: Codable {
           path: path, pageSha: try page.decodeIfPresent(String.self, forKey: .pageSha),
           approval: try container.decodeIfPresent(PageApproval.self, forKey: .approval)))
     case .livePlan:
-      throw DecodingError.dataCorruptedError(
-        forKey: .source, in: container, debugDescription: "a live plan doesn't decode yet")
+      if let key = Self.designOnlyKeys.first(where: container.contains) {
+        throw DecodingError.dataCorruptedError(
+          forKey: key, in: container,
+          debugDescription: "a live plan carries `\(key.stringValue)`, which only a design plan "
+            + "has; a plan has one source")
+      }
+      if container.contains(.specPage) || container.contains(.approval) {
+        throw DecodingError.dataCorruptedError(
+          forKey: .livePlan, in: container,
+          debugDescription: "a live plan carries a spec page or an approval; it has neither")
+      }
+      let live = try container.nestedContainer(keyedBy: LivePlanKeys.self, forKey: .livePlan)
+      let path = try live.decode(String.self, forKey: .path)
+      guard path == LivePlanSource.fileName else {
+        throw DecodingError.dataCorruptedError(
+          forKey: .path, in: live,
+          debugDescription: "live plan path `\(path)` must be `\(LivePlanSource.fileName)`, "
+            + "inside the plan's own directory")
+      }
+      source = .livePlan(
+        LivePlanSource(briefs: try live.decode([String: TaskBrief].self, forKey: .briefs)))
     }
     self.init(
       schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -281,8 +304,11 @@ extension PlanFile: Codable {
       try nested.encode(page.path, forKey: .path)
       try nested.encodeIfPresent(page.pageSha, forKey: .pageSha)
       try container.encodeIfPresent(page.approval, forKey: .approval)
-    case .livePlan:
+    case .livePlan(let live):
       try container.encode(SourceKind.livePlan.rawValue, forKey: .source)
+      var nested = container.nestedContainer(keyedBy: LivePlanKeys.self, forKey: .livePlan)
+      try nested.encode(live.path, forKey: .path)
+      try nested.encode(live.briefs, forKey: .briefs)
     }
   }
 }

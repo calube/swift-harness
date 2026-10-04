@@ -243,6 +243,7 @@ struct NewSubcommandRegistrationTests {
     "sprint status --json",
     "spec-page check", "spec-page check --json",
     "design-telemetry",
+    "plan import",
   ]
 
   @Test(
