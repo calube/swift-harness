@@ -62,6 +62,47 @@ struct BrownfieldWorkerPackTests {
   }
 
   @Test(
+    "an Xcode area's section names how a new file joins its target — catches a worker adding a file no target compiles"
+  )
+  func xcodeAreaNamesInclusion() throws {
+    let app = BrownfieldArea(
+      name: "app", root: "ios", language: .swift, kind: .xcode, test: nil, testFiles: nil,
+      lint: nil, build: "xcodebuild build", e2e: nil, testGlobs: [], packs: [],
+      xcode: XcodeAreaConfig(
+        workspace: nil, project: "ios/App.xcodeproj", inclusion: .explicit, manifest: nil,
+        schemes: ["App"]))
+
+    let pack = try ContextPack.brownfieldWorkerPack(
+      BrownfieldWorkerInputs(
+        task: Self.task(writeSet: ["ios/App/New.swift"]), plan: Self.plan, areas: [app],
+        standards: try Self.standards(), dependencyNotes: []))
+
+    let lines = pack.slices.flatMap(\.lines)
+    #expect(lines.contains("xcode inclusion = explicit"))
+    #expect(lines.contains("build = xcodebuild build"))
+  }
+
+  @Test(
+    "a dependency's notes ride along under its id, and a dependency with no return throws naming it — catches a dependent starting blind to its dependency's notes"
+  )
+  func dependencyNotes() throws {
+    let inputs = { (notes: String?) throws in
+      BrownfieldWorkerInputs(
+        task: Self.task(writeSet: ["web/a.ts"]), plan: Self.plan, areas: Self.areas,
+        standards: try Self.standards(),
+        dependencyNotes: [DependencyReturnNotes(taskID: "store-pins", notes: notes)])
+    }
+
+    let pack = try ContextPack.brownfieldWorkerPack(try inputs("Store.pin(id:) persists"))
+
+    let notes = try #require(pack.slices.last)
+    #expect(notes.lines == ["store-pins", "Store.pin(id:) persists"])
+    #expect(throws: ContextPackError.missingDependencyReturn(task: "store-pins")) {
+      try ContextPack.brownfieldWorkerPack(try inputs(nil))
+    }
+  }
+
+  @Test(
     "standards with no brownfield profile section throw naming it — catches a worker pack built without the rules its gate applies"
   )
   func missingRulesThrow() {

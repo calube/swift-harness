@@ -85,6 +85,31 @@ struct ContextPackTaskReturnTests {
   }
 
   @Test(
+    "from a plan directory, a missing return is unreadable and one naming another task is malformed — catches a dependency's absent or misfiled return quoted as its notes"
+  )
+  func planDirectoryRefusesBadReturns() throws {
+    let scenario = ReturnsScenario()
+    defer { scenario.remove() }
+    try scenario.write(task: "fetch", ReturnsScenario.fullReturn(task: "render"))
+    let directory = scenario.root.appending(
+      path: "plans/2026-09-26-search", directoryHint: .isDirectory)
+
+    let misfiled = ContextPackTaskReturn.notes(
+      forTask: "fetch", buildRun: ReturnsScenario.runID, planDirectory: directory)
+    let missing = ContextPackTaskReturn.notes(
+      forTask: "store", buildRun: ReturnsScenario.runID, planDirectory: directory)
+
+    guard case .failure(.malformed) = misfiled else {
+      Issue.record("a return for `render` stored as `fetch` was accepted: \(misfiled)")
+      return
+    }
+    guard case .failure(.unreadable) = missing else {
+      Issue.record("a missing return was read: \(missing)")
+      return
+    }
+  }
+
+  @Test(
     "a return naming another task is malformed — catches one task's notes filed under a dependency's name"
   )
   func mismatchedTaskIsMalformed() throws {
