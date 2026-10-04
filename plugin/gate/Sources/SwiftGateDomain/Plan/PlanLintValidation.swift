@@ -60,6 +60,22 @@ public enum PlanLintValidation {
               + "boundary with an acceptance row instead",
             failureScenario: "the flow has no app to launch, so the row can never pass"))
       }
+      if row.layer == .acceptance, namesSourceFile(row.check) {
+        let form =
+          hasIOSArea
+          ? "`test: <Target>/<Class>/<method>`, which runs the area's test command with "
+            + "`-only-testing:`"
+          : "`test: <selector>`, which the area's test_files places in `{tests}` or `{files}`"
+        findings.append(
+          try Finding(
+            ruleID: checkSourceFileRuleID, severity: .major, file: file, line: line,
+            message:
+              "\(place) checks `\(row.check)`, a test source file that `qa run` would run as a "
+              + "shell command; name the test as \(form), or give the runner's command",
+            failureScenario:
+              "/bin/sh can't execute a source file, so the row reads red on exit 126 or 127 "
+              + "whatever the code does"))
+      }
       if row.layer == .state, !hasPrecedingRow(row, in: table.rows, hasIOSArea: hasIOSArea) {
         let expected = hasIOSArea ? "a flow row" : "a flow or acceptance row"
         findings.append(
@@ -74,6 +90,24 @@ public enum PlanLintValidation {
       }
     }
     return findings
+  }
+
+  /// Extensions of the source files test frameworks read; a check naming 1 is never a command.
+  private static let sourceExtensions: Set<String> = [
+    "swift", "m", "mm", "c", "cc", "cpp", "h", "kt", "kts", "java", "scala", "groovy", "go", "rs",
+    "py", "rb", "js", "jsx", "mjs", "cjs", "ts", "tsx", "cs",
+  ]
+
+  /// Whether `check` is 1 word naming a source file: no runner, no `test:` reference, and not a
+  /// `qa/` script the validation task writes.
+  private static func namesSourceFile(_ check: String) -> Bool {
+    let word = check.trimmingCharacters(in: .whitespaces)
+    guard !word.isEmpty, !word.contains(where: \.isWhitespace), !word.hasPrefix("qa/"),
+      AcceptanceTestReference.parse(word) == nil,
+      let name = word.split(separator: "/").last, let dot = name.lastIndex(of: "."),
+      dot != name.startIndex
+    else { return false }
+    return sourceExtensions.contains(name[name.index(after: dot)...].lowercased())
   }
 
   /// Whether a flow row, or where no app exists an acceptance row, produces what `state` reads:

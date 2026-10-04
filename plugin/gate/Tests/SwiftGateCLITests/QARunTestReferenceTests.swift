@@ -56,7 +56,11 @@ struct QARunTestReferenceTests {
       request.program == .command("\(configured) -only-testing:'\(Self.id)'"),
       "\(request.program)")
     #expect(request.workingDirectory == repo.root.path)
-    let saved = try repo.evidence(report, row: 1)
+    let evidence = try #require(report.rows.first?.evidence.first)
+    let saved = try String(
+      contentsOf: try RunStore(worktreeRoot: repo.root)
+        .runDirectory(for: try #require(report.runID)).appending(path: evidence),
+      encoding: .utf8)
     #expect(saved.contains("-only-testing:'\(Self.id)'"), "\(saved)")
     #expect(saved.contains("TEST SUCCEEDED"))
   }

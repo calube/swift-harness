@@ -23,8 +23,9 @@ enum ShellLink: Equatable {
 /// A simple command and whether it came from a heredoc's text rather than the command line.
 struct ParsedCommand {
   let command: SimpleCommand
-  /// Heredoc text is data to the command it feeds unless that command is a shell, which a static
-  /// reading can't tell, so it is checked as commands by the Bash guard but never names a write.
+  /// Heredoc text is read as commands only when a shell on its line may run it, or, in an
+  /// unquoted heredoc, inside the `$( … )` and backticks the shell expands. It is checked by the
+  /// Bash guard but never names a write.
   let isHeredocBody: Bool
   /// The words as written, before wrappers and assignments are stripped.
   let words: [String]
@@ -70,6 +71,12 @@ public enum ShellSyntax {
     }
     return result
   }
+
+  /// Commands that run text they are fed as shell commands. A heredoc on a line with none of
+  /// them is data, such as a file `cat` writes or a script `python3` runs.
+  static let interpreters: Set<String> = [
+    "sh", "bash", "zsh", "dash", "ksh", "fish", "eval", "source", ".", "xargs", "ssh",
+  ]
 
   private static let wrappers: Set<String> = [
     "sudo", "command", "exec", "time", "nohup", "nice", "caffeinate", "xcrun", "env",
@@ -149,8 +156,12 @@ public enum ShellSyntax {
     private var inWord = false
     private var index = 0
     private var operand: Operand?
-    private var heredocs: [(delimiter: String, stripsTabs: Bool)] = []
+    private var heredocs: [(delimiter: String, stripsTabs: Bool, quoted: Bool)] = []
     private var links: [ShellLink] = []
+    /// Whether the word being read had a quote or backslash, which makes a heredoc literal.
+    private var wordQuoted = false
+    /// The index in ``commands`` of the current line's first command.
+    private var lineStart = 0
 
     init(characters: [Character], depth: Int, isHeredocBody: Bool) {
       self.characters = characters
@@ -164,6 +175,7 @@ public enum ShellSyntax {
         switch character {
         case "'":
           inWord = true
+          wordQuoted = true
           index += 1
           while index < characters.count, characters[index] != "'" {
             word.append(characters[index])
@@ -172,9 +184,11 @@ public enum ShellSyntax {
           index += 1
         case "\"":
           inWord = true
+          wordQuoted = true
           index += 1
           doubleQuoted()
         case "\\":
+          wordQuoted = true
           if index + 1 < characters.count, characters[index + 1] != "\n" {
             word.append(characters[index + 1])
             inWord = true
@@ -196,6 +210,7 @@ public enum ShellSyntax {
           links.append(.sequence)
           index += 1
           if !heredocs.isEmpty { heredocBodies() }
+          lineStart = commands.count
         case ";", "&", "|", "(", ")":
           endCommand()
           links.append(link(at: character))
@@ -303,6 +318,9 @@ public enum ShellSyntax {
     private mutating func heredocBodies() {
       let pending = heredocs
       heredocs = []
+      let interpreted = commands[lineStart...].contains { command in
+        ShellSyntax.normalize(command.words).name.map(ShellSyntax.interpreters.contains) ?? false
+      }
       for heredoc in pending {
         var body: [Character] = []
         while index < characters.count {
@@ -316,8 +334,58 @@ public enum ShellSyntax {
           body.append("\n")
         }
         guard depth < ShellSyntax.maxDepth else { continue }
-        commands += ShellSyntax.words(in: body, depth: depth + 1, isHeredocBody: true)
+        if interpreted {
+          commands += ShellSyntax.words(in: body, depth: depth + 1, isHeredocBody: true)
+        } else if !heredoc.quoted {
+          for script in Self.substitutions(in: body) {
+            commands += ShellSyntax.words(in: script, depth: depth + 1, isHeredocBody: true)
+          }
+        }
       }
+    }
+
+    /// The scripts inside each `$( … )` and backticks of unquoted heredoc text, which the shell
+    /// runs while it writes the text.
+    private static func substitutions(in body: [Character]) -> [[Character]] {
+      var scripts: [[Character]] = []
+      var cursor = 0
+      while cursor < body.count {
+        let character = body[cursor]
+        let next = cursor + 1 < body.count ? body[cursor + 1] : nil
+        if character == "\\" {
+          cursor += 2
+        } else if character == "$", next == "(",
+          cursor + 2 >= body.count || body[cursor + 2] != "("
+        {
+          var depth = 1
+          var end = cursor + 2
+          var quote: Character?
+          while end < body.count {
+            let inner = body[end]
+            if let active = quote {
+              if inner == active { quote = nil }
+            } else if inner == "'" || inner == "\"" {
+              quote = inner
+            } else if inner == "(" {
+              depth += 1
+            } else if inner == ")" {
+              depth -= 1
+              if depth == 0 { break }
+            }
+            end += 1
+          }
+          scripts.append(Array(body[(cursor + 2)..<min(end, body.count)]))
+          cursor = end + 1
+        } else if character == "`" {
+          var end = cursor + 1
+          while end < body.count, body[end] != "`" { end += 1 }
+          scripts.append(Array(body[(cursor + 1)..<min(end, body.count)]))
+          cursor = end + 1
+        } else {
+          cursor += 1
+        }
+      }
+      return scripts
     }
 
     /// `$( … )`: the inner script is checked as commands of its own; the word it sits in keeps a
@@ -371,7 +439,7 @@ public enum ShellSyntax {
         case .ignored?:
           break
         case .heredocDelimiter(let stripsTabs)?:
-          heredocs.append((word, stripsTabs))
+          heredocs.append((word, stripsTabs, wordQuoted))
         case nil:
           words.append(word)
         }
@@ -379,6 +447,7 @@ public enum ShellSyntax {
       }
       word = ""
       inWord = false
+      wordQuoted = false
     }
 
     private mutating func endCommand() {
