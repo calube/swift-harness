@@ -50,6 +50,8 @@ public struct RunViewChanges: Sendable, Equatable, Encodable {
   public var gates: [RunView.Gate]?
   public var proofs: [RunView.Proof]?
   public var halts: [RunView.Halt]?
+  /// The whole validation section when any of it changed: the page replaces it.
+  public var validation: RunViewValidation?
   public var damage: [RunView.Damage]?
 
   public init(cursor: String) {
@@ -69,6 +71,7 @@ public struct RunViewChanges: Sendable, Equatable, Encodable {
     changes.halts = changed(old.halts, new.halts) {
       "\($0.task ?? "")\u{0}\($0.at.timeIntervalSinceReferenceDate)"
     }
+    if old.validation != new.validation { changes.validation = new.validation }
     changes.damage = changed(old.damage, new.damage) { "\($0.source)\u{0}\($0.reason)" }
     return changes
   }

@@ -55,10 +55,11 @@ struct RunViewContractTests {
     #expect(
       keys(object) == [
         "schemaVersion", "cursor", "run", "spec", "tasks", "roles", "spans", "gates", "proofs",
-        "halts", "damage",
+        "halts", "validation", "damage",
       ])
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["cursor"] is NSNull)
+    #expect(object["validation"] is NSNull)
     #expect(
       keys(object["run"]) == [
         "id", "plan", "preset", "startedAt", "endedAt", "state", "stallMin", "timeBox",
@@ -150,6 +151,34 @@ struct RunViewContractTests {
     let test = first(failure["failedTests"])
     #expect(keys(test) == ["test", "tier", "proof", "file", "line"])
     #expect(test["proof"] is NSNull)
+  }
+
+  @Test(
+    "a validation section encodes its plan, counts and each row's keys, absent values as null — catches a validation key the page won't read"
+  )
+  func encodesValidationKeys() throws {
+    var view = view
+    view.validation = RunViewValidation(
+      plan: "p", counts: RunViewValidation.Counts(red: 1),
+      rows: [
+        RunViewValidation.Row(
+          row: 1, requirement: "req-a", layer: .acceptance, result: .red, qaRun: "q1", at: start)
+      ])
+    let object = try #require(
+      JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
+    let validation = try #require(object["validation"] as? [String: Any])
+    #expect(keys(validation) == ["plan", "counts", "rows"])
+    #expect(keys(validation["counts"]) == ["pass", "red", "unverified", "waiting"])
+    let row = first(validation["rows"])
+    #expect(
+      keys(row) == [
+        "row", "requirement", "layer", "check", "runsAfter", "result", "message", "exitStatus",
+        "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut",
+      ])
+    #expect(row["check"] is NSNull)
+    #expect(row["exitStatus"] is NSNull)
+    #expect(row["result"] as? String == "red")
+    #expect(row["at"] as? String == "2026-09-21T14:13:20.250Z")
   }
 
   @Test(

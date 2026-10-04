@@ -72,7 +72,7 @@
   }
 
   // timeline
-  const colour = { run: "--bar-phase", task: "--bar-task", worker: "--bar-worker", fix: "--bar-worker", review: "--bar-review", verify: "--bar-gate", merge: "--bar-merge" };
+  const colour = { run: "--bar-phase", task: "--bar-task", worker: "--bar-worker", fix: "--bar-worker", review: "--bar-review", verify: "--bar-gate", merge: "--bar-merge", "qa.check": "--bar-gate" };
   const barColour = (s) => {
     if (s.baseline) return "--bar-baseline";
     if (s.phase === "gate" || s.phase === "step") return s.outcome === "red" ? "--bar-red" : "--bar-gate";
@@ -871,7 +871,8 @@
   window.runViewer = {
     register,
     addTab,
-    openPopover: (anchor, rows, title) => { openPopover(anchor, rows.map(([k, v]) => [k, v]), title); popKind = "other"; },
+    // `extraHtml` follows the rows; the module that passes it escapes what it holds.
+    openPopover: (anchor, rows, title, extraHtml) => { openPopover(anchor, rows.map(([k, v]) => [k, v]), title, extraHtml || ""); popKind = "other"; },
     openTaskPopover: (id, anchor) => openTaskPopover(id, anchor),
     openTaskDrawer,
     apply

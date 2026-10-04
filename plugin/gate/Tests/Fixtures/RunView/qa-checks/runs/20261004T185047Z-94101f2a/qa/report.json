@@ -1,0 +1,129 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "commit" : "bc2474c1d23a1642f65c269504d1c73e066733c8",
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (slice-1-reset-after-increments-shows-zero, flow) `reset.flow.json`: flow runner not built",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (slice-1-reset-after-increments-shows-zero, state) `reset.state.sh` passes at the merge base, so it can't tell the change from its absence",
+      "rule" : "qa.check-passes-at-base",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 rows: 1 pass, 3 red, 1 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "2026-10-03-counter-reset-and-floor",
+  "rows" : [
+    {
+      "check" : "/bin/test -d .git",
+      "evidence" : [
+        "qa/01-slice-2-decrement-at-zero-stays-zero.acceptance.txt"
+      ],
+      "exitStatus" : 1,
+      "layer" : "acceptance",
+      "message" : "exit 1",
+      "ms" : 11,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "printf 'counter reset\\n'; printf 'expected 0 after reset, got 1\\n' >&2; exit 1",
+      "evidence" : [
+        "qa/02-slice-1-reset-after-increments-shows-zero.acceptance.txt"
+      ],
+      "exitStatus" : 1,
+      "layer" : "acceptance",
+      "message" : "exit 1",
+      "ms" : 9,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "reset.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "flow runner not built",
+      "ms" : 0,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "unverified",
+      "row" : 3,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "floor.state.sh",
+      "evidence" : [
+        "qa/04-slice-2-decrement-at-zero-stays-zero.state.txt"
+      ],
+      "exitStatus" : 1,
+      "layer" : "state",
+      "message" : "exit 1",
+      "ms" : 11,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor",
+        "counter-ui-reset-button-snapshot"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "reset.state.sh",
+      "evidence" : [
+        "qa/05-slice-1-reset-after-increments-shows-zero.state.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "state",
+      "message" : "exit 0",
+      "ms" : 13,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261004T185047Z-94101f2a",
+  "schemaVersion" : 1,
+  "verdict" : "RED"
+}

@@ -40,6 +40,8 @@ public struct RunViewInput: Sendable, Equatable {
   /// What the warm-up recorded into the baseline for each failed `warmup.run`'s step, by event
   /// id; absent when no baseline record matched it.
   public var warmupBaselines: [String: BaselineStepResult]
+  /// What the reader read of each `qa run` a kept `qa.check` names, by its run id.
+  public var qaRuns: [String: RunViewQARun]
 
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
@@ -47,7 +49,7 @@ public struct RunViewInput: Sendable, Equatable {
     damage: [RunView.Damage] = [], briefs: [String: RunView.Brief] = [:],
     workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
     gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = [],
-    warmupBaselines: [String: BaselineStepResult] = [:]
+    warmupBaselines: [String: BaselineStepResult] = [:], qaRuns: [String: RunViewQARun] = [:]
   ) {
     self.buildRun = buildRun
     self.events = events
@@ -61,5 +63,6 @@ public struct RunViewInput: Sendable, Equatable {
     self.gateReports = gateReports
     self.checkoutRoots = checkoutRoots
     self.warmupBaselines = warmupBaselines
+    self.qaRuns = qaRuns
   }
 }
