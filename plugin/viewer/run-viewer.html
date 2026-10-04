@@ -24,6 +24,9 @@
   --bar-red: #d31248;
   --bar-merge: #11181c;
   --bar-text: #ffffff;
+  --label-1: #7c3aed; --label-2: #0e9f9a; --label-3: #d97706; --label-4: #db2777; --label-5: #2563eb;
+  --shadow: rgba(16, 24, 40, .22);
+  --scrim: rgba(17, 24, 28, .32);
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 6px;
@@ -38,6 +41,8 @@
     --bad: #f31260; --bad-soft: #3a0d1c;
     --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
     --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
     color-scheme: dark;
   }
 }
@@ -48,6 +53,8 @@
   --bad: #f31260; --bad-soft: #3a0d1c;
   --bar-phase: #5b6676; --bar-task: #2f6fd6; --bar-worker: #4a8ae0; --bar-review: #6a7aa0;
   --bar-gate: #139a52; --bar-red: #d0104f; --bar-merge: #ecedee; --bar-text: #ffffff;
+    --label-1: #a78bfa; --label-2: #2dd4bf; --label-3: #fbbf24; --label-4: #f472b6; --label-5: #60a5fa;
+    --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -106,7 +113,7 @@ h2 { font-size: 12px; margin: 0; font-weight: 600; text-transform: uppercase; le
 .zoom button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* span popover: anchored to the clicked bar; a bottom sheet at phone width */
-.pop { position: fixed; z-index: 20; top: 0; left: 0; width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 520px); overflow-y: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 12px 32px rgba(0, 0, 0, .22); padding: 12px 14px 14px; display: grid; gap: 10px; }
+.pop { position: fixed; z-index: 20; top: 0; left: 0; width: min(360px, calc(100vw - 32px)); max-height: min(70vh, 520px); overflow-y: auto; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 12px 32px var(--shadow); padding: 12px 14px 14px; display: grid; gap: 10px; }
 .pop[hidden] { display: none; }
 .pop-head { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
 .pop-head h3 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
@@ -154,7 +161,7 @@ td .sub { color: var(--muted); font-size: 12px; }
 /* plan graph: layered left to right, scrolls inside its own box at narrow widths */
 .graph-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
 .graph-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.graph { display: block; width: 100%; min-width: 760px; height: auto; }
+.graph { display: block; width: 100%; height: auto; }
 .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .75; }
 .arrow { fill: var(--muted); }
 .gnode { cursor: pointer; outline: none; }
@@ -186,6 +193,67 @@ td .sub { color: var(--muted); font-size: 12px; }
 .card-id { font-family: var(--font-mono); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .card-meta .num { color: var(--muted); font-size: 12px; }
 footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+
+/* task drawer: a ticket view that slides in from the right; a full-height sheet at phone width */
+html.drawer-open { overflow: hidden; }
+.scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); opacity: 0; visibility: hidden; transition: opacity .2s, visibility 0s linear .2s; }
+.scrim.open { opacity: 1; visibility: visible; transition: opacity .2s; }
+.drawer { position: fixed; z-index: 31; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--bg); color: var(--fg); border-left: 1px solid var(--line); box-shadow: -16px 0 40px var(--shadow); overflow-y: auto; overscroll-behavior: contain; transform: translateX(100%); visibility: hidden; transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s; }
+.drawer.open { transform: none; visibility: visible; transition: transform .24s cubic-bezier(.2, .8, .2, 1); }
+.dr-head { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; align-items: center; }
+.dr-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--muted); min-width: 0; }
+.dr-kicker .mono { font-weight: 500; overflow-wrap: anywhere; }
+.dr-title { grid-column: 1 / -1; margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; text-wrap: balance; overflow-wrap: anywhere; }
+.dr-body { padding: 16px 20px 32px; display: grid; gap: 12px; }
+.dr-body > * { min-width: 0; }
+.dr-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+.dr-card h4, .dr-fold summary { margin: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.dr-card p { margin: 0; overflow-wrap: anywhere; }
+.dr-ref { color: var(--muted); font-size: 13px; }
+.dr-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; overflow-wrap: anywhere; }
+.dr-list li::marker { color: var(--muted); }
+.drawer code { font-family: var(--font-mono); font-size: 12px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; overflow-wrap: anywhere; }
+.props { margin: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px 12px; font-size: 13px; align-items: baseline; }
+.props dt { color: var(--muted); }
+.props dd { margin: 0; min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.props dd.block { display: block; }
+.muted { color: var(--muted); }
+.drawer .sub { color: var(--muted); font-size: 12px; margin: 0; }
+.label-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.label-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.drawer summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; border-radius: 4px; }
+.drawer summary::-webkit-details-marker { display: none; }
+.drawer summary::before { content: ""; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; flex: none; }
+.drawer details[open] > summary::before { transform: rotate(45deg); }
+.drawer summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws summary { font-variant-numeric: tabular-nums; }
+.ws .pop-files { margin-top: 6px; }
+.dr-fold[open] { gap: 12px; }
+.dr-fold:not([open]) { gap: 0; }
+.links { display: grid; gap: 6px; }
+.link-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; }
+.link-row > span { color: var(--muted); }
+.link-btn { font: inherit; color: var(--fg); text-align: left; background: var(--sunken); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 6px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.link-btn:hover { border-color: var(--line); }
+.link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.link-btn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.link-btn .mono { flex: none; font-weight: 600; }
+.link-btn .goal { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.act { list-style: none; margin: 0; padding: 0; display: grid; }
+.act li { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; position: relative; padding-bottom: 14px; font-size: 13px; }
+.act li:last-child { padding-bottom: 0; }
+.act li::before { content: ""; position: absolute; left: 6px; top: 16px; bottom: 0; width: 1px; background: var(--line); }
+.act li:last-child::before { display: none; }
+.act .dot { width: 9px; height: 9px; border-radius: 50%; margin: 5px 0 0 2px; background: var(--c, var(--muted)); }
+.act .ev { min-width: 0; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+.act .ev .sub { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+.act time { color: var(--muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) {
+  .drawer { width: 100%; border-left: 0; transform: translateY(100%); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  .dr-head { padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px; }
+  .dr-body { padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .dr-card { padding: 12px 14px; }
+}
 @media (max-width: 520px) {
   .tok-row { grid-template-columns: 84px 1fr 58px; }
   .tl-row { grid-template-columns: 132px 1fr; }
@@ -291,6 +359,16 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
   <footer id="foot"></footer>
 </div>
 
+<div class="scrim" id="drawer-scrim"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title" inert>
+  <header class="dr-head">
+    <div class="dr-kicker"><span class="mono" id="dr-id"></span><span class="chip" id="dr-status"></span></div>
+    <button type="button" class="pop-close dr-close" aria-label="Close task">×</button>
+    <h3 class="dr-title" id="dr-title"></h3>
+  </header>
+  <div class="dr-body" id="dr-body"></div>
+</aside>
+
 <script type="application/json" id="run-view">
 {
   "schemaVersion": 1,
@@ -303,26 +381,42 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
     {"id": "req-offline-badge", "title": "Mark drafts that haven't synced", "tasks": ["draft-ui"]}
   ],
   "tasks": [
-    {"id": "draft-store", "status": "done", "model": "opus", "commits": ["4be91c0", "a07d3e2"], "gateRun": "20261003T142104Z-0d6a11b2", "mergeGateRun": "20261003T142545Z-9c2f47e1",
+    {"id": "draft-store",
+     "brief": {"title": "Save drafts to a local store that works offline", "why": "Drafts have to survive with no network, and the list needs one source of truth for ordering. Every other task reads from this store.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§3 Local store"}, "scope": ["`Draft` model with id, body, `updatedAt` and a `synced` flag", "`DraftStore` saves and loads drafts on disk with no network", "`DraftStoreClient` dependency with live and test values", "List query returns drafts newest first"], "acceptance": ["`DraftStoreTests/savesDraftWithoutNetwork()` fails first, then passes", "`DraftStoreTests/listsNewestFirst()` fails first, then passes", "Push gate GREEN with prove GREEN"], "outOfScope": ["Sending drafts to the server (save-queue)", "Any SwiftUI view (draft-ui)", "Migrating drafts from older app versions"]},
+     "status": "done", "model": "opus", "commits": ["4be91c0", "a07d3e2"], "gateRun": "20261003T142104Z-0d6a11b2", "mergeGateRun": "20261003T142545Z-9c2f47e1",
      "deps": ["contract"], "writes": ["Packages/Drafts/Sources/DraftStore.swift", "Packages/Drafts/Sources/Draft.swift", "Packages/Drafts/Sources/DraftStoreClient.swift", "Packages/Drafts/Tests/DraftStoreTests.swift", "Packages/Drafts/Package.swift"],
      "tokens": {"input": 118400, "output": 41200, "cacheRead": 512300, "cacheWrite": 88100}},
-    {"id": "save-queue", "status": "done", "model": "opus", "commits": ["c31f8aa", "e6620d4", "1f9b7c3"], "gateRun": "20261003T143018Z-71be03aa", "mergeGateRun": "20261003T143254Z-2a8d6f90",
+    {"id": "save-queue",
+     "brief": {"title": "Queue saves offline and send them in order on reconnect", "why": "A save made offline has to reach the server once the network returns, in the order the user made it, even across an app restart.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§4 Sync queue"}, "scope": ["`PendingSave` record persisted to disk", "`SaveQueue` drains first in, first out when `ReachabilityClient` reports online", "Duplicate saves for the same draft collapse to the newest", "`SaveQueueClient` and `ReachabilityClient` live and test values"], "acceptance": ["`SaveQueueTests/sendsQueuedSavesOnReconnect()` fails first", "`SaveQueueTests/keepsOrderAcrossRestarts()` fails first", "`SaveQueueTests/dropsDuplicateSaves()` fails first", "Push gate GREEN with prove GREEN"], "outOfScope": ["Conflict resolution when the server copy changed", "Retry backoff tuning", "Showing sync state in the list (draft-ui)"]},
+     "status": "done", "model": "opus", "commits": ["c31f8aa", "e6620d4", "1f9b7c3"], "gateRun": "20261003T143018Z-71be03aa", "mergeGateRun": "20261003T143254Z-2a8d6f90",
      "deps": ["contract"], "writes": ["Packages/Sync/Sources/SaveQueue.swift", "Packages/Sync/Sources/SaveQueueClient.swift", "Packages/Sync/Sources/PendingSave.swift", "Packages/Sync/Sources/ReachabilityClient.swift", "Packages/Sync/Tests/SaveQueueTests.swift", "Packages/Sync/Tests/PendingSaveTests.swift", "Packages/Sync/Package.swift"],
      "tokens": {"input": 164900, "output": 63800, "cacheRead": 701200, "cacheWrite": 120500}},
-    {"id": "draft-ui", "status": "done", "model": "opus", "commits": ["9d04b6e", "57ac2f1"], "gateRun": "20261003T143044Z-e40c9b17", "mergeGateRun": "20261003T143507Z-6f13a2cd",
+    {"id": "draft-ui",
+     "brief": {"title": "Show drafts newest first and badge the ones that haven't synced", "why": "People need their drafts in the order they worked on them, and need to know which ones still live only on the device.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§5 Draft list"}, "scope": ["`DraftListFeature` reducer reading from `DraftStoreClient`", "`DraftListView` and `DraftRowView` ordered by `updatedAt`", "`UnsyncedBadge` on rows whose `synced` flag is false", "Snapshot of an unsynced row in light and dark"], "acceptance": ["`DraftListFeatureTests/marksUnsyncedDrafts()` fails first", "`DraftListFeatureTests/ordersRowsByUpdatedAt()` fails first", "Snapshot `unsyncedRow` recorded and reviewed", "Push gate GREEN with prove and snapshots GREEN"], "outOfScope": ["Editing a draft", "Pull to refresh", "Swipe to delete"]},
+     "status": "done", "model": "opus", "commits": ["9d04b6e", "57ac2f1"], "gateRun": "20261003T143044Z-e40c9b17", "mergeGateRun": "20261003T143507Z-6f13a2cd",
      "deps": ["draft-store"], "writes": ["Packages/DraftList/Sources/DraftListFeature.swift", "Packages/DraftList/Sources/DraftListView.swift", "Packages/DraftList/Sources/DraftRowView.swift", "Packages/DraftList/Sources/UnsyncedBadge.swift", "Packages/DraftList/Tests/DraftListFeatureTests.swift", "Packages/DraftList/Tests/DraftListViewTests.swift", "Packages/DraftList/Tests/__Snapshots__/DraftListViewTests/unsyncedRow.1.png"],
      "tokens": {"input": 139700, "output": 52600, "cacheRead": 598800, "cacheWrite": 97300}}
   ],
   "stages": [
-    {"id": "spec-read", "span": "s1", "deps": [], "writes": []},
-    {"id": "plan", "span": "s4", "deps": ["spec-read"], "writes": ["docs/plans/offline-drafts-plan.md"]},
-    {"id": "contract", "span": "s5", "deps": ["plan"], "writes": ["Packages/Drafts/Sources/DraftStoreClient.swift", "Packages/Sync/Sources/SaveQueueClient.swift", "Packages/Sync/Sources/ReachabilityClient.swift"]},
-    {"id": "final", "span": "s6", "deps": ["draft-ui", "save-queue"], "writes": []}
+    {"id": "spec-read",
+     "brief": {"title": "Read the spec and pull out requirement ids", "why": "Every task traces back to a requirement id, so the ids come before any planning.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§1 Requirements"}, "scope": ["5 requirement ids, each with a one-line title"], "acceptance": ["Every requirement has an id and a title"], "outOfScope": ["Choosing an implementation"]},
+     "span": "s1", "deps": [], "writes": []},
+    {"id": "plan",
+     "brief": {"title": "Split the spec into tasks with deps and write sets", "why": "Parallel workers need disjoint write sets and a dependency order before any code is written.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§2 Approach"}, "scope": ["3 build tasks and 1 docs task", "Deps and write set for each task", "Each spec id mapped to the tasks that satisfy it"], "acceptance": ["No 2 tasks in the same wave share a file", "Every spec id maps to at least 1 task"], "outOfScope": ["Writing code"]},
+     "span": "s4", "deps": ["spec-read"], "writes": ["docs/plans/offline-drafts-plan.md"]},
+    {"id": "contract",
+     "brief": {"title": "Commit the client interfaces every task builds against", "why": "Workers in the same wave build against shared clients; committing the interfaces first means none of them waits on another.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§3 Local store, §4 Sync queue"}, "scope": ["`DraftStoreClient`, `SaveQueueClient` and `ReachabilityClient` signatures", "Unimplemented live values so every package compiles"], "acceptance": ["Every package builds on the contract commit", "Push gate GREEN"], "outOfScope": ["Any implementation"]},
+     "span": "s5", "deps": ["plan"], "writes": ["Packages/Drafts/Sources/DraftStoreClient.swift", "Packages/Sync/Sources/SaveQueueClient.swift", "Packages/Sync/Sources/ReachabilityClient.swift"]},
+    {"id": "final",
+     "brief": {"title": "Run the ready gate on the merged result", "why": "Each task's gate proves its own change; the ready gate proves the merged whole, with UI tests and mutation testing.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§7 Verification"}, "scope": ["Ready tier: lint, tests, snapshots, UI tests, mutate"], "acceptance": ["Ready gate GREEN with mutate GREEN", "No damage outside the planned write sets"], "outOfScope": ["New code: a RED here spawns a fix task"]},
+     "span": "s6", "deps": ["draft-ui", "save-queue"], "writes": []}
   ],
   "liveSnapshot": {
     "at": 22.6,
     "extraTasks": [
-      {"id": "docs-update", "status": "queued", "model": "sonnet", "deps": ["draft-ui", "save-queue"], "writes": ["docs/offline-drafts.md", "README.md"]}
+      {"id": "docs-update",
+     "brief": {"title": "Document how offline drafts behave", "why": "Once the store, queue and list land, the feature doc and README need to say when offline saves send and how to test them.", "designRef": {"doc": "docs/designs/offline-drafts.md", "section": "§6 Rollout"}, "scope": ["`docs/offline-drafts.md`: how saves queue and when they send", "README feature list entry", "How to run the sync tests locally"], "acceptance": ["Every link in both files resolves", "Comments check GREEN on both files", "Push gate GREEN"], "outOfScope": ["API reference docs", "Store screenshots"]},
+     "status": "queued", "model": "sonnet", "deps": ["draft-ui", "save-queue"], "writes": ["docs/offline-drafts.md", "README.md"]}
     ],
     "board": [
       {"task": "draft-store", "column": "review", "lastGate": "GREEN"},
@@ -513,7 +607,7 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
     pop.style.top = top + "px";
   }
 
-  // Any trigger (timeline bar, board card, graph node) can open the popover with its own span and files label.
+  // Timeline bars open the popover; board cards and graph nodes open the task drawer instead.
   function openPop(bar, s = all[bar.dataset.id], filesLabel) {
     if (openBar) closePop(false);
     openBar = bar;
@@ -551,9 +645,12 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
     if (b === openBar) closePop(); else openPop(b);
   });
   pop.querySelector(".pop-close").addEventListener("click", () => closePop());
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openBar) { e.preventDefault(); closePop(); } });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (drawerId) { e.preventDefault(); closeDrawer(); } else if (openBar) { e.preventDefault(); closePop(); }
+  });
   document.addEventListener("pointerdown", (e) => {
-    if (openBar && !pop.contains(e.target) && !e.target.closest(".bar, .card, .gnode")) closePop();
+    if (openBar && !pop.contains(e.target) && !e.target.closest(".bar")) closePop();
   });
   window.addEventListener("scroll", place, { capture: true, passive: true });
   window.addEventListener("resize", () => { fitBars(); place(); });
@@ -576,20 +673,6 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
 
   const specTags = (id) => view.spec.filter((q) => q.tasks.includes(id)).map((q) => q.id);
   const spanOfTask = Object.fromEntries(view.spans.filter((s) => s.phase === "task").map((s) => [s.task, s.id]));
-  function toggleFrom(el, s, label) { if (el === openBar) closePop(); else openPop(el, s, label); }
-
-  // Sum the tool activity of a span's descendants, and swap the files list for the node's write set.
-  function writeSetSpan(spanId, writes) {
-    const counts = {};
-    let toolMs = 0;
-    const walk = (id) => (kids[id] || []).forEach((c) => {
-      if (c.tools) { toolMs += c.tools.toolMs; Object.entries(c.tools.counts).forEach(([k, n]) => { counts[k] = (counts[k] || 0) + n; }); }
-      walk(c.id);
-    });
-    walk(spanId);
-    const base = all[spanId];
-    return Object.assign({}, base, { tools: Object.assign({}, base.tools, { counts, toolMs: base.tools ? base.tools.toolMs + toolMs : toolMs, files: writes }) });
-  }
 
   // plan graph
   const gnodes = [
@@ -619,7 +702,7 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
     const gatesRed = (kids[n.span] || []).filter((c) => c.phase === "gate").slice(-1).some((c) => c.outcome === "red");
     return gatesRed ? "red" : s.end <= wall ? "done" : "running";
   };
-  let svg = `<svg class="graph" viewBox="0 0 ${GW} ${GH}" role="group" aria-label="Plan dependency graph">
+  let svg = `<svg class="graph" viewBox="0 0 ${GW} ${GH}" style="min-width:${GW}px" role="group" aria-label="Plan dependency graph">
     <defs><marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0 L10 5 L0 10 z"/></marker></defs>`;
   gnodes.forEach((n) => n.deps.forEach((d) => {
     const a = gBy[d], x1 = a.x + NW, x2 = n.x - 2, mx = (x1 + x2) / 2;
@@ -635,7 +718,7 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
       <text class="gsub" x="${n.x + 24}" y="${n.cy + 14}">${esc(sub)}</text></g>`;
   });
   $("graph-scroll").innerHTML = svg + `</svg>`;
-  const openNode = (g) => { const n = gBy[g.dataset.node]; toggleFrom(g, writeSetSpan(n.span, n.writes), "Write set"); };
+  const openNode = (g) => openDrawer(g.dataset.node, g);
   $("graph-scroll").addEventListener("click", (e) => { const g = e.target.closest(".gnode"); if (g) openNode(g); });
   $("graph-scroll").addEventListener("keydown", (e) => {
     const g = e.target.closest(".gnode");
@@ -651,7 +734,7 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
     return g ? (g.outcome === "red" ? "RED" : "GREEN") : null;
   };
   const halted = new Set(view.halts.map((h) => h.task));
-  let cardSpans = {};
+  let curMode = "live";
   function boardCards(mode) {
     const cards = mode === "live"
       ? snap.board.map((b) => {
@@ -668,15 +751,12 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
   const laneColour = { queued: "--muted", building: "--bar-worker", gating: "--warn", review: "--bar-review", merged: "--ok", blocked: "--bad" };
   function renderBoard(mode) {
     const cards = boardCards(mode);
-    cardSpans = {};
     $("board-note").textContent = mode === "live"
       ? `Snapshot at +${fmtMin(snap.at)}: ${cards.filter((c) => c.column !== "merged").length} tasks in flight.`
       : `Final state at +${fmtMin(wall)}: every task merged.`;
     $("board").innerHTML = lanes.map((lane) => {
       const inLane = cards.filter((c) => c.column === lane);
       const body = inLane.length ? inLane.map((c) => {
-        const sid = spanOfTask[c.id];
-        cardSpans[c.id] = all[sid] || { id: "q-" + c.id, phase: "task", task: c.id, label: c.id, start: snap.at, end: snap.at };
         const tags = specTags(c.id);
         return `<button type="button" class="card" style="--c:var(${laneColour[lane]})" data-task="${esc(c.id)}" aria-haspopup="dialog" aria-expanded="false"
             aria-label="${esc(c.id)}, ${esc(lane)}, ${esc(modelOf[c.id])}, ${esc(c.elapsed)}, last gate ${esc(c.lastGate || "none")}">
@@ -690,14 +770,14 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
   }
   const modeBtns = [...document.querySelectorAll("#board-mode button")];
   function setMode(mode) {
-    if (openBar && openBar.classList.contains("card")) closePop(false);
+    curMode = mode;
     modeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
     renderBoard(mode);
   }
   modeBtns.forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   $("board").addEventListener("click", (e) => {
     const c = e.target.closest(".card");
-    if (c) toggleFrom(c, cardSpans[c.dataset.task]);
+    if (c) openDrawer(c.dataset.task, c);
   });
   setMode("live");
 
@@ -749,6 +829,165 @@ footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; g
       ${rules.length ? `<div class="tags">${rules.map(([k, n]) => `<span class="tag">${esc(k)} ${n}</span>`).join("")}</div>` : ""}</div>`;
   }).join("");
 
-  $("foot").innerHTML = `<span>RunView schema ${view.schemaVersion}</span><span>damage: ${view.damage.length ? view.damage.length + " files" : "none"}</span><span>0 dropped events</span><span>ids, counts, times and repo-relative paths only</span>`;
+  // task drawer: a board card or plan node opens its task as a ticket
+  const items = {};
+  view.stages.forEach((st) => { items[st.id] = { id: st.id, kind: "stage", brief: st.brief, deps: st.deps, writes: st.writes, span: st.span, commits: [] }; });
+  [...view.tasks, ...snap.extraTasks].forEach((t) => { items[t.id] = { id: t.id, kind: "task", brief: t.brief, deps: t.deps, writes: t.writes, span: spanOfTask[t.id], model: t.model, commits: t.commits || [] }; });
+  const dependents = (id) => Object.values(items).filter((x) => x.deps.includes(id)).map((x) => x.id);
+  // A task's wave counts only task deps, so the plan stages before it don't push it back.
+  const waveOf = (id) => {
+    const it = items[id];
+    if (it.wave) return it.wave;
+    const td = it.deps.filter((d) => items[d].kind === "task");
+    return (it.wave = td.length ? 1 + Math.max(...td.map(waveOf)) : 1);
+  };
+  const nowMin = () => (curMode === "live" ? snap.at : wall);
+  function statusOf(it) {
+    const s = all[it.span], now = nowMin();
+    if (it.kind === "stage") return !s || s.start > now ? "queued" : s.end <= now ? "done" : "running";
+    if (halted.has(it.id)) return "blocked";
+    if (curMode === "live") { const b = snap.board.find((x) => x.task === it.id); if (b) return b.column; }
+    return s ? "merged" : "queued";
+  }
+  const statusChip = { queued: "plain", building: "info", gating: "warn", review: "info", merged: "ok", blocked: "bad", done: "ok", running: "info" };
+  const statusVar = Object.assign({ done: "--ok", running: "--accent" }, laneColour);
+  const t0 = Date.parse(r.startedAt);
+  const clock = (m) => { const d = new Date(t0 + m * 60000); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + " UTC"; };
+  const ago = (m) => { const d = nowMin() - m; return d < 1 ? "just now" : d < 60 ? Math.round(d) + "m ago" : Math.floor(d / 60) + "h ago"; };
+  const when = (m) => `<time title="+${fmtMin(m)} · ${clock(m)}">${ago(m)}</time>`;
+  const planEnd = all[view.stages.find((st) => st.id === "plan").span].end;
+  const md = (txt) => esc(txt).replace(/`([^`]+)`/g, "<code>$1</code>");
+  const bullets = (xs) => `<ul class="dr-list">${xs.map((x) => `<li>${md(x)}</li>`).join("")}</ul>`;
+  const specColour = Object.fromEntries(view.spec.map((q, i) => [q.id, `--label-${(i % 5) + 1}`]));
+
+  function toolsOf(spanId) {
+    if (!all[spanId]) return null;
+    const counts = {}, files = new Set();
+    let toolMs = 0;
+    const walk = (s) => {
+      if (s.tools) { toolMs += s.tools.toolMs; Object.entries(s.tools.counts).forEach(([k, n]) => { counts[k] = (counts[k] || 0) + n; }); s.tools.files.forEach((f) => files.add(f)); }
+      (kids[s.id] || []).forEach(walk);
+    };
+    walk(all[spanId]);
+    return Object.keys(counts).length ? { counts, toolMs, files: [...files] } : null;
+  }
+
+  function activity(it) {
+    const ev = [], sp = all[it.span];
+    if (it.kind === "task") ev.push({ t: planEnd, text: "Created by plan", c: "--muted" });
+    if (sp && it.kind === "stage") ev.push({ t: sp.start, text: "Started", c: "--accent" });
+    (kids[it.span] || []).forEach((c) => {
+      if (c.phase === "worker") ev.push({ t: c.start, text: "Worker started", sub: it.model + " build worker", c: "--bar-worker" });
+      else if (c.phase === "fix") ev.push({ t: c.start, text: "Fix started", sub: c.tools.files.length + " files touched", c: "--warn" });
+      else if (c.phase === "review") ev.push({ t: c.start, text: "Review started", c: "--bar-review" });
+      else if (c.phase === "merge") ev.push({ t: c.end, text: "Merged", codes: it.commits, sub: "merge gate GREEN", c: "--fg" });
+      else if (c.phase === "gate") {
+        const g = gateBy[c.gateRun], red = c.outcome === "red";
+        const tier = `${c.label.replace("gate ", "")} gate · run ${shortRun(c.gateRun)}`;
+        if (c.end > nowMin()) ev.push({ t: c.start, text: "Gate running", sub: tier, c: "--warn" });
+        else ev.push({ t: c.end, text: `Gate ${red ? "RED" : "GREEN"}`, codes: g ? Object.keys(g.ruleCounts) : [], sub: tier, c: red ? "--bad" : "--ok" });
+      }
+    });
+    if (sp && it.kind === "stage") ev.push({ t: sp.end, text: "Finished", c: "--ok" });
+    if (!sp) ev.push({ t: planEnd, text: "Waiting on " + it.deps.join(", "), c: "--muted" });
+    return ev.filter((e) => e.t <= nowMin()).sort((a, b) => a.t - b.t);
+  }
+
+  const card = (label, body) => `<section class="dr-card"><h4>${label}</h4>${body}</section>`;
+
+  function renderDrawer(id) {
+    const it = items[id], b = it.brief, st = statusOf(it), now = nowMin();
+    $("dr-id").textContent = it.id;
+    $("dr-status").className = "chip " + statusChip[st];
+    $("dr-status").textContent = st;
+    $("dr-title").textContent = b.title;
+
+    const tags = specTags(id);
+    const merge = (kids[it.span] || []).find((c) => c.phase === "merge");
+    const sp = all[it.span];
+    const created = it.kind === "task" ? planEnd : 0;
+    let finished = `<span class="muted">not yet</span>`;
+    if (it.kind === "task" && merge && merge.end <= now) finished = `${it.commits.map((c) => `<code>${esc(c)}</code>`).join("")}<span class="muted">${clock(merge.end)} · ${ago(merge.end)}</span>`;
+    if (it.kind === "stage" && sp && sp.end <= now) finished = `<span>${clock(sp.end)}</span><span class="muted">· ${ago(sp.end)}</span>`;
+    const ws = it.writes.length
+      ? `<details class="ws"><summary>${it.writes.length} ${it.writes.length === 1 ? "file" : "files"}</summary><ul class="pop-files">${it.writes.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></details>`
+      : `<span class="muted">no files</span>`;
+    const props = [
+      ["status", `<span class="chip ${statusChip[st]}">${esc(st)}</span>`],
+      ["worker", it.kind === "task" ? `${esc(it.model)} <span class="muted">build worker</span>` : `orchestrator`],
+      ["wave", it.kind === "task" ? `wave ${waveOf(id)}` : `<span class="muted">plan stage</span>`],
+      ["spec ids", tags.length ? tags.map((t) => `<span class="label-chip" style="--c:var(${specColour[t]})">${esc(t)}</span>`).join("") : `<span class="muted">none</span>`],
+      ["write set", ws, "block"],
+      ["created", `<span>${clock(created)}</span><span class="muted">· ${ago(created)}</span>`],
+      [it.kind === "task" ? "merged" : "finished", finished],
+      ["id", `<span class="mono">${esc(id)}</span>`]
+    ];
+
+    const linkRows = (label, ids) => ids.map((d) => {
+      const x = items[d], s2 = statusOf(x);
+      return `<div class="link-row"><span>${label}</span><button type="button" class="link-btn" data-open="${esc(d)}" style="--c:var(${statusVar[s2]})" aria-label="${label} ${esc(d)}, ${esc(s2)}: ${esc(x.brief.title)}"><i class="dot"></i><span class="mono">${esc(d)}</span><span class="goal">${esc(x.brief.title)}</span></button></div>`;
+    }).join("");
+    const links = linkRows("Blocked by", it.deps) + linkRows("Blocks", dependents(id));
+
+    const ev = activity(it);
+    const acts = ev.length
+      ? `<ol class="act">${ev.map((e) => `<li style="--c:var(${e.c})"><i class="dot"></i><div class="ev"><span>${esc(e.text)}</span>${(e.codes || []).map((c) => `<code>${esc(c)}</code>`).join("")}${e.sub ? `<span class="sub">${esc(e.sub)}</span>` : ""}</div>${when(e.t)}</li>`).join("")}</ol>`
+      : `<p class="muted">nothing yet</p>`;
+
+    $("dr-body").innerHTML =
+      card("Why", `<p>${md(b.why)}</p><p class="dr-ref">Implements <code>${esc(b.designRef.doc)}</code> → ${esc(b.designRef.section)}</p>`) +
+      card("Scope", bullets(b.scope)) +
+      card("Acceptance", bullets(b.acceptance)) +
+      card("Out of scope", bullets(b.outOfScope)) +
+      card("Properties", `<dl class="props">${props.map(([k, v, cls]) => `<dt>${k}</dt><dd${cls ? ` class="${cls}"` : ""}>${v}</dd>`).join("")}</dl>`) +
+      card("Links", links ? `<div class="links">${links}</div>` : `<p class="muted">no dependencies</p>`) +
+      card("Activity", acts) +
+      `<details class="dr-card dr-fold"><summary>Tool activity</summary><div style="display:grid;gap:8px">${toolsHtml(toolsOf(it.span))}</div></details>`;
+  }
+
+  const drawer = $("drawer"), scrim = $("drawer-scrim");
+  let drawerId = null, drawerOpener = null;
+  function openDrawer(id, opener) {
+    closePop(false);
+    if (opener && opener !== drawerOpener) {
+      if (drawerOpener) { drawerOpener.classList.remove("sel"); drawerOpener.setAttribute("aria-expanded", "false"); }
+      drawerOpener = opener;
+      opener.classList.add("sel");
+      opener.setAttribute("aria-expanded", "true");
+    }
+    drawerId = id;
+    renderDrawer(id);
+    drawer.scrollTop = 0;
+    drawer.removeAttribute("inert");
+    drawer.classList.add("open");
+    scrim.classList.add("open");
+    document.documentElement.classList.add("drawer-open");
+    drawer.querySelector(".dr-close").focus({ preventScroll: true });
+  }
+  function closeDrawer() {
+    if (!drawerId) return;
+    drawerId = null;
+    drawer.classList.remove("open");
+    scrim.classList.remove("open");
+    drawer.setAttribute("inert", "");
+    document.documentElement.classList.remove("drawer-open");
+    const o = drawerOpener;
+    drawerOpener = null;
+    if (o) { o.classList.remove("sel"); o.setAttribute("aria-expanded", "false"); if (o.isConnected) o.focus({ preventScroll: true }); }
+  }
+  drawer.querySelector(".dr-close").addEventListener("click", closeDrawer);
+  scrim.addEventListener("pointerdown", (e) => { e.preventDefault(); closeDrawer(); });
+  // Following a link keeps the original opener, so closing still returns focus to the card or node.
+  $("dr-body").addEventListener("click", (e) => { const l = e.target.closest("[data-open]"); if (l) openDrawer(l.dataset.open); });
+  drawer.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    const f = [...drawer.querySelectorAll("button, summary, [tabindex]:not([tabindex='-1'])")].filter((el) => el.getClientRects().length);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  $("foot").innerHTML =`<span>RunView schema ${view.schemaVersion}</span><span>damage: ${view.damage.length ? view.damage.length + " files" : "none"}</span><span>0 dropped events</span><span>plan text, ids, counts, times and repo-relative paths; no source or transcripts</span>`;
 })();
 </script>
