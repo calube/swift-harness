@@ -31,12 +31,19 @@ public struct RunViewInput: Sendable, Equatable {
   /// When `swiftgate run` started a brownfield run, before discovery and the build run; `nil`
   /// for a run no `swiftgate run` launched.
   public var launchedAt: Date?
+  /// The `report.json` of each gate run that wasn't GREEN, by run id; a run whose report didn't
+  /// read is absent.
+  public var gateReports: [String: RunViewGateReport]
+  /// The absolute roots of the run's checkouts, so a finding message's machine path can become
+  /// repo-relative before it enters the view.
+  public var checkoutRoots: [String]
 
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
     ledger: Ledger? = nil, requirements: [RunViewRequirement] = [],
     damage: [RunView.Damage] = [], briefs: [String: RunView.Brief] = [:],
-    workerGateRuns: [String: String] = [:], launchedAt: Date? = nil
+    workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
+    gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = []
   ) {
     self.buildRun = buildRun
     self.events = events
@@ -47,5 +54,7 @@ public struct RunViewInput: Sendable, Equatable {
     self.briefs = briefs
     self.workerGateRuns = workerGateRuns
     self.launchedAt = launchedAt
+    self.gateReports = gateReports
+    self.checkoutRoots = checkoutRoots
   }
 }

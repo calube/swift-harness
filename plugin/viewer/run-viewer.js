@@ -139,6 +139,70 @@
       ${t.droppedPaths ? `<p class="sub">${plural(t.droppedPaths, "path")} dropped: outside the repository</p>` : ""}`;
   }
 
+  // Why a gate run, a stage or a task failed. The popover shows a few lines, each message cut;
+  // the task drawer shows every line the view carries, whole.
+  const POP_LINES = 3, POP_MESSAGE = 140;
+  const stageText = { task: "task gate", worker: "worker's gate", merge: "merge gate", final: "final gate" };
+  const blockText = {
+    "gate-red": "its last gate run was RED",
+    "return-not-stored": "no return of it was stored: build check-return rejected it, or none came back",
+    halt: "a halt stopped it"
+  };
+  function failureHeadline(g) {
+    const f = g.failure;
+    const tiers = f.tiers.length ? f.tiers.join(", ") + " failed" : g.verdict;
+    return [tiers, f.checkTier ? f.checkTier + " tier" : null, f.stage ? stageText[f.stage] : null].filter(Boolean).join(" · ");
+  }
+  function findingHtml(x, max) {
+    const at = M.location(x.file, x.line);
+    const message = max ? M.clip(x.message, max) : x.message;
+    const cut = !max && x.truncated ? ` <span class="muted">(cut; the report holds the rest)</span>` : "";
+    return `<li><div class="fail-head"><span class="chip ${x.severity === "blocker" || x.severity === "major" ? "bad" : "warn"}">${esc(x.severity)}</span><code>${esc(x.rule)}</code>${at ? `<span class="mono">${esc(at)}</span>` : ""}</div><div class="fail-msg">${esc(message)}${cut}</div></li>`;
+  }
+  function testHtml(t) {
+    const at = M.location(t.file, t.line);
+    const how = t.proof ? "not proven: " + t.proof : "failed" + (t.tier ? " in " + t.tier : "");
+    return `<li><div class="fail-head"><span class="mono">${esc(t.test)}</span></div><div class="fail-msg">${esc(how)}${at ? ` at <span class="mono">${esc(at)}</span>` : ""}</div></li>`;
+  }
+  function more(n, where) { return n > 0 ? `<li class="more">+${n} more ${where}</li>` : ""; }
+  // 1 gate run's failure; `full` is the drawer's form.
+  function gateFailureHtml(g, full) {
+    const f = g.failure;
+    const n = full ? Infinity : POP_LINES;
+    const findings = f.findings.slice(0, n), tests = f.failedTests.slice(0, n);
+    const hiddenF = f.findings.length - findings.length, hiddenT = f.failedTests.length - tests.length;
+    const counts = g.tests ? `<p class="sub num">${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped</p>` : "";
+    const rules = !f.findings.length && Object.keys(g.ruleCounts || {}).length
+      ? `<div class="tags">${Object.entries(g.ruleCounts).map(([k, v]) => `<span class="tag">${esc(k)} ${v}</span>`).join("")}</div>` : "";
+    const where = full ? "in the report" : "in the task drawer";
+    return `<p class="fail-line"><span class="chip bad">${esc(g.verdict)}</span> ${esc(failureHeadline(g))}</p>${counts}
+      ${findings.length ? `<h4>Gating findings</h4><ul class="fail-list">${findings.map((x) => findingHtml(x, full ? 0 : POP_MESSAGE)).join("")}${more(hiddenF, where)}${more(f.moreFindings, "in the report")}</ul>` : rules}
+      ${tests.length ? `<h4>Failing tests</h4><ul class="fail-list">${tests.map(testHtml).join("")}${more(hiddenT, where)}${more(f.moreFailedTests, "in the report")}</ul>` : ""}
+      <p class="sub">run <span class="mono">${esc(g.runId)}</span></p>
+      <p class="sub">${f.report ? `report <code>${esc(f.report)}</code>` : "its report.json isn't in any live checkout"} · <code>${esc(f.command)}</code></p>`;
+  }
+  function blockHtml(b, gateOf) {
+    const g = b.gateRun ? gateOf(b.gateRun) : null;
+    return `<p class="fail-line"><span class="chip bad">stopped</span> at ${esc(clock(Date.parse(b.at)))}${b.cause ? `: ${esc(blockText[b.cause] || b.cause)}` : ""}</p>
+      ${b.halt ? `<p class="sub">halt raised: ${esc(b.halt)}</p>` : ""}
+      ${b.gateRun ? `<p class="sub">last gate run <span class="mono">${esc(b.gateRun)}</span> ${g ? esc(g.verdict) : ""}</p>` : `<p class="sub">no gate run</p>`}`;
+  }
+  // The popover's "Why it failed" section for a span; empty when nothing explains it.
+  function spanFailureHtml(s) {
+    const why = M.failureOf(view, s);
+    if (!why) return "";
+    const parts = [];
+    if (why.block) parts.push(blockHtml(why.block, why.gateOf));
+    if (why.gate) parts.push(gateFailureHtml(why.gate, false));
+    why.halts.forEach((h) => {
+      const g = h.gateRun ? why.gateOf(h.gateRun) : null;
+      parts.push(`<p class="fail-line"><span class="chip bad">halted</span> ${esc(h.task || "the run")}: ${esc(h.reason)}</p>${g && g.failure ? gateFailureHtml(g, false) : ""}`);
+    });
+    const task = s.task && taskBy[s.task] ? `<button type="button" class="link-btn" data-open-task="${esc(s.task)}">Open ${esc(s.task)} for every line</button>` : "";
+    const heading = why.gate || why.halts.length ? "Why it failed" : "Why it stopped";
+    return `<div class="pop-fail" role="group" aria-label="${heading}"><h4>${heading}</h4>${parts.join("")}${task}</div>`;
+  }
+
   function place() {
     if (!openAnchor) return;
     if (sheet.matches) { pop.style.left = ""; pop.style.top = ""; return; }
@@ -180,7 +244,7 @@
       ["outcome", outcome || "none", outcome ? verdictChip(outcome) : null]
     ];
     const tools = s.phase === "step" ? null : M.toolSummary(spans, s.id);
-    openPopover(bar, rows, s.label, `<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
+    openPopover(bar, rows, s.label, `${spanFailureHtml(s)}<div class="pop-tools"><h4>Tools</h4>${toolsHtml(tools)}</div>`, focus);
   }
 
   function closePop(restoreFocus = true) {
@@ -188,15 +252,41 @@
     const anchor = openAnchor;
     openAnchor = null;
     pop.hidden = true;
+    pinned = false;
     anchor.classList.remove("sel");
     anchor.setAttribute("aria-expanded", "false");
-    if (restoreFocus && anchor.isConnected) anchor.focus({ preventScroll: true });
+    if (restoreFocus && anchor.isConnected) {
+      restoring = true;
+      anchor.focus({ preventScroll: true });
+      restoring = false;
+    }
   }
 
+  // Hovering or focusing a bar previews its popover without moving focus; a click or Enter pins
+  // it and moves focus in. A preview closes when the pointer or focus leaves its bar.
+  let pinned = false, restoring = false;
   tl.addEventListener("click", (e) => {
     const b = e.target.closest(".bar");
     if (!b) return;
-    if (b === openAnchor) closePop(); else openSpan(b);
+    if (b === openAnchor && pinned) { closePop(); return; }
+    openSpan(b);
+    pinned = true;
+  });
+  const preview = (b) => { if (b && b !== openAnchor && !pinned && !restoring) { openSpan(b, false); pinned = false; } };
+  tl.addEventListener("focusin", (e) => preview(e.target.closest(".bar")));
+  tl.addEventListener("mouseover", (e) => preview(e.target.closest(".bar")));
+  tl.addEventListener("focusout", (e) => {
+    if (pinned || !openAnchor || e.target !== openAnchor) return;
+    if (!e.relatedTarget || (!pop.contains(e.relatedTarget) && !e.relatedTarget.closest(".bar"))) closePop(false);
+  });
+  tl.addEventListener("mouseout", (e) => {
+    const b = e.target.closest(".bar");
+    if (pinned || !b || b !== openAnchor || document.activeElement === b) return;
+    if (!e.relatedTarget || (!pop.contains(e.relatedTarget) && e.relatedTarget.closest(".bar") !== b)) closePop(false);
+  });
+  pop.addEventListener("click", (e) => {
+    const l = e.target.closest("[data-open-task]");
+    if (l) openTaskDrawer(l.dataset.openTask, openAnchor);
   });
   pop.querySelector(".pop-close").addEventListener("click", () => closePop());
   document.addEventListener("keydown", (e) => {
@@ -277,9 +367,10 @@
     $("gates").innerHTML = view.gates.map((g) => {
       const rules = Object.entries(g.ruleCounts || {});
       return `<div class="gate"><div class="gate-top">${verdictChip(g.verdict)}<span class="mono">${esc(g.runId)}</span></div>
-        <div class="sub" style="color:var(--muted);font-size:12px">${esc(g.task || "no task")} · swiftgate ${esc(g.command)} · ${fmtMs(g.ms)} · ${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped</div>
+        <div class="sub" style="color:var(--muted);font-size:12px">${esc(g.task || "no task")} · swiftgate ${esc(g.command)} · ${fmtMs(g.ms)}${g.tests ? ` · ${g.tests.passed} passed, ${g.tests.failed} failed, ${g.tests.skipped} skipped` : ""}</div>
         <div class="steps">${g.steps.map((s) => `<span class="step ${s.verdict === "RED" ? "red" : ""}">${esc(s.tier)} ${esc(s.step)} ${fmtMs(s.ms)}</span>`).join("")}</div>
-        ${rules.length ? `<div class="tags">${rules.map(([k, n]) => `<span class="tag">${esc(k)} ${n}</span>`).join("")}</div>` : ""}</div>`;
+        ${rules.length ? `<div class="tags">${rules.map(([k, n]) => `<span class="tag">${esc(k)} ${n}</span>`).join("")}</div>` : ""}
+        ${g.failure ? `<div class="gate-fail"><p class="sub">${esc(failureHeadline(g))}</p>${g.failure.findings.length ? `<ul class="fail-list">${g.failure.findings.slice(0, POP_LINES).map((x) => findingHtml(x, POP_MESSAGE)).join("")}${more(g.failure.findings.length - Math.min(POP_LINES, g.failure.findings.length) + g.failure.moreFindings, "")}</ul>` : ""}</div>` : ""}</div>`;
     }).join("");
   }
 
@@ -335,8 +426,13 @@
       ? `<ol class="act">${ev.map((e) => `<li style="--c:var(${e.c})"><i class="dot"></i><div class="ev"><span>${esc(e.text)}</span>${(e.codes || []).map((c) => `<code>${esc(c)}</code>`).join("")}${e.sub ? `<span class="sub">${esc(e.sub)}</span>` : ""}</div>${when(e.at)}</li>`).join("")}</ol>`
       : `<p class="muted">nothing yet</p>`;
     const ts = taskSpan(id);
+    const redGates = view.gates.filter((g) => g.task === id && g.failure);
+    const gateOf = (rid) => gateBy[rid] || null;
+    const failed = t.blocked || redGates.length
+      ? card(redGates.length ? "Why it failed" : "Why it stopped", `${t.blocked ? blockHtml(t.blocked, gateOf) : ""}${redGates.map((g) => `<div class="dr-fail">${gateFailureHtml(g, true)}</div>`).join("")}`)
+      : "";
 
-    $("dr-body").innerHTML =
+    $("dr-body").innerHTML = failed +
       (b ? card("Why", `<p>${md(b.why)}</p>${b.designRef ? `<p class="dr-ref">Implements design ${esc(b.designRef)}</p>` : ""}`) +
         card("Scope", bullets(b.scope)) +
         card("Acceptance", bullets(b.acceptance)) +
@@ -480,12 +576,18 @@
     const drawerFocusables = () => [...drawer.querySelectorAll("#dr-body button, #dr-body summary")];
     const drawerFocus = drawerId ? drawerFocusables().indexOf(active) : -1;
     const folds = drawerId ? [...drawer.querySelectorAll("#dr-body details")].map((d) => d.open) : [];
+    const wasPinned = pinned;
     closePop(false);
     render();
     modules.forEach((_, name) => runModule(name, "apply"));
     const bar = (id) => (id ? tl.querySelector(`.bar[data-id="${CSS.escape(id)}"]`) : null);
+    restoring = true;
     if (barFocus && bar(barFocus)) bar(barFocus).focus({ preventScroll: true });
-    if (popSpan && bar(popSpan)) openSpan(bar(popSpan), popFocus);
+    restoring = false;
+    if (popSpan && bar(popSpan)) {
+      openSpan(bar(popSpan), popFocus);
+      pinned = wasPinned;
+    }
     if (drawerId) {
       renderDrawer(drawerId);
       drawer.querySelectorAll("#dr-body details").forEach((d, i) => { if (folds[i]) d.open = true; });

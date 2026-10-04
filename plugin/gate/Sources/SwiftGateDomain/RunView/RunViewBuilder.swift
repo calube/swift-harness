@@ -58,6 +58,7 @@ public enum RunViewBuilder {
     for index in view.spans.indices {
       if let summary = summaries[view.spans[index].id] { view.spans[index].tools = summary }
     }
+    RunViewGateFailures.fill(&view, input: input, events: events)
     return view
   }
 

@@ -192,11 +192,11 @@
         const verdict = g ? g.verdict : s.outcome === "red" ? "RED" : "GREEN";
         const sub = (g ? gateTier(g.command) + " gate · " : "") + "run " + shortRun(s.gateRun);
         if (s.end == null) events.push({ at: ms(s.start), kind: "gate", text: "Gate running", sub, c: "--warn" });
-        else events.push({ at: ms(s.end), kind: "gate", text: "Gate " + verdict, codes: g ? Object.keys(g.ruleCounts || {}) : [], sub, c: verdict === "RED" ? "--bad" : "--ok" });
+        else events.push({ at: ms(s.end), kind: "gate", text: "Gate " + verdict, codes: g ? (g.failure && g.failure.findings.length ? g.failure.findings.map((x) => x.rule) : Object.keys(g.ruleCounts || {})) : [], sub, c: verdict === "RED" ? "--bad" : "--ok" });
       }
     });
     (view.halts || []).filter((h) => h.task === id).forEach((h) => {
-      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason, c: "--bad" });
+      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason + (h.gateRun ? " · gate run " + shortRun(h.gateRun) : ""), c: "--bad" });
     });
     if (t.mergedAt) {
       const g = gateBy[t.mergeGateRun];
@@ -240,6 +240,26 @@
     return { calls: sorted, otherCount, ms: total, files, droppedPaths };
   }
 
+  // What explains a span's red or halted outcome: the RED gate run it is or names, the task's
+  // block when it stopped there, and the run's halts. Null when nothing does.
+  function failureOf(view, span) {
+    const gates = {};
+    (view.gates || []).forEach((g) => { gates[g.runId] = g; });
+    const task = span.task != null ? (view.tasks || []).find((t) => t.id === span.task) : null;
+    const runId = span.gateRun || span.causeGateRun || null;
+    const gate = runId && gates[runId] && gates[runId].failure ? gates[runId] : null;
+    const block = span.phase === "task" && task && task.blocked ? task.blocked : null;
+    const halts = span.phase === "run" && span.outcome === "halted" ? openHalts(view) : [];
+    if (!gate && !block && !halts.length) return null;
+    return { gate, block, halts, gateOf: (id) => gates[id] || null };
+  }
+
+  // `file:line`, `file`, or null for a finding or test no file locates.
+  const location = (file, line) => (file == null ? null : line == null ? file : file + ":" + line);
+
+  // `text` cut to `max` characters with an ellipsis.
+  const clip = (text, max) => (text.length > max ? text.slice(0, Math.max(0, max - 1)) + "…" : text);
+
   // Halts with no resume yet: the builder fills `answer` and `waitMs` only from a `build.resume`.
   const openHalts = (view) => (view.halts || []).filter((h) => h.answer == null && h.waitMs == null);
 
@@ -278,7 +298,7 @@
   const stalls = (view, nowMs, stallMin) => workers(view, nowMs, stallMin).filter((w) => w.stalled).map((w) => w.task);
 
   root.RunViewModel = {
-    apply, stalls, openHalts, workers, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    apply, stalls, openHalts, workers, failureOf, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

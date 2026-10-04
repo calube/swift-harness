@@ -2078,6 +2078,58 @@ cp $S/build-events.jsonl $F/build-events.jsonl
 The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
 changes nothing else.
 
+## Run view: a RED gate's report
+
+`RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
+gate of `counter-ui-reset-button` wrote in the `build-run-1` capture (see its `SOURCE`), the run
+that went RED on the `counterWithFact` snapshot test before the fixer turned the task GREEN. The
+run viewer reads it for that gate's failure: its tier, gating findings and failing test. The
+capture's scratch repository still held it on 2026-10-04; with `S` that scratch directory and
+`R=20261004T050310Z-ed998508`, this copy made 2 path substitutions and nothing else:
+
+```sh
+sed -e 's#/var/folders/lb/9c21kv5n74x2gyjdxqn51ngh0000gn/T/tmp\.IvRTQZud90#/var/folders/xx/T/tmp.scratch#g' \
+    -e 's#/Users/<user>/#/Users/user/#g' \
+    $S/app/.harness/runs/$R/report.json > <fixtures>/RunView/build-run-1/runs/$R/report.json
+```
+
+The `t2.test-failed` finding's message is the snapshot library's own, 13 lines long with 2
+`file://` URLs: 1 under the checkout and 1 under the simulator's data directory. The substitutions
+keep both absolute, so a test can show that neither reaches a run view: the builder makes the
+first repo-relative from the checkout root and replaces the second with `<path>`. Those 2 URLs are
+the only matches of the run view greps above in this file.
+
+## Run view: a brownfield run with blocked tasks
+
+`RunView/brownfield-blocked/` is the state a real brownfield run left, for the run view's worker
+gate runs in a clone's shared store and its blocked tasks. The `memos-3` trial ran the run skill
+on a clone of the `usememos/memos` repository on 2026-10-04, build run
+`20261004T124141Z-c3747b7a` of plan `spec`. The contract task finished. `share-view-limit-store`
+and `share-view-limit-web` ran in parallel. Each worker's slice gate went RED once in its own
+worktree (`neutral.lint` on `store/test/memo_share_test.go:212`, and the web area's lint), then
+GREEN. Each task ended `blocked` when `build check-return` rejected its return for an
+`app-build` step a slice gate never records. That rejection is in no event or ledger line: the
+run's `REPORT.md` holds it as prose. `share-view-limit-api` never started.
+
+With `G` the clone's `.git`, `C=$G/swift-harness`, `P=$C/plans/spec` and
+`R=$P/build/20261004T124141Z-c3747b7a`, copied after the run ended:
+
+```sh
+S='s#/Users/<user>/Developer/trials/memos-3-#../memos-3-#g; s#"/private/tmp/[^"]*/spec\.md"#"/spec.md"#g; s#"/Users/<user>/Developer/trials/memos-3/\.git/swift-harness/plans/spec/spec\.md"#"/spec.md"#g'
+cp $C/events/{gate,span,build,brownfield,usage}.jsonl $C/events/store.json events/
+sed -E "$S" $P/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json; cp $P/plan.json plan.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+for w in $G/worktrees/*; do n=$(basename $w); for r in $w/swift-harness/runs/2*/; do
+  mkdir -p worktrees/$n/runs/$(basename $r); cp $r/report.json worktrees/$n/runs/$(basename $r)/; done; done
+```
+
+The `sed` made the ledger's 4 worktree paths relative (`../memos-3-spec-<task>`), as
+`build-run-1`'s are, and set `clock.json`'s `spec` and `origin` to `/spec.md`, as the reader
+tests' clocks spell them. The hook stream, `PLAN.md`, `spec.md` and `REPORT.md` stayed out: the
+reader reads none of them. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|home'
+RunView/brownfield-blocked` and the secrets grep above matched nothing; `/tmp` matches only a
+repo-relative `.harness/tmp/edit.py` in an `agent.tools` file list.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on

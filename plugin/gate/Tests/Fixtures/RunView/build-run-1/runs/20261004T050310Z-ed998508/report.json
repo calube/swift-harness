@@ -1,0 +1,80 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 128593,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "T1 covers 3 of 3 changed Core/client/Live lines (100%; minimum 90%)",
+      "rule" : "coverage.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/CounterFeature/Tests/CounterUISnapshotTests/CounterViewSnapshotTests.swift",
+      "line" : 21,
+      "message" : "CounterViewSnapshotTests/counterWithFact(): Issue recorded: Snapshot does not match reference.\n\n@−\n\"file:///var/folders/xx/T/tmp.scratch/app/Packages/CounterFeature/Tests/CounterUISnapshotTests/__Snapshots__/CounterViewSnapshotTests/counterWithFact.1.png\"\n@+\n\"file:///Users/user/Library/Developer/CoreSimulator/Devices/23227D41-D53D-4BB0-A995-17BCD470CF45/data/tmp/CounterViewSnapshotTests/counterWithFact.1.png\"\n\nTo configure output for a custom diff tool, use 'withSnapshotTesting'. For example:\n\n    withSnapshotTesting(diffTool: .ksdiff) {\n      // ...\n    }\n\nNewly-taken snapshot does not match reference.",
+      "rule" : "t2.test-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "evidence check (push tier): 0 design doc(s) found, 0 approved or built and checked at HEAD.",
+      "rule" : "evidence-check.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "calibration freshness skipped: no plugin/agents/design-*.md in this repository, so there is no design agent to calibrate; no plugin/agents/build-fixer.md and plugin/agents/build-worker.md in this repository, so there is no build agent to calibrate.",
+      "rule" : "calibration-freshness.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prose (push tier): 0 changed doc(s), 0 added line(s) since the merge base with 5f49d8d7e6b040dab1a1971e8bcb5546c0431171 checked.",
+      "rule" : "prose.summary",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "ab2b20eb2524d3920cb1ad8eca96734fb02e72bf",
+  "runID" : "20261004T050310Z-ed998508",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 271,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "GREEN"
+    },
+    {
+      "durationMilliseconds" : 8371,
+      "testCounts" : {
+        "failed" : 0,
+        "passed" : 33,
+        "skipped" : 0
+      },
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    },
+    {
+      "durationMilliseconds" : 119402,
+      "testCounts" : {
+        "failed" : 1,
+        "passed" : 0,
+        "skipped" : 0
+      },
+      "tier" : "T2",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}
