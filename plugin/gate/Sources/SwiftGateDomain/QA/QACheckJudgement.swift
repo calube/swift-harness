@@ -52,16 +52,70 @@ public struct QACheckJudgement: Sendable, Equatable {
     }
   }
 
+  /// Exit 0 passes unless the check wrote a report showing no test ran, which is the expected red
+  /// run at the merge base and `unverified` after the merge. Any other end keeps its exit-status
+  /// result, and a red one names its first meaningful failure line.
   public static func judge(_ input: Input) -> QACheckJudgement {
+    let status: String
     switch input.end {
-    case .exited(let code):
-      return QACheckJudgement(result: code == 0 ? .pass : .red, message: "exit \(code)")
-    case .signaled(let signal):
-      return QACheckJudgement(result: .red, message: "killed by signal \(signal)")
-    case .timedOut(let after):
-      return QACheckJudgement(result: .red, message: "timed out after \(after)")
+    case .exited(0):
+      guard let why = noTestRan(input) else {
+        return QACheckJudgement(result: .pass, message: "exit 0")
+      }
+      return input.atBase
+        ? QACheckJudgement(result: .red, message: "exit 0, but \(why)")
+        : QACheckJudgement(result: .unverified, message: why)
+    case .exited(let code): status = "exit \(code)"
+    case .signaled(let signal): status = "killed by signal \(signal)"
+    case .timedOut(let after): status = "timed out after \(after)"
     case .launchFailed(let reason):
       return QACheckJudgement(result: .unverified, message: "not started: \(reason)")
     }
+    guard let reason = failureLine(input) else {
+      return QACheckJudgement(result: .red, message: status)
+    }
+    return QACheckJudgement(result: .red, message: "\(status): \(reason)")
+  }
+
+  /// Why the report shows no test ran, or `nil` when there is no report or a test ran.
+  private static func noTestRan(_ input: Input) -> String? {
+    guard let report = input.report else { return nil }
+    guard let cases = JUnitReports.cases(report) else {
+      return "its test report doesn't read, so no test is shown to have run for "
+        + "`\(input.reference)`"
+    }
+    guard !cases.contains(where: \.isExecuted) else { return nil }
+    return cases.isEmpty
+      ? "no test matched `\(input.reference)`"
+      : "all \(cases.count) tests `\(input.reference)` matched were skipped"
+  }
+
+  /// The report's first failure message, the first failing case when every message is XCTest's
+  /// placeholder, or else the last non-empty line of stderr, then of stdout; scrubbed and cut.
+  private static func failureLine(_ input: Input) -> String? {
+    var line: String?
+    let failed = input.report.flatMap(JUnitReports.cases)?.compactMap {
+      testCase -> (XUnitTestCase, String)? in
+      guard case .failed(let message) = testCase.outcome else { return nil }
+      return (testCase, message.trimmingCharacters(in: .whitespacesAndNewlines))
+    } ?? []
+    if let (_, message) = failed.first(where: { !$0.1.isEmpty && $0.1 != "failure" }) {
+      line = message
+    } else if let (testCase, _) = failed.first {
+      line = "\(testCase.className).\(testCase.name) failed"
+    } else {
+      line = lastLine(input.stderr) ?? lastLine(input.stdout)
+    }
+    guard let line else { return nil }
+    let roots = RunViewGateFailures.Scrub.roots(input.roots)
+    let scrubbed = RunViewGateFailures.Scrub.message(line, roots: roots).0
+    guard scrubbed.count > maxReasonCharacters else { return scrubbed }
+    return String(scrubbed.prefix(maxReasonCharacters - 1)) + "…"
+  }
+
+  private static func lastLine(_ text: String) -> String? {
+    text.split(whereSeparator: \.isNewline)
+      .last { !$0.allSatisfy(\.isWhitespace) }
+      .map { String($0).trimmingCharacters(in: .whitespaces) }
   }
 }

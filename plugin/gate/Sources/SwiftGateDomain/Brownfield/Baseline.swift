@@ -41,14 +41,7 @@ public enum BaselineStepResult: Sendable, Hashable {
 
   /// An unreadable report, or one naming no failing case, reads as no ids: the step failed.
   private static func failingTests(_ junit: Data) -> Set<String> {
-    let cases: [XUnitTestCase]
-    if let parsed = try? XUnitReport.parse(junit) {
-      cases = parsed
-    } else if let parsed = try? XUnitReport.parse(wrappingBareSuite(junit)) {
-      cases = parsed
-    } else {
-      return []
-    }
+    guard let cases = JUnitReports.cases(junit) else { return [] }
     var tests = Set<String>()
     for testCase in cases {
       guard case .failed = testCase.outcome else { continue }
@@ -59,15 +52,6 @@ public enum BaselineStepResult: Sendable, Hashable {
       tests.insert(id)
     }
     return tests
-  }
-
-  /// Surefire and Gradle write 1 `<testsuite>` as the root, which ``XUnitReport`` doesn't take.
-  private static func wrappingBareSuite(_ junit: Data) -> Data {
-    var text = String(decoding: junit, as: UTF8.self)
-    if text.hasPrefix("<?xml"), let end = text.range(of: "?>") {
-      text.removeSubrange(text.startIndex..<end.upperBound)
-    }
-    return Data("<testsuites>\(text)</testsuites>".utf8)
   }
 }
 

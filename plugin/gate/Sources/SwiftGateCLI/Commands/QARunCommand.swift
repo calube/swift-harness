@@ -376,9 +376,12 @@ enum QARunRun {
       var directory = workingDirectory
       var shown = row.check
       var reference = row.check
-      if row.layer == .acceptance, let test = AcceptanceTestReference.parse(row.check) {
+      // Where an acceptance check may write a test report, which must then show a test ran.
+      let junit =
+        row.layer == .acceptance
+        ? qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path : nil
+      if let junit, let test = AcceptanceTestReference.parse(row.check) {
         reference = test.id
-        let junit = qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path
         switch areas.flatMap({ test.resolve(in: $0, junitPath: junit) }) {
         case .success(let resolved):
           program = .command(resolved.command)
@@ -396,13 +399,19 @@ enum QARunRun {
             && !isDirectory.boolValue
           ? .script(path: script) : .command(row.check)
       }
+      var environment = [
+        "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
+        "QA_EVIDENCE_DIR": qaDirectory.path,
+      ]
+      if let junit {
+        JUnitReportFiles.clear(at: junit)
+        environment[QACheckJudgement.reportVariable] = junit
+      }
       let output = await dependencies.checks.run(
         QACheckRequest(
           program: program, workingDirectory: directory,
-          environment: [
-            "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
-            "QA_EVIDENCE_DIR": qaDirectory.path,
-          ].merging(device, uniquingKeysWith: { own, _ in own }), timeout: dependencies.timeout))
+          environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
+          timeout: dependencies.timeout))
 
       var exitStatus: Int?
       let end: QACheckJudgement.End
@@ -424,7 +433,8 @@ enum QARunRun {
       }
       let judgement = QACheckJudgement.judge(
         QACheckJudgement.Input(
-          end: end, stdout: output.stdout, stderr: output.stderr, report: nil,
+          end: end, stdout: output.stdout, stderr: output.stderr,
+          report: junit.flatMap(JUnitReportFiles.read(at:)),
           reference: reference, atBase: atBase,
           roots: [directory, workingDirectory, qaDirectory.path, planDirectory]))
       let result = judgement.result
