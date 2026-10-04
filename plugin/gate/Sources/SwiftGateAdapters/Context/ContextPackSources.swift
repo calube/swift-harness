@@ -173,7 +173,14 @@ public enum ContextPackTaskReturn {
   public static func notes(forTask taskID: String, buildRun runID: String, planDirectory: URL)
     -> Result<String, Failure>
   {
-    .failure(.unreadable(path: planDirectory.path))
+    let file = planDirectory.appending(path: "build/\(runID)/returns/\(taskID).json")
+    guard let data = try? Data(contentsOf: file) else {
+      return .failure(.unreadable(path: file.path))
+    }
+    guard let taskReturn = try? TaskReturnJSON.decode(data), taskReturn.task == taskID else {
+      return .failure(.malformed(path: file.path))
+    }
+    return .success(taskReturn.notes)
   }
 }
 

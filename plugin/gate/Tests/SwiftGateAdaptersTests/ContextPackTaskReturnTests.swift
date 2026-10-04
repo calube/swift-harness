@@ -69,6 +69,22 @@ struct ContextPackTaskReturnTests {
   }
 
   @Test(
+    "a brownfield plan directory given whole yields its stored return's notes — catches dependency notes looked up under the repository root instead of the git common dir"
+  )
+  func planDirectoryYieldsNotes() throws {
+    let scenario = ReturnsScenario()
+    defer { scenario.remove() }
+    try scenario.write(task: "fetch", ReturnsScenario.fullReturn(task: "fetch"))
+
+    let notes = ContextPackTaskReturn.notes(
+      forTask: "fetch", buildRun: ReturnsScenario.runID,
+      planDirectory: scenario.root.appending(
+        path: "plans/2026-09-26-search", directoryHint: .isDirectory))
+
+    #expect(notes == .success("Fetcher.load() returns [Item]"))
+  }
+
+  @Test(
     "a return naming another task is malformed — catches one task's notes filed under a dependency's name"
   )
   func mismatchedTaskIsMalformed() throws {

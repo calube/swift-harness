@@ -51,7 +51,9 @@ enum PlanImportRun {
   static let command = "plan import"
 
   /// Reads `<common>/swift-harness/plans/<slug>/PLAN.md`, writes `ledger.json` and `plan.json`
-  /// beside it, links `<root>/PLAN.md` to it and excludes that link once. Nothing is written
+  /// beside it, links `<root>/PLAN.md` to it and excludes that link once, then sets the plan's
+  /// `index.json` entry to `planned` under the index lock unless it is already planned or past
+  /// it. Nothing is written
   /// unless the clone is brownfield, the plan parses and the link's place is free or already
   /// the link.
   static func run(slug: String, root: URL, git: any Git) async -> PlanImportReport {
@@ -183,6 +185,48 @@ enum PlanImportRun {
       return report
     }
 
+    let indexFile: String
+    do {
+      indexFile = try PlanStateLayout(commonDirectory: common).indexFile
+    } catch {
+      report.message = "placing index.json under \(common): \(error)"
+      return report
+    }
+    // A plan already planned, building or finished keeps its status: importing again adds a
+    // fix task to a running build, which `build next` picks up without a second `build start`.
+    var kept: Result<PlanStatus, IndexEntryUnknown> = .success(.planned)
+    do {
+      try await PlanIndexStore(path: indexFile).update { index in
+        guard let current = index.plans.first(where: { $0.slug == slug }) else {
+          return index.settingStatus(
+            slug: slug, status: PlanStatus.planned.rawValue, resume: planFile.resume)
+        }
+        guard let status = PlanStatus(rawValue: current.status) else {
+          kept = .failure(IndexEntryUnknown(status: current.status))
+          return index
+        }
+        guard status.importSetsPlanned else {
+          kept = .success(status)
+          return index
+        }
+        return index.settingStatus(
+          slug: slug, status: PlanStatus.planned.rawValue, resume: planFile.resume)
+      }
+    } catch {
+      report.message =
+        "\(plan.ledgerFile) and \(plan.planFile) written, but setting \(indexFile) to planned "
+        + "failed: \(error)"
+      return report
+    }
+    switch kept {
+    case .success(let status): report.indexStatus = status
+    case .failure(let unknown):
+      report.message =
+        "\(plan.ledgerFile) and \(plan.planFile) written, but \(indexFile) holds `\(slug)` at "
+        + "`\(unknown.status)`, which is not a plan status; it was left as it is"
+      return report
+    }
+
     report.status = .imported
     report.verdict = .green
     report.tasks = ledger.tasks.count
@@ -232,12 +276,28 @@ enum PlanImportRun {
   }
 }
 
+private struct IndexEntryUnknown: Error {
+  let status: String
+}
+
+extension PlanStatus {
+  /// Whether `plan import` moves a plan at this status to `planned`: only one not planned yet.
+  fileprivate var importSetsPlanned: Bool {
+    switch self {
+    case .designing, .inReview, .approved: true
+    case .planned, .building, .done, .abandoned, .superseded: false
+    }
+  }
+}
+
 /// `swiftgate plan import <slug>`: derives a brownfield plan's ledger and plan file from its
 /// `PLAN.md`.
 struct PlanImportCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "import",
-    abstract: "Write a brownfield plan's ledger.json and plan.json from its PLAN.md.")
+    abstract:
+      "Write a brownfield plan's ledger.json and plan.json from its PLAN.md, and index it as "
+      + "planned.")
 
   @Argument(help: "The plan's slug.")
   var slug: String

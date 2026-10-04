@@ -29,8 +29,79 @@ extension ContextPack {
   /// The heading the brownfield rules' section of the standards doc starts with.
   public static let brownfieldRulesHeading = "Brownfield profile"
 
+  /// The task's ledger entry; its `PLAN.md` section and the plan's Assumptions, verbatim; each
+  /// area its write set lies in, with that area's commands as `config.toml` holds them; the
+  /// standards doc's brownfield profile section, verbatim; and its dependencies' return notes.
+  /// A task whose write set lies in no area says so, so an empty section is never a lost one.
   public static func brownfieldWorkerPack(_ inputs: BrownfieldWorkerInputs) throws -> ContextPack {
-    ContextPack(role: .worker, slices: [])
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
+    var slices = [
+      ContextPackSlice(
+        sourceLabel: "ledger task entry: \(inputs.task.id)", anchor: nil,
+        lines: MarkdownAnchorSlicer.rawLines(
+          String(decoding: try encoder.encode(inputs.task), as: UTF8.self)))
+    ]
+
+    let plan = MarkdownDocument.parse(inputs.plan.rawText)
+    slices.append(
+      try MarkdownAnchorSlicer.slice(
+        anchor: inputs.task.id, of: plan, rawText: inputs.plan.rawText,
+        sourceLabel: inputs.plan.label))
+    if plan.section(anchor: "assumptions") != nil {
+      // The plan's task sections nest under its last `##` section, Assumptions, so the slice
+      // stops at the first heading below it: another task's section never rides along.
+      let whole = try MarkdownAnchorSlicer.slice(
+        anchor: "assumptions", of: plan, rawText: inputs.plan.rawText,
+        sourceLabel: inputs.plan.label)
+      let body = whole.lines.dropFirst().prefix { !$0.hasPrefix("#") }
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: whole.sourceLabel, anchor: whole.anchor,
+          lines: Array(whole.lines.prefix(1) + body)))
+    }
+
+    let held = areas(holding: inputs.task.writeSet, in: inputs.areas)
+    if held.isEmpty {
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: "config.toml areas", anchor: nil,
+          lines: ["No area in config.toml holds this task's write set; no area commands apply."]))
+    }
+    for area in held {
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: "config.toml area \(area.name)", anchor: nil, lines: areaLines(area)))
+    }
+
+    let standards = MarkdownDocument.parse(inputs.standards.rawText)
+    guard
+      let rules = sections(standards.sections).first(where: {
+        $0.heading.hasPrefix(brownfieldRulesHeading)
+      })
+    else {
+      throw ContextPackError.missingAnchor(
+        anchor: brownfieldRulesHeading, source: inputs.standards.label)
+    }
+    slices.append(
+      try MarkdownAnchorSlicer.slice(
+        anchor: rules.anchor, of: standards, rawText: inputs.standards.rawText,
+        sourceLabel: inputs.standards.label))
+
+    if !inputs.dependencyNotes.isEmpty {
+      var noteLines: [String] = []
+      for dependency in inputs.dependencyNotes {
+        guard let notes = dependency.notes else {
+          throw ContextPackError.missingDependencyReturn(task: dependency.taskID)
+        }
+        noteLines.append(dependency.taskID)
+        noteLines.append(contentsOf: MarkdownAnchorSlicer.rawLines(notes))
+      }
+      slices.append(
+        ContextPackSlice(
+          sourceLabel: "Notes from the tasks this one depends on", anchor: nil, lines: noteLines))
+    }
+    return ContextPack(role: .worker, slices: slices)
   }
 
   /// The areas holding `writeSet`, in config order: each entry belongs to the area with the
@@ -38,6 +109,63 @@ extension ContextPack {
   public static func areas(holding writeSet: [String], in areas: [BrownfieldArea])
     -> [BrownfieldArea]
   {
-    []
+    var names: Set<String> = []
+    for entry in writeSet {
+      let owner =
+        areas
+        .filter { contains(root: $0.root, path: entry) }
+        .max { rootDepth($0.root) < rootDepth($1.root) }
+      if let owner { names.insert(owner.name) }
+    }
+    return areas.filter { names.contains($0.name) }
+  }
+
+  private static func contains(root: String, path: String) -> Bool {
+    let root = trimmed(root)
+    let path = trimmed(path)
+    return root.isEmpty || path == root || path.hasPrefix(root + "/")
+  }
+
+  private static func rootDepth(_ root: String) -> Int {
+    let root = trimmed(root)
+    return root.isEmpty ? 0 : root.split(separator: "/").count
+  }
+
+  /// `.`, `./x` and `x/` as the plain repository-relative form, with `.` as the empty string.
+  private static func trimmed(_ path: String) -> String {
+    var path = Substring(path)
+    while path.hasPrefix("./") { path = path.dropFirst(2) }
+    if path == "." { return "" }
+    while path.hasSuffix("/") { path = path.dropLast() }
+    return String(path)
+  }
+
+  /// The area as `config.toml` spells its keys; a step with no command is named, so the worker
+  /// knows no gate runs it.
+  private static func areaLines(_ area: BrownfieldArea) -> [String] {
+    var lines = [
+      "name = \(area.name)", "root = \(area.root)", "language = \(area.language.rawValue)",
+      "kind = \(area.kind.rawValue)",
+    ]
+    let steps: [(AreaStep, String?)] = [
+      (.build, area.build), (.test, area.test), (.testFiles, area.testFiles), (.lint, area.lint),
+      (.e2e, area.e2e),
+    ]
+    for (step, command) in steps {
+      lines.append("\(step.rawValue) = \(command ?? "none: no gate runs this step")")
+    }
+    if !area.testGlobs.isEmpty {
+      lines.append("test_globs = \(area.testGlobs.joined(separator: ", "))")
+    }
+    if let xcode = area.xcode {
+      lines.append("xcode inclusion = \(xcode.inclusion.rawValue)")
+    }
+    return lines
+  }
+
+  private static func sections(_ sections: [MarkdownDocument.Section])
+    -> [MarkdownDocument.Section]
+  {
+    sections.flatMap { [$0] + self.sections($0.subsections) }
   }
 }

@@ -164,11 +164,11 @@ enum ContextPackRun {
 
   /// One role's gathered inputs, its notes about absent optional inputs, and the output key
   /// (`nil` unless the role picks a default, as worker does from its task id).
-  private typealias Gathered = (inputs: ContextPackRoleInputs, notes: [String], key: String?)
+  typealias Gathered = (inputs: ContextPackRoleInputs, notes: [String], key: String?)
 
   /// A gathering-stage failure message (bad flag, unreadable path, unknown value). Wraps
   /// `String` only because `Result`'s failure type must conform to `Error`.
-  private struct GatherFailure: Error, Sendable, Equatable {
+  struct GatherFailure: Error, Sendable, Equatable {
     let message: String
     /// The domain refused the inputs (exit 1), rather than an input being bad or unreadable.
     let isViolation: Bool
@@ -202,15 +202,19 @@ enum ContextPackRun {
     }
 
     let gathered: Result<Gathered, GatherFailure>
-    switch role {
-    case .researchLane: gathered = await gatherResearchLane(options, root, swiftPM)
-    case .claimChecker: gathered = gatherClaimChecker(options, root)
-    case .drafter: gathered = gatherDrafter(options, root)
-    case .evidenceAuditor: gathered = gatherEvidenceAuditor(options, root)
-    case .standardsReviewer: gathered = gatherStandardsReviewer(options, root)
-    case .challenger: gathered = gatherChallenger(options, root)
-    case .decomposer: gathered = gatherDecomposer(options, root)
-    case .worker: gathered = await gatherWorker(options, root, swiftPM)
+    switch brownfieldConfig(root: root) {
+    case .failure(let failure):
+      return .invalid(message: failure.message)
+    case .success(let config?):
+      guard role == .worker else {
+        return .invalid(
+          message:
+            "a brownfield clone packs only --role worker: it has no design, so \(role.rawValue) "
+            + "has nothing to read")
+      }
+      gathered = gatherBrownfieldWorker(options, root, config)
+    case .success(nil):
+      gathered = await gatherOwned(role: role, options: options, root: root, swiftPM: swiftPM)
     }
 
     let (inputs, notes, roleKey): Gathered
@@ -252,6 +256,21 @@ enum ContextPackRun {
   }
 
   // MARK: - Per-role gathering
+
+  private static func gatherOwned(
+    role: ContextPackRole, options: ContextPackGatherInputs, root: URL, swiftPM: any SwiftPM
+  ) async -> Result<Gathered, GatherFailure> {
+    switch role {
+    case .researchLane: await gatherResearchLane(options, root, swiftPM)
+    case .claimChecker: gatherClaimChecker(options, root)
+    case .drafter: gatherDrafter(options, root)
+    case .evidenceAuditor: gatherEvidenceAuditor(options, root)
+    case .standardsReviewer: gatherStandardsReviewer(options, root)
+    case .challenger: gatherChallenger(options, root)
+    case .decomposer: gatherDecomposer(options, root)
+    case .worker: await gatherWorker(options, root, swiftPM)
+    }
+  }
 
   private static func gatherResearchLane(
     _ o: ContextPackGatherInputs, _ root: URL, _ swiftPM: any SwiftPM
@@ -1168,7 +1187,10 @@ struct ContextPackCommand: AsyncParsableCommand {
       + "the 2, else exit 2; a page that breaks the spec page format, or a `covers` id that is "
       + "not a slice id on it, exits 1. A worker pack's standards are the "
       + "anchors for the module kinds its task's write set touches in the module graph; "
-      + "--standards defaults to docs/standards.md, else the harness plugin's.")
+      + "--standards defaults to docs/standards.md, else the harness plugin's. In a brownfield "
+      + "clone only --role worker runs, from --ledger (absolute allowed) and --task-id with an "
+      + "optional --build-run: the pack holds the task's PLAN.md section, the plan's assumptions, "
+      + "its areas' commands from config.toml and the harness's brownfield rules.")
 
   @OptionGroup var packOptions: ContextPackOptions
   @OptionGroup var output: OutputOptions
