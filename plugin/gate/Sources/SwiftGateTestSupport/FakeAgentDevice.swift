@@ -18,6 +18,7 @@ public final class FakeAgentDevice: AgentDevice {
     case recordStop(AgentDeviceTarget)
     case contactSheet(video: String, sheet: String)
     case logs(AgentDeviceTarget)
+    case logStream(AgentDeviceLogsAction, target: AgentDeviceTarget)
     case networkDump(limit: Int, target: AgentDeviceTarget)
     case trace(AgentDeviceTraceAction, path: String, target: AgentDeviceTarget)
     case close(AgentDeviceTarget)
@@ -38,6 +39,7 @@ public final class FakeAgentDevice: AgentDevice {
       case .recordStop: "record stop"
       case .contactSheet: "record contact-sheet"
       case .logs: "logs path"
+      case .logStream(let action, _): "logs \(action.rawValue)"
       case .networkDump: "network dump"
       case .trace(let action, _, _): "trace \(action.rawValue)"
       case .close: "close"
@@ -164,6 +166,12 @@ public final class FakeAgentDevice: AgentDevice {
 
   public func logs(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> String {
     try record(.logs(target)).logPath
+  }
+
+  public func logStream(_ action: AgentDeviceLogsAction, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
+  {
+    _ = try record(.logStream(action, target: target))
   }
 
   public func networkDump(limit: Int, on target: AgentDeviceTarget)

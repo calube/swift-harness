@@ -57,6 +57,10 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
   public let video: String?
   /// Run-relative; absent until a final pass makes one.
   public let sheet: String?
+  /// Why a final pass left no video; absent otherwise.
+  public let videoUnverified: QARecordingGapReason?
+  /// Why a final pass that made a video left no contact sheet; absent otherwise.
+  public let sheetUnverified: QARecordingGapReason?
 
   public init(
     plan: String?, row: Int?, requirement: String?, atBase: Bool, record: QAFlowRecord
@@ -69,9 +73,13 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
     self.steps = record.steps
     self.video = record.video
     self.sheet = record.sheet
+    self.videoUnverified = record.videoUnverified
+    self.sheetUnverified = record.sheetUnverified
   }
 
   public var record: QAFlowRecord {
-    QAFlowRecord(source: source, steps: steps, video: video, sheet: sheet)
+    QAFlowRecord(
+      source: source, steps: steps, video: video, sheet: sheet, videoUnverified: videoUnverified,
+      sheetUnverified: sheetUnverified)
   }
 }

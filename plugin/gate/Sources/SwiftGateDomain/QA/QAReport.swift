@@ -19,6 +19,8 @@ public struct QAReport: Sendable, Equatable {
   public let plan: String?
   public let after: String?
   public let atBase: Bool
+  /// A `--final` run: every row, with each flow recorded.
+  public let final: Bool
   /// The commit the rows ran at; `nil` when none ran.
   public let commit: String?
   public let verdict: Verdict
@@ -29,16 +31,17 @@ public struct QAReport: Sendable, Equatable {
   public let message: String
 
   /// The report for rows that ran; its findings and verdict come from `rows`.
+  /// - Parameter gaps: final-pass evidence the flow rows didn't leave, each a nit.
   public init(
-    runID: String, plan: String, after: String?, atBase: Bool, commit: String?, rows: [QARow],
-    notes: [String] = []
+    runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
+    commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [], notes: [String] = []
   ) {
     let findings = Self.findings(rows: rows, atBase: atBase)
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
     self.init(
-      runID: runID, plan: plan, after: after, atBase: atBase, commit: commit,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: commit,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
       findings: findings, notes: notes,
       message: rows.isEmpty
@@ -46,7 +49,7 @@ public struct QAReport: Sendable, Equatable {
   }
 
   private init(
-    runID: String?, plan: String?, after: String?, atBase: Bool, commit: String?,
+    runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, commit: String?,
     verdict: Verdict, rows: [QARow], findings: [Finding], notes: [String], message: String
   ) {
     self.schemaVersion = Self.currentSchemaVersion
@@ -54,6 +57,7 @@ public struct QAReport: Sendable, Equatable {
     self.plan = plan
     self.after = after
     self.atBase = atBase
+    self.final = final
     self.commit = commit
     self.verdict = verdict
     self.rows = rows
@@ -64,27 +68,31 @@ public struct QAReport: Sendable, Equatable {
 
   /// A run the environment stopped before any row ran.
   public static func blocked(
-    _ message: String, plan: String?, after: String?, atBase: Bool, runID: String? = nil
+    _ message: String, plan: String?, after: String?, atBase: Bool, final: Bool = false,
+    runID: String? = nil
   ) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, commit: nil, verdict: .blocked,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: nil,
+      verdict: .blocked,
       rows: [], findings: [], notes: [], message: message)
   }
 
   /// A run with no table to read: GREEN, since a plan may carry none, with `note` saying why.
   public static func nothingToRun(
-    _ note: String, plan: String?, after: String?, atBase: Bool, runID: String? = nil
+    _ note: String, plan: String?, after: String?, atBase: Bool, final: Bool = false,
+    runID: String? = nil
   ) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, commit: nil, verdict: .green,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: nil,
+      verdict: .green,
       rows: [], findings: [], notes: [note], message: "no validation row to run")
   }
 
   /// This report with `notes` added after its own.
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, commit: commit, verdict: verdict,
-      rows: rows, findings: findings, notes: notes + more, message: message)
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: commit,
+      verdict: verdict, rows: rows, findings: findings, notes: notes + more, message: message)
   }
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
@@ -116,8 +124,8 @@ public struct QAReport: Sendable, Equatable {
 
 extension QAReport: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runID, plan, after, atBase, commit, verdict, rows, findings, notes,
-      message
+    case schemaVersion, runID, plan, after, atBase, final, commit, verdict, rows, findings,
+      notes, message
   }
 
   public init(from decoder: any Decoder) throws {
@@ -132,6 +140,8 @@ extension QAReport: Codable {
       plan: try c.decodeIfPresent(String.self, forKey: .plan),
       after: try c.decodeIfPresent(String.self, forKey: .after),
       atBase: try c.decode(Bool.self, forKey: .atBase),
+      // Reports written before `--final` existed hold no key, and none of them was final.
+      final: try c.decodeIfPresent(Bool.self, forKey: .final) ?? false,
       commit: try c.decodeIfPresent(String.self, forKey: .commit),
       verdict: try c.decode(Verdict.self, forKey: .verdict),
       rows: try c.decode([QARow].self, forKey: .rows),
@@ -148,6 +158,7 @@ extension QAReport: Codable {
     try c.encode(plan, forKey: .plan)
     try c.encode(after, forKey: .after)
     try c.encode(atBase, forKey: .atBase)
+    try c.encode(final, forKey: .final)
     try c.encode(commit, forKey: .commit)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(rows, forKey: .rows)

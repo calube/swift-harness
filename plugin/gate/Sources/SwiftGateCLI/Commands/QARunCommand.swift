@@ -15,6 +15,8 @@ enum QARunRun {
     var plan: String?
     var after: String?
     var atBase = false
+    /// Every ready row, with each flow recorded and its logs saved.
+    var final = false
   }
 
   struct Dependencies: Sendable {
@@ -32,6 +34,8 @@ enum QARunRun {
     var flows: (any QAFlowSimulating)?
     /// The plugin root `qa lint` reads the pinned step schemas from.
     var pluginRoot: URL?
+    /// What `--final` adds around each flow.
+    var finalPass: QAFinalPass?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the

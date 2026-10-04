@@ -13,7 +13,8 @@ public struct QAFlowStep: Sendable, Equatable, Codable {
   /// 1-based, in the flow file's numbering.
   public let n: Int
   public let label: String
-  /// When the step started, from the start of the flow.
+  /// When the step started: from the video's first frame when the record has a `video`, else
+  /// from the batch's start.
   public let offsetMs: Int
   public let ok: Bool
 
@@ -37,13 +38,22 @@ public struct QAFlowRecord: Sendable, Equatable, Codable {
   public let video: String?
   /// Run-relative path of the video's contact sheet; `nil` until a final pass makes one.
   public let sheet: String?
+  /// Why a final pass left no video: the video reads `unverified`. `nil` outside a final pass.
+  public let videoUnverified: QARecordingGapReason?
+  /// Why a final pass that made a video left no contact sheet.
+  public let sheetUnverified: QARecordingGapReason?
 
-  public init(source: QAFlowSource, steps: [QAFlowStep], video: String? = nil, sheet: String? = nil)
-  {
+  public init(
+    source: QAFlowSource, steps: [QAFlowStep], video: String? = nil, sheet: String? = nil,
+    videoUnverified: QARecordingGapReason? = nil,
+    sheetUnverified: QARecordingGapReason? = nil
+  ) {
     self.source = source
     self.steps = steps
     self.video = video
     self.sheet = sheet
+    self.videoUnverified = videoUnverified
+    self.sheetUnverified = sheetUnverified
   }
 
   public func encoded() throws -> Data {
@@ -111,6 +121,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
     case step(n: Int, command: String)
     /// A capture `qa run` added after step `after` failed.
     case evidence(after: Int, command: String)
+    /// The `record start` a final pass puts first failed, so no step of the flow ran.
+    case recordStart
   }
 
   public let steps: [FlowStep]
@@ -120,12 +132,19 @@ public struct BatchFlowPlan: Sendable, Equatable {
   /// For each driven index, 1-based at position `index - 1`: the flow file's step number, or
   /// `nil` for a capture `qa run` added.
   public let origin: [Int?]
+  /// Where the first driven step, a `record start`, writes the video; `nil` when the batch
+  /// records nothing.
+  public let recordTo: String?
 
-  public init(steps: [FlowStep], evidence: [Evidence], driven: [FlowJSON], origin: [Int?]) {
+  public init(
+    steps: [FlowStep], evidence: [Evidence], driven: [FlowJSON], origin: [Int?],
+    recordTo: String? = nil
+  ) {
     self.steps = steps
     self.evidence = evidence
     self.driven = driven
     self.origin = origin
+    self.recordTo = recordTo
   }
 
   /// How many assertions `steps` holds, and so how many screenshots the plan needs.
@@ -133,9 +152,14 @@ public struct BatchFlowPlan: Sendable, Equatable {
     steps.filter(FlowRules.asserts).count
   }
 
-  /// - Parameter screenshots: 1 path per assertion, in order; an assertion past the last path
-  ///   gets no evidence.
-  public static func make(steps: [FlowStep], screenshots: [String]) -> BatchFlowPlan {
+  /// - Parameters:
+  ///   - screenshots: 1 path per assertion, in order; an assertion past the last path gets no
+  ///     evidence.
+  ///   - recordTo: set on a final pass: the batch starts with a `record start` to this path, so
+  ///     the video and the steps share the batch's clock.
+  public static func make(steps: [FlowStep], screenshots: [String], recordTo: String? = nil)
+    -> BatchFlowPlan
+  {
     var driven: [FlowJSON] = []
     var origin: [Int?] = []
     var evidence: [Evidence] = []

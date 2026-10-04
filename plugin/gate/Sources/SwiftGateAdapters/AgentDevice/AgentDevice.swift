@@ -73,6 +73,13 @@ public enum AgentDeviceTraceAction: String, Sendable, Equatable, CaseIterable {
   case stop
 }
 
+/// Starts or stops streaming the session app's log to the file `logs path` names, which
+/// `network dump` also parses.
+public enum AgentDeviceLogsAction: String, Sendable, Equatable, CaseIterable {
+  case start
+  case stop
+}
+
 /// The `agent-device` calls simulator QA makes. Device calls name their target; `version` and
 /// `contactSheet` touch no device.
 public protocol AgentDevice: Sendable {
@@ -98,6 +105,8 @@ public protocol AgentDevice: Sendable {
   func contactSheet(video: String, to sheet: String) async throws(AgentDeviceError) -> String
   /// Returns the session's app log path.
   func logs(on target: AgentDeviceTarget) async throws(AgentDeviceError) -> String
+  func logStream(_ action: AgentDeviceLogsAction, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
   /// The `network dump --json` output, byte for byte.
   func networkDump(limit: Int, on target: AgentDeviceTarget) async throws(AgentDeviceError)
     -> Data
@@ -265,6 +274,13 @@ public struct LiveAgentDevice: AgentDevice {
     return try await data(
       Logs.self, "logs path", ["logs", "path"], on: target, timeout: timeouts.quick
     ).path
+  }
+
+  public func logStream(_ action: AgentDeviceLogsAction, on target: AgentDeviceTarget)
+    async throws(AgentDeviceError)
+  {
+    _ = try await succeeded(
+      "logs \(action.rawValue)", ["logs", action.rawValue], on: target, timeout: timeouts.quick)
   }
 
   public func networkDump(limit: Int, on target: AgentDeviceTarget)
