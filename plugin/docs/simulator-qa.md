@@ -65,7 +65,7 @@ A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 
 `sim up` and `sim hold` read `.swiftgate.toml`, or in a brownfield clone its 1 `xcode` area: the
 workspace or project, the scheme in its `test` command, and the device its `-destination` names,
-on the newest iOS runtime holding it. A clone with no `xcode` area, or several, is BLOCKED.
+on the newest iOS runtime holding it. A clone with no `xcode` area, or several, reads BLOCKED.
 
 ## qa adopt
 

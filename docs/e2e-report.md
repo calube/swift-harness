@@ -521,12 +521,12 @@ Other fast-tier REDs were the inner loop at work. No attempt-2 fast T1 run took 
 
 Harness `main` at `91fa9876` for every check, merged to `b6bb74fe` for the run viewer. `agent-device`
 0.21.18, Xcode 26.2, each device a clone `sim up` made from the configured iPhone 17 (iOS 26.2). The
-`sim` lock is machine-wide and its cap is 2 (the default). Other sessions were queued on the same
+`sim` lock is machine-wide and its cap is 2 (the default). Other sessions queued on the same
 lock during the isolation check.
 
 The skill steps ran from `examples/SampleApp` in this checkout. The isolation check used a scratch
 copy of the app with 2 extra git worktrees. The validation table and the planted bug used a second
-scratch copy with its own plan state, so no plan state in this repository was touched.
+scratch copy with its own plan state, so the trial touched no plan state in this repository.
 
 ### Acceptance checks
 
@@ -576,7 +576,7 @@ while the screen shows the new one:
          return .none
 ```
 
-For b2, the same diff went into a second copy's `feature` commit, and the state row was removed.
+For b2, the same diff went into a second copy's `feature` commit, and the state row came out.
 `/swift-harness:qa` then ran in a fresh `claude -p --plugin-dir plugin --model opus` session with the
 prompt "QA the counter reset change on this branch, and record the evidence (video and logs) so I
 can look at it later". The prompt didn't hint at logs.
@@ -592,8 +592,8 @@ The acceptance unit test passed in every run, because it checks state, not the l
 ### Run viewer
 
 Each copy got a build run from `build start` with a 1-task preset before the viewer runs, since the
-viewer reads only `qa run`s inside a build run. Then `qa run --final` was run again and
-`swiftgate report --html` wrote the page to its default `reports/` folder. Each page was copied next to
+viewer reads only `qa run`s inside a build run. Then `qa run --final` ran again and
+`swiftgate report --html` wrote the page to its default `reports/` folder. Each page went next to
 its run's `video.mp4` and `sheet.png`, at the same relative paths, so every link resolves (0 missing).
 
 | Report | Strip | Contrast |
@@ -617,7 +617,7 @@ show the newest result.
    state row reading the collected `os.log` (b1), the run went RED and named the line.
 3. **`--at-base` passes an acceptance test that exists only on the branch.** The plain
    `swift test --filter resetAfterIncrementsShowsZero` row read `pass` at base, with
-   "No matching test cases were run" and exit 0, and no note (`20261004T221707Z-0078b8c8`). It took a
+   `No matching test cases were run` and exit 0, and no note (`20261004T221707Z-0078b8c8`). It took a
    check that also requires a test to have run to get a red run at base.
 4. **At base, a state row behind a lint-red flow never gets a red run.** The new id doesn't exist at
    base, so the flow stops at `qa.flow-unknown-id` and no device comes up. The state row reads
@@ -637,7 +637,7 @@ show the newest result.
 
 ### Decisions
 
-Keep-flow answer: no flow was proposed. The counter journey is already kept as `[[flows]] counter`
+Keep-flow answer: the session proposed no flow. The repo already keeps the counter journey as `[[flows]] counter`
 (2 XCUITests). b2's skill session proposed none either, saying Reset stays inside 1 feature and a
 unit test covers it.
 

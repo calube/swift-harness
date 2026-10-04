@@ -44,20 +44,20 @@ history with the run id and verdict.
 `swiftgate sim down [<runID>] [--json]` ends a QA run (simulator QA design §4, §7.4). Without
 `<runID>` it takes this worktree's newest lease, whether or not its holder is alive. In order:
 
-1. A lease from another worktree is `sim.not-owner`: RED (exit 1), and nothing is touched.
+1. A lease from another worktree is `sim.not-owner`: RED (exit 1), and `sim down` touches nothing.
 2. `agent-device close` on the lease's session and device, then `session list` must no longer name
    the session. `SESSION_NOT_FOUND` or `DEVICE_NOT_FOUND` from `close` counts as closed.
-3. The lease is removed, so the `sim hold` process deletes the device and frees the `sim` slot.
+3. `sim down` removes the lease, so the `sim hold` process deletes the device and frees the `sim` slot.
    `sim down` waits up to 2 minutes for the holder to exit and the device to go. If the holder
-   died holding it, `sim down` deletes that one device, which is named for the dead PID.
+   died holding it, `sim down` deletes that one device, whose name carries the dead PID.
 4. `agent-device device release --stale --udid <udid>` clears claims whose owner is dead.
 5. It copies into `sim/crashes/` each `.ips` crash report of the run's app on its device since
    `startedAt`, from the user's `DiagnosticReports` log folder. A report lands seconds after its
    crash, so with fewer reports than recorded exits it waits up to 30 s, then notes the shortfall.
 
 A close that fails, a session still listed, or a failed release is `sim.driver-failed`: BLOCKED
-(exit 3) after the device is given back, with each problem appended to `sim/agent-device.log`. A
-lease that can't be removed, or a holder or device still there after the wait, is
+(exit 3) after the device goes back to the pool, with each problem appended to `sim/agent-device.log`. A
+lease `sim down` can't remove, or a holder or device still there after the wait, is
 `swiftgate.environment` (exit 3).
 
 With no lease left, `sim down` does nothing and exits 0, so a second call is harmless. The JSON is
@@ -68,4 +68,4 @@ the call.
 `swiftgate gc`, and the orphan sweep each `sim hold` runs before taking a device, first give
 `sim down`'s release to every lease whose holder died, in any worktree: a killed holder's session
 and claim outlive it. Then they run `device release --stale --udid` on every orphaned device they
-delete. An `agent-device` that can't be launched is skipped; any other failure is a `gc` error.
+delete. They skip an `agent-device` that won't launch; any other failure is a `gc` error.

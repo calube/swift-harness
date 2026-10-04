@@ -12,7 +12,7 @@ keeps a qa.flow with no row, a kept XCUITest flow, when its gate run is the buil
 `qa run` it reads `.harness/runs/<run id>/qa/report.json` from the main checkout or a live task
 worktree, and each red row's `.txt` evidence as saved output, at most its last 16 KB.
 
-Each row shows its newest result. A `qa run --at-base` is expected to fail every row, so it neither sets
+Each row shows its newest result. A `qa run --at-base` should fail every row, so it neither sets
 a row's result nor draws a timeline bar.
 
 ## The tab
@@ -40,7 +40,7 @@ a row's result nor draws a timeline bar.
 
 ## Evidence and privacy
 
-Evidence is named by its path relative to its run's directory, never embedded: the page holds no
+The page names evidence by its path relative to its run's directory and never embeds it: the page holds no
 image or video. A link reads `../runs/<run id>/<path>`, which resolves from a report in its default
 `reports/` folder, and from a live page, whose server answers each video and contact sheet a flow
 links and 404s any other file. Every string passes the payload guard. A check, reason, step label,

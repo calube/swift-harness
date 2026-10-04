@@ -189,7 +189,7 @@ Observed behavior the evidence rules rely on:
 
 ### Kept flows: activities and screen recordings
 
-`Xcresult/activities/<scenario>/` is captured by `plugin/gate/Fixtures/xcresult/capture-flow-video.sh`
+`plugin/gate/Fixtures/xcresult/capture-flow-video.sh` captures `Xcresult/activities/<scenario>/`
 (run from anywhere, with `SWIFTGATE=<binary>` to pin the build): a scratch git copy of
 `examples/SampleApp`, whose test plan sets `uiTestingScreenshotsLifetime` to `keepAlways` and
 `preferredScreenCaptureFormat` to `screenRecording`, runs `swiftgate test --tier t3 --json` on the
@@ -256,7 +256,7 @@ Build the app with `(cd examples/SampleApp && ../../plugin/bin/swiftgate test --
 examples/SampleApp/.harness/derived-data/app-SampleApp/Build/Products/Debug-iphonesimulator/SampleApp.app`
 from the repository root. The script creates its own `agent-device-capture-<pid>` iPhone 17 device,
 installs the app, and deletes the device on exit. Each `AgentDevice/<call>.{stdout,stderr,status}`
-is one real call against session `swiftgate-capture` on that device; the scratch path is replaced
+is 1 real call against session `swiftgate-capture` on that device; the script replaces the scratch path
 with `/SCRATCH` and `$HOME` with `/HOME`. The same script writes
 `plugin/qa/agent-device-schemas-0.21.18.json`: the MCP server's `initialize` `serverInfo` and its
 `tools/list` `tools`, from `agent-device mcp` over stdio.
@@ -282,7 +282,7 @@ Observed behavior the adapter relies on:
   `{"success":false,"error":{"code","message",…}}`, and leaves stderr empty. A failure exits 1.
   Without `--json`, a failure prints `Error (<code>): <message>` on stderr and nothing on stdout.
 - The codes seen are `COMMAND_FAILED` (a `wait` past its deadline, with `details.reason`
-  `wait_deadline_exceeded`), `DEVICE_IN_USE` (`open` on a device another session holds),
+  `wait_deadline_exceeded`) and `DEVICE_IN_USE` (`open` on a device another session holds). Others are
   `DEVICE_NOT_FOUND` (an unknown UDID), `SESSION_NOT_FOUND` (`close` on a session that isn't
   open) and `INVALID_ARGS` (a step input that fails its schema, and `--session` on `device`, which
   refuses it).
@@ -300,8 +300,8 @@ Observed behavior the adapter relies on:
   `runningForeground`).
 - The iOS role vocabulary is a node's `type`. The runner names each element type from
   `elementTypeNamesByRawValue` in
-  `dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+Snapshot.swift`:
-  `Application`, `Window`, `Button`, `Cell`, `StaticText`, `TextField`, `TextView`,
+  `dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+Snapshot.swift`.
+  The names are `Application`, `Window`, `Button`, `Cell`, `StaticText`, `TextField`, `TextView`,
   `SecureTextField`, `Switch`, `Slider`, `Link`, `Image`, `NavigationBar`, `TabBar`,
   `CollectionView`, `Table`, `ScrollView`, `Toolbar`, `SearchField`, `SegmentedControl`, `Stepper`,
   `Picker`, `ActivityIndicator`, `ProgressIndicator`, `CheckBox`, `MenuItem`, `WebView`, `Other`,
@@ -313,7 +313,7 @@ Observed behavior the adapter relies on:
 Two real `sim up` and `sim snap` runs against `examples/SampleApp` on 2026-10-04, with `agent-device`
 0.21.18 on a clone `sim up` made from the configured iPhone 17 (iOS 26.2). The seeded run had this
 local diff applied to `Packages/CounterFeature/Sources/CounterUI/CounterView.swift`, below the
-`counter.fact` button; it was never committed, and `git checkout -- Packages` removed it after the
+`counter.fact` button; nobody committed it, and `git checkout -- Packages` removed it after the
 capture:
 
 ```swift
@@ -333,7 +333,7 @@ agent-device close --udid <udid> --session <session> --json
 rm <lock dir>/sim-leases/<runID>.json
 ```
 
-Removing the lease makes the holder delete the clone and free its slot. Nothing was scrubbed: no
+Removing the lease makes the holder delete the clone and free its slot. The capture scrubbed nothing: no
 file holds a local path.
 
 | Files | From |
@@ -356,7 +356,7 @@ The script runs `sim up --json` in `examples/SampleApp`, runs each batch with `-
 `--session` from its output, and runs `sim down` on exit. `<name>.steps.json` is the input: the
 counter flow (`QA/counter.flow.json`) with the `snapshot`, `screenshot` and `snapshot` steps
 `qa run` adds after each assertion, its screenshot paths under `/SCRATCH`, which the script points
-at a scratch folder. In each output the scratch path is replaced with `/SCRATCH`, `$HOME` with
+at a scratch folder. In each output the script replaces the scratch path with `/SCRATCH`, `$HOME` with
 `/HOME`, the clone's UDID with `UDID` and the session with `SESSION`.
 
 | Files | Batch |
@@ -378,7 +378,7 @@ A batch that stops on a failure reason the 3 original cases didn't name, capture
 with `agent-device` 0.21.18 on a clone `swiftgate sim up` made from the configured iPhone 17
 (iOS 26.2). The iOS validation trial's second attempt on `Aidoku/Aidoku`
 (`evals/results/2026-10-04-brownfield-ios-validation-2/`, finding 4) hit it pressing a SwiftUI
-toggle whose label is hidden, but kept no batch output. The capture repeats that shape on
+toggle that hides its label, but kept no batch output. The capture repeats that shape on
 `examples/SampleApp` with `change.diff` applied: 1 such toggle, `id="counter.confirm"`. From the
 repository root:
 
@@ -390,7 +390,7 @@ The script applies `change.diff`, runs `sim up --json` in `examples/SampleApp`, 
 with `--udid` and `--session` from its output, and on exit runs `sim down` and reverts the diff.
 `press-switch.flow.json` is the flow as a validation worker writes it, and
 `press-switch.steps.json` the batch `qa run` drives from it, its screenshot paths under
-`/SCRATCH`. The outputs are scrubbed as in `AgentDevice/batch`.
+`/SCRATCH`. The script scrubs the outputs as in `AgentDevice/batch`.
 
 | Files | Batch |
 |---|---|
@@ -411,7 +411,7 @@ The script runs `sim up --json` in `examples/SampleApp`, makes every call with `
 `--session` from its output, and runs `sim down` on exit. `recorded-pass.steps.json` and
 `recorded-fail.steps.json` are inputs: `AgentDevice/batch/pass.steps.json` and `fail.steps.json`
 with `{"command":"record","input":{"action":"start","path":"/SCRATCH/video.mp4"}}` put first. In
-each output the scratch path is replaced with `/SCRATCH`, `$HOME` with `/HOME`, the clone's UDID
+each output the script replaces the scratch path with `/SCRATCH`, `$HOME` with `/HOME`, the clone's UDID
 with `UDID` and the session with `SESSION`.
 
 | Files | Call |
@@ -2388,7 +2388,7 @@ cp .harness/events/qa.jsonl <fixtures>/RunView/qa-checks/events/qa.jsonl
 for r in .harness/runs/*/; do mkdir -p <fixtures>/RunView/qa-checks/runs/$(basename $r); cp -R $r/qa <fixtures>/RunView/qa-checks/runs/$(basename $r)/; done
 ```
 
-`validation.json` was written by hand as the capture's input, the way a plan's validation task
+`validation.json` is the capture's hand-written input, shaped the way a plan's validation task
 writes it; everything else is `qa run`'s output, unedited. Row 1's check, `/bin/test -d .git`,
 starts with `/`, so the run view's payload guard rejects it; it fails at the merge base, where
 `.git` is a file. Row 2 always exits 1, so its saved output carries the failure. Row 3 is a flow
@@ -2429,9 +2429,9 @@ for d in .harness/runs/$G/qa/xcuitest/*; do mkdir -p $X/runs/$G/qa/xcuitest/$(ba
 cp .harness/runs/$G/report.json $X/runs/$G/report.json
 ```
 
-The inputs were written by hand, the way a plan's validation task writes them: `validation.json`
+The inputs are hand-written, shaped the way a plan's validation task writes them. `validation.json`
 holds a flow row running `counter.flow.json`, a state row of the same requirement, and a flow row
-running `wrong-count.flow.json`; `counter.flow.json` is `QA/counter.flow.json`, and
+running `wrong-count.flow.json`. `counter.flow.json` is `QA/counter.flow.json`, and
 `wrong-count.flow.json` is the same flow expecting `5`, made with
 `sed 's/"value":"1"/"value":"5"/'`. `counter.state.sh` is
 `test -n "$QA_SIM_UDID" && echo "device $QA_SIM_BUNDLE_ID is up"`.
@@ -2572,7 +2572,7 @@ T=98ce20b4568e17d2b5fee0f4a11ec054d03d03e2
 mkdir -p warmup baseline && cp $C/warmup/$T.json warmup/ && cp $C/baseline/$T.json baseline/
 ```
 
-Both files are copied unedited; the grep above matched nothing in them.
+Both files are unedited copies; the grep above matched nothing in them.
 
 `RunView/brownfield-rejected/` is the state the fourth brownfield trial on `usememos/memos` left
 (`evals/results/2026-10-04-brownfield-trial/memos-4`), build run `20261004T141445Z-85d15f09` of plan
@@ -2743,7 +2743,7 @@ sed -i '' 's#^  "license": "UNLICENSED"$#  "license": "UNLICENSED",\n  "colour":
 
 Observed behavior the check relies on: the version warning is the manifest entry's warning with
 `path` `"version"`; `--strict` turns it into `"success": false` and exit status 1, and without
-`--strict` the same warning is printed with `"success": true`. A manifest with a schema error
+`--strict` it prints the same warning with `"success": true`. A manifest with a schema error
 (such as `"keywords": "swift"`) reports the error and drops the version warning.
 `grep -niE '/Users|/private|/var/folders|caleb' PluginValidate/*` matched nothing.
 

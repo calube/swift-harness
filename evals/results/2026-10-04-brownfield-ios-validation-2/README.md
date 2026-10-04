@@ -1,16 +1,16 @@
 # Brownfield iOS trial: validation rows on Aidoku, second attempt
 
-This is a re-run of [the first validation trial](../2026-10-04-brownfield-ios-validation/README.md), made after its
-findings 1, 2, 3, 4, 7, 8, 11 and 12 were fixed on main. It is a one-shot `swiftgate run <spec.md>` on `Aidoku/Aidoku`
+This is a re-run of [the first validation trial](../2026-10-04-brownfield-ios-validation/README.md), made after
+main fixed its findings 1, 2, 3, 4, 7, 8, 11 and 12. It is a one-shot `swiftgate run <spec.md>` on `Aidoku/Aidoku`
 at `3091ef26e593d303e34afed70bc8c5997c105f80`, in a fresh clone made on 2026-10-04 at
 `trials/aidoku-ios-validation-2`. The harness ran from this branch's `plugin/bin/swiftgate`: main at `70e54179`,
 built as source hash `c69f219c55d44fd4`.
 
 The spec keeps the first attempt's feature, an opt-in "Confirm Large Downloads" setting. It adds 1 thing: requirement 3
-is now a decision at a boundary. The decision reads the setting from the `UserDefaults` it is handed, and a test that
+is now a decision at a boundary. The decision reads the setting from the `UserDefaults` its caller passes in, and a test that
 stores the setting under its real key accepts it. The aim was to lead the plan to an acceptance row.
 
-**Verdict: the bar is NOT met.** The code side passed. All 5 tasks merged, `final` is GREEN, and the run was truly
+**Verdict: the bar is NOT met.** The code side passed. All 5 tasks merged, `final` is GREEN, and the run was
 one-shot: no resume and no human input. The validation layer now reaches the device, but only 1 of the 3 layers got a
 real result:
 
@@ -54,8 +54,8 @@ and 2 reason-only requirements.
 
 `qa run --after download-prompt` (`20261004T221914Z-a64747f0`) read "no validation row to run". The 2 reports with
 rows read `RED` with "1 of 3 rows verified: 0 pass, 1 red, 2 unverified". The run report's second line is
-`validation: 1 of 3 rows verified (qa run 20261004T223404Z-be50ef8e, RED)`. Both `qa.flow` events were recorded per
-run, 4 in all.
+`validation: 1 of 3 rows verified (qa run 20261004T223404Z-be50ef8e, RED)`. Each run recorded both `qa.flow` events,
+4 in all.
 
 Against the bar:
 
@@ -124,8 +124,8 @@ Ranked by how much they block the validation layer.
      to `X`, or fails `plan import` naming the line.
 3. **A state row waits on any red flow row, not on its own requirement's flow.**
    - Row 3 (req-stored) read "not run: the flow layer has a red row". The red row was row 1 (req-setting). Its own
-     flow, row 2, was `unverified`, so the row would have been skipped either way. But the reason it gives is wrong,
-     and a green row 2 would still have been blocked by row 1.
+     flow, row 2, was `unverified`, so `qa run` would have skipped the row either way. But the reason it gives is wrong,
+     and row 1 would still have blocked a green row 2.
    - `plan-shape.md` says a state row "runs straight after a `flow` row for the same requirement and `Runs after`
      tasks".
    - File: the flow-to-state dependency in `QARunPlan.execute`, `QARunCommand.swift`.
@@ -144,18 +144,18 @@ Ranked by how much they block the validation layer.
    - The worker drove each flow with raw `agent-device batch` on its own `sim up`, not with `qa run` or
      `sim verify`. So the audit red (finding 1) and the press failure (finding 4) first showed only after the merge.
    - The orchestrator's summary says: "I didn't run the step that confirms each check fails before its task merges."
-     By the time the checks were adopted, 2 tasks had merged.
+     By the time `qa adopt` took the checks, 2 tasks had merged.
    - Files: `plugin/skills/qa/references/validation-worker.md`, and the validation-task and at-base steps in
      `plugin/skills/run/SKILL.md`.
    - Suggested fix: the worker records its red run through `qa run --at-base` (or `sim verify`), so the run uses the
      same judge as after the merge.
 6. **The validation worker took 13 minutes.** It ran from 22:09:21Z to 22:22:33Z, with 4 `sim up` calls and a cold
    app build each time. Its checks were ready only after `download-check` and `download-prompt` had merged. No row
-   was due on those 2 merges, so nothing was lost here, but on a plan whose first merge has rows it would be.
+   was due on those 2 merges, so the delay cost nothing here, but on a plan whose first merge has rows it would.
    Reusing 1 device across the 3 red runs (`sim hold`) would save about 3 builds.
 7. **A RED `qa run` halts nothing.** After `--after download-setting` read RED, the orchestrator kept the merge on
-   its own judgement. It wrote a "Halt:" bullet into `## Assumptions`, but no `build.halt` was recorded and no
-   fixer was queued. That may be right here (finding 1), but no rule says what a validation red should do.
+   its own judgement. It wrote a "Halt:" bullet into `## Assumptions`, but the run recorded no `build.halt` and
+   queued no fixer. That may be right here (finding 1), but no rule says what a validation red should do.
    - Files: `## After each merge` in `plugin/skills/build/references/event-loop.md`.
 8. **Prove at merge measures against the plan base, not the merge's first parent.** Every `prove.result` has
    `proofBase` `3091ef26`. `download-prompt`'s merge reported "1 of 1 changed tests fail with the change's source
@@ -183,7 +183,7 @@ Ranked by how much they block the validation layer.
   - I deleted the clone and its 12 DerivedData directories (22.4 GiB), each matched to the clone by its
     `WorkspacePath`. The run's worktrees were already gone.
   - The run made 8 simulator clones: 4 by the worker's `sim up`, and 1 per flow row in each of the 2 `qa run`s. None remains, and no
-    `agent-device` session or sim lease is left. The simulator list matches the one taken before the run.
+    `agent-device` session or sim lease remains. The simulator list matches the one taken before the run.
   - I touched no other simulator.
 
 ## Files
