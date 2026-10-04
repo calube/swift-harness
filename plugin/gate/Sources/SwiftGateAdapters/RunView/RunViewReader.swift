@@ -38,17 +38,27 @@ public struct RunViewReader: RunViewReading {
     let main = EventStoreReader(files: StateRootEventFiles(state: stateRoot)).read(EventQuery())
     batches.append(main.events)
     damage += main.damage.map { Self.damage($0, in: nil) }
+    // The main checkout's own files, without the worktree stores copied into it; their damage
+    // is already counted above.
+    let mainOwn = Set(
+      EventStoreReader(files: StateRootEventFiles(state: stateRoot, includeCopies: false))
+        .read(EventQuery()).events.map(\.event.eventID))
+    var workerEvents = main.events.map(\.event).filter { !mainOwn.contains($0.eventID) }
     if let join, let ledger {
       for worktree in liveWorktrees(plan: join.plan, ledger: ledger, damage: &damage) {
         let read = EventStoreReader(
           files: StateRootEventFiles(state: StateRootResolver.resolve(worktree: worktree))
         ).read(EventQuery())
         batches.append(read.events)
+        workerEvents += read.events.map(\.event)
         damage += read.damage.map { Self.damage($0, in: worktree.lastPathComponent) }
       }
     }
 
-    let gateRuns = join.map(Self.gateRuns(of:)) ?? []
+    var gateRuns = join.map(Self.gateRuns(of:)) ?? []
+    let workerGateRuns =
+      join.map { Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns) } ?? [:]
+    gateRuns.formUnion(workerGateRuns.keys)
     let events = EventQuery.merge(batches).map(\.event)
     let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns)
     return RunViewInput(
@@ -56,7 +66,38 @@ public struct RunViewReader: RunViewReading {
       events: events.filter {
         Self.belongs($0, buildRun: buildRun, gateRuns: gateRuns, parents: parents)
       },
-      join: join, ledger: ledger, requirements: requirements, damage: damage)
+      join: join, ledger: ledger, requirements: requirements, damage: damage,
+      workerGateRuns: workerGateRuns)
+  }
+
+  /// Each `gate.run` of a worker's store that nothing names, by run id, with the task whose
+  /// window holds its end: from the task's move to `in-progress` until it is `done` or
+  /// `abandoned`, or open. A run inside no window, or inside more than 1, stays out: a store copied
+  /// into the main checkout no longer says which task's worktree it came from.
+  static func workerGateRuns(
+    _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>
+  ) -> [String: String] {
+    var windows: [(task: String, start: Date, end: Date?)] = []
+    for event in events {
+      guard case .transition(let move) = event else { continue }
+      if move.to == .inProgress, !windows.contains(where: { $0.task == move.task }) {
+        windows.append((move.task, move.at, nil))
+      } else if move.to == .done || move.to == .abandoned,
+        let index = windows.firstIndex(where: { $0.task == move.task && $0.end == nil })
+      {
+        windows[index].end = move.at
+      }
+    }
+    var tasks: [String: String] = [:]
+    for event in workerEvents {
+      guard case .gateRun = event.payload, let runID = event.runID, !named.contains(runID)
+      else { continue }
+      let holding = windows.filter {
+        $0.start <= event.time && $0.end.map { event.time <= $0 } ?? true
+      }
+      if holding.count == 1, let window = holding.first { tasks[runID] = window.task }
+    }
+    return tasks
   }
 
   /// Every gate run the run's ledger log or its returns name.
@@ -247,6 +288,11 @@ public struct RunViewReader: RunViewReading {
 /// ``RunLayout`` paths under 1 ``StateRoot``, named as ``StateRoot/displayPath(_:)`` names them.
 private struct StateRootEventFiles: EventStoreFileReading {
   let state: StateRoot
+  /// Whether `imported/` and `unkept/` list their stores.
+  var includeCopies = true
+  static let copyDirectories: Set<String> = [
+    "\(RunLayout.eventsDirectory)/imported", "\(RunLayout.eventsDirectory)/unkept",
+  ]
 
   func displayPath(_ path: String) -> String { state.displayPath(path) }
 
@@ -261,6 +307,7 @@ private struct StateRootEventFiles: EventStoreFileReading {
   }
 
   func list(_ directory: String) throws(EventStoreFileError) -> [String] {
+    if !includeCopies, Self.copyDirectories.contains(directory) { return [] }
     do {
       return try FileManager.default.contentsOfDirectory(atPath: state.url(directory).path)
         .sorted()

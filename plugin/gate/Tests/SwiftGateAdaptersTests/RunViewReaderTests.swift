@@ -192,6 +192,44 @@ struct RunViewReaderTests {
   }
 
   @Test(
+    "a fix worker's gate runs in an imported store read with the task whose window holds them, and unnamed runs of the main checkout or outside every window stay out — catches a worker's RED-then-fixed gates missing from the report"
+  )
+  func keepsWorkerGateRunsInTheTaskWindow() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    for stream in ["usage", "gate", "test", "build"] {
+      try repository.write(
+        try Self.lines("events/\(stream).jsonl"),
+        to: repository.events.appending(path: "\(stream).jsonl"))
+    }
+    let store = "events/imported/b624dcba-0ec6-4c16-b29a-4c8992f0b8a4"
+    let imported = try Self.lines("\(store)/gate.jsonl")
+    let late = try #require(imported.first { $0.contains("20261004T050817Z-c5027c06") })
+    let outside =
+      late
+      .replacingOccurrences(of: "20261004T050817Z-c5027c06", with: "20261004T044000Z-0badf00d")
+      .replacingOccurrences(of: "2026-10-04T05:10:27.992Z", with: "2026-10-04T04:41:00.000Z")
+      .replacingOccurrences(of: try Self.eventID(late), with: UUID().uuidString)
+    try repository.write(
+      imported + [outside], to: repository.events.appending(path: "imported/b624/gate.jsonl"))
+    try repository.write(
+      try Self.lines("\(store)/test.jsonl"),
+      to: repository.events.appending(path: "imported/b624/test.jsonl"))
+
+    let view = RunViewBuilder.build(try repository.read())
+    let tasks = Dictionary(view.gates.map { ($0.runID, $0.task) }, uniquingKeysWith: { a, _ in a })
+    #expect(tasks["20261004T050551Z-3bf0d37c"] == .some("counter-ui-reset-button"))
+    #expect(tasks["20261004T050817Z-c5027c06"] == .some("counter-ui-reset-button"))
+    #expect(tasks["20261004T050310Z-ed998508"] == .some("counter-ui-reset-button"))
+    #expect(tasks["20261004T050310Z-8a535bea"] == nil, "a main checkout run no event names")
+    #expect(tasks["20261004T044000Z-0badf00d"] == nil, "a run outside every task's window")
+    #expect(
+      view.spans.contains {
+        $0.id == "gate:20261004T050817Z-c5027c06" && $0.parent == "task:counter-ui-reset-button"
+      })
+  }
+
+  @Test(
     "the run's ledger and its spec page's slices read with the join — catches a reader that drops the plan"
   )
   func readsThePlan() throws {
