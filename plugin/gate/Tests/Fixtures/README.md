@@ -985,10 +985,25 @@ jq '.[-1]' tools.json | sed "s#$ROOT#/REPO#g" > Transcripts/<session>.envelope.j
 The `/etc/hosts` result is the stock macOS file. After the copy, the grep above matched nothing in
 these 3 files.
 
-Here a message's repeated lines carry the same usage. The run view build's worker transcripts
-came from Workflow agents in the same Claude Code version, and the fixtures don't keep them. Their
-lines differed: the first message's 2 lines read `usage.output_tokens` 16, then 350. `events
-ingest` refused each with `repeats an earlier message id with different usage`.
+Here a message's repeated lines carry the same usage.
+
+### Streamed worker usage (`streamed/`)
+
+`streamed/agent-ad10c26c66ae4d738.jsonl` is 1 worker transcript of the run view build
+(`RunView/build-run-1/SOURCE`), the Workflow agent of task `counter-core-reset-and-decrement-floor`,
+Claude Code 2.1.288 on `claude-sonnet-5-5`. Claude Code wrote it to
+`~/.claude/projects/<cwd slug>/<session_id>/subagents/workflows/wf_4110cb4e-e8d/agent-ad10c26c66ae4d738.jsonl`.
+Its first 2 messages are 2 lines each with 1 `message.id`: input and cache counts repeat byte for byte,
+and `usage.output_tokens` reads 16, then 350, and 3, then 1077. Only the later line has a
+`stop_reason`, and its `usage.iterations` total agrees with it. The filter drops
+`message.content`, which held the scratch repository's paths, and keeps `stop_reason`:
+
+```sh
+F='select(.type=="assistant" or .type=="user") | {type, timestamp, isSidechain, message: (.message | {id, model, stop_reason, usage} | with_entries(select(.value != null)))}'
+jq -c "$F" <worker transcript> > Transcripts/streamed/agent-ad10c26c66ae4d738.jsonl
+```
+
+After the copy, the grep above matched nothing in it.
 
 ## Events
 
@@ -1139,11 +1154,30 @@ because the resumed session abandoned 1 task.
 | `returns/<task>.json` | the 2 checked returns; the abandoned task's was refused, so none was written |
 | `run.json`, `plan.json`, `plan.md`, `spec.md` | the build run record, the plan state, the spec page and the spec |
 
-There is no `usage` stream: `events ingest` exited 2 after every task, first with `no session
-record` and, after the resume wrote one, with `repeats an earlier message id with different usage`
-(see Transcripts). The first failure came from the SessionStart hook running the shim's last good
-binary while the plugin data cache rebuilt; that older binary refused a `plugin.json` with no
-`version`. No command records spans, `prove.result` or `agent.tools` yet; a later capture repeats this
+In the run, `events ingest` exited 2 after every task, first with `no session record` and, after
+the resume wrote one, with `repeats an earlier message id with different usage` (see Transcripts).
+The first failure came from the SessionStart hook running the shim's last good binary while the
+plugin data cache rebuilt; that older binary refused a `plugin.json` with no `version`.
+
+`events/usage.jsonl` holds 91 `agent.usage`: 68 main and 11 subagent orchestrator messages, and 4
+per build worker. `events ingest`, from the commit that reads streamed messages, wrote it afterwards
+in an `rsync` copy of the scratch app without `.harness/derived-data`, from the transcripts Claude
+Code left. With `SG=<harness>/plugin/bin/swiftgate`,
+`SES=306d86af-8556-4a2c-8300-5029ecae68b2`, `R=20261004T045528Z-58d28c78` and
+`W=~/.claude/projects/<cwd slug>/$SES/subagents/workflows`, the same flags the run used:
+
+```sh
+for p in counter-core-reset-and-decrement-floor:wf_4110cb4e-e8d \
+  counter-ui-reset-button:wf_04439a44-cc1 counter-ui-reset-button-snapshot:wf_45713b8a-4f4; do
+  "$SG" events ingest --session $SES --workflow-transcripts $W/${p#*:} --role build-worker \
+    --task ${p%%:*} --build-run $R
+done
+"$SG" events ingest --session $SES --role orchestrator --build-run $R
+cp .harness/events/usage.jsonl <fixtures>/RunView/build-run-1/events/usage.jsonl
+```
+
+Each exited 0: 83 new, then 4, 4 and 0. The other streams and `store.json` stayed byte-identical.
+No command records spans, `prove.result` or `agent.tools` yet; a later capture repeats this
 run once one does.
 
 The sources held no machine path, so no `sed` ran. Ledger worktrees are relative
