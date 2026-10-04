@@ -3,8 +3,9 @@
 A brownfield run's plan is 1 live file, `<plan-dir>/PLAN.md`. `swiftgate plan import <slug>` turns
 it into the executor's `ledger.json`, with each task's `Covers` as its `covers`, and carries each
 task's goal, `Why`, `Scope`, `Acceptance` and `Out of scope`, and the `## Requirements`, into
-`plan.json` for the run viewer's task drawer and spec rows. Anything the importer can't read
-fails the import and names the task and the line.
+`plan.json` for the run viewer's task drawer and spec rows. The `## Validation` table becomes
+`validation.json` beside them. Anything the importer can't read fails the import and names the
+task and the line.
 
 ## Sections
 
@@ -17,6 +18,9 @@ fails the import and names the task and the line.
 - `## Areas`: 1 bullet per touched area: its name, its warm test time from the warm-up, and
   `build-only` when that time exceeds `slice_budget_s`, or `unknown` while the warm-up hasn't
   reached it. The importer ignores this section; the report and the workers read it.
+- `## Validation`: the checks that prove each requirement once its tasks merge; see
+  [The validation table](#the-validation-table). A plan without it imports as before, with a note
+  that no checks will run after each merge.
 - `## Assumptions`: 1 bullet per reading you made of an ambiguous spec, per halt you decided, and
   per explorer report you dropped. The importer keeps every bullet; the report lists them.
 - 1 `### <task-id>` section per task. A task id is lowercase letters, digits and `-`.
@@ -86,6 +90,51 @@ Serve the report as CSV.
   - the download button
 - Covers: req-csv-download, req-csv-columns
 - Writes: api/export/handler/, api/tests/export/
+```
+
+## The validation table
+
+`## Validation` holds 1 markdown table. Each row maps 1 requirement to 1 check:
+
+| Column | Holds |
+|---|---|
+| `Done when` | a `## Requirements` id |
+| `Layer` | `acceptance`, `flow` or `state` |
+| `Check` | the command, test or file the row runs, in backticks |
+| `Runs after` | the task ids, comma-separated, whose merge the check waits for |
+| `Writer` | the 1 task id that writes the check |
+| `Reason` | optional: why the requirement needs no other layer |
+
+- **acceptance** checks behaviour at a boundary, such as an API, a CLI or the module that joins
+  2 tasks. It is a test in the area's framework, or a `curl -fsS … \| jq -e '<condition>'`
+  command against a server the command starts on `$QA_PORT`.
+- **flow** drives a user journey in the running app. It runs for `xcode` areas only.
+- **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
+  straight after a `flow` row for the same requirement and `Runs after` tasks; in a repository
+  with no `xcode` area, an `acceptance` row takes the flow's place.
+
+Unit tests are each task's own and never get a row. A requirement its tasks' unit tests prove
+alone gets 1 row with `Layer`, `Check`, `Runs after` and `Writer` empty, and a `Reason` saying
+why. Escape a `|` inside a cell as `\|`.
+
+`plan import` fails, naming the line, on a row it can't read: an unknown layer such as `unit`,
+an id `## Requirements` doesn't list, or an empty `Check`, `Runs after` or `Writer`. It also fails
+on these `plan-lint` rules:
+
+| Rule id | Fires on |
+|---|---|
+| `plan-lint.validation-uncovered` | a requirement with no row |
+| `plan-lint.validation-unknown-task` | a `Runs after` or `Writer` id with no task section |
+| `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
+| `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
+
+```markdown
+## Validation
+
+| Done when | Layer | Check | Runs after | Writer | Reason |
+|---|---|---|---|---|---|
+| req-csv-download | acceptance | `pytest api/tests/export/test_download.py` | report-export-api | report-export-api | |
+| req-csv-columns | | | | | the handler test in report-export-api checks the column order |
 ```
 
 ## Write sets from the target graph

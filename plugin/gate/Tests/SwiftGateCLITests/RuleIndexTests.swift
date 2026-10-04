@@ -150,7 +150,9 @@ extension RuleIndexTests {
       PlanLintCoverage.unknownTestRuleID, PlanLintCoverage.missingModelRuleID,
       PlanLintCoverage.estLinesHighRuleID, PlanLintCoverage.estLinesLowRuleID,
       PlanLintCoverage.tooManyModulesRuleID, PlanLintCoverage.tooManyTestsRuleID,
-      PlanLintCoverage.packOverBudgetRuleID,
+      PlanLintCoverage.packOverBudgetRuleID, PlanLintValidation.uncoveredRuleID,
+      PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
+      PlanLintValidation.flowWithoutIOSRuleID,
     ]
     let build = [
       "build-next.unmerged-dependency", "build-next.missing-model", "build-next.write-set-overlap",

@@ -83,7 +83,19 @@ public enum ValidationTableJSON {
     return data
   }
 
+  /// A table whose `schemaVersion` isn't 1 fails before its rows are read, so a newer harness's
+  /// rows are never taken for this one's.
   public static func decode(_ data: Data) throws(ValidationTableJSONError) -> ValidationTable {
+    struct Version: Decodable { let schemaVersion: Int }
+    let version: Int
+    do {
+      version = try JSONDecoder().decode(Version.self, from: data).schemaVersion
+    } catch {
+      throw .malformed("\(error)")
+    }
+    guard version == ValidationTable.currentSchemaVersion else {
+      throw .unsupportedSchemaVersion(version)
+    }
     do {
       return try JSONDecoder().decode(ValidationTable.self, from: data)
     } catch {

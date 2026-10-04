@@ -740,7 +740,8 @@ private enum SeedRunners {
     """
 
   /// `design.md` and `ledger.json` (hand-authored plan-state data, never captured tool output) plus
-  /// an optional `bounds.toml` fragment appended under `[plan]`, staged into a throwaway repo with
+  /// an optional `bounds.toml` fragment appended under `[plan]` and an optional `validation.json`
+  /// copied beside the ledger, staged into a throwaway repo with
   /// the shared package above and a `plan.json`/`ledger.json` written where `plan claim` would —
   /// under the repo's own common dir, resolved through real git — then handed to `plan-lint`'s own
   /// run function, never a re-implementation of its checks. An optional `amended.md` is committed
@@ -794,6 +795,12 @@ private enum SeedRunners {
         clarifyChain: [], tier: nil, resume: "self-test")
       try PlanFileJSON.encode(file).write(to: URL(filePath: plan.planFile))
       try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+      let validation = caseDirectory.appending(path: ValidationTable.fileName)
+      if FileManager.default.fileExists(atPath: validation.path) {
+        try FileManager.default.copyItem(
+          at: validation,
+          to: URL(filePath: plan.directory).appending(path: ValidationTable.fileName))
+      }
     } catch {
       return .blocked("could not write plan state: \(error)")
     }

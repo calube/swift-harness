@@ -191,13 +191,18 @@ public enum LivePlanParser {
     var assumptions: [String] = []
     var inRequirements = false
     var requirementLines: [String] = []
+    var inValidation = false
+    var validationHeading: Int?
+    var validationLines: [(line: Int, text: String)] = []
 
     func close() {
       if let current { sections.append(current) }
       current = nil
     }
 
-    for raw in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+    for (offset, raw) in text.split(
+      omittingEmptySubsequences: false, whereSeparator: \.isNewline
+    ).enumerated() {
       let line = String(raw)
       let trimmed = line.trimmingCharacters(in: .whitespaces)
       if line.hasPrefix("## ") || line.hasPrefix("# ") {
@@ -207,14 +212,26 @@ public enum LivePlanParser {
           ? trimmed.dropFirst(3).trimmingCharacters(in: .whitespaces).lowercased() : ""
         inAssumptions = heading == "assumptions"
         inRequirements = heading == "requirements"
+        inValidation = heading == "validation"
+        if inValidation {
+          if validationHeading != nil {
+            throw .invalidValidation(line: offset + 1, reason: "a second `## Validation` section")
+          }
+          validationHeading = offset + 1
+        }
         continue
       }
       if line.hasPrefix("### ") {
         close()
         inAssumptions = false
         inRequirements = false
+        inValidation = false
         let id = stripTicks(String(trimmed.dropFirst(4)))
         if isTaskID(id) { current = Section(id: id) }
+        continue
+      }
+      if inValidation {
+        if trimmed.hasPrefix("|") { validationLines.append((offset + 1, trimmed)) }
         continue
       }
       if inRequirements {
@@ -267,7 +284,12 @@ public enum LivePlanParser {
     }
     let requirements = try requirements(requirementLines)
     try checkCovers(tasks, requirements: requirements)
-    return LivePlan(tasks: tasks, assumptions: assumptions, requirements: requirements)
+    let validation = try validationHeading.map { heading throws(LivePlanError) in
+      try ValidationSection.parse(
+        heading: heading, lines: validationLines, requirements: Set(requirements.map(\.id)))
+    }
+    return LivePlan(
+      tasks: tasks, assumptions: assumptions, requirements: requirements, validation: validation)
   }
 
   /// Each `- <id>: <title>` bullet, the id in the task-id alphabet and optionally in backticks.
@@ -400,6 +422,169 @@ public enum LivePlanParser {
     var number = rest.prefix { $0.isNumber || $0 == "." }
     while number.hasSuffix(".") { number = number.dropLast() }
     return number.isEmpty ? nil : "§" + number
+  }
+}
+
+/// Reads the `## Validation` table: a header naming `Done when`, `Layer`, `Check`, `Runs after`,
+/// `Writer` and optionally `Reason`, a separator line, then 1 row per check. A row with an empty
+/// `Layer` is a unit-only reason.
+private enum ValidationSection {
+  private enum Column: String, CaseIterable {
+    case doneWhen = "Done when"
+    case layer = "Layer"
+    case check = "Check"
+    case runsAfter = "Runs after"
+    case writer = "Writer"
+    case reason = "Reason"
+  }
+
+  static func parse(
+    heading: Int, lines: [(line: Int, text: String)], requirements: Set<String>
+  ) throws(LivePlanError) -> LivePlanValidation {
+    guard let header = lines.first else {
+      throw .invalidValidation(
+        line: heading,
+        reason: "the section has no table; give it 1 with a header and a separator line")
+    }
+    var columns: [Column] = []
+    for name in cells(header.text) {
+      guard
+        let column = Column.allCases.first(where: {
+          $0.rawValue.lowercased() == stripTicks(name).lowercased()
+        })
+      else {
+        throw .invalidValidation(
+          line: header.line,
+          reason: "`\(name)` is not a column; use "
+            + Column.allCases.map { "`\($0.rawValue)`" }.joined(separator: ", "))
+      }
+      columns.append(column)
+    }
+    for column in Column.allCases where column != .reason && !columns.contains(column) {
+      throw .invalidValidation(
+        line: header.line, reason: "the table's header has no `\(column.rawValue)` column")
+    }
+    guard lines.count > 1, isSeparator(lines[1].text) else {
+      throw .invalidValidation(
+        line: lines.count > 1 ? lines[1].line : header.line,
+        reason: "the header isn't followed by a `|---|` separator line")
+    }
+
+    var rows: [ValidationRow] = []
+    var rowLines: [Int] = []
+    var unitOnly: [ValidationUnitOnly] = []
+    for (line, text) in lines.dropFirst(2) {
+      let values = cells(text)
+      guard values.count == columns.count else {
+        throw .invalidValidation(
+          line: line,
+          reason: "the row has \(values.count) cells and the header \(columns.count)")
+      }
+      var cell: [Column: String] = [:]
+      for (column, value) in zip(columns, values) { cell[column] = value }
+      func value(_ column: Column) -> String { stripTicks(cell[column] ?? "") }
+
+      let requirement = value(.doneWhen)
+      guard requirements.contains(requirement) else {
+        throw .invalidValidation(
+          line: line, reason: "`\(requirement)` is not a `## Requirements` id")
+      }
+      let reason = cell[.reason].flatMap { $0.isEmpty ? nil : $0 }
+      let rawLayer = value(.layer)
+      if rawLayer.isEmpty || rawLayer == "—" || rawLayer == "-" {
+        for column in [Column.check, .runsAfter, .writer] where !value(column).isEmpty {
+          throw .invalidValidation(
+            line: line,
+            reason: "the row has no `Layer`, so it is a unit-only reason and leaves "
+              + "`\(column.rawValue)` empty")
+        }
+        guard let reason else {
+          throw .invalidValidation(
+            line: line,
+            reason: "the row has no `Layer`, so it needs a `Reason` saying why the "
+              + "requirement's unit tests suffice")
+        }
+        unitOnly.append(ValidationUnitOnly(requirement: requirement, reason: reason))
+        continue
+      }
+      guard let layer = ValidationLayer(rawValue: rawLayer) else {
+        throw .invalidValidation(
+          line: line,
+          reason: "layer `\(rawLayer)` is not a validation layer; use acceptance, flow or state, "
+            + "or leave `Layer` empty and give a `Reason` when the requirement's unit tests suffice")
+      }
+      let check = unwrap(cell[.check] ?? "")
+      guard !check.isEmpty else {
+        throw .invalidValidation(line: line, reason: "the row's `Check` is empty")
+      }
+      let runsAfter = (cell[.runsAfter] ?? "").split(separator: ",").map {
+        stripTicks(String($0))
+      }.filter { !$0.isEmpty }
+      guard !runsAfter.isEmpty else {
+        throw .invalidValidation(line: line, reason: "the row's `Runs after` is empty")
+      }
+      let writer = value(.writer)
+      guard !writer.isEmpty else {
+        throw .invalidValidation(line: line, reason: "the row's `Writer` is empty")
+      }
+      rows.append(
+        ValidationRow(
+          requirement: requirement, layer: layer, check: check, runsAfter: runsAfter,
+          writer: writer, reason: reason))
+      rowLines.append(line)
+    }
+    return LivePlanValidation(
+      table: ValidationTable(rows: rows, unitOnly: unitOnly), headingLine: heading,
+      rowLines: rowLines)
+  }
+
+  /// A row's cells, split on each `|` not escaped as `\|`, with `\|` read as `|`.
+  private static func cells(_ row: String) -> [String] {
+    var body = Substring(row.trimmingCharacters(in: .whitespaces))
+    if body.hasPrefix("|") { body = body.dropFirst() }
+    if body.hasSuffix("|"), !body.hasSuffix("\\|") { body = body.dropLast() }
+    var cells: [String] = []
+    var current = ""
+    var escaped = false
+    for character in body {
+      if escaped {
+        current.append(character == "|" ? "|" : "\\\(character)")
+        escaped = false
+      } else if character == "\\" {
+        escaped = true
+      } else if character == "|" {
+        cells.append(current.trimmingCharacters(in: .whitespaces))
+        current = ""
+      } else {
+        current.append(character)
+      }
+    }
+    if escaped { current.append("\\") }
+    cells.append(current.trimmingCharacters(in: .whitespaces))
+    return cells
+  }
+
+  private static func isSeparator(_ row: String) -> Bool {
+    let values = cells(row)
+    return !values.isEmpty
+      && values.allSatisfy { value in
+        let dashes = value.trimmingCharacters(in: CharacterSet(charactersIn: ":"))
+        return !dashes.isEmpty && dashes.allSatisfy { $0 == "-" }
+      }
+  }
+
+  /// The first code span's text when the cell opens with one, so a check written as
+  /// `` `cmd`: what it reads `` runs `cmd`; otherwise the whole cell.
+  private static func unwrap(_ cell: String) -> String {
+    guard cell.hasPrefix("`") else { return cell }
+    let rest = cell.dropFirst()
+    guard let close = rest.firstIndex(of: "`") else { return stripTicks(cell) }
+    return rest[..<close].trimmingCharacters(in: .whitespaces)
+  }
+
+  private static func stripTicks(_ text: String) -> String {
+    text.trimmingCharacters(in: .whitespaces).trimmingCharacters(
+      in: CharacterSet(charactersIn: "`"))
   }
 }
 

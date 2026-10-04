@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "requirement": "req-alpha",
+      "layer": "acceptance",
+      "check": "AlphaTests",
+      "runsAfter": [
+        "only-task",
+        "later-task"
+      ],
+      "writer": "only-task"
+    }
+  ],
+  "unitOnly": [
+    {
+      "requirement": "req-beta",
+      "reason": "the task's unit tests prove beta"
+    }
+  ]
+}
