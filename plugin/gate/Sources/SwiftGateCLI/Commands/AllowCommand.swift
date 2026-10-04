@@ -107,11 +107,11 @@ struct AllowCommand: AsyncParsableCommand {
     }
     switch outcome {
     case .success(let entry):
-      try print(
+      try emit(
         ["status": "allowed", "rule": entry.rule, "path": entry.path, "line_sha": entry.lineSHA],
         text: "allowed \(entry.rule) on \(location) (line_sha \(entry.lineSHA))")
     case .failure(let error):
-      try print(["status": "error", "message": error.description], text: "allow: \(error)")
+      try emit(["status": "error", "message": error.description], text: "allow: \(error)")
       switch error {
       case .config(.lock), .config(.unreadable), .config(.write):
         throw ExitCode(Verdict.blocked.exitCode)
@@ -121,7 +121,7 @@ struct AllowCommand: AsyncParsableCommand {
     }
   }
 
-  private func print(_ fields: [String: String], text: String) throws {
+  private func emit(_ fields: [String: String], text: String) throws {
     guard json else { return Console.write(text) }
     let data = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
     Console.write(String(decoding: data, as: UTF8.self))

@@ -73,15 +73,9 @@ public struct BrownfieldConfigFile: Sendable {
       throw .invalid(path: url.path, error: error)
     }
     let updated = try change(current)
-    let temporary = url.deletingLastPathComponent()
-      .appending(path: ".\(url.lastPathComponent).\(UUID().uuidString).tmp")
     do {
-      try Data(BrownfieldConfigTOML.render(updated).utf8).write(to: temporary)
-      guard rename(temporary.path, url.path) == 0 else {
-        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-      }
+      try Data(BrownfieldConfigTOML.render(updated).utf8).write(to: url, options: .atomic)
     } catch {
-      try? FileManager.default.removeItem(at: temporary)
       throw .write(path: url.path, reason: error.localizedDescription)
     }
     return updated
