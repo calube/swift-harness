@@ -269,8 +269,10 @@ private struct TrialPlanBranch {
 
     try await git("checkout", "-q", "-b", "download-check")
     try write(
-      "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift", "enum LargeDownloadConfirmation {}\n")
-    try write(Self.test, "import XCTest\nfinal class LargeDownloadConfirmationTests: XCTestCase {}\n")
+      "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift", "enum LargeDownloadConfirmation {}\n"
+    )
+    try write(
+      Self.test, "import XCTest\nfinal class LargeDownloadConfirmationTests: XCTestCase {}\n")
     _ = try await commit("check")
     try await git("checkout", "-q", "main")
     try await git("merge", "-q", "--no-ff", "-m", "merge check", "download-check")
@@ -362,7 +364,7 @@ extension BrownfieldMergeCheckTests {
   }
 
   @Test(
-    "a merge gate proves only the tests its own merge brought, measured from the merge's first parent, while final measures from the plan base — catches a second merge counting the first task's already-merged test as its own"
+    "a merge gate proves only the tests its own merge brought, measured from the merge's first parent, while final and a head that isn't a merge measure from the plan base — catches a second merge counting the first task's already-merged test as its own"
   )
   func mergeProvesFromTheFirstParent() async throws {
     let clone = try Clone()
@@ -385,6 +387,11 @@ extension BrownfieldMergeCheckTests {
             test: TrialPlanBranch.test, target: "Aidoku", outcome: .proven,
             proofBase: branch.contract, assertion: nil)
         ])
+
+    let fixer = try await Self.trialRun(clone, branch, tier: .merge, at: "download-check")
+    #expect(
+      fixer.proofs.map(\.proofBase) == [branch.planBase],
+      "a fix worktree's head is no merge, so its gate keeps the plan base")
 
     let final = try await Self.trialRun(clone, branch, tier: .final, at: branch.secondMerge)
     #expect(

@@ -258,11 +258,19 @@ enum BrownfieldMergeCheck {
     return outcome
   }
 
-  /// Where `tier`'s prove measures changed tests from and reverts the source to.
+  /// Where `tier`'s prove measures changed tests from and reverts the source to. At `merge` on a
+  /// merge commit, that's its first parent, the plan branch's tip before this merge, so a test an
+  /// earlier merge brought isn't counted again. `final`, a head that isn't a merge, or a first
+  /// parent from before `base`'s fork point, keeps `base`.
   static func proofBase(tier: CheckTier, base: String, git: any Git) async throws(GitError)
     -> String
   {
-    base
+    guard tier == .merge, try await git.revision("HEAD^2") != nil,
+      let parent = try await git.revision("HEAD^1"),
+      let fork = try await git.mergeBase("HEAD", base),
+      try await git.isAncestor(fork, of: parent)
+    else { return base }
+    return parent
   }
 
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
