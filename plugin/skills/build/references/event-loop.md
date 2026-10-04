@@ -299,7 +299,9 @@ target or product the task needs, which only a new surface can add.
    or the plan first.
 
 `amend`: set the reporting task `blocked`, and run the amend flow
-with the Skill tool: `swift-harness:design` with `--amend <slug>`. It marks the affected tasks
+with the Skill tool: `swift-harness:design` with `--amend <slug>`. A brownfield plan has no design:
+the run skill's design-conflict step amends its `PLAN.md` instead, widening the task's write set
+and retrying it. It marks the affected tasks
 `needs-replan`. The other tasks keep building; the report names the `needs-replan` tasks, which wait
 for `/swift-harness:plan`.
 

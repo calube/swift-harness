@@ -143,21 +143,30 @@ Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, k
 2. Write the contract: the new types, signatures and stubs every task compiles against, with
    behaviour unchanged. It builds in every touched area: run each touched area's `build` command
    from `<config>` in `<checkout>`.
-3. `"$SG" check --tier slice --base <base>` in `<checkout>`. Fix any finding the contract caused.
-   A finding on a line that must stay as it is, such as a generated file, gets
-   `"$SG" allow <rule> <path>:<line> --reason "<why>"`.
-4. Commit on `<plan-branch>` with a message in the repository's own style. The repository's git
+3. Commit on `<plan-branch>` with a message in the repository's own style. The repository's git
    hooks run on every commit of the run; a failing hook is a finding to fix, never one to bypass.
+4. With the tree clean, `"$SG" check --tier slice --base <base> --json` in `<checkout>`. Fix any
+   finding the contract caused in a new commit and gate again. A finding on a line that must stay
+   as it is, such as a generated file, gets `"$SG" allow <rule> <path>:<line> --reason "<why>"`.
+   Keep the GREEN run's `runId` as `<contract-run>`: it gated the commit at the tip of
+   `<plan-branch>`, which is what step 7 records.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 7. Import and build
 
-1. `"$SG" plan import <slug> --json`. Status `invalid` quotes the task and line to fix: fix
-   `PLAN.md` and import again. Status `blocked` names the state it couldn't read: report it and
-   stop. The import links the root `PLAN.md` to `<plan-dir>/PLAN.md` and keeps that link out of
-   `git status`; workers read the plan by absolute path. It also sets the plan's index entry to
-   `planned`, so `build start` needs no `index set`.
+1. `"$SG" plan import <slug> --contract <contract-task> --contract-run <contract-run> --json`,
+   where `<contract-task>` is the contract task's id. Status `invalid` quotes the task and line to
+   fix: fix `PLAN.md` and import again. Status `blocked` names the state it couldn't read: report
+   it and go to step 8. The import links the root `PLAN.md` to `<plan-dir>/PLAN.md` and keeps that
+   link out of `git status`; workers read the plan by absolute path. It also sets the plan's index
+   entry to `planned`, so `build start` needs no `index set`.
+   - `contract.status` `done`: the contract task is done, with the contract commit and its gate
+     run as its return, which `build start` hands to the dependents' packs. `build next` never
+     offers it.
+   - `contract.status` `pending` (exit 1): its `message` says why, such as a RED run or a run of an
+     older commit. Fix the contract, commit, gate it as in step 6 and import again with the new
+     run. Never move the contract through `ledger set` or write its return by hand.
 2. Run the build loop of `/swift-harness:build` (its `SKILL.md` and `references/event-loop.md`) with
    these changes:
    - Start it with `"$SG" build start <slug> --preset brownfield --session <session> --json`.
@@ -167,7 +176,26 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `PLAN.md` section, its areas' commands and the brownfield rules.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
-     and what you chose. An option that stops the build ends the run at step 9 with the report.
+     and what you chose. An option that stops the build starts nothing new: let running tasks
+     merge or stop them, then go to step 8. No answer skips step 8.
+   - A design conflict halts with `"$SG" build halt --run <run> --task <task> --reason amend`,
+     whatever the preset's `on_design_conflict` says. A brownfield plan has no design to amend:
+     `PLAN.md` is what changes. **Retry with a widened write set** (Recommended) when every path
+     the conflict names can join the task's `- Writes:` without 2 tasks of 1 wave sharing a path,
+     adding a `Deps:` entry where it must:
+     1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`, if it isn't already.
+     2. Add the paths to the task's `- Writes:` in `PLAN.md`, and 1 assumption naming the
+        conflict and the paths.
+     3. `"$SG" plan import <slug> --json`. It keeps every task's status and rewrites each write
+        set from `PLAN.md`.
+     4. `"$SG" ledger set <slug> <task> pending --session <session> --json`, then
+        `"$SG" build resume --run <run> --task <task> --answer retry`. A dependent the conflict
+        set `blocked` goes back to `pending` the same way. `build next` starts the task again,
+        into the worktree it already has.
+
+     **Stop** is recommended only when widening can't resolve it: the conflict needs a change to
+     work already done, such as the contract or a merged task, or a path a running task owns. A
+     task that conflicts again after its retry stays `blocked`: go on without it.
    - Stop at its step 4; this skill's step 8 replaces it.
    - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
      each task's diff `low`, `medium` or `high`, and paths in `[brownfield] sensitive` are always
@@ -179,8 +207,13 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 ## 8. Final
 
-When `build next` reports nothing to start and nothing running, open the phase:
-`"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
+Every run ends here, however its build ended: `build next` reports nothing to start and nothing
+running, or an answer stopped the build and its running tasks have merged or stopped. Blocked,
+abandoned and pending tasks never skip this step: `final` gates whatever merged, the contract
+alone when nothing else did. A run whose `plan import` never succeeded has no ledger and no
+`<run>`: it runs item 1 alone, naming `<slug>` for its span, then step 9.
+
+Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
    `lint` and `build` against the baseline, plus each area's `e2e`.
@@ -188,8 +221,8 @@ When `build next` reports nothing to start and nothing running, open the phase:
 3. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its
-   span with `"$SG" events span end <span> --outcome red` and ends the run RED; the report quotes
-   its findings as `rule: message`.
+   span with `"$SG" events span end <span> --outcome red`, goes on to item 4 and ends the run RED;
+   the report quotes its findings as `rule: message`.
 4. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 5. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate

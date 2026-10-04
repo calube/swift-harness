@@ -5,7 +5,9 @@
 // Regressions caught: an approval step or a question to the user creeping into a run that must
 // take 0 human input; a commit that skips the repository's git hooks; an explorer on a model alias
 // instead of a pinned id, or without its deadline and word cap; a run that never fixes a failing
-// guess, never imports its plan, never runs `final` or never reports; a plan shape whose
+// guess, never imports its plan, never runs `final` or never reports; a stopped or abandoned
+// build that skips `final` and `build finish`; a design conflict answered with stop where widening
+// the task's write set would do; a contract import that leaves it pending; a plan shape whose
 // example `plan import` rejects; and a plan checkout made or removed with raw `git worktree`,
 // which drops its gate reports. Its phase spans are checked with the other skills' telemetry
 // calls.
@@ -61,6 +63,59 @@ export function rawWorktreeCalls(files) {
     for (const [index, line] of text.split('\n').entries()) {
       if (/\bgit\b(?:\s+-\S+(?:\s+[^\s`-]\S*)?)*\s+worktree\b/.test(line)) problems.push(`${file}:${index + 1}`)
     }
+  }
+  return problems
+}
+
+/** The `## <n>. …` section of `text` whose heading starts with `heading`, without the heading. */
+function section(text, heading) {
+  const start = text.indexOf(`\n## ${heading}`)
+  if (start < 0) return null
+  const body = text.slice(start + 1)
+  const next = body.indexOf('\n## ', 1)
+  return next < 0 ? body : body.slice(0, next)
+}
+
+/** Every way the run skill `text` lets a run end without `final` and `build finish`: a line that
+ * sends a stopped or abandoned build straight to the report, or a final step that doesn't say
+ * every run reaches it. */
+export function finalSkips(text) {
+  const problems = []
+  for (const [index, line] of text.split('\n').entries()) {
+    if (/\b(?:stop|abandon)/i.test(line) && /\bstep 9\b/.test(line) && !/\bstep 8\b/.test(line)) {
+      problems.push(`line ${index + 1}: a stopped build goes to step 9 without step 8`)
+    }
+  }
+  const final = section(text, '8. Final')
+  if (!final) return [...problems, 'no `## 8. Final` step']
+  if (!/\bevery run\b/i.test(final)) problems.push('`## 8. Final` doesn\'t say every run reaches it')
+  if (!/\bstopped\b/.test(final)) problems.push('`## 8. Final` doesn\'t name a stopped build')
+  if (!/\b(?:blocked|abandoned)\b/.test(final)) problems.push('`## 8. Final` doesn\'t name blocked or abandoned tasks')
+  for (const call of ['check --tier final', 'build finish <slug>']) {
+    if (!extractInvocations(final).some(inv => inv.words.join(' ').startsWith(call))) {
+      problems.push(`\`## 8. Final\` never runs \`swiftgate ${call}\``)
+    }
+  }
+  return problems
+}
+
+/** How the run skill `text` answers a design conflict, as problems: stop marked recommended, or no
+ * recommended retry that widens the task's write set through `PLAN.md` and `plan import`. */
+export function designConflictProblems(text) {
+  const paragraphs = text.split(/\n(?=\s*- )/).filter(p => /\bdesign conflict\b/i.test(p))
+  if (paragraphs.length === 0) return ['no step answers a design conflict']
+  const problems = []
+  for (const paragraph of paragraphs) {
+    if (/\*\*stop\*\*\s*\(Recommended\)/i.test(paragraph)) problems.push('a design conflict recommends stop')
+  }
+  const answer = paragraphs.join('\n')
+  if (!/\*\*retry[^*]*write set\*\*\s*\(Recommended\)/i.test(answer)) {
+    problems.push('a design conflict never recommends a retry with a widened write set')
+  }
+  if (!/`- Writes:`/.test(answer)) problems.push('the retry never widens the task\'s `- Writes:` in PLAN.md')
+  const calls = extractInvocations(answer).map(inv => inv.words.join(' '))
+  for (const call of ['plan import <slug>', 'ledger set <slug> <task> pending', 'build resume']) {
+    if (!calls.some(c => c.startsWith(call))) problems.push(`the retry never runs \`swiftgate ${call}\``)
   }
   return problems
 }
@@ -149,6 +204,49 @@ const tests = {
     assert.match(skill, /4-minute hard/, 'the explorers have no hard deadline')
     assert.match(skill, /## Assumptions/, 'the run skill never records its readings in PLAN.md\'s Assumptions')
     assert.match(skill, /<plan-branch>/, 'the run skill never names the plan branch its commits land on')
+  },
+
+  'every way a run can stop its build still runs final and build finish, then the report — catches a run that abandons a build skipping final'() {
+    assert.deepEqual(finalSkips(read('skills/run/SKILL.md')), [])
+  },
+
+  'the final-skip check names a stopped build sent to the report and a conditional final step — catches a checker that passes anything'() {
+    const skipping = [
+      '## 7. Import and build', '',
+      'Take the recommended option. An option that stops the build ends the run at step 9 with the report.', '',
+      '## 8. Final', '',
+      'When `build next` reports nothing to start and nothing running, run `"$SG" check --tier final --base <base> --json`,',
+      'then `"$SG" build finish <slug> --session <session> --json`.', '',
+      '## 9. Report', '',
+    ].join('\n')
+    assert.deepEqual(finalSkips(skipping), [
+      'line 3: a stopped build goes to step 9 without step 8',
+      '`## 8. Final` doesn\'t say every run reaches it',
+      '`## 8. Final` doesn\'t name a stopped build',
+      '`## 8. Final` doesn\'t name blocked or abandoned tasks',
+    ])
+  },
+
+  'a brownfield design conflict recommends a retry with a widened write set, not stop — catches a brownfield write-set conflict recommending stop'() {
+    assert.deepEqual(designConflictProblems(read('skills/run/SKILL.md')), [])
+  },
+
+  'the design-conflict check names the build skill\'s stop recommendation — catches a checker that passes anything'() {
+    const loop = read('skills/build/references/event-loop.md')
+    const block = loop.slice(loop.indexOf('`block`:'), loop.indexOf('`amend`:'))
+    assert.match(block, /\*\*stop\*\* \(Recommended\)/, 'the build skill\'s block flow no longer recommends stop; pick another stop-recommending sample')
+    const problems = designConflictProblems(`- A design conflict follows the build skill:\n${block.replace(/^\d+\. /gm, '  ')}`)
+    assert.ok(problems.includes('a design conflict recommends stop'), problems.join('\n'))
+    assert.ok(problems.includes('a design conflict never recommends a retry with a widened write set'), problems.join('\n'))
+  },
+
+  'the run skill imports its plan with the landed contract and its gate run — catches a contract left pending after import'() {
+    const named = calls(runSkillFiles())
+    assert.ok(named.some(call => call.startsWith('plan import <slug> --contract <contract-task> --contract-run <contract-run>')),
+      'the run skill never imports with --contract and --contract-run')
+    const contract = section(read('skills/run/SKILL.md'), '6. Land the contract commit')
+    assert.ok(contract.indexOf('Commit on `<plan-branch>`') < contract.indexOf('check --tier slice'),
+      'the contract is gated before it is committed, so its gate run names the base, not the contract commit')
   },
 
   'the run skill makes and removes the plan checkout through swiftgate, never raw git worktree — catches a checkout whose gate reports die with it'() {

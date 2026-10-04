@@ -282,6 +282,7 @@ enum BuildStartRun {
       } catch {
         return .blocked(command, slug, "creating the build run: \(error)")
       }
+      try seedReturns(slug, layout: layout, into: store.layout)
       try await BuildLoop.setIndex(
         slug, .building,
         resume: "build run \(store.runID) (preset \(presetName)) in progress; continue with "
@@ -295,6 +296,38 @@ enum BuildStartRun {
         holder: nil, message: "started build run \(store.runID)")
     } catch {
       return .blocked(command, slug, error.message)
+    }
+  }
+
+  /// Copies the returns `plan import` recorded before any run existed, such as a brownfield
+  /// contract's, into the new run's `returns/`, where dependents' packs read their notes.
+  private static func seedReturns(
+    _ slug: String, layout: PlanStateLayout, into run: BuildRunLayout
+  ) throws(BuildLoopError) {
+    let files = FileManager.default
+    let source: URL
+    do {
+      source = URL(filePath: try layout.plan(slug).returnsDirectory, directoryHint: .isDirectory)
+    } catch {
+      throw BuildLoopError("invalid plan name `\(slug)`: \(error)")
+    }
+    guard files.fileExists(atPath: source.path) else { return }
+    let destination = URL(filePath: run.directory, directoryHint: .isDirectory)
+      .appending(path: "returns", directoryHint: .isDirectory)
+    do {
+      let names = try files.contentsOfDirectory(atPath: source.path).filter {
+        $0.hasSuffix(".json")
+      }
+      guard !names.isEmpty else { return }
+      try files.createDirectory(at: destination, withIntermediateDirectories: true)
+      for name in names.sorted() {
+        let data = try Data(contentsOf: source.appending(path: name))
+        try data.write(to: destination.appending(path: name), options: .atomic)
+      }
+    } catch {
+      throw BuildLoopError(
+        "copying \(source.path) into run \(run.runID)'s returns: \(error); the run is created "
+          + "but its dependents can't read those returns")
     }
   }
 

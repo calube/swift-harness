@@ -369,8 +369,9 @@ public enum ConfigSchema {
       readEnum(&reader, table, "on_design_conflict", at: path)
     let taskProof: BuildPreset.TaskProof =
       readProfiled(&reader, table, "task_proof", at: path, profile: profile) ?? .perTask
-    // With no design there is nothing to amend, so a conflict can only block.
-    if designTier == .none, let readConflict, readConflict != .block {
+    // With no design there is nothing to amend, so a conflict can only block. A brownfield plan
+    // is its live PLAN.md, which the run amends itself, so it may answer `amend` with no design.
+    if designTier == .none, profile == .owned, let readConflict, readConflict != .block {
       reader.issues.append(
         .outOfRange(
           path: Reader.join(path, "on_design_conflict"), value: readConflict.rawValue,
