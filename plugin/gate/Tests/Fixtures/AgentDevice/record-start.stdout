@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": {
+    "recording": "started",
+    "outPath": "/SCRATCH/flow.mp4",
+    "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture",
+    "recordingBackend": "simctl recordVideo",
+    "recordingScope": "app",
+    "recordOnlySession": false,
+    "activeSessionApp": {
+      "bundleId": "com.example.SampleApp",
+      "name": "com.example.SampleApp"
+    },
+    "showTouches": true
+  }
+}

@@ -218,6 +218,70 @@ and deletes only the devices it made.
 - `simctl create` prints only the new UDID. The device list gives each device's
   `deviceTypeIdentifier`.
 
+## AgentDevice
+
+Captured on 2026-10-04 with `agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. The pin
+is `AgentDevicePin.version`; install it with:
+
+```
+npm i -g agent-device@0.21.18
+```
+
+Build the app with `(cd examples/SampleApp && ../../plugin/bin/swiftgate test --tier t3)`, then run
+`plugin/gate/Tests/Fixtures/AgentDevice/capture.sh
+examples/SampleApp/.harness/derived-data/app-SampleApp/Build/Products/Debug-iphonesimulator/SampleApp.app`
+from the repository root. The script creates its own `agent-device-capture-<pid>` iPhone 17 device,
+installs the app, and deletes the device on exit. Each `AgentDevice/<call>.{stdout,stderr,status}`
+is one real call against session `swiftgate-capture` on that device; the scratch path is replaced
+with `/SCRATCH` and `$HOME` with `/HOME`. The same script writes
+`plugin/qa/agent-device-schemas-0.21.18.json`: the MCP server's `initialize` `serverInfo` and its
+`tools/list` `tools`, from `agent-device mcp` over stdio.
+
+| Files | Call |
+|---|---|
+| `version` | `--version` |
+| `open`, `open-launch-args.txt` | `open com.example.SampleApp --udid <udid> --session <session> --launch-args -harness-scenario --launch-args live --json`, then the app process's argv from `ps` |
+| `snapshot`, `screenshot`, `appstate`, `session-list` | `snapshot`, `screenshot <path>`, `appstate`, `session list`, each with `--udid <udid> --session <session> --json` |
+| `wait-text-absent`, `wait-text-absent-plain` | `wait text "No such text anywhere" 2000`, with and without `--json` |
+| `open-device-in-use` | `open` on the same device from session `<session>-other` |
+| `open-unknown-udid` | `open` with UDID `00000000-0000-0000-0000-000000000000` |
+| `batch-pass`, `batch-fail`, `batch-invalid`, `batch-record` | `batch --steps-file <file> --on-error stop`: a passing `wait`, `press`, `is`, `snapshot` flow; a flow whose second step waits for absent text; a `wait` step with a CLI-shaped `target`; a flow wrapped in `record start` and `record stop` steps |
+| `record-start`, `record-stop`, `contact-sheet` | `record start <path>`, a `press`, `record stop`, `record contact-sheet <video> --out <sheet> --json` |
+| `logs-path`, `network-dump`, `trace-start`, `trace-stop` | `logs path`, `network dump 25 --include headers`, `trace start <path>`, `trace stop <path>` |
+| `close` | `close` |
+| `device-release-session-refused`, `device-release-stale` | `device release --stale` with `--udid --session`, then with `--udid` alone |
+
+Observed behavior the adapter relies on:
+
+- `--json` prints its envelope on stdout, `{"success":true,"data":…}` or
+  `{"success":false,"error":{"code","message",…}}`, and leaves stderr empty. A failure exits 1.
+  Without `--json`, a failure prints `Error (<code>): <message>` on stderr and nothing on stdout.
+- The codes seen are `COMMAND_FAILED` (a `wait` past its deadline, with `details.reason`
+  `wait_deadline_exceeded`), `DEVICE_IN_USE` (`open` on a device another session holds),
+  `DEVICE_NOT_FOUND` (an unknown UDID) and `INVALID_ARGS` (a step input that fails its schema, and
+  `--session` on `device`, which refuses it).
+- A failing batch names the step in `error.details.step` (1-based) and `error.details.command`;
+  a passing one lists every step under `data.results` with `step`, `command`, `ok` and
+  `durationMs`, and a `snapshot` step returns the full tree under its `data.nodes`.
+- `record start` and `record stop` work as steps inside a batch that also drives the app.
+- `open --launch-args` reaches the app: the app process's argv ends `-harness-scenario live`.
+- `open` with `--udid` and `--session` binds the session to that device: `session list` and the
+  envelope's `device_udid` name it.
+- No call failed for a missing macOS Accessibility or Screen Recording permission: `snapshot`,
+  `screenshot` and `record` all succeeded on this Mac, so `doctor` gets no permission check.
+- `appstate` prints `data.state`, one of the 5 `XCUIApplication.State` names in the package's
+  `dist/src` (`unknown`, `notRunning`, `runningBackgroundSuspended`, `runningBackground`,
+  `runningForeground`).
+- The iOS role vocabulary is a node's `type`. The runner names each element type from
+  `elementTypeNamesByRawValue` in
+  `dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+Snapshot.swift`:
+  `Application`, `Window`, `Button`, `Cell`, `StaticText`, `TextField`, `TextView`,
+  `SecureTextField`, `Switch`, `Slider`, `Link`, `Image`, `NavigationBar`, `TabBar`,
+  `CollectionView`, `Table`, `ScrollView`, `Toolbar`, `SearchField`, `SegmentedControl`, `Stepper`,
+  `Picker`, `ActivityIndicator`, `ProgressIndicator`, `CheckBox`, `MenuItem`, `WebView`, `Other`,
+  `Keyboard` and `Key`, and any other type as `Element(<raw value>)`. The snapshot engine in
+  `dist/src/ios-snapshot-engine.js` also rewrites some `Other` nodes to `Heading`.
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's

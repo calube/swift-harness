@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "session": "swiftgate-capture",
+    "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture",
+    "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture/runner.log",
+    "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture/requests/c4ed7bfd109e94ec.ndjson",
+    "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture/events.ndjson",
+    "appName": "com.example.SampleApp",
+    "appBundleId": "com.example.SampleApp",
+    "selection": {
+      "reason": "explicit-selector",
+      "source": "local",
+      "candidateCount": 1,
+      "bootOccurred": false
+    },
+    "startup": {
+      "durationMs": 4745,
+      "measuredAt": "2026-10-04T17:24:12.911Z",
+      "method": "open-command-roundtrip",
+      "appTarget": "com.example.SampleApp",
+      "appBundleId": "com.example.SampleApp"
+    },
+    "platform": "ios",
+    "target": "mobile",
+    "device": "agent-device-capture-10909",
+    "id": "F9277B7E-DB39-40C2-AF02-659F9A517B7A",
+    "device_udid": "F9277B7E-DB39-40C2-AF02-659F9A517B7A",
+    "ios_simulator_device_set": null,
+    "message": "Opened: com.example.SampleApp"
+  }
+}

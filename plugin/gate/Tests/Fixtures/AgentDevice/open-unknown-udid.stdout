@@ -1,0 +1,14 @@
+{
+  "success": false,
+  "error": {
+    "code": "DEVICE_NOT_FOUND",
+    "message": "No Apple device with UDID 00000000-0000-0000-0000-000000000000",
+    "hint": "Verify the target device is booted/connected and selectors match.",
+    "diagnosticId": "muu3c1fx-8ef78c89",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-unknown/requests/e4af898c25828ea1.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-unknown",
+      "requestId": "e4af898c25828ea1"
+    }
+  }
+}

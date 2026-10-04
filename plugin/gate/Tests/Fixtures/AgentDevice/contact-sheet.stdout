@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "path": "/SCRATCH/flow-sheet.png",
+    "videoPath": "/SCRATCH/flow.mp4",
+    "durationMs": 1717,
+    "width": 1480,
+    "height": 823,
+    "sampledFrameCount": 7,
+    "decodedFrameCount": 7,
+    "skippedSampleCount": 0,
+    "changedPixelThreshold": 0.02,
+    "cells": [
+      {
+        "timeMs": 0,
+        "changedPixelRatio": 1
+      },
+      {
+        "timeMs": 850,
+        "changedPixelRatio": 0.020084175084175083
+      },
+      {
+        "timeMs": 1416.6666666666667,
+        "changedPixelRatio": 0.021616161616161617
+      },
+      {
+        "timeMs": 1700,
+        "changedPixelRatio": 0.013451178451178452
+      }
+    ]
+  }
+}

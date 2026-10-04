@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": {
+    "trace": "stopped",
+    "outPath": "/SCRATCH/trace.log",
+    "artifacts": [
+      {
+        "field": "outPath",
+        "artifactType": "trace-log",
+        "artifactId": "f0fd4feb-6bce-4640-acf7-5f10278145fe",
+        "fileName": "trace.log",
+        "localPath": "/SCRATCH/trace.log"
+      }
+    ]
+  }
+}
