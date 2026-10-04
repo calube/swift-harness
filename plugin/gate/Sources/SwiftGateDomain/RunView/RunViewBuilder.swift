@@ -53,7 +53,8 @@ public enum RunViewBuilder {
       damage: damage)
     view = RunViewEmittedEvents.fold(events, into: view)
     RunViewValidationFold.fold(
-      events, qaRuns: input.qaRuns, roots: input.checkoutRoots, into: &view)
+      events, qaRuns: input.qaRuns, roots: input.checkoutRoots,
+      taskOfGateRun: join.taskOfGateRun, into: &view)
     let windows = events.compactMap { event -> AgentToolsEvent? in
       guard case .agentTools(let tools) = event.payload else { return nil }
       return tools

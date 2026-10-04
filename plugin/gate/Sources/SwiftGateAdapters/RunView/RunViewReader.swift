@@ -9,8 +9,9 @@ import SwiftGateDomain
 /// `build.return-checked`, `agent.usage`, `agent.tools`, `span.*`), or when it is a gate event (`gate.run`, `gate.step`,
 /// `test.result`, `prove.result`) of a gate run the run's ledger log or a task return names.
 ///
-/// A `qa.check` belongs to the run when it names the run's plan and its `qa run` started at or
-/// after the build run and before the plan's next build run.
+/// A `qa.check`, and a `qa.flow` with a row, belong to the run when they name the run's plan and
+/// their `qa run` started at or after the build run and before the plan's next build run. A
+/// `qa.flow` with no row, a kept XCUITest flow, belongs with its gate run.
 ///
 /// A brownfield run has phases before its build run exists, so the plan's first build run also
 /// keeps the spans that name the plan slug, and the `discover.run` and `warmup.run` events from
@@ -117,8 +118,8 @@ public struct RunViewReader: RunViewReading {
     var from: String
     var until: String?
 
-    func holds(_ check: QACheckEvent, qaRun: String?) -> Bool {
-      guard check.plan == plan, let qaRun else { return false }
+    func holds(plan named: String?, qaRun: String?) -> Bool {
+      guard named == plan, let qaRun else { return false }
       let started = Self.startTime(qaRun)
       guard started >= Self.startTime(from) else { return false }
       return until.map { started < Self.startTime($0) } ?? true
@@ -137,7 +138,8 @@ public struct RunViewReader: RunViewReading {
     return runs.filter { RunID.isValid($0) && $0 > buildRun }.min()
   }
 
-  /// Each kept `qa run`'s `qa/report.json` and its red rows' saved output, from the first checkout
+  /// Each kept `qa run`'s `qa/report.json` and its red rows' saved output, the `.txt` files a
+  /// check's command, script or lint printed to, from the first checkout
   /// whose state holds the run: the main checkout's, then each live task worktree's. A report
   /// that is missing or doesn't read, and an evidence path that leaves the run directory or
   /// doesn't read, are damage.
@@ -151,7 +153,9 @@ public struct RunViewReader: RunViewReading {
       guard case .qaCheck(let check) = event.payload, let runID = event.runID else { continue }
       if red[runID] == nil { order.append(runID) }
       var paths = red[runID] ?? []
-      if check.result == .red { paths += check.evidence.filter { !paths.contains($0) } }
+      if check.result == .red {
+        paths += check.evidence.filter { $0.hasSuffix(".txt") && !paths.contains($0) }
+      }
       red[runID] = paths
     }
     var runs: [String: RunViewQARun] = [:]
@@ -576,8 +580,13 @@ public struct RunViewReader: RunViewReading {
     case .proveResult:
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
     case .discoverRun, .warmupRun: return prebuild.holds(event.time)
-    case .qaCheck(let check): return qaWindow?.holds(check, qaRun: event.runID) ?? false
-    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup, .qaFlow:
+    case .qaCheck(let check):
+      return qaWindow?.holds(plan: check.plan, qaRun: event.runID) ?? false
+    case .qaFlow(let flow) where flow.row != nil:
+      return qaWindow?.holds(plan: flow.plan, qaRun: event.runID) ?? false
+    case .qaFlow:
+      return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
+    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
       return false
     }
   }

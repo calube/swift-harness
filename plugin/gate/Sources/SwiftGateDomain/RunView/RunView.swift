@@ -516,7 +516,7 @@ extension RunView.Task {
 extension RunView.Span {
   private enum CodingKeys: String, CodingKey {
     case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools, causeGateRun
-    case failureReason, baseline
+    case failureReason, baseline, flow
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -534,6 +534,7 @@ extension RunView.Span {
     try c.encode(causeGateRun, forKey: .causeGateRun)
     try c.encode(failureReason, forKey: .failureReason)
     try c.encode(baseline, forKey: .baseline)
+    try c.encode(flow, forKey: .flow)
   }
 }
 
