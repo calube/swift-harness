@@ -157,7 +157,7 @@ struct RunViewReaderPrebuildTests {
   }
 
   @Test(
-    "a later build run of the same plan keeps none of the plan's pre-build phases — catches every build run of a plan redrawing its spec-read and warm-up"
+    "with a later build run of the same plan beside it, the first build run keeps the plan's pre-build phases and the later one none — catches every build run of a plan redrawing its spec-read and warm-up"
   )
   func laterBuildRunKeepsNone() throws {
     let clone = try PrebuildClone(launched: try time("2026-10-04T09:19:55.000Z"))
@@ -168,9 +168,11 @@ struct RunViewReaderPrebuildTests {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try Data().write(to: directory.appending(path: "events.jsonl"))
 
+    let prebuild: Set<RunView.Phase> = [.specRead, .explore, .plan, .contract, .discover, .warmup]
+    let first = try clone.reader.read(buildRun: PrebuildClone.buildRun)
+    #expect(Set(RunViewBuilder.build(first).spans.map(\.phase)).isSuperset(of: prebuild))
     let input = try clone.reader.read(buildRun: later)
     #expect(input.launchedAt == nil)
-    let phases = Set(RunViewBuilder.build(input).spans.map(\.phase))
-    #expect(phases.isDisjoint(with: [.specRead, .explore, .plan, .contract, .discover, .warmup]))
+    #expect(Set(RunViewBuilder.build(input).spans.map(\.phase)).isDisjoint(with: prebuild))
   }
 }
