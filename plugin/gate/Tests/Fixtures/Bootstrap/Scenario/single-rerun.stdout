@@ -1,0 +1,9 @@
+bootstrap: 0 to write, 7 unchanged, 1 left alone, 0 outside the repository
+
+Left alone:
+  .swiftlint.yml: not written: swiftlint is not installed (style only)
+
+Notes:
+  not a git repository: lefthook hooks are not installed
+
+Nothing to do.

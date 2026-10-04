@@ -1,0 +1,14 @@
+bootstrap: applied 10 change(s)
+  wrote AGENTS.md
+  wrote CLAUDE.md
+  wrote .swiftgate.toml
+  wrote App/Scenario.swift
+  wrote .swift-format
+  wrote lefthook.yml
+  wrote .gitignore
+  wrote docs/index.md
+  registered /REPO in /HOME/.swift-harness/projects.json
+  linked /HOME/.local/bin/swiftgate -> /PLUGIN/bin/swiftgate
+Notes:
+  App/Scenario.swift: add `Scenario.prepareFromLaunchArguments()` as the first line of `SampleApp.init()` in App/SampleApp.swift (add an `init()` if it has none); bootstrap never edits app source
+  not a git repository: lefthook hooks are not installed

@@ -10,7 +10,8 @@ struct BootstrapRouterTests {
   static let templates = HarnessTemplates(
     agents: "# Router\nSee [`docs/index.md`](docs/index.md).\n", config: "xcode = {{XCODE}}\n",
     swiftFormat: "{}\n", swiftLint: "rules\n", lefthook: "pre-commit:\n",
-    gitignore: "# swift-harness\n**/.harness/runs/\n", docsIndex: "# Docs index\n")
+    gitignore: "# swift-harness\n**/.harness/runs/\n", docsIndex: "# Docs index\n",
+    scenario: "enum Scenario: String { case live }\n")
 
   static let inferred = ConfigInference.infer(
     RepositorySurvey(

@@ -432,6 +432,26 @@ Observed behavior the adapter relies on:
 - Listing resolves the project's packages first (16s cold on the sample app).
 - A missing project exits 66 with the error on stderr.
 
+### `Bootstrap/Scenario/`
+
+Real `swiftgate bootstrap` runs on 2026-10-04 (Xcode 26.2), on `rsync` copies of
+`examples/SampleApp` without `.harness`, `DerivedData`, `.build`, `.swiftpm` or `xcuserdata`, and
+with `.swiftgate.toml` and `App/Scenario.swift` deleted, so the copy is the app before it adopted
+the harness: 1 `@main … : App` file, `App/SampleApp.swift`. Not a git repository. Every command
+ran with `HOME=<scratch>/home SWIFTGATE_CACHE_DIR=<scratch>/cache SWIFTGATE_BUILD_CONFIG=debug
+<checkout>/plugin/bin/swiftgate`, written `SG` below. Scrubbing: the copy's path becomes `/REPO`,
+the scratch home `/HOME`, the checkout's `plugin` directory `/PLUGIN`.
+
+| File | Capture |
+|---|---|
+| `single-dry-run.stdout` | `SG bootstrap` in the copy (exit 0) |
+| `single-apply.stdout` | `SG bootstrap --apply` next (exit 0) |
+| `single-stamped-Scenario.swift`, `single-stamped.swiftgate.toml` | `App/Scenario.swift` and `.swiftgate.toml` as that apply wrote them, copied verbatim |
+| `single-arch.stdout` | `SG arch` next (exit 1). Its 1 finding is `arch.undeclared-kind` for `GameEngine`, whose `[[modules]]` entry went with the deleted config; no `sim.scenario-drift` |
+| `single-rerun-Scenario.swift`, `single-rerun.stdout` | `case empty` added after `case live` with `sed -i '' 's/^    case live$/    case live\n    case empty/' App/Scenario.swift`, then `SG bootstrap` (exit 0, `Nothing to do.`); the file is copied after the run, unchanged by it |
+| `two-CompanionApp.swift` | Not tool output: the second `@main … : App` file written for the next run, copied to `Companion/CompanionApp.swift` in a fresh copy |
+| `two-dry-run.stdout` | `SG bootstrap` in that copy (exit 0): no `Scenario.swift`, a commented `[[scenarios]]` example in the config, and a `consider:` note naming both entry points |
+
 ## Judge
 
 Claude Code 2.1.282, run from a scratch directory with the schema in

@@ -74,6 +74,14 @@ Never run `--apply` without an explicit **Apply**.
   lists what breaks a run (Xcode pin, uncovered packages, app_scheme mismatch, a simulator that isn't installed, or
   `[docs] managed_files` missing the router or `AGENTS.md` — an upgraded repo whose config predates that key
   otherwise leaves docs-lint, and so pre-push, red with no visible cause). Offer the edit; don't make it silently.
+- **Dependency scenarios.** When bootstrap creates the config and finds 1 `@main … : App` file
+  outside packages, it writes `Scenario.swift` beside it and a `[[scenarios]] live` entry, and
+  `Notes:` names the 1 line to add to the app's `init()`, `Scenario.prepareFromLaunchArguments()`.
+  Bootstrap never edits app source: offer that edit, and if the app target lists its files one
+  by one rather than syncing a folder, adding `Scenario.swift` to the target. With 0 or 2+ entry
+  points, or an existing config, `Notes:` has a `consider:` line with the file, the config entry
+  and the call instead; ask whether to adopt them (with 2+ entry points, ask which target).
+  An existing `Scenario` is never touched.
 - **CLAUDE.md is a real file.** Offer to move its content into `AGENTS.md` outside the managed
   block, delete `CLAUDE.md`, and re-run bootstrap so it becomes the link.
 - **lefthook or swiftlint missing.** Tell the user to install it (for example with Homebrew), then
