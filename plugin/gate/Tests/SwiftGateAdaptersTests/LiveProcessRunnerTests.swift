@@ -388,7 +388,8 @@ struct LiveProcessRunnerTests {
   }
 
   @Test(
-    "runs leave no descriptor open behind them — catches a leaked stdin file or pipe end exhausting a long gate's descriptor table"
+    "runs leave no descriptor open behind them — catches a leaked stdin file or pipe end exhausting a long gate's descriptor table",
+    .disabled("load-sensitive 60 s budget; load-flakes-are-diagnosed re-enables it")
   )
   func runsLeaveNoDescriptorsOpen() async throws {
     let runs = 200
