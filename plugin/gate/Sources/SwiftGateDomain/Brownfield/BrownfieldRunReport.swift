@@ -339,11 +339,19 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       note: nil)
   }
 
-  /// The build-task workflow gets no diff-risk answer, so classified review runs every task at
-  /// `medium`; the report names them so the depth is never silent. A task the build carried
-  /// through review is one it merged, or one it started that ended blocked or needing a replan,
-  /// since a return halts only after its review; a task marked done with no merge was landed
-  /// without one.
+  /// Classified review takes each task's depth from `judge diff-risk`, and `build-task.js` puts
+  /// the depth and its source in the return's `notes` as 1 line starting with this.
+  static let classifiedNotePrefix = "review: classified at "
+  /// How the line ends when diff-risk rated the change.
+  static let ratedNoteSuffix = " by swiftgate judge diff-risk"
+  /// How the line continues after `medium` when diff-risk gave no level.
+  static let fallbackNoteInfix = ", because diff-risk gave no level ("
+
+  /// 1 line per reviewed task whose classified review didn't run at the depth diff-risk rated:
+  /// it fell back to `medium`, saying why, or its depth is unknown because its return is missing,
+  /// unreadable or silent. A task the build carried through review is one it merged, or one it
+  /// started that ended blocked or needing a replan, since a return halts only after its review;
+  /// a task marked done with no merge was landed without one.
   private static func reviewFallbacks(_ build: RunReportInput<RunReportBuild>) -> Section<String> {
     guard case .read(let run) = build else {
       return Section(items: [], note: describe(build, what: "build run"))
@@ -364,17 +372,51 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
         continue
       }
     }
-    let reviewed = order.compactMap { task -> String? in
-      if merged.contains(task) { return "\(task) (merged)" }
-      guard let status = ended[task], [.blocked, .needsReplan].contains(status) else { return nil }
-      return "\(task) (\(status.rawValue))"
+    let items = order.compactMap { task -> String? in
+      let state: String
+      if merged.contains(task) {
+        state = "merged"
+      } else if let status = ended[task], [.blocked, .needsReplan].contains(status) {
+        state = status.rawValue
+      } else {
+        return nil
+      }
+      return fallback(run.returns[task]).map { "\(task) (\(state)): \($0)" }
     }
-    guard !reviewed.isEmpty else { return Section(items: [], note: nil) }
-    return Section(
-      items: [
-        "classified review ran at medium for \(reviewed.count) task(s), merged or not, because no "
-          + "diff-risk answer reached them: " + reviewed.joined(separator: ", ")
-      ], note: nil)
+    return Section(items: items, note: nil)
+  }
+
+  /// Why a task's review didn't run at a rated depth; `nil` when diff-risk rated it, or when the
+  /// task stopped before review, as a design conflict or a red gate does.
+  private static func fallback(_ input: RunReportInput<TaskReturn>?) -> String? {
+    let taskReturn: TaskReturn
+    switch input {
+    case nil:
+      return "review depth unknown: the build run stored no checked return for it"
+    case .missing(let path)?:
+      return "review depth unknown: \(path) doesn't exist"
+    case .unreadable(let source, let reason)?:
+      return "review depth unknown: \(source) didn't read: \(reason)"
+    case .read(let read)?:
+      taskReturn = read
+    }
+    let line = taskReturn.notes.split(separator: "\n").last { $0.hasPrefix(classifiedNotePrefix) }
+    guard let line else {
+      if [.designConflict, .gateRed].contains(taskReturn.outcome) { return nil }
+      return "review depth unknown: its return's notes name no classified depth"
+    }
+    let rest = line.dropFirst(classifiedNotePrefix.count)
+    if rest.hasSuffix(ratedNoteSuffix),
+      DiffRiskLevel(rawValue: String(rest.dropLast(ratedNoteSuffix.count))) != nil
+    {
+      return nil
+    }
+    let medium = DiffRiskLevel.medium.rawValue + fallbackNoteInfix
+    if rest.hasPrefix(medium), rest.hasSuffix(")") {
+      let why = rest.dropFirst(medium.count).dropLast()
+      return "classified review ran at medium, because diff-risk gave no level: \(why)"
+    }
+    return "review depth unknown: its return's review line doesn't read as a depth: \(line)"
   }
 
   /// The report as Markdown. A run that left a task short of `done`, or whose ledger couldn't be

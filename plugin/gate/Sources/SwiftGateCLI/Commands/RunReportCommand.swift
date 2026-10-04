@@ -177,10 +177,46 @@ enum BrownfieldRunReportRun {
         let common = (try? await git.commonDirectory()) ?? "the git common dir"
         return .missing(path: "\(common)/swift-harness/plans/\(slug)/build")
       }
-      return .read(RunReportBuild(record: try store.record(), log: try store.events()))
+      let log = try store.events()
+      return .read(
+        RunReportBuild(
+          record: try store.record(), log: log,
+          returns: returns(in: store.layout.directory + "/returns", log: log)))
     } catch {
       return .unreadable(source: "the plan's build runs", reason: "\(error)")
     }
+  }
+
+  /// Each `<task>.json` under `directory`, by task id. A listing that fails for a reason other
+  /// than a missing directory marks every task the log names unreadable, so no task reads as
+  /// having stored nothing.
+  private static func returns(in directory: String, log: BuildEventLog)
+    -> [String: RunReportInput<TaskReturn>]
+  {
+    let names: [String]
+    do {
+      names = try FileManager.default.contentsOfDirectory(atPath: directory)
+    } catch CocoaError.fileReadNoSuchFile {
+      return [:]
+    } catch {
+      let tasks = log.events.compactMap { event -> String? in
+        switch event {
+        case .merge(let merge): merge.task
+        case .transition(let transition): transition.task
+        case .undo, .gate: nil
+        }
+      }
+      return Dictionary(
+        tasks.map { ($0, .unreadable(source: directory, reason: error.localizedDescription)) },
+        uniquingKeysWith: { first, _ in first })
+    }
+    var found: [String: RunReportInput<TaskReturn>] = [:]
+    for name in names where name.hasSuffix(".json") {
+      found[String(name.dropLast(".json".count))] = read(directory + "/" + name) {
+        try TaskReturnJSON.decode(Data($0.utf8))
+      }
+    }
+    return found
   }
 
   static func render(_ outcome: RunReportOutcome, json: Bool) -> String {

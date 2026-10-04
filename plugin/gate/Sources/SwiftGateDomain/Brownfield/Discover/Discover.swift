@@ -111,9 +111,9 @@ public enum Discover {
       applied: applied, stale: stale)
   }
 
-  /// The config an applied `proposal` writes. Settings, `[[allow]]` entries and presets come from
-  /// `existing` when there is one, so a rediscovery keeps them; areas always come from the
-  /// proposal.
+  /// The config an applied `proposal` writes. Settings, `[[allow]]` entries, presets and `[judge]`
+  /// come from `existing` when there is one, so a rediscovery keeps them; areas always come from
+  /// the proposal.
   public static func config(from proposal: DiscoverProposal, keeping existing: BrownfieldConfig?)
     -> BrownfieldConfig
   {
@@ -125,7 +125,7 @@ public enum Discover {
         timeBudgetMinutes: settings?.timeBudgetMinutes ?? 0, sensitive: settings?.sensitive ?? []),
       areas: proposal.areas.map(BrownfieldArea.init(proposed:)), allow: existing?.allow ?? [],
       buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset],
-      judge: existing?.judge ?? .disabled)
+      judge: existing?.judge ?? defaultJudge)
   }
 }
 
