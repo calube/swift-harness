@@ -885,6 +885,12 @@ struct CheckCommand: AsyncParsableCommand {
     }
   }
 
+  /// The options asked for that only an owned tier runs, by their command-line names.
+  var ownedOnlyOptions: [String] {
+    guard tier.profile == .brownfield else { return [] }
+    return extraSteps.map { "--\($0.rawValue)" } + (proofBases.isEmpty ? [] : ["--proof-base"])
+  }
+
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     if tier.profile == .brownfield {
@@ -892,7 +898,8 @@ struct CheckCommand: AsyncParsableCommand {
         root: root, format: output.format, command: "check \(tier.rawValue)", base: base,
         checkTier: tier
       ) { context in
-        try await BrownfieldCheck.run(root: root, tier: tier, base: base, context: context)
+        try await BrownfieldCheck.run(
+          root: root, tier: tier, base: base, refusing: ownedOnlyOptions, context: context)
       }
       return
     }
