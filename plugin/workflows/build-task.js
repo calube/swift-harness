@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun?: "<build run id>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review only: architecture and test-quality in parallel' },
@@ -74,7 +74,7 @@ const SEVERITY_RANK = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun']
 // A brownfield worktree keeps its state in its git dir's `swift-harness/`, never in the tree.
 const GIT_DIR_STATE = '/swift-harness'
 
@@ -82,6 +82,8 @@ const GIT_DIR_STATE = '/swift-harness'
 const SPEC_PAGE_SECTIONS = ['slices', 'surface', 'modules']
 // `plan.json`'s `surfaceCommit`: a hex sha, never a ref name that could move.
 const SHA = /^[0-9a-f]{7,40}$/
+// A build run id goes into a shell command, so only id characters pass.
+const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
 const stringArray = value => Array.isArray(value) && value.every(nonEmptyString)
@@ -159,7 +161,11 @@ function validateArgs(a) {
     }
     pluginRoot = a.pluginRoot.replace(/\/+$/, '')
   }
-  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main' }
+  // The build run the stage spans belong to; with none, the task records no span.
+  if (a.buildRun !== undefined && !(typeof a.buildRun === 'string' && BUILD_RUN.test(a.buildRun))) {
+    invalid(`buildRun must be a build run id, got ${JSON.stringify(a.buildRun)}`)
+  }
+  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main', buildRun: a.buildRun ?? null }
 }
 
 const A = validateArgs(ARGS)
