@@ -102,17 +102,23 @@ struct SpanLogTests {
     _ = try Self.start(root)
     let enders = 8
 
-    let closed = await withTaskGroup(of: Bool.self) { group in
+    let results = await withTaskGroup(of: Result<HarnessEvent, SpanLogError>.self) { group in
       for ender in 0..<enders {
         group.addTask {
-          (try? Self.log(root, at: 5, id: "end-\(ender)").end(spanID: Self.spanID, outcome: .ok))
-            != nil
+          Result { () throws(SpanLogError) -> HarnessEvent in
+            try Self.log(root, at: 5, id: "end-\(ender)").end(spanID: Self.spanID, outcome: .ok)
+          }
         }
       }
-      return await group.reduce(into: 0) { $0 += $1 ? 1 : 0 }
+      return await group.reduce(into: []) { $0.append($1) }
     }
 
-    #expect(closed == 1)
+    let refusals = results.compactMap { result -> SpanLogError? in
+      guard case .failure(let error) = result else { return nil }
+      return error
+    }
+    #expect(results.count - refusals.count == 1)
+    #expect(refusals == Array(repeating: .alreadyEnded(spanID: Self.spanID), count: enders - 1))
     #expect(try Self.spanLines(root).count == 2)
   }
 }

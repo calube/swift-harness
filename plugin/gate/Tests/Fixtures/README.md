@@ -1187,8 +1187,8 @@ nothing. `store.json` holds each store's random hashing salt, as written.
 
 `RunView/span-sequence/span.jsonl` is the span stream a real `events span` sequence wrote, for the
 span decoder and the run view builder. It holds a `plan` span around a `worker` span, each ended
-once. Between them, 1 second end, 1 orphan end and 1 unknown phase were refused and wrote
-nothing. Captured at the commit that records spans, from `plugin/gate` after `swift build`:
+once. Between them, `events span` refused 1 second end, 1 orphan end and 1 unknown phase, and wrote
+nothing for any of them. Captured at the commit that records spans, from `plugin/gate` after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate T=$(mktemp -d) && cd $T && export LLVM_PROFILE_FILE=$T/%p.profraw
