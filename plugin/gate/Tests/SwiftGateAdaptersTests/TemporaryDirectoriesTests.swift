@@ -113,6 +113,7 @@ struct TemporaryDirectoriesTests {
     "Tests/SwiftGateAdaptersTests/WorktreeSeedingTests.swift": 2,
     "Tests/SwiftGateAdaptersTests/XcodeGeneratorTests.swift": 1,
     "Tests/SwiftGateCLITests/ArchCommandTests.swift": 1,
+    "Tests/SwiftGateCLITests/BrownfieldCheckOptionsTests.swift": 1,
     "Tests/SwiftGateCLITests/BrownfieldSliceCheckTests.swift": 1,
     "Tests/SwiftGateCLITests/BuildBrownfieldPresetTests.swift": 1,
     "Tests/SwiftGateCLITests/BuildMergeCommandTests.swift": 1,

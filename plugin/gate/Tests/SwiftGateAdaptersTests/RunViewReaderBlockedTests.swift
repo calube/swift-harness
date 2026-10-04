@@ -21,7 +21,7 @@ private struct BlockedClone {
 
   init() throws {
     let files = FileManager.default
-    parent = files.temporaryDirectory.appending(
+    parent = TestTemporaryDirectory.root.appending(
       path: "run-view-blocked-\(UUID().uuidString)", directoryHint: .isDirectory
     ).resolvingSymlinksInPath()
     common = parent.appending(path: "memos-3/.git", directoryHint: .isDirectory)
