@@ -20,6 +20,15 @@ Start a NEW Claude Code session in the repo root, then paste:
 > `git push origin main:refs/heads/backup/subproject-2-wave-<N>`. Only push `origin/main` if I say so. Stop
 > and ask me before the acceptance waves (26–28), which need me present.
 
+## Speed mode until the #8 cleanup (2026-10-03 to 2026-10-04)
+
+The maintainer chose build speed until a cleanup on 2026-10-04. Until this section is deleted:
+- Don't wait for low machine load before running or rerunning a gate.
+- If a gate's only failure is a node walk test's 60 s timeout (issue #8), commit anyway and name the run id in
+  the commit body. Those tests are being skipped until #8 is fixed.
+- Everything else stands: the push gate with `--prove` on every change, surface-first commits, tests that fail
+  first, captured fixtures, and no push.
+
 ## New machine
 
 All build state lives in this repo: the plan and its RESUME header, this runbook, the worker brief, the

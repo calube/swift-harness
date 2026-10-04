@@ -8,6 +8,15 @@ owns the plan and merges your work. Your task IDs and worktree are given in your
   "Decisions" and "How to work this plan" sections and YOUR task sections only (grep for the task id).
 - Spec: the design the plan names — grep for the sections your task cites (e.g. `§5.4`, `### 7.4`). Do not read the whole spec unless needed.
 
+## Speed mode until the #8 cleanup (2026-10-03 to 2026-10-04)
+
+The maintainer chose build speed until a cleanup on 2026-10-04. Until this section is deleted:
+- Don't wait for low machine load before running or rerunning a gate.
+- If a gate's only failure is a node walk test's 60 s timeout (issue #8), commit anyway and name the run id in
+  the commit body. Those tests are being skipped until #8 is fixed.
+- Everything else stands: the push gate with `--prove` on every change, surface-first commits, tests that fail
+  first, captured fixtures, and no push.
+
 ## Rules
 1. **TDD.** For each behavior: write the failing test first, named `@Test("<behavior> — catches <regression>")`
    (Swift Testing), run it and SEE it fail on an assertion (not only a compile error where avoidable),
