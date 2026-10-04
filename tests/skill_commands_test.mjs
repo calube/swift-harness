@@ -3,7 +3,8 @@
 // Run: node tests/skill_commands_test.mjs
 // Regressions caught: a skill naming a subcommand or flag the CLI doesn't have (instructions
 // drifting from the CLI), an extractor that silently stops finding invocations, and a skill call
-// that leaves out a flag or workflow arg the callee requires.
+// that leaves out a flag or workflow arg the callee requires; a brownfield run that skips a
+// merge's validation rows, or reads its prepared checks before adopting them.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
@@ -1028,6 +1029,87 @@ function validationTableProblems({ plan, stateFiles, agent }, contract) {
   return problems
 }
 
+// The text of the `## <heading>…` section of `text`, without the next `## ` section.
+function h2Section(text, heading) {
+  const padded = `\n${text}`
+  const at = padded.indexOf(`\n## ${heading}`)
+  return at < 0 ? '' : padded.slice(at + 1).split(/\n## /)[0]
+}
+
+const runValidationFileNames = [
+  'skills/run/SKILL.md', 'skills/run/references/plan-shape.md', 'skills/run/references/validation-worker.md',
+  'skills/build/references/event-loop.md',
+]
+const runValidationFiles = () => Object.fromEntries(runValidationFileNames.map(name =>
+  [name, existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '']))
+
+// Where the brownfield run falls short of validating each merge: `qa adopt` copies the validation
+// worker's checks into plan state before `qa run --at-base` reads them there, every merge runs
+// `qa run --after <task>` and a red one undoes the merge, `final` runs every merged row, flow rows
+// stay with `xcode` areas, the contract names what the checks target, and the validation task
+// writes only `.harness/qa/`, since no commit carries that folder and its task never merges.
+function runValidationProblems(files) {
+  const problems = []
+  const skill = files['skills/run/SKILL.md'] ?? ''
+  const shape = files['skills/run/references/plan-shape.md'] ?? ''
+  const worker = files['skills/run/references/validation-worker.md'] ?? ''
+  const loop = files['skills/build/references/event-loop.md'] ?? ''
+  const qaCalls = text => extractInvocations(text).filter(inv => inv.words[0] === 'qa')
+  const isRun = inv => inv.words[1] === 'run'
+  const afterTask = inv => isRun(inv) && inv.words[inv.words.indexOf('--after') + 1] === '<task>'
+
+  const skillCalls = qaCalls(skill)
+  const adopt = skillCalls.find(inv => inv.words[1] === 'adopt')
+  const atBase = skillCalls.find(inv => isRun(inv) && inv.words.includes('--at-base'))
+  if (!adopt) problems.push('the run skill never runs `swiftgate qa adopt`')
+  if (!atBase) problems.push('the run skill never runs `swiftgate qa run --at-base`')
+  if (adopt && atBase && atBase.line < adopt.line) {
+    problems.push('the run skill runs `qa run --at-base` before `qa adopt` copies the checks it reads')
+  }
+  if (!qaCalls(h2Section(skill, '7. ')).some(afterTask)) {
+    problems.push('step 7 never runs `swiftgate qa run --after <task>` after a merge')
+  }
+  const finalCalls = qaCalls(h2Section(skill, '8. ')).filter(isRun)
+  if (!finalCalls.some(inv => !inv.words.includes('--after') && !inv.words.includes('--at-base'))) {
+    problems.push('step 8 never runs `swiftgate qa run` over every merged row')
+  }
+  if (!/`flow` rows?[^.]*`xcode` area/.test(skill.replace(/\s+/g, ' '))) {
+    problems.push('the run skill never keeps `flow` rows to `xcode` areas')
+  }
+  const contract = h2Section(skill, '6. ').replace(/\s+/g, ' ')
+  for (const target of ['identifier', 'route', 'storage key', 'log line']) {
+    if (!contract.includes(target)) problems.push(`the contract step never names a check's ${target}s`)
+  }
+
+  const after = h2Section(loop, 'After each merge')
+  if (!after) problems.push('the build loop has no `## After each merge` step')
+  else {
+    if (!qaCalls(after).some(afterTask)) problems.push('the after-merge step never runs `swiftgate qa run --after <task>`')
+    if (!extractInvocations(after).some(inv => inv.words.join(' ').startsWith('build merge <slug> <task> --undo'))) {
+      problems.push('the after-merge step never undoes a merge whose rows read red')
+    }
+  }
+
+  const blocks = [...shape.matchAll(/```markdown\n([\s\S]*?)\n```/g)].map(m => m[1])
+  const task = blocks.find(block => /^### \S+-validation$/m.test(block))
+  if (!task) problems.push('the plan shape has no `### <slug>-validation` task example')
+  else {
+    const writes = /^- Writes: (.*)$/m.exec(task)?.[1] ?? ''
+    const paths = writes.split(',').map(p => p.trim()).filter(Boolean)
+    if (!paths.length) problems.push('the validation task example has no write set')
+    for (const path of paths) {
+      if (!path.startsWith('.harness/qa/')) problems.push(`the validation task example writes \`${path}\`, outside \`.harness/qa/\``)
+    }
+  }
+  if (!worker) problems.push('no validation worker brief')
+  else {
+    if (!worker.includes('`.harness/qa/<slug>/`')) problems.push('the validation worker brief never names `.harness/qa/<slug>/` as its write set')
+    if (!/\bnever commits?\b/i.test(worker)) problems.push('the validation worker brief never says it commits nothing')
+    if (!qaCalls(worker).some(inv => inv.words[1] === 'lint')) problems.push('the validation worker never runs `swiftgate qa lint` on its flows')
+  }
+  return problems
+}
+
 const planValidationFiles = () => ({
   plan: readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8'),
   stateFiles: readFileSync(join(root, 'skills/plan/references/state-files.md'), 'utf8'),
@@ -1091,6 +1173,67 @@ const tests = {
     assert.deepEqual(unsessioned.map(r => `${r.file}:${r.line} ${r.path}`), [])
     const { resolved: bootstrap } = scanSkills(join(root, 'skills/bootstrap'), help, root)
     assert.ok(bootstrap.some(r => r.path === 'discover' && r.flags.includes('--apply')), 'the bootstrap skill never runs `swiftgate discover --apply`')
+  },
+
+  'the run skill and the build loop name every `swiftgate qa` command and flag a validated run needs, each as the CLI has it — catches a validation step calling a qa flag that drifted'() {
+    const run = scanSkills(join(root, 'skills/run'), help, root)
+    const build = scanSkills(join(root, 'skills/build'), help, root)
+    assert.deepEqual([...run.problems, ...build.problems], [])
+    const qa = [...run.resolved, ...build.resolved].filter(r => r.path.startsWith('qa'))
+    const has = (path, flag, file) => qa.some(r => r.path === path && (!flag || r.flags.includes(flag)) && (!file || r.file.startsWith(file)))
+    for (const [path, flag, file] of [
+      ['qa adopt', '--json', 'skills/run/SKILL.md'], ['qa run', '--at-base', 'skills/run/SKILL.md'],
+      ['qa run', '--after', 'skills/run/SKILL.md'], ['qa run', '--plan', 'skills/run/SKILL.md'],
+      ['qa run', '--json', 'skills/run/SKILL.md'], ['qa lint', '--json', 'skills/run/references/validation-worker.md'],
+      ['qa run', '--after', 'skills/build/references/event-loop.md'],
+    ]) assert.ok(has(path, flag, file), `${file} never runs \`swiftgate ${path} ${flag}\``)
+  },
+
+  'the brownfield run adopts its prepared checks before their red run, validates each merge, runs every row at final and keeps the validation task to .harness/qa/ — catches a merge that skips its rows or a validation task that commits'() {
+    assert.deepEqual(runValidationProblems(runValidationFiles()), [])
+  },
+
+  'the run validation check names each missing step — catches a checker that passes anything'() {
+    const files = {
+      'skills/run/SKILL.md': [
+        '## 6. Land the contract commit', '', 'Write the types.', '',
+        '## 7. Import and build', '', '1. `"$SG" qa run --at-base --json`.', '2. `"$SG" qa adopt <worktree> --json`.', '',
+        '## 8. Final', '', '1. `"$SG" qa run --after <task> --json`.', '',
+      ].join('\n'),
+      'skills/run/references/plan-shape.md': ['```markdown', '### demo-validation', '- Writes: .harness/qa/demo/, Tests/DemoTests.swift', '```'].join('\n'),
+      'skills/run/references/validation-worker.md': 'Write the checks under `.harness/qa/`, then commit them.\n',
+      'skills/build/references/event-loop.md': '## After each merge\n\n`"$SG" qa run --json`.\n',
+    }
+    assert.deepEqual(runValidationProblems(files), [
+      'the run skill runs `qa run --at-base` before `qa adopt` copies the checks it reads',
+      'step 7 never runs `swiftgate qa run --after <task>` after a merge',
+      'step 8 never runs `swiftgate qa run` over every merged row',
+      'the run skill never keeps `flow` rows to `xcode` areas',
+      'the contract step never names a check\'s identifiers',
+      'the contract step never names a check\'s routes',
+      'the contract step never names a check\'s storage keys',
+      'the contract step never names a check\'s log lines',
+      'the after-merge step never runs `swiftgate qa run --after <task>`',
+      'the after-merge step never undoes a merge whose rows read red',
+      'the validation task example writes `Tests/DemoTests.swift`, outside `.harness/qa/`',
+      'the validation worker brief never names `.harness/qa/<slug>/` as its write set',
+      'the validation worker brief never says it commits nothing',
+      'the validation worker never runs `swiftgate qa lint` on its flows',
+    ])
+    assert.deepEqual(runValidationProblems({}), [
+      'the run skill never runs `swiftgate qa adopt`',
+      'the run skill never runs `swiftgate qa run --at-base`',
+      'step 7 never runs `swiftgate qa run --after <task>` after a merge',
+      'step 8 never runs `swiftgate qa run` over every merged row',
+      'the run skill never keeps `flow` rows to `xcode` areas',
+      'the contract step never names a check\'s identifiers',
+      'the contract step never names a check\'s routes',
+      'the contract step never names a check\'s storage keys',
+      'the contract step never names a check\'s log lines',
+      'the build loop has no `## After each merge` step',
+      'the plan shape has no `### <slug>-validation` task example',
+      'no validation worker brief',
+    ])
   },
 
   'the build skill packs a spec page plan\'s workers with --spec-page and hands plan.json\'s surfaceCommit to every worker — catches a worker proving at the wrong base or packed from a design the plan lacks'() {
