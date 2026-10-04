@@ -37,8 +37,13 @@ const REVIEW_FINDING_KEYS = [
 const WORKER = 'swift-harness:build-worker'
 const REVIEWERS = { 'swift-harness:architecture': 'architecture', 'swift-harness:test-quality': 'test-quality' }
 const VERIFIER = 'swift-harness:verifier'
-// The agent that runs `swiftgate judge diff-risk` for classified review.
+// The agent that runs `swiftgate judge diff-risk` for classified review, told apart from any other
+// plain agent by its label.
 const CLASSIFIER = 'general-purpose'
+const CLASSIFIER_LABEL = /^diff-risk:/
+// The only agents a task may spawn: the stages, each of which runs its own span calls.
+const STAGE_AGENTS = [WORKER, VERIFIER, ...Object.keys(REVIEWERS)]
+const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
 
 const baseArgs = (extra = {}) => ({
   task: 'catalog-list-reducer',
@@ -53,6 +58,7 @@ const baseArgs = (extra = {}) => ({
   review: 'full',
   taskProof: 'per-task',
   planSurface: null,
+  buildRun: BUILD_RUN,
   ...extra,
 })
 
@@ -74,6 +80,7 @@ const brownfieldArgs = (extra = {}) => {
     planSurface: null,
     stateRoot: '/work/repo/.git/worktrees/search-task/swift-harness',
     base: 'search/plan',
+    buildRun: BUILD_RUN,
     ...extra,
   }
   for (const key of Object.keys(args)) if (args[key] === undefined) delete args[key]
@@ -144,28 +151,21 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 // was sent, and a missing entry confirms every finding.
 // `diffRisk` is what the diff-risk agent returns (a function gets the prompt, an Error is thrown);
 // by default the command printed no level because the clone has no judge.
+// `swiftgate` is the fake `swiftgate events span` every stage agent runs its own span lines
+// against; a stage's return gets the `span` its start printed unless the scripted return sets one.
 const noJudge = { level: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate, diffRisk = noJudge } = {}) {
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge } = {}) {
   const calls = []
   let inFlight = 0
   let maxReviewersInFlight = 0
   const perReviewer = {}
   const perVerifier = {}
-  const agent = async (prompt, opts) => {
-    if (typeof opts.label === 'string' && opts.label.startsWith('span:')) {
-      assert.ok(swiftgate, `a span call ran with no build run: ${opts.label}`)
-      return swiftgate.run(prompt, opts)
-    }
-    calls.push({ prompt, opts })
+  const stage = async (prompt, opts) => {
     if (opts.agentType === WORKER) {
       const n = calls.filter(c => c.opts.agentType === WORKER).length
       const next = workers[n - 1]
       assert.ok(next !== undefined, `unexpected worker call ${n}`)
       return typeof next === 'function' ? next(prompt) : structuredClone(next)
-    }
-    if (opts.agentType === CLASSIFIER) {
-      if (diffRisk instanceof Error) throw diffRisk
-      return typeof diffRisk === 'function' ? diffRisk(prompt) : structuredClone(diffRisk)
     }
     if (opts.agentType === VERIFIER) {
       assert.equal(opts.phase, 'Verify', `the verifier ran as a discovery reviewer (label ${opts.label})`)
@@ -179,7 +179,6 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       return typeof next === 'function' ? next(findings, prompt) : structuredClone(next)
     }
     const reviewer = REVIEWERS[opts.agentType]
-    assert.ok(reviewer, `unexpected agent type ${opts.agentType}`)
     const round = (perReviewer[reviewer] = (perReviewer[reviewer] ?? 0) + 1)
     inFlight++
     maxReviewersInFlight = Math.max(maxReviewersInFlight, inFlight)
@@ -191,6 +190,18 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       inFlight--
     }
   }
+  const agent = async (prompt, opts) => {
+    calls.push({ prompt, opts })
+    if (opts.agentType === CLASSIFIER) {
+      assert.match(opts.label ?? '', CLASSIFIER_LABEL, `a plain agent ran that is not the diff-risk classifier: ${opts.label}`)
+      assert.ok(!prompt.includes('events span'), 'the diff-risk classifier was handed a span call')
+      if (diffRisk instanceof Error) throw diffRisk
+      return typeof diffRisk === 'function' ? diffRisk(prompt) : structuredClone(diffRisk)
+    }
+    assert.ok(STAGE_AGENTS.includes(opts.agentType), `an agent that is not a stage ran: ${opts.agentType} (${opts.label})`)
+    const span = swiftgate.open(prompt)
+    return swiftgate.close(prompt, span, opts.agentType, await stage(prompt, opts))
+  }
   const logs = []
   const result = await script(args, agent, message => logs.push(message))
   const workerCalls = calls.filter(c => c.opts.agentType === WORKER)
@@ -200,48 +211,71 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, maxReviewersInFlight, logs }
 }
 
-// A fake `swiftgate events span`: the span agent's prompt lists numbered commands, and this answers
-// each as the real command would, recording every start and end in call order. `exit(n, command)`
-// forces the n-th command's exit status; `off` answers every start as telemetry-off does.
+// A stage prompt's 2 span lines: the start it runs first and the end it runs last, with
+// `<span>` and `<outcome>` for the agent to fill.
+const SPAN_START_LINE = /^1\. Before anything else, run `([^`]+)`/m
+const SPAN_END_LINE = /^2\. Last, [^`]*run `([^`]+)`/m
+const spanLines = prompt => ({ start: SPAN_START_LINE.exec(prompt)?.[1], end: SPAN_END_LINE.exec(prompt)?.[1] })
+const commandWords = command =>
+  (command.slice(command.indexOf('events span ')).match(/'[^']*'|\S+/g) ?? []).map(w => w.replace(/^'|'$/g, ''))
+const flagIn = (words, name) => (words.includes(name) ? words[words.indexOf(name) + 1] : undefined)
+
+// The outcome a stage agent ends its span with, by the rule its prompt states for its kind.
+function stageOutcome(agentType, value) {
+  if (agentType === WORKER) return { 'ready-to-merge': 'ok', 'gate-red': 'red', 'design-conflict': 'abandoned' }[value.outcome] ?? 'red'
+  if (agentType === VERIFIER) {
+    const blocks = (value.findings ?? []).some(f => f.verified === true && ['blocker', 'major'].includes(f.severity))
+    return blocks ? 'red' : 'ok'
+  }
+  return 'ok'
+}
+
+// A fake `swiftgate events span` that stage agents run their own span lines against. It answers
+// each command as the real one would and records every start and end in call order. `exit(n,
+// command)` forces the n-th command's exit status; `off` answers every start as telemetry-off does.
 function fakeSwiftgate({ exit = () => 0, off = false } = {}) {
   const events = []
-  const agentCalls = []
+  const commands = []
   let next = 0
   let n = 0
-  const run = (prompt, opts) => {
-    agentCalls.push({ prompt, opts })
-    assert.equal(opts.agentType, 'general-purpose', 'the span agent is not a plain command runner')
-    const marker = 'Commands:\n'
-    assert.ok(prompt.includes(marker), 'the span prompt lists no commands')
-    const commands = prompt.slice(prompt.indexOf(marker) + marker.length).split('\n')
-      .filter(line => /^\d+\. /.test(line)).map(line => line.replace(/^\d+\. /, ''))
-    return {
-      results: commands.map(command => {
-        n++
-        const forced = exit(n, command)
-        if (forced) return { exitStatus: forced, stdout: '' }
-        const words = (command.slice(command.indexOf('events span ')).match(/'[^']*'|\S+/g) ?? [])
-          .map(w => w.replace(/^'|'$/g, ''))
-        const flag = name => (words.includes(name) ? words[words.indexOf(name) + 1] : undefined)
-        if (words[2] === 'start') {
-          if (off) return { exitStatus: 0, stdout: '' }
-          const id = (++next).toString(16).padStart(16, '0')
-          events.push({ kind: 'start', id, phase: flag('--phase'), buildRun: flag('--build-run'), task: flag('--task'), role: flag('--role'), parent: flag('--parent') })
-          return { exitStatus: 0, stdout: id }
-        }
-        assert.equal(words[2], 'end', `unexpected span command ${command}`)
-        const id = words[3]
-        if (!events.some(e => e.kind === 'start' && e.id === id) || events.some(e => e.kind === 'end' && e.id === id)) {
-          return { exitStatus: 1, stdout: '' }
-        }
-        events.push({ kind: 'end', id, outcome: flag('--outcome') })
-        return { exitStatus: 0, stdout: `events span end: recorded ${flag('--outcome')} for span ${id}` }
-      }),
+  const exec = command => {
+    commands.push(command)
+    n++
+    const forced = exit(n, command)
+    if (forced) return { exitStatus: forced, stdout: '' }
+    const words = commandWords(command)
+    if (words[2] === 'start') {
+      if (off) return { exitStatus: 0, stdout: '' }
+      const id = (++next).toString(16).padStart(16, '0')
+      events.push({ kind: 'start', id, phase: flagIn(words, '--phase'), buildRun: flagIn(words, '--build-run'), task: flagIn(words, '--task'), role: flagIn(words, '--role'), parent: flagIn(words, '--parent') })
+      return { exitStatus: 0, stdout: id }
     }
+    assert.equal(words[2], 'end', `unexpected span command ${command}`)
+    const id = words[3]
+    if (!events.some(e => e.kind === 'start' && e.id === id) || events.some(e => e.kind === 'end' && e.id === id)) {
+      return { exitStatus: 1, stdout: '' }
+    }
+    events.push({ kind: 'end', id, outcome: flagIn(words, '--outcome') })
+    return { exitStatus: 0, stdout: `events span end: recorded ${flagIn(words, '--outcome')} for span ${id}` }
+  }
+  // Step 1 of the prompt: the span id, or null when the start printed nothing or failed.
+  const open = prompt => {
+    const { start } = spanLines(prompt)
+    if (!start) return null
+    const r = exec(start)
+    return r.exitStatus === 0 && r.stdout ? r.stdout : null
+  }
+  // Step 2: an agent that returned an object ends its span by its rule and returns the id.
+  const close = (prompt, span, agentType, value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+    if (Object.prototype.hasOwnProperty.call(value, 'span')) return value
+    const { end } = spanLines(prompt)
+    if (span !== null && end) exec(end.replace('<span>', span).replace('<outcome>', stageOutcome(agentType, value)))
+    return { ...value, span }
   }
   const starts = () => events.filter(e => e.kind === 'start')
   const endOf = id => events.find(e => e.kind === 'end' && e.id === id)
-  return { run, events, agentCalls, starts, endOf }
+  return { open, close, events, commands, starts, endOf }
 }
 
 // Each start names the task and build run, its parent ended before it started, and it ended itself.
@@ -255,8 +289,6 @@ function assertSpanChain(sg, buildRun, task) {
     assert.ok(parentEnd >= 0 && parentEnd < sg.events.indexOf(start), `span ${start.phase} started before its parent ended`)
   }
 }
-
-const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
 
 // The contract `build check-return` decodes: exactly TaskReturn's keys, `review` always filled.
 function assertTaskReturn(result, mode) {
@@ -274,7 +306,7 @@ function assertTaskReturn(result, mode) {
 const tests = {
   async 'a task run records its stages in order, each parented to the one before — catches stages started flat'() {
     const sg = fakeSwiftgate()
-    const { result } = await run(baseArgs({ buildRun: BUILD_RUN }), {
+    const { result } = await run(baseArgs(), {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
       reviews: { architecture: [{ findings: [finding()] }] },
       swiftgate: sg,
@@ -300,7 +332,7 @@ const tests = {
 
   async 'a red gate parents the fix pass to the worker and ends the worker red — catches a fix span hung off nothing'() {
     const sg = fakeSwiftgate()
-    const { result } = await run(baseArgs({ buildRun: BUILD_RUN, review: 'gate' }), { workers: [red(), workerReturn()], swiftgate: sg })
+    const { result } = await run(baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()], swiftgate: sg })
     assert.equal(result.outcome, 'ready-to-merge')
     const [worker, fix, ...rest] = sg.starts()
     assert.deepEqual([worker.phase, fix.phase, rest.length], ['worker', 'fix', 0])
@@ -310,13 +342,65 @@ const tests = {
     assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
   },
 
-  async 'a halted task ends its open span halted — catches a span left open when the task throws'() {
-    const sg = fakeSwiftgate()
-    await assert.rejects(run(baseArgs({ buildRun: BUILD_RUN, review: 'gate' }), { workers: [red(), null], swiftgate: sg }), /build-worker/)
-    const fix = sg.starts().find(s => s.phase === 'fix')
-    assert.ok(fix, 'no fix span started')
-    assert.equal(sg.endOf(fix.id)?.outcome, 'halted')
-    assertSpanChain(sg, BUILD_RUN, 'catalog-list-reducer')
+  async 'every worker, review, verify and fix prompt opens its own span first and closes it last — catches a stage prompt missing its span start or end'() {
+    const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    const seen = new Set()
+    const stage = c => (c.opts.agentType === WORKER ? (c.opts.label.startsWith('fix:') ? 'fix' : 'worker') : c.opts.agentType === VERIFIER ? 'verify' : 'review')
+    for (const c of calls) {
+      const phase = stage(c)
+      seen.add(phase)
+      const { start, end } = spanLines(c.prompt)
+      assert.ok(start, `${c.opts.label}: no span start line`)
+      assert.ok(end, `${c.opts.label}: no span end line`)
+      const words = commandWords(start)
+      assert.ok(start.startsWith('/plugins/swift-harness/bin/swiftgate events span start'), `${c.opts.label}: ${start}`)
+      assert.equal(flagIn(words, '--phase'), phase, c.opts.label)
+      assert.equal(flagIn(words, '--build-run'), BUILD_RUN, c.opts.label)
+      assert.equal(flagIn(words, '--task'), 'catalog-list-reducer', c.opts.label)
+      assert.equal(flagIn(words, '--role'), phase === 'worker' || phase === 'fix' ? 'build-worker' : 'review', c.opts.label)
+      assert.equal(end, '/plugins/swift-harness/bin/swiftgate events span end <span> --outcome <outcome>', c.opts.label)
+      assert.match(c.prompt, /return it as "span"/, `${c.opts.label}: never says to return the span id`)
+      assert.match(c.prompt, /Empty output means telemetry is off[^.]*: either way return "span": null and skip step 2/, `${c.opts.label}: no telemetry-off rule`)
+      assert.match(c.prompt, /If it fails, go on: your return stays the same/, `${c.opts.label}: a failed end may change the return`)
+      const rule = /where <outcome> is ([^.]*)\./.exec(c.prompt)?.[1] ?? ''
+      if (phase === 'worker' || phase === 'fix') {
+        assert.match(rule, /`ok` when you return ready-to-merge, `red` when you return gate-red, and `abandoned` when you return design-conflict/, `${c.opts.label}: ${rule}`)
+      } else if (phase === 'verify') {
+        assert.match(rule, /`red` when you return any finding verified true at severity blocker or major, else `ok`/, `${c.opts.label}: ${rule}`)
+      } else assert.equal(rule, '`ok`', `${c.opts.label}: ${rule}`)
+      assert.ok(c.opts.schema.required.includes('span'), `${c.opts.label}: the schema does not require "span"`)
+    }
+    assert.deepEqual([...seen].sort(), ['fix', 'review', 'verify', 'worker'])
+  },
+
+  async 'no agent runs only for a span: every agent is a stage or the diff-risk classifier — catches a helper agent spent per span call'() {
+    const scenarios = [
+      [baseArgs(), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: { architecture: [{ findings: [finding()] }] } }, 7],
+      [baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()] }, 2],
+      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'high', reason: null, exitStatus: 0 } }, 4],
+    ]
+    for (const [args, behave, expected] of scenarios) {
+      const { calls } = await run(args, behave)
+      for (const c of calls) {
+        assert.notEqual(c.opts.model, 'haiku', `a haiku agent ran: ${c.opts.label}`)
+        assert.ok(!/^span:/.test(c.opts.label ?? ''), `a span agent ran: ${c.opts.label}`)
+      }
+      assert.equal(calls.length, expected, calls.map(c => c.opts.label).join(', '))
+    }
+  },
+
+  async 'a stage that returns a malformed span id is logged and never names it to a later stage — catches agent text run as a shell word'() {
+    const { result, reviewerCalls, logs } = await run(baseArgs(), { workers: [workerReturn({ span: 'x; rm -rf ~' })] })
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.ok(!Object.prototype.hasOwnProperty.call(result, 'span'), 'the span key reached the TaskReturn')
+    for (const c of reviewerCalls) {
+      assert.ok(!c.prompt.includes('rm -rf'), 'the bad span id reached a review prompt')
+      assert.equal(flagIn(commandWords(spanLines(c.prompt).start), '--parent'), undefined)
+    }
+    assert.ok(logs.some(l => /span/.test(l) && /worker/.test(l) && l.includes('rm -rf')), `no log names the bad span id: ${logs.join(' | ')}`)
   },
 
   async 'a span call that exits 1 leaves the task outcome unchanged and is logged — catches telemetry failing a task'() {
@@ -324,36 +408,38 @@ const tests = {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
       reviews: { architecture: [{ findings: [finding()] }] },
     })
-    const plain = await run(baseArgs(), behave())
+    const clean = await run(baseArgs(), behave())
     for (const exit of [() => 1, (n, command) => (command.includes(' end ') ? 1 : 0)]) {
       const sg = fakeSwiftgate({ exit })
-      const spanned = await run(baseArgs({ buildRun: BUILD_RUN }), { ...behave(), swiftgate: sg })
-      assert.deepEqual(spanned.result, plain.result)
-      assert.ok(sg.agentCalls.length > 0, 'no span call ran')
-      assert.ok(spanned.logs.some(l => /span/.test(l) && /exit 1/.test(l)), `no log names the failed span call: ${spanned.logs.join(' | ')}`)
+      const failing = await run(baseArgs(), { ...behave(), swiftgate: sg })
+      assert.deepEqual(failing.result, clean.result)
+      assert.equal(failing.calls.length, clean.calls.length, 'a failed span call spawned another agent')
+      assert.ok(sg.commands.length > 0, 'no span call ran')
     }
-    const thrown = await run(baseArgs({ buildRun: BUILD_RUN }), {
-      ...behave(),
-      swiftgate: { run: () => { throw new Error('span agent died') } },
-    })
-    assert.deepEqual(thrown.result, plain.result)
+    const startsFail = await run(baseArgs(), { ...behave(), swiftgate: fakeSwiftgate({ exit: (n, command) => (command.includes(' start ') ? 1 : 0) }) })
+    assert.ok(startsFail.logs.some(l => /span/.test(l) && /worker/.test(l)), `no log names the stage left without a span: ${startsFail.logs.join(' | ')}`)
   },
 
-  async 'telemetry off stops span calls after the first start — catches an agent spent per stage on a repo that opted out'() {
+  async 'telemetry off runs no span end and spawns no extra agent — catches an end run on an id telemetry never printed'() {
     const sg = fakeSwiftgate({ off: true })
-    const { result } = await run(baseArgs({ buildRun: BUILD_RUN }), { swiftgate: sg })
+    const { result, calls } = await run(baseArgs({ review: 'gate' }), { swiftgate: sg })
     assert.equal(result.outcome, 'ready-to-merge')
-    assert.equal(sg.agentCalls.length, 1)
+    assert.equal(calls.length, 1)
+    assert.deepEqual(sg.commands.map(c => commandWords(c)[2]), ['start'])
   },
 
-  async 'with no build run no span call runs, and a malformed one throws before any agent — catches a span command built from an unchecked id'() {
-    const { result } = await run(baseArgs())
-    assert.equal(result.outcome, 'ready-to-merge')
-    for (const buildRun of ['', 'x; rm -rf ~', 42]) {
+  async 'a task started with no build run, or a malformed one, throws a named error before any agent — catches stage spans silently dropped'() {
+    for (const buildRun of [undefined, '', 'x; rm -rf ~', 42, null]) {
       const calls = []
-      await assert.rejects(script(baseArgs({ buildRun }), async (p, o) => calls.push(o), () => {}), /^Error: build-task: buildRun /)
+      const args = baseArgs({ buildRun })
+      if (buildRun === undefined) delete args.buildRun
+      await assert.rejects(script(args, async (p, o) => calls.push(o), () => {}), /^Error: build-task: buildRun /, JSON.stringify(buildRun))
       assert.equal(calls.length, 0)
     }
+    const calls = []
+    const missing = baseArgs()
+    delete missing.buildRun
+    await assert.rejects(script(missing, async (p, o) => calls.push(o), () => {}), /buildRun is required/)
   },
 
   async 'review gate spawns no reviewer and returns review.mode gate — catches a gate-only preset still paying for reviewers'() {
@@ -411,12 +497,13 @@ const tests = {
     }
   },
 
-  async 'the worker schema requires exactly TaskReturn keys — catches a schema drifting from the type check-return decodes'() {
-    const { workerCalls } = await run(baseArgs({ review: 'gate' }))
+  async 'the worker schema requires exactly TaskReturn keys and its span, and the return drops the span — catches a schema drifting from the type check-return decodes'() {
+    const { workerCalls, result } = await run(baseArgs({ review: 'gate' }))
     const { schema } = workerCalls[0].opts
     assert.equal(schema.type, 'object')
-    assert.deepEqual([...schema.required].sort(), [...TASK_RETURN_KEYS].sort())
-    assert.deepEqual(Object.keys(schema.properties).sort(), [...TASK_RETURN_KEYS, 'redReason'].sort())
+    assert.deepEqual([...schema.required].sort(), [...TASK_RETURN_KEYS, 'span'].sort())
+    assert.deepEqual(Object.keys(schema.properties).sort(), [...TASK_RETURN_KEYS, 'redReason', 'span'].sort())
+    assert.deepEqual(Object.keys(result).sort(), [...TASK_RETURN_KEYS].sort())
     assert.deepEqual(schema.properties.redReason.enum, RED_REASONS)
     assert.equal(schema.additionalProperties, false)
   },
@@ -774,13 +861,13 @@ const tests = {
 
   async 'with a null plan surface the worker prompt and schema are today\'s, byte for byte — catches a design plan\'s workers told about a plan surface'() {
     const head =
-      'Build this task and return one TaskReturn JSON object with "review": null.\n\n' +
+      'Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n' +
       'Task: catalog-list-reducer (plan catalog).\n' +
       'Worktree: /work/app-catalog-catalog-list-reducer, branch catalog/catalog-list-reducer, already checked out.\n' +
       'Write set: Sources/CatalogCore/CatalogList.swift, Tests/CatalogCoreTests/CatalogListTests.swift.\n'
     const tail =
       'Tests to turn green: test-catalog-list-loads-first-page.\n' +
-      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.'
+      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n\nRun-viewer span: '
     const expected = {
       'per-task':
         head + 'Task proof: per-task.\n' +
@@ -794,7 +881,7 @@ const tests = {
     }
     for (const [taskProof, prompt] of Object.entries(expected)) {
       const { workerCalls } = await run(baseArgs({ review: 'gate', taskProof }))
-      assert.equal(workerCalls[0].prompt, prompt)
+      assert.equal(workerCalls[0].prompt.slice(0, prompt.length), prompt)
       const section = workerCalls[0].opts.schema.properties.designConflict.properties.section
       assert.deepEqual(section, { type: 'string', description: 'the design section anchor, e.g. decision' })
     }

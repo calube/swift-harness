@@ -20,7 +20,30 @@ const contract = read('docs/review-contract.md')
 const SEVERITY_RULES = ['defect-users-hit', 'defect-narrow-trigger', 'structural-fix', 'do-violation', 'no-harm-yet', 'taste']
 const DEFECT_BLOCKER_RULE = /A defect is a `blocker` when users or callers hit it/.exec(contract)?.[0]
 
+// The agents build-task.js runs as review stages: each opens and closes its own run-viewer span.
+const SPAN_AGENTS = ['architecture', 'test-quality', 'verifier']
+const frontmatter = name => {
+  const text = readFileSync(join(root, `agents/${name}.md`), 'utf8')
+  const block = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? ''
+  return Object.fromEntries(block.split('\n').map(line => /^(\w+):\s*(.*)$/.exec(line)).filter(Boolean).map(m => [m[1], m[2]]))
+}
+const toolList = value => (value ?? '').split(',').map(s => s.trim()).filter(Boolean)
+
 const tests = {
+  'the build-task reviewers and verifier take Bash only to run their span lines, and every other code reviewer stays read-only — catches a stage that cannot open its span, or a reviewer granted a shell for no reason'() {
+    for (const name of CODE_AGENTS) {
+      const fields = frontmatter(name)
+      const tools = toolList(fields.tools)
+      if (!SPAN_AGENTS.includes(name)) {
+        assert.deepEqual(tools, ['Read', 'Grep', 'Glob'], `${name}: tools`)
+        continue
+      }
+      assert.deepEqual(tools, ['Read', 'Grep', 'Glob', 'Bash'], `${name}: tools`)
+      assert.match(fields.toolExceptions ?? '', /^Bash — .*`swiftgate events span`/, `${name}: Bash is not declared with its reason`)
+      assert.match(read(`agents/${name}.md`), /Use Bash only for the 2 run-viewer span lines a prompt names, and for no other command/, `${name}: no rule confining Bash to the span lines`)
+    }
+  },
+
   'every code-review agent says line is the new-file line, never a patch line — catches findings citing diff.patch lines that reconcile cannot line up'() {
     for (const name of CODE_AGENTS) {
       const body = read(`agents/${name}.md`)
