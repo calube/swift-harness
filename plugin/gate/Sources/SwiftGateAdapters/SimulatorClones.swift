@@ -143,6 +143,7 @@ public struct SimulatorClones: Sendable {
     var deleted: [String] = []
     for orphan in orphans where await discardSucceeded(orphan.udid) {
       deleted.append(orphan.udid)
+      await releaseClaims?(orphan.udid)
     }
     return deleted
   }
@@ -188,6 +189,13 @@ extension SimulatorClones {
   public static func agentDeviceClaimRelease(
     _ agentDevice: any AgentDevice, failed: @escaping @Sendable (String) -> Void
   ) -> ClaimRelease {
-    { _ in }
+    { udid in
+      do throws(AgentDeviceError) {
+        try await agentDevice.releaseStale(udid: udid)
+      } catch {
+        if case .runner(_, .launchFailed) = error { return }
+        failed("agent-device claims on \(udid): \(error.message)")
+      }
+    }
   }
 }

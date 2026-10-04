@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import Synchronization
 
 /// What `gc` removed, and what it could not.
 struct GCSummary: Sendable, Equatable, Encodable {
@@ -13,7 +14,8 @@ struct GCSummary: Sendable, Equatable, Encodable {
 }
 
 /// `gc`: prunes this worktree's stale DerivedData and run directories and deletes simulator
-/// clones whose owning process died (spec §4.4). Only paths under the state root are ever removed.
+/// clones whose owning process died (spec §4.4), releasing `agent-device`'s stale claims on each.
+/// Only paths under the state root are ever removed.
 enum GCRun {
   /// - Parameter eventsOlderThanDays: `nil` leaves every event file; a count removes each sealed
   ///   segment whose index's last time is older.
@@ -166,12 +168,19 @@ struct GCCommand: AsyncParsableCommand {
     let simulator =
       (try? ConfigLoader().load(repositoryRoot: root))??.simulator
       ?? SimulatorConfig(device: "-", os: "-")
-    let clones = SimulatorClones.live(config: simulator, runner: LiveProcessRunner())
-    let summary = await GCRun.run(
+    let runner = LiveProcessRunner()
+    let claimFailures = Mutex<[String]>([])
+    let clones = SimulatorClones.live(
+      config: simulator, runner: runner,
+      releaseClaims: SimulatorClones.agentDeviceClaimRelease(LiveAgentDevice(runner: runner)) {
+        failure in claimFailures.withLock { $0.append(failure) }
+      })
+    var summary = await GCRun.run(
       root: root, maxAgeDays: days, eventsOlderThanDays: events ? olderThan : nil, now: Date()
     ) {
       try await clones.sweepOrphans()
     }
+    summary.errors += claimFailures.withLock { $0 }
     Console.write(try GCRun.render(summary, format: output.format, maxAgeDays: days))
     if !summary.errors.isEmpty { throw ExitCode(Verdict.blocked.exitCode) }
   }
