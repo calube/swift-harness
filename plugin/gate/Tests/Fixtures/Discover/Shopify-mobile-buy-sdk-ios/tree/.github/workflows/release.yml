@@ -1,0 +1,42 @@
+name: Draft GitHub Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Get SDK version
+        id: sdk-version
+        run: |
+          SDK_VERSION="$(./Scripts/get_sdk_version)"
+          echo "SDK_VERSION=$SDK_VERSION" >> $GITHUB_ENV
+
+      - name: Get API Version
+        id: api-version
+        run: |
+          API_VERSION="$(./Scripts/get_api_version)"
+          echo "API_VERSION=$API_VERSION" >> $GITHUB_ENV
+
+      - name: Create a draft release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const api_version = process.env.API_VERSION
+            const sdk_version = process.env.SDK_VERSION
+            const notes = `Updates the Mobile Buy SDK for iOS with support for the \`${api_version}\` version of the Shopify Storefront API.\n\nFor more details about the changes, please see the [changelog](https://shopify.dev/changelog?filter=api&api_version=${api_version}&api_type=storefront-graphql).`
+            github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: `${sdk_version} [${api_version}]`,
+              body: notes,
+              tag_name: sdk_version,
+              target_commitish: 'main',
+              draft: true,
+              prerelease: false,
+            })

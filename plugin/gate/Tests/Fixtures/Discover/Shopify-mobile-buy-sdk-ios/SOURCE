@@ -1,0 +1,5 @@
+url: https://github.com/Shopify/mobile-buy-sdk-ios.git
+commit: 350c914d8beea856026807cbd3effc73aaf8b7cd
+commit date: 2026-04-07T12:01:50-04:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

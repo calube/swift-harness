@@ -1046,3 +1046,66 @@ cp .harness/runs/<run id>/report.json ../../plugin/gate/Tests/Fixtures/GateRun/r
 The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target selected with
 `--base HEAD`, and 7 findings across 7 rules naming the files `.`, `.swiftgate.toml` and `docs`.
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' GateRun/report.json` printed 0.
+
+## Discover
+
+`Discover/<owner>-<repo>/` holds 1 public repository at a pinned commit, as `swiftgate discover` sees it
+(design §5.1): `ls-files.txt` is its `git ls-files` listing, `tree/` holds the bytes of each signal file at its
+tracked path (symlinks stay symlinks), and `SOURCE` names the URL, commit, commit date and capture date. A path
+in `ls-files.txt` with no file under `tree/` is tracked but not a signal file: discover sees its name only
+(lockfiles, `bin/*`, sources). Nothing is edited after capture.
+
+Each repository is permissively licensed (MIT or Apache-2.0) and holds more than 1 language. Captured 2026-10-03.
+
+| Directory | Signal row | Commit |
+|---|---|---|
+| `Alamofire-Alamofire` | SwiftPM and an explicit Xcode project (Swift, Ruby) | `bda9ed57d72988a3a2ada33d824583541f86eac6` |
+| `yonaskolb-XcodeGen` | XcodeGen `project.yml`, with a tracked generated project (Swift, Objective-C, C) | `366592bc5be446b427fc8e2a21520344460f96ab` |
+| `square-workflow-swift` | Tuist `Project.swift` and `Workspace.swift` beside a root `Package.swift` (Swift, Python) | `03786ed826b594fc4e8b22c5ce91e042ea05e683` |
+| `Shopify-mobile-buy-sdk-ios` | synchronized folders: the first `project.pbxproj` result of `gh search code PBXFileSystemSynchronizedRootGroup` (Swift, Ruby) | `350c914d8beea856026807cbd3effc73aaf8b7cd` |
+| `touchlab-KaMPKit` | Gradle and Xcode together (Kotlin, Swift) | `4af02006be4be589e6848f097a92d97539300821` |
+| `tauri-apps-tauri` | Cargo and node workspaces (Rust, TypeScript) | `30da1fd6e17de6107ecc850c95dfb16b5729f2dd` |
+| `pola-rs-polars` | Cargo and Python (Rust, Python) | `9ee0dc5b818afbae7ddba308eddcf3174f6f5843` |
+| `pocketbase-pocketbase` | Go and node (Go, JavaScript) | `5cec579da984436a258602a46a96302fbd31f77c` |
+| `jhipster-jhipster-sample-app` | Maven and node (Java, TypeScript) | `6b000b5d23a36c45e01472471b84a44fa2464044` |
+| `mitmproxy-mitmproxy` | Python and node (Python, TypeScript) | `3368a0a06ae6195aad817a1ece1aaeb6fe0353a1` |
+| `hotwired-turbo-rails` | Ruby and node (Ruby, JavaScript) | `37530c08780fa6f6dbb56a633de4b81169bdd174` |
+| `ggml-org-llama.cpp` | CMake, Python and SwiftPM (C++, Python, Swift) | `11fe02151f79c41d0d4af7da708755d73b9c0da6` |
+| `phoenixframework-phoenix` | Elixir and node (Elixir, JavaScript) | `2ca60ffe811c0e585835cfc309b645c3a4190df1` |
+
+Capture, per row, with `O=plugin/gate/Tests/Fixtures/Discover/<owner>-<repo>`, `R="$TMPDIR/<owner>-<repo>"` and
+`signal` the filter below. `reset` fills the index from trees alone, so `ls-files` lists the commit without
+fetching any blob; the pathspec `checkout` then fetches only the signal files' blobs:
+
+```sh
+git clone --depth 1 --filter=blob:none --no-checkout https://github.com/<owner>/<repo>.git "$R"
+git -C "$R" fetch --depth 1 origin <commit> && git -C "$R" reset -q <commit>
+git -C "$R" ls-files -z | tr '\0' '\n' > "$O/ls-files.txt"
+git -C "$R" ls-files -z | tr '\0' '\n' | signal | tr '\n' '\0' \
+  | git -C "$R" checkout -q <commit> --pathspec-from-file=- --pathspec-file-nul
+mkdir -p "$O/tree"
+git -C "$R" ls-files -z | tr '\0' '\n' | signal | tr '\n' '\0' \
+  | (cd "$R" && xargs -0 tar -cf -) | (cd "$O/tree" && tar -xf -)
+```
+
+Then `rm -rf "$R"`, except for the 2 rows below.
+
+`signal` is `grep -E` with this pattern, which matches the §5.1 signal files: build files, workspace files,
+`.xcscheme` files, `project.pbxproj`, lint configs, `Makefile`, `justfile`, CI workflow files and tool pins:
+
+```text
+(^|/)(Package(@swift-[0-9.]+)?\.swift|project\.ya?ml|Project\.swift|Workspace\.swift|Tuist\.swift|Tuist/Config\.swift|Tuist/Package\.swift|Cargo\.toml|go\.mod|go\.work|build\.gradle(\.kts)?|settings\.gradle(\.kts)?|gradle\.properties|gradle-wrapper\.properties|libs\.versions\.toml|pom\.xml|maven-wrapper\.properties|package\.json|pnpm-workspace\.yaml|lerna\.json|nx\.json|turbo\.json|rush\.json|\.yarnrc\.yml|pyproject\.toml|setup\.cfg|tox\.ini|pytest\.ini|Gemfile|\.rspec|Rakefile|mix\.exs|CMakeLists\.txt|CMakePresets\.json|(GNU)?[Mm]akefile|[Jj]ustfile|\.gitlab-ci\.yml|[^/]+\.xcscheme|contents\.xcworkspacedata|project\.pbxproj|\.swiftlint\.ya?ml|\.swiftformat|\.swift-format|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.prettierrc(\.[a-z]+)?|ruff\.toml|\.ruff\.toml|\.flake8|\.pylintrc|mypy\.ini|\.rubocop\.yml|\.golangci\.(ya?ml|toml)|\.?clippy\.toml|\.?rustfmt\.toml|detekt(-config)?\.ya?ml|\.editorconfig|\.credo\.exs|\.formatter\.exs|\.clang-format|\.clang-tidy|\.tool-versions|\.?mise\.toml|\.nvmrc|\.node-version|\.python-version|\.ruby-version|rust-toolchain(\.toml)?|\.swift-version|\.xcode-version|\.java-version|\.sdkmanrc|\.go-version|Mintfile)$|(^|/)\.github/workflows/[^/]+\.ya?ml$
+```
+
+The 2 `after-build/` directories are the negative case: build output that exists on disk but isn't tracked.
+After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
+or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
+`git -C "$R" status --porcelain --ignored > "$O/after-build/status-ignored.txt"`:
+
+| Directory | Build | Ignored output |
+|---|---|---|
+| `Alamofire-Alamofire/after-build` | `swift build` (Swift 6.2) | `.build/` |
+| `phoenixframework-phoenix/after-build` | `npm ci` (node 22.23.3, npm 10.9.9) | `node_modules/` |
+
+Both `after-build/ls-files.txt` files are byte-identical to their row's `ls-files.txt`: the build adds nothing
+tracked.

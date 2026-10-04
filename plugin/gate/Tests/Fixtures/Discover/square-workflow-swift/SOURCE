@@ -1,0 +1,5 @@
+url: https://github.com/square/workflow-swift.git
+commit: 03786ed826b594fc4e8b22c5ce91e042ea05e683
+commit date: 2026-09-10T17:03:38-04:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

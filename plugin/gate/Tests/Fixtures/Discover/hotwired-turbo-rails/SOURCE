@@ -1,0 +1,5 @@
+url: https://github.com/hotwired/turbo-rails.git
+commit: 37530c08780fa6f6dbb56a633de4b81169bdd174
+commit date: 2026-07-01T14:18:50-04:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

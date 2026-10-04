@@ -1,0 +1,5 @@
+url: https://github.com/phoenixframework/phoenix.git
+commit: 2ca60ffe811c0e585835cfc309b645c3a4190df1
+commit date: 2026-10-02T12:52:42+02:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

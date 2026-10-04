@@ -1,0 +1,5 @@
+url: https://github.com/ggml-org/llama.cpp.git
+commit: 11fe02151f79c41d0d4af7da708755d73b9c0da6
+commit date: 2026-10-04T09:07:47+09:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

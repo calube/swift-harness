@@ -1,0 +1,5 @@
+url: https://github.com/Alamofire/Alamofire.git
+commit: bda9ed57d72988a3a2ada33d824583541f86eac6
+commit date: 2026-09-09T21:24:49-04:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"

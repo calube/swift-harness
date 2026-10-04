@@ -1,0 +1,49 @@
+name: Generate Latest API Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Ruby
+        uses: ruby/setup-ruby@dffc446db9ba5a0c4446edb5bca1c5c473a806c5 # v1.235.0
+        with:
+          bundler-cache: true
+
+      - name: Install Dependencies
+        run: brew install swiftlint
+
+      - name: Set API Version
+        id: version
+        run: |
+          API_VERSION="${{ github.event.inputs.version }}"
+          BRANCH_NAME="release/${API_VERSION}"
+          echo "API_VERSION=$API_VERSION" >> $GITHUB_ENV
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create Release Branch
+        run: |
+          git switch -C $BRANCH_NAME # -C will reset branch if it exists
+          git push --set-upstream --force origin $BRANCH_NAME
+
+      - name: Generate Schema
+        run: |
+          echo "Generating schema for $API_VERSION"
+          ./Scripts/build $API_VERSION
+          ./Scripts/update_version $API_VERSION
+          swiftlint --fix > /dev/null
+          git add .
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+          git commit -m "Generate \`${API_VERSION}\` schema."
+          git push --set-upstream --force origin $BRANCH_NAME

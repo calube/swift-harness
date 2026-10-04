@@ -1,0 +1,5 @@
+url: https://github.com/jhipster/jhipster-sample-app.git
+commit: 6b000b5d23a36c45e01472471b84a44fa2464044
+commit date: 2026-09-17T21:28:19-06:00
+captured: 2026-10-03
+command: plugin/gate/Tests/Fixtures/README.md, section "Discover"
