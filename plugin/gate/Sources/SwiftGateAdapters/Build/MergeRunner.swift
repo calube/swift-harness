@@ -243,11 +243,14 @@ public struct BuildMerge: Sendable {
   let workspace: any GitWorkspace
   let merger: any MergeRunner
   let clock: any BuildClock
+  /// Which ``TaskWorktree`` layout names the checkout and branch merges land in.
+  let profile: RepositoryProfile
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
-    merger: any MergeRunner, clock: any BuildClock
+    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned
   ) {
+    self.profile = profile
     self.plan = plan
     self.task = task
     self.fix = fix

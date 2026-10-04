@@ -178,6 +178,12 @@ struct BuildPresetCatalog: Sendable, Equatable {
     Self(profile: .owned, presets: presets, file: ConfigLoader.fileName)
   }
 
+  /// The profile of the repository holding `root`, decided as ``load(root:git:)`` decides it: by
+  /// which config file exists, without parsing either.
+  static func profile(root: URL) -> RepositoryProfile {
+    .owned
+  }
+
   /// An owned repository's `.swiftgate.toml`, or a brownfield clone's `config.toml` under the git
   /// common dir, chosen as ``StateRootResolver`` chooses the state root.
   static func load(root: URL, git: any Git) async throws(BuildLoopError) -> Self {

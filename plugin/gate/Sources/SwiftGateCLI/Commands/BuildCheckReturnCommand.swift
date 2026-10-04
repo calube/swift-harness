@@ -33,9 +33,10 @@ enum BuildCheckReturnRun {
   /// - Parameter fix: check a fixer's return: its commits are on `<plan>/fix-<task>`, its gate
   ///   run is in the fix worktree, the tier to meet is the run preset's merge gate, and its
   ///   `review` may be `null`.
-  static func run(file: String, plan: String?, fix: Bool = false, git: any Git) async
-    -> BuildCheckReturnReport
-  {
+  static func run(
+    file: String, plan: String?, fix: Bool = false, git: any Git,
+    profile: RepositoryProfile = .owned
+  ) async -> BuildCheckReturnReport {
     let blocked = { (task: String?, message: String) in
       BuildCheckReturnReport(
         command: command, plan: plan, task: task, verdict: .blocked, findings: [], warnings: [],

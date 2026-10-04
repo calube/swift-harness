@@ -80,7 +80,8 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
 /// lock holder, with the same `--session` check as `plan set`.
 enum WorktreeRun {
   static func create(
-    slug: String, task: String, session: String?, git: any Git, workspace: any GitWorkspace
+    slug: String, task: String, session: String?, git: any Git, workspace: any GitWorkspace,
+    profile: RepositoryProfile = .owned
   ) async -> WorktreeReport {
     let command = "worktree create"
     let context: HeldTask
@@ -173,7 +174,7 @@ enum WorktreeRun {
 
   static func remove(
     slug: String, task: String, fix: Bool = false, session: String?, git: any Git,
-    workspace: any GitWorkspace
+    workspace: any GitWorkspace, profile: RepositoryProfile = .owned
   ) async -> WorktreeReport {
     let command = "worktree remove"
     let context: HeldTask

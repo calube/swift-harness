@@ -8,7 +8,8 @@ enum BuildMergeRun {
   /// commands.
   static func run(
     slug: String, task: String, undo: Bool, fix: Bool = false, session: String?, git: any Git,
-    workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock
+    workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock,
+    profile: RepositoryProfile = .owned
   ) async -> BuildMergeReport {
     let command = undo ? BuildMerge.undoCommand : BuildMerge.mergeCommand
     if let refusal: BuildLoopResult<BuildMergeReport> = await BuildLoop.authorize(
@@ -21,8 +22,9 @@ enum BuildMergeRun {
         holder: refusal.holder, message: refusal.message)
     }
     let flow = BuildMerge(
-      plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger, clock: clock
-    )
+      plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger,
+      clock: clock,
+      profile: profile)
     return undo ? await flow.undo() : await flow.merge()
   }
 
