@@ -2,22 +2,106 @@
 /// reverted: a test that passes there is `neutral.not-proven`.
 public enum ProveVerdict {
   /// Whether a run of `idCount` ids together that ended in `outcome` must be rerun 1 id at a time
-  /// to say which ids it covers.
+  /// to say which ids it covers. A pass covers them all; a failure or crash may be any 1 of them.
   public static func needsRerunAlone(_ outcome: AreaCommandOutcome, idCount: Int) -> Bool {
-    false
+    guard idCount > 1 else { return false }
+    switch outcome {
+    case .failed, .crashed: return true
+    case .passed, .timedOut: return false
+    }
   }
 
   /// Judges each id by the outcome of the run that selected it.
   public static func judge(area: String, outcomes: [(AreaTestID, AreaCommandOutcome)])
     -> ChangedTestJudgement
   {
-    .empty
+    var findings = ProveFindings()
+    for (id, outcome) in outcomes {
+      switch outcome {
+      case .passed:
+        findings.gate(
+          BrownfieldRuleID.notProven.rawValue, id,
+          "\(id.name) passes with the change's source reverted, so it doesn't test the change")
+      case .failed:
+        break
+      case .crashed(let signal, let tail):
+        findings.gate(
+          ProofRules.crashedRuleID, id,
+          "not proven: with the change's source reverted \(id.name) crashed (signal \(signal)); "
+            + "it must fail on an assertion\(excerpt(tail))")
+      case .timedOut(let tail):
+        findings.block(
+          ProofRules.noEvidenceRuleID, file: id.file, line: id.line,
+          "\(area): \(id.name) timed out with the change's source reverted\(excerpt(tail))")
+      }
+    }
+    return findings.judgement
   }
 
   /// Judges `ids` by 1 run of the area's whole `test` command, which can't attribute a failure.
   public static func judgeWhole(area: String, ids: [AreaTestID], outcome: AreaCommandOutcome)
     -> ChangedTestJudgement
   {
-    .empty
+    var findings = ProveFindings()
+    findings.note(
+      ProofRules.summaryRuleID,
+      "prove ran \(area)'s whole test command: it has no test_files that selects its changed "
+        + "tests, so a failure there can't name the test that caught the change")
+    switch outcome {
+    case .passed, .failed:
+      return findings.judgement.merged(
+        with: judge(area: area, outcomes: ids.map { ($0, outcome) }))
+    case .crashed(let signal, let tail):
+      findings.block(
+        ProofRules.noEvidenceRuleID, file: ids.first?.file ?? ".", line: nil,
+        "\(area)'s whole test command crashed (signal \(signal)) with the change's source "
+          + "reverted, and without test_files no test can rerun alone\(excerpt(tail))")
+    case .timedOut(let tail):
+      findings.block(
+        ProofRules.noEvidenceRuleID, file: ids.first?.file ?? ".", line: nil,
+        "\(area)'s whole test command timed out with the change's source reverted\(excerpt(tail))"
+      )
+    }
+    return findings.judgement
+  }
+
+  private static func excerpt(_ tail: String) -> String {
+    let last = tail.split(separator: "\n").last.map(String.init) ?? ""
+    return last.isEmpty ? "" : " (\(last))"
+  }
+}
+
+/// Every field passed is non-empty and every line positive, so the finding contract can't reject
+/// 1; a violation would be a gate defect and is dropped rather than crashing the run.
+private struct ProveFindings {
+  var findings: [Finding] = []
+  var blocked = false
+
+  mutating func gate(_ ruleID: String, _ id: AreaTestID, _ message: String) {
+    append(ruleID, .major, file: id.file, line: id.line, message)
+  }
+
+  mutating func block(_ ruleID: String, file: String, line: Int?, _ message: String) {
+    blocked = true
+    append(ruleID, .minor, file: file, line: line, message)
+  }
+
+  mutating func note(_ ruleID: String, _ message: String) {
+    append(ruleID, .nit, file: ".", line: nil, message)
+  }
+
+  private mutating func append(
+    _ ruleID: String, _ severity: Severity, file: String, line: Int?, _ message: String
+  ) {
+    if let finding = try? Finding(
+      ruleID: ruleID, severity: severity, file: file.isEmpty ? "." : file,
+      line: line.map { max($0, 1) }, message: message, failureScenario: nil)
+    {
+      findings.append(finding)
+    }
+  }
+
+  var judgement: ChangedTestJudgement {
+    ChangedTestJudgement(findings: findings, blocked: blocked)
   }
 }
