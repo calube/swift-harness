@@ -21,9 +21,11 @@ final class GateStepCollector: Sendable {
     _ step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
     derivedData: GateDerivedData = .none, area: String? = nil
   ) {
+    // A step records when it ends, so its start is its duration back from now.
     let timing = GateStepTiming(
       step: step, tier: tier, milliseconds: milliseconds, verdict: verdict,
-      derivedData: derivedData, area: area)
+      derivedData: derivedData, area: area,
+      startMs: max(0, (elapsed?() ?? GateRun.milliseconds(.now - start)) - milliseconds))
     timings.withLock { $0.append(timing) }
   }
 

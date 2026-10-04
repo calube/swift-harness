@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// What `prove` found for 1 changed test it ran, before its record writes it as a `prove.result`.
@@ -26,14 +27,33 @@ public struct ProvedTest: Sendable, Equatable {
   public static func outcome(
     of test: ChangedTest, run: SelectedTestRun, judgement: ChangedTestJudgement
   ) -> ProveResultOutcome? {
-    nil
+    switch run {
+    case .reported(let outcomes):
+      switch outcomes[test] {
+      case .failed: .proven
+      case .passed: .passesReverted
+      case .skipped: .skipped
+      case nil: nil
+      }
+    case .buildFailed:
+      ProofRules.compileOnly([test], in: judgement).isEmpty ? nil : .compileOnly
+    case .crashed: .crashed
+    case .noEvidence: nil
+    }
   }
 }
 
 extension ProveResultEvent {
   public init(_ proved: ProvedTest) {
+    // The payload guard would drop the whole event; a hash keeps the result and still joins runs.
+    let hashed = EventPayloadGuard.rejection(inJSON: proved.test) != nil
     self.init(
-      test: proved.test, testHashed: false, target: proved.target, outcome: proved.outcome,
+      test: hashed
+        ? "sha256:"
+          + SHA256.hash(data: Data(proved.test.utf8))
+          .map { String(format: "%02x", $0) }.joined()
+        : proved.test,
+      testHashed: hashed, target: proved.target, outcome: proved.outcome,
       proofBase: proved.proofBase, assertion: proved.assertion)
   }
 }
@@ -48,6 +68,47 @@ public enum ProveAssertionLocator {
   public static func firstFailure(
     of test: ChangedTest, in evidence: HostTestEvidence, sourceLine: (String, Int) -> String?
   ) -> ProveAssertion? {
-    nil
+    let log = TestConsoleLog(stdout: evidence.stdout, stderr: evidence.stderr)
+    let found: ProveAssertion?
+    switch test.framework {
+    case .xcTest:
+      let key = TestConsoleLog.xctestKey(
+        ([test.target] + test.suites).joined(separator: ".") + " " + test.function)
+      found = log.xctestFailures[key]?.first.flatMap { failure in
+        relative(failure.file, to: evidence.repositoryRoot).map {
+          ProveAssertion(file: $0, line: failure.line, kind: xctestKind(failure.message))
+        }
+      }
+    case .swiftTesting:
+      // Swift Testing prints a bare file name, so only an issue inside the test's own lines is
+      // known to be its own.
+      let name = test.file.split(separator: "/").last.map(String.init) ?? test.file
+      found = log.swiftTestingIssues.first {
+        $0.file == name && (test.line...test.lastLine).contains($0.line)
+      }.map { issue in
+        let kind: ProveAssertionKind
+        if issue.message.hasPrefix("Expectation failed") {
+          kind =
+            sourceLine(test.file, issue.line)?.contains("#require") == true ? .require : .expect
+        } else {
+          kind = .other
+        }
+        return ProveAssertion(file: test.file, line: issue.line, kind: kind)
+      }
+    }
+    guard let found, !found.file.hasPrefix("/"), !found.file.hasPrefix("~"),
+      EventPayloadGuard.rejection(inJSON: found.file) == nil
+    else { return nil }
+    return found
+  }
+
+  private static func xctestKind(_ message: String) -> ProveAssertionKind {
+    message.hasPrefix("XCT") || message.hasPrefix("failed - ") ? .xctAssert : .other
+  }
+
+  private static func relative(_ path: String, to root: String) -> String? {
+    let prefix = root.hasSuffix("/") ? root : root + "/"
+    guard path.hasPrefix(prefix) else { return nil }
+    return String(path.dropFirst(prefix.count))
   }
 }

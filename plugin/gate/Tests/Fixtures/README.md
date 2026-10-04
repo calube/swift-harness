@@ -1622,3 +1622,32 @@ Lint findings, by path relative to `<repo>` and line, on the lines `change.diff`
 | `maven/lint` (Checkstyle) | 1 | `README.md` 301 NoHttp | `[ERROR] README.md:[301,6] (extension) NoHttp: ...` |
 | `ruby/lint` (RuboCop) | 1 | `app/lib/hashtag_normalizer.rb` 9 `Lint/UselessAssignment`, 10 `Style/RedundantReturn`, 10 `Style/StringConcatenation`, 10 `Style/StringLiterals` | repository-relative, `path:line:col: S: [Correctable] Cop: message` |
 | `swift/lint` (SwiftLint) | 2 | `ElementX/Sources/Other/Extensions/Array.swift` 100 `force_cast` (error), 101 `force_unwrapping` (warning) | absolute (`<repo>/...`), `path:line:col: severity: message (rule)` |
+
+## Run view: a prove gate
+
+`RunView/prove-gate/{gate,test}.jsonl` are the `gate` and `test` streams of 1 real
+`check --tier push --prove` run over a throwaway package, so the run view reads real
+`prove.result` events and `gate.step` start offsets. Captured 2026-10-04 with Swift 6.2.3, from a
+`swiftgate` debug build of this commit's sources.
+
+The repository, made in `mktemp -d`, holds `Packages/Calc` (a `Calc` library and a `CalcTests`
+target, swift-tools-version 6.2) and a `.swiftgate.toml` declaring `Calc` a `library` module.
+It has 3 commits. `base` holds an `add` function and its test. `surface` adds `double` and
+`clamp`, both returning `x` unchanged. `behaviour` writes their bodies and adds
+`DoubleTests.swift`: a `#expect` test of `double`, a `#expect` test of an in-range `clamp`, a
+`try #require` test of a low `clamp`, and an XCTest of `double`. From that repository:
+
+```sh
+LLVM_PROFILE_FILE=<scratch>/p-%p.profraw <harness>/plugin/gate/.build/debug/swiftgate \
+  check --tier push --base <base sha> --prove --proof-base <surface sha>
+cp .harness/events/gate.jsonl .harness/events/test.jsonl <fixtures>/RunView/prove-gate/
+```
+
+The run was RED, as built to be: the in-range `clamp` test passes with `clamp` reverted to the
+surface. At the merge base all 4 tests were compile-only, so prove retried them at the surface
+sha. The streams hold 1 `gate.run`, 11 `gate.step` (every one but `record` with a `startMs`),
+5 `test.result` and 4 `prove.result`: 3 `proven` (kinds `expect`, `require`, `xct-assert`) and 1
+`passes-reverted`, each with the surface sha as `proofBase`. The capture copied both files
+unedited:
+`grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/prove-gate`
+matched nothing.
