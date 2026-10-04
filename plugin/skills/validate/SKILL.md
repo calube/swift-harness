@@ -26,6 +26,14 @@ evidence. It never re-runs a check another way and never reports a step it didn'
    `swiftgate.nothing-selected` note ran no tests, so say so instead of listing it GREEN. List
    any `swiftgate.budget` or `swiftgate.scopes-fallback` finding under "Notes". T0 has no
    `testCounts`, so its Tests cell is always "—".
+6. Add simulator QA from the runs `/swift-harness:qa` or a `validate` stage printed for this
+   change, never from a run of your own. For each flow, read `.harness/runs/<runID>/sim/report.json`,
+   whose `sim/report.json` keys `runID`, `verdict` and `stepCount` fill 1 "Simulator QA" row. For
+   a `qa run`, read `.harness/runs/<runID>/qa/report.json`: its `qa/report.json` keys `runID`,
+   `final` and `rows[]`, and each row's keys `requirement`, `layer`, `check`, `result` and
+   `evidence` fill 1 row per validation row, with its evidence paths relative to that run. With
+   no QA run for this change, or a preset whose `sim_qa` is `off`, list it under "Not run" as
+   `simulator QA: <reason>`.
 
 ```markdown
 ### Validation
@@ -38,16 +46,21 @@ evidence. It never re-runs a check another way and never reports a step it didn'
 | T1 host | GREEN | <passed> passed, <skipped> skipped | <duration> |
 | T2 simulator | GREEN | … | … |
 | T3 flows | GREEN | … | … |
+| Simulator QA | <verdict> | <stepCount> steps | run `<runID>` |
+
+| Done when | Layer | Check | Result | Evidence |
+|---|---|---|---|---|
+| `<requirement>` | <layer> | `<check>` | <result> | <evidence paths>, run `<runID>` |
 
 - Red/green proof, stress and per-test reach: <the `changed-tests.summary` finding messages>
 - Diff coverage: <the `coverage.summary` finding message, if the report has one>
 - Waivers: <rule × count from allowances, or "none">
-- Not run: <each swiftgate.not-run message, or "nothing">
+- Not run: <each swiftgate.not-run message, simulator QA with its reason when it didn't run, or "nothing">
 - Notes: <budget or scope notes, or omit the line>
 ```
 
-6. Show the block, then ask with `AskUserQuestion` whether to add it to the PR description (only
+7. Show the block, then ask with `AskUserQuestion` whether to add it to the PR description (only
    if a PR exists) or leave it for them to paste. Never open a PR from this skill.
 
-Later sub-projects add simulator QA of changed flows and before/after profiling here; until then
-the block claims only what the gate ran.
+A later sub-project adds before/after profiling here; until then the block claims only what the
+gate and simulator QA ran.
