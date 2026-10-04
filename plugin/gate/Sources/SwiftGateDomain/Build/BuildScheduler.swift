@@ -10,6 +10,9 @@ public enum BuildScheduler {
     /// The task has no `model` and the preset's `worker_model` is `tagged`, so there's no model to
     /// run it with.
     case missingModel
+    /// The preset belongs to the brownfield profile, which runs only pinned model ids, and leaves
+    /// the model to the task's tag, which only names an alias.
+    case unpinnedModel
   }
 
   /// A ready task that didn't start, and why.
@@ -58,7 +61,8 @@ public enum BuildScheduler {
     /// Sorted by task id.
     public let tasks: [RequiredTask]
 
-    /// For a ledger read without a repository, such as a self-test seed.
+    /// For a ledger read without a repository, such as a self-test seed, and for a brownfield
+    /// plan, whose contract commit compiles before any task starts.
     public static let empty = RequiredTasks(tasks: [])
 
     private init(tasks: [RequiredTask]) {
@@ -104,7 +108,8 @@ public enum BuildScheduler {
   ///   `abandoned`, `needs-replan` and `in-progress` dependencies never unlock a dependent.
   /// - Ready tasks whose `model` is absent are refused when `preset.workerModel` is `.tagged`
   ///   (there's no model to run them with); a preset that forces `sonnet` or `opus` lets them
-  ///   start. This check runs regardless of free slots or budget phase, since it's not about
+  ///   start. Under a brownfield preset a `tagged` model refuses every ready task, since a tag
+  ///   names only an alias. This check runs regardless of free slots or budget phase, since it's not about
   ///   capacity — the task can never start under this preset as configured.
   /// - The remaining ready tasks are ordered by the longest remaining `estLines`-weighted
   ///   dependency chain reachable through not-yet-done tasks (critical path first), then by task
@@ -132,6 +137,8 @@ public enum BuildScheduler {
     for task in readyTasks {
       if task.model == nil && preset.workerModel == .tagged {
         refused.append(Refusal(taskID: task.id, reason: .missingModel))
+      } else if preset.workerModel == .tagged && preset.profile == .brownfield {
+        refused.append(Refusal(taskID: task.id, reason: .unpinnedModel))
       } else {
         candidates.append(task)
       }
@@ -207,4 +214,9 @@ public enum BuildScheduler {
     for id in byID.keys { _ = weight(of: id) }
     return memo
   }
+}
+
+extension BuildPreset {
+  /// The profile whose config defined the preset: its merge gate's tier belongs to exactly 1.
+  public var profile: RepositoryProfile { mergeGate.profile }
 }
