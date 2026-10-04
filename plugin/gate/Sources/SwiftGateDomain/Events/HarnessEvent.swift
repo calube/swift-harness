@@ -69,6 +69,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case buildHalt = "build.halt"
   /// A person answered a build's halt.
   case buildResume = "build.resume"
+  /// `build check-return` judged 1 task's return.
+  case buildReturnChecked = "build.return-checked"
   /// 1 `swiftgate discover` in a brownfield clone.
   case discoverRun = "discover.run"
   /// 1 area's 1 step of a brownfield warm-up.
@@ -90,7 +92,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .testResult, .proveResult: .test
     case .cacheLookup: .cache
     case .agentUsage, .agentTools: .usage
-    case .buildHalt, .buildResume: .build
+    case .buildHalt, .buildResume, .buildReturnChecked: .build
     case .discoverRun, .warmupRun: .brownfield
     case .spanStart, .spanEnd: .span
     }
@@ -168,6 +170,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case agentUsage(AgentUsageEvent)
   case buildHalt(BuildHaltEvent)
   case buildResume(BuildResumeEvent)
+  case buildReturnChecked(BuildReturnCheckedEvent)
   case discoverRun(DiscoverRunEvent)
   case warmupRun(WarmupRunEvent)
   case spanStart(SpanStartEvent)
@@ -187,6 +190,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .agentUsage: .agentUsage
     case .buildHalt: .buildHalt
     case .buildResume: .buildResume
+    case .buildReturnChecked: .buildReturnChecked
     case .discoverRun: .discoverRun
     case .warmupRun: .warmupRun
     case .spanStart: .spanStart
@@ -403,6 +407,9 @@ extension HarnessEvent: Codable {
       payload = .buildHalt(try c.decode(BuildHaltEvent.self, forKey: .payload))
     case .buildResume:
       payload = .buildResume(try c.decode(BuildResumeEvent.self, forKey: .payload))
+    case .buildReturnChecked:
+      payload = .buildReturnChecked(
+        try c.decode(BuildReturnCheckedEvent.self, forKey: .payload))
     case .discoverRun:
       payload = .discoverRun(try c.decode(DiscoverRunEvent.self, forKey: .payload))
     case .warmupRun:
@@ -440,6 +447,7 @@ extension HarnessEvent: Codable {
     case .agentUsage(let usage): try c.encode(usage, forKey: .payload)
     case .buildHalt(let halt): try c.encode(halt, forKey: .payload)
     case .buildResume(let resume): try c.encode(resume, forKey: .payload)
+    case .buildReturnChecked(let checked): try c.encode(checked, forKey: .payload)
     case .discoverRun(let run): try c.encode(run, forKey: .payload)
     case .warmupRun(let run): try c.encode(run, forKey: .payload)
     case .spanStart(let start): try c.encode(start, forKey: .payload)

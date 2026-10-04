@@ -184,7 +184,7 @@ public enum TaskReturnJSON {
 
 /// One way a task return claims more than git, the run store or the worktree shows.
 public struct TaskReturnFinding: Sendable, Equatable, Encodable {
-  public enum Rule: String, Sendable, Equatable, Encodable, CaseIterable {
+  public enum Rule: String, Sendable, Equatable, Codable, CaseIterable {
     case branchMissing = "build-return.branch-missing"
     case noCommits = "build-return.no-commits"
     case commitMissing = "build-return.commit-missing"

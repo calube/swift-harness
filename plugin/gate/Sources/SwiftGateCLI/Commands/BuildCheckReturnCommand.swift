@@ -69,6 +69,25 @@ enum BuildCheckReturnRun {
     }
   }
 
+  /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.
+  struct Checked: Equatable {
+    let report: BuildCheckReturnReport
+    /// Why the verdict went unrecorded, for stderr; empty when it was recorded or telemetry is
+    /// off.
+    let notRecorded: [String]
+  }
+
+  /// ``run(file:plan:fix:git:profile:)``, then its verdict recorded as `build.return-checked` in
+  /// the main checkout's store, the one `directory` belongs to.
+  static func check(
+    file: String, plan: String?, fix: Bool = false, git: any Git,
+    profile: RepositoryProfile = .owned,
+    directory: String = FileManager.default.currentDirectoryPath
+  ) async -> Checked {
+    let report = await run(file: file, plan: plan, fix: fix, git: git, profile: profile)
+    return Checked(report: report, notRecorded: [])
+  }
+
   private static func gather(
     _ taskReturn: TaskReturn, plan slug: String, fix: Bool, git: any Git,
     profile: RepositoryProfile, warnings: inout [String]
@@ -466,8 +485,13 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
-    let report = await BuildCheckReturnRun.run(
-      file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root))
+    let checked = await BuildCheckReturnRun.check(
+      file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root),
+      directory: root.path)
+    for note in checked.notRecorded {
+      FileHandle.standardError.write(Data("swiftgate build check-return: \(note)\n".utf8))
+    }
+    let report = checked.report
     Console.write(BuildCheckReturnRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

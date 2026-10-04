@@ -105,12 +105,15 @@ extension RunView {
 }
 
 extension RunView {
-  /// What a blocked task's structured record says stopped it. Nothing records a rejected
-  /// return's findings, so a task whose return wasn't stored names that and its last gate run.
+  /// What a blocked task's structured record says stopped it.
   public enum BlockCause: String, Sendable, Equatable, Encodable, CaseIterable {
+    /// The task's newest `build.return-checked` wasn't GREEN: `build check-return` rejected its
+    /// return, or couldn't judge it.
+    case returnRejected = "return-rejected"
     /// The task's newest gate run was RED.
     case gateRed = "gate-red"
-    /// No return of the task was stored: `build check-return` rejected it, or none came back.
+    /// No return of the task was stored, and no check of one was recorded: none came back, or
+    /// a `build check-return` too old to record its verdict rejected it.
     case returnNotStored = "return-not-stored"
     /// A halt of the task stopped it, with neither of the above.
     case halt
@@ -125,14 +128,42 @@ extension RunView {
     public var halt: BuildHaltReason?
     /// The task's newest gate run before `at`; `nil` when it ran none.
     public var gateRun: String?
+    /// What `build check-return` said, when its newest check of the task wasn't GREEN.
+    public var rejection: ReturnRejection?
 
     public init(
-      at: Date, cause: BlockCause? = nil, halt: BuildHaltReason? = nil, gateRun: String? = nil
+      at: Date, cause: BlockCause? = nil, halt: BuildHaltReason? = nil, gateRun: String? = nil,
+      rejection: ReturnRejection? = nil
     ) {
       self.at = at
       self.cause = cause
       self.halt = halt
       self.gateRun = gateRun
+      self.rejection = rejection
+    }
+  }
+
+  /// 1 `build.return-checked` that wasn't GREEN, as its event holds it.
+  public struct ReturnRejection: Sendable, Equatable, Encodable {
+    public var at: Date
+    public var verdict: Verdict
+    public var fix: Bool
+    public var rules: [TaskReturnFinding.Rule]
+    public var findings: [BuildReturnCheckedEvent.Finding]
+    public var moreFindings: Int
+    public var message: String
+
+    public init(
+      at: Date, verdict: Verdict, fix: Bool, rules: [TaskReturnFinding.Rule],
+      findings: [BuildReturnCheckedEvent.Finding], moreFindings: Int, message: String
+    ) {
+      self.at = at
+      self.verdict = verdict
+      self.fix = fix
+      self.rules = rules
+      self.findings = findings
+      self.moreFindings = moreFindings
+      self.message = message
     }
   }
 }
@@ -213,5 +244,22 @@ extension RunView.TaskBlock {
     try c.encode(cause, forKey: .cause)
     try c.encode(halt, forKey: .halt)
     try c.encode(gateRun, forKey: .gateRun)
+  }
+}
+
+extension RunView.ReturnRejection {
+  private enum CodingKeys: String, CodingKey {
+    case at, verdict, fix, rules, findings, moreFindings, message
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(at, forKey: .at)
+    try c.encode(verdict, forKey: .verdict)
+    try c.encode(fix, forKey: .fix)
+    try c.encode(rules, forKey: .rules)
+    try c.encode(findings, forKey: .findings)
+    try c.encode(moreFindings, forKey: .moreFindings)
+    try c.encode(message, forKey: .message)
   }
 }
