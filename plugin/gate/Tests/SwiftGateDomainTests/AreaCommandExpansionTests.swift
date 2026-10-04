@@ -177,7 +177,9 @@ struct AreaOutcomeReadingTests {
     }
     #expect(
       AreaOutcomeReading.outcome(end: run.end, output: run.output, junit: run.junit)
-        == .failed(exit: exit, tail: AreaOutcomeReading.tail(run.output), junit: run.junit))
+        == .failed(
+          exit: exit, tail: AreaOutcomeReading.tail(run.output),
+          junit: run.junit ?? GoTestReport.junit(fromJSON: run.output)))
   }
 
   @Test(

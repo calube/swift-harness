@@ -1697,6 +1697,40 @@ Lint findings, by path relative to `<repo>` and line, on the lines `change.diff`
 | `ruby/lint` (RuboCop) | 1 | `app/lib/hashtag_normalizer.rb` 9 `Lint/UselessAssignment`, 10 `Style/RedundantReturn`, 10 `Style/StringConcatenation`, 10 `Style/StringLiterals` | repository-relative, `path:line:col: S: [Correctable] Cop: message` |
 | `swift/lint` (SwiftLint) | 2 | `ElementX/Sources/Other/Extensions/Array.swift` 100 `force_cast` (error), 101 `force_unwrapping` (warning) | absolute (`<repo>/...`), `path:line:col: severity: message (rule)` |
 
+### Go runs read per test
+
+`AreaRuns/go/{baseline-base,baseline-head,build-fail}/` are 3 `go test -json` runs of a throwaway
+module, so a baseline can hold 1 failing test while the head fails another, and a package can fail
+to build beside failing tests. Each directory has `command`, `exit`, `stdout` and `stderr`; there is
+no `change.diff`, since an environment variable or a build tag changes the run, not an edit.
+Captured 2026-10-04 on macOS 26 (arm64) with go 1.27.0 (mise), `GOTOOLCHAIN=local`, `GOFLAGS=` and
+`GOCACHE` under the scratch directory. The output names no machine path, so nothing was scrubbed.
+
+The module, `example.com/gobase`:
+
+- `go.mod`: `module example.com/gobase` and `go 1.27`.
+- `alpha/alpha_test.go`: `TestPasses` passes; `TestFlaky` calls `t.Fatal("fails at the base commit")`
+  on line 12; `TestTable` runs subtests `case_a` and `case_b`, and `case_b` calls
+  `t.Errorf("%s fails", name)`.
+- `beta/beta_test.go`: `TestNew` calls `t.Fatal("fails only after the change")` when
+  `GOBASE_FAIL_NEW=1`.
+- `beta/broken_test.go`: under `//go:build broken`, `func undefinedCall() int { return missing() }`.
+
+`cap.sh <dir> <command>` writes `command`, runs it through `/bin/sh -c` with stdout and stderr to
+their files, and writes the status to `exit`. From the module root:
+
+```sh
+$CAP $F/go/baseline-base "go test -json ./..."
+GOBASE_FAIL_NEW=1 $CAP $F/go/baseline-head "go test -json ./..."
+$CAP $F/go/build-fail "go test -json -tags broken ./..."
+```
+
+| Case | exit | What the events say |
+|---|---|---|
+| `go/baseline-base` | 1 | `alpha`: `TestFlaky`, `TestTable/case_b` and `TestTable` fail; `beta` passes |
+| `go/baseline-head` | 1 | as `baseline-base`, and `beta`'s `TestNew` fails |
+| `go/build-fail` | 1 | `beta` emits `build-output` and `build-fail`, then a package `fail` with `FailedBuild` and no test; `alpha` fails as in `baseline-base` |
+
 ## Run view: a prove gate
 
 `RunView/prove-gate/{gate,test}.jsonl` are the `gate` and `test` streams of 1 real
