@@ -106,16 +106,35 @@ public struct PlanFile: Sendable, Equatable {
     }
   }
 
+  /// A brownfield plan imported from its live `PLAN.md`, with no design and no approval chain:
+  /// the run's spec is the user's, and `plan import` derives the ledger from the file.
+  public struct LivePlanSource: Sendable, Equatable {
+    /// The live file's name inside the plan's directory.
+    public static let fileName = "PLAN.md"
+
+    /// Relative to the plan's directory; always ``fileName``.
+    public let path: String
+    /// Each task's brief, keyed by task id, for the run viewer's task drawer.
+    public let briefs: [String: TaskBrief]
+
+    public init(briefs: [String: TaskBrief]) {
+      self.path = Self.fileName
+      self.briefs = briefs
+    }
+  }
+
   /// What the plan was decomposed from.
   public enum Source: Sendable, Equatable {
     case design(DesignSource)
     case specPage(SpecPageSource)
+    case livePlan(LivePlanSource)
   }
 
   /// `plan.json`'s `source` key; a file without one is a design plan.
   public enum SourceKind: String, Sendable, Equatable, CaseIterable {
     case design
     case specPage
+    case livePlan
   }
 
   public let schemaVersion: Int
@@ -155,6 +174,12 @@ public struct PlanFile: Sendable, Equatable {
     return nil
   }
 
+  /// `nil` unless the plan was imported from a live `PLAN.md`.
+  public var livePlanSource: LivePlanSource? {
+    if case .livePlan(let source) = source { return source }
+    return nil
+  }
+
   /// `nil` for a design plan.
   public var specPageSource: SpecPageSource? {
     if case .specPage(let source) = source { return source }
@@ -165,7 +190,7 @@ public struct PlanFile: Sendable, Equatable {
 extension PlanFile: Codable {
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, slug, source, design, designSha, approval, clarifyChain, tier, specPage
-    case surfaceCommit, resume
+    case livePlan, surfaceCommit, resume
   }
 
   private enum SpecPageKeys: String, CodingKey {
@@ -224,6 +249,9 @@ extension PlanFile: Codable {
         SpecPageSource(
           path: path, pageSha: try page.decodeIfPresent(String.self, forKey: .pageSha),
           approval: try container.decodeIfPresent(PageApproval.self, forKey: .approval)))
+    case .livePlan:
+      throw DecodingError.dataCorruptedError(
+        forKey: .source, in: container, debugDescription: "a live plan doesn't decode yet")
     }
     self.init(
       schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -253,6 +281,8 @@ extension PlanFile: Codable {
       try nested.encode(page.path, forKey: .path)
       try nested.encodeIfPresent(page.pageSha, forKey: .pageSha)
       try container.encodeIfPresent(page.approval, forKey: .approval)
+    case .livePlan:
+      try container.encode(SourceKind.livePlan.rawValue, forKey: .source)
     }
   }
 }
