@@ -1,9 +1,10 @@
 # swift-harness: simulator QA amendment, layered validation and evidence
 
 <!-- RESUME
-Status: PROPOSED 2026-10-04. Nothing here is approved. Each choice waits on the user's decisions in §12.
+Status: APPROVED 2026-10-04 by the user, who accepted every recommendation in §12 and chose decisions 1, 10 and 17
+themselves. Decision record: [ADR 0008](../adrs/0008-simulator-qa-layered-validation.md), amending [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md).
 Amends: the approved simulator QA design (docs/designs/2026-09-28-simulator-qa-design.md), its decision record
-[ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), and its plan (docs/plans/2026-09-28-simulator-qa-plan.md), which has not started.
+[ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), and its plan (docs/plans/2026-09-28-simulator-qa-plan.md), which now carries §13's tasks.
 Why: the user asked for layered validation planning and richer QA evidence, fitted to this harness's QA setup and
 report format.
 Read first: this header, §2, §4, §10 (conflicts) and §12 (decisions).
@@ -108,7 +109,7 @@ A validation task runs beside the first wave, with no deps on the build tasks, a
 
 The edit guard denies a subagent's write outside the repository's checkouts (`guard.subagent-outside-checkouts`)
 and any write into `.git` (`guard.subagent-protected-path`). Because of the edit guard, `qa/` can't sit in a work
-directory outside the repository. The recommended option writes `qa/` under the validation worktree's own
+directory outside the repository. Decision 5 puts `qa/` under the validation worktree's own
 `.harness/qa/<plan>/`, which no commit carries. The orchestrator then copies it into plan state.
 
 ### 5.2 Proof that a check fails first
@@ -118,7 +119,7 @@ directory outside the repository. The recommended option writes `qa/` under the 
 | acceptance | `prove` with `--proof-base` set to `main` before the row's `Runs after` tasks merged: the test must fail there on an assertion. Host tests only; the testing playbook says simulator tests aren't proven yet |
 | flow, state | `swiftgate qa run --at-base` runs the check on the base app and stores the failing step or exit status in the evidence folder |
 
-Recommended: the gate confirms the red run, not the worker's own note (decision 7).
+Decision 7: the gate confirms the red run, not the worker's own note.
 
 ## 6. Running checks after each merge
 
@@ -152,7 +153,7 @@ agent-device batch --steps-file <qa>/<name>.flow.json --session <session> --udid
 These rules check a batch steps file. A kept XCUITest flow gets the same guarantees from the compiler and the
 typed accessibility-id module.
 
-| Rule id (proposed) | Finding | Verdict |
+| Rule id | Finding | Verdict |
 |---|---|---|
 | `qa.flow-unparsed` | the steps file isn't a JSON array of `{"command","input"}` steps | `RED` |
 | `qa.flow-ref-target` | a step targets an `@e` ref or a coordinate, not a selector | `RED` |
@@ -376,29 +377,35 @@ same flow both ways.
 | Step schema stability | the schemas for `open`, `wait`, `press`, `is`, `screenshot`, `snapshot` and `record` match across 0.21.16, 0.21.18 and 0.21.20 |
 
 
-## 12. Decisions for the user
+## 12. Decisions
 
-| # | Question | Options | Recommendation | Needs |
+The user approved the amendment on 2026-10-04 and accepted every recommendation, so the Decision column holds what the user approved. Decisions 1, 10 and 17 record
+choices the user made in so many words.
+
+| # | Question | Options | Decision | Needs |
 |---|---|---|---|---|
-| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) a separate per-plan numbering, `D1`, `D2` | Decided: (a), the ledger and the run viewer already join on them | decided (user, 2026-10-04) |
-| 2 | Which tools run the checks? | (a) every check invoked by `swiftgate`: prepared and final-pass flows as `agent-device` batch behind `swiftgate qa run`, with `qa.flow-schema` and `qa.flow-unknown-id` checked before any step runs; kept flows as XCUITest in T3 through `swiftgate check`, with keep-always attachments; acceptance through the repo's test runner or `curl` with `jq -e`; state through shell. Both flow sources normalise to 1 `qa.flow` record; (b) the same tools called directly, with no `swiftgate` wrapper | (a): every enforcement point calls `swiftgate`, and the 2 offline flow rules run only when `swiftgate` runs the flow | user |
-| 3 | Which evidence kinds? | (a) the approved PNG and tree per step, plus final-pass MP4 and contact sheet, logs, network, trace and app data; (b) (a) without trace; (c) the approved evidence only | (a) | user |
-| 4 | What passes a check? | (a) only `wait` or `is` steps with batch exit 0 plus `sim verify` GREEN, a test pass, or a state exit 0; (b) (a) plus `get` steps | (a): the installed guide says `get` alone isn't proof | user |
-| 5 | Where does `qa/` live? | (a) the validation worktree's `.harness/qa/<plan>/`, copied into plan state by the orchestrator; (b) a tracked `qa/` folder in the repository; (c) plan state in the git common dir, with a new guard exception for the validation agent | (a): no guard change, no second tracked format | user |
-| 6 | How do final passes share the recording lock? | (a) a 1-slot machine-wide recording lock; (b) final passes run 1 at a time by design | (a) | user |
-| 7 | Who confirms a check fails first? | (a) the gate: `prove --proof-base` for acceptance, `qa run --at-base` for flow and state; (b) the worker's recorded reason | (a) | user |
-| 8 | What may the validation worker write? | (a) acceptance test files named in its write set, plus `qa/`; (b) (a) plus contract additions it finds missing | (a): it reports a missing name and the orchestrator amends the contract | user |
-| 9 | Do sprint and design-free ship get the table? | (a) not in the first cut; (b) yes, as an optional spec-page section | (a) | user |
-| 10 | Where does the report live, and how does the run viewer show it? | Location: (a) `.harness/runs/<runID>/qa/report.json` plus rows in `/swift-validate`; (b) `/swift-validate` rows only. Layout: tabs with a Validation tab (variant B of the validation layout mockups). Evidence: linked by run-relative path, never embedded | Location: (a). Layout: decided, tabs (§9.2). Evidence: decided, the page embeds neither video nor contact sheet, with no thumbnails and no inline images | location: user; layout and evidence: decided (user, 2026-10-04) |
-| 11 | Do flows run after each merge, or only at `validate`? | (a) after each merge for the rows it unblocks, stop at the first red layer; (b) acceptance after each merge, flow and state at `validate` only | (a) | user |
-| 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a). 0.21.20 is out, with the same step schemas (§11.1); recapture the fixtures on any bump | user |
-| 13 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | user |
-| 14 | How long does `qa run --final` wait when another recording holds the Mac? | (a) retry every 15 s for up to 5 minutes per flow, then run without video and mark the video `unverified`; (b) no wait: mark it `unverified` at once; (c) wait with no bound | (a): a bound keeps the final pass from hanging on a session the harness can't see | user |
-| 15 | How does a server's port reach its checks? | (a) the row binds port 0, reads the port the OS assigned, and passes it as the `QA_PORT` environment variable to the row's commands and scripts; (b) a port range per worktree in `.swiftgate.toml` | (a): no config, no collisions between runs | user |
-| 16 | What happens when more than 1 device shares the base's name and `os`? | (a) a non-gating note naming each UDID, and the lowest UDID as today; (b) `BLOCKED` until 1 remains; (c) no change | (a): no silent pick, and no new way to block a gate | user |
-| 17 | Kept flows: XCUITest or `agent-device` batch? | (a) keep the split: batch for prepared flows that serve 1 run, XCUITest for kept regression flows; a prepared flow that proves its worth moves to XCUITest through its contract-named identifiers. With it: a shared typed accessibility-id module that the app and its UI tests both import, so an id typo fails to compile in XCUITest; and keep-always attachments for T3, so kept flows also leave video. (b) promote batch flows to the kept regression format: a tracked `qa/` folder, plus a new ADR superseding that part of [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): `agent-device` is pre-1.0 and its pin has moved twice; XCUITest compiles against the app and already runs in the gate; batch's speed edge is `xcodebuild`'s fixed cost per call, which T3 pays once (§11.1); and every replay would depend on the `sim up` UDID lease. Revisit (b) only if the step schemas hold across several minor releases and `xcodebuild`'s fixed cost starts to dominate kept-flow time | decided: (a) (user, 2026-10-04) |
+| 1 | How does a row name its acceptance criterion? | (a) existing `req-<name>` ids; (b) a separate per-plan numbering, `D1`, `D2` | (a), the ledger and the run viewer already join on them | decided (user, 2026-10-04) |
+| 2 | Which tools run the checks? | (a) every check invoked by `swiftgate`: prepared and final-pass flows as `agent-device` batch behind `swiftgate qa run`, with `qa.flow-schema` and `qa.flow-unknown-id` checked before any step runs; kept flows as XCUITest in T3 through `swiftgate check`, with keep-always attachments; acceptance through the repo's test runner or `curl` with `jq -e`; state through shell. Both flow sources normalise to 1 `qa.flow` record; (b) the same tools called directly, with no `swiftgate` wrapper | (a): every enforcement point calls `swiftgate`, and the 2 offline flow rules run only when `swiftgate` runs the flow | decided (user, 2026-10-04) |
+| 3 | Which evidence kinds? | (a) the approved PNG and tree per step, plus final-pass MP4 and contact sheet, logs, network, trace and app data; (b) (a) without trace; (c) the approved evidence only | (a) | decided (user, 2026-10-04) |
+| 4 | What passes a check? | (a) only `wait` or `is` steps with batch exit 0 plus `sim verify` GREEN, a test pass, or a state exit 0; (b) (a) plus `get` steps | (a): the installed guide says `get` alone isn't proof | decided (user, 2026-10-04) |
+| 5 | Where does `qa/` live? | (a) the validation worktree's `.harness/qa/<plan>/`, copied into plan state by the orchestrator; (b) a tracked `qa/` folder in the repository; (c) plan state in the git common dir, with a new guard exception for the validation agent | (a): no guard change, no second tracked format | decided (user, 2026-10-04) |
+| 6 | How do final passes share the recording lock? | (a) a 1-slot machine-wide recording lock; (b) final passes run 1 at a time by design | (a) | decided (user, 2026-10-04) |
+| 7 | Who confirms a check fails first? | (a) the gate: `prove --proof-base` for acceptance, `qa run --at-base` for flow and state; (b) the worker's recorded reason | (a) | decided (user, 2026-10-04) |
+| 8 | What may the validation worker write? | (a) acceptance test files named in its write set, plus `qa/`; (b) (a) plus contract additions it finds missing | (a): it reports a missing name and the orchestrator amends the contract | decided (user, 2026-10-04) |
+| 9 | Do sprint and design-free ship get the table? | (a) not in the first cut; (b) yes, as an optional spec-page section | (a) | decided (user, 2026-10-04) |
+| 10 | Where does the report live, and how does the run viewer show it? | Location: (a) `.harness/runs/<runID>/qa/report.json` plus rows in `/swift-validate`; (b) `/swift-validate` rows only. Layout: tabs with a Validation tab (variant B of the validation layout mockups). Evidence: linked by run-relative path, never embedded | Location: (a). Layout: tabs (§9.2). Evidence: linked by run-relative path, never embedded, with no thumbnails and no inline images | decided (user, 2026-10-04) |
+| 11 | Do flows run after each merge, or only at `validate`? | (a) after each merge for the rows it unblocks, stop at the first red layer; (b) acceptance after each merge, flow and state at `validate` only | (a) | decided (user, 2026-10-04) |
+| 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a). 0.21.20 is out, with the same step schemas (§11.1); recapture the fixtures on any bump | decided (user, 2026-10-04) |
+| 13 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | decided (user, 2026-10-04) |
+| 14 | How long does `qa run --final` wait when another recording holds the Mac? | (a) retry every 15 s for up to 5 minutes per flow, then run without video and mark the video `unverified`; (b) no wait: mark it `unverified` at once; (c) wait with no bound | (a): a bound keeps the final pass from hanging on a session the harness can't see | decided (user, 2026-10-04) |
+| 15 | How does a server's port reach its checks? | (a) the row binds port 0, reads the port the OS assigned, and passes it as the `QA_PORT` environment variable to the row's commands and scripts; (b) a port range per worktree in `.swiftgate.toml` | (a): no config, no collisions between runs | decided (user, 2026-10-04) |
+| 16 | What happens when more than 1 device shares the base's name and `os`? | (a) a non-gating note naming each UDID, and the lowest UDID as today; (b) `BLOCKED` until 1 remains; (c) no change | (a): no silent pick, and no new way to block a gate | decided (user, 2026-10-04) |
+| 17 | Kept flows: XCUITest or `agent-device` batch? | (a) keep the split: batch for prepared flows that serve 1 run, XCUITest for kept regression flows; a prepared flow that proves its worth moves to XCUITest through its contract-named identifiers. With it: a shared typed accessibility-id module that the app and its UI tests both import, so an id typo fails to compile in XCUITest; and keep-always attachments for T3, so kept flows also leave video. (b) promote batch flows to the kept regression format: a tracked `qa/` folder, plus a new ADR superseding that part of [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): `agent-device` is pre-1.0 and its pin has moved twice; XCUITest compiles against the app and already runs in the gate; batch's speed edge is `xcodebuild`'s fixed cost per call, which T3 pays once (§11.1); and every replay would depend on the `sim up` UDID lease. Revisit (b) only if the step schemas hold across several minor releases and `xcodebuild`'s fixed cost starts to dominate kept-flow time | decided (user, 2026-10-04) |
 
-## 13. Changes to the plan, once approved
+## 13. Changes to the plan
+
+[The plan](../plans/2026-09-28-simulator-qa-plan.md) carries each change below as a task, in waves that reach a
+brownfield iOS run first.
 
 - The capture task also captures `batch --json` success and failure, `record start`, `record stop`, `record
   contact-sheet`, `logs`, `network dump`, `trace`, and the MCP `tools/list` step schemas at the pin.
