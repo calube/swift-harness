@@ -29,10 +29,12 @@ private func lint(
 @Suite("plan-lint validation table")
 struct PlanLintValidationTests {
   @Test(
-    "a table with an acceptance row, a flow and its state row, and a unit-only reason lints clean — catches a rule firing on a sound plan"
+    "a table with an acceptance row, a flow and its state row, and a unit-only reason lints clean, and drops to 1 finding without the flow — catches a rule firing on a sound plan"
   )
   func cleanTablePasses() throws {
     #expect(try lint([acceptance, flow, state]).isEmpty)
+    #expect(
+      try lint([acceptance, state]).map(\.ruleID) == [PlanLintValidation.stateWithoutFlowRuleID])
   }
 
   @Test(

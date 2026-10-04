@@ -168,7 +168,39 @@ struct LivePlanValidationTests {
     let without = text.replacingCharacters(in: start.lowerBound..<end.lowerBound, with: "")
     let parsed = try LivePlanParser.parse(without)
     #expect(parsed.validation == nil)
-    #expect(parsed.tasks == (try LivePlanParser.parse(text)).tasks)
+    let withSection = try LivePlanParser.parse(text)
+    #expect(withSection.validation?.table.rows.count == 3)
+    #expect(parsed.tasks == withSection.tasks)
+  }
+
+  @Test(
+    "a second Validation section, a section with no table and a header with no separator each fail naming their line, and a validation.json that isn't JSON fails decoding — catches a malformed section read as no rows"
+  )
+  func sectionShapeFails() throws {
+    let text = plan(rows: cleanRows)
+    let twice = text.replacingOccurrences(
+      of: "## Assumptions", with: "## Validation\n\nRepeated.\n\n## Assumptions")
+    let second = #expect(throws: LivePlanError.self) { try LivePlanParser.parse(twice) }
+    let secondHeading = twice.split(separator: "\n", omittingEmptySubsequences: false)
+      .lastIndex { $0 == "## Validation" }.map { $0 + 1 }
+    #expect(
+      second
+        == .invalidValidation(line: secondHeading ?? 0, reason: "a second `## Validation` section"))
+
+    let tableStart = try #require(text.range(of: "| Done when"))
+    let tableEnd = try #require(text.range(of: "## Assumptions"))
+    let empty = text.replacingCharacters(in: tableStart.lowerBound..<tableEnd.lowerBound, with: "")
+    let noTable = #expect(throws: LivePlanError.self) { try LivePlanParser.parse(empty) }
+    #expect(noTable?.message.contains("line \(line(of: "## Validation", in: empty) ?? 0)") == true)
+    #expect(noTable?.message.contains("no table") == true)
+
+    let unseparated = text.replacingOccurrences(of: "|---|---|---|---|---|---|\n", with: "")
+    let noSeparator = #expect(throws: LivePlanError.self) { try LivePlanParser.parse(unseparated) }
+    #expect(noSeparator?.message.contains("separator") == true)
+
+    #expect(throws: ValidationTableJSONError.self) {
+      try ValidationTableJSON.decode(Data("not json".utf8))
+    }
   }
 
   @Test(
