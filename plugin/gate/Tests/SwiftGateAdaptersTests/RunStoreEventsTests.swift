@@ -258,6 +258,26 @@ struct RunStoreEventsTests {
     #expect(untrackedSource == WorkingTreeState(treeHash: nil, dirty: true))
     #expect(modified == WorkingTreeState(treeHash: nil, dirty: true))
   }
+
+  @Test(
+    "a record given a baselineCount writes it on gate.run — catches the run store dropping the count a brownfield gate hands it"
+  )
+  func baselineCount() throws {
+    let root = try Self.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = RunStore(worktreeRoot: root, events: HarnessEventFiles(root: root))
+
+    try store.record(
+      try Self.capturedReport(), finishedAt: Date(timeIntervalSince1970: 1_790_000_000),
+      command: "check slice", checkTier: .slice, baselineCount: 3)
+
+    let run = try #require(try Self.gateEvents(root).first)
+    guard case .gateRun(let payload) = run.payload else {
+      Issue.record("the first event is \(run.kind.rawValue), not gate.run")
+      return
+    }
+    #expect(payload.baselineCount == 3)
+  }
 }
 
 /// Event ids `event-1`, `event-2`, … in the order asked.

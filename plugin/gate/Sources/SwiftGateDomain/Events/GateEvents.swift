@@ -156,7 +156,8 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
 
   /// The event for `report`.
   public init(
-    report: RunReport, command: String?, treeHash: String?, dirty: Bool?
+    report: RunReport, command: String?, treeHash: String?, dirty: Bool?,
+    baselineCount: Int? = nil
   ) throws(ReportContractViolation) {
     var ruleCounts: [String: Int] = [:]
     for finding in report.findings { ruleCounts[finding.ruleID, default: 0] += 1 }
@@ -182,7 +183,7 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
         GateRunTier(tier: $0.tier, verdict: $0.verdict, milliseconds: $0.durationMilliseconds)
       },
       ruleCounts: ruleCounts, findingPaths: paths, findingPathsTruncated: paths.count < files.count,
-      allowanceCounts: allowanceCounts, testCounts: testCounts)
+      allowanceCounts: allowanceCounts, testCounts: testCounts, baselineCount: baselineCount)
   }
 
   /// A path the payload guard keeps: relative, 1 line, short.

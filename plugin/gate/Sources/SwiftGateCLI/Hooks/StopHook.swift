@@ -3,16 +3,21 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 
-/// Stop (spec §8, ≤ 90s): `check --tier fast`, blocking a RED result under ``StopGate``'s policy.
+/// Stop (spec §8, ≤ 90s): `check --tier fast`, or `slice` in a brownfield clone, blocking a RED
+/// result under ``StopGate``'s policy.
 enum StopHook {
   static let command = "hook stop"
 
-  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
-    -> HookResult
-  {
+  /// - Parameter brownfield: the worktree's clone runs the brownfield profile, so the hook gates
+  ///   at `slice` instead of `fast`.
+  static func run(
+    _ payload: HookPayload, root: URL, dependencies: HookDependencies, brownfield: Bool = false
+  ) async -> HookResult {
     let store = HookStateStore(worktreeRoot: root)
     let state = store.stopState(session: payload.sessionID)
-    let fingerprint = await ContentFingerprint.compute(git: dependencies.git)
+    // A brownfield area can be in any language, so every changed path counts.
+    let fingerprint = await ContentFingerprint.compute(
+      git: dependencies.git, relevant: brownfield ? { _ in true } : ContentFingerprint.isRelevant)
     let reentry = payload.stopHookActive
 
     let outcome: StopGate.Outcome
@@ -25,7 +30,10 @@ enum StopHook {
       outcome = StopGate.decide(
         verdict: .red, summary: summary, fingerprint: fingerprint, state: state, reentry: reentry)
     case .run:
-      let (verdict, summary) = await fastTier(root: root, dependencies: dependencies)
+      let (verdict, summary) =
+        brownfield
+        ? await dependencies.brownfieldSlice(root)
+        : await fastTier(root: root, dependencies: dependencies)
       outcome = StopGate.decide(
         verdict: verdict, summary: summary, fingerprint: fingerprint, state: state,
         reentry: reentry)
@@ -47,6 +55,39 @@ enum StopHook {
       return HookResult(stdout: HookOutput.block(reason), stderr: stderr, exitCode: 0)
     case .release(let message), .warn(let message):
       return HookResult(stdout: HookOutput.systemMessage(message), stderr: stderr, exitCode: 0)
+    }
+  }
+
+  /// The same run `swiftgate check --tier slice` performs, against the commit discovery read.
+  static func sliceTier(root: URL) async -> (Verdict, String) {
+    let clock = ContinuousClock()
+    let start = clock.now
+    let runID = RunID.make(startedAt: Date(), suffix: UInt32.random(in: .min ... .max))
+    let runs = RunStore(worktreeRoot: root)
+    let directory =
+      (try? runs.runDirectory(for: runID))
+      ?? FileManager.default.temporaryDirectory.appending(
+        path: "swiftgate-\(runID)", directoryHint: .isDirectory)
+    do {
+      let context = GateRun.Context(runID: runID, directory: directory)
+      let parts: GateRunParts
+      do {
+        let dependencies = try await BrownfieldSliceCheck.Dependencies.live(root: root)
+        parts = try await BrownfieldSliceCheck.run(
+          root: root, base: dependencies.config.brownfield.discoveredAt, context: context,
+          dependencies: dependencies)
+      } catch let error as BrownfieldCheckSetupError {
+        parts = try BrownfieldCheck.notRun(.slice, because: error.reason)
+      }
+      let report = try RunReport(
+        runID: runID, durationMilliseconds: GateRun.milliseconds(clock.now - start),
+        tiers: parts.tiers, findings: parts.findings, allowances: parts.allowances)
+      try? runs.record(
+        report, finishedAt: Date(), command: command, gateSteps: context.steps.steps,
+        checkTier: .slice, baselineCount: parts.baselineCount)
+      return (report.verdict, ReportRenderer.human(report))
+    } catch {
+      return (.blocked, "swiftgate check --tier slice could not run: \(error)")
     }
   }
 
@@ -90,12 +131,14 @@ enum ContentFingerprint {
   }
 
   /// `nil` when git cannot say (no repository, no commit yet): the check then always runs.
-  static func compute(git: any Git) async -> String? {
+  static func compute(
+    git: any Git, relevant: (String) -> Bool = ContentFingerprint.isRelevant
+  ) async -> String? {
     do throws(GitError) {
       guard let head = try await git.revision("HEAD") else { return nil }
       let prefix = try await git.workingDirectoryPrefix()
       let changed = try await git.changedFiles(since: "HEAD")
-        .filter { $0.hasPrefix(prefix) && isRelevant($0) }
+        .filter { $0.hasPrefix(prefix) && relevant($0) }
         .map { String($0.dropFirst(prefix.count)) }
       let hashes = try await git.contentHashes(of: changed)
       var hasher = SHA256()

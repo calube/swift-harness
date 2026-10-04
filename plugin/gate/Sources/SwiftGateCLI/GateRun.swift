@@ -9,6 +9,9 @@ struct GateRunParts: Sendable {
   var tiers: [TierResult] = []
   var findings: [Finding] = []
   var allowances: [AllowanceCount] = []
+  /// Failures a brownfield gate found at the merge base too, so they didn't gate; `nil` for a run
+  /// with no baseline.
+  var baselineCount: Int?
 }
 
 /// Shared driver for commands that run tests: allocates the run (id and artifact directory),
@@ -75,7 +78,7 @@ enum GateRun {
         report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
-        testResults: context.tests.cases)
+        testResults: context.tests.cases, baselineCount: parts.baselineCount)
     }
     Console.write(
       try ReportRenderer.render(
