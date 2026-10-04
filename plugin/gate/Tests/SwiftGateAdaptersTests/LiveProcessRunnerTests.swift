@@ -69,6 +69,24 @@ struct LiveProcessRunnerTests {
   }
 
   @Test(
+    "a bare name missing from PATH says so without printing PATH — catches a report carrying the machine's home directories"
+  )
+  func missingBareNameKeepsPathOut() async {
+    let path = "/nonexistent/home/someone/bin:/nonexistent/opt/tools"
+    let restricted = LiveProcessRunner(baseEnvironment: ["PATH": path])
+
+    await #expect {
+      _ = try await restricted.run(ProcessInvocation(executable: "claude", timeout: .seconds(10)))
+    } throws: { error in
+      guard case .launchFailed(let executable, let reason) = error as? ProcessRunnerError else {
+        return false
+      }
+      return executable == "claude" && reason == "not found on PATH"
+        && !reason.contains("/nonexistent")
+    }
+  }
+
+  @Test(
     "env overlay replaces and removes parent values — catches SNAPSHOT_TESTING_RECORD leaking in")
   func environmentOverlay() async throws {
     let runner = LiveProcessRunner(baseEnvironment: [
