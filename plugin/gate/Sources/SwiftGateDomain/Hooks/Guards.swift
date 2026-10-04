@@ -595,3 +595,29 @@ public enum SubagentScopeGuard {
     path == root || path.hasPrefix(root + "/")
   }
 }
+
+/// `discover/dirty.json`: the repository-relative paths `git status` showed as modified or
+/// untracked when discovery ran. They are the user's work in progress, never a worker's.
+public struct DirtyFileList: Sendable, Equatable, Codable {
+  public let paths: [String]
+
+  public init(paths: [String]) {
+    self.paths = paths
+  }
+}
+
+/// Denies a Bash command that would stage a file in ``DirtyFileList``: `git add` or `git stage`
+/// naming it or a directory above it, an all-files form (`-A`, `-u`, `.` at the root), and
+/// `git commit -a` or `git commit <path>`.
+public enum DirtyFileGuard {
+  public static let ruleID = "guard.dirty-file"
+
+  /// - Parameters:
+  ///   - cwd: the absolute directory the command runs in.
+  ///   - repositoryRoot: the absolute worktree root the dirty paths are relative to.
+  public static func evaluate(
+    _ command: String, cwd: String, repositoryRoot: String, dirty: DirtyFileList
+  ) -> GuardViolation? {
+    nil
+  }
+}

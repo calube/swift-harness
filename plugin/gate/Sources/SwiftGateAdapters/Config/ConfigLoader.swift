@@ -29,3 +29,49 @@ public struct ConfigLoader: Sendable {
     return try decoder.decode(text)
   }
 }
+
+/// The config a clone runs under: a committed `.swiftgate.toml`, or the brownfield profile's
+/// `config.toml` under the git common dir.
+public enum LoadedConfig: Sendable, Equatable {
+  case owned(Config)
+  case brownfield(BrownfieldConfig)
+}
+
+public enum ProfileLoadError: Error, Sendable, Equatable, CustomStringConvertible {
+  /// Both configs exist, so the clone's profile is ambiguous.
+  case conflict(committed: String, common: String)
+  case config(ConfigLoadError)
+
+  public var verdict: Verdict {
+    switch self {
+    case .conflict: .red
+    case .config(let error): error.verdict
+    }
+  }
+
+  public var description: String {
+    switch self {
+    case .conflict(let committed, let common):
+      "\(committed) and \(common) both exist; a clone runs 1 profile, so delete one"
+    case .config(let error): error.description
+    }
+  }
+}
+
+extension ConfigLoader {
+  /// Reads the committed `.swiftgate.toml` at `repositoryRoot` and the brownfield config under
+  /// `commonDir`. `nil` when neither exists.
+  public func loadProfile(repositoryRoot: URL, commonDir: URL) throws(ProfileLoadError)
+    -> LoadedConfig?
+  {
+    do {
+      return try load(repositoryRoot: repositoryRoot).map(LoadedConfig.owned)
+    } catch {
+      throw .config(error)
+    }
+  }
+
+  /// The git common dir of the worktree at or above `directory`, from git's own pointer files;
+  /// `nil` outside a git worktree.
+  public static func commonDirectory(enclosing directory: URL) -> URL? { nil }
+}

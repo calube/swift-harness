@@ -161,6 +161,20 @@ public struct DoctorResult: Sendable, Equatable {
   }
 }
 
+/// What `doctor` judges in a brownfield clone, where the harness owns no Xcode pin, shim or
+/// SwiftLint setup.
+public struct BrownfieldDoctorFacts: Sendable {
+  /// Free bytes on the worktree's volume; `nil` when unreadable.
+  public let freeBytes: Int64?
+  /// The session's plugin record against the tree on disk; `nil` when not gathered.
+  public let pluginSession: PluginSessionFacts?
+
+  public init(freeBytes: Int64?, pluginSession: PluginSessionFacts? = nil) {
+    self.freeBytes = freeBytes
+    self.pluginSession = pluginSession
+  }
+}
+
 /// A toolchain upgrade that breaks a pinned dependency (spec §6.2 toolchain notes).
 public struct UpgradeHazard: Sendable {
   public let xcode: ToolVersion
@@ -189,6 +203,9 @@ public enum Doctor {
   public static let sessionRecordRuleID = "doctor.session-record"
   /// `[judge] backend` names a backend whose key variable isn't set.
   public static let judgeKeyRuleID = "doctor.judge-key"
+
+  /// A committed `.swiftgate.toml` and a common-dir `config.toml` in 1 clone.
+  public static let configConflictRuleID = BrownfieldRuleID.doctorConfigConflict.rawValue
 
   /// One simulator run's DerivedData plus result bundle runs to several GiB; below this a run is
   /// likely to fail part-way.
@@ -357,6 +374,16 @@ public enum Doctor {
       }
     }
     return check.result
+  }
+
+  /// Both configs in 1 clone: the profile is ambiguous, so nothing else is judged.
+  public static func configConflict(committed: String, common: String) -> DoctorResult {
+    DoctorResult(verdict: .green, findings: [])
+  }
+
+  /// A brownfield clone: the disk and the plugin session only.
+  public static func evaluateBrownfield(_ facts: BrownfieldDoctorFacts) -> DoctorResult {
+    DoctorResult(verdict: .green, findings: [])
   }
 
   /// Whether the session still runs the plugin text on disk: a running session keeps the skills

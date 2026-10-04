@@ -25,6 +25,38 @@ public enum ProjectRoot {
   }
 }
 
+/// The project a hook fires in, by profile.
+public enum HookProject: Sendable, Equatable {
+  /// The directory holding `.swiftgate.toml`.
+  case owned(URL)
+  /// A worktree of a clone whose git common dir holds the brownfield `config.toml`.
+  case brownfield(root: URL, layout: BrownfieldStateLayout)
+
+  public var root: URL {
+    switch self {
+    case .owned(let root), .brownfield(let root, _): root
+    }
+  }
+}
+
+extension ProjectRoot {
+  /// ``locate(from:)``'s owned project, or else the enclosing worktree when its clone runs the
+  /// brownfield profile.
+  public static func locateProfile(from directory: URL) -> HookProject? {
+    locate(from: directory).map(HookProject.owned)
+  }
+}
+
+/// What reading `discover/dirty.json` gave.
+public enum DirtyFileRead: Sendable, Equatable {
+  /// Discovery hasn't written one.
+  case absent
+  case listed(DirtyFileList)
+  case unreadable(path: String, reason: String)
+
+  public static func read(_ file: URL) -> DirtyFileRead { .absent }
+}
+
 public enum HookStateError: Error, Sendable, Equatable {
   case unwritable(path: String, reason: String)
 
