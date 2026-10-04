@@ -18,3 +18,8 @@ vendor_modules = []
 name = "GameEngine"
 kind = "engine"
 reason = "tic-tac-toe rules as a pure (State, Input) -> State step with a seeded RNG; a reducer adds ceremony only"
+
+[[modules]]
+name = "AccessibilityIDs"
+kind = "library"
+reason = "one String-backed enum of identifiers shared by the views and the UI tests; no state, no reducer"

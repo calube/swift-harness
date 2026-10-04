@@ -447,9 +447,15 @@ public struct QAConfig: Sendable, Equatable {
 
   /// Minutes a `sim hold` keeps its device after `sim up` before it releases it unasked.
   public let sessionTimeoutMinutes: Int
+  /// Repo-relative Swift file declaring `enum AccessibilityID: String`, whose raw values are every
+  /// identifier the app sets; `nil` when the repository declares none.
+  public let accessibilityIDs: String?
 
-  public init(sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes) {
+  public init(
+    sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes, accessibilityIDs: String? = nil
+  ) {
     self.sessionTimeoutMinutes = sessionTimeoutMinutes
+    self.accessibilityIDs = accessibilityIDs
   }
 }
 
