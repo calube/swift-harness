@@ -144,7 +144,7 @@ struct RunViewFailureReasonTests {
   @Test(
     "a RED gate names its first gating rule and the failing test count, and a merge on it says the merged branch — catches a gate reason missing its rule or count"
   )
-  func gateReason() {
+  func gateReason() throws {
     let failure = RunView.GateFailure(
       stage: .merge, tiers: [.t2],
       findings: [
@@ -154,13 +154,13 @@ struct RunViewFailureReasonTests {
       ], command: "swiftgate events list --run r")
     let gate = RunView.Gate(
       runID: "r", verdict: .red, milliseconds: 1,
-      tests: try? TestCounts(passed: 3, failed: 46, skipped: 0),
+      tests: try TestCounts(passed: 3, failed: 46, skipped: 0),
       failure: failure)
     #expect(
       RunViewFailureReasons.gate(gate) == "area.test-failed: 46 tests fail on the merged branch.")
     var task = gate
     task.failure?.stage = .task
-    task.tests = try? TestCounts(passed: 3, failed: 1, skipped: 0)
+    task.tests = try TestCounts(passed: 3, failed: 1, skipped: 0)
     #expect(
       RunViewFailureReasons.gate(task) == "area.test-failed: 1 test fails on the task branch.")
 

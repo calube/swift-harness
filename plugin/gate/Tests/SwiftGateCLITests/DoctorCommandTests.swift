@@ -197,16 +197,12 @@ struct DoctorCommandTests {
   func agentDeviceIsCheckedAgainstThePin() async throws {
     defer { cleanUp() }
     let emptyPath = LiveProcessRunner(baseEnvironment: ["PATH": repository.path])
-    let notFound: ProcessRunnerError
-    do {
-      _ = try await emptyPath.run(
-        ProcessInvocation(
-          executable: LiveAgentDevice.executable, arguments: ["--version"], timeout: .seconds(10)))
-      Issue.record("agent-device ran with an empty PATH")
-      return
-    } catch {
-      notFound = error
-    }
+    let version = ProcessInvocation(
+      executable: LiveAgentDevice.executable, arguments: ["--version"], timeout: .seconds(10))
+    let notFound = try #require(
+      await #expect(throws: ProcessRunnerError.self, "agent-device ran with an empty PATH") {
+        try await emptyPath.run(version)
+      })
     let missing = try await agentDeviceFindings { () throws(ProcessRunnerError) in throw notFound }
     let finding = try #require(missing.first)
     #expect(missing.count == 1)

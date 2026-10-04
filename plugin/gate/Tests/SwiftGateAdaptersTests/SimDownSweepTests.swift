@@ -42,7 +42,7 @@ extension SimDownTests {
     let deadline = ContinuousClock.now + .seconds(20)
     while lease == nil, ContinuousClock.now < deadline {
       lease = try store.read(runID: Self.runID)
-      try await Task.sleep(for: .milliseconds(5))
+      await Task.yield()
     }
     var recorded = try #require(lease)
     // `sim up` records the session it opened in the lease; the holder must see it open, or it
@@ -78,8 +78,8 @@ extension SimDownTests {
     #expect(agent.calls.contains(.releaseStale(udid: recorded.udid)))
     #expect(try store.read(runID: Self.runID) == nil)
     #expect(Self.harnessDevices(simctl).isEmpty)
-    holding.cancel()
-    _ = try? await holding.value
+    let outcome = try await holding.value
+    #expect(outcome == SimHoldOutcome(udid: recorded.udid, end: .released))
   }
 
   @Test(

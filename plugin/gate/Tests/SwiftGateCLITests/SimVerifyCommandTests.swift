@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @testable import SwiftGateCLI
@@ -53,13 +54,11 @@ struct SimVerifyCommandTests {
     "standalone sim verify audits every control in an owned repository and none in a brownfield clone, saying why — catches a brownfield run failing on controls no flow named"
   )
   func standaloneAuditFollowsTheProfile() throws {
-    let brownfield = FileManager.default.temporaryDirectory.appending(
-      path: "sim-verify-audit-\(UUID().uuidString)", directoryHint: .isDirectory)
-    let owned = FileManager.default.temporaryDirectory.appending(
-      path: "sim-verify-audit-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let brownfield = try TestTemporaryDirectory.make("sim-verify-audit")
+    let owned = try TestTemporaryDirectory.make("sim-verify-audit")
     defer {
-      try? FileManager.default.removeItem(at: brownfield)
-      try? FileManager.default.removeItem(at: owned)
+      TestTemporaryDirectory.remove(brownfield)
+      TestTemporaryDirectory.remove(owned)
     }
     let common = brownfield.appending(path: ".git/\(StateRootResolver.commonConfigFile)")
     try FileManager.default.createDirectory(

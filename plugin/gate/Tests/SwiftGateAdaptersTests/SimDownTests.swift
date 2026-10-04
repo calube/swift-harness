@@ -103,7 +103,7 @@ struct SimDownTests {
         agent.update { $0.sessions = [AgentDeviceSession(name: Self.session, udid: lease.udid)] }
         return (lease, process, holding)
       }
-      try await Task.sleep(for: .milliseconds(5))
+      await Task.yield()
     }
     holding.cancel()
     throw HolderNeverLeased()
@@ -324,7 +324,7 @@ struct SimDownTests {
     let deadline = ContinuousClock.now + .seconds(20)
     while lease == nil, ContinuousClock.now < deadline {
       lease = try store.read(runID: Self.runID)
-      try await Task.sleep(for: .milliseconds(5))
+      await Task.yield()
     }
     let udid = try #require(lease?.udid)
 
