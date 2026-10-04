@@ -53,6 +53,9 @@ tool summary. Below sit requirements against tasks, a row per changed test `prov
 role, every gate run, and a footer naming what the reader couldn't read. A running worker's tokens read
 "pending" until its ingest.
 
+A red span, a blocked task and a `gate-red` halt say why, in the popover and in more detail in the
+task drawer: see [why a run failed](run-viewer-failures.md).
+
 The board and the plan graph are optional modules: the page inlines every `run-viewer-*.js` and `.css`
 present. The board puts each task in queued, building, gating, review, merged or a blocked lane, which also
 holds a task with an open halt. The graph draws the deps as SVG in waves left to right. A card or node opens
@@ -61,7 +64,8 @@ the task drawer: the brief when the plan has one, properties, links and activity
 ## Live mode
 
 `view` answers `GET /`, `/view.json` and `/changes?after=<cursor>`, the rows changed since that cursor and a
-new one, and 404 for anything else. An unknown cursor gets the whole view. A request whose `Host` isn't
+new one, and 404 for anything else. A changed row comes whole, its failure or block reason
+included. An unknown cursor gets the whole view. A request whose `Host` isn't
 `127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere can't reach it through a rebound name.
 
 The page polls `/changes` each second, merges rows by id, and keeps polling after a failure, which it shows
@@ -71,4 +75,5 @@ badge once the preset's `stall_min` passes with no event of that task, and a hal
 ## Privacy
 
 Every string in the view passes the event guard before either command writes or serves it. The view drops
-the ledger's worktree path and holds no prompt, source line, assertion text, commit subject or tool output.
+the ledger's worktree path and holds no prompt, source line, commit subject or tool output.  A RED gate's
+finding messages are the 1 piece of report text it keeps, with machine paths taken out.

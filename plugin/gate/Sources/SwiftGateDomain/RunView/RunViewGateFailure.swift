@@ -148,3 +148,70 @@ public struct RunViewGateReport: Sendable, Equatable {
     self.location = location
   }
 }
+
+// Each spells its encoding out so an absent value reads `null`, as every other row's does.
+
+extension RunView.FailureFinding {
+  private enum CodingKeys: String, CodingKey {
+    case rule, severity, file, line, message, truncated
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(rule, forKey: .rule)
+    try c.encode(severity, forKey: .severity)
+    try c.encode(file, forKey: .file)
+    try c.encode(line, forKey: .line)
+    try c.encode(message, forKey: .message)
+    try c.encode(truncated, forKey: .truncated)
+  }
+}
+
+extension RunView.FailedTest {
+  private enum CodingKeys: String, CodingKey {
+    case test, tier, proof, file, line
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(test, forKey: .test)
+    try c.encode(tier, forKey: .tier)
+    try c.encode(proof, forKey: .proof)
+    try c.encode(file, forKey: .file)
+    try c.encode(line, forKey: .line)
+  }
+}
+
+extension RunView.GateFailure {
+  private enum CodingKeys: String, CodingKey {
+    case checkTier, stage, tiers, findings, moreFindings, failedTests, moreFailedTests, report
+    case command
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(checkTier, forKey: .checkTier)
+    try c.encode(stage, forKey: .stage)
+    try c.encode(tiers, forKey: .tiers)
+    try c.encode(findings, forKey: .findings)
+    try c.encode(moreFindings, forKey: .moreFindings)
+    try c.encode(failedTests, forKey: .failedTests)
+    try c.encode(moreFailedTests, forKey: .moreFailedTests)
+    try c.encode(report, forKey: .report)
+    try c.encode(command, forKey: .command)
+  }
+}
+
+extension RunView.TaskBlock {
+  private enum CodingKeys: String, CodingKey {
+    case at, cause, halt, gateRun
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(at, forKey: .at)
+    try c.encode(cause, forKey: .cause)
+    try c.encode(halt, forKey: .halt)
+    try c.encode(gateRun, forKey: .gateRun)
+  }
+}

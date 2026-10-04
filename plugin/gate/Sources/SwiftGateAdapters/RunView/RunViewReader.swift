@@ -60,8 +60,12 @@ public struct RunViewReader: RunViewReading {
     var workerEvents = main.events.map(\.event).filter {
       profile == .brownfield || !mainOwn.contains($0.eventID)
     }
+    var worktrees: [URL] = []
+    var holders: [String: String] = [:]
     if let join, let ledger {
-      for worktree in liveWorktrees(plan: join.plan, ledger: ledger, damage: &damage) {
+      worktrees = liveWorktrees(plan: join.plan, ledger: ledger, damage: &damage)
+      holders = runHolders(plan: join.plan, ledger: ledger)
+      for worktree in worktrees {
         let read = EventStoreReader(
           files: StateRootEventFiles(state: StateRootResolver.resolve(worktree: worktree))
         ).read(EventQuery())
@@ -73,18 +77,95 @@ public struct RunViewReader: RunViewReading {
 
     var gateRuns = join.map(Self.gateRuns(of:)) ?? []
     let workerGateRuns =
-      join.map { Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns) } ?? [:]
+      join.map {
+        Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns, holders: holders)
+      } ?? [:]
     gateRuns.formUnion(workerGateRuns.keys)
     let events = EventQuery.merge(batches).map(\.event)
     let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns, prebuild: prebuild)
+    let kept = events.filter {
+      Self.belongs(
+        $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild)
+    }
+    let checkouts =
+      [(stateRoot, nil as URL?)]
+      + worktrees.map {
+        (StateRootResolver.resolve(worktree: $0), $0)
+      }
+    let reports = gateReports(of: kept, in: checkouts, damage: &damage)
     return RunViewInput(
-      buildRun: buildRun,
-      events: events.filter {
-        Self.belongs(
-          $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild)
-      },
-      join: join, ledger: ledger, requirements: requirements, damage: damage, briefs: briefs,
-      workerGateRuns: workerGateRuns, launchedAt: prebuild.launchedAt)
+      buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
+      damage: damage, briefs: briefs, workerGateRuns: workerGateRuns,
+      launchedAt: prebuild.launchedAt, gateReports: reports,
+      checkoutRoots: checkoutRoots(worktrees: worktrees))
+  }
+
+  /// The `report.json` of each kept gate run that wasn't GREEN, from the first checkout whose
+  /// state holds it: the main checkout's, then each live task worktree's. A report that exists
+  /// and doesn't read is damage. One no checkout holds, as in a removed worktree, is absent, and
+  /// the run's failure says so through its `nil` report.
+  private func gateReports(
+    of events: [HarnessEvent], in checkouts: [(state: StateRoot, worktree: URL?)],
+    damage: inout [RunView.Damage]
+  ) -> [String: RunViewGateReport] {
+    var reports: [String: RunViewGateReport] = [:]
+    for event in events {
+      guard case .gateRun(let run) = event.payload, run.verdict != .green,
+        let runID = event.runID, RunID.isValid(runID), reports[runID] == nil
+      else { continue }
+      let path = RunLayout.runDirectory(for: runID) + RunLayout.reportFileName
+      for checkout in checkouts {
+        let url = checkout.state.url(path)
+        guard FileManager.default.fileExists(atPath: url.path) else { continue }
+        let location = Self.location(path, in: checkout.state, worktree: checkout.worktree)
+        // A read error names the file's absolute path, which the view must not carry.
+        guard let data = try? Data(contentsOf: url) else {
+          damage.append(RunView.Damage(source: location, reason: "unreadable"))
+          break
+        }
+        do {
+          let report = try RecordedRunReport.decode(data).report
+          reports[runID] = RunViewGateReport(report: report, location: location)
+        } catch {
+          damage.append(RunView.Damage(source: location, reason: "not a gate report: \(error)"))
+        }
+        break
+      }
+    }
+    return reports
+  }
+
+  /// `path` under `state`, named relative to the main checkout: a task worktree sits beside it.
+  /// A state root under a git dir is named from that git dir, which has no relative name.
+  static func location(_ path: String, in state: StateRoot, worktree: URL?) -> String {
+    switch state {
+    case .tree:
+      let inTree = RunLayout.treePath(path)
+      return worktree.map { "../\($0.lastPathComponent)/\(inTree)" } ?? inTree
+    case .gitDir:
+      let name = worktree.map { " of \($0.lastPathComponent)" } ?? ""
+      return "<git dir\(name)>/\(RunLayout.gitDirDirectory)/\(path)"
+    }
+  }
+
+  /// The main checkout and each live task worktree, each as written and with its links resolved.
+  private func checkoutRoots(worktrees: [URL]) -> [String] {
+    var roots: [URL] = worktrees
+    switch stateRoot {
+    case .tree(let checkout): roots.append(checkout)
+    case .gitDir:
+      if let checkout = try? TaskWorktree.mainCheckout(commonDirectory: commonDirectory.path) {
+        roots.append(URL(filePath: checkout, directoryHint: .isDirectory))
+      }
+    }
+    var paths: [String] = []
+    for root in roots {
+      for path in [root.standardizedFileURL.path, root.resolvingSymlinksInPath().path]
+      where !paths.contains(path) {
+        paths.append(path)
+      }
+    }
+    return paths
   }
 
   /// What a build run keeps from before it existed. Empty for any build run but its plan's first.
@@ -220,7 +301,9 @@ public struct RunViewReader: RunViewReading {
   /// ends, wins over those: the task's fixer runs then, while every task still in progress beside
   /// it holds the run too. A run inside more than 1 fix window stays out.
   ///
-  /// `holders` names the task whose worktree's run store holds a run, by run id.
+  /// A run a live task worktree's run store holds, by run id in `holders`, goes to that
+  /// worktree's task before any window: concurrent tasks of a clone write to 1 shared store,
+  /// where windows alone can't tell their runs apart.
   static func workerGateRuns(
     _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>,
     holders: [String: String] = [:]
@@ -260,6 +343,10 @@ public struct RunViewReader: RunViewReading {
     for event in workerEvents {
       guard case .gateRun = event.payload, let runID = event.runID, !named.contains(runID)
       else { continue }
+      if let holder = holders[runID] {
+        tasks[runID] = holder
+        continue
+      }
       let fixing = holding(fixes, event.time)
       let holds = fixing.isEmpty ? holding(windows, event.time) : fixing
       if holds.count == 1, let window = holds.first { tasks[runID] = window.task }
@@ -319,6 +406,33 @@ public struct RunViewReader: RunViewReading {
     case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
       return false
     }
+  }
+
+  /// Each run a live task worktree's run store holds, by run id, with the worktree's task: a fix
+  /// worktree's runs go to the task it fixes. A run 2 worktrees hold goes to neither.
+  private func runHolders(plan: String, ledger: Ledger) -> [String: String] {
+    var holders: [String: String] = [:]
+    var shared = Set<String>()
+    for task in ledger.tasks {
+      for name in [task.id, "fix-\(task.id)"] {
+        guard
+          let path = try? TaskWorktree(
+            commonDirectory: commonDirectory.path, plan: plan, task: name, profile: profile
+          ).path
+        else { continue }
+        let worktree = URL(filePath: path, directoryHint: .isDirectory)
+        guard FileManager.default.fileExists(atPath: path) else { continue }
+        let runs = StateRootResolver.resolve(worktree: worktree).url(
+          RunLayout.runsDirectory, directoryHint: .isDirectory)
+        let ids = (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []
+        for id in ids where RunID.isValid(id) {
+          if let other = holders[id], other != task.id { shared.insert(id) }
+          holders[id] = task.id
+        }
+      }
+    }
+    for id in shared { holders[id] = nil }
+    return holders
   }
 
   /// The task worktrees of `plan` that exist now, a fix worktree included. In a brownfield clone,

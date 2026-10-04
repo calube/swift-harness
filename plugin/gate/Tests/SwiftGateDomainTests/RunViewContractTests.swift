@@ -69,8 +69,9 @@ struct RunViewContractTests {
     #expect(
       keys(task) == [
         "id", "status", "model", "deps", "writes", "gate", "covers", "commits", "gateRun",
-        "mergeGateRun", "createdAt", "mergedAt", "brief", "tokens",
+        "mergeGateRun", "createdAt", "mergedAt", "brief", "tokens", "blocked",
       ])
+    #expect(task["blocked"] is NSNull)
     #expect(task["tokens"] is NSNull)
     #expect(task["mergedAt"] is NSNull)
     #expect(task["status"] as? String == "in-progress")
@@ -83,25 +84,82 @@ struct RunViewContractTests {
     let spans = try #require(object["spans"] as? [[String: Any]])
     let spanKeys: Set<String> = [
       "id", "parent", "phase", "task", "gateRun", "start", "end", "outcome", "approximate", "tools",
+      "causeGateRun",
     ]
     #expect(spans.map(keys) == [spanKeys, spanKeys])
     #expect(spans[0]["end"] is NSNull)
     #expect(spans[0]["tools"] is NSNull)
+    #expect(spans[0]["causeGateRun"] is NSNull)
     #expect(keys(spans[1]["tools"]) == ["calls", "otherCount", "ms", "files", "droppedPaths"])
     #expect(
       keys(first((spans[1]["tools"] as? [String: Any])?["calls"])) == ["tool", "count", "ms"])
 
     let gate = first(object["gates"])
     #expect(
-      keys(gate) == ["runId", "task", "command", "verdict", "ms", "tests", "ruleCounts", "steps"])
+      keys(gate) == [
+        "runId", "task", "command", "verdict", "ms", "tests", "ruleCounts", "steps", "failure",
+      ])
+    #expect(gate["failure"] is NSNull)
     #expect(keys(first(gate["steps"])) == ["tier", "step", "startMs", "ms", "verdict"])
     #expect(first(gate["steps"])["startMs"] is NSNull)
     #expect(
       keys(first(object["proofs"])) == [
         "gateRun", "task", "test", "outcome", "proofBase", "assertion",
       ])
-    #expect(keys(first(object["halts"])) == ["task", "reason", "at", "answer", "waitMs"])
+    #expect(
+      keys(first(object["halts"])) == ["task", "reason", "at", "answer", "waitMs", "gateRun"])
+    #expect(first(object["halts"])["gateRun"] is NSNull)
     #expect(keys(first(object["damage"])) == ["source", "reason"])
+  }
+
+  @Test(
+    "a RED gate's failure encodes its tiers, findings, failing tests, report and command, absent values as null — catches a failure key the page won't read"
+  )
+  func encodesGateFailureKeys() throws {
+    var view = view
+    view.gates[0].verdict = .red
+    view.gates[0].failure = RunView.GateFailure(
+      checkTier: .push, stage: .merge, tiers: [.t2],
+      findings: [
+        RunView.FailureFinding(
+          rule: "t2.test-failed", severity: .major, file: nil, line: nil, message: "m",
+          truncated: false)
+      ], moreFindings: 2, failedTests: [RunView.FailedTest(test: "T.a/b")], moreFailedTests: 1,
+      command: "swiftgate events list --run g1")
+    let object = try #require(
+      JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
+    let failure = try #require(first(object["gates"])["failure"] as? [String: Any])
+    #expect(
+      keys(failure) == [
+        "checkTier", "stage", "tiers", "findings", "moreFindings", "failedTests",
+        "moreFailedTests", "report", "command",
+      ])
+    #expect(failure["report"] is NSNull)
+    #expect(failure["checkTier"] as? String == "push")
+    #expect(failure["tiers"] as? [String] == ["T2"])
+    let finding = first(failure["findings"])
+    #expect(keys(finding) == ["rule", "severity", "file", "line", "message", "truncated"])
+    #expect(finding["file"] is NSNull)
+    #expect(finding["line"] is NSNull)
+    let test = first(failure["failedTests"])
+    #expect(keys(test) == ["test", "tier", "proof", "file", "line"])
+    #expect(test["proof"] is NSNull)
+  }
+
+  @Test(
+    "a blocked task's reason encodes its time, cause, halt and gate run, absent values as null — catches a block key the page won't read"
+  )
+  func encodesTaskBlockKeys() throws {
+    var view = view
+    view.tasks[0].status = .blocked
+    view.tasks[0].blocked = RunView.TaskBlock(at: start, cause: .returnNotStored)
+    let object = try #require(
+      JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
+    let block = try #require(first(object["tasks"])["blocked"] as? [String: Any])
+    #expect(keys(block) == ["at", "cause", "halt", "gateRun"])
+    #expect(block["cause"] as? String == "return-not-stored")
+    #expect(block["halt"] is NSNull)
+    #expect(block["gateRun"] is NSNull)
   }
 
   @Test(

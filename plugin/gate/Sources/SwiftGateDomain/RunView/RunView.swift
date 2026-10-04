@@ -281,7 +281,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-      case task, command, verdict, tests, ruleCounts, steps
+      case task, command, verdict, tests, ruleCounts, steps, failure
       case runID = "runId"
       case milliseconds = "ms"
     }
@@ -436,7 +436,7 @@ extension RunView.Brief {
 extension RunView.Task {
   private enum CodingKeys: String, CodingKey {
     case id, status, model, deps, writes, gate, covers, commits, gateRun, mergeGateRun
-    case createdAt, mergedAt, brief, tokens
+    case createdAt, mergedAt, brief, tokens, blocked
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -455,12 +455,13 @@ extension RunView.Task {
     try c.encode(mergedAt, forKey: .mergedAt)
     try c.encode(brief, forKey: .brief)
     try c.encode(tokens, forKey: .tokens)
+    try c.encode(blocked, forKey: .blocked)
   }
 }
 
 extension RunView.Span {
   private enum CodingKeys: String, CodingKey {
-    case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools
+    case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools, causeGateRun
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -475,6 +476,7 @@ extension RunView.Span {
     try c.encode(outcome, forKey: .outcome)
     try c.encode(approximate, forKey: .approximate)
     try c.encode(tools, forKey: .tools)
+    try c.encode(causeGateRun, forKey: .causeGateRun)
   }
 }
 
@@ -500,6 +502,7 @@ extension RunView.Gate {
     try c.encode(tests, forKey: .tests)
     try c.encode(ruleCounts, forKey: .ruleCounts)
     try c.encode(steps, forKey: .steps)
+    try c.encode(failure, forKey: .failure)
   }
 }
 
@@ -521,7 +524,7 @@ extension RunView.Proof {
 
 extension RunView.Halt {
   private enum CodingKeys: String, CodingKey {
-    case task, reason, at, answer, waitMs
+    case task, reason, at, answer, waitMs, gateRun
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -531,6 +534,7 @@ extension RunView.Halt {
     try c.encode(at, forKey: .at)
     try c.encode(answer, forKey: .answer)
     try c.encode(waitMs, forKey: .waitMs)
+    try c.encode(gateRun, forKey: .gateRun)
   }
 }
 

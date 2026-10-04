@@ -1,0 +1,105 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "share-view-limit-api" : {
+        "acceptance" : [
+          "new tests in `server/api/v1/test/memo_share_service_test.go` fail first and then pass: create with limit 0 and 1001 is INVALID_ARGUMENT and 1 and 1000 succeed; a limit-2 share resolves twice and the third resolve is NOT_FOUND; listing returns view count and limit; a share without a limit keeps resolving and counts; an expired or unknown token leaves the count at 0",
+          "`DRIVER=sqlite go test ./server/...` passes apart from baseline failures; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the fileserver's `share_token` attachment path, which keeps its expiry-only check",
+          "the web client"
+        ],
+        "scope" : [
+          "`CreateMemoShare` rejects a `view_limit` below 1 or above 1000 with `codes.InvalidArgument` and stores a valid one in `store.MemoShare.ViewLimit`",
+          "`convertMemoShareFromStore` sets `ViewCount` always and `ViewLimit` when the store share has one",
+          "`getActiveMemoShare` also answers NOT_FOUND when `ViewLimit` is set and `ViewCount >= *ViewLimit`",
+          "`GetSharedMemo` calls `Store.ConsumeMemoShareView(ctx, token, time.Now().Unix())` after every other check and the memo conversion succeed; a nil share answers `codes.NotFound` \"not found\", an error answers `codes.Internal`"
+        ],
+        "title" : "Validate the view limit on create, return count and limit on list, and consume a view on each successful resolve.",
+        "why" : "spec items 1 to 4: limits outside 1 to 1000 are INVALID_ARGUMENT, only a successful resolve counts, a used-up share answers NOT_FOUND like an expired one, and listing shows count and limit."
+      },
+      "share-view-limit-contract" : {
+        "acceptance" : [
+          "every touched area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "schema changes and any counting or enforcement"
+        ],
+        "scope" : [
+          "proto `MemoShare.view_limit` and `view_count`, regenerated Go, OpenAPI and TypeScript",
+          "`store.MemoShare.ViewLimit` and `ViewCount`, `Store.ConsumeMemoShareView`, `Driver.ConsumeMemoShareView` stubbed in sqlite, mysql and postgres"
+        ],
+        "title" : "Declare the view-limit proto fields, store fields and consume method every task compiles against, with no behaviour.",
+        "why" : "requirements 1 to 4 cross the store, API and web, so all three build against 1 declared shape."
+      },
+      "share-view-limit-store" : {
+        "acceptance" : [
+          "new tests in `store/test/memo_share_test.go`, run with `DRIVER=sqlite`, fail first and then pass: a share with limit 2 consumes twice and the third consume returns nil; a share with no limit keeps consuming and its count rises; an expired share consumes nothing; listing returns the count and limit; 2 goroutines racing for the last view of a limit-1 share yield exactly 1 success",
+          "`DRIVER=sqlite go test ./store/...` passes apart from baseline failures; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "API validation and GetSharedMemo, the fileserver, the web client",
+          "running the MySQL and PostgreSQL migrations"
+        ],
+        "scope" : [
+          "`store/migration/{sqlite,mysql,postgres}/26.10/00__add_memo_share_view_limit.sql` adding `view_limit` (nullable) and `view_count` (NOT NULL DEFAULT 0) to `memo_share`",
+          "each driver's `LATEST.sql` gains the same 2 columns so fresh installs match the migrated schema",
+          "sqlite, mysql and postgres `memo_share.go`: create writes `view_limit` when set; list and get read `view_limit` and `view_count`; `ConsumeMemoShareView` replaces the stub with 1 conditional `UPDATE ... SET view_count = view_count + 1 WHERE uid = ? AND (expires_ts IS NULL OR expires_ts >= ?) AND (view_limit IS NULL OR view_count < view_limit)`, then returns the row when 1 row changed and nil otherwise (sqlite and postgres via `RETURNING`; mysql via the UPDATE then a SELECT in 1 transaction)",
+          "store tests that pin the schema version at 0.31.8, or treat 26.9.1 as newer than the binary, move to the new version 26.10.1"
+        ],
+        "title" : "Store each share's view limit and count in every driver and consume views atomically.",
+        "why" : "spec items 2 and 3 and the migration constraint: each resolve counts once, a used-up share stops resolving, racing resolves never both take the last view, and existing shares keep working."
+      },
+      "share-view-limit-web" : {
+        "acceptance" : [
+          "a new vitest test `web/tests/memo-share-panel-view-count.test.tsx` fails first and then passes: a share with `viewCount` 3 and `viewLimit` 10 reads \"3 of 10 views\", and one with `viewCount` 3 and no limit reads \"3 views\"",
+          "`pnpm run lint` and `pnpm run test` pass apart from baseline failures; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "locales other than English, which fall back to English",
+          "server behaviour"
+        ],
+        "scope" : [
+          "`useCreateMemoShare` accepts an optional `viewLimit` and sets `MemoShare.viewLimit` when given",
+          "`MemoSharePanel.tsx` gains a view-limit `Select` beside the expiry one, with options none, 1, 10 and 100, and passes the choice to create",
+          "each `ShareLinkRow` shows the view-count text from an exported pure helper, `formatViewCount(share, t)`: `memo.share.views-of-limit` when `viewLimit` is set, else `memo.share.views`",
+          "`web/src/locales/en.json` gains `memo.share.views`, `memo.share.views-of-limit`, `memo.share.view-limit-none`, `memo.share.view-limit-1`, `memo.share.view-limit-10`, `memo.share.view-limit-100`"
+        ],
+        "title" : "Add the view-limit choice to the share panel and show each share's view count.",
+        "why" : "spec item 5: a no limit, 1, 10 or 100 views choice next to the expiry choice, and \"N of M views\" or \"N views\" on each listed share."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-view-limit-field",
+        "title" : "A share can be created with an optional view limit from 1 to 1000, a share created without one behaves as today, and a limit outside 1 to 1000 is rejected with INVALID_ARGUMENT"
+      },
+      {
+        "id" : "req-view-count",
+        "title" : "Each successful resolve of a share token increments that share's view count by 1, and an invalid, expired or revoked token counts nothing"
+      },
+      {
+        "id" : "req-limit-enforced",
+        "title" : "Once a share's view count reaches its limit the token returns NOT_FOUND, and 2 resolves racing for the last view never both succeed"
+      },
+      {
+        "id" : "req-list-counts",
+        "title" : "Listing a memo's shares returns each share's view count and, when set, its limit"
+      },
+      {
+        "id" : "req-web-panel",
+        "title" : "The share panel offers no limit, 1, 10 or 100 views next to the expiry choice, and each listed share shows \"N of M views\" with a limit and \"N views\" without one, with new strings in the English locale"
+      },
+      {
+        "id" : "req-migration",
+        "title" : "SQLite, MySQL and PostgreSQL each get a migration and a matching LATEST.sql, and existing shares keep working with no limit and a view count of 0"
+      }
+    ]
+  },
+  "resume" : "planned; 4 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

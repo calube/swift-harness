@@ -101,6 +101,59 @@ struct ViewCommandTests {
   }
 
   @Test(
+    "a RED gate landing after the first fetch reaches /changes with its tier, rule, file:line, failing test and report, and no machine path — catches a live page with no failure context"
+  )
+  func changesCarryTheFailure() throws {
+    let redGate = "20261004T050310Z-ed998508"
+    let repository = try Repository()
+    defer { repository.remove() }
+    let events = repository.root.appending(path: ".harness/events", directoryHint: .isDirectory)
+    var held: [URL: [Substring]] = [:]
+    for stream in ["gate", "test"] {
+      let url = events.appending(path: "\(stream).jsonl")
+      let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+      let red = lines.filter { $0.contains("\"runID\":\"\(redGate)\"") }
+      #expect(!red.isEmpty, "the captured \(stream) stream holds no line of \(redGate)")
+      held[url] = red
+      try Data(lines.filter { !red.contains($0) }.map { $0 + "\n" }.joined().utf8).write(to: url)
+    }
+    let view = try Self.serve(repository)
+    let first = try Self.object(view.respond(to: Self.get("/view.json")))
+    let cursor = try #require(first["cursor"] as? String)
+    let before = (first["gates"] as? [[String: Any]]) ?? []
+    #expect(!before.contains { $0["runId"] as? String == redGate })
+
+    for (url, lines) in held {
+      let handle = try FileHandle(forWritingTo: url)
+      try handle.seekToEnd()
+      try handle.write(contentsOf: Data(lines.map { $0 + "\n" }.joined().utf8))
+      try handle.close()
+    }
+    let response = view.respond(to: Self.get("/changes", ["after": cursor]))
+    #expect(response.status == 200)
+    let text = String(decoding: response.body, as: UTF8.self)
+    for leak in ["/var/folders", "/Users/", "file://", repository.root.path] {
+      #expect(!text.contains(leak), "\(leak)")
+    }
+    let changes = try Self.object(response)
+    let gates = try #require(changes["gates"] as? [[String: Any]])
+    let gate = try #require(gates.first { $0["runId"] as? String == redGate })
+    let failure = try #require(gate["failure"] as? [String: Any])
+    #expect(failure["tiers"] as? [String] == ["T2"])
+    #expect(failure["stage"] as? String == "merge")
+    #expect(failure["report"] as? String == ".harness/runs/\(redGate)/report.json")
+    let finding = try #require((failure["findings"] as? [[String: Any]])?.first)
+    #expect(finding["rule"] as? String == "t2.test-failed")
+    #expect(
+      finding["file"] as? String
+        == "Packages/CounterFeature/Tests/CounterUISnapshotTests/CounterViewSnapshotTests.swift")
+    #expect(finding["line"] as? Int == 21)
+    let test = try #require((failure["failedTests"] as? [[String: Any]])?.first)
+    #expect(
+      test["test"] as? String == "CounterUISnapshotTests.CounterViewSnapshotTests/counterWithFact")
+  }
+
+  @Test(
     "a malformed or stale cursor gets the whole view and a fresh cursor, never a 500 — catches a page stuck after the server restarts"
   )
   func malformedCursorGetsTheWholeView() throws {

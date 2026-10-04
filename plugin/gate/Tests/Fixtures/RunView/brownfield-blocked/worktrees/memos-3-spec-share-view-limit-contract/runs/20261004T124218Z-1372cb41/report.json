@@ -1,0 +1,28 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 27330,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "memos: its warm test run takes 30.6 s, over the 30 s slice budget, so slice only builds it; its changed tests and their prove run at merge",
+      "rule" : "area.build-only",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "1316c66095bd42bf45c1bec0b208202099b74252",
+  "runID" : "20261004T124218Z-1372cb41",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 27230,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

@@ -54,7 +54,8 @@ enum RunViewSpans {
       id: runSpanID, phase: .run, start: start, end: state == .done ? end : nil, outcome: settled)
   }
 
-  /// Each task from its move into `in-progress` to `done` or `abandoned`, or to the run's end,
+  /// Each task from its move into `in-progress` to `done` or `abandoned`, to a `blocked` or
+  /// `needs-replan` it didn't leave, or to the run's end,
   /// and each merge from the ledger's `merge` to the gate or undo that settles it.
   static func taskSpans(
     tasks: [LedgerTask], events: [BuildEvent], parent: String?, runEnd: Date?, join: inout Join
@@ -72,14 +73,18 @@ enum RunViewSpans {
       var outcome: SpanOutcome?
       for event in own[startIndex...] {
         guard case .transition(let move) = event else { continue }
-        if move.to == .done {
+        switch move.to {
+        case .done:
           (end, outcome) = (move.at, .ok)
-          break
-        }
-        if move.to == .abandoned {
+        case .abandoned:
           (end, outcome) = (move.at, .abandoned)
-          break
+        // A stop to ask ends the span, unless the task picks up again.
+        case .blocked, .needsReplan:
+          (end, outcome) = (move.at, .halted)
+        case .inProgress, .pending:
+          (end, outcome) = (runEnd, nil)
         }
+        if move.to == .done || move.to == .abandoned { break }
       }
       let taskSpan = taskSpanID(task.id)
       spans.append(
