@@ -779,7 +779,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `calibrate-design.usage`, `calibrate-design.passed`, `calibrate-design.seed-defect`, `calibrate-design.label-missed`, `calibrate-design.no-seeds`, `calibrate-design.missing-label`, `calibrate-design.missing-input`, `calibrate-design.missing-entry`, `calibrate-design.invalid-label`, `calibrate-design.unknown-agent`, `calibrate-design.uncalibrated-agent` | design plan workflows §6.2 (`calibrate design`) |
 | `calibrate-build.usage`, `calibrate-build.passed`, `calibrate-build.seed-defect`, `calibrate-build.label-missed`, `calibrate-build.no-seeds`, `calibrate-build.missing-label`, `calibrate-build.missing-input`, `calibrate-build.missing-entry`, `calibrate-build.invalid-label`, `calibrate-build.unknown-agent`, `calibrate-build.uncalibrated-agent` | build executor §12 (`calibrate build`) |
 
-### Simulator QA commands (`sim up`, `snap`, [`down`](simulator-qa.md#sim-down))
+### Simulator QA commands (`sim up`, `snap`, [`down`](simulator-qa-sim.md#sim-down))
 
 | Rule id | Section |
 |---|---|
@@ -792,7 +792,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `sim.not-owner` | simulator QA §4, §7.5; `swiftgate sim snap <label> [--assert "<text>"] [<runID>] [--json]` names a run whose lease belongs to another worktree. RED (exit 1), naming that worktree, before any device call or write. Without `<runID>`, `snap` takes this worktree's newest lease whose holder is alive |
 | `sim.session-gone` | simulator QA §4, §5.1; `sim snap` found no lease for the run (or, without `<runID>`, no live lease of this worktree), a holder that has exited, a lease with no session yet, or `agent-device` reported the device unknown (`DEVICE_NOT_FOUND`). RED (exit 1). It writes no step line and leaves no PNG or tree behind. A snap that passes appends 1 line to `sim/steps.ndjson` (`n`, `label`, `assert` only when given, `screenshot`, `tree`, `settled` only when both snapshots parse, `elapsedMs`) and writes `steps/<NNN>.png` and the `snapshot --json` bytes unmodified as `steps/<NNN>.tree.json` |
 
-### Simulator QA evidence ([`sim verify`](simulator-qa.md#sim-verify))
+### Simulator QA evidence ([`sim verify`](simulator-qa-sim.md#sim-verify))
 
 | Rule id | Section |
 |---|---|
