@@ -55,6 +55,11 @@ public struct WarmupAreaRecord: Sendable, Equatable {
     self.testMilliseconds = testMilliseconds
     self.steps = steps
   }
+
+  /// The warm test time a gate may budget with: only a test step that passed measured one.
+  public var warmTestMilliseconds: Int? {
+    testMilliseconds
+  }
 }
 
 /// 1 area's warm-up.
