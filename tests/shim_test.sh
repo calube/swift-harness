@@ -137,11 +137,12 @@ wait_for_background_build() {
 }
 
 # Kills this run's background build (and every child it spawned) so a killed sample never leaves
-# a build running, or contending for CPU, into the next sample. `--package-path` and every source
-# file the build touches sit under $work/repo/plugin/gate, so this pattern reaches the swift build
-# driver and its compiler children without reaching anything outside this test.
+# a build running, or contending for CPU, into the next sample. The detached shim names
+# $work/repo/plugin/bin and spends its first moments hashing sources and writing its stamp before
+# it starts `swift build`; the build driver and its compiler children name sources under
+# $work/repo/plugin/gate. This pattern reaches all of them and nothing outside this test.
 kill_background_build() {
-  local pattern="$work/repo/plugin/gate"
+  local pattern="$work/repo/plugin/"
   local waited
   for signal in "" "-9"; do
     pkill $signal -f "$pattern" >/dev/null 2>&1 || true
@@ -151,6 +152,14 @@ kill_background_build() {
     done
   done
   return 1
+}
+
+# A killed build's cache directory is removed next, so nothing of this plugin copy may still be
+# writing into it: a detached shim still hashing its sources writes its stamp after the kill.
+assert_no_shim_left() {
+  local left
+  left="$(pgrep -fl "$work/repo/plugin/bin/swiftgate" 2>/dev/null || true)"
+  [ -z "$left" ] || fail "a killed background build left its shim running: $left"
 }
 
 # A hook on a cold cache must answer at once and build in the background. Each sample resets
@@ -196,6 +205,7 @@ assert "warming up" in context and "not enforced" in context, context
 
   if [ "$i" -lt 3 ]; then
     if kill_background_build; then
+      assert_no_shim_left
       continue
     fi
     cold_note=" (sample $i's background build could not be killed cleanly, so this fell back to 1 cold sample)"
@@ -404,6 +414,7 @@ sid_out="$(
     CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start
 )" || fail "cold session-start with a session id exited non-zero"
 kill_background_build || true
+assert_no_shim_left
 printf '%s\n' "$sid_out" | python3 -m json.tool >/dev/null ||
   fail "cold session-start with a session id was not valid JSON: '$sid_out'"
 case "$sid_out" in
@@ -419,6 +430,7 @@ unsafe_out="$(
     CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start
 )" || fail "cold session-start with an unsafe session id exited non-zero"
 kill_background_build || true
+assert_no_shim_left
 printf '%s\n' "$unsafe_out" | python3 -m json.tool >/dev/null ||
   fail "cold session-start with an unsafe session id was not valid JSON: '$unsafe_out'"
 case "$unsafe_out" in
@@ -430,6 +442,7 @@ rm -rf "$sid_cache"
 nostdin_out="$(cd "$work/project" && CLAUDE_PLUGIN_DATA="$sid_cache" "$shim" hook session-start </dev/null)" ||
   fail "cold session-start with no stdin exited non-zero"
 kill_background_build || true
+assert_no_shim_left
 printf '%s\n' "$nostdin_out" | python3 -m json.tool >/dev/null ||
   fail "cold session-start with no stdin was not valid JSON: '$nostdin_out'"
 case "$nostdin_out" in
