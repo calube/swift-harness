@@ -24,8 +24,8 @@ public enum ReviewerBashGuard {
       ruleID: ruleID,
       reason:
         "`\(agentType)` runs Bash only for its own run-viewer span: exactly 1 "
-        + "`swiftgate events span start|end …` command, through the plugin's `bin/swiftgate`, "
-        + "`\"$SG\"` or `swiftgate`, with no `;`, `&&`, `|`, redirection, substitution or second "
+        + "`swiftgate events span start|end …` command, through the plugin's `bin/swiftgate` "
+        + "or `\"$SG\"`, with no `;`, `&&`, `|`, redirection, substitution or second "
         + "command. This command \(problem). Read the code with Read, Grep and Glob; a reviewer "
         + "never changes the tree.")
   }
@@ -38,6 +38,9 @@ public enum ReviewerBashGuard {
     case .success(let lexed): words = lexed
     }
     guard let program = words.first else { return "is empty" }
+    if program.literal == "swiftgate" {
+      return "runs `swiftgate` from PATH, which may be another install than the plugin under test"
+    }
     guard isSwiftgate(program) else { return "doesn't run swiftgate" }
     let rest = words.dropFirst()
     guard rest.allSatisfy({ !$0.usesVariable }) else {
@@ -57,13 +60,13 @@ public enum ReviewerBashGuard {
     }
   }
 
-  /// The program: `$SG` in any quoting, bare `swiftgate`, or an absolute `…/bin/swiftgate` path
-  /// with no `.` or `..` component.
+  /// The program: `$SG` in any quoting, or an absolute `…/bin/swiftgate` path with no `.` or `..`
+  /// component. Bare `swiftgate` resolves through PATH, which may hold an older installed plugin
+  /// whose span store isn't the one the build reads.
   private static func isSwiftgate(_ word: Word) -> Bool {
     if word.pieces == [.sg] { return true }
     guard !word.usesVariable else { return false }
     let path = word.literal
-    if path == "swiftgate" { return true }
     guard path.hasPrefix("/"), path.hasSuffix("/bin/swiftgate") else { return false }
     return !path.split(separator: "/").contains { $0 == "." || $0 == ".." }
   }

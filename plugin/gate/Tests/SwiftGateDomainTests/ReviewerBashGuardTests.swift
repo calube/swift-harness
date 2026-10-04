@@ -16,13 +16,12 @@ struct ReviewerBashGuardTests {
   }
 
   @Test(
-    "a reviewer's exact span start and end lines pass, through the shim, \"$SG\" or bare swiftgate, while the same start with `&& rm` is denied — catches the guard blocking the span lines the review prompts hand every reviewer",
+    "a reviewer's exact span start and end lines pass, through the shim or \"$SG\", while the same start with `&& rm` is denied — catches the guard blocking the span lines the review prompts hand every reviewer",
     arguments: [
       start, end,
       "\"$SG\" events span start --phase verify --build-run r1 --task t --role review",
       "$SG events span end 0123456789abcdef --outcome red",
       "${SG} events span end 0123456789abcdef --outcome=ok",
-      "swiftgate events span start --phase review --build-run r1 --task 'a task' --role review",
       "  \(end)  ",
     ])
   func exactSpanLinesPass(_ command: String) {
@@ -71,6 +70,8 @@ struct ReviewerBashGuardTests {
       "/tmp/swiftgate events span end 0123456789abcdef --outcome ok",
       "/plugins/../tmp/bin/swiftgate events span end 0123456789abcdef --outcome ok",
       "bin/swiftgate events span end 0123456789abcdef --outcome ok",
+      "swiftgate events span start --phase review --build-run r1 --task 'a task' --role review",
+      "swiftgate events span end 0123456789abcdef --outcome ok",
       "SG=/bin/rm \"$SG\" events span end 0123456789abcdef --outcome ok",
       "\"${SG:-rm}\" events span end 0123456789abcdef --outcome ok",
       "$HOME/bin/swiftgate events span end 0123456789abcdef --outcome ok",
@@ -96,5 +97,15 @@ struct ReviewerBashGuardTests {
     #expect(verdict(command, agentType: agentType) == nil, "\(agentType ?? "main session")")
     #expect(
       verdict(command, agentType: "swift-harness:architecture")?.ruleID == ReviewerBashGuard.ruleID)
+  }
+
+  @Test(
+    "a reviewer's span line through bare `swiftgate` is denied saying PATH may hold another install — catches a span recorded by a stale installed gate instead of the plugin under test"
+  )
+  func bareSwiftgateDeniedNamingPath() throws {
+    let denied = try #require(
+      verdict("swiftgate events span end 0123456789abcdef --outcome ok"))
+    #expect(denied.reason.contains("PATH"), "\(denied.reason)")
+    #expect(verdict(Self.end) == nil)
   }
 }
